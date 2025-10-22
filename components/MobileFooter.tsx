@@ -1,5 +1,3 @@
-
-
 import React, { useState } from 'react';
 
 interface Totals {
@@ -18,6 +16,7 @@ interface MobileFooterProps {
     onDuplicateMeasurements: () => void;
     onGeneratePdf: () => void;
     isGeneratingPdf: boolean;
+    onOpenAIModal: () => void;
 }
 
 const formatNumberBR = (number: number) => {
@@ -34,7 +33,8 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
     onAddMeasurement,
     onDuplicateMeasurements,
     onGeneratePdf,
-    isGeneratingPdf
+    isGeneratingPdf,
+    onOpenAIModal
 }) => {
     const [isExpanded, setIsExpanded] = useState(false);
 
@@ -134,6 +134,7 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
                 {/* Main Action Bar */}
                 <div className="relative">
                     <div className="flex justify-around items-center h-16">
+                        <ActionButton onClick={onOpenAIModal} label="com IA" icon="fas fa-robot" />
                         <ActionButton onClick={onDuplicateMeasurements} label="Duplicar" icon="fas fa-copy" />
 
                         {/* Floating Action Button */}

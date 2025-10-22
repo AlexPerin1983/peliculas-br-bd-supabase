@@ -5,13 +5,15 @@ interface ActionsBarProps {
     onDuplicateMeasurements: () => void;
     onGeneratePdf: () => void;
     isGeneratingPdf: boolean;
+    onOpenAIModal: () => void;
 }
 
 const ActionsBar: React.FC<ActionsBarProps> = ({
     onAddMeasurement,
     onDuplicateMeasurements,
     onGeneratePdf,
-    isGeneratingPdf
+    isGeneratingPdf,
+    onOpenAIModal
 }) => {
     const baseButton = "w-full p-4 rounded-lg transition duration-300 shadow-md font-semibold text-sm flex items-center justify-center";
     
@@ -19,6 +21,9 @@ const ActionsBar: React.FC<ActionsBarProps> = ({
         <div className="flex flex-col sm:flex-row gap-3">
             <button onClick={onAddMeasurement} className={`${baseButton} bg-slate-800 text-white hover:bg-slate-700`}>
                 Adicionar Medida
+            </button>
+            <button onClick={onOpenAIModal} className={`${baseButton} bg-slate-800 text-white hover:bg-slate-700`}>
+                <i className="fas fa-robot mr-2"></i> com IA
             </button>
             <button onClick={onDuplicateMeasurements} className={`${baseButton} bg-slate-200 text-slate-700 hover:bg-slate-300`}>
                 Duplicar Medidas

@@ -31,6 +31,10 @@ export const mockUserInfo: UserInfo = {
     employees: [
         { id: 1, nome: 'Alex Renato Lacerda Perin' }
     ],
+    aiConfig: {
+        provider: 'gemini',
+        apiKey: '', // User needs to fill this in
+    },
 };
 
 export const mockClients: Omit<Client, 'id'>[] = [];

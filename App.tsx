@@ -19,6 +19,9 @@ import PdfGenerationStatusModal from './components/modals/PdfGenerationStatusMod
 import EditMeasurementModal from './components/modals/EditMeasurementModal';
 import AgendamentoModal from './components/modals/AgendamentoModal';
 import DiscountModal from './components/modals/DiscountModal';
+import AIMeasurementModal from './components/modals/AIMeasurementModal';
+import ApiKeyModal from './components/modals/ApiKeyModal';
+import { GoogleGenAI, Type, Part } from "@google/genai";
 
 
 const UserSettingsView = lazy(() => import('./components/views/UserSettingsView'));
@@ -85,6 +88,9 @@ const App: React.FC = () => {
     const [agendamentoToDelete, setAgendamentoToDelete] = useState<Agendamento | null>(null);
     const [postClientSaveAction, setPostClientSaveAction] = useState<'openAgendamentoModal' | null>(null);
     const [editingMeasurementForDiscount, setEditingMeasurementForDiscount] = useState<UIMeasurement | null>(null);
+    const [isAIMeasurementModalOpen, setIsAIMeasurementModalOpen] = useState(false);
+    const [isProcessingAI, setIsProcessingAI] = useState(false);
+    const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
 
     const [numpadConfig, setNumpadConfig] = useState<NumpadConfig>({
         isOpen: false,
@@ -581,6 +587,95 @@ const App: React.FC = () => {
         });
     };
 
+    const handleProcessAIInput = async (input: { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob }) => {
+        if (!userInfo?.aiConfig?.apiKey) {
+            alert("Por favor, configure sua chave de API do Google Gemini na aba 'Empresa' para usar esta funcionalidade.");
+            return;
+        }
+    
+        setIsProcessingAI(true);
+    
+        try {
+            const ai = new GoogleGenAI({ apiKey: userInfo.aiConfig.apiKey });
+            
+            const schema = {
+                type: Type.ARRAY,
+                items: {
+                    type: Type.OBJECT,
+                    properties: {
+                        largura: { type: Type.STRING, description: 'Largura em metros, com vírgula como separador decimal. Ex: "1,50"' },
+                        altura: { type: Type.STRING, description: 'Altura em metros, com vírgula como separador decimal. Ex: "2,10"' },
+                        quantidade: { type: Type.NUMBER, description: 'A quantidade de itens com essa medida.' },
+                        ambiente: { type: Type.STRING, description: 'O local ou descrição do item. Ex: "Janela da Sala", "Porta do Quarto"' },
+                    },
+                    required: ['largura', 'altura', 'quantidade', 'ambiente'],
+                },
+            };
+    
+            const prompt = `
+                Você é um assistente especialista para uma empresa de instalação de películas de vidro. Sua tarefa é extrair dados de medidas de uma entrada fornecida pelo usuário.
+                A entrada pode ser texto, imagem (de uma lista, rascunho ou foto) ou áudio.
+                Extraia as seguintes informações para cada medida: largura, altura, quantidade e uma descrição do ambiente/local (ex: "sala", "quarto", "janela da cozinha").
+                As medidas estão em metros. Se o usuário disser '1 e meio por 2', interprete como 1,50m por 2,00m. Sempre formate as medidas com duas casas decimais e vírgula como separador.
+                O ambiente deve ser uma descrição curta e útil.
+                Responda APENAS com um objeto JSON válido que corresponda ao schema fornecido. Não inclua nenhuma outra explicação ou texto.
+            `;
+    
+            const parts: Part[] = [{ text: prompt }];
+    
+            if (input.type === 'text') {
+                parts.push({ text: input.data as string });
+            } else if (input.type === 'image') {
+                for (const file of input.data as File[]) {
+                    const { mimeType, data } = await blobToBase64(file);
+                    parts.push({ inlineData: { mimeType, data } });
+                }
+            } else if (input.type === 'audio') {
+                const { mimeType, data } = await blobToBase64(input.data as Blob);
+                parts.push({ inlineData: { mimeType, data } });
+            }
+    
+            const response = await ai.models.generateContent({
+                model: 'gemini-1.5-flash',
+                contents: [{ role: "user", parts }],
+                config: { responseMimeType: "application/json", responseSchema: schema }
+            });
+    
+            const extractedData = JSON.parse(response.text.trim());
+    
+            if (Array.isArray(extractedData)) {
+                const newMeasurements: UIMeasurement[] = extractedData.map((item: any, index: number) => ({
+                    id: Date.now() + index,
+                    largura: item.largura || '',
+                    altura: item.altura || '',
+                    quantidade: item.quantidade || 1,
+                    ambiente: item.ambiente || 'Desconhecido',
+                    tipoAplicacao: 'Desconhecido',
+                    pelicula: films[0]?.nome || 'Nenhuma',
+                    active: true,
+                    isNew: index === 0,
+                    discount: 0,
+                    discountType: 'percentage',
+                }));
+    
+                if (newMeasurements.length > 0) {
+                    handleMeasurementsChange([...newMeasurements, ...measurements.map(m => ({...m, isNew: false}))]);
+                    setIsAIMeasurementModalOpen(false);
+                } else {
+                    alert("Nenhuma medida foi extraída. Tente novamente com mais detalhes.");
+                }
+            } else {
+                throw new Error("A resposta da IA não está no formato esperado.");
+            }
+    
+        } catch (error) {
+            console.error("Erro ao processar com IA:", error);
+            alert(`Ocorreu um erro: ${error instanceof Error ? error.message : String(error)}`);
+        } finally {
+            setIsProcessingAI(false);
+        }
+    };
+
     const handleRequestDeletePdf = useCallback((pdfId: number) => {
         setPdfToDeleteId(pdfId);
     }, []);
@@ -1061,6 +1156,20 @@ const App: React.FC = () => {
         handleCloseDiscountModal();
     }, [editingMeasurementForDiscount, measurements, handleMeasurementsChange, handleCloseDiscountModal]);
 
+    const handleSaveApiKey = useCallback(async (apiKey: string) => {
+        if (userInfo) {
+            const updatedUserInfo = {
+                ...userInfo,
+                aiConfig: {
+                    provider: 'gemini' as const,
+                    apiKey: apiKey,
+                }
+            };
+            await handleSaveUserInfo(updatedUserInfo);
+            setIsApiKeyModalOpen(false);
+        }
+    }, [userInfo, handleSaveUserInfo]);
+
 
     const LoadingSpinner = () => (
         <div className="flex items-center justify-center h-full min-h-[300px]">
@@ -1081,6 +1190,7 @@ const App: React.FC = () => {
                             userInfo={userInfo}
                             onSave={handleSaveUserInfo}
                             onOpenPaymentMethods={() => setIsPaymentModalOpen(true)}
+                            onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
                         />
                     </Suspense>
                 );
@@ -1262,6 +1372,7 @@ const App: React.FC = () => {
                                         onDuplicateMeasurements={duplicateAllMeasurements}
                                         onGeneratePdf={handleGeneratePdf}
                                         isGeneratingPdf={pdfGenerationStatus === 'generating'}
+                                        onOpenAIModal={() => setIsAIMeasurementModalOpen(true)}
                                    />
                                 </div>
                                 <MobileFooter
@@ -1272,6 +1383,7 @@ const App: React.FC = () => {
                                     onDuplicateMeasurements={duplicateAllMeasurements}
                                     onGeneratePdf={handleGeneratePdf}
                                     isGeneratingPdf={pdfGenerationStatus === 'generating'}
+                                    onOpenAIModal={() => setIsAIMeasurementModalOpen(true)}
                                 />
                             </>
                         )}
@@ -1492,6 +1604,22 @@ const App: React.FC = () => {
                     onSave={handleSaveDiscount}
                     initialValue={editingMeasurementForDiscount.discount}
                     initialType={editingMeasurementForDiscount.discountType}
+                />
+            )}
+            {isAIMeasurementModalOpen && (
+                <AIMeasurementModal
+                    isOpen={isAIMeasurementModalOpen}
+                    onClose={() => setIsAIMeasurementModalOpen(false)}
+                    onProcess={handleProcessAIInput}
+                    isProcessing={isProcessingAI}
+                />
+            )}
+            {isApiKeyModalOpen && userInfo && (
+                <ApiKeyModal
+                    isOpen={isApiKeyModalOpen}
+                    onClose={() => setIsApiKeyModalOpen(false)}
+                    onSave={handleSaveApiKey}
+                    currentApiKey={userInfo.aiConfig?.apiKey}
                 />
             )}
             {numpadConfig.isOpen && (

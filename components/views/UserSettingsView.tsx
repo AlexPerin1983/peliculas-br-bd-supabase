@@ -8,6 +8,7 @@ interface UserSettingsViewProps {
     userInfo: UserInfo;
     onSave: (userInfo: UserInfo) => void;
     onOpenPaymentMethods: () => void;
+    onOpenApiKeyModal: () => void;
 }
 
 const applyPhoneMask = (value: string) => {
@@ -34,7 +35,7 @@ const applyPhoneMask = (value: string) => {
     return "";
 };
 
-const UserSettingsView: React.FC<UserSettingsViewProps> = ({ userInfo, onSave, onOpenPaymentMethods }) => {
+const UserSettingsView: React.FC<UserSettingsViewProps> = ({ userInfo, onSave, onOpenPaymentMethods, onOpenApiKeyModal }) => {
     const [formData, setFormData] = useState<UserInfo>(userInfo);
     const [logoPreview, setLogoPreview] = useState<string | undefined>(userInfo.logo);
     const [isSaving, setIsSaving] = useState(false);
@@ -375,6 +376,23 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({ userInfo, onSave, o
                             Adicionar
                         </button>
                     </div>
+                </div>
+            </div>
+
+            <div className={sectionClass}>
+                <h3 className={sectionTitleClass}>Inteligência Artificial (IA)</h3>
+                <p className="text-sm text-slate-500 mt-2">
+                    Configure sua chave de API do Google Gemini para habilitar funcionalidades como o preenchimento automático de medidas.
+                </p>
+                <div className="mt-4">
+                    <button
+                        type="button"
+                        onClick={onOpenApiKeyModal}
+                        className="w-full px-4 py-3 bg-slate-100 text-slate-700 font-semibold rounded-lg hover:bg-slate-200 transition-colors flex items-center justify-center gap-2"
+                    >
+                        <i className="fas fa-key"></i>
+                        {userInfo.aiConfig?.apiKey ? 'Alterar Chave de API' : 'Configurar Chave de API'}
+                    </button>
                 </div>
             </div>
 

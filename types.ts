@@ -1,5 +1,3 @@
-
-
 export interface Client {
     id?: number;
     nome: string;
@@ -86,6 +84,10 @@ export interface UserInfo {
         days: number[]; // 0 for Sunday, 1 for Monday, etc.
     };
     employees?: Employee[];
+    aiConfig?: {
+        provider: 'gemini';
+        apiKey: string;
+    };
 }
 
 export interface Agendamento {
