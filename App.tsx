@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense, useRef } from 'react';
 import { Client, Measurement, UserInfo, Film, PaymentMethods, SavedPDF, Agendamento } from './types';
 import * as db from './services/db';
@@ -18,7 +16,6 @@ import ConfirmationModal from './components/modals/ConfirmationModal';
 import CustomNumpad from './components/ui/CustomNumpad';
 import FilmSelectionModal from './components/modals/FilmSelectionModal';
 import PdfGenerationStatusModal from './components/modals/PdfGenerationStatusModal';
-import AppHeader from './components/AppHeader';
 import EditMeasurementModal from './components/modals/EditMeasurementModal';
 import AgendamentoModal from './components/modals/AgendamentoModal';
 import DiscountModal from './components/modals/DiscountModal';
@@ -1203,8 +1200,6 @@ const App: React.FC = () => {
 
     return (
         <div className="h-full font-roboto flex flex-col">
-            <AppHeader toggleFullScreen={toggleFullScreen} />
-
             <main ref={mainRef} className="flex-grow overflow-y-auto pb-36 sm:pb-0">
                 <div className="sticky top-0 bg-white/80 backdrop-blur-sm z-10 border-b border-slate-200">
                     <div className="container mx-auto px-2 sm:px-4 w-full max-w-2xl">
