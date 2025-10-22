@@ -1212,7 +1212,7 @@ const App: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="container mx-auto px-2 sm:px-4 py-4 sm:py-8 w-full max-w-2xl">
+                <div className="container mx-auto px-1 sm:px-4 py-4 sm:py-8 w-full max-w-2xl">
                     <div className="bg-white rounded-2xl shadow-lg p-4 sm:p-6">
                        {activeTab === 'client' ? (
                            <>

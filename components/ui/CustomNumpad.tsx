@@ -1,6 +1,3 @@
-
-
-
 import React, { forwardRef } from 'react';
 
 interface CustomNumpadProps {
@@ -35,7 +32,7 @@ const CustomNumpad = forwardRef<HTMLDivElement, CustomNumpadProps>(({ onInput, o
                 action();
             }}
             aria-label={ariaLabel}
-            className={`flex items-center justify-center h-14 rounded-lg text-2xl font-semibold transition-colors duration-150 ${className}`}
+            className={`flex items-center justify-center h-12 rounded-lg text-2xl font-semibold transition-colors duration-150 ${className}`}
         >
             {children}
         </button>
@@ -53,7 +50,7 @@ const CustomNumpad = forwardRef<HTMLDivElement, CustomNumpadProps>(({ onInput, o
                 action();
             }}
             aria-label={ariaLabel}
-            className="flex items-center justify-center h-14 w-14 rounded-full text-xl transition-colors duration-150 bg-slate-100 text-slate-600 hover:bg-slate-200"
+            className="flex items-center justify-center h-12 w-12 rounded-full text-xl transition-colors duration-150 bg-slate-100 text-slate-600 hover:bg-slate-200"
         >
             <i className={icon}></i>
         </button>
@@ -99,7 +96,7 @@ const CustomNumpad = forwardRef<HTMLDivElement, CustomNumpadProps>(({ onInput, o
                             onDone();
                         }}
                         aria-label={isLastField ? "Confirmar entrada" : "Próximo campo"}
-                        className="flex-grow h-14 rounded-xl shadow-sm text-lg font-bold bg-slate-900 text-white hover:bg-slate-800 transition-colors duration-150 flex items-center justify-center gap-2"
+                        className="flex-grow h-12 rounded-xl shadow-sm text-lg font-bold bg-slate-900 text-white hover:bg-slate-800 transition-colors duration-150 flex items-center justify-center gap-2"
                     >
                         {isLastField ? 'Pronto' : (
                             <>
