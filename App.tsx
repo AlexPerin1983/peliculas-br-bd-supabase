@@ -1213,11 +1213,11 @@ const App: React.FC = () => {
                 </div>
 
                 <div className="container mx-auto px-2 sm:px-4 py-4 sm:py-8 w-full max-w-2xl">
-                    <div className="bg-white rounded-2xl shadow-lg p-4 sm:p-6">
+                    <div className="bg-white rounded-2xl shadow-lg p-2 sm:p-6">
                        {activeTab === 'client' ? (
                            <>
                                {clients.length > 0 ? (
-                                   <div className="bg-slate-100 p-4 rounded-xl">
+                                   <div className="bg-slate-100 p-2 sm:p-4 rounded-xl">
                                        <ClientBar
                                            selectedClient={selectedClient}
                                            onSelectClientClick={handleOpenClientSelectionModal}
@@ -1236,7 +1236,7 @@ const App: React.FC = () => {
                                )}
                            </>
                        ) : ['history', 'agenda'].includes(activeTab) ? (
-                           <div className="bg-blue-50 -m-4 sm:-m-6 p-4 sm:p-6 rounded-2xl">
+                           <div className="bg-blue-50 -m-2 sm:-m-6 p-2 sm:p-6 rounded-2xl">
                                <div id="contentContainer" className="w-full min-h-[300px]">
                                    {renderContent()}
                                </div>
