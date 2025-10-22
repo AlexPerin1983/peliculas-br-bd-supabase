@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, FormEvent } from 'react';
 import { Agendamento, Client, UserInfo, SavedPDF } from '../../types';
 import { SchedulingInfo } from '../../App';
@@ -184,7 +183,7 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
             
             const ai = new GoogleGenAI({ apiKey: userInfo.aiConfig.apiKey });
             const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
+                model: 'gemini-1.5-flash',
                 contents: prompt,
                 config: { responseMimeType: "application/json", responseSchema: schema }
             });
