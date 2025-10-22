@@ -32,7 +32,7 @@ const CustomNumpad = forwardRef<HTMLDivElement, CustomNumpadProps>(({ onInput, o
                 action();
             }}
             aria-label={ariaLabel}
-            className={`flex items-center justify-center h-12 rounded-lg text-2xl font-semibold transition-colors duration-150 ${className}`}
+            className={`flex items-center justify-center h-10 rounded-lg text-xl font-semibold transition-colors duration-150 ${className}`}
         >
             {children}
         </button>
@@ -50,7 +50,7 @@ const CustomNumpad = forwardRef<HTMLDivElement, CustomNumpadProps>(({ onInput, o
                 action();
             }}
             aria-label={ariaLabel}
-            className="flex items-center justify-center h-12 w-12 rounded-full text-xl transition-colors duration-150 bg-slate-100 text-slate-600 hover:bg-slate-200"
+            className="flex items-center justify-center h-10 w-10 rounded-full text-lg transition-colors duration-150 bg-slate-100 text-slate-600 hover:bg-slate-200"
         >
             <i className={icon}></i>
         </button>
@@ -61,7 +61,7 @@ const CustomNumpad = forwardRef<HTMLDivElement, CustomNumpadProps>(({ onInput, o
     const isLastField = activeField === 'quantidade';
 
     return (
-        <div ref={ref} className="fixed bottom-0 left-0 right-0 bg-white p-3 pb-4 shadow-[0_-5px_15px_-5px_rgba(0,0,0,0.1)] border-t border-slate-200 z-50 animate-slide-up">
+        <div ref={ref} className="fixed bottom-0 left-0 right-0 bg-white p-2 pb-3 shadow-[0_-5px_15px_-5px_rgba(0,0,0,0.1)] border-t border-slate-200 z-50 animate-slide-up">
              <div className="max-w-sm mx-auto">
                 <div className="grid grid-cols-3 gap-2">
                     <NumpadButton action={() => onInput('1')} className={numberClasses} ariaLabel="Número 1">1</NumpadButton>
@@ -79,7 +79,7 @@ const CustomNumpad = forwardRef<HTMLDivElement, CustomNumpadProps>(({ onInput, o
                     <NumpadButton action={() => onInput(',')} className={actionClasses} ariaLabel="Vírgula">,</NumpadButton>
                     <NumpadButton action={() => onInput('0')} className={numberClasses} ariaLabel="Número 0">0</NumpadButton>
                     <NumpadButton action={onDelete} className={actionClasses} ariaLabel="Apagar">
-                        <i className="fas fa-backspace text-xl"></i>
+                        <i className="fas fa-backspace text-lg"></i>
                     </NumpadButton>
                 </div>
                 <div className="mt-2 flex items-center justify-between gap-2">
@@ -96,7 +96,7 @@ const CustomNumpad = forwardRef<HTMLDivElement, CustomNumpadProps>(({ onInput, o
                             onDone();
                         }}
                         aria-label={isLastField ? "Confirmar entrada" : "Próximo campo"}
-                        className="flex-grow h-12 rounded-xl shadow-sm text-lg font-bold bg-slate-900 text-white hover:bg-slate-800 transition-colors duration-150 flex items-center justify-center gap-2"
+                        className="flex-grow h-10 rounded-xl shadow-sm text-base font-bold bg-slate-900 text-white hover:bg-slate-800 transition-colors duration-150 flex items-center justify-center gap-2"
                     >
                         {isLastField ? 'Pronto' : (
                             <>
