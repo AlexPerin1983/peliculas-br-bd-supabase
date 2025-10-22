@@ -4,7 +4,7 @@ import { SchedulingInfo } from '../../App';
 import Modal from '../ui/Modal';
 import Input from '../ui/Input';
 import SearchableSelect from '../ui/SearchableSelect';
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 
 interface AgendamentoModalProps {
     isOpen: boolean;
@@ -81,7 +81,7 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                 const startDate = new Date(agendamento.start);
                 setDate(startDate.toISOString().split('T')[0]);
                 setStartTime(startDate.toTimeString().split(' ')[0].substring(0, 5));
-                const endDate = new Date(startDate.getTime() + 2 * 60 * 60 * 1000); // Default 2 hours later
+                const endDate = new Date(startDate.getTime() + 2 * 60 * 60 * 1000);
                 setEndTime(endDate.toTimeString().split(' ')[0].substring(0, 5));
                 setNotes(agendamento.notes || '');
             } else {
@@ -167,13 +167,13 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                 generationConfig: {
                     responseMimeType: "application/json",
                     responseSchema: {
-                        type: "array" as const,
+                        type: SchemaType.ARRAY,
                         items: {
-                            type: "object" as const,
+                            type: SchemaType.OBJECT,
                             properties: {
-                                startTime: { type: "string" as const, description: 'Horário de início sugerido no formato "HH:mm".' },
-                                endTime: { type: "string" as const, description: 'Horário de término sugerido no formato "HH:mm".' },
-                                reason: { type: "string" as const, description: 'Breve justificativa para a sugestão.' },
+                                startTime: { type: SchemaType.STRING, description: 'Horário de início sugerido no formato "HH:mm".' },
+                                endTime: { type: SchemaType.STRING, description: 'Horário de término sugerido no formato "HH:mm".' },
+                                reason: { type: SchemaType.STRING, description: 'Breve justificativa para a sugestão.' },
                             },
                             required: ['startTime', 'endTime', 'reason']
                         }
@@ -197,7 +197,7 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
     const handleApplySuggestion = (suggestion: AISuggestion) => {
         setStartTime(suggestion.startTime);
         setEndTime(suggestion.endTime);
-        setAiSuggestions(null); // Clear suggestions after applying one
+        setAiSuggestions(null);
     };
 
 

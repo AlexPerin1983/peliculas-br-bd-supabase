@@ -21,7 +21,7 @@ import AgendamentoModal from './components/modals/AgendamentoModal';
 import DiscountModal from './components/modals/DiscountModal';
 import AIMeasurementModal from './components/modals/AIMeasurementModal';
 import ApiKeyModal from './components/modals/ApiKeyModal';
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 
 
 const UserSettingsView = lazy(() => import('./components/views/UserSettingsView'));
@@ -45,7 +45,7 @@ export type SchedulingInfo = {
     pdf: SavedPDF;
     agendamento?: Agendamento;
 } | {
-    agendamento: Partial<Agendamento>; // Use partial for new, standalone appointments
+    agendamento: Partial<Agendamento>;
     pdf?: SavedPDF;
 };
 
@@ -109,22 +109,17 @@ const App: React.FC = () => {
         if (!mainEl) return;
     
         if (numpadConfig.isOpen) {
-            // Wait for numpad animation (200ms) to finish before getting height and scrolling.
             const timer = setTimeout(() => {
                 if (numpadRef.current) {
                     const numpadHeight = numpadRef.current.offsetHeight;
-                    // Add padding to the bottom of the scroll container to make space for the numpad.
                     mainEl.style.paddingBottom = `${numpadHeight}px`;
     
-                    // Find the active measurement element and scroll it to a comfortable position.
                     if (numpadConfig.measurementId) {
                         const activeElement = mainEl.querySelector(`[data-measurement-id='${numpadConfig.measurementId}']`);
                         if (activeElement) {
                             const elementRect = activeElement.getBoundingClientRect();
                             const mainRect = mainEl.getBoundingClientRect();
                             
-                            // We want to position the element in the upper part of the visible scroll area.
-                            // Let's aim for about 30% from the top.
                             const targetY = mainRect.top + (mainEl.clientHeight * 0.3);
                             const scrollAmount = elementRect.top - targetY;
 
@@ -138,7 +133,6 @@ const App: React.FC = () => {
             }, 250);
             return () => clearTimeout(timer);
         } else {
-            // Remove padding when numpad is closed, reverting to the class-based padding.
             mainEl.style.paddingBottom = '';
         }
     }, [numpadConfig.isOpen, numpadConfig.measurementId]);
@@ -182,7 +176,6 @@ const App: React.FC = () => {
             setIsLoading(false);
         };
         init();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
     
     useEffect(() => {
@@ -216,14 +209,13 @@ const App: React.FC = () => {
         }
     }, [selectedClientId, measurements]);
 
-    // Auto-save measurements
     useEffect(() => {
         if (!isDirty) {
             return;
         }
         const timerId = setTimeout(() => {
             handleSaveChanges();
-        }, 1500); // Auto-save after 1.5 seconds of inactivity
+        }, 1500);
 
         return () => clearTimeout(timerId);
     }, [measurements, isDirty, handleSaveChanges]);
@@ -260,7 +252,7 @@ const App: React.FC = () => {
         const duplicated = measurements.map((m, index) => ({
             ...m,
             id: Date.now() + Math.random() + index,
-            isNew: index === 0, // Set the first new measurement to be focused
+            isNew: index === 0,
         }));
         const newMeasurements = [
             ...duplicated,
@@ -285,7 +277,6 @@ const App: React.FC = () => {
             return;
         }
 
-        // 1. Calculate the final value and create an updated measurement list
         let finalValue: string | number = currentValue;
         if (field === 'quantidade') {
             finalValue = parseInt(currentValue, 10) || 1;
@@ -298,7 +289,6 @@ const App: React.FC = () => {
         );
         handleMeasurementsChange(updatedMeasurements);
         
-        // 2. Just close the numpad
         setNumpadConfig({ isOpen: false, measurementId: null, field: null, currentValue: '', shouldClearOnNextInput: false });
     }, [numpadConfig, measurements, handleMeasurementsChange]);
 
@@ -335,7 +325,7 @@ const App: React.FC = () => {
             handleOpenAgendamentoModal({
                 agendamento: { clienteId: savedClient.id }
             });
-            setPostClientSaveAction(null); // Reset the action
+            setPostClientSaveAction(null);
         }
     }, [clientModalMode, selectedClientId, clients, postClientSaveAction, handleOpenAgendamentoModal]);
 
@@ -396,18 +386,14 @@ const App: React.FC = () => {
     }, []);
 
     const handleEditFilmFromSelection = useCallback((film: Film) => {
-        // Close the selection modal first to prevent overlap
         setIsFilmSelectionModalOpen(false);
         setIsApplyFilmToAllModalOpen(false);
         setEditingMeasurementIdForFilm(null);
         
-        // Then open the editor modal
         handleOpenFilmModal(film);
     }, [handleOpenFilmModal]);
 
     const handleSaveFilm = useCallback(async (newFilmData: Film, originalFilm: Film | null) => {
-        // If editing and the name (which is the key) has changed,
-        // delete the old entry before saving the new one.
         if (originalFilm && originalFilm.nome !== newFilmData.nome) {
             await db.deleteCustomFilm(originalFilm.nome);
         }
@@ -428,7 +414,6 @@ const App: React.FC = () => {
     }, [loadFilms]);
 
     const handleRequestDeleteFilm = useCallback((filmName: string) => {
-        // Close the film selection modal before opening the confirmation
         setIsFilmSelectionModalOpen(false);
         setFilmToDeleteName(filmName);
     }, []);
@@ -436,7 +421,6 @@ const App: React.FC = () => {
     const handleConfirmDeleteFilm = useCallback(async () => {
         if (filmToDeleteName === null) return;
         await db.deleteCustomFilm(filmToDeleteName);
-        // Reload films to update UI across the app
         await loadFilms();
         setFilmToDeleteName(null);
     }, [filmToDeleteName, loadFilms]);
@@ -596,24 +580,24 @@ const App: React.FC = () => {
                 generationConfig: {
                     responseMimeType: "application/json",
                     responseSchema: {
-                        type: "array" as const,
+                        type: SchemaType.ARRAY,
                         items: {
-                            type: "object" as const,
+                            type: SchemaType.OBJECT,
                             properties: {
                                 largura: { 
-                                    type: "string" as const, 
+                                    type: SchemaType.STRING, 
                                     description: 'Largura em metros, com vírgula como separador decimal. Ex: "1,50"' 
                                 },
                                 altura: { 
-                                    type: "string" as const, 
+                                    type: SchemaType.STRING, 
                                     description: 'Altura em metros, com vírgula como separador decimal. Ex: "2,10"' 
                                 },
                                 quantidade: { 
-                                    type: "number" as const, 
+                                    type: SchemaType.NUMBER, 
                                     description: 'A quantidade de itens com essa medida.' 
                                 },
                                 ambiente: { 
-                                    type: "string" as const, 
+                                    type: SchemaType.STRING, 
                                     description: 'O local ou descrição do item. Ex: "Janela da Sala", "Porta do Quarto"' 
                                 },
                             },
@@ -854,7 +838,6 @@ const App: React.FC = () => {
     const handleOpenNumpad = useCallback((measurementId: number, field: 'largura' | 'altura' | 'quantidade', currentValue: string | number) => {
         const { isOpen, measurementId: prevId, field: prevField, currentValue: prevValue } = numpadConfig;
 
-        // Save previous value if switching inputs
         if (isOpen && (prevId !== measurementId || prevField !== field)) {
             let finalValue: string | number = prevValue;
             if (prevField === 'quantidade') {
@@ -869,19 +852,16 @@ const App: React.FC = () => {
             handleMeasurementsChange(updatedMeasurements);
         }
 
-        // Now, set the new numpad config
         setNumpadConfig(prev => {
             const isSameButton = prev.isOpen && prev.measurementId === measurementId && prev.field === field;
             
             if (isSameButton) {
-                // Tapped same button again, switch to edit mode
                 return {
                     ...prev,
                     shouldClearOnNextInput: false,
                 };
             }
 
-            // New focus, switch to replace mode
             return {
                 isOpen: true,
                 measurementId,
@@ -896,7 +876,6 @@ const App: React.FC = () => {
         const { measurementId, field, currentValue } = numpadConfig;
         if (measurementId === null || field === null) return;
 
-        // 1. Calculate the final value and create an updated measurement list
         let finalValue: string | number = currentValue;
         if (field === 'quantidade') {
             finalValue = parseInt(currentValue, 10) || 1;
@@ -909,18 +888,15 @@ const App: React.FC = () => {
         );
         handleMeasurementsChange(updatedMeasurements);
 
-        // 2. Determine the next field in the sequence
         const fieldSequence: Array<'largura' | 'altura' | 'quantidade'> = ['largura', 'altura', 'quantidade'];
         const currentIndex = fieldSequence.indexOf(field);
         const nextIndex = currentIndex + 1;
 
-        // 3. If there's a next field, transition to it. Otherwise, close the numpad.
         if (nextIndex < fieldSequence.length) {
             const nextField = fieldSequence[nextIndex];
             const currentMeasurement = updatedMeasurements.find(m => m.id === measurementId);
             const nextValue = currentMeasurement ? currentMeasurement[nextField] : '';
 
-            // Transition numpad to the next field
             setNumpadConfig({
                 isOpen: true,
                 measurementId,
@@ -929,7 +905,6 @@ const App: React.FC = () => {
                 shouldClearOnNextInput: true,
             });
         } else {
-            // This was the last field, close the numpad
             setNumpadConfig({ isOpen: false, measurementId: null, field: null, currentValue: '', shouldClearOnNextInput: false });
         }
     }, [numpadConfig, measurements, handleMeasurementsChange]);
@@ -949,25 +924,20 @@ const App: React.FC = () => {
                 newValue = shouldClear ? char : newValue + char;
             }
 
-            // NEW: Auto-advance logic for width and height
             const isWidthOrHeight = prev.field === 'largura' || prev.field === 'altura';
-            // Pattern: a single digit, a dot, and two digits (e.g., "1.23")
             const matchesPattern = /^\d\.\d{2}$/.test(newValue);
 
             if (isWidthOrHeight && matchesPattern) {
-                // 1. Save the just-completed value
                 const finalValue = newValue.replace('.', ',');
                 const measurementsWithSavedValue = measurements.map(m =>
                     m.id === prev.measurementId ? { ...m, [prev.field!]: finalValue } : m
                 );
                 handleMeasurementsChange(measurementsWithSavedValue);
 
-                // 2. Determine the next field in the sequence
                 const fieldSequence: Array<'largura' | 'altura' | 'quantidade'> = ['largura', 'altura', 'quantidade'];
                 const currentIndex = fieldSequence.indexOf(prev.field!);
                 const nextIndex = currentIndex + 1;
 
-                // 3. Transition to the next field
                 if (nextIndex < fieldSequence.length) {
                     const nextField = fieldSequence[nextIndex];
                     const currentMeasurement = measurementsWithSavedValue.find(m => m.id === prev.measurementId);
@@ -981,11 +951,9 @@ const App: React.FC = () => {
                         shouldClearOnNextInput: true,
                     };
                 } else {
-                    // This was the last field, close the numpad
                     return { isOpen: false, measurementId: null, field: null, currentValue: '', shouldClearOnNextInput: false };
                 }
             }
-            // END OF NEW LOGIC
 
             return { ...prev, currentValue: newValue, shouldClearOnNextInput: false };
         });
@@ -1003,7 +971,6 @@ const App: React.FC = () => {
         const { measurementId, field, currentValue } = numpadConfig;
         if (measurementId === null || field === null) return;
 
-        // Step 1: Save the current numpad value to the original measurement
         let finalValue: string | number = currentValue;
         if (field === 'quantidade') {
             finalValue = parseInt(currentValue, 10) || 1;
@@ -1015,28 +982,23 @@ const App: React.FC = () => {
             m.id === measurementId ? { ...m, [field]: finalValue } : m
         );
         
-        // Step 2: Find the updated measurement to duplicate
         const measurementToDuplicate = measurementsWithSavedValue.find(m => m.id === measurementId);
         
         if (measurementToDuplicate) {
-            // Step 3: Create the new duplicated measurement
             const newMeasurement: UIMeasurement = { 
                 ...measurementToDuplicate, 
                 id: Date.now(), 
                 isNew: true
             };
             
-            // Step 4: Insert the new measurement into the list
             const index = measurementsWithSavedValue.findIndex(m => m.id === measurementId);
             const finalMeasurements = [...measurementsWithSavedValue];
             finalMeasurements.splice(index + 1, 0, newMeasurement);
             
-            // Step 5: Update the state and ensure only the new one is marked for focus
             handleMeasurementsChange(finalMeasurements.map(m => 
                 m.id === newMeasurement.id ? m : { ...m, isNew: false }
             ));
 
-            // Step 6: Close the numpad
             setNumpadConfig({ isOpen: false, measurementId: null, field: null, currentValue: '', shouldClearOnNextInput: false });
         }
     }, [numpadConfig, measurements, handleMeasurementsChange]);
@@ -1045,13 +1007,11 @@ const App: React.FC = () => {
         const { measurementId, field } = numpadConfig;
         if (measurementId === null) return;
 
-        // Reset the measurement in the main state
         const updatedMeasurements = measurements.map(m =>
             m.id === measurementId ? { ...m, largura: '', altura: '', quantidade: 1 } : m
         );
         handleMeasurementsChange(updatedMeasurements);
 
-        // Reset the numpad state for the current field to reflect the cleared value
         setNumpadConfig(prev => ({
             ...prev,
             currentValue: field === 'quantidade' ? '1' : '',
@@ -1062,10 +1022,8 @@ const App: React.FC = () => {
     const handleNumpadAddGroup = useCallback(() => {
         const { measurementId, field, currentValue } = numpadConfig;
     
-        // Use a functional update for `setMeasurements` to avoid stale state issues.
         setMeasurements(currentMeasurements => {
             let measurementsWithSavedValue = currentMeasurements;
-            // Step 1: Save the current value if a field is being edited.
             if (measurementId !== null && field !== null) {
                 let finalValue: string | number = currentValue;
                 if (field === 'quantidade') {
@@ -1078,7 +1036,6 @@ const App: React.FC = () => {
                 );
             }
     
-            // Step 2: Add the new measurement.
             const newMeasurement: UIMeasurement = { ...createEmptyMeasurement(), isNew: true };
             const finalMeasurements = [
                 newMeasurement,
@@ -1090,7 +1047,6 @@ const App: React.FC = () => {
     
         setIsDirty(true);
         
-        // Step 3: Close the numpad.
         setNumpadConfig({ isOpen: false, measurementId: null, field: null, currentValue: '', shouldClearOnNextInput: false });
     }, [numpadConfig, createEmptyMeasurement, setIsDirty]);
 
@@ -1173,8 +1129,7 @@ const App: React.FC = () => {
     const handleUpdateEditingMeasurement = useCallback((updatedData: Partial<Measurement>) => {
         if (!editingMeasurement) return;
         const updatedMeasurement = { ...editingMeasurement, ...updatedData };
-        setEditingMeasurement(updatedMeasurement); // Update state for modal
-        // Also update the main list
+        setEditingMeasurement(updatedMeasurement);
         const newMeasurements = measurements.map(m => m.id === updatedMeasurement.id ? updatedMeasurement : m);
         handleMeasurementsChange(newMeasurements);
     }, [editingMeasurement, measurements, handleMeasurementsChange]);
@@ -1185,12 +1140,9 @@ const App: React.FC = () => {
 
     const handleSaveAgendamento = useCallback(async (agendamentoData: Omit<Agendamento, 'id'> | Agendamento) => {
         try {
-            // --- DB Mutation Phase ---
             const savedAgendamento = await db.saveAgendamento(agendamentoData);
     
-            // If the appointment is linked to a PDF, ensure the link is stored in the PDF record.
             if (savedAgendamento.pdfId) {
-                // Fetch fresh data to avoid overwriting with stale state
                 const allPdfsFromDb = await db.getAllPDFs();
                 const pdfToUpdate = allPdfsFromDb.find(p => p.id === savedAgendamento.pdfId);
                 
@@ -1199,8 +1151,6 @@ const App: React.FC = () => {
                 }
             }
             
-            // --- State Reload Phase ---
-            // After all DB mutations are complete, reload the state from the single source of truth (DB).
             await Promise.all([loadAgendamentos(), loadAllPdfs()]);
     
             handleCloseAgendamentoModal();
@@ -1249,7 +1199,6 @@ const App: React.FC = () => {
     }, [handleCloseAgendamentoModal]);
 
     const handleCreateNewAgendamento = useCallback((date: Date) => {
-        // Set time to a default, like 9 AM, but keep the selected date.
         const startDate = new Date(date);
         startDate.setHours(9, 0, 0, 0);
 
@@ -1628,7 +1577,7 @@ const App: React.FC = () => {
                             const newMeasurement: UIMeasurement = { 
                                 ...measurementToDuplicate, 
                                 id: Date.now(), 
-                                isNew: false // Don't focus in this context
+                                isNew: false
                             };
                             const index = measurements.findIndex(m => m.id === measurementToDuplicate.id);
                             const newMeasurements = [...measurements];
