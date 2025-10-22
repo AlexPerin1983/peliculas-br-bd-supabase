@@ -40,10 +40,10 @@ const ClientBar: React.FC<ClientBarProps> = ({
             <button
                 onClick={onClick}
                 disabled={disabled}
-                className={`flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-lg transition duration-200 ${
+                className={`flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-lg transition duration-200 ${
                     disabled
                         ? 'text-slate-400 bg-slate-100 cursor-not-allowed'
-                        : `text-slate-600 bg-white hover:bg-slate-200 hover:text-slate-800 border border-slate-200 ${className}`
+                        : `text-slate-600 bg-white hover:bg-slate-200 hover:text-slate-800 ${className}`
                 }`}
                 aria-label={tooltip}
             >
@@ -55,79 +55,72 @@ const ClientBar: React.FC<ClientBarProps> = ({
     const fullAddress = selectedClient ? formatAddress(selectedClient) : '';
 
     return (
-        <div className="mb-4 bg-white rounded-xl border border-slate-200 shadow-sm">
-            {/* Header Section */}
-            <div className="flex items-start justify-between p-4 border-b border-slate-100">
-                <div 
-                    onClick={onSelectClientClick}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onSelectClientClick() }}
-                    className="text-left flex-grow pr-4 min-w-0 cursor-pointer focus:outline-none group"
-                    aria-label="Trocar de cliente"
-                >
-                    {selectedClient ? (
-                        <>
-                            <div className="flex items-center gap-2 mb-1">
-                                <span className="text-xs font-semibold uppercase text-slate-500 tracking-wider">Cliente</span>
-                                {selectedClient.telefone && (
-                                    <span className="text-xs font-medium text-slate-600 bg-slate-100 px-2 py-0.5 rounded">
-                                        {selectedClient.telefone}
-                                    </span>
-                                )}
-                            </div>
-                            <h2 className="text-xl font-bold text-slate-800 leading-tight truncate group-hover:text-slate-900 transition-colors">
-                                {selectedClient.nome}
-                            </h2>
-                        </>
-                    ) : (
-                        <>
-                            <span className="text-xs font-semibold uppercase text-slate-500 tracking-wider">Cliente</span>
-                            <h2 className="text-xl font-bold text-slate-800 leading-tight truncate mt-1">
-                                Nenhum cliente selecionado
-                            </h2>
-                        </>
-                    )}
-                </div>
-
-                <div className="flex items-center gap-2 flex-shrink-0">
-                    <ActionButton
-                        onClick={onAddClient}
-                        icon="fas fa-plus"
-                        tooltip="Adicionar Novo Cliente"
-                    />
-                    <ActionButton
-                        onClick={onEditClient}
-                        icon="fas fa-pen"
-                        tooltip="Editar Cliente Atual"
-                        disabled={!selectedClient}
-                    />
-                    <ActionButton
-                        onClick={onDeleteClient}
-                        icon="fas fa-trash-alt"
-                        tooltip="Excluir Cliente Atual"
-                        className="hover:bg-red-50 hover:text-red-600 hover:border-red-200"
-                        disabled={!selectedClient}
-                    />
-                </div>
+        <div className="flex items-center justify-between mb-4">
+            <div 
+                onClick={onSelectClientClick}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onSelectClientClick() }}
+                className="text-left flex-grow pr-4 py-2 rounded-lg hover:bg-slate-50 transition-colors min-w-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-slate-300"
+                aria-label="Trocar de cliente"
+            >
+                {selectedClient ? (
+                    <>
+                        <div className="flex items-baseline gap-2">
+                            <span className="text-xs font-semibold uppercase text-slate-500 tracking-wider">Cliente:</span>
+                            {selectedClient.telefone && (
+                                <span className="font-medium text-sm text-slate-600">
+                                    {selectedClient.telefone}
+                                </span>
+                            )}
+                        </div>
+                        <h2 className="text-xl font-bold text-slate-800 leading-tight truncate mt-0.5">
+                            {selectedClient.nome}
+                        </h2>
+                        {fullAddress && (
+                             <a
+                                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullAddress)}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="mt-1 group flex items-center gap-2 text-sm text-slate-600 hover:text-blue-600 transition-colors"
+                                aria-label={`Abrir endereço no mapa: ${fullAddress}`}
+                            >
+                                <i className="fas fa-map-marker-alt text-slate-400 group-hover:text-blue-500 flex-shrink-0"></i>
+                                <span className="truncate group-hover:underline">{fullAddress}</span>
+                            </a>
+                        )}
+                    </>
+                ) : (
+                    <>
+                        <span className="text-xs font-semibold uppercase text-slate-500 tracking-wider">Cliente</span>
+                        <h2 className="text-xl font-bold text-slate-800 leading-tight truncate mt-1">
+                            Nenhum cliente selecionado
+                        </h2>
+                    </>
+                )}
             </div>
 
-            {/* Address Section */}
-            {fullAddress && (
-                <div className="px-4 py-3 bg-slate-50/50">
-                    <a
-                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullAddress)}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="group flex items-start gap-2.5 text-sm text-slate-600 hover:text-blue-600 transition-colors"
-                        aria-label={`Abrir endereço no mapa: ${fullAddress}`}
-                    >
-                        <i className="fas fa-map-marker-alt text-slate-400 group-hover:text-blue-500 flex-shrink-0 mt-0.5"></i>
-                        <span className="group-hover:underline leading-relaxed">{fullAddress}</span>
-                    </a>
-                </div>
-            )}
+            <div className="flex items-center space-x-2 flex-shrink-0">
+                <ActionButton
+                    onClick={onAddClient}
+                    icon="fas fa-plus"
+                    tooltip="Adicionar Novo Cliente"
+                />
+                <ActionButton
+                    onClick={onEditClient}
+                    icon="fas fa-pen"
+                    tooltip="Editar Cliente Atual"
+                    disabled={!selectedClient}
+                />
+                <ActionButton
+                    onClick={onDeleteClient}
+                    icon="fas fa-trash-alt"
+                    tooltip="Excluir Cliente Atual"
+                    className="hover:bg-red-100 hover:text-red-600"
+                    disabled={!selectedClient}
+                />
+            </div>
         </div>
     );
 };
