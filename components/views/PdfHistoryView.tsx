@@ -189,9 +189,16 @@ const PdfHistoryItem: React.FC<{
             >
                 <div className="relative z-10 w-full p-4 bg-white rounded-lg border border-slate-200/80 shadow-md">
                     <div className="flex items-start justify-between gap-4">
-                        <p className="font-bold text-slate-900 text-xl truncate">
-                            {clientName}
-                        </p>
+                        <div className="flex-grow min-w-0">
+                            <p className="font-bold text-slate-900 text-xl truncate">
+                                {clientName}
+                            </p>
+                            {pdf.proposalOptionName && (
+                                <p className="text-sm text-slate-500 mt-0.5">
+                                    {pdf.proposalOptionName}
+                                </p>
+                            )}
+                        </div>
                         <div className="flex items-center space-x-1 text-slate-500 flex-shrink-0">
                             <button
                                 onClick={(e) => { e.stopPropagation(); onDownload(pdf.pdfBlob, pdf.nomeArquivo); }}

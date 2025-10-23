@@ -27,6 +27,16 @@ export interface Measurement {
     discountType?: 'percentage' | 'fixed';
 }
 
+export interface ProposalOption {
+    id: number;
+    name: string;
+    measurements: Measurement[];
+    generalDiscount: {
+        value: string;
+        type: 'percentage' | 'fixed';
+    };
+}
+
 export interface Film {
     nome: string;
     preco: number;
@@ -118,4 +128,5 @@ export interface SavedPDF {
     measurements?: Measurement[];
     status?: 'pending' | 'approved' | 'revised';
     agendamentoId?: number;
+    proposalOptionName?: string;
 }

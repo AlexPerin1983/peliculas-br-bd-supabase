@@ -1,8 +1,8 @@
-import { Client, Measurement, UserInfo, Film, SavedPDF, Agendamento } from '../types';
+import { Client, Measurement, UserInfo, Film, SavedPDF, Agendamento, ProposalOption } from '../types';
 import { mockUserInfo } from './mockData';
 
 const DB_NAME = 'ClientesDB';
-const DB_VERSION = 5;
+const DB_VERSION = 6;
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
@@ -43,6 +43,11 @@ const openDB = (): Promise<IDBDatabase> => {
                 }
             }
 
+            if (event.oldVersion < 6) {
+                if (!db.objectStoreNames.contains('proposal_options')) {
+                    db.createObjectStore('proposal_options', { keyPath: 'clienteId' });
+                }
+            }
 
             // Populate with default data only on initial database creation
             if (event.oldVersion < 1) {
@@ -153,13 +158,25 @@ export const getAllClients = () => dbGetAll<Client>('clientes');
 export const saveClient = (client: Omit<Client, 'id'> | Client) => dbPut<Client>('clientes', client);
 export const deleteClient = (id: number) => dbDelete('clientes', id);
 
-// Measurement functions
+// Measurement functions (deprecated - use proposal options instead)
 export const getMeasurements = async (clientId: number): Promise<Measurement[] | null> => {
     const result = await dbGet<{ clienteId: number, medidas: Measurement[] }>('medidas', clientId);
     return result ? result.medidas : null;
 };
 export const saveMeasurements = (clientId: number, medidas: Measurement[]) => dbPut('medidas', { clienteId: clientId, medidas });
 export const deleteMeasurements = (clientId: number) => dbDelete('medidas', clientId);
+
+// Proposal Options functions
+export const getProposalOptions = async (clientId: number): Promise<ProposalOption[]> => {
+    const result = await dbGet<{ clienteId: number, options: ProposalOption[] }>('proposal_options', clientId);
+    return result?.options || [];
+};
+
+export const saveProposalOptions = async (clientId: number, options: ProposalOption[]) => {
+    return dbPut('proposal_options', { clienteId: clientId, options });
+};
+
+export const deleteProposalOptions = (clientId: number) => dbDelete('proposal_options', clientId);
 
 // UserInfo functions
 export const getUserInfo = async (): Promise<UserInfo> => {

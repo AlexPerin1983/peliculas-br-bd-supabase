@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense, useRef } from 'react';
-import { Client, Measurement, UserInfo, Film, PaymentMethods, SavedPDF, Agendamento } from './types';
+import { Client, Measurement, UserInfo, Film, PaymentMethods, SavedPDF, Agendamento, ProposalOption } from './types';
 import * as db from './services/db';
 import { generatePDF } from './services/pdfGenerator';
 import Header from './components/Header';
@@ -21,6 +21,7 @@ import AgendamentoModal from './components/modals/AgendamentoModal';
 import DiscountModal from './components/modals/DiscountModal';
 import AIMeasurementModal from './components/modals/AIMeasurementModal';
 import ApiKeyModal from './components/modals/ApiKeyModal';
+import ProposalOptionsTabs from './components/ProposalOptionsTabs';
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 
 
@@ -54,14 +55,14 @@ const App: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [clients, setClients] = useState<Client[]>([]);
     const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
-    const [measurements, setMeasurements] = useState<UIMeasurement[]>([]);
+    const [proposalOptions, setProposalOptions] = useState<ProposalOption[]>([]);
+    const [activeOptionId, setActiveOptionId] = useState<number | null>(null);
     const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
     const [films, setFilms] = useState<Film[]>([]);
     const [allSavedPdfs, setAllSavedPdfs] = useState<SavedPDF[]>([]);
     const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
     const [activeTab, setActiveTab] = useState<ActiveTab>('client');
     const [isDirty, setIsDirty] = useState(false);
-    const [generalDiscount, setGeneralDiscount] = useState<{ value: string; type: 'percentage' | 'fixed' }>({ value: '', type: 'percentage' });
     const [hasLoadedHistory, setHasLoadedHistory] = useState(false);
     const [hasLoadedAgendamentos, setHasLoadedAgendamentos] = useState(false);
 
@@ -190,24 +191,44 @@ const App: React.FC = () => {
     useEffect(() => {
         const loadDataForClient = async () => {
             if (selectedClientId) {
-                const savedMeasurements = await db.getMeasurements(selectedClientId);
-                setMeasurements(savedMeasurements || []);
+                const savedOptions = await db.getProposalOptions(selectedClientId);
+                
+                if (savedOptions.length === 0) {
+                    const defaultOption: ProposalOption = {
+                        id: Date.now(),
+                        name: 'Opção 1',
+                        measurements: [],
+                        generalDiscount: { value: '', type: 'percentage' }
+                    };
+                    setProposalOptions([defaultOption]);
+                    setActiveOptionId(defaultOption.id);
+                } else {
+                    setProposalOptions(savedOptions);
+                    setActiveOptionId(savedOptions[0].id);
+                }
                 setIsDirty(false);
             } else {
-                setMeasurements([]);
+                setProposalOptions([]);
+                setActiveOptionId(null);
                 setIsDirty(false);
             }
         };
         loadDataForClient();
     }, [selectedClientId]);
 
+    const activeOption = useMemo(() => {
+        return proposalOptions.find(opt => opt.id === activeOptionId) || null;
+    }, [proposalOptions, activeOptionId]);
+
+    const measurements = activeOption?.measurements || [];
+    const generalDiscount = activeOption?.generalDiscount || { value: '', type: 'percentage' as const };
+
     const handleSaveChanges = useCallback(async () => {
-        if (selectedClientId) {
-            const measurementsToSave = measurements.map(({ isNew, ...rest }) => rest);
-            await db.saveMeasurements(selectedClientId, measurementsToSave);
+        if (selectedClientId && proposalOptions.length > 0) {
+            await db.saveProposalOptions(selectedClientId, proposalOptions);
             setIsDirty(false);
         }
-    }, [selectedClientId, measurements]);
+    }, [selectedClientId, proposalOptions]);
 
     useEffect(() => {
         if (!isDirty) {
@@ -218,13 +239,30 @@ const App: React.FC = () => {
         }, 1500);
 
         return () => clearTimeout(timerId);
-    }, [measurements, isDirty, handleSaveChanges]);
+    }, [proposalOptions, isDirty, handleSaveChanges]);
 
 
     const handleMeasurementsChange = useCallback((newMeasurements: UIMeasurement[]) => {
-        setMeasurements(newMeasurements);
+        if (!activeOptionId) return;
+        
+        setProposalOptions(prev => prev.map(opt =>
+            opt.id === activeOptionId
+                ? { ...opt, measurements: newMeasurements }
+                : opt
+        ));
         setIsDirty(true);
-    }, []);
+    }, [activeOptionId]);
+
+    const handleGeneralDiscountChange = useCallback((discount: { value: string; type: 'percentage' | 'fixed' }) => {
+        if (!activeOptionId) return;
+        
+        setProposalOptions(prev => prev.map(opt =>
+            opt.id === activeOptionId
+                ? { ...opt, generalDiscount: discount }
+                : opt
+        ));
+        setIsDirty(true);
+    }, [activeOptionId]);
 
     const createEmptyMeasurement = useCallback((): Measurement => ({
         id: Date.now(),
@@ -249,17 +287,53 @@ const App: React.FC = () => {
     }, [createEmptyMeasurement, measurements, handleMeasurementsChange]);
     
     const duplicateAllMeasurements = useCallback(() => {
-        const duplicated = measurements.map((m, index) => ({
-            ...m,
-            id: Date.now() + Math.random() + index,
-            isNew: index === 0,
-        }));
-        const newMeasurements = [
-            ...duplicated,
-            ...measurements.map(m => ({...m, isNew: false}))
-        ];
-        handleMeasurementsChange(newMeasurements);
-    }, [measurements, handleMeasurementsChange]);
+        if (!activeOption) return;
+        
+        const newOption: ProposalOption = {
+            id: Date.now(),
+            name: `Opção ${proposalOptions.length + 1}`,
+            measurements: activeOption.measurements.map((m, index) => ({
+                ...m,
+                id: Date.now() + index,
+                isNew: false
+            })),
+            generalDiscount: { ...activeOption.generalDiscount }
+        };
+        
+        setProposalOptions(prev => [...prev, newOption]);
+        setActiveOptionId(newOption.id);
+        setIsDirty(true);
+    }, [activeOption, proposalOptions.length]);
+
+    const handleAddProposalOption = useCallback(() => {
+        const newOption: ProposalOption = {
+            id: Date.now(),
+            name: `Opção ${proposalOptions.length + 1}`,
+            measurements: [],
+            generalDiscount: { value: '', type: 'percentage' }
+        };
+        
+        setProposalOptions(prev => [...prev, newOption]);
+        setActiveOptionId(newOption.id);
+        setIsDirty(true);
+    }, [proposalOptions.length]);
+
+    const handleRenameProposalOption = useCallback((optionId: number, newName: string) => {
+        setProposalOptions(prev => prev.map(opt =>
+            opt.id === optionId ? { ...opt, name: newName } : opt
+        ));
+        setIsDirty(true);
+    }, []);
+
+    const handleDeleteProposalOption = useCallback((optionId: number) => {
+        const remainingOptions = proposalOptions.filter(opt => opt.id !== optionId);
+        setProposalOptions(remainingOptions);
+        
+        if (activeOptionId === optionId && remainingOptions.length > 0) {
+            setActiveOptionId(remainingOptions[0].id);
+        }
+        setIsDirty(true);
+    }, [proposalOptions, activeOptionId]);
 
     const handleConfirmClearAll = useCallback(() => {
         handleMeasurementsChange([]);
@@ -343,7 +417,7 @@ const App: React.FC = () => {
         if (!selectedClientId) return;
 
         await db.deleteClient(selectedClientId);
-        await db.deleteMeasurements(selectedClientId);
+        await db.deleteProposalOptions(selectedClientId);
         
         const pdfsForClient = await db.getPDFsForClient(selectedClientId);
         for (const pdf of pdfsForClient) {
@@ -485,7 +559,7 @@ const App: React.FC = () => {
     }, [measurements, films, generalDiscount]);
 
     const handleGeneratePdf = useCallback(async () => {
-        if (!selectedClient || !userInfo) {
+        if (!selectedClient || !userInfo || !activeOption) {
             alert("Selecione um cliente e preencha as informações da empresa antes de gerar o PDF.");
             return;
         }
@@ -506,7 +580,7 @@ const App: React.FC = () => {
         setPdfGenerationStatus('generating');
         try {
             const pdfBlob = await generatePDF(selectedClient, userInfo, activeMeasurements, films, generalDiscount, totals);
-            const filename = `orcamento_${selectedClient.nome.replace(/\s+/g, '_').toLowerCase()}_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.pdf`;
+            const filename = `orcamento_${selectedClient.nome.replace(/\s+/g, '_').toLowerCase()}_${activeOption.name.replace(/\s+/g, '_').toLowerCase()}_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.pdf`;
             
             const generalDiscountForDb: SavedPDF['generalDiscount'] = {
                 ...generalDiscount,
@@ -531,7 +605,8 @@ const App: React.FC = () => {
                 pdfBlob: pdfBlob,
                 nomeArquivo: filename,
                 measurements: activeMeasurements.map(({ isNew, ...rest }) => rest),
-                status: 'pending'
+                status: 'pending',
+                proposalOptionName: activeOption.name
             };
             await db.savePDF(pdfToSave);
             
@@ -547,7 +622,7 @@ const App: React.FC = () => {
             alert("Ocorreu um erro ao gerar o PDF. Verifique o console para mais detalhes.");
             setPdfGenerationStatus('idle');
         }
-    }, [selectedClient, userInfo, isDirty, handleSaveChanges, measurements, films, generalDiscount, totals, selectedClientId, downloadBlob, hasLoadedHistory, loadAllPdfs]);
+    }, [selectedClient, userInfo, activeOption, isDirty, handleSaveChanges, measurements, films, generalDiscount, totals, selectedClientId, downloadBlob, hasLoadedHistory, loadAllPdfs]);
 
     const handleGoToHistoryFromPdf = useCallback(() => {
         setPdfGenerationStatus('idle');
@@ -1022,33 +1097,39 @@ const App: React.FC = () => {
     const handleNumpadAddGroup = useCallback(() => {
         const { measurementId, field, currentValue } = numpadConfig;
     
-        setMeasurements(currentMeasurements => {
-            let measurementsWithSavedValue = currentMeasurements;
-            if (measurementId !== null && field !== null) {
-                let finalValue: string | number = currentValue;
-                if (field === 'quantidade') {
-                    finalValue = parseInt(currentValue, 10) || 1;
-                } else {
-                    finalValue = (currentValue === '' || currentValue === '.') ? '0' : currentValue.replace('.', ',');
-                }
-                measurementsWithSavedValue = currentMeasurements.map(m =>
-                    m.id === measurementId ? { ...m, [field]: finalValue } : m
-                );
-            }
-    
-            const newMeasurement: UIMeasurement = { ...createEmptyMeasurement(), isNew: true };
-            const finalMeasurements = [
-                newMeasurement,
-                ...measurementsWithSavedValue.map(m => ({ ...m, isNew: false }))
-            ];
+        setProposalOptions(currentOptions => {
+            if (!activeOptionId) return currentOptions;
             
-            return finalMeasurements;
+            return currentOptions.map(opt => {
+                if (opt.id !== activeOptionId) return opt;
+                
+                let measurementsWithSavedValue = opt.measurements;
+                if (measurementId !== null && field !== null) {
+                    let finalValue: string | number = currentValue;
+                    if (field === 'quantidade') {
+                        finalValue = parseInt(currentValue, 10) || 1;
+                    } else {
+                        finalValue = (currentValue === '' || currentValue === '.') ? '0' : currentValue.replace('.', ',');
+                    }
+                    measurementsWithSavedValue = opt.measurements.map(m =>
+                        m.id === measurementId ? { ...m, [field]: finalValue } : m
+                    );
+                }
+        
+                const newMeasurement: UIMeasurement = { ...createEmptyMeasurement(), isNew: true };
+                const finalMeasurements = [
+                    newMeasurement,
+                    ...measurementsWithSavedValue.map(m => ({ ...m, isNew: false }))
+                ];
+                
+                return { ...opt, measurements: finalMeasurements };
+            });
         });
     
         setIsDirty(true);
         
         setNumpadConfig({ isOpen: false, measurementId: null, field: null, currentValue: '', shouldClearOnNextInput: false });
-    }, [numpadConfig, createEmptyMeasurement, setIsDirty]);
+    }, [numpadConfig, createEmptyMeasurement, activeOptionId]);
 
     const handleTabChange = useCallback((tab: ActiveTab) => {
         if (numpadConfig.isOpen) {
@@ -1422,6 +1503,18 @@ const App: React.FC = () => {
                                            onEditClient={() => handleOpenClientModal('edit')}
                                            onDeleteClient={handleDeleteClient}
                                        />
+                                       
+                                       {proposalOptions.length > 0 && activeOptionId && (
+                                           <ProposalOptionsTabs
+                                               options={proposalOptions}
+                                               activeOptionId={activeOptionId}
+                                               onSelectOption={setActiveOptionId}
+                                               onAddOption={handleAddProposalOption}
+                                               onRenameOption={handleRenameProposalOption}
+                                               onDeleteOption={handleDeleteProposalOption}
+                                           />
+                                       )}
+                                       
                                        <div id="contentContainer" className="w-full min-h-[300px]">
                                            {renderContent()}
                                        </div>
@@ -1451,7 +1544,7 @@ const App: React.FC = () => {
                                    <SummaryBar 
                                         totals={totals}
                                         generalDiscount={generalDiscount}
-                                        onGeneralDiscountChange={setGeneralDiscount}
+                                        onGeneralDiscountChange={handleGeneralDiscountChange}
                                         isDesktop
                                     />
                                    <ActionsBar
@@ -1465,7 +1558,7 @@ const App: React.FC = () => {
                                 <MobileFooter
                                     totals={totals}
                                     generalDiscount={generalDiscount}
-                                    onGeneralDiscountChange={setGeneralDiscount}
+                                    onGeneralDiscountChange={handleGeneralDiscountChange}
                                     onAddMeasurement={addMeasurement}
                                     onDuplicateMeasurements={duplicateAllMeasurements}
                                     onGeneratePdf={handleGeneratePdf}
@@ -1598,7 +1691,7 @@ const App: React.FC = () => {
                     onClose={() => setIsClearAllModalOpen(false)}
                     onConfirm={handleConfirmClearAll}
                     title="Confirmar Exclusão Total"
-                    message="Tem certeza que deseja apagar TODAS as medidas para este cliente? Esta ação não pode ser desfeita."
+                    message="Tem certeza que deseja apagar TODAS as medidas para esta opção? Esta ação não pode ser desfeita."
                     confirmButtonText="Sim, Excluir Tudo"
                     confirmButtonVariant="danger"
                 />
@@ -1640,7 +1733,7 @@ const App: React.FC = () => {
                                     </div>
                                     <div className="ml-3">
                                         <p>
-                                            Todas as suas medidas e histórico de orçamentos (PDFs) serão <strong>perdidos permanentemente</strong>. Esta ação não pode ser desfeita.
+                                            Todas as suas medidas, opções de proposta e histórico de orçamentos (PDFs) serão <strong>perdidos permanentemente</strong>. Esta ação não pode ser desfeita.
                                         </p>
                                     </div>
                                 </div>
