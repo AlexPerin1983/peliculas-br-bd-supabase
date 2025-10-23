@@ -14,13 +14,14 @@ const ProposalOptionsTabs: React.FC<ProposalOptionsTabsProps> = ({
     options,
     activeOptionId,
     onSelectOption,
-    onAddOption,
     onRenameOption,
-    onDeleteOption
+    onDeleteOption,
+    onAddOption
 }) => {
     const [editingOptionId, setEditingOptionId] = useState<number | null>(null);
     const [editingName, setEditingName] = useState('');
     const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
+    const [isAnimating, setIsAnimating] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
     const previousActiveIdRef = useRef<number>(activeOptionId);
 
@@ -37,11 +38,14 @@ const ProposalOptionsTabs: React.FC<ProposalOptionsTabsProps> = ({
             const currentIndex = options.findIndex(opt => opt.id === activeOptionId);
             
             if (previousIndex !== -1 && currentIndex !== -1) {
-                setSwipeDirection(currentIndex > previousIndex ? 'left' : 'right');
+                const direction = currentIndex > previousIndex ? 'left' : 'right';
+                setSwipeDirection(direction);
+                setIsAnimating(true);
                 
                 setTimeout(() => {
                     setSwipeDirection(null);
-                }, 300);
+                    setIsAnimating(false);
+                }, 400);
             }
             
             previousActiveIdRef.current = activeOptionId;
@@ -77,13 +81,13 @@ const ProposalOptionsTabs: React.FC<ProposalOptionsTabsProps> = ({
 
     return (
         <>
-            <div className="flex items-center gap-2 overflow-x-auto pb-2 mb-4 border-b border-slate-200">
+            <div className="flex items-center gap-2 overflow-x-auto pb-2 mb-4 border-b border-slate-200 scrollbar-hide">
                 {options.map((option) => (
                     <div
                         key={option.id}
-                        className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors cursor-pointer flex-shrink-0 ${
+                        className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-200 cursor-pointer flex-shrink-0 ${
                             activeOptionId === option.id
-                                ? 'bg-slate-800 text-white shadow-sm'
+                                ? 'bg-slate-800 text-white shadow-sm scale-105'
                                 : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                         }`}
                     >
@@ -144,35 +148,59 @@ const ProposalOptionsTabs: React.FC<ProposalOptionsTabsProps> = ({
                 </button>
             </div>
             
-            {swipeDirection && (
-                <style jsx>{`
-                    @keyframes swipe-in-from-right {
-                        from {
-                            opacity: 0;
-                            transform: translateX(30px);
-                        }
-                        to {
-                            opacity: 1;
-                            transform: translateX(0);
-                        }
+            <style jsx>{`
+                .scrollbar-hide::-webkit-scrollbar {
+                    display: none;
+                }
+                .scrollbar-hide {
+                    -ms-overflow-style: none;
+                    scrollbar-width: none;
+                }
+
+                @keyframes slide-out-left {
+                    0% {
+                        opacity: 1;
+                        transform: translateX(0) scale(1);
                     }
-                    
-                    @keyframes swipe-in-from-left {
-                        from {
-                            opacity: 0;
-                            transform: translateX(-30px);
-                        }
-                        to {
-                            opacity: 1;
-                            transform: translateX(0);
-                        }
+                    50% {
+                        opacity: 0.3;
+                        transform: translateX(-40px) scale(0.95);
                     }
-                    
+                    51% {
+                        opacity: 0;
+                        transform: translateX(40px) scale(0.95);
+                    }
+                    100% {
+                        opacity: 1;
+                        transform: translateX(0) scale(1);
+                    }
+                }
+                
+                @keyframes slide-out-right {
+                    0% {
+                        opacity: 1;
+                        transform: translateX(0) scale(1);
+                    }
+                    50% {
+                        opacity: 0.3;
+                        transform: translateX(40px) scale(0.95);
+                    }
+                    51% {
+                        opacity: 0;
+                        transform: translateX(-40px) scale(0.95);
+                    }
+                    100% {
+                        opacity: 1;
+                        transform: translateX(0) scale(1);
+                    }
+                }
+                
+                ${isAnimating ? `
                     :global(#contentContainer) {
-                        animation: ${swipeDirection === 'left' ? 'swipe-in-from-right' : 'swipe-in-from-left'} 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+                        animation: ${swipeDirection === 'left' ? 'slide-out-left' : 'slide-out-right'} 0.4s cubic-bezier(0.4, 0, 0.2, 1);
                     }
-                `}</style>
-            )}
+                ` : ''}
+            `}</style>
         </>
     );
 };
