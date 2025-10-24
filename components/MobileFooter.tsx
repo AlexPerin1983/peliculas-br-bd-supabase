@@ -149,7 +149,7 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
                         </div>
 
                         <ActionButton 
-                            onClick={() => setIsExpanded(!isExpanded)} 
+                            onClick={(e: React.MouseEvent) => { e.stopPropagation(); setIsExpanded(!isExpanded); }}
                             label="Totais" 
                             icon="fas fa-dollar-sign"
                             isActive={isExpanded}
