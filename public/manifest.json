@@ -1,21 +1,28 @@
 {
-  "name": "Películas Brasil",
-  "short_name": "PeliculasBR",
-  "description": "Calculadora de Orçamento de Películas de Vidro",
+  "name": "Películas Brasil - Calculadora de Orçamentos",
+  "short_name": "Películas BR",
+  "description": "Calculadora profissional de orçamento para instalação de películas de vidro",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "portrait-primary",
   "background_color": "#ffffff",
   "theme_color": "#364562",
   "icons": [
     {
       "src": "/icon-192x192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
       "src": "/icon-512x512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
-  ]
+  ],
+  "categories": ["business", "productivity", "finance"],
+  "screenshots": [],
+  "prefer_related_applications": false
 }

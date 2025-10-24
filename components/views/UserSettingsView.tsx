@@ -3,6 +3,7 @@ import { UserInfo } from '../../types';
 import Input from '../ui/Input';
 import ColorPicker from '../ui/ColorPicker';
 import SignatureModal from '../modals/SignatureModal';
+import PwaDiagnostics from '../PwaDiagnostics';
 
 interface UserSettingsViewProps {
     userInfo: UserInfo;
@@ -44,9 +45,14 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({ userInfo, onSave, o
     const [showSuccess, setShowSuccess] = useState(false);
     const [newEmployeeName, setNewEmployeeName] = useState('');
     const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
+    const [showDiagnostics, setShowDiagnostics] = useState(false);
+    const [isInIframe, setIsInIframe] = useState(false);
 
 
     useEffect(() => {
+        // Check if running in iframe
+        setIsInIframe(window.self !== window.top);
+        
         setFormData(userInfo);
         setLogoPreview(userInfo.logo);
     }, [userInfo]);
@@ -165,6 +171,10 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({ userInfo, onSave, o
                 provider: provider,
             }
         }));
+    };
+
+    const handleOpenInNewWindow = () => {
+        window.open(window.location.href, '_blank');
     };
 
     const labelClass = "block text-sm font-medium text-slate-700 mb-1";
@@ -428,10 +438,45 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({ userInfo, onSave, o
             </div>
             
             <div className={sectionClass}>
-                <h3 className={sectionTitleClass}>Aplicativo (PWA)</h3>
+                <div className="flex justify-between items-center">
+                    <h3 className={sectionTitleClass}>Aplicativo (PWA)</h3>
+                    <button
+                        type="button"
+                        onClick={() => setShowDiagnostics(!showDiagnostics)}
+                        className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1"
+                    >
+                        <i className="fas fa-info-circle"></i>
+                        {showDiagnostics ? 'Ocultar' : 'Diagnóstico'}
+                    </button>
+                </div>
                 <p className="text-sm text-slate-500 mt-2">
                     Instale o aplicativo no seu dispositivo para acesso rápido e uso offline.
                 </p>
+                
+                {isInIframe && (
+                    <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                        <div className="flex items-start gap-2">
+                            <i className="fas fa-exclamation-triangle text-yellow-600 mt-0.5"></i>
+                            <div className="flex-1">
+                                <p className="text-sm text-yellow-800 font-medium">App rodando em iframe</p>
+                                <p className="text-xs text-yellow-700 mt-1">
+                                    PWAs não podem ser instalados de dentro de iframes. Abra em uma nova janela para instalar.
+                                </p>
+                                <button
+                                    type="button"
+                                    onClick={handleOpenInNewWindow}
+                                    className="mt-2 px-3 py-1.5 bg-yellow-600 text-white text-xs font-semibold rounded-md hover:bg-yellow-700 transition-colors flex items-center gap-1"
+                                >
+                                    <i className="fas fa-external-link-alt"></i>
+                                    Abrir em Nova Janela
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+                
+                {showDiagnostics && <PwaDiagnostics />}
+                
                 <div className="mt-4">
                     {isPwaInstalled ? (
                         <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-800 font-medium flex items-center gap-2">
@@ -442,10 +487,11 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({ userInfo, onSave, o
                         <button
                             type="button"
                             onClick={onPromptPwaInstall}
-                            className="w-full px-4 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 shadow-md"
+                            disabled={isInIframe}
+                            className="w-full px-4 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 shadow-md disabled:bg-slate-400 disabled:cursor-not-allowed"
                         >
                             <i className="fas fa-download"></i>
-                            Instalar Aplicativo Agora
+                            Instalar Aplicativo
                         </button>
                     )}
                 </div>

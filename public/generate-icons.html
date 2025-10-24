@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Gerar Ícones PWA</title>
+</head>
+<body>
+    <h1>Gerando Ícones...</h1>
+    <canvas id="canvas192" width="192" height="192" style="display:none;"></canvas>
+    <canvas id="canvas512" width="512" height="512" style="display:none;"></canvas>
+    
+    <script>
+        function generateIcon(canvasId, size) {
+            const canvas = document.getElementById(canvasId);
+            const ctx = canvas.getContext('2d');
+            
+            // Background gradient
+            const gradient = ctx.createLinearGradient(0, 0, size, size);
+            gradient.addColorStop(0, '#364562');
+            gradient.addColorStop(1, '#937e44');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, size, size);
+            
+            // Add text
+            ctx.fillStyle = '#ffffff';
+            ctx.font = `bold ${size * 0.15}px Montserrat, sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('PB', size / 2, size / 2);
+            
+            // Download
+            canvas.toBlob((blob) => {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `icon-${size}x${size}.png`;
+                a.click();
+                URL.revokeObjectURL(url);
+            });
+        }
+        
+        // Generate both icons
+        setTimeout(() => {
+            generateIcon('canvas192', 192);
+            setTimeout(() => {
+                generateIcon('canvas512', 512);
+                document.body.innerHTML = '<h1>Ícones gerados! Verifique seus downloads.</h1><p>Mova os arquivos icon-192x192.png e icon-512x512.png para a pasta public/</p>';
+            }, 500);
+        }, 500);
+    </script>
+</body>
+</html>
