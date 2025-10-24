@@ -66,7 +66,7 @@ const CustomNumpad = forwardRef<HTMLDivElement, CustomNumpadProps>(({ onInput, o
     const isLastField = activeField === 'quantidade';
 
     return (
-        <div ref={ref} className="fixed bottom-0 left-0 right-0 bg-white p-2 pb-3 shadow-[0_-5px_15px_-5px_rgba(0,0,0,0.1)] border-t border-slate-200 z-50 animate-slide-up">
+        <div ref={ref} className="fixed bottom-0 left-0 right-0 bg-white p-2 pb-3 shadow-[0_-5px_15px_-5px_rgba(0,0,0,0.1)] border-t border-slate-100 z-50 animate-slide-up">
              <div className="max-w-sm mx-auto">
                 <div className="grid grid-cols-3 gap-2">
                     <NumpadButton action={() => onInput('1')} className={numberClasses} ariaLabel="Número 1">1</NumpadButton>
@@ -88,15 +88,15 @@ const CustomNumpad = forwardRef<HTMLDivElement, CustomNumpadProps>(({ onInput, o
                     </NumpadButton>
                 </div>
                 
-                {/* Barra de Ações - Distribuição harmônica */}
-                <div className="mt-3 flex items-center justify-between w-full">
+                {/* Barra de Ações - Distribuição equitativa */}
+                <div className="mt-3 flex justify-between items-center w-full relative">
                     {/* Extremidade esquerda */}
                     <div className="flex items-center gap-2">
                         <IconButton action={onDuplicate} ariaLabel="Duplicar medida" icon="fas fa-copy" />
                         <IconButton action={onClear} ariaLabel="Limpar campos" icon="fas fa-eraser" />
                     </div>
                     
-                    {/* Centro */}
+                    {/* Centro (Botão de Fechar) */}
                     <div className="absolute left-1/2 transform -translate-x-1/2">
                         <IconButton action={onClose} ariaLabel="Recolher teclado" icon="fas fa-chevron-down" />
                     </div>
