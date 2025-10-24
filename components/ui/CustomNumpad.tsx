@@ -89,9 +89,9 @@ const CustomNumpad = forwardRef<HTMLDivElement, CustomNumpadProps>(({ onInput, o
                 </div>
                 
                 {/* Barra de Ações - Ajustada para melhor distribuição */}
-                <div className="mt-3 flex items-center justify-between">
+                <div className="mt-3 flex items-center justify-center gap-4">
                     {/* Grupo Esquerda: Duplicar, Limpar */}
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
                         <IconButton action={onDuplicate} ariaLabel="Duplicar medida" icon="fas fa-copy" />
                         <IconButton action={onClear} ariaLabel="Limpar campos" icon="fas fa-eraser" />
                     </div>
@@ -100,7 +100,7 @@ const CustomNumpad = forwardRef<HTMLDivElement, CustomNumpadProps>(({ onInput, o
                     <IconButton action={onClose} ariaLabel="Recolher teclado" icon="fas fa-chevron-down" />
 
                     {/* Grupo Direita: Adicionar Grupo, Próximo/Pronto */}
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
                         <IconButton action={onAddGroup} ariaLabel="Novo grupo" icon="fas fa-plus" />
                         <IconButton
                             action={onDone}
