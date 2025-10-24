@@ -100,6 +100,8 @@ export const useNumpad = (
 
             if (isWidthOrHeight && matchesPattern) {
                 const finalValue = newValue.replace('.', ',');
+                
+                // SALVAR EM TEMPO REAL APENAS SE FOR O PADRÃO COMPLETO X.XX
                 const measurementsWithSavedValue = measurements.map(m =>
                     m.id === prev.measurementId ? { ...m, [prev.field!]: finalValue } : m
                 );
@@ -200,50 +202,6 @@ export const useNumpad = (
             shouldClearOnNextInput: true,
         }));
     }, [numpadConfig, measurements, onMeasurementsChange]);
-
-    const handleNumpadAddGroup = useCallback(() => {
-        const { measurementId, field, currentValue } = numpadConfig;
-    
-        setProposalOptions(currentOptions => {
-            if (!activeOptionId) return currentOptions;
-            
-            return currentOptions.map(opt => {
-                if (opt.id !== activeOptionId) return opt;
-                
-                let measurementsWithSavedValue = opt.measurements;
-                if (measurementId !== null && field !== null) {
-                    let finalValue: string | number;
-                    if (field === 'quantidade') {
-                        finalValue = parseInt(String(currentValue), 10) || 1;
-                    } else {
-                        finalValue = (currentValue === '' || currentValue === '.') ? '0' : currentValue.replace('.', ',');
-                    }
-                    measurementsWithSavedValue = opt.measurements.map(m =>
-                        m.id === measurementId ? { ...m, [field]: finalValue } : m
-                    );
-                }
-        
-                const newMeasurement: UIMeasurement = { ...createEmptyMeasurement(), isNew: true };
-                const finalMeasurements = [
-                    ...measurementsWithSavedValue.map(m => ({ ...m, isNew: false })),
-                    newMeasurement,
-                ];
-                
-                return { ...opt, measurements: finalMeasurements };
-            });
-        });
-    
-        setIsDirty(true);
-        
-        setNumpadConfig({ isOpen: false, measurementId: null, field: null, currentValue: '', shouldClearOnNextInput: false });
-    }, [numpadConfig, createEmptyMeasurement, activeOptionId]);
-
-    const handleTabChange = useCallback((tab: Tab) => {
-        if (numpadConfig.isOpen) {
-            handleNumpadClose();
-        }
-        setActiveTab(tab);
-    }, [numpadConfig.isOpen, handleNumpadClose]);
 
     return {
         numpadConfig,

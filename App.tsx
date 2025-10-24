@@ -34,7 +34,6 @@ const AgendaView = lazy(() => import('./components/views/AgendaView'));
 
 type UIMeasurement = Measurement & { isNew?: boolean };
 type ActiveTab = 'client' | 'films' | 'settings' | 'history' | 'agenda';
-type Tab = ActiveTab; // Definindo o tipo Tab para resolver o erro TS2304
 
 type NumpadConfig = {
     isOpen: boolean;
@@ -110,7 +109,40 @@ const App: React.FC = () => {
     const mainRef = useRef<HTMLElement>(null);
     const numpadRef = useRef<HTMLDivElement>(null);
     
-    // --- Funções de utilidade e callbacks que não dependem de outros callbacks ---
+    // Removed PWA Auto-prompt logic
+
+    useEffect(() => {
+        const mainEl = mainRef.current;
+        if (!mainEl) return;
+    
+        if (numpadConfig.isOpen) {
+            const timer = setTimeout(() => {
+                if (numpadRef.current) {
+                    const numpadHeight = numpadRef.current.offsetHeight;
+                    mainEl.style.paddingBottom = `${numpadHeight}px`;
+    
+                    if (numpadConfig.measurementId) {
+                        const activeElement = mainEl.querySelector(`[data-measurement-id='${numpadConfig.measurementId}']`);
+                        if (activeElement) {
+                            const elementRect = activeElement.getBoundingClientRect();
+                            const mainRect = mainEl.getBoundingClientRect();
+                            
+                            const targetY = mainRect.top + (mainEl.clientHeight * 0.3);
+                            const scrollAmount = elementRect.top - targetY;
+
+                            mainEl.scrollBy({
+                                top: scrollAmount,
+                                behavior: 'smooth'
+                            });
+                        }
+                    }
+                }
+            }, 250);
+            return () => clearTimeout(timer);
+        } else {
+            mainEl.style.paddingBottom = '';
+        }
+    }, [numpadConfig.isOpen, numpadConfig.measurementId]);
 
     const loadClients = useCallback(async (clientIdToSelect?: number) => {
         const storedClients = await db.getAllClients();
@@ -140,10 +172,81 @@ const App: React.FC = () => {
         setAgendamentos(data);
     }, []);
 
-    const handleSaveUserInfo = useCallback(async (info: UserInfo) => {
-        await db.saveUserInfo(info);
-        setUserInfo(info);
+    useEffect(() => {
+        const init = async () => {
+            setIsLoading(true);
+            await Promise.all([
+                loadClients(),
+                loadFilms(),
+                db.getUserInfo().then(setUserInfo),
+            ]);
+            setIsLoading(false);
+        };
+        init();
     }, []);
+    
+    useEffect(() => {
+        if (activeTab === 'history' && !hasLoadedHistory) {
+            loadAllPdfs().then(() => setHasLoadedHistory(true));
+        }
+        if (activeTab === 'agenda' && !hasLoadedAgendamentos) {
+            loadAgendamentos().then(() => setHasLoadedAgendamentos(true));
+        }
+    }, [activeTab, hasLoadedHistory, loadAllPdfs, hasLoadedAgendamentos, loadAgendamentos]);
+
+    useEffect(() => {
+        const loadDataForClient = async () => {
+            if (selectedClientId) {
+                const savedOptions = await db.getProposalOptions(selectedClientId);
+                
+                if (savedOptions.length === 0) {
+                    const defaultOption: ProposalOption = {
+                        id: Date.now(),
+                        name: 'Opção 1',
+                        measurements: [],
+                        generalDiscount: { value: '', type: 'percentage' }
+                    };
+                    setProposalOptions([defaultOption]);
+                    setActiveOptionId(defaultOption.id);
+                } else {
+                    setProposalOptions(savedOptions);
+                    setActiveOptionId(savedOptions[0].id);
+                }
+                setIsDirty(false);
+            } else {
+                setProposalOptions([]);
+                setActiveOptionId(null);
+                setIsDirty(false);
+            }
+        };
+        loadDataForClient();
+    }, [selectedClientId]);
+
+    const activeOption = useMemo(() => {
+        return proposalOptions.find(opt => opt.id === activeOptionId) || null;
+    }, [proposalOptions, activeOptionId]);
+
+    const measurements = activeOption?.measurements || [];
+    const generalDiscount = activeOption?.generalDiscount || { value: '', type: 'percentage' as const };
+
+    const handleSaveChanges = useCallback(async () => {
+        if (selectedClientId && proposalOptions.length > 0) {
+            await db.saveProposalOptions(selectedClientId, proposalOptions);
+            setIsDirty(false);
+        }
+    }, [selectedClientId, proposalOptions]);
+
+    useEffect(() => {
+        if (!isDirty) {
+            return;
+        }
+        const timerId = setTimeout(() => {
+            handleSaveChanges();
+        }, 1500);
+
+        return () => clearTimeout(timerId);
+    }, [proposalOptions, isDirty, handleSaveChanges]);
+
 
     const handleMeasurementsChange = useCallback((newMeasurements: UIMeasurement[]) => {
         if (!activeOptionId) return;
@@ -156,45 +259,16 @@ const App: React.FC = () => {
         setIsDirty(true);
     }, [activeOptionId]);
 
-    const handleNumpadClose = useCallback(() => {
-        const { measurementId, field, currentValue } = numpadConfig;
-        if (measurementId === null || field === null) {
-            setNumpadConfig({ isOpen: false, measurementId: null, field: null, currentValue: '', shouldClearOnNextInput: false });
-            return;
-        }
-
-        let finalValue: string | number;
-        if (field === 'quantidade') {
-            finalValue = parseInt(String(currentValue), 10) || 1;
-        } else {
-            finalValue = (currentValue === '' || currentValue === '.') ? '0' : currentValue.replace('.', ',');
-        }
-
-        const updatedMeasurements = measurements.map(m =>
-            m.id === measurementId ? { ...m, [field]: finalValue } : m
-        );
-        handleMeasurementsChange(updatedMeasurements);
+    const handleGeneralDiscountChange = useCallback((discount: { value: string; type: 'percentage' | 'fixed' }) => {
+        if (!activeOptionId) return;
         
-        setNumpadConfig({ isOpen: false, measurementId: null, field: null, currentValue: '', shouldClearOnNextInput: false });
-    }, [numpadConfig, measurements, handleMeasurementsChange]); // <-- Depende de measurements e handleMeasurementsChange
-
-    const handleNumpadCloseIfOutside = useCallback((event: MouseEvent) => {
-        if (numpadConfig.isOpen) {
-            const target = event.target as Node;
-            const numpadElement = numpadRef.current;
-            const measurementListElement = document.querySelector('#measurement-list-container'); // ID para o container da lista de medidas
-            
-            const isClickInsideNumpad = numpadElement && numpadElement.contains(target);
-            const isClickInsideMeasurementList = measurementListElement && measurementListElement.contains(target);
-
-            // Se o clique não foi no Numpad E não foi dentro da lista de medidas (onde os inputs estão)
-            if (!isClickInsideNumpad && !isClickInsideMeasurementList) {
-                handleNumpadClose();
-            }
-        }
-    }, [numpadConfig.isOpen, handleNumpadClose]); // <-- Depende de handleNumpadClose
-
-    // --- Funções de utilidade e callbacks que dependem de outros callbacks/estados ---
+        setProposalOptions(prev => prev.map(opt =>
+            opt.id === activeOptionId
+                ? { ...opt, generalDiscount: discount }
+                : opt
+        ));
+        setIsDirty(true);
+    }, [activeOptionId]);
 
     const createEmptyMeasurement = useCallback((): Measurement => ({
         id: Date.now(),
@@ -276,6 +350,29 @@ const App: React.FC = () => {
         return clients.find(c => c.id === selectedClientId) || null;
     }, [clients, selectedClientId]);
     
+    const handleNumpadClose = useCallback(() => {
+        const { measurementId, field, currentValue } = numpadConfig;
+        if (measurementId === null || field === null) {
+            setNumpadConfig({ isOpen: false, measurementId: null, field: null, currentValue: '', shouldClearOnNextInput: false });
+            return;
+        }
+
+        let finalValue: string | number;
+        if (field === 'quantidade') {
+            // FIX: Ensure currentValue is treated as string before parseInt
+            finalValue = parseInt(String(currentValue), 10) || 1;
+        } else {
+            finalValue = (currentValue === '' || currentValue === '.') ? '0' : currentValue.replace('.', ',');
+        }
+
+        const updatedMeasurements = measurements.map(m =>
+            m.id === measurementId ? { ...m, [field]: finalValue } : m
+        );
+        handleMeasurementsChange(updatedMeasurements);
+        
+        setNumpadConfig({ isOpen: false, measurementId: null, field: null, currentValue: '', shouldClearOnNextInput: false });
+    }, [numpadConfig, measurements, handleMeasurementsChange]);
+
     const handleOpenClientModal = useCallback((mode: 'add' | 'edit') => {
         if (numpadConfig.isOpen) {
             handleNumpadClose();
@@ -350,6 +447,11 @@ const App: React.FC = () => {
         setIsDeleteClientModalOpen(false);
     }, [selectedClientId, clients, hasLoadedHistory, loadAllPdfs, hasLoadedAgendamentos, loadAgendamentos]);
     
+    const handleSaveUserInfo = useCallback(async (info: UserInfo) => {
+        await db.saveUserInfo(info);
+        setUserInfo(info);
+    }, []);
+
     const handleSavePaymentMethods = useCallback(async (methods: PaymentMethods) => {
         if (userInfo) {
             const updatedUserInfo = { ...userInfo, payment_methods: methods };
@@ -858,6 +960,7 @@ const App: React.FC = () => {
 
         let finalValue: string | number;
         if (field === 'quantidade') {
+            // FIX: Ensure currentValue is treated as string before parseInt
             finalValue = parseInt(String(currentValue), 10) || 1;
         } else {
             finalValue = (currentValue === '' || currentValue === '.') ? '0' : currentValue.replace('.', ',');
@@ -933,19 +1036,9 @@ const App: React.FC = () => {
                 } else {
                     return { isOpen: false, measurementId: null, field: null, currentValue: '', shouldClearOnNextInput: false };
                 }
-            } else if (prev.field === 'quantidade') {
-                // Para quantidade, salvamos o inteiro em tempo real
-                const finalQty = parseInt(newValue, 10) || 0;
-                const measurementsWithSavedValue = measurements.map(m =>
-                    m.id === prev.measurementId ? { ...m, quantidade: finalQty } : m
-                );
-                handleMeasurementsChange(measurementsWithSavedValue);
             }
 
-            // FIX: Desativar shouldClearOnNextInput após o primeiro caractere digitado, a menos que seja um ponto/vírgula
-            const nextShouldClear = shouldClear && value !== ',' && value !== '.';
-
-            return { ...prev, currentValue: newValue, shouldClearOnNextInput: nextShouldClear };
+            return { ...prev, currentValue: newValue, shouldClearOnNextInput: false };
         });
     }, [measurements, handleMeasurementsChange]);
 
@@ -1046,7 +1139,7 @@ const App: React.FC = () => {
         setNumpadConfig({ isOpen: false, measurementId: null, field: null, currentValue: '', shouldClearOnNextInput: false });
     }, [numpadConfig, createEmptyMeasurement, activeOptionId]);
 
-    const handleTabChange = useCallback((tab: Tab) => {
+    const handleTabChange = useCallback((tab: ActiveTab) => {
         if (numpadConfig.isOpen) {
             handleNumpadClose();
         }
@@ -1348,7 +1441,7 @@ const App: React.FC = () => {
                         <i className="fas fa-users fa-2x text-slate-500"></i>
                     </div>
                     <h3 className="text-xl font-semibold text-slate-800">Crie seu Primeiro Cliente</h3>
-                    <p className="mt-2 text-slate-600 max-w-xs mx-auto">Adicione os dados para começar a gerar orçamentos.</p>
+                    <p className="mt-2 text-slate-600 max-w-xs mx-auto">Tudo começa com um cliente. Adicione os dados para começar a gerar orçamentos.</p>
                     <button
                         onClick={() => handleOpenClientModal('add')}
                         className="mt-6 px-6 py-3 bg-slate-800 text-white font-semibold rounded-lg hover:bg-slate-700 transition duration-300 shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 flex items-center gap-2"
@@ -1456,12 +1549,12 @@ const App: React.FC = () => {
                                            />
                                        )}
                                        
-                                       <div id="measurement-list-container" className="w-full min-h-[300px]">
+                                       <div id="contentContainer" className="w-full min-h-[300px]">
                                            {renderContent()}
                                        </div>
                                    </div>
                                ) : (
-                                   <div id="measurement-list-container" className="w-full min-h-[300px]">
+                                   <div id="contentContainer" className="w-full min-h-[300px]">
                                        {renderContent()}
                                    </div>
                                )}
