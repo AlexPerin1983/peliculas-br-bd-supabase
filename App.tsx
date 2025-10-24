@@ -23,7 +23,7 @@ import AIMeasurementModal from './components/modals/AIMeasurementModal';
 import ApiKeyModal from './components/modals/ApiKeyModal';
 import ProposalOptionsTabs from './components/ProposalOptionsTabs';
 import PwaInstallPromptModal from './components/modals/PwaInstallPromptModal';
-import { usePwaInstallPrompt } from './hooks/usePwaInstallPrompt';
+import { usePwaInstallPrompt } from './src/hooks/usePwaInstallPrompt';
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 
 
@@ -366,9 +366,10 @@ const App: React.FC = () => {
             return;
         }
 
-        let finalValue: string | number = currentValue;
+        let finalValue: string | number;
         if (field === 'quantidade') {
-            finalValue = parseInt(currentValue, 10) || 1;
+            // FIX: Ensure currentValue is treated as string before parseInt
+            finalValue = parseInt(String(currentValue), 10) || 1;
         } else {
             finalValue = (currentValue === '' || currentValue === '.') ? '0' : currentValue.replace('.', ',');
         }
@@ -929,9 +930,9 @@ const App: React.FC = () => {
         const { isOpen, measurementId: prevId, field: prevField, currentValue: prevValue } = numpadConfig;
 
         if (isOpen && (prevId !== measurementId || prevField !== field)) {
-            let finalValue: string | number = prevValue;
+            let finalValue: string | number;
             if (prevField === 'quantidade') {
-                finalValue = parseInt(prevValue, 10) || 1;
+                finalValue = parseInt(String(prevValue), 10) || 1;
             } else {
                 finalValue = (prevValue === ',' || prevValue === '' || prevValue === '.') ? '0' : prevValue.replace('.', ',');
             }
@@ -966,9 +967,10 @@ const App: React.FC = () => {
         const { measurementId, field, currentValue } = numpadConfig;
         if (measurementId === null || field === null) return;
 
-        let finalValue: string | number = currentValue;
+        let finalValue: string | number;
         if (field === 'quantidade') {
-            finalValue = parseInt(currentValue, 10) || 1;
+            // FIX: Ensure currentValue is treated as string before parseInt
+            finalValue = parseInt(String(currentValue), 10) || 1;
         } else {
             finalValue = (currentValue === '' || currentValue === '.') ? '0' : currentValue.replace('.', ',');
         }
@@ -1061,9 +1063,9 @@ const App: React.FC = () => {
         const { measurementId, field, currentValue } = numpadConfig;
         if (measurementId === null || field === null) return;
 
-        let finalValue: string | number = currentValue;
+        let finalValue: string | number;
         if (field === 'quantidade') {
-            finalValue = parseInt(currentValue, 10) || 1;
+            finalValue = parseInt(String(currentValue), 10) || 1;
         } else {
             finalValue = (currentValue === '' || currentValue === '.') ? '0' : currentValue.replace('.', ',');
         }
@@ -1120,9 +1122,9 @@ const App: React.FC = () => {
                 
                 let measurementsWithSavedValue = opt.measurements;
                 if (measurementId !== null && field !== null) {
-                    let finalValue: string | number = currentValue;
+                    let finalValue: string | number;
                     if (field === 'quantidade') {
-                        finalValue = parseInt(currentValue, 10) || 1;
+                        finalValue = parseInt(String(currentValue), 10) || 1;
                     } else {
                         finalValue = (currentValue === '' || currentValue === '.') ? '0' : currentValue.replace('.', ',');
                     }
