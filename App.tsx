@@ -22,7 +22,6 @@ import DiscountModal from './components/modals/DiscountModal';
 import AIMeasurementModal from './components/modals/AIMeasurementModal';
 import ApiKeyModal from './components/modals/ApiKeyModal';
 import ProposalOptionsTabs from './components/ProposalOptionsTabs';
-import PwaInstallPromptModal from './components/modals/PwaInstallPromptModal';
 import { usePwaInstallPrompt } from './src/hooks/usePwaInstallPrompt';
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 
@@ -97,7 +96,7 @@ const App: React.FC = () => {
     const [isProcessingAI, setIsProcessingAI] = useState(false);
     const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
     const [apiKeyModalProvider, setApiKeyModalProvider] = useState<'gemini' | 'openai'>('gemini');
-    const [isPwaModalOpen, setIsPwaModalOpen] = useState(false); // New PWA state
+    // Removed isPwaModalOpen state
 
     const [numpadConfig, setNumpadConfig] = useState<NumpadConfig>({
         isOpen: false,
@@ -110,15 +109,7 @@ const App: React.FC = () => {
     const mainRef = useRef<HTMLElement>(null);
     const numpadRef = useRef<HTMLDivElement>(null);
     
-    // PWA Auto-prompt logic
-    useEffect(() => {
-        if (deferredPrompt && !isInstalled) {
-            const timer = setTimeout(() => {
-                setIsPwaModalOpen(true);
-            }, 3000); // Show prompt after 3 seconds
-            return () => clearTimeout(timer);
-        }
-    }, [deferredPrompt, isInstalled]);
+    // Removed PWA Auto-prompt logic
 
     useEffect(() => {
         const mainEl = mainRef.current;
@@ -1364,10 +1355,10 @@ const App: React.FC = () => {
 
     const handlePromptPwaInstall = useCallback(() => {
         if (deferredPrompt) {
+            // If the prompt is available, use it
             promptInstall();
         } else {
-            // Fallback for browsers that don't fire the event (like Safari/iOS)
-            // We can't trigger the prompt, but we can instruct the user.
+            // If not available (e.g., Safari/iOS or blocked), instruct the user
             alert("Para instalar, use o menu 'Compartilhar' do seu navegador e selecione 'Adicionar à Tela de Início'.");
         }
     }, [deferredPrompt, promptInstall]);
@@ -1522,12 +1513,12 @@ const App: React.FC = () => {
 
                 <div className="container mx-auto px-1 sm:px-4 py-4 sm:py-8 w-full max-w-2xl">
                     <div className="bg-white rounded-2xl shadow-lg p-4 sm:p-6">
-                       {/* PWA Install Prompt Button */}
+                       {/* PWA Install Prompt Button (Simplified) */}
                        {deferredPrompt && !isInstalled && (
                             <div className="mb-4 p-3 bg-blue-100 border border-blue-200 rounded-lg flex justify-between items-center">
                                 <p className="text-sm text-blue-800 font-medium">Instale o app para usar offline!</p>
                                 <button 
-                                    onClick={() => setIsPwaModalOpen(true)}
+                                    onClick={handlePromptPwaInstall}
                                     className="px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-md hover:bg-blue-700 transition-colors"
                                 >
                                     Instalar
@@ -1847,16 +1838,7 @@ const App: React.FC = () => {
                     provider={apiKeyModalProvider}
                 />
             )}
-            {isPwaModalOpen && deferredPrompt && (
-                <PwaInstallPromptModal
-                    isOpen={isPwaModalOpen}
-                    onClose={() => setIsPwaModalOpen(false)}
-                    onInstall={() => {
-                        promptInstall();
-                        setIsPwaModalOpen(false);
-                    }}
-                />
-            )}
+            {/* Removed PwaInstallPromptModal */}
             {numpadConfig.isOpen && (
                 <CustomNumpad
                     ref={numpadRef}
