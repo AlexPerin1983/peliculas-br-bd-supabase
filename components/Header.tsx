@@ -17,10 +17,10 @@ const Header: React.FC<HeaderProps> = ({
         return (
             <button
                 onClick={() => onTabChange(tabId)}
-                className={`px-3 py-2 text-sm font-semibold rounded-lg transition-colors duration-200 flex-1 flex items-center justify-center gap-2 ${
+                className={`px-3 py-2 text-sm font-semibold rounded-lg transition-all duration-300 flex-1 flex items-center justify-center gap-2 transform ${
                     isActive
-                        ? 'bg-slate-800 text-white shadow'
-                        : 'text-slate-600 hover:bg-slate-200'
+                        ? 'bg-slate-800 text-white shadow-lg scale-105'
+                        : 'text-slate-600 hover:bg-slate-200 hover:scale-100'
                 }`}
             >
                 <i className={`${icon} text-base`}></i>
