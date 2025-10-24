@@ -151,7 +151,7 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
                         <ActionButton 
                             onClick={() => setIsExpanded(!isExpanded)} 
                             label="Totais" 
-                            icon="fas fa-chevron-up"
+                            icon="fas fa-dollar-sign"
                             isActive={isExpanded}
                         />
                         <PdfActionButton />
