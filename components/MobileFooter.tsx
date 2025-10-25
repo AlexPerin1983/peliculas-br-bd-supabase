@@ -41,6 +41,7 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
     // Estado local para controlar o valor do input durante a digitação
     const [localDiscountValue, setLocalDiscountValue] = useState(generalDiscount.value);
     const [localDiscountType, setLocalDiscountType] = useState(generalDiscount.type);
+    const inputRef = useRef<HTMLInputElement>(null);
 
     // Sincroniza o estado local APENAS quando o valor externo (prop) muda.
     useEffect(() => {
@@ -79,6 +80,14 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
         setLocalDiscountType(type);
         // Sincroniza o tipo e o valor atual com o componente pai
         onGeneralDiscountChange({ value: localDiscountValue, type });
+        
+        // Tenta re-focar o input imediatamente após a mudança de tipo
+        setTimeout(() => inputRef.current?.focus(), 0);
+    };
+    
+    const handleButtonMouseDown = (e: React.MouseEvent) => {
+        // Previne que o botão roube o foco do input antes do clique ser processado
+        e.preventDefault();
     };
 
     const SummaryRow: React.FC<{label: string; value: string, className?: string}> = ({label, value, className}) => (
@@ -93,6 +102,7 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
             <label className="block text-sm font-medium text-slate-600 mb-1">Desconto Geral</label>
             <div className="flex">
                 <input
+                    ref={inputRef}
                     type="text"
                     value={localDiscountValue}
                     onChange={handleValueChange}
@@ -105,6 +115,7 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
                     <button 
                         type="button" 
                         onClick={() => handleTypeChange('percentage')} 
+                        onMouseDown={handleButtonMouseDown}
                         className={`px-4 py-2 text-sm font-semibold border-t border-b transition-colors ${localDiscountType === 'percentage' ? 'bg-slate-800 text-white border-slate-800 z-10' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}
                     >
                         %
@@ -112,6 +123,7 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
                     <button 
                         type="button" 
                         onClick={() => handleTypeChange('fixed')} 
+                        onMouseDown={handleButtonMouseDown}
                         className={`px-4 py-2 text-sm font-semibold border rounded-r-md transition-colors ${localDiscountType === 'fixed' ? 'bg-slate-800 text-white border-slate-800 z-10' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}
                     >
                         R$

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 
 interface Totals {
     totalM2: number;
@@ -28,12 +28,12 @@ const SummaryBar: React.FC<SummaryBarProps> = ({ totals, generalDiscount, onGene
     const [localDiscountValue, setLocalDiscountValue] = useState(generalDiscount.value);
     const [localDiscountType, setLocalDiscountType] = useState(generalDiscount.type);
     const [showDiscountControls, setShowDiscountControls] = useState(!!(parseFloat(String(generalDiscount.value).replace(',', '.')) || 0));
+    const inputRef = useRef<HTMLInputElement>(null);
 
     // Sincroniza o estado local APENAS quando o valor externo (prop) muda,
     // garantindo que a digitação local não seja interrompida.
     useEffect(() => {
         // Se o valor da prop for diferente do valor local, atualiza o estado local.
-        // Isso cobre casos como troca de cliente/opção ou carregamento inicial.
         if (localDiscountValue !== generalDiscount.value) {
             setLocalDiscountValue(generalDiscount.value);
         }
@@ -69,6 +69,14 @@ const SummaryBar: React.FC<SummaryBarProps> = ({ totals, generalDiscount, onGene
         setLocalDiscountType(type);
         // Sincroniza o tipo e o valor atual com o componente pai
         onGeneralDiscountChange({ value: localDiscountValue, type });
+        
+        // Tenta re-focar o input imediatamente após a mudança de tipo
+        setTimeout(() => inputRef.current?.focus(), 0);
+    };
+    
+    const handleButtonMouseDown = (e: React.MouseEvent) => {
+        // Previne que o botão roube o foco do input antes do clique ser processado
+        e.preventDefault();
     };
 
     const SummaryRow: React.FC<{label: string; value: string, className?: string}> = ({label, value, className}) => (
@@ -83,6 +91,7 @@ const SummaryBar: React.FC<SummaryBarProps> = ({ totals, generalDiscount, onGene
             <label className="block text-sm font-medium text-slate-600">Desconto Geral</label>
             <div className="mt-1 flex">
                 <input
+                    ref={inputRef}
                     type="text"
                     value={localDiscountValue}
                     onChange={handleDiscountValueChange}
@@ -92,10 +101,20 @@ const SummaryBar: React.FC<SummaryBarProps> = ({ totals, generalDiscount, onGene
                     inputMode="decimal"
                 />
                 <div className="flex">
-                    <button type="button" onClick={() => handleTypeChange('percentage')} className={`px-4 py-2 text-sm font-semibold border-t border-b ${localDiscountType === 'percentage' ? 'bg-slate-800 text-white border-slate-800 z-10' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}>
+                    <button 
+                        type="button" 
+                        onClick={() => handleTypeChange('percentage')} 
+                        onMouseDown={handleButtonMouseDown}
+                        className={`px-4 py-2 text-sm font-semibold border-t border-b ${localDiscountType === 'percentage' ? 'bg-slate-800 text-white border-slate-800 z-10' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}
+                    >
                         %
                     </button>
-                    <button type="button" onClick={() => handleTypeChange('fixed')} className={`px-4 py-2 text-sm font-semibold border rounded-r-md ${localDiscountType === 'fixed' ? 'bg-slate-800 text-white border-slate-800 z-10' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}>
+                    <button 
+                        type="button" 
+                        onClick={() => handleTypeChange('fixed')} 
+                        onMouseDown={handleButtonMouseDown}
+                        className={`px-4 py-2 text-sm font-semibold border rounded-r-md ${localDiscountType === 'fixed' ? 'bg-slate-800 text-white border-slate-800 z-10' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}
+                    >
                         R$
                     </button>
                 </div>
