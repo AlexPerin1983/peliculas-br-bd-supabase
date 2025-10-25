@@ -8,7 +8,7 @@ interface ProposalOptionsTabsProps {
     onAddOption: () => void;
     onRenameOption: (optionId: number, newName: string) => void;
     onDeleteOption: (optionId: number) => void;
-    onSwipeDirectionChange: (direction: 'left' | 'right' | null) => void;
+    onSwipeDirectionChange: (direction: 'left' | 'right' | null, distance: number) => void;
 }
 
 const ProposalOptionsTabs: React.FC<ProposalOptionsTabsProps> = ({
@@ -38,12 +38,16 @@ const ProposalOptionsTabs: React.FC<ProposalOptionsTabsProps> = ({
             const currentIndex = options.findIndex(opt => opt.id === activeOptionId);
             
             if (previousIndex !== -1 && currentIndex !== -1) {
+                const distance = Math.abs(currentIndex - previousIndex);
                 const direction = currentIndex > previousIndex ? 'left' : 'right';
-                onSwipeDirectionChange(direction);
                 
+                onSwipeDirectionChange(direction, distance);
+                
+                // Duration increases with distance (200ms per step)
+                const animationDuration = 200 + (distance * 200);
                 setTimeout(() => {
-                    onSwipeDirectionChange(null);
-                }, 400);
+                    onSwipeDirectionChange(null, 0);
+                }, animationDuration);
             }
             
             previousActiveIdRef.current = activeOptionId;

@@ -70,6 +70,7 @@ const App: React.FC = () => {
     const [hasLoadedHistory, setHasLoadedHistory] = useState(false);
     const [hasLoadedAgendamentos, setHasLoadedAgendamentos] = useState(false);
     const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
+    const [swipeDistance, setSwipeDistance] = useState(0);
 
 
     // Modal States
@@ -269,6 +270,11 @@ const App: React.FC = () => {
         ));
         setIsDirty(true);
     }, [activeOptionId]);
+
+    const handleSwipeDirectionChange = useCallback((direction: 'left' | 'right' | null, distance: number) => {
+        setSwipeDirection(direction);
+        setSwipeDistance(distance);
+    }, []);
 
     const createEmptyMeasurement = useCallback((): Measurement => ({
         id: Date.now(),
@@ -1469,6 +1475,7 @@ const App: React.FC = () => {
                     onOpenEditModal={handleOpenEditMeasurementModal}
                     onOpenDiscountModal={handleOpenDiscountModal}
                     swipeDirection={swipeDirection}
+                    swipeDistance={swipeDistance}
                 />
             );
         }
@@ -1547,7 +1554,7 @@ const App: React.FC = () => {
                                                onAddOption={handleAddProposalOption}
                                                onRenameOption={handleRenameProposalOption}
                                                onDeleteOption={handleDeleteProposalOption}
-                                               onSwipeDirectionChange={setSwipeDirection}
+                                               onSwipeDirectionChange={handleSwipeDirectionChange}
                                            />
                                        )}
                                        

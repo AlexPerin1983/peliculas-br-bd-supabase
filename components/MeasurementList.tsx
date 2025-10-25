@@ -26,6 +26,7 @@ interface MeasurementListProps {
     onOpenEditModal: (measurement: UIMeasurement) => void;
     onOpenDiscountModal: (measurement: UIMeasurement) => void;
     swipeDirection?: 'left' | 'right' | null;
+    swipeDistance?: number;
 }
 
 const MeasurementList: React.FC<MeasurementListProps> = ({ 
@@ -41,7 +42,8 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
     activeMeasurementId,
     onOpenEditModal,
     onOpenDiscountModal,
-    swipeDirection = null
+    swipeDirection = null,
+    swipeDistance = 0
 }) => {
     const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
     const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
@@ -252,8 +254,19 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
     );
 
     const getAnimationClass = () => {
-        if (!swipeDirection) return '';
-        return swipeDirection === 'left' ? 'animate-swipe-left' : 'animate-swipe-right';
+        if (!swipeDirection || swipeDistance === 0) return '';
+        return swipeDirection === 'left' ? 'animate-carousel-left' : 'animate-carousel-right';
+    };
+
+    const getAnimationStyle = () => {
+        if (!swipeDirection || swipeDistance === 0) return {};
+        
+        // Base duration + additional time per step
+        const duration = 200 + (swipeDistance * 200);
+        
+        return {
+            animationDuration: `${duration}ms`
+        };
     };
 
     return (
@@ -330,7 +343,12 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
                     </div>
                 )}
             </div>
-            <div onDragOver={handleDragOver} ref={listContainerRef} className={getAnimationClass()}>
+            <div 
+                onDragOver={handleDragOver} 
+                ref={listContainerRef} 
+                className={getAnimationClass()}
+                style={getAnimationStyle()}
+            >
                 {measurements.map((measurement, index) => (
                     <React.Fragment key={measurement.id}>
                         {dragOverIdx === index && <div className="h-1.5 bg-blue-500 rounded-full my-1 transition-all" />}
@@ -378,50 +396,58 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
             )}
             
             <style jsx>{`
-                @keyframes swipe-left {
+                @keyframes carousel-left {
                     0% {
                         opacity: 1;
-                        transform: translateX(0);
+                        transform: translateX(0) scale(1);
+                    }
+                    25% {
+                        opacity: 0.5;
+                        transform: translateX(-50px) scale(0.95);
                     }
                     50% {
                         opacity: 0;
-                        transform: translateX(-30px);
+                        transform: translateX(-100px) scale(0.9);
                     }
-                    51% {
-                        opacity: 0;
-                        transform: translateX(30px);
+                    75% {
+                        opacity: 0.5;
+                        transform: translateX(50px) scale(0.95);
                     }
                     100% {
                         opacity: 1;
-                        transform: translateX(0);
+                        transform: translateX(0) scale(1);
                     }
                 }
                 
-                @keyframes swipe-right {
+                @keyframes carousel-right {
                     0% {
                         opacity: 1;
-                        transform: translateX(0);
+                        transform: translateX(0) scale(1);
+                    }
+                    25% {
+                        opacity: 0.5;
+                        transform: translateX(50px) scale(0.95);
                     }
                     50% {
                         opacity: 0;
-                        transform: translateX(30px);
+                        transform: translateX(100px) scale(0.9);
                     }
-                    51% {
-                        opacity: 0;
-                        transform: translateX(-30px);
+                    75% {
+                        opacity: 0.5;
+                        transform: translateX(-50px) scale(0.95);
                     }
                     100% {
                         opacity: 1;
-                        transform: translateX(0);
+                        transform: translateX(0) scale(1);
                     }
                 }
                 
-                .animate-swipe-left {
-                    animation: swipe-left 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+                .animate-carousel-left {
+                    animation: carousel-left cubic-bezier(0.4, 0, 0.2, 1);
                 }
                 
-                .animate-swipe-right {
-                    animation: swipe-right 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+                .animate-carousel-right {
+                    animation: carousel-right cubic-bezier(0.4, 0, 0.2, 1);
                 }
             `}</style>
         </>
