@@ -38,14 +38,12 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
 }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [localValue, setLocalValue] = useState(generalDiscount.value);
-    const inputRef = useRef<HTMLInputElement>(null);
     const debounceRef = useRef<NodeJS.Timeout>();
-    const isFocusedRef = useRef(false);
-    const shouldRestoreFocusRef = useRef(false);
+    const isTypingRef = useRef(false);
 
-    // Sync from parent only when input is NOT focused
+    // Sync from parent only when NOT typing
     useEffect(() => {
-        if (!isFocusedRef.current) {
+        if (!isTypingRef.current) {
             setLocalValue(generalDiscount.value);
         }
     }, [generalDiscount.value]);
@@ -59,16 +57,9 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
         };
     }, []);
 
-    // Restore focus ONLY when explicitly needed
-    useEffect(() => {
-        if (shouldRestoreFocusRef.current && inputRef.current && document.activeElement !== inputRef.current) {
-            inputRef.current.focus();
-            shouldRestoreFocusRef.current = false;
-        }
-    }, [localValue]);
-
     const propagateChange = (value: string) => {
         onGeneralDiscountChange({ ...generalDiscount, value });
+        isTypingRef.current = false;
     };
 
     const handleValueChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -81,9 +72,7 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
 
         // Update local state immediately
         setLocalValue(value);
-        
-        // Mark that we should restore focus after this update
-        shouldRestoreFocusRef.current = true;
+        isTypingRef.current = true;
 
         // Clear existing debounce
         if (debounceRef.current) {
@@ -96,15 +85,7 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
         }, 800);
     };
 
-    const handleFocus = () => {
-        isFocusedRef.current = true;
-        shouldRestoreFocusRef.current = false;
-    };
-
     const handleBlur = () => {
-        isFocusedRef.current = false;
-        shouldRestoreFocusRef.current = false;
-        
         // Clear debounce and propagate immediately on blur
         if (debounceRef.current) {
             clearTimeout(debounceRef.current);
@@ -118,6 +99,7 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
             clearTimeout(debounceRef.current);
         }
         onGeneralDiscountChange({ value: localValue, type });
+        isTypingRef.current = false;
     };
 
     const SummaryRow: React.FC<{label: string; value: string, className?: string}> = ({label, value, className}) => (
@@ -132,11 +114,9 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
             <label className="block text-sm font-medium text-slate-600 mb-1">Desconto Geral</label>
             <div className="flex">
                 <input
-                    ref={inputRef}
                     type="text"
                     value={localValue}
                     onChange={handleValueChange}
-                    onFocus={handleFocus}
                     onBlur={handleBlur}
                     className="w-full p-2 bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-l-md shadow-sm focus:ring-slate-500 focus:border-slate-500 text-sm"
                     placeholder="0"
