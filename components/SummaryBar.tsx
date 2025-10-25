@@ -30,10 +30,10 @@ const SummaryBar: React.FC<SummaryBarProps> = ({ totals, generalDiscount, onGene
     const [showDiscountControls, setShowDiscountControls] = useState(!!(parseFloat(String(generalDiscount.value).replace(',', '.')) || 0));
     const inputRef = useRef<HTMLInputElement>(null);
 
-    // Sincroniza o estado local APENAS quando o valor externo (prop) muda,
-    // garantindo que a digitação local não seja interrompida.
+    // Sincroniza o estado local APENAS quando o tipo muda ou na montagem/abertura.
     useEffect(() => {
         // Se o valor da prop for diferente do valor local, atualiza o estado local.
+        // Isso é crucial para sincronizar quando o cliente/opção muda, mas não durante a digitação.
         if (localDiscountValue !== generalDiscount.value) {
             setLocalDiscountValue(generalDiscount.value);
         }
@@ -42,7 +42,7 @@ const SummaryBar: React.FC<SummaryBarProps> = ({ totals, generalDiscount, onGene
         }
         setShowDiscountControls(!!(parseFloat(String(generalDiscount.value).replace(',', '.')) || 0));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [generalDiscount.value, generalDiscount.type]); // Dependências da prop
+    }, [generalDiscount.value, generalDiscount.type]); 
 
     const handleDiscountValueChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { value } = e.target;

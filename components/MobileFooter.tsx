@@ -43,7 +43,7 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
     const [localDiscountType, setLocalDiscountType] = useState(generalDiscount.type);
     const inputRef = useRef<HTMLInputElement>(null);
 
-    // Sincroniza o estado local APENAS quando o valor externo (prop) muda.
+    // Sincroniza o estado local APENAS quando o tipo muda ou na montagem/abertura.
     useEffect(() => {
         if (localDiscountValue !== generalDiscount.value) {
             setLocalDiscountValue(generalDiscount.value);
