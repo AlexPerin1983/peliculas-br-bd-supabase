@@ -41,6 +41,7 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
     const inputRef = useRef<HTMLInputElement>(null);
     const debounceRef = useRef<NodeJS.Timeout>();
     const isFocusedRef = useRef(false);
+    const shouldRestoreFocusRef = useRef(false);
 
     // Sync from parent only when input is NOT focused
     useEffect(() => {
@@ -58,12 +59,13 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
         };
     }, []);
 
-    // Restore focus after re-render if it was focused
+    // Restore focus ONLY when explicitly needed
     useEffect(() => {
-        if (isFocusedRef.current && inputRef.current && document.activeElement !== inputRef.current) {
+        if (shouldRestoreFocusRef.current && inputRef.current && document.activeElement !== inputRef.current) {
             inputRef.current.focus();
+            shouldRestoreFocusRef.current = false;
         }
-    });
+    }, [localValue]);
 
     const propagateChange = (value: string) => {
         onGeneralDiscountChange({ ...generalDiscount, value });
@@ -79,6 +81,9 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
 
         // Update local state immediately
         setLocalValue(value);
+        
+        // Mark that we should restore focus after this update
+        shouldRestoreFocusRef.current = true;
 
         // Clear existing debounce
         if (debounceRef.current) {
@@ -93,10 +98,12 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
 
     const handleFocus = () => {
         isFocusedRef.current = true;
+        shouldRestoreFocusRef.current = false;
     };
 
     const handleBlur = () => {
         isFocusedRef.current = false;
+        shouldRestoreFocusRef.current = false;
         
         // Clear debounce and propagate immediately on blur
         if (debounceRef.current) {
