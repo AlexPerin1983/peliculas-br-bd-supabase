@@ -77,7 +77,7 @@ const GeneralDiscountModal: React.FC<GeneralDiscountModalProps> = ({
                         Valor do Desconto Geral
                     </label>
                     <p className="text-xs text-slate-500 mb-3">
-                        Este desconto será aplicado ao valor total após os descontos individuais dos itens.
+                        Este desconto será aplicado ao valor total desta opção após os descontos individuais dos itens.
                     </p>
                     <div className="flex">
                         <input
