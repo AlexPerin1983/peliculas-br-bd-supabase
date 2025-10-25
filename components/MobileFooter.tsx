@@ -37,16 +37,8 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
     onOpenAIModal
 }) => {
     const [isExpanded, setIsExpanded] = useState(false);
-    const [localValue, setLocalValue] = useState(generalDiscount.value);
+    const inputRef = useRef<HTMLInputElement>(null);
     const debounceRef = useRef<NodeJS.Timeout>();
-    const isTypingRef = useRef(false);
-
-    // Sync from parent only when NOT typing
-    useEffect(() => {
-        if (!isTypingRef.current) {
-            setLocalValue(generalDiscount.value);
-        }
-    }, [generalDiscount.value]);
 
     // Cleanup on unmount
     useEffect(() => {
@@ -57,22 +49,21 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
         };
     }, []);
 
-    const propagateChange = (value: string) => {
-        onGeneralDiscountChange({ ...generalDiscount, value });
-        isTypingRef.current = false;
-    };
+    // Sync external changes to input (only when not focused)
+    useEffect(() => {
+        if (inputRef.current && document.activeElement !== inputRef.current) {
+            inputRef.current.value = generalDiscount.value;
+        }
+    }, [generalDiscount.value]);
 
     const handleValueChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const value = e.target.value;
         
         // Validate format
         if (!/^[0-9]*[.,]?[0-9]*$/.test(value)) {
+            e.target.value = inputRef.current?.value || '';
             return;
         }
-
-        // Update local state immediately
-        setLocalValue(value);
-        isTypingRef.current = true;
 
         // Clear existing debounce
         if (debounceRef.current) {
@@ -81,7 +72,7 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
 
         // Debounce propagation
         debounceRef.current = setTimeout(() => {
-            propagateChange(value);
+            onGeneralDiscountChange({ ...generalDiscount, value });
         }, 800);
     };
 
@@ -90,7 +81,8 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
         if (debounceRef.current) {
             clearTimeout(debounceRef.current);
         }
-        propagateChange(localValue);
+        const currentValue = inputRef.current?.value || '';
+        onGeneralDiscountChange({ ...generalDiscount, value: currentValue });
     };
 
     const handleTypeChange = (type: 'percentage' | 'fixed') => {
@@ -98,8 +90,8 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
         if (debounceRef.current) {
             clearTimeout(debounceRef.current);
         }
-        onGeneralDiscountChange({ value: localValue, type });
-        isTypingRef.current = false;
+        const currentValue = inputRef.current?.value || '';
+        onGeneralDiscountChange({ value: currentValue, type });
     };
 
     const SummaryRow: React.FC<{label: string; value: string, className?: string}> = ({label, value, className}) => (
@@ -114,8 +106,9 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
             <label className="block text-sm font-medium text-slate-600 mb-1">Desconto Geral</label>
             <div className="flex">
                 <input
+                    ref={inputRef}
                     type="text"
-                    value={localValue}
+                    defaultValue={generalDiscount.value}
                     onChange={handleValueChange}
                     onBlur={handleBlur}
                     className="w-full p-2 bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-l-md shadow-sm focus:ring-slate-500 focus:border-slate-500 text-sm"
