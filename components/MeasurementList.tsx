@@ -25,6 +25,7 @@ interface MeasurementListProps {
     activeMeasurementId: number | null;
     onOpenEditModal: (measurement: UIMeasurement) => void;
     onOpenDiscountModal: (measurement: UIMeasurement) => void;
+    swipeDirection?: 'left' | 'right' | null;
 }
 
 const MeasurementList: React.FC<MeasurementListProps> = ({ 
@@ -39,7 +40,8 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
     onOpenNumpad,
     activeMeasurementId,
     onOpenEditModal,
-    onOpenDiscountModal
+    onOpenDiscountModal,
+    swipeDirection = null
 }) => {
     const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
     const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
@@ -249,6 +251,11 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
         </li>
     );
 
+    const getAnimationClass = () => {
+        if (!swipeDirection) return '';
+        return swipeDirection === 'left' ? 'animate-swipe-left' : 'animate-swipe-right';
+    };
+
     return (
         <>
             <div className="my-4 pt-4 border-t border-slate-200">
@@ -323,7 +330,7 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
                     </div>
                 )}
             </div>
-            <div onDragOver={handleDragOver} ref={listContainerRef}>
+            <div onDragOver={handleDragOver} ref={listContainerRef} className={getAnimationClass()}>
                 {measurements.map((measurement, index) => (
                     <React.Fragment key={measurement.id}>
                         {dragOverIdx === index && <div className="h-1.5 bg-blue-500 rounded-full my-1 transition-all" />}
@@ -369,6 +376,54 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
                     confirmButtonVariant="danger"
                 />
             )}
+            
+            <style jsx>{`
+                @keyframes swipe-left {
+                    0% {
+                        opacity: 1;
+                        transform: translateX(0);
+                    }
+                    50% {
+                        opacity: 0;
+                        transform: translateX(-30px);
+                    }
+                    51% {
+                        opacity: 0;
+                        transform: translateX(30px);
+                    }
+                    100% {
+                        opacity: 1;
+                        transform: translateX(0);
+                    }
+                }
+                
+                @keyframes swipe-right {
+                    0% {
+                        opacity: 1;
+                        transform: translateX(0);
+                    }
+                    50% {
+                        opacity: 0;
+                        transform: translateX(30px);
+                    }
+                    51% {
+                        opacity: 0;
+                        transform: translateX(-30px);
+                    }
+                    100% {
+                        opacity: 1;
+                        transform: translateX(0);
+                    }
+                }
+                
+                .animate-swipe-left {
+                    animation: swipe-left 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+                }
+                
+                .animate-swipe-right {
+                    animation: swipe-right 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+                }
+            `}</style>
         </>
     );
 };

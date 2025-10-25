@@ -69,6 +69,7 @@ const App: React.FC = () => {
     const [isDirty, setIsDirty] = useState(false);
     const [hasLoadedHistory, setHasLoadedHistory] = useState(false);
     const [hasLoadedAgendamentos, setHasLoadedAgendamentos] = useState(false);
+    const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
 
 
     // Modal States
@@ -1467,6 +1468,7 @@ const App: React.FC = () => {
                     activeMeasurementId={numpadConfig.measurementId}
                     onOpenEditModal={handleOpenEditMeasurementModal}
                     onOpenDiscountModal={handleOpenDiscountModal}
+                    swipeDirection={swipeDirection}
                 />
             );
         }
@@ -1545,6 +1547,7 @@ const App: React.FC = () => {
                                                onAddOption={handleAddProposalOption}
                                                onRenameOption={handleRenameProposalOption}
                                                onDeleteOption={handleDeleteProposalOption}
+                                               onSwipeDirectionChange={setSwipeDirection}
                                            />
                                        )}
                                        
