@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React from 'react';
 
 interface Totals {
     totalM2: number;
@@ -11,7 +11,7 @@ interface Totals {
 interface SummaryBarProps {
     totals: Totals;
     generalDiscount: { value: string; type: 'percentage' | 'fixed' };
-    onGeneralDiscountChange: (discount: { value: string; type: 'percentage' | 'fixed' }) => void;
+    onOpenGeneralDiscountModal: () => void;
     isDesktop?: boolean;
 }
 
@@ -22,113 +22,14 @@ const formatNumberBR = (number: number) => {
     }).format(number);
 };
 
-const SummaryBar: React.FC<SummaryBarProps> = ({ totals, generalDiscount, onGeneralDiscountChange, isDesktop = false }) => {
+const SummaryBar: React.FC<SummaryBarProps> = ({ totals, generalDiscount, onOpenGeneralDiscountModal, isDesktop = false }) => {
     
-    // Estado local para controlar o valor do input durante a digitação
-    const [localDiscountValue, setLocalDiscountValue] = useState(generalDiscount.value);
-    const [localDiscountType, setLocalDiscountType] = useState(generalDiscount.type);
-    const [showDiscountControls, setShowDiscountControls] = useState(!!(parseFloat(String(generalDiscount.value).replace(',', '.')) || 0));
-    const inputRef = useRef<HTMLInputElement>(null);
-
-    // Sincroniza o estado local APENAS quando o tipo muda ou na montagem/abertura.
-    useEffect(() => {
-        const isActiveElement = document.activeElement === inputRef.current;
-        
-        // Se o tipo mudar, sempre sincroniza (e tenta focar)
-        if (localDiscountType !== generalDiscount.type) {
-            setLocalDiscountType(generalDiscount.type);
-        }
-        
-        // Se o input não estiver focado E o valor externo for diferente do local, sincroniza.
-        if (!isActiveElement && localDiscountValue !== generalDiscount.value) {
-            setLocalDiscountValue(generalDiscount.value);
-        }
-        
-        setShowDiscountControls(!!(parseFloat(String(generalDiscount.value).replace(',', '.')) || 0));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [generalDiscount.value, generalDiscount.type]); 
-
-    const handleDiscountValueChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const { value } = e.target;
-        
-        // Permite apenas números, vírgula e ponto
-        if (/^[0-9]*[.,]?[0-9]*$/.test(value)) {
-            setLocalDiscountValue(value);
-        }
-    };
-    
-    const handleBlur = () => {
-        // Limpa o valor se for apenas vírgula ou ponto
-        let finalValue = localDiscountValue;
-        if (finalValue === ',' || finalValue === '.') {
-            finalValue = '';
-        }
-        
-        // Sincroniza o valor digitado com o componente pai (App.tsx)
-        onGeneralDiscountChange({ value: finalValue, type: localDiscountType });
-        setLocalDiscountValue(finalValue); // Atualiza o estado local para refletir a limpeza
-    };
-    
-    const handleTypeChange = (type: 'percentage' | 'fixed') => {
-        setLocalDiscountType(type);
-        // Sincroniza o tipo e o valor atual com o componente pai
-        onGeneralDiscountChange({ value: localDiscountValue, type });
-        
-        // Tenta re-focar o input imediatamente após a mudança de tipo
-        setTimeout(() => inputRef.current?.focus(), 0);
-    };
-    
-    const handleButtonMouseDown = (e: React.MouseEvent) => {
-        // Previne que o botão roube o foco do input antes do clique ser processado
-        e.preventDefault();
-    };
+    const hasGeneralDiscount = !!(parseFloat(String(generalDiscount.value).replace(',', '.')) || 0);
 
     const SummaryRow: React.FC<{label: string; value: string, className?: string}> = ({label, value, className}) => (
         <div className={`flex justify-between items-center text-sm ${className}`}>
             <span className="text-slate-600">{label}</span>
             <span className="font-semibold text-slate-800">{value}</span>
-        </div>
-    );
-
-    const DiscountControls = () => (
-        <div className="mt-3">
-            <label className="block text-sm font-medium text-slate-600">Desconto Geral</label>
-            <div className="mt-1 flex">
-                <input
-                    ref={inputRef}
-                    type="text"
-                    value={localDiscountValue}
-                    onChange={handleDiscountValueChange}
-                    onBlur={handleBlur}
-                    onClick={(e) => {
-                        // Garante que se o usuário clicar no input, ele mantenha o foco
-                        if (document.activeElement !== inputRef.current) {
-                            inputRef.current?.focus();
-                        }
-                    }}
-                    className="w-full p-2 bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-l-md shadow-sm focus:ring-slate-500 focus:border-slate-500 sm:text-sm"
-                    placeholder="0"
-                    inputMode="decimal"
-                />
-                <div className="flex">
-                    <button 
-                        type="button" 
-                        onClick={() => handleTypeChange('percentage')} 
-                        onMouseDown={handleButtonMouseDown}
-                        className={`px-4 py-2 text-sm font-semibold border-t border-b ${localDiscountType === 'percentage' ? 'bg-slate-800 text-white border-slate-800 z-10' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}
-                    >
-                        %
-                    </button>
-                    <button 
-                        type="button" 
-                        onClick={() => handleTypeChange('fixed')} 
-                        onMouseDown={handleButtonMouseDown}
-                        className={`px-4 py-2 text-sm font-semibold border rounded-r-md ${localDiscountType === 'fixed' ? 'bg-slate-800 text-white border-slate-800 z-10' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}
-                    >
-                        R$
-                    </button>
-                </div>
-            </div>
         </div>
     );
 
@@ -143,20 +44,17 @@ const SummaryBar: React.FC<SummaryBarProps> = ({ totals, generalDiscount, onGene
         </div>
     );
 
-
     if (isDesktop) {
         return (
             <div className="grid grid-cols-2 gap-x-8 items-start mb-4">
                 <div>
-                     {!showDiscountControls && (
-                        <button 
-                            onClick={() => setShowDiscountControls(true)}
-                            className="text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-2 transition-colors duration-200 flex items-center gap-2"
-                        >
-                            <i className="fas fa-percent"></i> Adicionar Desconto Geral
-                        </button>
-                    )}
-                    {showDiscountControls && <DiscountControls />}
+                    <button 
+                        onClick={onOpenGeneralDiscountModal}
+                        className="text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-2 transition-colors duration-200 flex items-center gap-2"
+                    >
+                        <i className="fas fa-percent"></i> 
+                        {hasGeneralDiscount ? 'Editar Desconto Geral' : 'Adicionar Desconto Geral'}
+                    </button>
                 </div>
                 <TotalsBlock />
             </div>
@@ -166,16 +64,14 @@ const SummaryBar: React.FC<SummaryBarProps> = ({ totals, generalDiscount, onGene
     // Mobile layout
     return (
         <div className="space-y-3">
-             <TotalsBlock isMobile />
-             {!showDiscountControls && (
-                <button 
-                    onClick={() => setShowDiscountControls(true)}
-                    className="w-full text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg py-2 transition-colors duration-200 flex items-center justify-center gap-2"
-                >
-                    <i className="fas fa-percent"></i> Adicionar Desconto Geral
-                </button>
-            )}
-            {showDiscountControls && <DiscountControls />}
+            <TotalsBlock isMobile />
+            <button 
+                onClick={onOpenGeneralDiscountModal}
+                className="w-full text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg py-2 transition-colors duration-200 flex items-center justify-center gap-2"
+            >
+                <i className="fas fa-percent"></i> 
+                {hasGeneralDiscount ? 'Editar Desconto Geral' : 'Adicionar Desconto Geral'}
+            </button>
         </div>
     );
 };

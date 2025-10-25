@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 
 interface Totals {
     totalM2: number;
@@ -11,7 +11,7 @@ interface Totals {
 interface MobileFooterProps {
     totals: Totals;
     generalDiscount: { value: string; type: 'percentage' | 'fixed' };
-    onGeneralDiscountChange: (discount: { value: string; type: 'percentage' | 'fixed' }) => void;
+    onOpenGeneralDiscountModal: () => void;
     onAddMeasurement: () => void;
     onDuplicateMeasurements: () => void;
     onGeneratePdf: () => void;
@@ -29,7 +29,7 @@ const formatNumberBR = (number: number) => {
 const MobileFooter: React.FC<MobileFooterProps> = ({
     totals,
     generalDiscount,
-    onGeneralDiscountChange,
+    onOpenGeneralDiscountModal,
     onAddMeasurement,
     onDuplicateMeasurements,
     onGeneratePdf,
@@ -38,107 +38,12 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
 }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     
-    // Estado local para controlar o valor do input durante a digitação
-    const [localDiscountValue, setLocalDiscountValue] = useState(generalDiscount.value);
-    const [localDiscountType, setLocalDiscountType] = useState(generalDiscount.type);
-    const inputRef = useRef<HTMLInputElement>(null);
-
-    // Sincroniza o estado local APENAS quando o tipo muda ou na montagem/abertura.
-    useEffect(() => {
-        const isActiveElement = document.activeElement === inputRef.current;
-        
-        if (localDiscountType !== generalDiscount.type) {
-            setLocalDiscountType(generalDiscount.type);
-        }
-        
-        if (!isActiveElement && localDiscountValue !== generalDiscount.value) {
-            setLocalDiscountValue(generalDiscount.value);
-        }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [generalDiscount.value, generalDiscount.type]);
-
-    const handleValueChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const value = e.target.value;
-        
-        // Validate format
-        if (!/^[0-9]*[.,]?[0-9]*$/.test(value)) {
-            return;
-        }
-        setLocalDiscountValue(value);
-    };
-
-    const handleBlur = () => {
-        // Limpa o valor se for apenas vírgula ou ponto
-        let finalValue = localDiscountValue;
-        if (finalValue === ',' || finalValue === '.') {
-            finalValue = '';
-        }
-        
-        // Sincroniza o valor digitado com o componente pai (App.tsx)
-        onGeneralDiscountChange({ value: finalValue, type: localDiscountType });
-        setLocalDiscountValue(finalValue); // Atualiza o estado local para refletir a limpeza
-    };
-
-    const handleTypeChange = (type: 'percentage' | 'fixed') => {
-        setLocalDiscountType(type);
-        // Sincroniza o tipo e o valor atual com o componente pai
-        onGeneralDiscountChange({ value: localDiscountValue, type });
-        
-        // Tenta re-focar o input imediatamente após a mudança de tipo
-        setTimeout(() => inputRef.current?.focus(), 0);
-    };
-    
-    const handleButtonMouseDown = (e: React.MouseEvent) => {
-        // Previne que o botão roube o foco do input antes do clique ser processado
-        e.preventDefault();
-    };
+    const hasGeneralDiscount = !!(parseFloat(String(generalDiscount.value).replace(',', '.')) || 0);
 
     const SummaryRow: React.FC<{label: string; value: string, className?: string}> = ({label, value, className}) => (
         <div className={`flex justify-between items-center text-sm ${className}`}>
             <span className="text-slate-600">{label}</span>
             <span className="font-semibold text-slate-800">{value}</span>
-        </div>
-    );
-
-    const DiscountControls = () => (
-        <div className="mt-4 pt-4 border-t border-slate-200">
-            <label className="block text-sm font-medium text-slate-600 mb-1">Desconto Geral</label>
-            <div className="flex">
-                <input
-                    ref={inputRef}
-                    type="text"
-                    value={localDiscountValue}
-                    onChange={handleValueChange}
-                    onBlur={handleBlur}
-                    onClick={(e) => {
-                        // Garante que se o usuário clicar no input, ele mantenha o foco
-                        if (document.activeElement !== inputRef.current) {
-                            inputRef.current?.focus();
-                        }
-                    }}
-                    className="w-full p-2 bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-l-md shadow-sm focus:ring-slate-500 focus:border-slate-500 text-sm"
-                    placeholder="0"
-                    inputMode="decimal"
-                />
-                <div className="flex">
-                    <button 
-                        type="button" 
-                        onClick={() => handleTypeChange('percentage')} 
-                        onMouseDown={handleButtonMouseDown}
-                        className={`px-4 py-2 text-sm font-semibold border-t border-b transition-colors ${localDiscountType === 'percentage' ? 'bg-slate-800 text-white border-slate-800 z-10' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}
-                    >
-                        %
-                    </button>
-                    <button 
-                        type="button" 
-                        onClick={() => handleTypeChange('fixed')} 
-                        onMouseDown={handleButtonMouseDown}
-                        className={`px-4 py-2 text-sm font-semibold border rounded-r-md transition-colors ${localDiscountType === 'fixed' ? 'bg-slate-800 text-white border-slate-800 z-10' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}
-                    >
-                        R$
-                    </button>
-                </div>
-            </div>
         </div>
     );
     
@@ -188,7 +93,15 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
                             <SummaryRow label="Total" value={formatNumberBR(totals.finalTotal)} className='text-base' />
                         </div>
                     </div>
-                    <DiscountControls />
+                    <div className="mt-4 pt-4 border-t border-slate-200">
+                        <button 
+                            onClick={onOpenGeneralDiscountModal}
+                            className="w-full text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg py-2.5 transition-colors duration-200 flex items-center justify-center gap-2"
+                        >
+                            <i className="fas fa-percent"></i> 
+                            {hasGeneralDiscount ? 'Editar Desconto Geral' : 'Adicionar Desconto Geral'}
+                        </button>
+                    </div>
                 </div>
                 
                 {/* Main Action Bar */}

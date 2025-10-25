@@ -19,6 +19,7 @@ import PdfGenerationStatusModal from './components/modals/PdfGenerationStatusMod
 import EditMeasurementModal from './components/modals/EditMeasurementModal';
 import AgendamentoModal from './components/modals/AgendamentoModal';
 import DiscountModal from './components/modals/DiscountModal';
+import GeneralDiscountModal from './components/modals/GeneralDiscountModal';
 import AIMeasurementModal from './components/modals/AIMeasurementModal';
 import ApiKeyModal from './components/modals/ApiKeyModal';
 import ProposalOptionsTabs from './components/ProposalOptionsTabs';
@@ -96,7 +97,7 @@ const App: React.FC = () => {
     const [isProcessingAI, setIsProcessingAI] = useState(false);
     const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
     const [apiKeyModalProvider, setApiKeyModalProvider] = useState<'gemini' | 'openai'>('gemini');
-    // Removed isPwaModalOpen state
+    const [isGeneralDiscountModalOpen, setIsGeneralDiscountModalOpen] = useState(false);
 
     const [numpadConfig, setNumpadConfig] = useState<NumpadConfig>({
         isOpen: false,
@@ -108,8 +109,6 @@ const App: React.FC = () => {
     
     const mainRef = useRef<HTMLElement>(null);
     const numpadRef = useRef<HTMLDivElement>(null);
-    
-    // Removed PWA Auto-prompt logic
 
     useEffect(() => {
         const mainEl = mainRef.current;
@@ -359,7 +358,6 @@ const App: React.FC = () => {
 
         let finalValue: string | number;
         if (field === 'quantidade') {
-            // FIX: Ensure currentValue is treated as string before parseInt
             finalValue = parseInt(String(currentValue), 10) || 1;
         } else {
             finalValue = (currentValue === '' || currentValue === '.') ? '0' : currentValue.replace('.', ',');
@@ -960,7 +958,6 @@ const App: React.FC = () => {
 
         let finalValue: string | number;
         if (field === 'quantidade') {
-            // FIX: Ensure currentValue is treated as string before parseInt
             finalValue = parseInt(String(currentValue), 10) || 1;
         } else {
             finalValue = (currentValue === '' || currentValue === '.') ? '0' : currentValue.replace('.', ',');
@@ -1346,6 +1343,11 @@ const App: React.FC = () => {
         }
     }, [userInfo, handleSaveUserInfo, apiKeyModalProvider]);
 
+    const handleSaveGeneralDiscount = useCallback((discount: { value: string; type: 'percentage' | 'fixed' }) => {
+        handleGeneralDiscountChange(discount);
+        setIsGeneralDiscountModalOpen(false);
+    }, [handleGeneralDiscountChange]);
+
 
     const LoadingSpinner = () => (
         <div className="flex items-center justify-center h-full min-h-[300px]">
@@ -1355,10 +1357,8 @@ const App: React.FC = () => {
 
     const handlePromptPwaInstall = useCallback(() => {
         if (deferredPrompt) {
-            // If the prompt is available, use it
             promptInstall();
         } else {
-            // If not available (e.g., Safari/iOS or blocked), instruct the user
             alert("Para instalar, use o menu 'Compartilhar' do seu navegador e selecione 'Adicionar à Tela de Início'.");
         }
     }, [deferredPrompt, promptInstall]);
@@ -1513,7 +1513,6 @@ const App: React.FC = () => {
 
                 <div className="container mx-auto px-1 sm:px-4 py-4 sm:py-8 w-full max-w-2xl">
                     <div className="bg-white rounded-2xl shadow-lg p-4 sm:p-6">
-                       {/* PWA Install Prompt Button (Simplified) */}
                        {deferredPrompt && !isInstalled && (
                             <div className="mb-4 p-3 bg-blue-100 border border-blue-200 rounded-lg flex justify-between items-center">
                                 <p className="text-sm text-blue-800 font-medium">Instale o app para usar offline!</p>
@@ -1578,7 +1577,7 @@ const App: React.FC = () => {
                                    <SummaryBar 
                                         totals={totals}
                                         generalDiscount={generalDiscount}
-                                        onGeneralDiscountChange={handleGeneralDiscountChange}
+                                        onOpenGeneralDiscountModal={() => setIsGeneralDiscountModalOpen(true)}
                                         isDesktop
                                     />
                                    <ActionsBar
@@ -1592,7 +1591,7 @@ const App: React.FC = () => {
                                 <MobileFooter
                                     totals={totals}
                                     generalDiscount={generalDiscount}
-                                    onGeneralDiscountChange={handleGeneralDiscountChange}
+                                    onOpenGeneralDiscountModal={() => setIsGeneralDiscountModalOpen(true)}
                                     onAddMeasurement={addMeasurement}
                                     onDuplicateMeasurements={duplicateAllMeasurements}
                                     onGeneratePdf={handleGeneratePdf}
@@ -1820,6 +1819,15 @@ const App: React.FC = () => {
                     initialType={editingMeasurementForDiscount.discountType}
                 />
             )}
+            {isGeneralDiscountModalOpen && (
+                <GeneralDiscountModal
+                    isOpen={isGeneralDiscountModalOpen}
+                    onClose={() => setIsGeneralDiscountModalOpen(false)}
+                    onSave={handleSaveGeneralDiscount}
+                    initialValue={generalDiscount.value}
+                    initialType={generalDiscount.type}
+                />
+            )}
             {isAIMeasurementModalOpen && (
                 <AIMeasurementModal
                     isOpen={isAIMeasurementModalOpen}
@@ -1838,7 +1846,6 @@ const App: React.FC = () => {
                     provider={apiKeyModalProvider}
                 />
             )}
-            {/* Removed PwaInstallPromptModal */}
             {numpadConfig.isOpen && (
                 <CustomNumpad
                     ref={numpadRef}
