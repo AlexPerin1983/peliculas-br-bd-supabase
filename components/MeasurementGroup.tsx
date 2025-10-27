@@ -349,7 +349,7 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
                         draggable={isDraggable}
                         onDragStart={onDragStart}
                         onDragEnter={onDragEnter}
-                        onDragEnd={handleDragEnd}
+                        onDragEnd={onDragEnd}
                         onDragOver={(e) => e.preventDefault()}
                         className={`relative z-10 ${baseClasses} ${selectionClasses} ${isDragging ? 'shadow-2xl scale-[1.02]' : ''} ${isActive ? 'ring-2 ring-blue-500' : ''}`}
                     >

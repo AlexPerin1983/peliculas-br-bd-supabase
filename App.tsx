@@ -102,6 +102,7 @@ const App: React.FC = () => {
     const [apiKeyModalProvider, setApiKeyModalProvider] = useState<'gemini' | 'openai'>('gemini');
     const [isGeneralDiscountModalOpen, setIsGeneralDiscountModalOpen] = useState(false);
     const [isDuplicateAllModalOpen, setIsDuplicateAllModalOpen] = useState(false); // NOVO ESTADO
+    const [measurementToDeleteId, setMeasurementToDeleteId] = useState<number | null>(null); // NOVO ESTADO
     
     // Image Gallery State
     const [isGalleryOpen, setIsGalleryOpen] = useState(false);
@@ -1265,6 +1266,34 @@ const App: React.FC = () => {
         const newMeasurements = measurements.map(m => m.id === updatedMeasurement.id ? updatedMeasurement : m);
         handleMeasurementsChange(newMeasurements);
     }, [editingMeasurement, measurements, handleMeasurementsChange]);
+    
+    // Função que o MeasurementGroup e EditMeasurementModal chamam para iniciar a exclusão
+    const handleRequestDeleteMeasurement = useCallback((measurementId: number) => {
+        // Fecha o modal de edição se estiver aberto
+        handleCloseEditMeasurementModal(); 
+        // Define o ID para abrir o modal de confirmação no App.tsx
+        setMeasurementToDeleteId(measurementId); 
+    }, [handleCloseEditMeasurementModal]);
+    
+    const handleConfirmDeleteIndividualMeasurement = useCallback(() => {
+        if (measurementToDeleteId !== null) {
+            handleMeasurementsChange(measurements.filter(m => m.id !== measurementToDeleteId));
+            setMeasurementToDeleteId(null);
+        }
+    }, [measurementToDeleteId, measurements, handleMeasurementsChange]);
+    
+    // A função onDelete passada para EditMeasurementModal
+    const handleDeleteMeasurementFromEditModal = useCallback(() => {
+        if (editingMeasurement) {
+            handleRequestDeleteMeasurement(editingMeasurement.id);
+        }
+    }, [editingMeasurement, handleRequestDeleteMeasurement]);
+    
+    // A função onDelete passada para MeasurementGroup
+    const handleDeleteMeasurementFromGroup = useCallback((measurementId: number) => {
+        handleRequestDeleteMeasurement(measurementId);
+    }, [handleRequestDeleteMeasurement]);
+
 
     const handleCloseAgendamentoModal = useCallback(() => {
         setSchedulingInfo(null);
@@ -1538,6 +1567,7 @@ const App: React.FC = () => {
                     onOpenDiscountModal={handleOpenDiscountModal}
                     swipeDirection={swipeDirection}
                     swipeDistance={swipeDistance}
+                    onDeleteMeasurement={handleDeleteMeasurementFromGroup} // Passando a nova função
                 />
             );
         }
@@ -1567,6 +1597,8 @@ const App: React.FC = () => {
             </div>
         );
     }
+
+    const measurementToDelete = measurements.find(m => m.id === measurementToDeleteId);
 
     return (
         <div className="h-full font-roboto flex flex-col">
@@ -1765,10 +1797,7 @@ const App: React.FC = () => {
                     measurement={editingMeasurement}
                     films={films}
                     onUpdate={handleUpdateEditingMeasurement}
-                    onDelete={() => {
-                        handleMeasurementsChange(measurements.filter(m => m.id !== editingMeasurement.id));
-                        handleCloseEditMeasurementModal();
-                    }}
+                    onDelete={handleDeleteMeasurementFromEditModal} // Chama a função que abre o modal de confirmação
                     onDuplicate={() => {
                         const measurementToDuplicate = measurements.find(m => m.id === editingMeasurement.id);
                         if (measurementToDuplicate) {
@@ -1956,6 +1985,22 @@ const App: React.FC = () => {
                         </>
                     }
                     confirmButtonText="Sim, Duplicar Opção"
+                />
+            )}
+            {measurementToDeleteId !== null && measurementToDelete && (
+                <ConfirmationModal
+                    isOpen={measurementToDeleteId !== null}
+                    onClose={() => setMeasurementToDeleteId(null)}
+                    onConfirm={handleConfirmDeleteIndividualMeasurement}
+                    title="Confirmar Exclusão de Medida"
+                    message={
+                        <>
+                            Tem certeza que deseja apagar a medida de <strong>{measurementToDelete.largura}x{measurementToDelete.altura}</strong> ({measurementToDelete.ambiente})?
+                            Esta ação não pode ser desfeita.
+                        </>
+                    }
+                    confirmButtonText="Sim, Excluir"
+                    confirmButtonVariant="danger"
                 />
             )}
         </div>

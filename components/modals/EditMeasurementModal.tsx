@@ -108,6 +108,11 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
             onOpenFilmModal(selectedFilm); // Open film editor modal
         }
     };
+    
+    const handleDeleteClick = () => {
+        onClose(); // Fecha o modal de edição
+        onDelete(); // Chama a função que irá abrir o modal de confirmação no App.tsx
+    };
 
     const LabeledInput: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
         <div>
@@ -243,7 +248,7 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
 
             <footer className="flex-shrink-0 p-3 border-t border-slate-200 bg-white/80 backdrop-blur-sm fixed bottom-0 left-0 right-0 z-30">
                 <div className="max-w-xl mx-auto flex items-center justify-between gap-2 sm:gap-3">
-                    <button onClick={onDelete} className="px-4 py-2.5 text-sm font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors flex-1 text-center">Excluir</button>
+                    <button onClick={handleDeleteClick} className="px-4 py-2.5 text-sm font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors flex-1 text-center">Excluir</button>
                     <button onClick={onDuplicate} className="px-4 py-2.5 text-sm font-semibold text-slate-700 bg-slate-200 hover:bg-slate-300 rounded-lg transition-colors flex-1 text-center">Duplicar</button>
                     <button onClick={handleSave} className="px-4 py-2.5 text-sm font-semibold text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors flex-[2] text-center">Salvar Alterações</button>
                 </div>

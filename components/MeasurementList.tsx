@@ -25,6 +25,7 @@ interface MeasurementListProps {
     activeMeasurementId: number | null;
     onOpenEditModal: (measurement: UIMeasurement) => void;
     onOpenDiscountModal: (measurement: UIMeasurement) => void;
+    onDeleteMeasurement: (measurementId: number) => void; // Nova prop
     swipeDirection?: 'left' | 'right' | null;
     swipeDistance?: number;
 }
@@ -42,6 +43,7 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
     activeMeasurementId,
     onOpenEditModal,
     onOpenDiscountModal,
+    onDeleteMeasurement, // Usando a nova prop
     swipeDirection = null,
     swipeDistance = 0
 }) => {
@@ -54,8 +56,8 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
     const [swipedItemId, setSwipedItemId] = useState<number | null>(null);
     const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
     
-    // Novo estado para exclusão individual
-    const [measurementToDeleteId, setMeasurementToDeleteId] = useState<number | null>(null);
+    // Removendo o estado local de exclusão individual, pois ele foi movido para App.tsx
+    // const [measurementToDeleteId, setMeasurementToDeleteId] = useState<number | null>(null);
 
     const scrollVelocityRef = useRef(0);
     const animationFrameRef = useRef<number | null>(null);
@@ -212,17 +214,9 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
         onMeasurementsChange(newMeasurements);
     };
     
-    // Função para solicitar a exclusão (abre o modal)
+    // Função que o MeasurementGroup chama para iniciar a exclusão
     const requestDeleteMeasurement = (id: number) => {
-        setMeasurementToDeleteId(id);
-    };
-    
-    // Função para confirmar a exclusão (executa a ação)
-    const confirmDeleteMeasurement = () => {
-        if (measurementToDeleteId !== null) {
-            onMeasurementsChange(measurements.filter(m => m.id !== measurementToDeleteId));
-            setMeasurementToDeleteId(null);
-        }
+        onDeleteMeasurement(id); // Chama a função do App.tsx
     };
     
     const duplicateMeasurement = (id: number) => {
@@ -283,7 +277,7 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
         };
     };
     
-    const measurementToDelete = measurements.find(m => m.id === measurementToDeleteId);
+    // Removendo a variável local measurementToDelete
 
     return (
         <>
@@ -411,22 +405,7 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
                 />
             )}
             
-            {measurementToDeleteId !== null && measurementToDelete && (
-                <ConfirmationModal
-                    isOpen={measurementToDeleteId !== null}
-                    onClose={() => setMeasurementToDeleteId(null)}
-                    onConfirm={confirmDeleteMeasurement}
-                    title="Confirmar Exclusão de Medida"
-                    message={
-                        <>
-                            Tem certeza que deseja apagar a medida de <strong>{measurementToDelete.largura}x{measurementToDelete.altura}</strong> ({measurementToDelete.ambiente})?
-                            Esta ação não pode ser desfeita.
-                        </>
-                    }
-                    confirmButtonText="Sim, Excluir"
-                    confirmButtonVariant="danger"
-                />
-            )}
+            {/* O modal de exclusão individual foi movido para App.tsx */}
             
             <style jsx>{`
                 @keyframes carousel-left {
