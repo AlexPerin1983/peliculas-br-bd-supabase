@@ -17,7 +17,7 @@ const Header: React.FC<HeaderProps> = ({
         return (
             <button
                 onClick={() => onTabChange(tabId)}
-                className={`px-2 py-1 text-sm font-semibold rounded-lg transition-all duration-300 flex-1 flex items-center justify-center gap-2 transform ${
+                className={`px-2 py-1.5 text-sm font-semibold rounded-lg transition-all duration-300 flex-1 flex items-center justify-center gap-2 transform ${
                     isActive
                         ? 'bg-slate-800 text-white shadow-lg scale-105'
                         : 'text-slate-600 hover:bg-slate-200 hover:scale-100'
