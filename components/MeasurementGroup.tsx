@@ -53,7 +53,7 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
     isDragging,
     onDragStart,
     onDragEnter,
-    onDragEnd,
+    onDragEnd, // Usando a prop onDragEnd
     isSelectionMode,
     isSelected,
     onToggleSelection,
@@ -85,6 +85,19 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
             setTranslateX(0);
         }
     }, [swipedItemId, measurement.id]);
+
+    // Efeito para abrir o Numpad automaticamente para novas medidas
+    useEffect(() => {
+        if (measurement.isNew) {
+            // Abre o Numpad para o primeiro campo (largura)
+            onOpenNumpad(measurement.id, 'largura', measurement.largura);
+            
+            // Limpa o estado 'isNew' imediatamente após a abertura do Numpad
+            // Isso evita que o Numpad seja reaberto em re-renderizações
+            onUpdate({ isNew: false });
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [measurement.isNew]); // Depende apenas de isNew
 
     const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
         if (isSelectionMode || isModalMode) return;
@@ -183,12 +196,6 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
         }
     };
 
-    useEffect(() => {
-        if (measurement.isNew) {
-            onOpenNumpad(measurement.id, 'largura', measurement.largura);
-        }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [measurement.isNew]);
     
     const handleInputChange = (field: keyof Measurement, value: any) => {
         onUpdate({ [field]: value });
@@ -313,7 +320,7 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
 
     return (
         <>
-            <div className={`relative my-2 rounded-lg ${!isModalMode ? 'sm:overflow-visible overflow-hidden' : ''}`}>
+            <div className="relative my-2 rounded-lg">
                 <div className={`absolute inset-y-0 right-0 flex rounded-r-lg overflow-hidden ${isModalMode ? 'hidden' : 'sm:hidden'}`}>
                     <button
                         onClick={handleMenuClick}

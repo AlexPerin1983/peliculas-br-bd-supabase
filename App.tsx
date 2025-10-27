@@ -130,12 +130,17 @@ const App: React.FC = () => {
                     mainEl.style.paddingBottom = `${numpadHeight}px`;
     
                     if (numpadConfig.measurementId) {
+                        // Usamos querySelector para encontrar o elemento dentro do container principal
                         const activeElement = mainEl.querySelector(`[data-measurement-id='${numpadConfig.measurementId}']`);
+                        
                         if (activeElement) {
                             const elementRect = activeElement.getBoundingClientRect();
                             const mainRect = mainEl.getBoundingClientRect();
                             
+                            // Calcula a posição alvo (30% abaixo do topo do container principal)
                             const targetY = mainRect.top + (mainEl.clientHeight * 0.3);
+                            
+                            // Calcula o quanto precisa rolar
                             const scrollAmount = elementRect.top - targetY;
 
                             mainEl.scrollBy({
