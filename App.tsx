@@ -358,8 +358,8 @@ const App: React.FC = () => {
     const addMeasurement = useCallback(() => {
         const newMeasurement: UIMeasurement = { ...createEmptyMeasurement(), isNew: true };
         const updatedMeasurements = [
+            newMeasurement, // Adiciona no início
             ...measurements.map(m => ({ ...m, isNew: false })),
-            newMeasurement, 
         ];
         handleMeasurementsChange(updatedMeasurements);
     }, [createEmptyMeasurement, measurements, handleMeasurementsChange]);
@@ -433,7 +433,7 @@ const App: React.FC = () => {
         if (field === 'quantidade') {
             finalValue = parseInt(String(currentValue), 10) || 1;
         } else {
-            finalValue = (currentValue === '' || currentValue === '.') ? '0' : currentValue.replace('.', ',');
+            finalValue = (currentValue === '' || currentValue === '.') ? '0' : String(currentValue).replace('.', ',');
         }
 
         const updatedMeasurements = measurements.map(m =>
@@ -850,21 +850,12 @@ const App: React.FC = () => {
                         parameters: {
                             type: "object",
                             properties: {
-                                measurements: {
-                                    type: "array",
-                                    items: {
-                                        type: "object",
-                                        properties: {
-                                            largura: { type: "string", description: "Largura em metros, com vírgula. Ex: '1,50'" },
-                                            altura: { type: "string", description: "Altura em metros, com vírgula. Ex: '2,10'" },
-                                            quantidade: { type: "number", description: "Quantidade de itens." },
-                                            ambiente: { type: "string", description: "Local do item. Ex: 'Janela da Sala'" }
-                                        },
-                                        required: ["largura", "altura", "quantidade", "ambiente"]
-                                    }
-                                }
+                                largura: { type: "string", description: "Largura em metros, com vírgula. Ex: '1,50'" },
+                                altura: { type: "string", description: "Altura em metros, com vírgula. Ex: '2,10'" },
+                                quantidade: { type: "number", description: "Quantidade de itens." },
+                                ambiente: { type: "string", description: "Local do item. Ex: 'Janela da Sala'" }
                             },
-                            required: ["measurements"]
+                            required: ["largura", "altura", "quantidade", "ambiente"]
                         }
                     }
                 }
@@ -1016,7 +1007,7 @@ const App: React.FC = () => {
             if (prevField === 'quantidade') {
                 finalValue = parseInt(String(prevValue), 10) || 1;
             } else {
-                finalValue = (prevValue === ',' || prevValue === '' || prevValue === '.') ? '0' : prevValue.replace('.', ',');
+                finalValue = (prevValue === ',' || prevValue === '' || prevValue === '.') ? '0' : String(prevValue).replace('.', ',');
             }
 
             const updatedMeasurements = measurements.map(m =>
@@ -1053,7 +1044,7 @@ const App: React.FC = () => {
         if (field === 'quantidade') {
             finalValue = parseInt(String(currentValue), 10) || 1;
         } else {
-            finalValue = (currentValue === '' || currentValue === '.') ? '0' : currentValue.replace('.', ',');
+            finalValue = (currentValue === '' || currentValue === '.') ? '0' : String(currentValue).replace('.', ',');
         }
 
         const updatedMeasurements = measurements.map(m =>
@@ -1148,7 +1139,7 @@ const App: React.FC = () => {
         if (field === 'quantidade') {
             finalValue = parseInt(String(currentValue), 10) || 1;
         } else {
-            finalValue = (currentValue === '' || currentValue === '.') ? '0' : currentValue.replace('.', ',');
+            finalValue = (currentValue === '' || currentValue === '.') ? '0' : String(currentValue).replace('.', ',');
         }
 
         const measurementsWithSavedValue = measurements.map(m =>
@@ -1207,7 +1198,7 @@ const App: React.FC = () => {
                     if (field === 'quantidade') {
                         finalValue = parseInt(String(currentValue), 10) || 1;
                     } else {
-                        finalValue = (currentValue === '' || currentValue === '.') ? '0' : currentValue.replace('.', ',');
+                        finalValue = (currentValue === '' || currentValue === '.') ? '0' : String(currentValue).replace('.', ',');
                     }
                     measurementsWithSavedValue = opt.measurements.map(m =>
                         m.id === measurementId ? { ...m, [field]: finalValue } : m
@@ -1216,8 +1207,8 @@ const App: React.FC = () => {
         
                 const newMeasurement: UIMeasurement = { ...createEmptyMeasurement(), isNew: true };
                 const finalMeasurements = [
+                    newMeasurement, // Adiciona no início
                     ...measurementsWithSavedValue.map(m => ({ ...m, isNew: false })),
-                    newMeasurement,
                 ];
                 
                 return { ...opt, measurements: finalMeasurements };
