@@ -244,13 +244,13 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
     const hasDiscount = (measurement.discount || 0) > 0;
 
     // Reduzindo o padding principal (p-3 -> p-2.5) e o espaçamento interno (space-y-2.5 -> space-y-2)
-    const baseClasses = `border rounded-lg p-2.5 space-y-2 bg-white transition-shadow, transform`;
+    const baseClasses = `border rounded-lg p-2 space-y-1.5 bg-white transition-shadow, transform`; // Reduzido para p-2 e space-y-1.5
     const selectionClasses = isSelectionMode
         ? `cursor-pointer ${isSelected ? 'border-blue-500 bg-blue-50/70 ring-1 ring-blue-500' : 'border-slate-200 hover:bg-slate-50/80'}`
         : 'border-slate-200';
     
-    // Reduzindo o padding do input (p-2 -> p-1.5) e o tamanho da fonte (text-sm -> text-xs)
-    const inputBaseClasses = "w-full text-center p-1.5 rounded-lg border text-xs transition-colors duration-200";
+    // Mantendo o padding do input em p-1.5, mas ajustando o tamanho da fonte para text-sm
+    const inputBaseClasses = "w-full text-center p-1.5 rounded-lg border text-sm transition-colors duration-200";
     
     const isDraggable = !isSelectionMode && translateX === 0 && !isModalMode;
 
@@ -368,12 +368,11 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
                                             onOpenFilmSelectionModal(measurement.id);
                                         }
                                     }}
-                                    // Reduzindo o padding aqui (p-2 -> p-1)
-                                    className={`text-left w-full p-1 rounded-lg transition-colors ${(!measurement.active || isSelectionMode) ? 'cursor-default' : 'hover:bg-slate-200/50 cursor-pointer'}`}
+                                    className={`text-left w-full rounded-lg transition-colors ${(!measurement.active || isSelectionMode) ? 'cursor-default' : 'hover:bg-slate-200/50 cursor-pointer'}`}
                                     aria-label={`Película atual: ${measurement.pelicula || 'Nenhuma'}. Clique para alterar.`}
                                 >
                                     <div className="text-[9px] font-semibold uppercase text-slate-500 tracking-wider">Película</div>
-                                    <div className="text-sm font-bold text-slate-800 truncate">{measurement.pelicula || 'Nenhuma'}</div>
+                                    <div className="text-sm font-bold text-slate-800 truncate leading-tight">{measurement.pelicula || 'Nenhuma'}</div>
                                 </div>
                             </div>
 
@@ -385,8 +384,7 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
                                         tabIndex={isSelectionMode ? -1 : 0}
                                         onClick={() => !isSelectionMode && onOpenDiscountModal(measurement)}
                                         onKeyDown={(e) => !isSelectionMode && (e.key === 'Enter' || e.key === ' ') && onOpenDiscountModal(measurement)}
-                                        // Reduzindo o padding aqui (p-2 -> p-1)
-                                        className={`text-right p-1 rounded-lg transition-colors ${isSelectionMode ? 'cursor-default' : 'hover:bg-slate-100 cursor-pointer'}`}
+                                        className={`text-right rounded-lg transition-colors ${isSelectionMode ? 'cursor-default' : 'hover:bg-slate-100 cursor-pointer'}`}
                                         aria-label="Preço, clique para aplicar ou editar desconto"
                                     >
                                         <div className="text-[9px] font-semibold uppercase text-slate-500 tracking-wider">Preço</div>
@@ -394,13 +392,13 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
                                             finalPrice < basePrice ? (
                                                 <div className="flex flex-col items-end leading-tight">
                                                     <s className="text-red-500/80 text-[9px] font-normal">{formatCurrency(basePrice)}</s>
-                                                    <span className="text-sm font-bold text-slate-800">{formatCurrency(finalPrice)}</span>
+                                                    <span className="text-sm font-bold text-slate-800 leading-tight">{formatCurrency(finalPrice)}</span>
                                                 </div>
                                             ) : (
-                                                <span className="text-sm font-bold text-slate-800">{formatCurrency(basePrice)}</span>
+                                                <span className="text-sm font-bold text-slate-800 leading-tight">{formatCurrency(basePrice)}</span>
                                             )
                                         ) : (
-                                        <span className="text-sm font-bold text-slate-800">-</span>
+                                        <span className="text-sm font-bold text-slate-800 leading-tight">-</span>
                                         )}
                                     </div>
                                 </Tooltip>
@@ -422,7 +420,7 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
                         </div>
 
                         {/* Checkbox and Inputs Row */}
-                        <div className="flex items-center space-x-2 pt-2 border-t border-slate-200">
+                        <div className="flex items-center space-x-2 pt-1.5 border-t border-slate-200">
                             {isSelectionMode ? (
                                 <input 
                                     type="checkbox" 
