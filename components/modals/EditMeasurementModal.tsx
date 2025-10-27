@@ -56,39 +56,22 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
         setLocalMeasurement(prev => ({ ...prev, ...updatedData }));
     };
 
-    // Função genérica para lidar com inputs de texto/decimal
-    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>, field: 'largura' | 'altura' | 'quantidade' | 'discount') => {
-        const { value } = e.target;
-        
-        if (field === 'quantidade') {
-            const intValue = parseInt(value, 10);
-            if (value === '' || (!isNaN(intValue) && intValue >= 0)) {
-                handleLocalUpdate({ [field]: value === '' ? 1 : intValue });
-            }
-        } else if (field === 'largura' || field === 'altura') {
-            // Permite apenas números, vírgula e ponto
-            if (/^[0-9]*[.,]?[0-9]*$/.test(value)) {
-                handleLocalUpdate({ [field]: value });
-            }
-        } else if (field === 'discount') {
-            if (/^[0-9]*[.,]?[0-9]*$/.test(value)) {
-                const numericValue = parseFloat(value.replace(',', '.')) || 0;
-                handleLocalUpdate({ discount: numericValue });
-            }
-        }
-    };
-    
     // Função para garantir que o valor no estado local seja o valor final do input
     const handleBlur = (e: React.FocusEvent<HTMLInputElement>, field: 'largura' | 'altura' | 'quantidade' | 'discount') => {
         const { value } = e.target;
         
         if (field === 'largura' || field === 'altura') {
             // Garante que o valor final seja salvo no formato esperado (com vírgula)
-            const finalValue = value.replace('.', ',');
+            const sanitizedValue = value.replace(/[^0-9,.]/g, '');
+            const finalValue = sanitizedValue.replace('.', ',');
             handleLocalUpdate({ [field]: finalValue });
         } else if (field === 'quantidade') {
-            const intValue = parseInt(value, 10);
+            const intValue = parseInt(value.replace(/[^0-9]/g, ''), 10);
             handleLocalUpdate({ quantidade: isNaN(intValue) || intValue < 1 ? 1 : intValue });
+        } else if (field === 'discount') {
+            const sanitizedValue = value.replace(/[^0-9,.]/g, '');
+            const numericValue = parseFloat(sanitizedValue.replace(',', '.')) || 0;
+            handleLocalUpdate({ discount: numericValue });
         }
     };
 
@@ -157,9 +140,8 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
                                 <input 
                                     type="text" 
                                     inputMode="decimal" 
-                                    // Usamos o valor do estado local, mas permitimos que o input seja controlado pelo navegador
                                     defaultValue={String(localMeasurement.largura)} 
-                                    onChange={(e) => handleInputChange(e, 'largura')} 
+                                    // Removemos o onChange para evitar re-renderização a cada tecla
                                     onBlur={(e) => handleBlur(e, 'largura')}
                                     className={inputClasses} 
                                 />
@@ -169,7 +151,7 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
                                     type="text" 
                                     inputMode="decimal" 
                                     defaultValue={String(localMeasurement.altura)} 
-                                    onChange={(e) => handleInputChange(e, 'altura')} 
+                                    // Removemos o onChange para evitar re-renderização a cada tecla
                                     onBlur={(e) => handleBlur(e, 'altura')}
                                     className={inputClasses} 
                                 />
@@ -179,7 +161,7 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
                                     type="text" 
                                     inputMode="numeric" 
                                     defaultValue={String(localMeasurement.quantidade)} 
-                                    onChange={(e) => handleInputChange(e, 'quantidade')} 
+                                    // Removemos o onChange para evitar re-renderização a cada tecla
                                     onBlur={(e) => handleBlur(e, 'quantidade')}
                                     className={inputClasses} 
                                 />
@@ -243,7 +225,7 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
                                 <input
                                     type="text"
                                     defaultValue={String(localMeasurement.discount || '').replace('.', ',')}
-                                    onChange={(e) => handleInputChange(e, 'discount')}
+                                    // Removemos o onChange para evitar re-renderização a cada tecla
                                     onBlur={(e) => handleBlur(e, 'discount')}
                                     className="w-full p-2.5 bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-l-md shadow-sm focus:ring-slate-500 focus:border-slate-500 sm:text-sm"
                                     placeholder="0"
