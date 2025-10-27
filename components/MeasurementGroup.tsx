@@ -373,7 +373,7 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
                                     className={`text-left w-full rounded-lg transition-colors`}
                                     aria-label={`Película atual: ${measurement.pelicula || 'Nenhuma'}. Clique para alterar.`}
                                 >
-                                    <div className="text-[9px] font-semibold uppercase text-slate-500 tracking-wider">Película</div>
+                                    <div className="text-[10px] font-semibold uppercase text-slate-500 tracking-wider">Película</div>
                                     <div className="text-xs font-bold text-slate-800 truncate leading-tight">{measurement.pelicula || 'Nenhuma'}</div>
                                 </div>
                             </div>
@@ -389,7 +389,7 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
                                         className={`text-right rounded-lg transition-colors ${isSelectionMode ? 'cursor-default' : 'hover:bg-slate-100 cursor-pointer'}`}
                                         aria-label="Preço, clique para aplicar ou editar desconto"
                                     >
-                                        <div className="text-[9px] font-semibold uppercase text-slate-500 tracking-wider">Preço</div>
+                                        <div className="text-[10px] font-semibold uppercase text-slate-500 tracking-wider">Preço</div>
                                         {basePrice > 0 ? (
                                             finalPrice < basePrice ? (
                                                 <div className="flex flex-col items-end leading-tight">
