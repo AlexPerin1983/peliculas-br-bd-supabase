@@ -261,7 +261,7 @@ const App: React.FC = () => {
 
     const handleSaveChanges = useCallback(async () => {
         if (selectedClientId && proposalOptions.length > 0) {
-            // db.saveProposalOptions now updates the client's lastUpdated timestamp
+            // db.saveProposalOptions now handles updating the client's lastUpdated timestamp
             await db.saveProposalOptions(selectedClientId, proposalOptions);
             setIsDirty(false);
             
@@ -799,21 +799,12 @@ const App: React.FC = () => {
                         parameters: {
                             type: "object",
                             properties: {
-                                measurements: {
-                                    type: "array",
-                                    items: {
-                                        type: "object",
-                                        properties: {
-                                            largura: { type: "string", description: "Largura em metros, com vírgula. Ex: '1,50'" },
-                                            altura: { type: "string", description: "Altura em metros, com vírgula. Ex: '2,10'" },
-                                            quantidade: { type: "number", description: "Quantidade de itens." },
-                                            ambiente: { type: "string", description: "Local do item. Ex: 'Janela da Sala'" }
-                                        },
-                                        required: ["largura", "altura", "quantidade", "ambiente"]
-                                    }
-                                }
+                                largura: { type: "string", description: "Largura em metros, com vírgula. Ex: '1,50'" },
+                                altura: { type: "string", description: "Altura em metros, com vírgula. Ex: '2,10'" },
+                                quantidade: { type: "number", description: "Quantidade de itens." },
+                                ambiente: { type: "string", description: "Local do item. Ex: 'Janela da Sala'" }
                             },
-                            required: ["measurements"]
+                            required: ["largura", "altura", "quantidade", "ambiente"]
                         }
                     }
                 }
@@ -1560,7 +1551,7 @@ const App: React.FC = () => {
             <main ref={mainRef} className="flex-grow overflow-y-auto pb-36 sm:pb-0">
                 <div className="sticky top-0 bg-white/80 backdrop-blur-sm z-10 border-b border-slate-200">
                     <div className="container mx-auto px-2 sm:px-4 w-full max-w-2xl">
-                        <div className="py-2 sm:py-3">
+                        <div className="py-1 sm:py-3">
                             <Header
                                 activeTab={activeTab}
                                 onTabChange={handleTabChange}
