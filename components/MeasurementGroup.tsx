@@ -243,12 +243,14 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
     
     const hasDiscount = (measurement.discount || 0) > 0;
 
-    const baseClasses = `border rounded-lg p-3 space-y-2.5 bg-white transition-shadow, transform`;
+    // Reduzindo o padding principal (p-3 -> p-2.5) e o espaçamento interno (space-y-2.5 -> space-y-2)
+    const baseClasses = `border rounded-lg p-2.5 space-y-2 bg-white transition-shadow, transform`;
     const selectionClasses = isSelectionMode
         ? `cursor-pointer ${isSelected ? 'border-blue-500 bg-blue-50/70 ring-1 ring-blue-500' : 'border-slate-200 hover:bg-slate-50/80'}`
         : 'border-slate-200';
     
-    const inputBaseClasses = "w-full text-center p-2 rounded-lg border text-sm transition-colors duration-200";
+    // Reduzindo o padding do input (p-2 -> p-1.5) e o tamanho da fonte (text-sm -> text-xs)
+    const inputBaseClasses = "w-full text-center p-1.5 rounded-lg border text-xs transition-colors duration-200";
     
     const isDraggable = !isSelectionMode && translateX === 0 && !isModalMode;
 
@@ -286,7 +288,7 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
                 return (
                     <>
                         {displayValWithComma}
-                        <span className="inline-block w-px h-5 bg-blue-500 align-text-bottom ml-0.5 animate-blink" />
+                        <span className="inline-block w-px h-4 bg-blue-500 align-text-bottom ml-0.5 animate-blink" />
                     </>
                 );
             }
@@ -366,10 +368,11 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
                                             onOpenFilmSelectionModal(measurement.id);
                                         }
                                     }}
-                                    className={`text-left w-full p-2 rounded-lg transition-colors ${(!measurement.active || isSelectionMode) ? 'cursor-default' : 'hover:bg-slate-200/50 cursor-pointer'}`}
+                                    // Reduzindo o padding aqui (p-2 -> p-1)
+                                    className={`text-left w-full p-1 rounded-lg transition-colors ${(!measurement.active || isSelectionMode) ? 'cursor-default' : 'hover:bg-slate-200/50 cursor-pointer'}`}
                                     aria-label={`Película atual: ${measurement.pelicula || 'Nenhuma'}. Clique para alterar.`}
                                 >
-                                    <div className="text-[10px] font-semibold uppercase text-slate-500 tracking-wider">Película</div>
+                                    <div className="text-[9px] font-semibold uppercase text-slate-500 tracking-wider">Película</div>
                                     <div className="text-sm font-bold text-slate-800 truncate">{measurement.pelicula || 'Nenhuma'}</div>
                                 </div>
                             </div>
@@ -382,14 +385,15 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
                                         tabIndex={isSelectionMode ? -1 : 0}
                                         onClick={() => !isSelectionMode && onOpenDiscountModal(measurement)}
                                         onKeyDown={(e) => !isSelectionMode && (e.key === 'Enter' || e.key === ' ') && onOpenDiscountModal(measurement)}
-                                        className={`text-right p-2 rounded-lg transition-colors ${isSelectionMode ? 'cursor-default' : 'hover:bg-slate-100 cursor-pointer'}`}
+                                        // Reduzindo o padding aqui (p-2 -> p-1)
+                                        className={`text-right p-1 rounded-lg transition-colors ${isSelectionMode ? 'cursor-default' : 'hover:bg-slate-100 cursor-pointer'}`}
                                         aria-label="Preço, clique para aplicar ou editar desconto"
                                     >
-                                        <div className="text-[10px] font-semibold uppercase text-slate-500 tracking-wider">Preço</div>
+                                        <div className="text-[9px] font-semibold uppercase text-slate-500 tracking-wider">Preço</div>
                                         {basePrice > 0 ? (
                                             finalPrice < basePrice ? (
                                                 <div className="flex flex-col items-end leading-tight">
-                                                    <s className="text-red-500/80 text-[10px] font-normal">{formatCurrency(basePrice)}</s>
+                                                    <s className="text-red-500/80 text-[9px] font-normal">{formatCurrency(basePrice)}</s>
                                                     <span className="text-sm font-bold text-slate-800">{formatCurrency(finalPrice)}</span>
                                                 </div>
                                             ) : (
@@ -417,13 +421,14 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
                             </div>
                         </div>
 
+                        {/* Checkbox and Inputs Row */}
                         <div className="flex items-center space-x-2 pt-2 border-t border-slate-200">
                             {isSelectionMode ? (
                                 <input 
                                     type="checkbox" 
                                     checked={isSelected} 
                                     onChange={(e) => onToggleSelection(measurement.id, index, e.shiftKey)}
-                                    className="form-checkbox h-5 w-5 text-blue-600 rounded-md border-slate-400 focus:ring-offset-0 focus:ring-2 focus:ring-blue-500 cursor-pointer flex-shrink-0"
+                                    className="form-checkbox h-4 w-4 text-blue-600 rounded-md border-slate-400 focus:ring-offset-0 focus:ring-2 focus:ring-blue-500 cursor-pointer flex-shrink-0"
                                     aria-label={`Selecionar medida ${measurement.id}`}
                                 />
                             ) : (
@@ -432,7 +437,7 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
                                         type="checkbox" 
                                         checked={measurement.active} 
                                         onChange={(e) => handleInputChange('active', e.target.checked)} 
-                                        className="form-checkbox h-5 w-5 text-blue-600 rounded-md border-slate-400 focus:ring-offset-0 focus:ring-2 focus:ring-blue-500 cursor-pointer flex-shrink-0"
+                                        className="form-checkbox h-4 w-4 text-blue-600 rounded-md border-slate-400 focus:ring-offset-0 focus:ring-2 focus:ring-blue-500 cursor-pointer flex-shrink-0"
                                         aria-label="Ativar ou desativar esta medida do cálculo"
                                     />
                                 </Tooltip>
