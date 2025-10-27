@@ -1497,7 +1497,7 @@ const App: React.FC = () => {
                         <i className="fas fa-users fa-2x text-slate-500"></i>
                     </div>
                     <h3 className="text-xl font-semibold text-slate-800">Crie seu Primeiro Cliente</h3>
-                    <p className="mt-2 text-slate-600 max-w-xs mx-auto">Tudo começa com um cliente. Adicione os dados para começar a gerar orçamentos.</p>
+                    <p className="mt-2 text-slate-600 max-w-xs mx-auto">Adicione os dados para começar a gerar orçamentos.</p>
                     <button
                         onClick={() => handleOpenClientModal('add')}
                         className="mt-6 px-6 py-3 bg-slate-800 text-white font-semibold rounded-lg hover:bg-slate-700 transition duration-300 shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 flex items-center gap-2"
@@ -1772,8 +1772,6 @@ const App: React.FC = () => {
                     }}
                     onOpenFilmModal={handleOpenFilmModal}
                     onOpenFilmSelectionModal={handleOpenFilmSelectionModal}
-                    numpadConfig={numpadConfig}
-                    onOpenNumpad={handleOpenNumpad}
                 />
             )}
             {isClearAllModalOpen && (

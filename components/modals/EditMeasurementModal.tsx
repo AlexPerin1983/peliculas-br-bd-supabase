@@ -1,17 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Measurement, Film } from '../../types';
 import { AMBIENTES, TIPOS_APLICACAO } from '../../constants';
 import DynamicSelector from '../ui/DynamicSelector';
 
 type UIMeasurement = Measurement & { isNew?: boolean };
-
-type NumpadConfig = {
-    isOpen: boolean;
-    measurementId: number | null;
-    field: 'largura' | 'altura' | 'quantidade' | null;
-    currentValue: string;
-    shouldClearOnNextInput: boolean;
-};
 
 interface EditMeasurementModalProps {
     isOpen: boolean;
@@ -23,8 +15,6 @@ interface EditMeasurementModalProps {
     onDuplicate: () => void;
     onOpenFilmModal: (film: Film | null) => void;
     onOpenFilmSelectionModal: (measurementId: number) => void;
-    numpadConfig: NumpadConfig;
-    onOpenNumpad: (measurementId: number, field: 'largura' | 'altura' | 'quantidade', currentValue: string | number) => void;
 }
 
 const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -40,7 +30,7 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
     onOpenFilmModal,
     onOpenFilmSelectionModal,
 }) => {
-    // 1. Estado local para evitar re-renderização do App.tsx a cada digitação
+    // Estado local para evitar re-renderização do App.tsx a cada digitação
     const [localMeasurement, setLocalMeasurement] = useState<UIMeasurement>(measurement);
 
     useEffect(() => {
@@ -52,12 +42,13 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
 
     if (!isOpen) return null;
 
-    const handleLocalInputChange = (field: keyof Measurement, value: string | number) => {
+    const handleLocalInputChange = useCallback((field: keyof Measurement, value: string | number) => {
         setLocalMeasurement(prev => ({ ...prev, [field]: value }));
-    };
+    }, []);
 
     const handleNumericInputChange = (e: React.ChangeEvent<HTMLInputElement>, field: 'largura' | 'altura') => {
         const { value } = e.target;
+        // Permite apenas números, vírgula e ponto
         if (/^[0-9]*[.,]?[0-9]*$/.test(value)) {
             handleLocalInputChange(field, value);
         }
@@ -66,6 +57,7 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
     const handleQuantityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { value } = e.target;
         const intValue = parseInt(value, 10);
+        // Permite string vazia ou número inteiro positivo
         if (value === '' || (!isNaN(intValue) && intValue >= 0)) {
             handleLocalInputChange('quantidade', value === '' ? 1 : intValue);
         }
@@ -84,7 +76,7 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
     };
     
     const handleSaveAndClose = () => {
-        // 2. Aplica todas as alterações ao estado global antes de fechar
+        // Aplica todas as alterações ao estado global antes de fechar
         onUpdate(localMeasurement);
         onClose();
     };
@@ -141,13 +133,31 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
                         <h3 className="font-semibold text-slate-800 mb-3 text-base">Medidas e Quantidade</h3>
                         <div className="grid grid-cols-3 gap-3">
                             <LabeledInput label="Largura (m)">
-                                <input type="text" inputMode="decimal" value={String(localMeasurement.largura)} onChange={(e) => handleNumericInputChange(e, 'largura')} className={inputClasses} />
+                                <input 
+                                    type="text" 
+                                    inputMode="decimal" 
+                                    value={String(localMeasurement.largura)} 
+                                    onChange={(e) => handleNumericInputChange(e, 'largura')} 
+                                    className={inputClasses} 
+                                />
                             </LabeledInput>
                             <LabeledInput label="Altura (m)">
-                                <input type="text" inputMode="decimal" value={String(localMeasurement.altura)} onChange={(e) => handleNumericInputChange(e, 'altura')} className={inputClasses} />
+                                <input 
+                                    type="text" 
+                                    inputMode="decimal" 
+                                    value={String(localMeasurement.altura)} 
+                                    onChange={(e) => handleNumericInputChange(e, 'altura')} 
+                                    className={inputClasses} 
+                                />
                             </LabeledInput>
                             <LabeledInput label="Quantidade">
-                                <input type="text" inputMode="numeric" value={String(localMeasurement.quantidade)} onChange={handleQuantityChange} className={inputClasses} />
+                                <input 
+                                    type="text" 
+                                    inputMode="numeric" 
+                                    value={String(localMeasurement.quantidade)} 
+                                    onChange={handleQuantityChange} 
+                                    className={inputClasses} 
+                                />
                             </LabeledInput>
                         </div>
                     </div>
