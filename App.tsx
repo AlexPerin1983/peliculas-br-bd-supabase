@@ -154,22 +154,27 @@ const App: React.FC = () => {
 
     const loadClients = useCallback(async (clientIdToSelect?: number) => {
         const storedClients = await db.getAllClients();
-        setClients(storedClients);
+        
+        // Ordenar por lastInteraction (mais recente primeiro)
+        const sortedClients = storedClients.sort((a, b) => (b.lastInteraction || 0) - (a.lastInteraction || 0));
+        setClients(sortedClients);
         
         let idToSelect = clientIdToSelect;
         
-        // If no specific ID is passed, try to use the last selected ID from userInfo
+        // 1. Tenta usar o ID passado (se for uma seleção manual)
+        // 2. Tenta usar o último ID persistido no UserInfo
         if (!idToSelect && userInfo?.lastSelectedClientId) {
-            const lastClient = storedClients.find(c => c.id === userInfo.lastSelectedClientId);
+            const lastClient = sortedClients.find(c => c.id === userInfo.lastSelectedClientId);
             if (lastClient) {
                 idToSelect = lastClient.id;
             }
         }
-
+        
+        // 3. Se nada for encontrado, usa o cliente mais recente (primeiro da lista ordenada)
         if (idToSelect) {
             setSelectedClientId(idToSelect);
-        } else if (storedClients.length > 0) {
-            setSelectedClientId(storedClients[0].id!);
+        } else if (sortedClients.length > 0) {
+            setSelectedClientId(sortedClients[0].id!);
         } else {
             setSelectedClientId(null);
         }
@@ -197,10 +202,10 @@ const App: React.FC = () => {
             const loadedUserInfo = await db.getUserInfo();
             setUserInfo(loadedUserInfo);
             
-            await Promise.all([
-                loadClients(), // loadClients now depends on userInfo, so we call it after setting userInfo
-                loadFilms(),
-            ]);
+            // Passa o ID persistido para loadClients
+            await loadClients(loadedUserInfo.lastSelectedClientId || undefined); 
+            await loadFilms();
+            
             setIsLoading(false);
         };
         init();
@@ -274,12 +279,28 @@ const App: React.FC = () => {
     const measurements = activeOption?.measurements || [];
     const generalDiscount = activeOption?.generalDiscount || { value: '', type: 'percentage' as const };
 
+    const updateClientInteraction = useCallback(async (clientId: number) => {
+        const clientToUpdate = clients.find(c => c.id === clientId);
+        if (clientToUpdate) {
+            const updatedClient = { ...clientToUpdate, lastInteraction: Date.now() };
+            await db.saveClient(updatedClient);
+            
+            // Atualiza a lista de clientes na memória e reordena
+            setClients(prev => {
+                const newClients = prev.map(c => c.id === clientId ? updatedClient : c);
+                return newClients.sort((a, b) => (b.lastInteraction || 0) - (a.lastInteraction || 0));
+            });
+        }
+    }, [clients]);
+
     const handleSaveChanges = useCallback(async () => {
         if (selectedClientId && proposalOptions.length > 0) {
             await db.saveProposalOptions(selectedClientId, proposalOptions);
             setIsDirty(false);
+            // Interação: Salva medidas
+            await updateClientInteraction(selectedClientId);
         }
-    }, [selectedClientId, proposalOptions]);
+    }, [selectedClientId, proposalOptions, updateClientInteraction]);
 
     useEffect(() => {
         if (!isDirty) {
@@ -302,6 +323,7 @@ const App: React.FC = () => {
                 : opt
         ));
         setIsDirty(true);
+        // A interação será salva pelo useEffect do isDirty
     }, [activeOptionId]);
 
     const handleGeneralDiscountChange = useCallback((discount: { value: string; type: 'percentage' | 'fixed' }) => {
@@ -439,14 +461,28 @@ const App: React.FC = () => {
     }, []);
 
     const handleSaveClient = useCallback(async (client: Omit<Client, 'id'>) => {
+        const now = Date.now();
         let savedClient: Client;
+        
         if (clientModalMode === 'edit' && selectedClientId) {
-            savedClient = await db.saveClient({ ...client, id: selectedClientId });
-            setClients(clients.map(c => c.id === selectedClientId ? savedClient : c));
+            const existingClient = clients.find(c => c.id === selectedClientId);
+            savedClient = await db.saveClient({ ...client, id: selectedClientId, lastInteraction: now });
+            
+            // Atualiza a lista de clientes na memória e reordena
+            setClients(prev => {
+                const newClients = prev.map(c => c.id === selectedClientId ? savedClient : c);
+                return newClients.sort((a, b) => (b.lastInteraction || 0) - (a.lastInteraction || 0));
+            });
         } else {
-            savedClient = await db.saveClient(client);
-            setClients(prevClients => [savedClient, ...prevClients]);
+            savedClient = await db.saveClient({ ...client, lastInteraction: now });
+            
+            // Adiciona o novo cliente e reordena
+            setClients(prev => {
+                const newClients = [savedClient, ...prev];
+                return newClients.sort((a, b) => (b.lastInteraction || 0) - (a.lastInteraction || 0));
+            });
         }
+        
         setSelectedClientId(savedClient.id!);
         setIsClientModalOpen(false);
         setNewClientName('');
@@ -675,12 +711,16 @@ const App: React.FC = () => {
             if (hasLoadedHistory) {
                 await loadAllPdfs();
             }
+            
+            // Interação: Geração de PDF
+            await updateClientInteraction(selectedClientId);
+
         } catch (error) {
             console.error("Erro ao gerar ou salvar PDF:", error);
             alert("Ocorreu um erro ao gerar o PDF. Verifique o console para mais detalhes.");
             setPdfGenerationStatus('idle');
         }
-    }, [selectedClient, userInfo, activeOption, isDirty, handleSaveChanges, measurements, films, generalDiscount, totals, selectedClientId, downloadBlob, hasLoadedHistory, loadAllPdfs]);
+    }, [selectedClient, userInfo, activeOption, isDirty, handleSaveChanges, measurements, films, generalDiscount, totals, selectedClientId, downloadBlob, hasLoadedHistory, loadAllPdfs, updateClientInteraction]);
 
     const handleGoToHistoryFromPdf = useCallback(() => {
         setPdfGenerationStatus('idle');
@@ -810,12 +850,21 @@ const App: React.FC = () => {
                         parameters: {
                             type: "object",
                             properties: {
-                                largura: { type: "string", description: "Largura em metros, com vírgula. Ex: '1,50'" },
-                                altura: { type: "string", description: "Altura em metros, com vírgula. Ex: '2,10'" },
-                                quantidade: { type: "number", description: "Quantidade de itens." },
-                                ambiente: { type: "string", description: "Local do item. Ex: 'Janela da Sala'" }
+                                measurements: {
+                                    type: "array",
+                                    items: {
+                                        type: "object",
+                                        properties: {
+                                            largura: { type: "string", description: "Largura em metros, com vírgula. Ex: '1,50'" },
+                                            altura: { type: "string", description: "Altura em metros, com vírgula. Ex: '2,10'" },
+                                            quantidade: { type: "number", description: "Quantidade de itens." },
+                                            ambiente: { type: "string", description: "Local do item. Ex: 'Janela da Sala'" }
+                                        },
+                                        required: ["largura", "altura", "quantidade", "ambiente"]
+                                    }
+                                }
                             },
-                            required: ["largura", "altura", "quantidade", "ambiente"]
+                            required: ["measurements"]
                         }
                     }
                 }

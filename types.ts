@@ -12,6 +12,7 @@ export interface Client {
     bairro?: string;
     cidade?: string;
     uf?: string;
+    lastInteraction?: number; // Novo campo: timestamp da última interação
 }
 
 export interface Measurement {
@@ -95,10 +96,6 @@ export interface UserInfo {
         days: number[]; // 0 for Sunday, 1 for Monday, etc.
     };
     employees?: Employee[];
-    aiConfig?: {
-        provider: 'gemini' | 'openai';
-        apiKey: string;
-    };
     lastSelectedClientId?: number | null;
     lastSelectedOptionId?: number | null; // Novo campo
 }
