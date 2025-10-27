@@ -1614,7 +1614,7 @@ const App: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="container mx-auto px-1 sm:px-4 py-4 sm:py-8 w-full max-w-2xl">
+                <div className="container mx-auto px-0.5 sm:px-4 py-4 sm:py-8 w-full max-w-2xl">
                     <div className="bg-white rounded-2xl shadow-lg p-4 sm:p-6">
                        {deferredPrompt && !isInstalled && (
                             <div className="mb-4 p-3 bg-blue-100 border border-blue-200 rounded-lg flex justify-between items-center">
