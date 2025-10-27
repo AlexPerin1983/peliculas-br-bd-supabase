@@ -141,7 +141,6 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
                                     type="text" 
                                     inputMode="decimal" 
                                     defaultValue={String(localMeasurement.largura)} 
-                                    // Removemos o onChange para evitar re-renderização a cada tecla
                                     onBlur={(e) => handleBlur(e, 'largura')}
                                     className={inputClasses} 
                                 />
@@ -151,7 +150,6 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
                                     type="text" 
                                     inputMode="decimal" 
                                     defaultValue={String(localMeasurement.altura)} 
-                                    // Removemos o onChange para evitar re-renderização a cada tecla
                                     onBlur={(e) => handleBlur(e, 'altura')}
                                     className={inputClasses} 
                                 />
@@ -161,7 +159,6 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
                                     type="text" 
                                     inputMode="numeric" 
                                     defaultValue={String(localMeasurement.quantidade)} 
-                                    // Removemos o onChange para evitar re-renderização a cada tecla
                                     onBlur={(e) => handleBlur(e, 'quantidade')}
                                     className={inputClasses} 
                                 />
@@ -225,7 +222,6 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
                                 <input
                                     type="text"
                                     defaultValue={String(localMeasurement.discount || '').replace('.', ',')}
-                                    // Removemos o onChange para evitar re-renderização a cada tecla
                                     onBlur={(e) => handleBlur(e, 'discount')}
                                     className="w-full p-2.5 bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-l-md shadow-sm focus:ring-slate-500 focus:border-slate-500 sm:text-sm"
                                     placeholder="0"
