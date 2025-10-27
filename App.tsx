@@ -89,7 +89,7 @@ const App: React.FC = () => {
     const [isFilmSelectionModalOpen, setIsFilmSelectionModalOpen] = useState(false);
     const [isApplyFilmToAllModalOpen, setIsApplyFilmToAllModalOpen] = useState(false);
     const [filmToApplyToAll, setFilmToApplyToAll] = useState<string | null>(null);
-    const [editingMeasurementIdForFilm, setEditingMeasurementIdForFilm, ] = useState<number | null>(null);
+    const [editingMeasurementIdForFilm, setEditingMeasurementIdForFilm] = useState<number | null>(null);
     const [newClientName, setNewClientName] = useState<string>('');
     const [editingMeasurement, setEditingMeasurement] = useState<UIMeasurement | null>(null);
     const [schedulingInfo, setSchedulingInfo] = useState<SchedulingInfo | null>(null);
@@ -130,17 +130,12 @@ const App: React.FC = () => {
                     mainEl.style.paddingBottom = `${numpadHeight}px`;
     
                     if (numpadConfig.measurementId) {
-                        // Usamos querySelector para encontrar o elemento dentro do container principal
                         const activeElement = mainEl.querySelector(`[data-measurement-id='${numpadConfig.measurementId}']`);
-                        
                         if (activeElement) {
                             const elementRect = activeElement.getBoundingClientRect();
                             const mainRect = mainEl.getBoundingClientRect();
                             
-                            // Calcula a posição alvo (30% abaixo do topo do container principal)
                             const targetY = mainRect.top + (mainEl.clientHeight * 0.3);
-                            
-                            // Calcula o quanto precisa rolar
                             const scrollAmount = elementRect.top - targetY;
 
                             mainEl.scrollBy({
@@ -159,31 +154,15 @@ const App: React.FC = () => {
 
     const loadClients = useCallback(async (clientIdToSelect?: number) => {
         const storedClients = await db.getAllClients();
-        
-        // Ordenar por lastInteraction (mais recente primeiro)
-        const sortedClients = storedClients.sort((a, b) => (b.lastInteraction || 0) - (a.lastInteraction || 0));
-        setClients(sortedClients);
-        
-        let idToSelect = clientIdToSelect;
-        
-        // 1. Tenta usar o ID passado (se for uma seleção manual)
-        // 2. Tenta usar o último ID persistido no UserInfo
-        if (!idToSelect && userInfo?.lastSelectedClientId) {
-            const lastClient = sortedClients.find(c => c.id === userInfo.lastSelectedClientId);
-            if (lastClient) {
-                idToSelect = lastClient.id;
-            }
-        }
-        
-        // 3. Se nada for encontrado, usa o cliente mais recente (primeiro da lista ordenada)
-        if (idToSelect) {
-            setSelectedClientId(idToSelect);
-        } else if (sortedClients.length > 0) {
-            setSelectedClientId(sortedClients[0].id!);
+        setClients(storedClients);
+        if (clientIdToSelect) {
+            setSelectedClientId(clientIdToSelect);
+        } else if (storedClients.length > 0) {
+            setSelectedClientId(storedClients[0].id!);
         } else {
             setSelectedClientId(null);
         }
-    }, [userInfo?.lastSelectedClientId]);
+    }, []);
 
     const loadFilms = useCallback(async () => {
         const customFilms = await db.getAllCustomFilms();
@@ -204,41 +183,24 @@ const App: React.FC = () => {
     useEffect(() => {
         const init = async () => {
             setIsLoading(true);
-            const loadedUserInfo = await db.getUserInfo();
-            setUserInfo(loadedUserInfo);
-            
-            // Passa o ID persistido para loadClients
-            await loadClients(loadedUserInfo.lastSelectedClientId || undefined); 
-            await loadFilms();
-            
+            await Promise.all([
+                loadClients(),
+                loadFilms(),
+                db.getUserInfo().then(setUserInfo),
+            ]);
             setIsLoading(false);
         };
         init();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []); // Run only once on mount
-
-    // Effect to persist selectedClientId and activeOptionId
+    }, []);
+    
     useEffect(() => {
-        if (userInfo) {
-            let shouldSave = false;
-            let updatedUserInfo = { ...userInfo };
-
-            if (selectedClientId !== null && userInfo.lastSelectedClientId !== selectedClientId) {
-                updatedUserInfo = { ...updatedUserInfo, lastSelectedClientId: selectedClientId };
-                shouldSave = true;
-            }
-            
-            if (activeOptionId !== null && userInfo.lastSelectedOptionId !== activeOptionId) {
-                updatedUserInfo = { ...updatedUserInfo, lastSelectedOptionId: activeOptionId };
-                shouldSave = true;
-            }
-
-            if (shouldSave) {
-                setUserInfo(updatedUserInfo);
-                db.saveUserInfo(updatedUserInfo);
-            }
+        if (activeTab === 'history' && !hasLoadedHistory) {
+            loadAllPdfs().then(() => setHasLoadedHistory(true));
         }
-    }, [selectedClientId, activeOptionId, userInfo]);
+        if (activeTab === 'agenda' && !hasLoadedAgendamentos) {
+            loadAgendamentos().then(() => setHasLoadedAgendamentos(true));
+        }
+    }, [activeTab, hasLoadedHistory, loadAllPdfs, hasLoadedAgendamentos, loadAgendamentos]);
 
     useEffect(() => {
         const loadDataForClient = async () => {
@@ -256,16 +218,7 @@ const App: React.FC = () => {
                     setActiveOptionId(defaultOption.id);
                 } else {
                     setProposalOptions(savedOptions);
-                    
-                    // Tenta carregar a última opção selecionada
-                    const lastOptionId = userInfo?.lastSelectedOptionId;
-                    const lastOption = savedOptions.find(opt => opt.id === lastOptionId);
-
-                    if (lastOption) {
-                        setActiveOptionId(lastOption.id);
-                    } else {
-                        setActiveOptionId(savedOptions[0].id);
-                    }
+                    setActiveOptionId(savedOptions[0].id);
                 }
                 setIsDirty(false);
             } else {
@@ -275,7 +228,7 @@ const App: React.FC = () => {
             }
         };
         loadDataForClient();
-    }, [selectedClientId, userInfo?.lastSelectedOptionId]);
+    }, [selectedClientId]);
 
     const activeOption = useMemo(() => {
         return proposalOptions.find(opt => opt.id === activeOptionId) || null;
@@ -284,28 +237,12 @@ const App: React.FC = () => {
     const measurements = activeOption?.measurements || [];
     const generalDiscount = activeOption?.generalDiscount || { value: '', type: 'percentage' as const };
 
-    const updateClientInteraction = useCallback(async (clientId: number) => {
-        const clientToUpdate = clients.find(c => c.id === clientId);
-        if (clientToUpdate) {
-            const updatedClient = { ...clientToUpdate, lastInteraction: Date.now() };
-            await db.saveClient(updatedClient);
-            
-            // Atualiza a lista de clientes na memória e reordena
-            setClients(prev => {
-                const newClients = prev.map(c => c.id === clientId ? updatedClient : c);
-                return newClients.sort((a, b) => (b.lastInteraction || 0) - (a.lastInteraction || 0));
-            });
-        }
-    }, [clients]);
-
     const handleSaveChanges = useCallback(async () => {
         if (selectedClientId && proposalOptions.length > 0) {
             await db.saveProposalOptions(selectedClientId, proposalOptions);
             setIsDirty(false);
-            // Interação: Salva medidas
-            await updateClientInteraction(selectedClientId);
         }
-    }, [selectedClientId, proposalOptions, updateClientInteraction]);
+    }, [selectedClientId, proposalOptions]);
 
     useEffect(() => {
         if (!isDirty) {
@@ -328,7 +265,6 @@ const App: React.FC = () => {
                 : opt
         ));
         setIsDirty(true);
-        // A interação será salva pelo useEffect do isDirty
     }, [activeOptionId]);
 
     const handleGeneralDiscountChange = useCallback((discount: { value: string; type: 'percentage' | 'fixed' }) => {
@@ -363,8 +299,8 @@ const App: React.FC = () => {
     const addMeasurement = useCallback(() => {
         const newMeasurement: UIMeasurement = { ...createEmptyMeasurement(), isNew: true };
         const updatedMeasurements = [
-            newMeasurement, // Adiciona no início
             ...measurements.map(m => ({ ...m, isNew: false })),
+            newMeasurement, 
         ];
         handleMeasurementsChange(updatedMeasurements);
     }, [createEmptyMeasurement, measurements, handleMeasurementsChange]);
@@ -438,7 +374,7 @@ const App: React.FC = () => {
         if (field === 'quantidade') {
             finalValue = parseInt(String(currentValue), 10) || 1;
         } else {
-            finalValue = (currentValue === '' || currentValue === '.') ? '0' : String(currentValue).replace('.', ',');
+            finalValue = (currentValue === '' || currentValue === '.') ? '0' : currentValue.replace('.', ',');
         }
 
         const updatedMeasurements = measurements.map(m =>
@@ -466,28 +402,14 @@ const App: React.FC = () => {
     }, []);
 
     const handleSaveClient = useCallback(async (client: Omit<Client, 'id'>) => {
-        const now = Date.now();
         let savedClient: Client;
-        
         if (clientModalMode === 'edit' && selectedClientId) {
-            const existingClient = clients.find(c => c.id === selectedClientId);
-            savedClient = await db.saveClient({ ...client, id: selectedClientId, lastInteraction: now });
-            
-            // Atualiza a lista de clientes na memória e reordena
-            setClients(prev => {
-                const newClients = prev.map(c => c.id === selectedClientId ? savedClient : c);
-                return newClients.sort((a, b) => (b.lastInteraction || 0) - (a.lastInteraction || 0));
-            });
+            savedClient = await db.saveClient({ ...client, id: selectedClientId });
+            setClients(clients.map(c => c.id === selectedClientId ? savedClient : c));
         } else {
-            savedClient = await db.saveClient({ ...client, lastInteraction: now });
-            
-            // Adiciona o novo cliente e reordena
-            setClients(prev => {
-                const newClients = [savedClient, ...prev];
-                return newClients.sort((a, b) => (b.lastInteraction || 0) - (a.lastInteraction || 0));
-            });
+            savedClient = await db.saveClient(client);
+            setClients(prevClients => [savedClient, ...prevClients]);
         }
-        
         setSelectedClientId(savedClient.id!);
         setIsClientModalOpen(false);
         setNewClientName('');
@@ -525,9 +447,7 @@ const App: React.FC = () => {
 
         const remainingClients = clients.filter(c => c.id !== selectedClientId);
         setClients(remainingClients);
-        
-        const newSelectedId = remainingClients.length > 0 ? remainingClients[0].id! : null;
-        setSelectedClientId(newSelectedId);
+        setSelectedClientId(remainingClients.length > 0 ? remainingClients[0].id! : null);
         
         if (hasLoadedHistory) {
             await loadAllPdfs();
@@ -716,16 +636,12 @@ const App: React.FC = () => {
             if (hasLoadedHistory) {
                 await loadAllPdfs();
             }
-            
-            // Interação: Geração de PDF
-            await updateClientInteraction(selectedClientId);
-
         } catch (error) {
             console.error("Erro ao gerar ou salvar PDF:", error);
             alert("Ocorreu um erro ao gerar o PDF. Verifique o console para mais detalhes.");
             setPdfGenerationStatus('idle');
         }
-    }, [selectedClient, userInfo, activeOption, isDirty, handleSaveChanges, measurements, films, generalDiscount, totals, selectedClientId, downloadBlob, hasLoadedHistory, loadAllPdfs, updateClientInteraction]);
+    }, [selectedClient, userInfo, activeOption, isDirty, handleSaveChanges, measurements, films, generalDiscount, totals, selectedClientId, downloadBlob, hasLoadedHistory, loadAllPdfs]);
 
     const handleGoToHistoryFromPdf = useCallback(() => {
         setPdfGenerationStatus('idle');
@@ -855,12 +771,21 @@ const App: React.FC = () => {
                         parameters: {
                             type: "object",
                             properties: {
-                                largura: { type: "string", description: "Largura em metros, com vírgula. Ex: '1,50'" },
-                                altura: { type: "string", description: "Altura em metros, com vírgula. Ex: '2,10'" },
-                                quantidade: { type: "number", description: "Quantidade de itens." },
-                                ambiente: { type: "string", description: "Local do item. Ex: 'Janela da Sala'" }
+                                measurements: {
+                                    type: "array",
+                                    items: {
+                                        type: "object",
+                                        properties: {
+                                            largura: { type: "string", description: "Largura em metros, com vírgula. Ex: '1,50'" },
+                                            altura: { type: "string", description: "Altura em metros, com vírgula. Ex: '2,10'" },
+                                            quantidade: { type: "number", description: "Quantidade de itens." },
+                                            ambiente: { type: "string", description: "Local do item. Ex: 'Janela da Sala'" }
+                                        },
+                                        required: ["largura", "altura", "quantidade", "ambiente"]
+                                    }
+                                }
                             },
-                            required: ["largura", "altura", "quantidade", "ambiente"]
+                            required: ["measurements"]
                         }
                     }
                 }
@@ -1012,7 +937,7 @@ const App: React.FC = () => {
             if (prevField === 'quantidade') {
                 finalValue = parseInt(String(prevValue), 10) || 1;
             } else {
-                finalValue = (prevValue === ',' || prevValue === '' || prevValue === '.') ? '0' : String(prevValue).replace('.', ',');
+                finalValue = (prevValue === ',' || prevValue === '' || prevValue === '.') ? '0' : prevValue.replace('.', ',');
             }
 
             const updatedMeasurements = measurements.map(m =>
@@ -1049,7 +974,7 @@ const App: React.FC = () => {
         if (field === 'quantidade') {
             finalValue = parseInt(String(currentValue), 10) || 1;
         } else {
-            finalValue = (currentValue === '' || currentValue === '.') ? '0' : String(currentValue).replace('.', ',');
+            finalValue = (currentValue === '' || currentValue === '.') ? '0' : currentValue.replace('.', ',');
         }
 
         const updatedMeasurements = measurements.map(m =>
@@ -1144,7 +1069,7 @@ const App: React.FC = () => {
         if (field === 'quantidade') {
             finalValue = parseInt(String(currentValue), 10) || 1;
         } else {
-            finalValue = (currentValue === '' || currentValue === '.') ? '0' : String(currentValue).replace('.', ',');
+            finalValue = (currentValue === '' || currentValue === '.') ? '0' : currentValue.replace('.', ',');
         }
 
         const measurementsWithSavedValue = measurements.map(m =>
@@ -1203,7 +1128,7 @@ const App: React.FC = () => {
                     if (field === 'quantidade') {
                         finalValue = parseInt(String(currentValue), 10) || 1;
                     } else {
-                        finalValue = (currentValue === '' || currentValue === '.') ? '0' : String(currentValue).replace('.', ',');
+                        finalValue = (currentValue === '' || currentValue === '.') ? '0' : currentValue.replace('.', ',');
                     }
                     measurementsWithSavedValue = opt.measurements.map(m =>
                         m.id === measurementId ? { ...m, [field]: finalValue } : m
@@ -1212,8 +1137,8 @@ const App: React.FC = () => {
         
                 const newMeasurement: UIMeasurement = { ...createEmptyMeasurement(), isNew: true };
                 const finalMeasurements = [
-                    newMeasurement, // Adiciona no início
                     ...measurementsWithSavedValue.map(m => ({ ...m, isNew: false })),
+                    newMeasurement,
                 ];
                 
                 return { ...opt, measurements: finalMeasurements };

@@ -207,7 +207,7 @@ const FilmModal: React.FC<FilmModalProps> = ({ isOpen, onClose, onSave, onDelete
 
                 <div className="pt-4 mt-4 border-t border-slate-200">
                     <h3 className="text-base font-semibold leading-6 text-slate-800 mb-2">
-                        Dados Técnicos
+                        Dados Técnicos e Imagens ({currentImages.length}/{MAX_IMAGES})
                     </h3>
                     {/* Grid de Dados Técnicos - 2 colunas em mobile, 3 em desktop */}
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
@@ -255,53 +255,48 @@ const FilmModal: React.FC<FilmModalProps> = ({ isOpen, onClose, onSave, onDelete
                             min="0"
                             step="0.1"
                         />
-                        {/* Adicionar um placeholder para manter o grid alinhado em 3 colunas */}
+                        {/* Espaço vazio para alinhar o grid em 3 colunas se necessário */}
                         <div className="hidden sm:block"></div> 
                     </div>
-                </div>
                         
-                {/* Campo de Imagens - Seção separada para melhor controle de layout */}
-                <div className="pt-4 mt-4 border-t border-slate-200">
-                    <h3 className="text-base font-semibold leading-6 text-slate-800 mb-2">
-                        Imagens de Amostra ({currentImages.length}/{MAX_IMAGES})
-                    </h3>
-                    <div className="grid grid-cols-3 gap-3">
-                        {currentImages.map((image, index) => (
-                            <div key={index} className="relative aspect-square">
-                                <img src={image} alt={`Preview ${index + 1}`} className="w-full h-full object-cover rounded-lg border border-slate-200" />
-                                <button 
-                                    type="button" 
-                                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleRemoveImage(index); }}
-                                    className="absolute top-1 right-1 h-6 w-6 bg-red-600 text-white rounded-full flex items-center justify-center hover:bg-red-700 transition-colors"
-                                    aria-label="Remover imagem"
-                                >
-                                    <i className="fas fa-times text-xs"></i>
-                                </button>
-                            </div>
-                        ))}
-                        {canAddMore && (
-                            <div className="relative aspect-square">
-                                <input
-                                    id="film-image-upload"
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={handleImageChange}
-                                    className="sr-only"
-                                    multiple
-                                />
-                                <label 
-                                    htmlFor="film-image-upload" 
-                                    className={`w-full h-full flex flex-col items-center justify-center rounded-lg border-2 border-dashed transition-colors cursor-pointer border-slate-300 hover:border-slate-400 bg-slate-50`}
-                                >
-                                    <i className="fas fa-camera text-xl text-slate-400"></i>
-                                    <span className="text-xs text-slate-600 mt-1 text-center px-1">Adicionar ({MAX_IMAGES - currentImages.length} restantes)</span>
-                                </label>
-                            </div>
-                        )}
+                    {/* Campo de Imagens */}
+                    <div className="col-span-full mt-4">
+                        <label className="block text-sm font-medium text-slate-700 mb-2">Imagens da Película</label>
+                        <div className="grid grid-cols-3 gap-3">
+                            {currentImages.map((image, index) => (
+                                <div key={index} className="relative aspect-square">
+                                    <img src={image} alt={`Preview ${index + 1}`} className="w-full h-full object-cover rounded-lg border border-slate-200" />
+                                    <button 
+                                        type="button" 
+                                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleRemoveImage(index); }}
+                                        className="absolute top-1 right-1 h-6 w-6 bg-red-600 text-white rounded-full flex items-center justify-center hover:bg-red-700 transition-colors"
+                                        aria-label="Remover imagem"
+                                    >
+                                        <i className="fas fa-times text-xs"></i>
+                                    </button>
+                                </div>
+                            ))}
+                            {canAddMore && (
+                                <div className="relative aspect-square">
+                                    <input
+                                        id="film-image-upload"
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={handleImageChange}
+                                        className="sr-only"
+                                        multiple
+                                    />
+                                    <label 
+                                        htmlFor="film-image-upload" 
+                                        className={`w-full h-full flex flex-col items-center justify-center rounded-lg border-2 border-dashed transition-colors cursor-pointer border-slate-300 hover:border-slate-400 bg-slate-50`}
+                                    >
+                                        <i className="fas fa-camera text-xl text-slate-400"></i>
+                                        <span className="text-xs text-slate-600 mt-1 text-center px-1">Adicionar ({MAX_IMAGES - currentImages.length} restantes)</span>
+                                    </label>
+                                </div>
+                            )}
+                        </div>
                     </div>
-                    {!canAddMore && currentImages.length === MAX_IMAGES && (
-                        <p className="text-sm text-slate-500 mt-2">O limite de {MAX_IMAGES} imagens foi atingido.</p>
-                    )}
                 </div>
             </form>
         </Modal>
