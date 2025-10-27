@@ -1,5 +1,3 @@
-
-
 import React from 'react';
 import { Measurement, Film } from '../../types';
 import { AMBIENTES, TIPOS_APLICACAO } from '../../constants';
@@ -184,7 +182,7 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
                         </div>
                     </div>
 
-                    <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
+                    <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm relative z-20">
                         <div className="flex justify-between items-center mb-3">
                             <h3 className="font-semibold text-slate-800 text-base">Desconto e Preço</h3>
                             <p className="font-bold text-slate-800 text-lg">{formatCurrency(finalPrice)}</p>
@@ -214,7 +212,7 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
                 </div>
             </main>
 
-            <footer className="flex-shrink-0 p-3 border-t border-slate-200 bg-white/80 backdrop-blur-sm fixed bottom-0 left-0 right-0">
+            <footer className="flex-shrink-0 p-3 border-t border-slate-200 bg-white/80 backdrop-blur-sm fixed bottom-0 left-0 right-0 z-30">
                 <div className="max-w-xl mx-auto flex items-center justify-between gap-2 sm:gap-3">
                     <button onClick={onDelete} className="px-4 py-2.5 text-sm font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors flex-1 text-center">Excluir</button>
                     <button onClick={onDuplicate} className="px-4 py-2.5 text-sm font-semibold text-slate-700 bg-slate-200 hover:bg-slate-300 rounded-lg transition-colors flex-1 text-center">Duplicar</button>
