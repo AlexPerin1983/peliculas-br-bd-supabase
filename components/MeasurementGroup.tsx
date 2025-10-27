@@ -379,7 +379,7 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
                             </div>
 
                             {/* Right Side: Price & Options Menu */}
-                            <div className="flex items-center flex-none w-32">
+                            <div className="flex items-center">
                                 <Tooltip text={hasDiscount ? 'Editar Desconto' : 'Aplicar Desconto'}>
                                     <div
                                         role="button"
@@ -393,7 +393,7 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
                                         {basePrice > 0 ? (
                                             finalPrice < basePrice ? (
                                                 <div className="flex flex-col items-end leading-tight">
-                                                    <s className="text-red-500/80 text-xs font-normal">{formatCurrency(basePrice)}</s>
+                                                    <s className="text-red-500/80 text-[10px] font-normal">{formatCurrency(basePrice)}</s>
                                                     <span className="text-sm font-bold text-slate-800 leading-tight">{formatCurrency(finalPrice)}</span>
                                                 </div>
                                             ) : (
@@ -422,13 +422,13 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
                         </div>
 
                         {/* Checkbox and Inputs Row */}
-                        <div className="flex items-center space-x-1 pt-1.5 border-t border-slate-200">
+                        <div className="flex items-center space-x-2 pt-1.5 border-t border-slate-200">
                             {isSelectionMode ? (
                                 <input 
                                     type="checkbox" 
                                     checked={isSelected} 
                                     onChange={(e) => onToggleSelection(measurement.id, index, e.shiftKey)}
-                                    className="form-checkbox h-4 w-4 text-blue-600 rounded-md border-slate-400 focus:ring-offset-0 focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                                    className="form-checkbox h-4 w-4 text-blue-600 rounded-md border-slate-400 focus:ring-offset-0 focus:ring-2 focus:ring-blue-500 cursor-pointer flex-shrink-0"
                                     aria-label={`Selecionar medida ${measurement.id}`}
                                 />
                             ) : (
@@ -437,7 +437,7 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
                                         type="checkbox" 
                                         checked={measurement.active} 
                                         onChange={(e) => handleInputChange('active', e.target.checked)} 
-                                        className="form-checkbox h-4 w-4 text-blue-600 rounded-md border-slate-400 focus:ring-offset-0 focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                                        className="form-checkbox h-4 w-4 text-blue-600 rounded-md border-slate-400 focus:ring-offset-0 focus:ring-2 focus:ring-blue-500 cursor-pointer flex-shrink-0"
                                         aria-label="Ativar ou desativar esta medida do cálculo"
                                     />
                                 </Tooltip>
