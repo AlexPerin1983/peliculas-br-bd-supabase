@@ -422,7 +422,7 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
                         </div>
 
                         {/* Checkbox and Inputs Row */}
-                        <div className="flex items-center space-x-2 pt-1.5 border-t border-slate-200">
+                        <div className="flex items-center space-x-1 pt-1.5 border-t border-slate-200">
                             {isSelectionMode ? (
                                 <input 
                                     type="checkbox" 
