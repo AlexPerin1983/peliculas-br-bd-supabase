@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, memo } from 'react';
 import { Measurement, Film } from '../../types';
 import { AMBIENTES, TIPOS_APLICACAO } from '../../constants';
 import DynamicSelector from '../ui/DynamicSelector';
@@ -19,7 +19,7 @@ interface EditMeasurementModalProps {
 
 const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
-const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
+const EditMeasurementModal: React.FC<EditMeasurementModalProps> = memo(({
     isOpen,
     onClose,
     measurement,
@@ -43,6 +43,7 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
     if (!isOpen) return null;
 
     const handleLocalInputChange = useCallback((field: keyof Measurement, value: string | number) => {
+        // Esta função é estável e só atualiza o estado local
         setLocalMeasurement(prev => ({ ...prev, [field]: value }));
     }, []);
 
@@ -194,6 +195,7 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
                                 label="Ambiente"
                                 options={AMBIENTES}
                                 value={localMeasurement.ambiente}
+                                // DynamicSelector chama onChange(value), que chama handleLocalInputChange(field, value)
                                 onChange={(value) => handleLocalInputChange('ambiente', value)}
                                 disabled={!localMeasurement.active}
                             />
@@ -201,6 +203,7 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
                                 label="Tipo de Aplicação"
                                 options={TIPOS_APLICACAO}
                                 value={localMeasurement.tipoAplicacao}
+                                // DynamicSelector chama onChange(value), que chama handleLocalInputChange(field, value)
                                 onChange={(value) => handleLocalInputChange('tipoAplicacao', value)}
                                 disabled={!localMeasurement.active}
                             />
@@ -255,6 +258,6 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
             `}</style>
         </div>
     );
-};
+});
 
 export default EditMeasurementModal;
