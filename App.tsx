@@ -1631,7 +1631,7 @@ const App: React.FC = () => {
                        {activeTab === 'client' ? (
                            <>
                                {clients.length > 0 ? (
-                                   <div className="bg-slate-100 p-2 px-0 rounded-xl">
+                                   <div className="bg-slate-100 p-2 px-2 rounded-xl">
                                        <ClientBar
                                            selectedClient={selectedClient}
                                            onSelectClientClick={handleOpenClientSelectionModal}
