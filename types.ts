@@ -99,7 +99,8 @@ export interface UserInfo {
         provider: 'gemini' | 'openai';
         apiKey: string;
     };
-    lastSelectedClientId?: number | null; // Novo campo
+    lastSelectedClientId?: number | null;
+    lastSelectedOptionId?: number | null; // Novo campo
 }
 
 export interface Agendamento {

@@ -207,14 +207,28 @@ const App: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []); // Run only once on mount
 
-    // Effect to persist selectedClientId
+    // Effect to persist selectedClientId and activeOptionId
     useEffect(() => {
-        if (selectedClientId !== null && userInfo && userInfo.lastSelectedClientId !== selectedClientId) {
-            const updatedUserInfo = { ...userInfo, lastSelectedClientId: selectedClientId };
-            setUserInfo(updatedUserInfo);
-            db.saveUserInfo(updatedUserInfo);
+        if (userInfo) {
+            let shouldSave = false;
+            let updatedUserInfo = { ...userInfo };
+
+            if (selectedClientId !== null && userInfo.lastSelectedClientId !== selectedClientId) {
+                updatedUserInfo = { ...updatedUserInfo, lastSelectedClientId: selectedClientId };
+                shouldSave = true;
+            }
+            
+            if (activeOptionId !== null && userInfo.lastSelectedOptionId !== activeOptionId) {
+                updatedUserInfo = { ...updatedUserInfo, lastSelectedOptionId: activeOptionId };
+                shouldSave = true;
+            }
+
+            if (shouldSave) {
+                setUserInfo(updatedUserInfo);
+                db.saveUserInfo(updatedUserInfo);
+            }
         }
-    }, [selectedClientId, userInfo]);
+    }, [selectedClientId, activeOptionId, userInfo]);
 
     useEffect(() => {
         const loadDataForClient = async () => {
@@ -232,7 +246,16 @@ const App: React.FC = () => {
                     setActiveOptionId(defaultOption.id);
                 } else {
                     setProposalOptions(savedOptions);
-                    setActiveOptionId(savedOptions[0].id);
+                    
+                    // Tenta carregar a última opção selecionada
+                    const lastOptionId = userInfo?.lastSelectedOptionId;
+                    const lastOption = savedOptions.find(opt => opt.id === lastOptionId);
+
+                    if (lastOption) {
+                        setActiveOptionId(lastOption.id);
+                    } else {
+                        setActiveOptionId(savedOptions[0].id);
+                    }
                 }
                 setIsDirty(false);
             } else {
@@ -242,7 +265,7 @@ const App: React.FC = () => {
             }
         };
         loadDataForClient();
-    }, [selectedClientId]);
+    }, [selectedClientId, userInfo?.lastSelectedOptionId]);
 
     const activeOption = useMemo(() => {
         return proposalOptions.find(opt => opt.id === activeOptionId) || null;
@@ -787,21 +810,12 @@ const App: React.FC = () => {
                         parameters: {
                             type: "object",
                             properties: {
-                                measurements: {
-                                    type: "array",
-                                    items: {
-                                        type: "object",
-                                        properties: {
-                                            largura: { type: "string", description: "Largura em metros, com vírgula. Ex: '1,50'" },
-                                            altura: { type: "string", description: "Altura em metros, com vírgula. Ex: '2,10'" },
-                                            quantidade: { type: "number", description: "Quantidade de itens." },
-                                            ambiente: { type: "string", description: "Local do item. Ex: 'Janela da Sala'" }
-                                        },
-                                        required: ["largura", "altura", "quantidade", "ambiente"]
-                                    }
-                                }
+                                largura: { type: "string", description: "Largura em metros, com vírgula. Ex: '1,50'" },
+                                altura: { type: "string", description: "Altura em metros, com vírgula. Ex: '2,10'" },
+                                quantidade: { type: "number", description: "Quantidade de itens." },
+                                ambiente: { type: "string", description: "Local do item. Ex: 'Janela da Sala'" }
                             },
-                            required: ["measurements"]
+                            required: ["largura", "altura", "quantidade", "ambiente"]
                         }
                     }
                 }
