@@ -902,10 +902,11 @@ const App: React.FC = () => {
         try {
             if (userInfo.aiConfig.provider === 'gemini') {
                 await processWithGemini(input);
-            } else if (input.type === 'audio') {
-                alert("O provedor OpenAI não suporta entrada de áudio nesta aplicação.");
-                return;
             } else if (userInfo.aiConfig.provider === 'openai') {
+                if (input.type === 'audio') {
+                    alert("O provedor OpenAI não suporta entrada de áudio nesta aplicação.");
+                    return;
+                }
                 await processWithOpenAI(input as { type: 'text' | 'image'; data: string | File[] });
             }
         } finally {
@@ -1256,11 +1257,8 @@ const App: React.FC = () => {
 
     const handleUpdateEditingMeasurement = useCallback((updatedData: Partial<Measurement>) => {
         if (!editingMeasurement) return;
-        // Criamos uma nova instância de updatedMeasurement para garantir que o React detecte a mudança
         const updatedMeasurement = { ...editingMeasurement, ...updatedData };
         setEditingMeasurement(updatedMeasurement);
-        
-        // Atualizamos a lista principal de medidas
         const newMeasurements = measurements.map(m => m.id === updatedMeasurement.id ? updatedMeasurement : m);
         handleMeasurementsChange(newMeasurements);
     }, [editingMeasurement, measurements, handleMeasurementsChange]);
@@ -1499,7 +1497,7 @@ const App: React.FC = () => {
                         <i className="fas fa-users fa-2x text-slate-500"></i>
                     </div>
                     <h3 className="text-xl font-semibold text-slate-800">Crie seu Primeiro Cliente</h3>
-                    <p className="mt-2 text-slate-600 max-w-xs mx-auto">Adicione os dados para começar a gerar orçamentos.</p>
+                    <p className="mt-2 text-slate-600 max-w-xs mx-auto">Tudo começa com um cliente. Adicione os dados para começar a gerar orçamentos.</p>
                     <button
                         onClick={() => handleOpenClientModal('add')}
                         className="mt-6 px-6 py-3 bg-slate-800 text-white font-semibold rounded-lg hover:bg-slate-700 transition duration-300 shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 flex items-center gap-2"
@@ -1748,7 +1746,6 @@ const App: React.FC = () => {
             )}
             {editingMeasurement && (
                 <EditMeasurementModal
-                    key={editingMeasurement.id} // Adicionando a chave para forçar a recriação
                     isOpen={!!editingMeasurement}
                     onClose={handleCloseEditMeasurementModal}
                     measurement={editingMeasurement}
@@ -1766,7 +1763,7 @@ const App: React.FC = () => {
                                 id: Date.now(), 
                                 isNew: false
                             };
-                            const index = measurements.findIndex(m => m.id === editingMeasurement.id);
+                            const index = measurements.findIndex(m => m.id === measurementToDuplicate.id);
                             const newMeasurements = [...measurements];
                             newMeasurements.splice(index + 1, 0, newMeasurement);
                             handleMeasurementsChange(newMeasurements);
@@ -1775,6 +1772,8 @@ const App: React.FC = () => {
                     }}
                     onOpenFilmModal={handleOpenFilmModal}
                     onOpenFilmSelectionModal={handleOpenFilmSelectionModal}
+                    numpadConfig={numpadConfig}
+                    onOpenNumpad={handleOpenNumpad}
                 />
             )}
             {isClearAllModalOpen && (
