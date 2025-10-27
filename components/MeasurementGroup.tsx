@@ -249,7 +249,7 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
         ? `cursor-pointer ${isSelected ? 'border-blue-500 bg-blue-50/70 ring-1 ring-blue-500' : 'border-slate-200 hover:bg-slate-50/80'}`
         : 'border-slate-200';
     
-    // Ajustando para text-sm e py-2
+    // Inputs numéricos: text-sm e py-2
     const inputBaseClasses = "w-full text-center py-2 px-1.5 rounded-lg border text-sm transition-colors duration-200";
     
     const isDraggable = !isSelectionMode && translateX === 0 && !isModalMode;
@@ -275,7 +275,7 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
         };
         
         const renderContent = () => {
-            // Voltando para text-sm
+            // Usando text-sm para o conteúdo
             const displayValWithComma = (isEditing ? displayValue.replace('.', ',') : displayValue);
 
             if (isEditing) {
@@ -373,7 +373,7 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
                                     className={`text-left w-full rounded-lg transition-colors`}
                                     aria-label={`Película atual: ${measurement.pelicula || 'Nenhuma'}. Clique para alterar.`}
                                 >
-                                    <div className="text-[8px] font-semibold uppercase text-slate-500 tracking-wider">Película</div>
+                                    <div className="text-[9px] font-semibold uppercase text-slate-500 tracking-wider">Película</div>
                                     <div className="text-xs font-bold text-slate-800 truncate leading-tight">{measurement.pelicula || 'Nenhuma'}</div>
                                 </div>
                             </div>
@@ -389,11 +389,11 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
                                         className={`text-right rounded-lg transition-colors ${isSelectionMode ? 'cursor-default' : 'hover:bg-slate-100 cursor-pointer'}`}
                                         aria-label="Preço, clique para aplicar ou editar desconto"
                                     >
-                                        <div className="text-[8px] font-semibold uppercase text-slate-500 tracking-wider">Preço</div>
+                                        <div className="text-[9px] font-semibold uppercase text-slate-500 tracking-wider">Preço</div>
                                         {basePrice > 0 ? (
                                             finalPrice < basePrice ? (
                                                 <div className="flex flex-col items-end leading-tight">
-                                                    <s className="text-red-500/80 text-[8px] font-normal">{formatCurrency(basePrice)}</s>
+                                                    <s className="text-red-500/80 text-[9px] font-normal">{formatCurrency(basePrice)}</s>
                                                     <span className="text-xs font-bold text-slate-800 leading-tight">{formatCurrency(finalPrice)}</span>
                                                 </div>
                                             ) : (
