@@ -244,7 +244,8 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
     const hasDiscount = (measurement.discount || 0) > 0;
 
     // Mantendo o padding principal e espaçamento interno compactos
-    const baseClasses = `border rounded-lg p-2 space-y-1.5 bg-white transition-shadow, transform`;
+    // Removendo p-2 e substituindo por py-2 e px-3 para manter o espaçamento interno mínimo
+    const baseClasses = `border rounded-lg py-2 px-3 space-y-1.5 bg-white transition-shadow, transform`;
     const selectionClasses = isSelectionMode
         ? `cursor-pointer ${isSelected ? 'border-blue-500 bg-blue-50/70 ring-1 ring-blue-500' : 'border-slate-200 hover:bg-slate-50/80'}`
         : 'border-slate-200';
