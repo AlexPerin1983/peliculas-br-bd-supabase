@@ -164,7 +164,8 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
         }
     };
 
-    const handleDeleteClick = () => {
+    const handleDeleteClick = (e: React.MouseEvent) => {
+        e.stopPropagation();
         onDelete();
         onSetSwipedItem(null);
     };
@@ -348,7 +349,7 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
                         draggable={isDraggable}
                         onDragStart={onDragStart}
                         onDragEnter={onDragEnter}
-                        onDragEnd={onDragEnd}
+                        onDragEnd={handleDragEnd}
                         onDragOver={(e) => e.preventDefault()}
                         className={`relative z-10 ${baseClasses} ${selectionClasses} ${isDragging ? 'shadow-2xl scale-[1.02]' : ''} ${isActive ? 'ring-2 ring-blue-500' : ''}`}
                     >
@@ -452,14 +453,14 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
                                     label="Ambiente"
                                     options={AMBIENTES}
                                     value={measurement.ambiente}
-                                    onChange={(value) => handleInputChange('ambiente', value)}
+                                    onChange={(value) => onUpdate({ ambiente: value })}
                                     disabled={!measurement.active}
                                 />
                                 <DynamicSelector
                                     label="Tipo de Aplicação"
                                     options={TIPOS_APLICACAO}
                                     value={measurement.tipoAplicacao}
-                                    onChange={(value) => handleInputChange('tipoAplicacao', value)}
+                                    onChange={(value) => onUpdate({ tipoAplicacao: value })}
                                     disabled={!measurement.active}
                                 />
                             </div>

@@ -53,6 +53,9 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
     const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
     const [swipedItemId, setSwipedItemId] = useState<number | null>(null);
     const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
+    
+    // Novo estado para exclusão individual
+    const [measurementToDeleteId, setMeasurementToDeleteId] = useState<number | null>(null);
 
     const scrollVelocityRef = useRef(0);
     const animationFrameRef = useRef<number | null>(null);
@@ -136,31 +139,33 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
     };
 
     const handleToggleSelection = (id: number, index: number, isShiftKey: boolean) => {
-        const newSelectedIds = new Set(selectedIds);
-        
-        if (isShiftKey && lastSelectedIndex !== null && lastSelectedIndex !== index) {
-            const start = Math.min(lastSelectedIndex, index);
-            const end = Math.max(lastSelectedIndex, index);
+        setSelectedIds(prevSelectedIds => {
+            const newSelectedIds = new Set(prevSelectedIds);
+            
+            if (isShiftKey && lastSelectedIndex !== null && lastSelectedIndex !== index) {
+                const start = Math.min(lastSelectedIndex, index);
+                const end = Math.max(lastSelectedIndex, index);
 
-            const shouldSelectRange = !selectedIds.has(id);
+                const shouldSelectRange = !prevSelectedIds.has(id);
 
-            for (let i = start; i <= end; i++) {
-                if (shouldSelectRange) {
-                    newSelectedIds.add(measurements[i].id);
+                for (let i = start; i <= end; i++) {
+                    if (shouldSelectRange) {
+                        newSelectedIds.add(measurements[i].id);
+                    } else {
+                        newSelectedIds.delete(measurements[i].id);
+                    }
+                }
+            } else {
+                if (newSelectedIds.has(id)) {
+                    newSelectedIds.delete(id);
                 } else {
-                    newSelectedIds.delete(measurements[i].id);
+                    newSelectedIds.add(id);
                 }
             }
-        } else {
-            if (newSelectedIds.has(id)) {
-                newSelectedIds.delete(id);
-            } else {
-                newSelectedIds.add(id);
-            }
-        }
-        
-        setLastSelectedIndex(index);
-        setSelectedIds(newSelectedIds);
+            
+            setLastSelectedIndex(index);
+            return newSelectedIds;
+        });
     };
 
     const handleToggleSelectAll = () => {
@@ -207,8 +212,17 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
         onMeasurementsChange(newMeasurements);
     };
     
-    const deleteMeasurement = (id: number) => {
-        onMeasurementsChange(measurements.filter(m => m.id !== id));
+    // Função para solicitar a exclusão (abre o modal)
+    const requestDeleteMeasurement = (id: number) => {
+        setMeasurementToDeleteId(id);
+    };
+    
+    // Função para confirmar a exclusão (executa a ação)
+    const confirmDeleteMeasurement = () => {
+        if (measurementToDeleteId !== null) {
+            onMeasurementsChange(measurements.filter(m => m.id !== measurementToDeleteId));
+            setMeasurementToDeleteId(null);
+        }
     };
     
     const duplicateMeasurement = (id: number) => {
@@ -268,6 +282,8 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
             animationDuration: `${duration}ms`
         };
     };
+    
+    const measurementToDelete = measurements.find(m => m.id === measurementToDeleteId);
 
     return (
         <>
@@ -356,7 +372,7 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
                             measurement={measurement}
                             films={films}
                             onUpdate={(updated) => updateMeasurement(measurement.id, updated)}
-                            onDelete={() => deleteMeasurement(measurement.id)}
+                            onDelete={() => requestDeleteMeasurement(measurement.id)}
                             onDuplicate={() => duplicateMeasurement(measurement.id)}
                             onOpenFilmModal={onOpenFilmModal}
                             onOpenFilmSelectionModal={onOpenFilmSelectionModal}
@@ -395,6 +411,23 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
                 />
             )}
             
+            {measurementToDeleteId !== null && measurementToDelete && (
+                <ConfirmationModal
+                    isOpen={measurementToDeleteId !== null}
+                    onClose={() => setMeasurementToDeleteId(null)}
+                    onConfirm={confirmDeleteMeasurement}
+                    title="Confirmar Exclusão de Medida"
+                    message={
+                        <>
+                            Tem certeza que deseja apagar a medida de <strong>{measurementToDelete.largura}x{measurementToDelete.altura}</strong> ({measurementToDelete.ambiente})?
+                            Esta ação não pode ser desfeita.
+                        </>
+                    }
+                    confirmButtonText="Sim, Excluir"
+                    confirmButtonVariant="danger"
+                />
+            )}
+            
             <style jsx>{`
                 @keyframes carousel-left {
                     0% {
@@ -408,10 +441,6 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
                     50% {
                         opacity: 0;
                         transform: translateX(-100px) scale(0.9);
-                    }
-                    75% {
-                        opacity: 0.5;
-                        transform: translateX(50px) scale(0.95);
                     }
                     100% {
                         opacity: 1;
@@ -432,10 +461,6 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
                         opacity: 0;
                         transform: translateX(100px) scale(0.9);
                     }
-                    75% {
-                        opacity: 0.5;
-                        transform: translateX(-50px) scale(0.95);
-                    }
                     100% {
                         opacity: 1;
                         transform: translateX(0) scale(1);
@@ -443,11 +468,11 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
                 }
                 
                 .animate-carousel-left {
-                    animation: carousel-left cubic-bezier(0.4, 0, 0.2, 1);
+                    animation: carousel-left 0.5s cubic-bezier(0.4, 0, 0.2, 1);
                 }
                 
                 .animate-carousel-right {
-                    animation: carousel-right cubic-bezier(0.4, 0, 0.2, 1);
+                    animation: carousel-right 0.5s cubic-bezier(0.4, 0, 0.2, 1);
                 }
             `}</style>
         </>
