@@ -360,7 +360,7 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
                         {/* Top Row: Film selector and Price */}
                         <div className="flex items-start justify-between">
                             {/* Left Side: Film Info & Selector */}
-                            <div className="flex-[2] pr-2 min-w-0"> {/* Aumentado de flex-1 para flex-[2] */}
+                            <div className="flex-[2] pr-2 min-w-0">
                                 <div 
                                     role="button"
                                     tabIndex={(!measurement.active || isSelectionMode) ? -1 : 0}
@@ -374,12 +374,12 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
                                     aria-label={`Película atual: ${measurement.pelicula || 'Nenhuma'}. Clique para alterar.`}
                                 >
                                     <div className="text-xs font-semibold uppercase text-slate-500 tracking-wider">Película</div>
-                                    <div className="text-sm font-bold text-slate-800 truncate leading-tight">{measurement.pelicula || 'Nenhuma'}</div> {/* Aumentado para text-sm */}
+                                    <div className="text-sm font-bold text-slate-800 truncate leading-tight">{measurement.pelicula || 'Nenhuma'}</div>
                                 </div>
                             </div>
 
                             {/* Right Side: Price & Options Menu */}
-                            <div className="flex items-center flex-1"> {/* Reduzido para flex-1 */}
+                            <div className="flex items-center flex-1">
                                 <Tooltip text={hasDiscount ? 'Editar Desconto' : 'Aplicar Desconto'}>
                                     <div
                                         role="button"
@@ -393,14 +393,14 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
                                         {basePrice > 0 ? (
                                             finalPrice < basePrice ? (
                                                 <div className="flex flex-col items-end leading-tight">
-                                                    <s className="text-red-500/80 text-xs font-normal">{formatCurrency(basePrice)}</s> {/* Aumentado para text-xs */}
-                                                    <span className="text-sm font-bold text-slate-800 leading-tight">{formatCurrency(finalPrice)}</span> {/* Aumentado para text-sm */}
+                                                    <s className="text-red-500/80 text-xs font-normal">{formatCurrency(basePrice)}</s>
+                                                    <span className="text-sm font-bold text-slate-800 leading-tight">{formatCurrency(finalPrice)}</span>
                                                 </div>
                                             ) : (
-                                                <span className="text-sm font-bold text-slate-800 leading-tight">{formatCurrency(basePrice)}</span> {/* Aumentado para text-sm */}
+                                                <span className="text-sm font-bold text-slate-800 leading-tight">{formatCurrency(basePrice)}</span>
                                             )
                                         ) : (
-                                        <span className="text-sm font-bold text-slate-800 leading-tight">-</span> {/* Aumentado para text-sm */}
+                                        <span className="text-sm font-bold text-slate-800 leading-tight">-</span>
                                         )}
                                     </div>
                                 </Tooltip>
