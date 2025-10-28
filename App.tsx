@@ -1580,7 +1580,7 @@ const App: React.FC = () => {
         }
     }, [deferredPrompt, promptInstall]);
 
-    // --- NOVA LÓGICA DE PAGINAÇÃO POR SWIPE ---
+    // --- LÓGICA DE PAGINAÇÃO POR SWIPE ---
     const goToNextClient = useCallback(() => {
         if (clients.length <= 1 || !selectedClientId) return;
         const currentIndex = clients.findIndex(c => c.id === selectedClientId);
@@ -1594,7 +1594,7 @@ const App: React.FC = () => {
         const prevIndex = (currentIndex - 1 + clients.length) % clients.length;
         setSelectedClientId(clients[prevIndex].id!);
     }, [clients, selectedClientId]);
-    // --- FIM NOVA LÓGICA DE PAGINAÇÃO POR SWIPE ---
+    // --- FIM LÓGICA DE PAGINAÇÃO POR SWIPE ---
 
 
     const renderContent = () => {

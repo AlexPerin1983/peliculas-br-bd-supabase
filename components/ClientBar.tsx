@@ -35,6 +35,7 @@ const ClientBar: React.FC<ClientBarProps> = ({
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
     const touchStartX = useRef(0);
+    const touchStartY = useRef(0); // Adicionado touchStartY
     const touchStartTime = useRef(0);
     const isSwiping = useRef(false);
     const SWIPE_THRESHOLD = 50;
@@ -64,13 +65,14 @@ const ClientBar: React.FC<ClientBarProps> = ({
 
         isSwiping.current = true;
         touchStartX.current = e.touches[0].clientX;
+        touchStartY.current = e.touches[0].clientY; // Inicializado touchStartY
         touchStartTime.current = Date.now();
     };
 
     const handleTouchMove = (e: React.TouchEvent) => {
         if (!isSwiping.current) return;
         // Previne o scroll horizontal da página enquanto desliza
-        if (e.cancelable) e.preventDefault();
+        // Não previne o default aqui para permitir o scroll vertical
     };
 
     const handleTouchEnd = (e: React.TouchEvent) => {
@@ -78,7 +80,11 @@ const ClientBar: React.FC<ClientBarProps> = ({
         isSwiping.current = false;
 
         const deltaX = e.changedTouches[0].clientX - touchStartX.current;
+        const deltaY = e.changedTouches[0].clientY - touchStartY.current; // Usando touchStartY
         const deltaTime = Date.now() - touchStartTime.current;
+
+        // Verifica se o movimento foi predominantemente horizontal (para evitar conflito com scroll vertical)
+        if (Math.abs(deltaY) > Math.abs(deltaX)) return; // Se for mais vertical, ignora
 
         if (deltaTime < TIME_THRESHOLD && Math.abs(deltaX) > SWIPE_THRESHOLD) {
             if (deltaX > 0) {
