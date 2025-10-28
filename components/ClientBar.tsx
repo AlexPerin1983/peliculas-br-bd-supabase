@@ -8,6 +8,8 @@ interface ClientBarProps {
     onAddClient: () => void;
     onEditClient: () => void;
     onDeleteClient: () => void;
+    onSwipeLeft: () => void;
+    onSwipeRight: () => void;
 }
 
 const formatAddress = (client: Client): string => {
@@ -27,9 +29,16 @@ const ClientBar: React.FC<ClientBarProps> = ({
     onAddClient,
     onEditClient,
     onDeleteClient,
+    onSwipeLeft,
+    onSwipeRight,
 }) => {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
+    const touchStartX = useRef(0);
+    const touchStartTime = useRef(0);
+    const isSwiping = useRef(false);
+    const SWIPE_THRESHOLD = 50;
+    const TIME_THRESHOLD = 500;
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -45,6 +54,43 @@ const ClientBar: React.FC<ClientBarProps> = ({
         };
     }, [isMenuOpen]);
     
+    const handleTouchStart = (e: React.TouchEvent) => {
+        // Ignora se o menu de opções estiver aberto
+        if (isMenuOpen) return;
+        
+        // Ignora se o toque começar em um botão ou link
+        const target = e.target as HTMLElement;
+        if (target.closest('button') || target.closest('a')) return;
+
+        isSwiping.current = true;
+        touchStartX.current = e.touches[0].clientX;
+        touchStartTime.current = Date.now();
+    };
+
+    const handleTouchMove = (e: React.TouchEvent) => {
+        if (!isSwiping.current) return;
+        // Previne o scroll horizontal da página enquanto desliza
+        if (e.cancelable) e.preventDefault();
+    };
+
+    const handleTouchEnd = (e: React.TouchEvent) => {
+        if (!isSwiping.current) return;
+        isSwiping.current = false;
+
+        const deltaX = e.changedTouches[0].clientX - touchStartX.current;
+        const deltaTime = Date.now() - touchStartTime.current;
+
+        if (deltaTime < TIME_THRESHOLD && Math.abs(deltaX) > SWIPE_THRESHOLD) {
+            if (deltaX > 0) {
+                // Swipe Right (Cliente Anterior)
+                onSwipeRight();
+            } else {
+                // Swipe Left (Próximo Cliente)
+                onSwipeLeft();
+            }
+        }
+    };
+
     const ActionButton: React.FC<{
         onClick: () => void;
         icon: string;
@@ -99,7 +145,13 @@ const ClientBar: React.FC<ClientBarProps> = ({
     return (
         <div className="mb-4">
             {/* Mobile Layout */}
-            <div className="sm:hidden">
+            <div 
+                className="sm:hidden"
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+                style={{ touchAction: 'pan-y' }} // Permite o scroll vertical, mas captura o horizontal
+            >
                 {selectedClient ? (
                     <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-3">
                         <div className="flex items-start gap-3">

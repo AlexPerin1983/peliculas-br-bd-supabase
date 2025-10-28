@@ -1580,6 +1580,22 @@ const App: React.FC = () => {
         }
     }, [deferredPrompt, promptInstall]);
 
+    // --- NOVA LÓGICA DE PAGINAÇÃO POR SWIPE ---
+    const goToNextClient = useCallback(() => {
+        if (clients.length <= 1 || !selectedClientId) return;
+        const currentIndex = clients.findIndex(c => c.id === selectedClientId);
+        const nextIndex = (currentIndex + 1) % clients.length;
+        setSelectedClientId(clients[nextIndex].id!);
+    }, [clients, selectedClientId]);
+
+    const goToPrevClient = useCallback(() => {
+        if (clients.length <= 1 || !selectedClientId) return;
+        const currentIndex = clients.findIndex(c => c.id === selectedClientId);
+        const prevIndex = (currentIndex - 1 + clients.length) % clients.length;
+        setSelectedClientId(clients[prevIndex].id!);
+    }, [clients, selectedClientId]);
+    // --- FIM NOVA LÓGICA DE PAGINAÇÃO POR SWIPE ---
+
 
     const renderContent = () => {
         if (isLoading) {
@@ -1769,6 +1785,8 @@ const App: React.FC = () => {
                                            onAddClient={() => handleOpenClientModal('add')}
                                            onEditClient={() => handleOpenClientModal('edit')}
                                            onDeleteClient={handleDeleteClient}
+                                           onSwipeLeft={goToNextClient}
+                                           onSwipeRight={goToPrevClient}
                                        />
                                        
                                        {proposalOptions.length > 0 && activeOptionId && (
