@@ -77,37 +77,10 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSave, mode
     const [error, setError] = useState<string | null>(null);
     const [emailSuggestion, setEmailSuggestion] = useState<string | null>(null);
     const numberInputRef = useRef<HTMLInputElement>(null);
+    const isInitialLoadRef = useRef(true); // Para controlar o primeiro useEffect
 
-    useEffect(() => {
-        if (isOpen) {
-            setError(null);
-            setEmailSuggestion(null);
-            let baseData = initialFormData;
-            
-            if (mode === 'edit' && client) {
-                baseData = { ...initialFormData, ...client };
-            } else {
-                baseData = { ...initialFormData, nome: initialName || '' };
-            }
-            
-            // Apply AI data if available
-            if (aiData) {
-                baseData = {
-                    ...baseData,
-                    ...aiData,
-                    // Apply masks to AI data fields
-                    telefone: applyPhoneMask(aiData.telefone || ''),
-                    cpfCnpj: applyCpfCnpjMask(aiData.cpfCnpj || ''),
-                    cep: applyCepMask(aiData.cep || ''),
-                };
-            }
-            
-            setFormData(baseData);
-        }
-    }, [mode, client, isOpen, initialName, aiData]);
-
-    const handleCepBlur = async () => {
-        const cep = formData.cep?.replace(/\D/g, '');
+    const handleCepBlur = async (cepValue?: string) => {
+        const cep = (cepValue || formData.cep)?.replace(/\D/g, '');
         if (cep && cep.length === 8) {
             setIsFetchingCep(true);
             setError(null);
@@ -123,8 +96,12 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSave, mode
                     bairro: data.bairro,
                     cidade: data.localidade,
                     uf: data.uf,
+                    cep: applyCepMask(cep), // Garante que o CEP esteja mascarado
                 }));
-                numberInputRef.current?.focus();
+                // Se não estiver em modo de edição/AI, foca no número
+                if (!cepValue && !aiData) {
+                    numberInputRef.current?.focus();
+                }
             } catch (err) {
                 setError(err instanceof Error ? err.message : 'Erro ao buscar CEP.');
             } finally {
@@ -132,7 +109,45 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSave, mode
             }
         }
     };
-    
+
+    useEffect(() => {
+        if (isOpen) {
+            setError(null);
+            setEmailSuggestion(null);
+            let baseData = initialFormData;
+            
+            if (mode === 'edit' && client) {
+                baseData = { ...initialFormData, ...client };
+            } else {
+                baseData = { ...initialFormData, nome: initialName || '' };
+            }
+            
+            let cepToSearch: string | undefined;
+
+            // Apply AI data if available
+            if (aiData) {
+                baseData = {
+                    ...baseData,
+                    ...aiData,
+                    // Apply masks to AI data fields
+                    telefone: applyPhoneMask(aiData.telefone || ''),
+                    cpfCnpj: applyCpfCnpjMask(aiData.cpfCnpj || ''),
+                    cep: applyCepMask(aiData.cep || ''),
+                };
+                cepToSearch = aiData.cep;
+            }
+            
+            setFormData(baseData);
+            isInitialLoadRef.current = true;
+
+            // Se houver CEP da IA, aciona a busca do ViaCEP para validar e preencher o endereço
+            if (cepToSearch) {
+                // Usamos setTimeout para garantir que o estado inicial do formData seja aplicado antes de buscar
+                setTimeout(() => handleCepBlur(cepToSearch), 0);
+            }
+        }
+    }, [mode, client, isOpen, initialName, aiData]);
+
     const handleAddressSearch = async () => {
         const { logradouro, cidade, uf } = formData;
         if (!logradouro || !cidade || !uf || logradouro.length < 3) {
@@ -240,7 +255,7 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSave, mode
                     
                     <div className="pt-4 border-t border-slate-200">
                         <div className="relative">
-                            <Input id="cep" label="CEP" type="tel" value={formData.cep || ''} onChange={handleChange} onBlur={handleCepBlur} maxLength={9} />
+                            <Input id="cep" label="CEP" type="tel" value={formData.cep || ''} onChange={handleChange} onBlur={() => handleCepBlur()} maxLength={9} />
                             {isFetchingCep && <i className="fas fa-spinner fa-spin absolute right-3 top-[38px] text-slate-400"></i>}
                         </div>
                     </div>
