@@ -103,12 +103,19 @@ const ClientBar: React.FC<ClientBarProps> = ({
                 {selectedClient ? (
                     <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-3">
                         <div className="flex items-start gap-3">
-                            {/* Avatar */}
-                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center flex-shrink-0">
-                                <i className="fas fa-user text-white text-sm"></i>
+                            {/* Avatar - Agora clicável e com ícone de múltiplos clientes */}
+                            <div 
+                                onClick={onSelectClientClick}
+                                role="button"
+                                tabIndex={0}
+                                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onSelectClientClick() }}
+                                className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center flex-shrink-0 cursor-pointer hover:opacity-90 transition-opacity"
+                                aria-label="Trocar de cliente"
+                            >
+                                <i className="fas fa-users text-white text-sm"></i>
                             </div>
 
-                            {/* Client Info - Clickable */}
+                            {/* Client Info - Clicável */}
                             <div
                                 onClick={onSelectClientClick}
                                 role="button"
@@ -195,7 +202,7 @@ const ClientBar: React.FC<ClientBarProps> = ({
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center">
-                                    <i className="fas fa-user text-slate-400 text-sm"></i>
+                                    <i className="fas fa-users text-slate-400 text-sm"></i>
                                 </div>
                                 <div>
                                     <p className="text-sm font-semibold text-slate-500">Nenhum cliente selecionado</p>
