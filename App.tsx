@@ -21,6 +21,7 @@ import AgendamentoModal from './components/modals/AgendamentoModal';
 import DiscountModal from './components/modals/DiscountModal';
 import GeneralDiscountModal from './components/modals/GeneralDiscountModal';
 import AIMeasurementModal from './components/modals/AIMeasurementModal';
+import AIClientModal from './components/modals/AIClientModal'; // Importado
 import ApiKeyModal from './components/modals/ApiKeyModal';
 import ProposalOptionsCarousel from './components/ProposalOptionsCarousel';
 import ImageGalleryModal from './components/modals/ImageGalleryModal'; // Importado
@@ -52,6 +53,21 @@ export type SchedulingInfo = {
     agendamento: Partial<Agendamento>;
     pdf?: SavedPDF;
 };
+
+// Tipo para os dados do cliente extraídos pela IA
+interface ExtractedClientData {
+    nome?: string;
+    telefone?: string;
+    email?: string;
+    cpfCnpj?: string;
+    cep?: string;
+    logradouro?: string;
+    numero?: string;
+    complemento?: string;
+    bairro?: string;
+    cidade?: string;
+    uf?: string;
+}
 
 
 const App: React.FC = () => {
@@ -97,12 +113,14 @@ const App: React.FC = () => {
     const [postClientSaveAction, setPostClientSaveAction] = useState<'openAgendamentoModal' | null>(null);
     const [editingMeasurementForDiscount, setEditingMeasurementForDiscount] = useState<UIMeasurement | null>(null);
     const [isAIMeasurementModalOpen, setIsAIMeasurementModalOpen] = useState(false);
+    const [isAIClientModalOpen, setIsAIClientModalOpen] = useState(false); // NOVO ESTADO
+    const [aiClientData, setAiClientData] = useState<Partial<Client> | undefined>(undefined); // NOVO ESTADO
     const [isProcessingAI, setIsProcessingAI] = useState(false);
     const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
     const [apiKeyModalProvider, setApiKeyModalProvider] = useState<'gemini' | 'openai'>('gemini');
     const [isGeneralDiscountModalOpen, setIsGeneralDiscountModalOpen] = useState(false);
-    const [isDuplicateAllModalOpen, setIsDuplicateAllModalOpen] = useState(false); // NOVO ESTADO
-    const [measurementToDeleteId, setMeasurementToDeleteId] = useState<number | null>(null); // NOVO ESTADO
+    const [isDuplicateAllModalOpen, setIsDuplicateAllModalOpen] = useState(false); 
+    const [measurementToDeleteId, setMeasurementToDeleteId] = useState<number | null>(null); 
     
     // Image Gallery State
     const [isGalleryOpen, setIsGalleryOpen] = useState(false);
@@ -433,6 +451,7 @@ const App: React.FC = () => {
             alert('Selecione um cliente para editar.');
             return;
         }
+        setAiClientData(undefined); // Clear AI data when opening manually
         setIsClientModalOpen(true);
     }, [selectedClientId, numpadConfig.isOpen, handleNumpadClose]);
     
@@ -455,6 +474,7 @@ const App: React.FC = () => {
         
         setIsClientModalOpen(false);
         setNewClientName('');
+        setAiClientData(undefined); // Clear AI data after successful save
 
         if (postClientSaveAction === 'openAgendamentoModal') {
             handleOpenAgendamentoModal({
@@ -707,7 +727,106 @@ const App: React.FC = () => {
         });
     };
 
+    const processClientDataWithGemini = async (input: { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob }): Promise<ExtractedClientData | null> => {
+        try {
+            const genAI = new GoogleGenerativeAI(userInfo!.aiConfig!.apiKey);
+            const model = genAI.getGenerativeModel({ 
+                model: "gemini-2.0-flash-exp",
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: SchemaType.OBJECT,
+                        properties: {
+                            nome: { type: SchemaType.STRING, description: 'Nome completo do cliente.' },
+                            telefone: { type: SchemaType.STRING, description: 'Telefone do cliente, apenas dígitos. Ex: 83999998888' },
+                            email: { type: SchemaType.STRING, description: 'Email do cliente.' },
+                            cpfCnpj: { type: SchemaType.STRING, description: 'CPF ou CNPJ do cliente, apenas dígitos.' },
+                            cep: { type: SchemaType.STRING, description: 'CEP do endereço, apenas dígitos.' },
+                            logradouro: { type: SchemaType.STRING, description: 'Rua ou Logradouro.' },
+                            numero: { type: SchemaType.STRING, description: 'Número do endereço.' },
+                            complemento: { type: SchemaType.STRING, description: 'Complemento (opcional).' },
+                            bairro: { type: SchemaType.STRING, description: 'Bairro.' },
+                            cidade: { type: SchemaType.STRING, description: 'Cidade.' },
+                            uf: { type: SchemaType.STRING, description: 'Estado (UF).' },
+                        },
+                    }
+                }
+            });
+    
+            const prompt = `
+                Você é um assistente especialista em extração de dados de clientes. Sua tarefa é extrair o máximo de informações de contato e endereço de um cliente a partir da entrada fornecida (texto, imagem ou áudio).
+                Formate os campos de telefone, CPF/CNPJ e CEP APENAS com dígitos, sem pontuação ou espaços.
+                Responda APENAS com um objeto JSON válido que corresponda ao schema fornecido. Não inclua nenhuma outra explicação ou texto.
+            `;
+    
+            const parts: any[] = [prompt];
+    
+            if (input.type === 'text') {
+                parts.push(input.data as string);
+            } else if (input.type === 'image') {
+                for (const file of input.data as File[]) {
+                    const { mimeType, data } = await blobToBase64(file);
+                    parts.push({ inlineData: { mimeType, data } });
+                }
+            } else if (input.type === 'audio') {
+                const { mimeType, data } = await blobToBase64(input.data as Blob);
+                    parts.push({ inlineData: { mimeType, data } });
+            }
+    
+            const result = await model.generateContent(parts);
+            const response = await result.response;
+            const extractedData = JSON.parse(response.text());
+            
+            return extractedData as ExtractedClientData;
+
+        } catch (error) {
+            console.error("Erro ao processar dados do cliente com Gemini:", error);
+            alert(`Ocorreu um erro com Gemini: ${error instanceof Error ? error.message : String(error)}`);
+            return null;
+        }
+    };
+
+    const processClientDataWithOpenAI = async (input: { type: 'text' | 'image'; data: string | File[] }): Promise<ExtractedClientData | null> => {
+        // OpenAI logic here (similar to processWithOpenAI but with client data schema)
+        // NOTE: For brevity and since Gemini is the primary AI, we'll focus on Gemini implementation for now.
+        // If the user selects OpenAI, we'll alert them that this specific feature is only fully supported by Gemini (especially for audio).
+        alert("O preenchimento de dados do cliente com OpenAI ainda não está totalmente implementado. Por favor, use o Gemini ou preencha manualmente.");
+        return null;
+    };
+
+    const handleProcessAIClientInput = useCallback(async (input: { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob }) => {
+        if (!userInfo?.aiConfig?.apiKey || !userInfo?.aiConfig?.provider) {
+            alert("Por favor, configure seu provedor e chave de API na aba 'Empresa' para usar esta funcionalidade.");
+            return;
+        }
+    
+        setIsProcessingAI(true);
+        let extractedData: ExtractedClientData | null = null;
+    
+        try {
+            if (userInfo.aiConfig.provider === 'gemini') {
+                extractedData = await processClientDataWithGemini(input);
+            } else if (userInfo.aiConfig.provider === 'openai') {
+                if (input.type === 'audio') {
+                    alert("O provedor OpenAI não suporta entrada de áudio para esta funcionalidade.");
+                    return;
+                }
+                extractedData = await processClientDataWithOpenAI(input as { type: 'text' | 'image'; data: string | File[] });
+            }
+            
+            if (extractedData) {
+                setAiClientData(extractedData);
+                setIsAIClientModalOpen(false);
+                setIsClientModalOpen(true); // Reabre o modal do cliente com os dados da IA
+            }
+
+        } finally {
+            setIsProcessingAI(false);
+        }
+    }, [userInfo]);
+
     const processWithGemini = async (input: { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob }) => {
+        // ... (Lógica de processamento de medidas com Gemini, mantida)
         try {
             const genAI = new GoogleGenerativeAI(userInfo!.aiConfig!.apiKey);
             const model = genAI.getGenerativeModel({ 
@@ -800,6 +919,7 @@ const App: React.FC = () => {
     };
 
     const processWithOpenAI = async (input: { type: 'text' | 'image'; data: string | File[] }) => {
+        // ... (Lógica de processamento de medidas com OpenAI, mantida)
         try {
             const prompt = `Você é um assistente especialista para uma empresa de instalação de películas de vidro. Sua tarefa é extrair dados de medidas da entrada fornecida pelo usuário. Extraia as seguintes informações para cada medida: largura, altura, quantidade e uma descrição do ambiente/local (ex: "sala", "quarto", "janela da cozinha"). As medidas estão em metros. Se o usuário disser '1 e meio por 2', interprete como 1,50m por 2,00m. Sempre formate as medidas com duas casas decimais e vírgula como separador. O ambiente deve ser uma descrição curta e útil.`;
 
@@ -1245,6 +1365,7 @@ const App: React.FC = () => {
         setIsClientSelectionModalOpen(false);
         setClientModalMode('add');
         setNewClientName(clientName);
+        setAiClientData(undefined);
         setIsClientModalOpen(true);
     }, []);
 
@@ -1356,6 +1477,7 @@ const App: React.FC = () => {
         setPostClientSaveAction('openAgendamentoModal');
         setClientModalMode('add');
         setNewClientName(clientName);
+        setAiClientData(undefined);
         setIsClientModalOpen(true);
     }, [handleCloseAgendamentoModal]);
 
@@ -1433,6 +1555,11 @@ const App: React.FC = () => {
         setIsGalleryOpen(false);
         setGalleryImages([]);
         setGalleryInitialIndex(0);
+    }, []);
+
+    const handleOpenAIClientModal = useCallback(() => {
+        setIsClientModalOpen(false);
+        setIsAIClientModalOpen(true);
     }, []);
 
 
@@ -1715,11 +1842,14 @@ const App: React.FC = () => {
                     onClose={() => {
                         setIsClientModalOpen(false);
                         setNewClientName('');
+                        setAiClientData(undefined);
                     }}
                     onSave={handleSaveClient}
                     mode={clientModalMode}
                     client={clientModalMode === 'edit' ? selectedClient : null}
                     initialName={newClientName}
+                    aiData={aiClientData}
+                    onOpenAIModal={handleOpenAIClientModal}
                 />
             )}
             {isClientSelectionModalOpen && (
@@ -1934,6 +2064,15 @@ const App: React.FC = () => {
                     isOpen={isAIMeasurementModalOpen}
                     onClose={() => setIsAIMeasurementModalOpen(false)}
                     onProcess={handleProcessAIInput}
+                    isProcessing={isProcessingAI}
+                    provider={userInfo?.aiConfig?.provider || 'gemini'}
+                />
+            )}
+            {isAIClientModalOpen && (
+                <AIClientModal
+                    isOpen={isAIClientModalOpen}
+                    onClose={() => setIsAIClientModalOpen(false)}
+                    onProcess={handleProcessAIClientInput}
                     isProcessing={isProcessingAI}
                     provider={userInfo?.aiConfig?.provider || 'gemini'}
                 />

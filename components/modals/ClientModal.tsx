@@ -11,6 +11,8 @@ interface ClientModalProps {
     mode: 'add' | 'edit';
     client: Client | null;
     initialName?: string;
+    aiData?: Partial<Client>; // Novo campo para dados preenchidos pela IA
+    onOpenAIModal: () => void; // Novo prop para abrir o modal de IA
 }
 
 const applyPhoneMask = (value: string) => {
@@ -68,7 +70,7 @@ const initialFormData: Omit<Client, 'id'> = {
     uf: '',
 };
 
-const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSave, mode, client, initialName }) => {
+const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSave, mode, client, initialName, aiData, onOpenAIModal }) => {
     const [formData, setFormData] = useState<Omit<Client, 'id'>>(initialFormData);
     const [isFetchingCep, setIsFetchingCep] = useState(false);
     const [isSearchingByAddress, setIsSearchingByAddress] = useState(false);
@@ -80,13 +82,29 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSave, mode
         if (isOpen) {
             setError(null);
             setEmailSuggestion(null);
+            let baseData = initialFormData;
+            
             if (mode === 'edit' && client) {
-                setFormData({ ...initialFormData, ...client });
+                baseData = { ...initialFormData, ...client };
             } else {
-                setFormData({ ...initialFormData, nome: initialName || '' });
+                baseData = { ...initialFormData, nome: initialName || '' };
             }
+            
+            // Apply AI data if available
+            if (aiData) {
+                baseData = {
+                    ...baseData,
+                    ...aiData,
+                    // Apply masks to AI data fields
+                    telefone: applyPhoneMask(aiData.telefone || ''),
+                    cpfCnpj: applyCpfCnpjMask(aiData.cpfCnpj || ''),
+                    cep: applyCepMask(aiData.cep || ''),
+                };
+            }
+            
+            setFormData(baseData);
         }
-    }, [mode, client, isOpen, initialName]);
+    }, [mode, client, isOpen, initialName, aiData]);
 
     const handleCepBlur = async () => {
         const cep = formData.cep?.replace(/\D/g, '');
@@ -197,6 +215,18 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSave, mode
     const modalTitle = (
         <div className="flex items-center justify-between w-full">
             <span className="truncate pr-2">{mode === 'add' ? 'Adicionar Novo Cliente' : 'Editar Cliente'}</span>
+            {mode === 'add' && (
+                <Tooltip text="Preencher com IA">
+                    <button
+                        type="button"
+                        onClick={onOpenAIModal}
+                        className="w-8 h-8 flex items-center justify-center rounded-full text-slate-600 hover:bg-slate-100 transition-colors"
+                        aria-label="Preencher com IA"
+                    >
+                        <i className="fas fa-robot text-lg"></i>
+                    </button>
+                </Tooltip>
+            )}
         </div>
     );
 
