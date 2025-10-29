@@ -178,21 +178,16 @@
     <div id="root" class="h-full"></div>
     <script type="module" src="/index.tsx"></script>
     <script>
-        // Service Worker Registration
+        // Service Worker Registration (PWABuilder compatible)
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                // Use a unique URL to bypass aggressive browser caching of the SW script itself
-                const swUrl = '/service-worker.js?v=' + Date.now(); 
-                
-                navigator.serviceWorker.register(swUrl, { 
-                    scope: '/',
-                    // Force the browser to check for updates by ignoring the HTTP cache
-                    updateViaCache: 'none' 
+                navigator.serviceWorker.register('/service-worker.js', { 
+                    scope: '/'
                 })
                     .then(registration => {
                         console.log('✅ Service Worker registrado:', registration.scope);
                         
-                        // Force update check
+                        // Check for updates
                         registration.update();
                         
                         registration.addEventListener('updatefound', () => {
@@ -218,52 +213,3 @@
     </script>
 </body>
 </html>
-</dyad-file>
-
-### 2. Atualizando `public/manifest.json` (Adicionando `display_override`, `lang` e `dir`)
-
-O PWABuilder mencionou a necessidade de `display_override`. Também adicionarei `lang` e `dir` aqui para consistência com o HTML.
-
-<dyad-write path="public/manifest.json" description="Adicionando 'display_override', 'lang' e 'dir' ao manifest para melhor compatibilidade com o PWABuilder.">
-{
-  "name": "Películas Brasil - Calculadora de Orçamentos",
-  "short_name": "Películas BR",
-  "description": "Calculadora profissional de orçamento para instalação de películas de vidro",
-  "start_url": "/",
-  "scope": "/",
-  "display": "standalone",
-  "display_override": ["standalone", "window-controls-overlay"],
-  "lang": "pt-BR",
-  "dir": "ltr",
-  "orientation": "any",
-  "background_color": "#ffffff",
-  "theme_color": "#364562",
-  "icons": [
-    {
-      "src": "/icon-192x192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/icon-192x192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "maskable"
-    },
-    {
-      "src": "/icon-512x512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/icon-512x512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable"
-    }
-  ],
-  "categories": ["business", "productivity", "finance"],
-  "prefer_related_applications": false
-}
