@@ -184,12 +184,15 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
         }
     };
 
+    // REMOVIDO: useEffect que abria o numpad automaticamente ao carregar uma nova medida.
+    /*
     useEffect(() => {
         if (measurement.isNew) {
             onOpenNumpad(measurement.id, 'largura', measurement.largura);
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [measurement.isNew]);
+    */
     
     const handleInputChange = (field: keyof Measurement, value: any) => {
         onUpdate({ [field]: value });
