@@ -43,15 +43,72 @@
       "src": "/icon-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "platform": "windows",
-      "label": "Narrow Screenshot Example"
+      "form_factor": "narrow",
+      "label": "Tela de Orçamento - Mobile"
     },
     {
       "src": "/icon-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "platform": "windows",
-      "label": "Wide Screenshot Example"
+      "form_factor": "wide",
+      "label": "Tela de Orçamento - Desktop"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Novo Orçamento",
+      "short_name": "Novo",
+      "description": "Criar um novo orçamento rapidamente",
+      "url": "/?action=new",
+      "icons": [
+        {
+          "src": "/icon-192x192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
+  "share_target": {
+    "action": "/",
+    "method": "GET",
+    "enctype": "application/x-www-form-urlencoded",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  },
+  "edge_side_panel": {
+    "preferred_width": 400
+  },
+  "note_taking": {
+    "new_note_url": "/?action=new-note"
+  },
+  "widgets": [
+    {
+      "name": "Resumo de Orçamentos",
+      "description": "Visualize rapidamente seus orçamentos recentes",
+      "tag": "orcamentos",
+      "template": "orcamentos-widget",
+      "ms_ac_template": "orcamentos-adaptive-card.json",
+      "data": "orcamentos-data.json",
+      "type": "application/json",
+      "screenshots": [
+        {
+          "src": "/icon-192x192.png",
+          "sizes": "192x192",
+          "label": "Widget de Orçamentos"
+        }
+      ],
+      "icons": [
+        {
+          "src": "/icon-192x192.png",
+          "sizes": "192x192"
+        }
+      ],
+      "auth": false,
+      "update": 86400
     }
   ],
   "related_applications": [
