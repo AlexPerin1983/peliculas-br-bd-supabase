@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import QRCode from 'qrcode.react';
+import { QRCode } from 'qrcode.react';
 
 interface PwaQrCodeProps {
     appUrl: string;
