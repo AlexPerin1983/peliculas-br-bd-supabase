@@ -67,6 +67,11 @@ const ClientSelectionModal: React.FC<ClientSelectionModalProps> = ({
     const handleAddNewEmpty = () => {
         onAddNewClient('');
     }
+    
+    const handleClearSearch = () => {
+        setSearchTerm('');
+        inputRef.current?.focus();
+    };
 
     return (
         <div className="fixed inset-0 bg-white/95 backdrop-blur-sm z-50 flex flex-col animate-fade-in">
@@ -89,6 +94,16 @@ const ClientSelectionModal: React.FC<ClientSelectionModalProps> = ({
                         className="w-full pl-12 pr-4 py-3 bg-slate-100 border border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent"
                         disabled={isLoading}
                     />
+                    {searchTerm && (
+                        <button
+                            type="button"
+                            onClick={handleClearSearch}
+                            className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 h-8 w-8 flex items-center justify-center"
+                            aria-label="Limpar busca"
+                        >
+                            <i className="fas fa-times-circle text-lg"></i>
+                        </button>
+                    )}
                 </div>
             </div>
 
