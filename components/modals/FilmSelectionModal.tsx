@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Film } from '../../types';
 
@@ -234,6 +232,11 @@ const FilmSelectionModal: React.FC<FilmSelectionModalProps> = ({ isOpen, onClose
     const handleAddNew = () => {
         onAddNewFilm(searchTerm);
     };
+    
+    const handleClearSearch = () => {
+        setSearchTerm('');
+        inputRef.current?.focus();
+    };
 
     const handleEditFilm = (film: Film) => {
         onEditFilm(film);
@@ -261,8 +264,18 @@ const FilmSelectionModal: React.FC<FilmSelectionModalProps> = ({ isOpen, onClose
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         placeholder="Buscar pelo nome da película..."
-                        className="w-full pl-12 pr-4 py-3 bg-slate-100 border border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent"
+                        className="w-full pl-12 pr-12 py-3 bg-slate-100 border border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent"
                     />
+                    {searchTerm && (
+                        <button
+                            type="button"
+                            onClick={handleClearSearch}
+                            className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 h-8 w-8 flex items-center justify-center"
+                            aria-label="Limpar busca"
+                        >
+                            <i className="fas fa-times-circle text-lg"></i>
+                        </button>
+                    )}
                 </div>
             </div>
 
