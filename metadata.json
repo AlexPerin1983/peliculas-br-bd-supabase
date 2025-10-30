@@ -1,5 +1,7 @@
 {
-  "name": "Copia segrança",
-  "description": "22/10/2025",
+  "name": "Películas Br",
+  "description": "Calculadora de orçamentos para instalação de películas de vidro.",
+  "short_description": "Calcule orçamentos de películas de vidro de forma rápida e profissional, com gestão de clientes e agenda.",
+  "full_description": "A Calculadora de Orçamentos Películas Brasil é a ferramenta definitiva para profissionais de instalação de películas automotivas e arquitetônicas. Otimize seu tempo e aumente sua precisão com recursos poderosos:\n\n**1. Cálculo Rápido e Preciso:**\nInsira largura, altura e quantidade para obter o m² instantaneamente. Aplique descontos por item ou um desconto geral (em R$ ou %) para fechar o negócio.\n\n**2. Gestão de Clientes e Histórico:**\nCadastre e gerencie seus clientes com máscaras automáticas para telefone e CPF/CNPJ. Salve todos os orçamentos gerados como PDFs diretamente no dispositivo, com histórico completo e status de aprovação.\n\n**3. Inteligência Artificial (IA):**\nUse o poder do Google Gemini para extrair medidas de textos, imagens ou áudio, economizando tempo de digitação. Use a IA para otimizar a rota de agendamentos do dia.\n\n**4. Agenda Integrada:**\nControle seus compromissos em um calendário visual. Vincule agendamentos aos orçamentos gerados e exporte eventos para sua agenda pessoal.\n\n**5. Personalização Total:**\nConfigure cores, logotipo, formas de pagamento (Pix, Boleto, Parcelado) e dados da sua empresa para que os PDFs sejam emitidos com sua identidade visual profissional.",
   "requestFramePermissions": []
 }
