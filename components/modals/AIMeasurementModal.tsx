@@ -51,6 +51,7 @@ const AIMeasurementModal: React.FC<AIMeasurementModalProps> = ({ isOpen, onClose
             imagePreviews.forEach(url => URL.revokeObjectURL(url));
             if (audioUrl) URL.revokeObjectURL(audioUrl);
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [imagePreviews, audioUrl]);
     
     useEffect(() => {
