@@ -111,33 +111,33 @@ const dbGetAll = async <T,>(storeName: string): Promise<T[]> => {
 };
 
 const dbPut = async <T,>(storeName: string, value: any): Promise<T> => {
-    // We get the store and transaction. We will wait for the transaction to complete
-    // to ensure data is fully persisted before resolving the promise.
     const store = await getStore(storeName, 'readwrite');
     const transaction = store.transaction;
     
     return new Promise<T>((resolve, reject) => {
         const request = store.put(value);
+        let generatedKey: IDBValidKey | undefined;
 
-        // The 'oncomplete' event fires after all requests in the transaction have completed
-        // successfully and the changes have been committed to the database.
-        // This is a more robust approach than resolving on 'request.onsuccess', as it
-        // guarantees data persistence and prevents potential race conditions where the
-        // application state might be updated before the data is saved.
+        // Captura o ID gerado imediatamente após o sucesso da requisição
+        request.onsuccess = () => {
+            generatedKey = request.result;
+        };
+        
+        // Se a requisição falhar, rejeita imediatamente
+        request.onerror = () => {
+            reject(request.error);
+        };
+
+        // Resolve a promessa somente quando a transação for concluída (garantindo persistência)
         transaction.oncomplete = () => {
-            // When adding a new item to a store with an auto-incrementing key,
-            // 'value.id' will be undefined. After the 'put' operation, 'request.result'
-            // will hold the newly generated ID. We construct the complete object to return.
-            if (value.id === undefined && typeof request.result !== 'undefined') {
-                resolve({ ...value, id: request.result } as T);
+            if (value.id === undefined && typeof generatedKey !== 'undefined') {
+                resolve({ ...value, id: generatedKey } as T);
             } else {
-                // For updates, the original 'value' object already contains the correct ID.
                 resolve(value as T);
             }
         };
 
-        // If any request in the transaction fails, the transaction is aborted
-        // and this event fires.
+        // Se a transação falhar (por qualquer motivo), rejeita
         transaction.onerror = () => {
             reject(transaction.error);
         };
