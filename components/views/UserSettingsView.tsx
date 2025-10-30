@@ -503,7 +503,7 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({ userInfo, onSave, o
                         
                         {/* NOVO: Link para a Política de Privacidade */}
                         <a
-                            href="/privacy-policy.html"
+                            href="/privacy-policy"
                             target="_blank"
                             rel="noopener noreferrer"
                             className="w-full px-4 py-3 bg-slate-100 text-slate-700 font-semibold rounded-lg hover:bg-slate-200 transition-colors flex items-center justify-center gap-2 text-sm"
