@@ -500,6 +500,17 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({ userInfo, onSave, o
                                 Instalar Aplicativo
                             </button>
                         )}
+                        
+                        {/* NOVO: Link para a Política de Privacidade */}
+                        <a
+                            href="/privacy-policy.html"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="w-full px-4 py-3 bg-slate-100 text-slate-700 font-semibold rounded-lg hover:bg-slate-200 transition-colors flex items-center justify-center gap-2 text-sm"
+                        >
+                            <i className="fas fa-shield-alt"></i>
+                            Ver Política de Privacidade
+                        </a>
                     </div>
                 </div>
                 
