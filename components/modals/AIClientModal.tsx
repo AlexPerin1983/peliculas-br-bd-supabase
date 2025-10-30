@@ -246,7 +246,7 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
                                 </div>
                             )}
 
-                            {imageFiles.length < MAX_IMAGES && imagePreviews.length === 0 && (
+                            {imageFiles.length < MAX_IMAGES && (
                                  <div
                                     onDragEnter={(e) => handleDragEvent(e, true)}
                                     onDragLeave={(e) => handleDragEvent(e, false)}
@@ -277,7 +277,7 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
                                 <>
                                     <i className="fas fa-microphone-alt text-3xl text-red-500 mb-3 animate-pulse"></i>
                                     <p className="text-slate-600 mb-4">Gravando... fale os dados do cliente.</p>
-                                    <button type="button" onClick={stopRecording} className="px-6 py-2 bg-red-600 text-white rounded-full font-semibold shadow-md hover:bg-red-700">
+                                    <button type="button" onClick={stopRecording} className="px-6 py-2 bg-red-600 text-white rounded-full font-semibold shadow-md">
                                         Parar Gravação
                                     </button>
                                 </>
