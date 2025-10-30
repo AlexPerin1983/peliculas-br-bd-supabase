@@ -1,9 +1,11 @@
-[{
-      "relation": ["delegate_permission/common.handle_all_urls"],
-      "target": {
-        "namespace": "android_app",
-        "package_name": "br.com.peliculasbr.app",
-        "sha256_cert_fingerprints": ["0D:2A:1A:3A:68:8F:BF:CF:6B:E0:AB:1B:A7:3F:14:CE:C6:79:09:C4:CB:D8:FB:F1:8A:DE:20:42:B8:75:44:FC"]
-      }
-    }]
-
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "br.com.peliculasbr.app",
+      "sha256_cert_fingerprints":
+        ["72:20:14:7A:B6:44:E0:7D:37:7F:5C:28:2A:C9:F1:CC:63:FF:8F:D9:AC:DA:55:A2:9D:89:3D:33:E5:41:BF:B4"]
+    }
+  }
+]
