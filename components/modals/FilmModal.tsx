@@ -181,7 +181,7 @@ const FilmModal: React.FC<FilmModalProps> = ({ isOpen, onClose, onSave, onDelete
                         />
                         <Input
                             id="maoDeObra"
-                            label="Valor Mão de Obra (R$)"
+                            label="Mão de Obra (R$)"
                             type="number"
                             value={formData.maoDeObra}
                             onChange={handleChange}
