@@ -182,7 +182,7 @@
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 // Explicitly set scope to root to ensure correct registration path
-                navigator.serviceWorker.register('/service-worker.js', { 
+                navigator.serviceWorker.register('/service-worker.js?v=1.1', { // Adicionado ?v=1.1 para cache busting
                     scope: '/'
                 })
                     .then(registration => {
