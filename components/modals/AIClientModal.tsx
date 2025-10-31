@@ -1,13 +1,18 @@
-import React, { useState, useEffect, useRef, FormEvent, DragEvent } from 'react';
+import React, { useState, useEffect, FormEvent, useCallback, useRef } from 'react';
 import Modal from '../ui/Modal';
+import ErrorModal from './ErrorModal';
+import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
+import { ExtractedClientData } from '../../App';
 
 interface AIClientModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onProcess: (input: { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob }) => Promise<void>;
+    onProcess: (data: { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob }) => void;
     isProcessing: boolean;
     provider: 'gemini' | 'openai';
 }
+
+const MAX_IMAGES = 3;
 
 const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProcess, isProcessing, provider }) => {
     const [activeTab, setActiveTab] = useState<'text' | 'image' | 'audio'>('text');
@@ -15,132 +20,140 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
     const [imageFiles, setImageFiles] = useState<File[]>([]);
     const [imagePreviews, setImagePreviews] = useState<string[]>([]);
     const [isDragging, setIsDragging] = useState(false);
-
+    const [error, setError] = useState<string | null>(null);
+    const [isErrorModalOpen, setIsErrorModalOpen] = useState(false);
+    const [errorModalContent, setErrorModalContent] = useState({ title: '', message: '' });
+    
+    // Audio Recording State
     const [isRecording, setIsRecording] = useState(false);
     const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
     const [audioUrl, setAudioUrl] = useState<string | null>(null);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<Blob[]>([]);
-    
-    const [error, setError] = useState<string | null>(null);
 
-    const MAX_IMAGES = 1; 
-
-    const stopRecordingCleanup = () => {
-        if (mediaRecorderRef.current?.stream) {
-            mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
-        }
-    };
-
-    const resetState = () => {
-        if (isRecording) stopRecording();
-        stopRecordingCleanup();
-        imagePreviews.forEach(url => URL.revokeObjectURL(url));
-        if (audioUrl) URL.revokeObjectURL(audioUrl);
-        setText('');
-        setImageFiles([]);
-        setImagePreviews([]);
-        setAudioBlob(null);
-        setAudioUrl(null);
-        setIsRecording(false);
-        setIsDragging(false);
-        setError(null);
-    };
-
-    useEffect(() => {
-        return () => { 
-            stopRecordingCleanup();
-            imagePreviews.forEach(url => URL.revokeObjectURL(url));
-            if (audioUrl) URL.revokeObjectURL(audioUrl);
-        }
-    }, [imagePreviews, audioUrl]);
-    
-    useEffect(() => {
-        if (!isOpen) {
-            resetState();
-            setActiveTab('text');
-        }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isOpen]);
-    
-    const handleTabChange = (tab: 'text' | 'image' | 'audio') => {
-        resetState();
-        setActiveTab(tab);
-    }
-
-    const handleImageFiles = (files: FileList | null) => {
-        if (!files) return;
-
-        const newFiles: File[] = [];
-        const newPreviews: string[] = [];
-
-        for (let i = 0; i < files.length; i++) {
-            const file = files[i];
-            if (imageFiles.length + newFiles.length >= MAX_IMAGES) {
-                 setError(`Você pode enviar no máximo ${MAX_IMAGES} ${MAX_IMAGES > 1 ? 'imagens' : 'imagem'}.`);
-                 break;
-            }
-            if (file && file.type.startsWith('image/')) {
-                newFiles.push(file);
-                newPreviews.push(URL.createObjectURL(file));
-            } else {
-                 setError(`O arquivo "${file.name}" não é uma imagem válida.`);
-            }
-        }
-        
-        setImageFiles(prev => [...prev, ...newFiles]);
-        setImagePreviews(prev => [...prev, ...newPreviews]);
-    };
-    
-    const handleDragEvent = (e: DragEvent<HTMLDivElement>, isEntering: boolean) => {
+    const handleDragEvent = useCallback((e: React.DragEvent | React.TouchEvent, isEntering: boolean) => {
         e.preventDefault();
-        e.stopPropagation();
-        if (!isProcessing && imageFiles.length < MAX_IMAGES) setIsDragging(isEntering);
-    };
+        if (isEntering) {
+            setIsDragging(true);
+        } else {
+            setIsDragging(false);
+        }
+    }, []);
 
-    const handleDrop = (e: DragEvent<HTMLDivElement>) => {
-        handleDragEvent(e, false);
+    const handleDrop = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragging(false);
         if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
             handleImageFiles(e.dataTransfer.files);
-            e.dataTransfer.clearData();
         }
-    };
-    
-    const removeImage = (indexToRemove: number) => {
-        URL.revokeObjectURL(imagePreviews[indexToRemove]);
+    }, []);
+
+    const handleImageFiles = useCallback((files: FileList | null) => {
+        if (!files) return;
+        const newFiles = Array.from(files).filter(file => file.type.startsWith('image/'));
+        
+        setImageFiles(prev => {
+            const currentCount = prev.length;
+            if (currentCount + newFiles.length > MAX_IMAGES) {
+                setError(`Limite de ${MAX_IMAGES} imagens excedido. Selecione apenas ${MAX_IMAGES - currentCount} arquivos.`);
+                return prev;
+            }
+            return [...prev, ...newFiles];
+        });
+    }, []);
+
+    const removeImage = useCallback((indexToRemove: number) => {
         setImageFiles(prev => prev.filter((_, index) => index !== indexToRemove));
         setImagePreviews(prev => prev.filter((_, index) => index !== indexToRemove));
-    };
+    }, []);
 
-    const startRecording = async () => {
+    const startRecording = useCallback(async () => {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            setErrorModalContent({ title: "Erro de Gravação", message: "A gravação de áudio não é suportada neste navegador." });
+            setIsErrorModalOpen(true);
+            return;
+        }
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            mediaRecorderRef.current = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
-            mediaRecorderRef.current.ondataavailable = (event) => audioChunksRef.current.push(event.data);
-            mediaRecorderRef.current.onstop = () => {
-                const blob = new Blob(audioChunksRef.current, { type: 'audio/webm;codecs=opus' });
+            const recorder = new MediaRecorder(stream);
+            mediaRecorderRef.current = recorder;
+            audioChunksRef.current = [];
+            
+            recorder.ondataavailable = (e) => {
+                audioChunksRef.current.push(e.data);
+            };
+            
+            recorder.onstop = () => {
+                const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
                 setAudioBlob(blob);
                 setAudioUrl(URL.createObjectURL(blob));
-                audioChunksRef.current = [];
-                stopRecordingCleanup();
+                stream.getTracks().forEach(track => track.stop()); // Stop microphone access
             };
-            audioChunksRef.current = [];
-            setAudioBlob(null);
-            setAudioUrl(null);
-            mediaRecorderRef.current.start();
+
+            recorder.start();
             setIsRecording(true);
+            setError(null);
         } catch (err) {
-            console.error("Error accessing microphone:", err);
-            setError("Não foi possível acessar o microfone. Verifique as permissões do seu navegador.");
+            console.error("Erro ao iniciar gravação de áudio:", err);
+            setErrorModalContent({ title: "Erro de Permissão", message: "Permissão de microfone negada ou erro ao acessar o dispositivo de áudio." });
+            setIsErrorModalOpen(true);
             setIsRecording(false);
         }
-    };
+    }, []);
 
-    const stopRecording = () => {
-        if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+    const stopRecording = useCallback(() => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
             mediaRecorderRef.current.stop();
+            setIsRecording(false);
         }
-        setIsRecording(false);
+    }, []);
+
+    // Effect to generate previews and handle cleanup
+    useEffect(() => {
+        const newPreviews: string[] = [];
+        imageFiles.forEach(file => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                newPreviews.push(reader.result as string);
+                if (newPreviews.length === imageFiles.length) {
+                    setImagePreviews(newPreviews);
+                }
+            };
+            reader.readAsDataURL(file);
+        });
+        
+        if (imageFiles.length === 0) {
+            setImagePreviews([]);
+        }
+
+        return () => {
+            // Revoke object URLs when component unmounts or files change
+            imagePreviews.forEach(url => URL.revokeObjectURL(url));
+        };
+    }, [imageFiles, imagePreviews]);
+
+    useEffect(() => {
+        if (!isOpen) {
+            // Reset state when modal closes
+            setActiveTab('text');
+            setText('');
+            setImageFiles([]);
+            setImagePreviews([]);
+            setAudioBlob(null);
+            setAudioUrl(null);
+            setIsRecording(false);
+            setError(null);
+            if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+                mediaRecorderRef.current.stop();
+            }
+        }
+    }, [isOpen]);
+
+    const handleTabChange = (tab: 'text' | 'image' | 'audio') => {
+        if (!isProcessing) {
+            setActiveTab(tab);
+            setError(null); // Clear error on tab switch
+        }
     };
 
     const handleSubmit = (e: FormEvent) => {
@@ -169,23 +182,30 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
     const isProcessable = (activeTab === 'text' && !!text.trim()) || (activeTab === 'image' && imageFiles.length > 0) || (activeTab === 'audio' && !!audioBlob);
 
     const footer = (
-      <>
-        <button onClick={onClose} className="px-4 py-2 text-sm font-semibold rounded-md hover:bg-slate-100 disabled:opacity-50" disabled={isProcessing}>
-          Cancelar
-        </button>
-        <button
-          type="submit"
-          form="aiClientForm"
-          className="px-4 py-2 bg-slate-800 text-white text-sm font-semibold rounded-md hover:bg-slate-700 min-w-[120px] disabled:bg-slate-500 disabled:cursor-wait"
-          disabled={isProcessing || !isProcessable}
-        >
-          {isProcessing ? (
-            <div className="loader-sm mx-auto"></div>
-          ) : (
-            'Processar'
-          )}
-        </button>
-      </>
+        <div className="flex justify-end gap-3">
+            <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 text-sm font-semibold rounded-md hover:bg-slate-100"
+            >
+                Cancelar
+            </button>
+            <button
+                type="submit"
+                form="aiClientForm"
+                disabled={isProcessing || !isProcessable}
+                className="px-4 py-2 bg-slate-800 text-white text-sm font-semibold rounded-md hover:bg-slate-700 disabled:bg-slate-400 disabled:cursor-not-allowed"
+            >
+                {isProcessing ? (
+                    <div className="flex items-center gap-2">
+                        <div className="loader-sm"></div>
+                        Processando...
+                    </div>
+                ) : (
+                    'Extrair Dados'
+                )}
+            </button>
+        </div>
     );
 
     const TabButton: React.FC<{tab: 'text'|'image'|'audio', icon: string, children: React.ReactNode}> = ({tab, icon, children}) => (
@@ -193,7 +213,7 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
             type="button"
             onClick={() => handleTabChange(tab)}
             disabled={isProcessing}
-            className={`flex-1 px-3 py-2 text-sm font-semibold rounded-md transition-colors duration-200 flex items-center justify-center gap-2 ${activeTab === tab ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-200'}`}
+            className={`flex-1 px-3 py-2 text-sm font-semibold rounded-md transition-colors duration-200 ${activeTab === tab ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-200'}`}
         >
             <i className={icon}></i>
             {children}
@@ -201,7 +221,7 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
     );
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title="Preencher Cliente com IA" footer={footer}>
+        <Modal isOpen={isOpen} onClose={onClose} title="Extrair Dados do Cliente com IA" footer={footer}>
             <form id="aiClientForm" onSubmit={handleSubmit} className="space-y-4">
                  <div className="flex space-x-2 p-1 bg-slate-100 rounded-lg">
                     <TabButton tab="text" icon="fas fa-font">Texto</TabButton>
@@ -230,10 +250,10 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
                         <div className="w-full text-center flex flex-col items-center justify-center">
                              {imagePreviews.length > 0 && (
                                 <div className="w-full mb-2">
-                                    <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto p-1 bg-slate-100 rounded-lg">
+                                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-48 overflow-y-auto p-1 bg-slate-100 rounded-lg">
                                         {imagePreviews.map((previewUrl, index) => (
-                                            <div key={index} className="relative group aspect-video">
-                                                <img src={previewUrl} alt={`Preview ${index + 1}`} className="w-full h-full object-contain rounded-md border border-slate-200" />
+                                            <div key={index} className="relative group aspect-square">
+                                                <img src={previewUrl} alt={`Preview ${index + 1}`} className="w-full h-full object-cover rounded-md border border-slate-200" />
                                                 <button 
                                                     type="button" 
                                                     onClick={() => removeImage(index)} 
@@ -246,10 +266,15 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
                                             </div>
                                         ))}
                                     </div>
+                                    {imageFiles.length < MAX_IMAGES && (
+                                        <label htmlFor="image-upload" className="mt-2 text-sm text-slate-700 hover:text-slate-900 font-semibold cursor-pointer inline-block">
+                                            Adicionar mais imagens... ({imageFiles.length}/{MAX_IMAGES})
+                                        </label>
+                                    )}
                                 </div>
                             )}
 
-                            {imageFiles.length < MAX_IMAGES && (
+                            {imageFiles.length < MAX_IMAGES && imagePreviews.length === 0 && (
                                  <div
                                     onDragEnter={(e) => handleDragEvent(e, true)}
                                     onDragLeave={(e) => handleDragEvent(e, false)}
@@ -280,7 +305,7 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
                                 <>
                                     <i className="fas fa-microphone-alt text-3xl text-red-500 mb-3 animate-pulse"></i>
                                     <p className="text-slate-600 mb-4">Gravando... fale os dados do cliente.</p>
-                                    <button type="button" onClick={stopRecording} className="px-6 py-2 bg-red-600 text-white rounded-full font-semibold shadow-md">
+                                    <button type="button" onClick={stopRecording} disabled={isProcessing} className="px-6 py-2 bg-red-600 text-white rounded-full font-semibold shadow-md hover:bg-red-700">
                                         Parar Gravação
                                     </button>
                                 </>
@@ -295,6 +320,11 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
                             )}
                         </div>
                     )}
+                </div>
+                <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg space-y-2 mt-3">
+                    <p className="text-xs text-yellow-800 font-medium">
+                        ⚠️ <strong>Aviso de Responsabilidade:</strong> O uso desta funcionalidade envia dados (como descrições de medidas) para o provedor de IA escolhido. O custo e a responsabilidade pelo uso da API são inteiramente do usuário. A Películas Brasil não cobra pelo uso desta funcionalidade e não se responsabiliza pelo processamento de dados por terceiros.
+                    </p>
                 </div>
                 {error && (
                     <div className="p-3 bg-red-50 border border-red-200 text-red-800 text-sm rounded-md mt-2" role="alert">
@@ -317,6 +347,13 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
                 }
             `}</style>
         </Modal>
+        <ErrorModal
+            isOpen={isErrorModalOpen}
+            onClose={() => setIsErrorModalOpen(false)}
+            title={errorModalContent.title}
+            message={errorModalContent.message}
+        />
+        </>
     );
 };
 

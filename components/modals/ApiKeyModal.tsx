@@ -27,7 +27,7 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onSave, curr
     const providerInfo = {
         gemini: {
             name: 'Google Gemini',
-            url: 'https://aistudio.google.com/app/apikey',
+            url: 'https://aistudio.google.com/apikey',
         },
         openai: {
             name: 'OpenAI',
@@ -61,6 +61,11 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onSave, curr
                     <p>
                         Você deve inserir sua própria chave de API. Você pode obter uma no site da <a href={currentProvider.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">{currentProvider.name}</a>.
                     </p>
+                    <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                        <p className="text-xs text-yellow-800 font-medium">
+                            ⚠️ <strong>Aviso de Responsabilidade:</strong> O uso desta funcionalidade envia dados (como descrições de medidas ou dados de clientes) para o provedor de IA escolhido. O custo e a responsabilidade pelo uso da API são inteiramente do usuário. A Películas Brasil não cobra pelo uso desta funcionalidade e não se responsabiliza pelo processamento de dados por terceiros.
+                        </p>
+                    </div>
                 </div>
                 <Input
                     id="apiKey"
