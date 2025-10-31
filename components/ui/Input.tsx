@@ -47,10 +47,7 @@ const Input = forwardRef<RefType, CombinedProps>(({ id, label, as = 'input', chi
 
     return (
         <div>
-            {/* Adicionando min-h-[36px] para garantir espaço para 2 linhas de texto sm (14px * 2 + padding/margin implícito) */}
-            <label htmlFor={id} className={`${labelClasses} min-h-[36px] flex items-start`}>
-                {label}
-            </label>
+            <label htmlFor={id} className={labelClasses}>{label}</label>
             {renderInput()}
         </div>
     );
