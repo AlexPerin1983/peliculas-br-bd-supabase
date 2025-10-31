@@ -28,6 +28,7 @@ import ImageGalleryModal from './components/modals/ImageGalleryModal';
 import { usePwaInstallPrompt } from './src/hooks/usePwaInstallPrompt';
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 import ErrorModal from './components/modals/ErrorModal';
+import ServiceWorkerRegistrar from './components/ServiceWorkerRegistrar';
 
 
 const UserSettingsView = lazy(() => import('./components/views/UserSettingsView'));
