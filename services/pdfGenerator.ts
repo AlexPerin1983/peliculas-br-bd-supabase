@@ -1,5 +1,3 @@
-
-
 import { Client, UserInfo, Measurement, Film } from '../types';
 
 declare const jspdf: any;
@@ -578,6 +576,13 @@ export const generatePDF = async (client: Client, userInfo: UserInfo, measuremen
                 doc.setFontSize(10);
                 doc.setTextColor(...bodyText);
                 safeText(userInfo.nome, pageWidth / 2, nameY, { align: 'center' });
+                
+                // Add CPF/CNPJ below name
+                const cpfCnpjY = nameY + 5;
+                doc.setFontSize(8);
+                doc.setTextColor(100, 100, 100);
+                safeText(userInfo.cpfCnpj, pageWidth / 2, cpfCnpjY, { align: 'center' });
+
             } catch (error) {
                 console.error("Erro ao adicionar assinatura:", error);
             }
