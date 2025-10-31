@@ -177,5 +177,39 @@
 <body class="h-full text-slate-700">
     <div id="root" class="h-full"></div>
     <script type="module" src="/index.tsx"></script>
+    <script>
+        // Service Worker Registration (PWABuilder compatible)
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js', { 
+                    scope: '/'
+                })
+                    .then(registration => {
+                        console.log('✅ Service Worker registrado:', registration.scope);
+                        
+                        // Check for updates
+                        registration.update();
+                        
+                        registration.addEventListener('updatefound', () => {
+                            const newWorker = registration.installing;
+                            console.log('🔄 Nova versão do Service Worker encontrada');
+                            
+                            if (newWorker) {
+                                newWorker.addEventListener('statechange', () => {
+                                    if (newWorker.state === 'activated') {
+                                        console.log('✅ Service Worker ativado');
+                                    }
+                                });
+                            }
+                        });
+                    })
+                    .catch(error => {
+                        console.error('❌ Falha ao registrar Service Worker:', error);
+                    });
+            });
+        } else {
+            console.warn('⚠️ Service Workers não são suportados neste navegador');
+        }
+    </script>
 </body>
 </html>

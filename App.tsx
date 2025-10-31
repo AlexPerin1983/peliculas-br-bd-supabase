@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense, useRef } from 'react';
-import { Client, Measurement, UserInfo, Film, PaymentMethods, SavedPDF, Agendamento, ProposalOption, Client as ClientType } from './types';
+import { Client, Measurement, UserInfo, Film, PaymentMethods, SavedPDF, Agendamento, ProposalOption } from './types';
 import * as db from './services/db';
 import { generatePDF } from './services/pdfGenerator';
 import Header from './components/Header';
@@ -27,8 +27,6 @@ import ProposalOptionsCarousel from './components/ProposalOptionsCarousel';
 import ImageGalleryModal from './components/modals/ImageGalleryModal';
 import { usePwaInstallPrompt } from './src/hooks/usePwaInstallPrompt';
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
-import ErrorModal from './components/modals/ErrorModal';
-import ServiceWorkerRegistrar from './components/ServiceWorkerRegistrar';
 
 
 const UserSettingsView = lazy(() => import('./components/views/UserSettingsView'));
@@ -40,7 +38,7 @@ const AgendaView = lazy(() => import('./components/views/AgendaView'));
 type UIMeasurement = Measurement & { isNew?: boolean };
 type ActiveTab = 'client' | 'films' | 'settings' | 'history' | 'agenda';
 
-export type NumpadConfig = {
+type NumpadConfig = {
     isOpen: boolean;
     measurementId: number | null;
     field: 'largura' | 'altura' | 'quantidade' | null;
@@ -56,7 +54,7 @@ export type SchedulingInfo = {
     pdf?: SavedPDF;
 };
 
-export interface ExtractedClientData {
+interface ExtractedClientData {
     nome?: string;
     telefone?: string;
     email?: string;
@@ -75,7 +73,7 @@ const App: React.FC = () => {
     const { deferredPrompt, promptInstall, isInstalled } = usePwaInstallPrompt();
     
     const [isLoading, setIsLoading] = useState(true);
-    const [clients, setClients] = useState<ClientType[]>([]);
+    const [clients, setClients] = useState<Client[]>([]);
     const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
     const [proposalOptions, setProposalOptions] = useState<ProposalOption[]>([]);
     const [activeOptionId, setActiveOptionId] = useState<number | null>(null);
@@ -127,9 +125,6 @@ const App: React.FC = () => {
     const [isGalleryOpen, setIsGalleryOpen] = useState(false);
     const [galleryImages, setGalleryImages] = useState<string[]>([]);
     const [galleryInitialIndex, setGalleryInitialIndex] = useState(0);
-
-    // Estado para o modal de erro global de IA
-    const [aiErrorModal, setAiErrorModal] = useState<{ isOpen: boolean; title: string; message: string }>({ isOpen: false, title: '', message: '' });
 
 
     const [numpadConfig, setNumpadConfig] = useState<NumpadConfig>({
@@ -275,7 +270,7 @@ const App: React.FC = () => {
             setIsLoading(false);
         };
         init();
-    }, [loadClients, loadFilms]);
+    }, []);
 
     useEffect(() => {
         if (selectedClientId !== null && userInfo && userInfo.lastSelectedClientId !== selectedClientId) {
@@ -418,15 +413,15 @@ const App: React.FC = () => {
     }, [activeOption, proposalOptions.length]);
 
     const handleAddProposalOption = useCallback(() => {
-        setProposalOptions(currentOptions => {
+        setProposalOptions(prevOptions => {
             const newOption: ProposalOption = {
                 id: Date.now(),
-                name: `Opção ${currentOptions.length + 1}`,
+                name: `Opção 1`,
                 measurements: [],
                 generalDiscount: { value: '', type: 'percentage' }
             };
             
-            const newOptions = [...currentOptions, newOption];
+            const newOptions = [...prevOptions, newOption];
             setActiveOptionId(newOption.id);
             setIsDirty(true);
             return newOptions;
@@ -487,7 +482,7 @@ const App: React.FC = () => {
         }
         setClientModalMode(mode);
         if (mode === 'edit' && !selectedClientId) {
-            setAiErrorModal({ isOpen: true, title: "Erro", message: 'Selecione um cliente para editar.' });
+            alert('Selecione um cliente para editar.');
             return;
         }
         setAiClientData(undefined);
@@ -528,7 +523,7 @@ const App: React.FC = () => {
             return;
         }
         setIsDeleteClientModalOpen(true);
-    }, [numpadConfig.isOpen, handleNumpadClose, selectedClientId]);
+    }, [selectedClientId, numpadConfig.isOpen, handleNumpadClose]);
 
     const handleConfirmDeleteClient = useCallback(async () => {
         if (!selectedClientId) return;
@@ -685,20 +680,20 @@ const App: React.FC = () => {
 
     const handleGeneratePdf = useCallback(async () => {
         if (!selectedClient || !userInfo || !activeOption) {
-            setAiErrorModal({ isOpen: true, title: "Erro de Geração", message: "Selecione um cliente e preencha as informações da empresa antes de gerar o PDF." });
+            alert("Selecione um cliente e preencha as informações da empresa antes de gerar o PDF.");
             return;
         }
         if (isDirty) {
             if(window.confirm("Você tem alterações não salvas. Deseja salvar antes de gerar o PDF?")) {
                 await handleSaveChanges();
             } else {
-                setAiErrorModal({ isOpen: true, title: "Atenção", message: "Geração de PDF cancelada. Salve ou descarte suas alterações." });
+                alert("Geração de PDF cancelada. Salve ou descarte suas alterações.");
                 return;
             }
         }
         const activeMeasurements = measurements.filter(m => m.active && parseFloat(String(m.largura).replace(',', '.')) > 0 && parseFloat(String(m.altura).replace(',', '.')) > 0);
         if(activeMeasurements.length === 0) {
-            setAiErrorModal({ isOpen: true, title: "Atenção", message: "Não há medidas válidas para gerar um orçamento." });
+            alert("Não há medidas válidas para gerar um orçamento.");
             return;
         }
 
@@ -744,7 +739,7 @@ const App: React.FC = () => {
             }
         } catch (error) {
             console.error("Erro ao gerar ou salvar PDF:", error);
-            setAiErrorModal({ isOpen: true, title: "Erro de Geração", message: "Ocorreu um erro ao gerar o PDF. Verifique o console para mais detalhes." });
+            alert("Ocorreu um erro ao gerar o PDF. Verifique o console para mais detalhes.");
             setPdfGenerationStatus('idle');
         }
     }, [selectedClient, userInfo, activeOption, isDirty, handleSaveChanges, measurements, films, generalDiscount, totals, selectedClientId, downloadBlob, hasLoadedHistory, loadAllPdfs]);
@@ -829,27 +824,19 @@ const App: React.FC = () => {
 
         } catch (error) {
             console.error("Erro ao processar dados do cliente com Gemini:", error);
-            setAiErrorModal({ 
-                isOpen: true, 
-                title: "Erro Gemini", 
-                message: `Falha na extração de dados: ${error instanceof Error ? error.message : String(error)}` 
-            });
+            alert(`Ocorreu um erro com Gemini: ${error instanceof Error ? error.message : String(error)}`);
             return null;
         }
     };
 
     const processClientDataWithOpenAI = async (input: { type: 'text' | 'image'; data: string | File[] }): Promise<ExtractedClientData | null> => {
-        setAiErrorModal({ 
-            isOpen: true, 
-            title: "Funcionalidade Indisponível", 
-            message: "O preenchimento de dados do cliente com OpenAI ainda não está totalmente implementado. Por favor, use o Gemini ou preencha manualmente." 
-        });
+        alert("O preenchimento de dados do cliente com OpenAI ainda não está totalmente implementado. Por favor, use o Gemini ou preencha manualmente.");
         return null;
     };
 
-    const handleProcessAIClientInput = async (input: { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob }) => {
+    const handleProcessAIClientInput = useCallback(async (input: { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob }) => {
         if (!userInfo?.aiConfig?.apiKey || !userInfo?.aiConfig?.provider) {
-            setAiErrorModal({ isOpen: true, title: "API Não Configurada", message: "Por favor, configure seu provedor e chave de API na aba 'Empresa' para usar esta funcionalidade." });
+            alert("Por favor, configure seu provedor e chave de API na aba 'Empresa' para usar esta funcionalidade.");
             return;
         }
     
@@ -861,7 +848,7 @@ const App: React.FC = () => {
                 extractedData = await processClientDataWithGemini(input);
             } else if (userInfo.aiConfig.provider === 'openai') {
                 if (input.type === 'audio') {
-                    setAiErrorModal({ isOpen: true, title: "Erro de Entrada", message: "O provedor OpenAI não suporta entrada de áudio para esta funcionalidade." });
+                    alert("O provedor OpenAI não suporta entrada de áudio para esta funcionalidade.");
                     return;
                 }
                 extractedData = await processClientDataWithOpenAI(input as { type: 'text' | 'image'; data: string | File[] });
@@ -876,7 +863,7 @@ const App: React.FC = () => {
         } finally {
             setIsProcessingAI(false);
         }
-    };
+    }, [userInfo]);
 
     const processWithGemini = async (input: { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob }) => {
         try {
@@ -959,30 +946,20 @@ const App: React.FC = () => {
                     handleMeasurementsChange([...measurements.map(m => ({...m, isNew: false})), ...newMeasurements]);
                     setIsAIMeasurementModalOpen(false);
                 } else {
-                    setAiErrorModal({ isOpen: true, title: "Nenhuma Medida Extraída", message: "Nenhuma medida foi extraída. Tente novamente com mais detalhes." });
+                    alert("Nenhuma medida foi extraída. Tente novamente com mais detalhes.");
                 }
             } else {
                 throw new Error("A resposta da IA não está no formato esperado.");
             }
         } catch (error) {
             console.error("Erro ao processar com Gemini:", error);
-            setAiErrorModal({ 
-                isOpen: true, 
-                title: "Erro Gemini", 
-                message: `Falha na extração de dados: ${error instanceof Error ? error.message : String(error)}` 
-            });
+            alert(`Ocorreu um erro com Gemini: ${error instanceof Error ? error.message : String(error)}`);
         }
     };
 
     const processWithOpenAI = async (input: { type: 'text' | 'image'; data: string | File[] }) => {
         try {
-            const prompt = `
-                Você é um assistente especialista para uma empresa de instalação de películas de vidro. Sua tarefa é extrair dados de medidas da entrada fornecida pelo usuário.
-                A entrada pode ser texto ou imagem.
-                Extraia as seguintes informações para cada medida: largura, altura, quantidade e uma descrição do ambiente/local (ex: "sala", "quarto", "janela da cozinha").
-                As medidas estão em metros. Se o usuário disser '1 e meio por 2', interprete como 1,50m por 2,00m. Sempre formate as medidas com duas casas decimais e vírgula como separador.
-                O ambiente deve ser uma descrição curta e útil.
-            `;
+            const prompt = `Você é um assistente especialista para uma empresa de instalação de películas de vidro. Sua tarefa é extrair dados de medidas da entrada fornecida pelo usuário. Extraia as seguintes informações para cada medida: largura, altura, quantidade e uma descrição do ambiente/local (ex: "sala", "quarto", "janela da cozinha"). As medidas estão em metros. Se o usuário disser '1 e meio por 2', interprete como 1,50m por 2,00m. Sempre formate as medidas com duas casas decimais e vírgula como separador. O ambiente deve ser uma descrição curta e útil.`;
 
             const tools = [
                 {
@@ -1067,22 +1044,18 @@ const App: React.FC = () => {
                 handleMeasurementsChange([...measurements.map(m => ({...m, isNew: false})), ...newMeasurements]);
                 setIsAIMeasurementModalOpen(false);
             } else {
-                setAiErrorModal({ isOpen: true, title: "Nenhuma Medida Extraída", message: "Nenhuma medida foi extraída. Tente novamente com mais detalhes." });
+                alert("Nenhuma medida foi extraída com OpenAI. Tente novamente com mais detalhes.");
             }
 
         } catch (error) {
             console.error("Erro ao processar com OpenAI:", error);
-            setAiErrorModal({ 
-                isOpen: true, 
-                title: "Erro OpenAI", 
-                message: `Falha na extração de dados: ${error instanceof Error ? error.message : String(error)}` 
-            });
+            alert(`Ocorreu um erro com OpenAI: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
 
     const handleProcessAIInput = async (input: { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob }) => {
         if (!userInfo?.aiConfig?.apiKey || !userInfo?.aiConfig?.provider) {
-            setAiErrorModal({ isOpen: true, title: "API Não Configurada", message: "Por favor, configure seu provedor e chave de API na aba 'Empresa' para usar esta funcionalidade." });
+            alert("Por favor, configure seu provedor e chave de API na aba 'Empresa' para usar esta funcionalidade.");
             return;
         }
     
@@ -1093,7 +1066,7 @@ const App: React.FC = () => {
                 await processWithGemini(input);
             } else if (userInfo.aiConfig.provider === 'openai') {
                 if (input.type === 'audio') {
-                    setAiErrorModal({ isOpen: true, title: "Erro de Entrada", message: "O provedor OpenAI não suporta entrada de áudio nesta aplicação." });
+                    alert("O provedor OpenAI não suporta entrada de áudio nesta aplicação.");
                     return;
                 }
                 await processWithOpenAI(input as { type: 'text' | 'image'; data: string | File[] });
@@ -1129,7 +1102,7 @@ const App: React.FC = () => {
             }
         } catch (error) {
             console.error("Failed to update PDF status", error);
-            setAiErrorModal({ isOpen: true, title: "Erro de Status", message: "Não foi possível atualizar o status do orçamento." });
+            alert("Não foi possível atualizar o status do orçamento.");
         }
     }, [loadAllPdfs]);
 
@@ -1280,9 +1253,8 @@ const App: React.FC = () => {
 
     const handleNumpadDuplicate = useCallback(() => {
         const { measurementId, field, currentValue } = numpadConfig;
-        if (measurementId === null) return;
+        if (measurementId === null || field === null) return;
 
-        // Salva o valor atual antes de duplicar
         let finalValue: string | number;
         if (field === 'quantidade') {
             finalValue = parseInt(String(currentValue), 10) || 1;
@@ -1290,28 +1262,29 @@ const App: React.FC = () => {
             finalValue = (String(currentValue) === '' || String(currentValue) === '.') ? '0' : String(currentValue).replace('.', ',');
         }
 
-        const updatedMeasurements = measurements.map(m =>
+        const measurementsWithSavedValue = measurements.map(m =>
             m.id === measurementId ? { ...m, [field]: finalValue } : m
         );
-        handleMeasurementsChange(updatedMeasurements);
-
-        // Encontra a medida para duplicar e a duplica
-        const measurementToDuplicate = updatedMeasurements.find(m => m.id === measurementId);
+        
+        const measurementToDuplicate = measurementsWithSavedValue.find(m => m.id === measurementId);
+        
         if (measurementToDuplicate) {
             const newMeasurement: UIMeasurement = { 
                 ...measurementToDuplicate, 
                 id: Date.now(), 
-                isNew: true 
+                isNew: false
             };
             
-            const index = updatedMeasurements.findIndex(m => m.id === measurementId);
-            const finalMeasurements = [...updatedMeasurements];
+            const index = measurementsWithSavedValue.findIndex(m => m.id === measurementId);
+            const finalMeasurements = [...measurementsWithSavedValue];
             finalMeasurements.splice(index + 1, 0, newMeasurement);
             
-            handleMeasurementsChange(finalMeasurements);
-        }
+            handleMeasurementsChange(finalMeasurements.map(m => 
+                m.id === newMeasurement.id ? m : { ...m, isNew: false }
+            ));
 
-        setNumpadConfig({ isOpen: false, measurementId: null, field: null, currentValue: '', shouldClearOnNextInput: false });
+            setNumpadConfig({ isOpen: false, measurementId: null, field: null, currentValue: '', shouldClearOnNextInput: false });
+        }
     }, [numpadConfig, measurements, handleMeasurementsChange]);
 
     const handleNumpadClear = useCallback(() => {
@@ -1499,7 +1472,7 @@ const App: React.FC = () => {
             handleCloseAgendamentoModal();
         } catch (error) {
             console.error("Erro ao salvar agendamento:", error);
-            setAiErrorModal({ isOpen: true, title: "Erro de Agendamento", message: "Não foi possível salvar o agendamento. Tente novamente." });
+            alert("Não foi possível salvar o agendamento. Tente novamente.");
         }
     }, [handleCloseAgendamentoModal, loadAgendamentos, loadAllPdfs]);
 
@@ -1527,7 +1500,7 @@ const App: React.FC = () => {
             await Promise.all([loadAgendamentos(), loadAllPdfs()]);
         } catch (error) {
             console.error("Erro ao excluir agendamento:", error);
-            setAiErrorModal({ isOpen: true, title: "Erro de Exclusão", message: "Não foi possível excluir o agendamento. Tente novamente." });
+            alert("Não foi possível excluir o agendamento. Tente novamente.");
         } finally {
             setAgendamentoToDelete(null);
         }
@@ -1597,16 +1570,9 @@ const App: React.FC = () => {
                 }
             };
             await handleSaveUserInfo(updatedUserInfo);
-            setUserInfo(updatedUserInfo);
             setIsApiKeyModalOpen(false);
-            
-            // Se o usuário estava tentando usar a IA de Medidas, reabra o modal de IA de Medidas
-            if (isAIMeasurementModalOpen) {
-                // Pequeno delay para garantir que o userInfo foi atualizado antes de tentar abrir
-                setTimeout(() => setIsAIMeasurementModalOpen(true), 100);
-            }
         }
-    }, [userInfo, handleSaveUserInfo, apiKeyModalProvider, isAIMeasurementModalOpen]);
+    }, [userInfo, handleSaveUserInfo, apiKeyModalProvider]);
 
     const handleSaveGeneralDiscount = useCallback((discount: { value: string; type: 'percentage' | 'fixed' }) => {
         handleGeneralDiscountChange(discount);
@@ -1630,21 +1596,6 @@ const App: React.FC = () => {
         setIsAIClientModalOpen(true);
     }, []);
 
-    const handleOpenAIMeasurementModal = useCallback(() => {
-        if (numpadConfig.isOpen) {
-            handleNumpadClose();
-        }
-        
-        if (userInfo && userInfo.aiConfig?.apiKey) {
-            setIsAIMeasurementModalOpen(true);
-        } else {
-            // Se a chave não estiver configurada, abre o modal de API Key e navega para configurações
-            setApiKeyModalProvider(userInfo?.aiConfig?.provider || 'gemini');
-            setIsApiKeyModalOpen(true);
-            setActiveTab('settings'); // Navega para a aba de configurações conforme solicitado
-        }
-    }, [numpadConfig.isOpen, handleNumpadClose, userInfo]);
-
 
     const LoadingSpinner = () => (
         <div className="flex items-center justify-center h-full min-h-[300px]">
@@ -1656,7 +1607,7 @@ const App: React.FC = () => {
         if (deferredPrompt) {
             promptInstall();
         } else {
-            setAiErrorModal({ isOpen: true, title: "Instalação PWA", message: "Para instalar, use o menu 'Compartilhar' do seu navegador e selecione 'Adicionar à Tela de Início'." });
+            alert("Para instalar, use o menu 'Compartilhar' do seu navegador e selecione 'Adicionar à Tela de Início'.");
         }
     }, [deferredPrompt, promptInstall]);
 
@@ -1917,7 +1868,7 @@ const App: React.FC = () => {
                                         onDuplicateMeasurements={duplicateAllMeasurements}
                                         onGeneratePdf={handleGeneratePdf}
                                         isGeneratingPdf={pdfGenerationStatus === 'generating'}
-                                        onOpenAIMeasurementModal={handleOpenAIMeasurementModal}
+                                        onOpenAIModal={() => setIsAIMeasurementModalOpen(true)}
                                    />
                                 </div>
                                 <MobileFooter
@@ -1928,7 +1879,7 @@ const App: React.FC = () => {
                                     onDuplicateMeasurements={duplicateAllMeasurements}
                                     onGeneratePdf={handleGeneratePdf}
                                     isGeneratingPdf={pdfGenerationStatus === 'generating'}
-                                    onOpenAIMeasurementModal={handleOpenAIMeasurementModal}
+                                    onOpenAIModal={() => setIsAIMeasurementModalOpen(true)}
                                 />
                             </>
                         )}
@@ -2241,14 +2192,6 @@ const App: React.FC = () => {
                     }
                     confirmButtonText="Sim, Excluir"
                     confirmButtonVariant="danger"
-                />
-            )}
-            {aiErrorModal.isOpen && (
-                <ErrorModal
-                    isOpen={aiErrorModal.isOpen}
-                    onClose={() => setAiErrorModal({ isOpen: false, title: '', message: '' })}
-                    title={aiErrorModal.title}
-                    message={aiErrorModal.message}
                 />
             )}
         </div>
