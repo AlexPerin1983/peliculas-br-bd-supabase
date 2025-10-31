@@ -225,7 +225,7 @@ const FilmModal: React.FC<FilmModalProps> = ({ isOpen, onClose, onSave, onDelete
                         Dados Técnicos
                     </h3>
                     {/* Grid de Dados Técnicos - 2 colunas em mobile, 3 em desktop */}
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 items-start">
                         <Input
                             id="uv"
                             label="UV (%)"
