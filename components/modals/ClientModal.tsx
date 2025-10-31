@@ -246,7 +246,17 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSave, mode
                  <fieldset disabled={isFetchingCep || isSearchingByAddress} className="space-y-4">
                     <Input id="nome" label="Nome do Cliente" type="text" value={formData.nome} onChange={handleChange} required placeholder="Ex: João da Silva" />
                     <Input id="telefone" label="Telefone" type="tel" value={formData.telefone} onChange={handleChange} placeholder="(XX) XXXXX-XXXX" maxLength={15} />
-                    <Input id="cpfCnpj" label="CPF/CNPJ" type="text" inputMode="numeric" value={formData.cpfCnpj} onChange={handleChange} maxLength={18} required placeholder="000.000.000-00 ou 00.000.000/0000-00" />
+                    <Input 
+                        id="cpfCnpj" 
+                        label="CPF/CNPJ" 
+                        type="text" 
+                        inputMode="numeric" 
+                        value={formData.cpfCnpj} 
+                        onChange={handleChange} 
+                        maxLength={18} 
+                        // REMOVIDO: required
+                        placeholder="000.000.000-00 ou 00.000.000/0000-00" 
+                    />
                     
                     <div className="pt-4 border-t border-slate-200">
                         <div className="relative">
