@@ -168,7 +168,7 @@ const FilmModal: React.FC<FilmModalProps> = ({ isOpen, onClose, onSave, onDelete
                             required
                         />
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 gap-4 items-start">
                         <Input
                             id="preco"
                             label="Preço por m² (R$)"
@@ -196,7 +196,7 @@ const FilmModal: React.FC<FilmModalProps> = ({ isOpen, onClose, onSave, onDelete
                     <h3 className="text-base font-semibold leading-6 text-slate-800 mb-2">
                         Garantias
                     </h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 gap-4 items-start">
                         <Input
                             as="select"
                             id="garantiaFabricante"
