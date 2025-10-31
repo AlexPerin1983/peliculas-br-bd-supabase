@@ -1894,7 +1894,7 @@ const App: React.FC = () => {
                                         onDuplicateMeasurements={duplicateAllMeasurements}
                                         onGeneratePdf={handleGeneratePdf}
                                         isGeneratingPdf={pdfGenerationStatus === 'generating'}
-                                        onOpenAIModal={() => setIsAIMeasurementModalOpen(true)}
+                                        onOpenAIMeasurementModal={handleOpenAIMeasurementModal}
                                    />
                                 </div>
                                 <MobileFooter
@@ -1905,7 +1905,7 @@ const App: React.FC = () => {
                                     onDuplicateMeasurements={duplicateAllMeasurements}
                                     onGeneratePdf={handleGeneratePdf}
                                     isGeneratingPdf={pdfGenerationStatus === 'generating'}
-                                    onOpenAIModal={() => setIsAIMeasurementModalOpen(true)}
+                                    onOpenAIMeasurementModal={handleOpenAIMeasurementModal}
                                 />
                             </>
                         )}

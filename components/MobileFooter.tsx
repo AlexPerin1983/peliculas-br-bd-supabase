@@ -16,7 +16,7 @@ interface MobileFooterProps {
     onDuplicateMeasurements: () => void;
     onGeneratePdf: () => void;
     isGeneratingPdf: boolean;
-    onOpenAIModal: () => void;
+    onOpenAIMeasurementModal: () => void;
 }
 
 const formatNumberBR = (number: number) => {
@@ -34,7 +34,7 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
     onDuplicateMeasurements,
     onGeneratePdf,
     isGeneratingPdf,
-    onOpenAIModal
+    onOpenAIMeasurementModal
 }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     
@@ -107,7 +107,7 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
                 {/* Main Action Bar */}
                 <div className="relative">
                     <div className="flex justify-around items-center h-16">
-                        <ActionButton onClick={onOpenAIModal} label="com IA" icon="fas fa-robot" />
+                        <ActionButton onClick={onOpenAIMeasurementModal} label="com IA" icon="fas fa-robot" />
                         <ActionButton onClick={onDuplicateMeasurements} label="Duplicar" icon="fas fa-copy" />
 
                         {/* Floating Action Button */}
