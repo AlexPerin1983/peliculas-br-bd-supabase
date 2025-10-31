@@ -1,7 +1,6 @@
 import React, { useState, useEffect, FormEvent, useCallback, useRef } from 'react';
 import Modal from '../ui/Modal';
 import ErrorModal from './ErrorModal';
-import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 import { ExtractedClientData } from '../../App';
 
 interface AIClientModalProps {
