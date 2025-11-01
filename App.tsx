@@ -515,7 +515,6 @@ const App: React.FC = () => {
     
     const totals = useMemo(() => {
         const activeMeasurements = measurements.filter(m => m.active);
-        // CORREÇÃO: Sintaxe do reduce corrigida para evitar erro TS1005/TS1005
         const subtotal = activeMeasurements.reduce((sum, m) => {
             const price = (m.discountType === 'percentage' && m.discount > 0 && m.discount <= 100) 
                 ? (m.preco * (1 - m.discount / 100)) 
