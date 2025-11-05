@@ -21,8 +21,6 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
     const [audioUrl, setAudioUrl] = useState<string | null>(null);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<Blob[]>([]);
-    
-    const [error, setError] = useState<string | null>(null);
 
     const MAX_IMAGES = 1; 
 
@@ -44,7 +42,6 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
         setAudioUrl(null);
         setIsRecording(false);
         setIsDragging(false);
-        setError(null);
     };
 
     useEffect(() => {
@@ -53,6 +50,7 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
             imagePreviews.forEach(url => URL.revokeObjectURL(url));
             if (audioUrl) URL.revokeObjectURL(audioUrl);
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [imagePreviews, audioUrl]);
     
     useEffect(() => {
@@ -77,14 +75,14 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
             if (imageFiles.length + newFiles.length >= MAX_IMAGES) {
-                 setError(`Você pode enviar no máximo ${MAX_IMAGES} ${MAX_IMAGES > 1 ? 'imagens' : 'imagem'}.`);
+                 alert(`Você pode enviar no máximo ${MAX_IMAGES} ${MAX_IMAGES > 1 ? 'imagens' : 'imagem'}.`);
                  break;
             }
             if (file && file.type.startsWith('image/')) {
                 newFiles.push(file);
                 newPreviews.push(URL.createObjectURL(file));
             } else {
-                 setError(`O arquivo "${file.name}" não é uma imagem válida.`);
+                 alert(`O arquivo "${file.name}" não é uma imagem válida.`);
             }
         }
         
@@ -131,7 +129,7 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
             setIsRecording(true);
         } catch (err) {
             console.error("Error accessing microphone:", err);
-            setError("Não foi possível acessar o microfone. Verifique as permissões do seu navegador.");
+            alert("Não foi possível acessar o microfone. Verifique as permissões do seu navegador.");
             setIsRecording(false);
         }
     };
@@ -142,10 +140,9 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
         }
         setIsRecording(false);
     };
-
+    
     const handleSubmit = (e: FormEvent) => {
         e.preventDefault();
-        setError(null);
         let processData: { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob } | null = null;
         switch (activeTab) {
             case 'text':
@@ -162,7 +159,7 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
         if (processData) {
             onProcess(processData);
         } else {
-            setError("Forneça um conteúdo para processar.");
+            alert("Forneça um conteúdo para processar.");
         }
     };
     
@@ -296,11 +293,6 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
                         </div>
                     )}
                 </div>
-                {error && (
-                    <div className="p-3 bg-red-50 border border-red-200 text-red-800 text-sm rounded-md mt-2" role="alert">
-                        {error}
-                    </div>
-                )}
             </form>
             <style jsx>{`
                 .loader-sm {

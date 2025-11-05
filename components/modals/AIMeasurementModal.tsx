@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, FormEvent, DragEvent } from 'react';
 import Modal from '../ui/Modal';
-import ErrorModal from './ErrorModal';
 
 interface AIMeasurementModalProps {
     isOpen: boolean;
@@ -22,10 +21,6 @@ const AIMeasurementModal: React.FC<AIMeasurementModalProps> = ({ isOpen, onClose
     const [audioUrl, setAudioUrl] = useState<string | null>(null);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<Blob[]>([]);
-    
-    const [error, setError] = useState<string | null>(null);
-    const [isErrorModalOpen, setIsErrorModalOpen] = useState(false);
-    const [errorModalContent, setErrorModalContent] = useState({ title: '', message: '' });
 
     // Limite de 3 imagens conforme solicitado
     const MAX_IMAGES = 3; 
@@ -48,7 +43,6 @@ const AIMeasurementModal: React.FC<AIMeasurementModalProps> = ({ isOpen, onClose
         setAudioUrl(null);
         setIsRecording(false);
         setIsDragging(false);
-        setError(null);
     };
 
     useEffect(() => {
@@ -81,14 +75,14 @@ const AIMeasurementModal: React.FC<AIMeasurementModalProps> = ({ isOpen, onClose
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
             if (imageFiles.length + newFiles.length >= MAX_IMAGES) {
-                 setError(`Você pode enviar no máximo ${MAX_IMAGES} ${MAX_IMAGES > 1 ? 'imagens' : 'imagem'}.`);
+                 alert(`Você pode enviar no máximo ${MAX_IMAGES} ${MAX_IMAGES > 1 ? 'imagens' : 'imagem'}.`);
                  break;
             }
             if (file && file.type.startsWith('image/')) {
                 newFiles.push(file);
                 newPreviews.push(URL.createObjectURL(file));
             } else {
-                 setError(`O arquivo "${file.name}" não é uma imagem válida.`);
+                 alert(`O arquivo "${file.name}" não é uma imagem válida.`);
             }
         }
         
@@ -135,7 +129,7 @@ const AIMeasurementModal: React.FC<AIMeasurementModalProps> = ({ isOpen, onClose
             setIsRecording(true);
         } catch (err) {
             console.error("Error accessing microphone:", err);
-            setError("Não foi possível acessar o microfone. Verifique as permissões do seu navegador.");
+            alert("Não foi possível acessar o microfone. Verifique as permissões do seu navegador.");
             setIsRecording(false);
         }
     };
@@ -149,7 +143,6 @@ const AIMeasurementModal: React.FC<AIMeasurementModalProps> = ({ isOpen, onClose
     
     const handleSubmit = (e: FormEvent) => {
         e.preventDefault();
-        setError(null);
         let processData: { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob } | null = null;
         switch (activeTab) {
             case 'text':
@@ -166,7 +159,7 @@ const AIMeasurementModal: React.FC<AIMeasurementModalProps> = ({ isOpen, onClose
         if (processData) {
             onProcess(processData);
         } else {
-            setError("Forneça um conteúdo para processar.");
+            alert("Forneça um conteúdo para processar.");
         }
     };
     
@@ -180,7 +173,7 @@ const AIMeasurementModal: React.FC<AIMeasurementModalProps> = ({ isOpen, onClose
         <button
           type="submit"
           form="aiForm"
-          className="px-4 py-2 bg-slate-800 text-white text-sm font-semibold rounded-md hover:bg-slate-700 min-w-[120px] disabled:bg-slate-500 disabled:cursor-not-wait"
+          className="px-4 py-2 bg-slate-800 text-white text-sm font-semibold rounded-md hover:bg-slate-700 min-w-[120px] disabled:bg-slate-500 disabled:cursor-wait"
           disabled={isProcessing || !isProcessable}
         >
           {isProcessing ? (
@@ -205,7 +198,6 @@ const AIMeasurementModal: React.FC<AIMeasurementModalProps> = ({ isOpen, onClose
     );
 
     return (
-        <>
         <Modal isOpen={isOpen} onClose={onClose} title="Preenchimento Automático com IA" footer={footer}>
             <form id="aiForm" onSubmit={handleSubmit} className="space-y-4">
                  <div className="flex space-x-2 p-1 bg-slate-100 rounded-lg">
@@ -290,7 +282,7 @@ const AIMeasurementModal: React.FC<AIMeasurementModalProps> = ({ isOpen, onClose
                                 <>
                                     <i className="fas fa-microphone-alt text-3xl text-red-500 mb-3 animate-pulse"></i>
                                     <p className="text-slate-600 mb-4">Gravando... fale as medidas.</p>
-                                    <button type="button" onClick={stopRecording} disabled={isProcessing} className="px-6 py-2 bg-red-600 text-white rounded-full font-semibold shadow-md hover:bg-red-700">
+                                    <button type="button" onClick={stopRecording} className="px-6 py-2 bg-red-600 text-white rounded-full font-semibold shadow-md">
                                         Parar Gravação
                                     </button>
                                 </>
@@ -306,34 +298,22 @@ const AIMeasurementModal: React.FC<AIMeasurementModalProps> = ({ isOpen, onClose
                         </div>
                     )}
                 </div>
-                {error && (
-                    <div className="p-3 bg-red-50 border border-red-200 text-red-800 text-sm rounded-md mt-2" role="alert">
-                        {error}
-                    </div>
-                )}
             </form>
+            <style jsx>{`
+                .loader-sm {
+                    border: 3px solid #f3f3f3;
+                    border-top: 3px solid #fff;
+                    border-radius: 50%;
+                    width: 20px;
+                    height: 20px;
+                    animation: spin 1s linear infinite;
+                }
+                @keyframes spin {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                }
+            `}</style>
         </Modal>
-        <ErrorModal
-            isOpen={isErrorModalOpen}
-            onClose={() => setIsErrorModalOpen(false)}
-            title={errorModalContent.title}
-            message={errorModalContent.message}
-        />
-        <style jsx>{`
-            .loader-sm {
-                border: 3px solid #f3f3f3;
-                border-top: 3px solid #fff;
-                border-radius: 50%;
-                width: 20px;
-                height: 20px;
-                animation: spin 1s linear infinite;
-            }
-            @keyframes spin {
-                0% { transform: rotate(0deg); }
-                100% { transform: rotate(360deg); }
-            }
-        `}</style>
-        </>
     );
 };
 

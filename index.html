@@ -179,39 +179,37 @@
     <script type="module" src="/index.tsx"></script>
     <script>
         // Service Worker Registration (PWABuilder compatible)
-        window.addEventListener('load', () => {
-            setTimeout(() => {
-                if ('serviceWorker' in navigator) {
-                    navigator.serviceWorker.register('/service-worker.js', { 
-                        scope: '/'
-                    })
-                        .then(registration => {
-                            console.log('✅ Service Worker registrado:', registration.scope);
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js', { 
+                    scope: '/'
+                })
+                    .then(registration => {
+                        console.log('✅ Service Worker registrado:', registration.scope);
+                        
+                        // Check for updates
+                        registration.update();
+                        
+                        registration.addEventListener('updatefound', () => {
+                            const newWorker = registration.installing;
+                            console.log('🔄 Nova versão do Service Worker encontrada');
                             
-                            // Check for updates
-                            registration.update();
-                            
-                            registration.addEventListener('updatefound', () => {
-                                const newWorker = registration.installing;
-                                console.log('🔄 Nova versão do Service Worker encontrada');
-                                
-                                if (newWorker) {
-                                    newWorker.addEventListener('statechange', () => {
-                                        if (newWorker.state === 'activated') {
-                                            console.log('✅ Service Worker ativado');
-                                        }
-                                    });
-                                }
-                            });
-                        })
-                        .catch(error => {
-                            console.error('❌ Falha ao registrar Service Worker:', error);
+                            if (newWorker) {
+                                newWorker.addEventListener('statechange', () => {
+                                    if (newWorker.state === 'activated') {
+                                        console.log('✅ Service Worker ativado');
+                                    }
+                                });
+                            }
                         });
-                } else {
-                    console.warn('⚠️ Service Workers não são suportados neste navegador');
-                }
-            }, 500); // Pequeno atraso
-        });
+                    })
+                    .catch(error => {
+                        console.error('❌ Falha ao registrar Service Worker:', error);
+                    });
+            });
+        } else {
+            console.warn('⚠️ Service Workers não são suportados neste navegador');
+        }
     </script>
 </body>
 </html>
