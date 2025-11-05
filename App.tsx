@@ -1,279 +1,8 @@
-import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense, useRef } from 'react';
-import { Client, Measurement, UserInfo, Film, PaymentMethods, SavedPDF, Agendamento, ProposalOption, ActiveTab } from './types';
-import * as db from './services/db';
-import { generatePDF } from './services/pdfGenerator';
-import Header from './components/Header';
-import ClientBar from './components/ClientBar';
-import MeasurementList from './components/MeasurementList';
-import SummaryBar from './components/SummaryBar';
-import ActionsBar from './components/ActionsBar';
-import MobileFooter from './components/MobileFooter';
-import ClientModal from './components/modals/ClientModal';
-import ClientSelectionModal from './components/modals/ClientSelectionModal';
-import PaymentMethodsModal from './components/modals/PaymentMethodsModal';
-import FilmModal from './components/modals/FilmModal';
-import ConfirmationModal from './components/modals/ConfirmationModal';
-import CustomNumpad from './components/ui/CustomNumpad';
-import FilmSelectionModal from './components/modals/FilmSelectionModal';
-import PdfGenerationStatusModal from './components/modals/PdfGenerationStatusModal';
-import EditMeasurementModal from './components/modals/EditMeasurementModal';
-import AgendamentoModal from './components/modals/AgendamentoModal';
-import DiscountModal from './components/modals/DiscountModal';
-import GeneralDiscountModal from './components/modals/GeneralDiscountModal';
-import AIMeasurementModal from './components/modals/AIMeasurementModal';
-import AIClientModal from './components/modals/AIClientModal';
-import ApiKeyModal from './components/modals/ApiKeyModal';
-import ProposalOptionsCarousel from './components/ProposalOptionsCarousel';
-import ImageGalleryModal from './components/modals/ImageGalleryModal';
-import { usePwaInstallPrompt } from './src/hooks/usePwaInstallPrompt';
-import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
-
-
-const UserSettingsView = lazy(() => import('./components/views/UserSettingsView'));
-const PdfHistoryView = lazy(() => import('./components/views/PdfHistoryView'));
-const FilmListView = lazy(() => import('./components/views/FilmListView'));
-const AgendaView = lazy(() => import('./components/views/AgendaView'));
-
-
-type UIMeasurement = Measurement & { isNew?: boolean };
-// type ActiveTab = 'client' | 'films' | 'settings' | 'history' | 'agenda'; // Removido daqui, está em types.ts
-
-type NumpadConfig = {
-    isOpen: boolean;
-    measurementId: number | null;
-    field: 'largura' | 'altura' | 'quantidade' | null;
-    currentValue: string;
-    shouldClearOnNextInput: boolean;
-};
-
-export type SchedulingInfo = {
-    agendamento: Agendamento;
-    pdf?: SavedPDF;
-} | {
-    pdf: SavedPDF;
-    agendamento?: Agendamento;
-};
-
-interface ExtractedClientData {
-    nome?: string;
-    telefone?: string;
-    email?: string;
-    cpfCnpj?: string;
-    cep?: string;
-    logradouro?: string;
-    numero?: string;
-    complemento?: string;
-    bairro?: string;
-    cidade?: string;
-    uf?: string;
-}
-
-
-const App: React.FC = () => {
-    const { deferredPrompt, promptInstall, isInstalled } = usePwaInstallPrompt();
-    
-    const [isLoading, setIsLoading] = useState(true);
-    const [clients, setClients] = useState<Client[]>([]);
-    const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
-    const [proposalOptions, setProposalOptions] = useState<ProposalOption[]>([]);
-    const [activeOptionId, setActiveOptionId] = useState<number | null>(null);
-    const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
-    const [films, setFilms] = useState<Film[]>([]);
-    const [allSavedPdfs, setAllSavedPdfs] = useState<SavedPDF[]>([]);
-    const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
-    const [activeTab, setActiveTab] = useState<ActiveTab>('client'); // Estado local inicializado
-    const [isDirty, setIsDirty] = useState(false);
-    const [hasLoadedHistory, setHasLoadedHistory] = useState(false);
-    const [hasLoadedAgendamentos, setHasLoadedAgendamentos] = useState(false);
-    const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
-    const [swipeDistance, setSwipeDistance] = useState(0);
-    const [clientTransitionKey, setClientTransitionKey] = useState(0);
-
-
-    // Modal States
-    const [isClientModalOpen, setIsClientModalOpen] = useState(false);
-    const [clientModalMode, setClientModalMode] = useState<'add' | 'edit'>('add');
-    const [clientToDeleteId, setClientToDeleteId] = useState<number | null>(null);
-    const [postClientSaveAction, setPostClientSaveAction] = useState<{ type: 'select' | 'add' | 'edit', id?: number } | null>(null);
-    const [isClientSelectionModalOpen, setIsClientSelectionModalOpen] = useState(false);
-    const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-    const [isFilmModalOpen, setIsFilmModalOpen] = useState(false);
-    const [filmToEdit, setFilmToEdit] = useState<Film | null>(null);
-    const [filmToDeleteName, setFilmToDeleteName] = useState<string | null>(null);
-    const [isFilmSelectionModalOpen, setIsFilmSelectionModalOpen] = useState(false);
-    const [editingMeasurementIdForFilm, setEditingMeasurementIdForFilm] = useState<number | null>(null);
-    const [isApplyFilmToAllModalOpen, setIsApplyFilmToAllModalOpen] = useState(false);
-    const [filmToApplyToAll, setFilmToApplyToAll] = useState<string | null>(null);
-    const [isDeleteClientModalOpen, setIsDeleteClientModalOpen] = useState(false);
-    const [pdfToDeleteId, setPdfToDeleteId] = useState<number | null>(null);
-    const [agendamentoToDelete, setAgendamentoToDelete] = useState<Agendamento | null>(null);
-    const [pdfGenerationStatus, setPdfGenerationStatus] = useState<'idle' | 'generating' | 'success'>('idle');
-    const [schedulingInfo, setSchedulingInfo] = useState<SchedulingInfo | null>(null);
-    const [editingMeasurement, setEditingMeasurement] = useState<UIMeasurement | null>(null);
-    const [measurementToDeleteId, setMeasurementToDeleteId] = useState<number | null>(null);
-    const [isClearAllModalOpen, setIsClearAllModalOpen] = useState(false);
-    const [editingMeasurementForDiscount, setEditingMeasurementForDiscount] = useState<UIMeasurement | null>(null);
-    const [isGeneralDiscountModalOpen, setIsGeneralDiscountModalOpen] = useState(false);
-    const [isAIMeasurementModalOpen, setIsAIMeasurementModalOpen] = useState(false);
-    const [isAIClientModalOpen, setIsAIClientModalOpen] = useState(false);
-    const [isProcessingAI, setIsProcessingAI] = useState(false);
-    const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
-    const [apiKeyModalProvider, setApiKeyModalProvider] = useState<'gemini' | 'openai'>('gemini');
-    const [isGalleryOpen, setIsGalleryOpen] = useState(false);
-    const [galleryImages, setGalleryImages] = useState<string[]>([]);
-    const [galleryInitialIndex, setGalleryInitialIndex] = useState(0);
-    const [isDuplicateAllModalOpen, setIsDuplicateAllModalOpen] = useState(false);
-    const [isAIClientModalOpenForClient, setIsAIClientModalOpenForClient] = useState(false);
-    const [aiClientData, setAiClientData] = useState<Partial<Client> | null>(null);
-    
-    const mainRef = useRef<HTMLElement>(null);
-    const numpadRef = useRef<HTMLDivElement>(null);
-    const [numpadConfig, setNumpadConfig] = useState<NumpadConfig>({
-        isOpen: false,
-        measurementId: null,
-        field: null,
-        currentValue: '',
-        shouldClearOnNextInput: false,
-    });
-
-    // --- Hooks & Handlers ---
-
-    // Funções de Load (Declaradas aqui para serem usadas nos useEffects)
-    const loadClients = useCallback(async (clientIdToSelect?: number, shouldReorder: boolean = true) => {
-        const storedClients = await db.getAllClients();
-        
-        let finalClients = storedClients;
-
-        if (shouldReorder) {
-            finalClients = storedClients.sort((a, b) => {
-                const dateA = a.lastUpdated ? new Date(a.lastUpdated).getTime() : 0;
-                const dateB = b.lastUpdated ? new Date(b.lastUpdated).getTime() : 0;
-                return dateB - dateA;
-            });
-        }
-
-        setClients(finalClients);
-        
-        let idToSelect = clientIdToSelect;
-        
-        if (!idToSelect && userInfo?.lastSelectedClientId) {
-            const lastClient = finalClients.find(c => c.id === userInfo.lastSelectedClientId);
-            if (lastClient) {
-                idToSelect = lastClient.id;
-            }
-        }
-
-        if (idToSelect) {
-            setSelectedClientId(idToSelect);
-        } else if (finalClients.length > 0) {
-            setSelectedClientId(finalClients[0].id!);
-        } else {
-            setSelectedClientId(null);
-        }
-    }, [userInfo?.lastSelectedClientId]);
-
-    const loadFilms = useCallback(async () => {
-        const loadedFilms = await db.getAllFilms();
-        setFilms(loadedFilms);
-    }, []);
-
-    const loadAllPdfs = useCallback(async () => {
-        if (!selectedClientId) return;
-        const loadedPdfs = await db.getPDFsForClient(selectedClientId);
-        setAllSavedPdfs(loadedPdfs);
-    }, [selectedClientId]);
-    
-    const loadAgendamentos = useCallback(async () => {
-        const loadedAgendamentos = await db.getAllAgendamentos();
-        setAgendamentos(loadedAgendamentos);
-    }, []);
-
-    const loadProposalOptions = useCallback(async (clientId: number) => {
-        const savedOptions = await db.getProposalOptions(clientId);
-        
-        if (savedOptions.length === 0) {
-            const defaultOption: ProposalOption = {
-                id: Date.now(),
-                name: 'Opção 1',
-                measurements: [],
-                generalDiscount: { value: '', type: 'percentage' }
-            };
-            setProposalOptions([defaultOption]);
-            setActiveOptionId(defaultOption.id);
-        } else {
-            setProposalOptions(savedOptions);
-            setActiveOptionId(savedOptions[0].id);
-        }
-        setIsDirty(false);
-    }, []);
-
-
-    // Efeitos de Inicialização e Persistência
-    useEffect(() => {
-        const init = async () => {
-            setIsLoading(true);
-            const loadedUserInfo = await db.getUserInfo();
-            
-            setUserInfo(loadedUserInfo);
-            
-            const urlParams = new URLSearchParams(window.location.search);
-            const tabParam = urlParams.get('tab');
-            const initialTab: ActiveTab = tabParam && ['client', 'films', 'settings', 'history', 'agenda'].includes(tabParam) 
-                ? tabParam as ActiveTab 
-                : loadedUserInfo.activeTab || 'client';
-            
-            setActiveTab(initialTab);
-            
-            await loadClients(); 
-            await loadFilms();
-            
-            setIsLoading(false);
-        };
-        init();
-    }, [loadClients, loadFilms]);
-
-    useEffect(() => {
-        if (selectedClientId !== null && userInfo) {
-            const updatedUserInfo = { ...userInfo, lastSelectedClientId: selectedClientId };
-            setUserInfo(updatedUserInfo);
-            db.saveUserInfo(updatedUserInfo);
-        }
-        setClientTransitionKey(prev => prev + 1);
-    }, [selectedClientId, userInfo]);
-    
-    const handleTabChange = useCallback((tab: ActiveTab) => {
-        setActiveTab(tab);
-    }, []);
-
-    useEffect(() => {
-        if (userInfo && userInfo.activeTab !== activeTab) {
-            const updatedUserInfo = { ...userInfo, activeTab: activeTab };
-            setUserInfo(updatedUserInfo);
-            db.saveUserInfo(updatedUserInfo);
-        }
-    }, [activeTab, userInfo]);
-
-
-    useEffect(() => {
-        if (selectedClientId) {
-            loadProposalOptions(selectedClientId);
-            loadAllPdfs(); 
-            loadAgendamentos(); 
-        }
-    }, [selectedClientId, loadProposalOptions, loadAllPdfs, loadAgendamentos]);
-
-    const activeOption = useMemo(() => {
-        return proposalOptions.find(opt => opt.id === activeOptionId) || null;
-    }, [proposalOptions, activeOptionId]);
-
-    const measurements = activeOption?.measurements || [];
-
+// ... (código omitido)
     const handleSaveChanges = useCallback(async () => {
         if (selectedClientId && proposalOptions.length > 0) {
             await db.saveProposalOptions(selectedClientId, proposalOptions);
             setIsDirty(false);
-            
-            // Removido o reload de clientes aqui para evitar loop
         }
     }, [selectedClientId, proposalOptions]);
 
@@ -324,7 +53,7 @@ const App: React.FC = () => {
         }));
         handleMeasurementsChange(newMeasurements);
     }, [activeOption, handleMeasurementsChange]);
-    
+
     const handleConfirmDuplicateAll = useCallback(() => {
         duplicateAllMeasurements();
         setIsDuplicateAllModalOpen(false);
@@ -513,7 +242,7 @@ const App: React.FC = () => {
                 handleMeasurementsChange(updatedMeasurements);
             }
         }
-    }, [loadFilms, handleMeasurementsChange, activeOption]);
+    }, [loadFilms, handleMeasurementsChange, activeOption, loadAllPdfs]);
 
     const handleDeleteFilm = useCallback(async (filmName: string) => {
         await db.deleteFilm(filmName);
@@ -792,185 +521,6 @@ const App: React.FC = () => {
         }
     };
 
-    const handleProcessAIClientInput = useCallback(async (input: { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob }) => {
-        if (!userInfo?.aiConfig?.apiKey || !userInfo?.aiConfig?.provider) {
-            alert("Por favor, configure seu provedor e chave de API na aba 'Empresa' para usar esta funcionalidade.");
-            return;
-        }
-    
-        setIsProcessingAI(true);
-        setAiClientData(null);
-        try {
-            let extractedData: ExtractedClientData | null = null;
-            if (userInfo.aiConfig.provider === 'gemini') {
-                extractedData = await processClientDataWithGemini(input as { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob });
-            } else if (userInfo.aiConfig.provider === 'openai') {
-                if (input.type === 'audio') {
-                    alert("O provedor OpenAI não suporta entrada de áudio nesta aplicação.");
-                } else {
-                    extractedData = await processClientDataWithOpenAI(input as { type: 'text' | 'image'; data: string | File[] });
-                }
-            }
-            
-            if (extractedData) {
-                setAiClientData(extractedData);
-                setIsAIClientModalOpenForClient(true); // Abre o modal de confirmação de cliente
-            }
-        } finally {
-            setIsProcessingAI(false);
-        }
-    }, [userInfo, processClientDataWithGemini, processClientDataWithOpenAI]);
-
-    const processWithGemini = async (input: { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob }) => {
-        if (!userInfo?.aiConfig?.apiKey) return;
-        
-        setIsProcessingAI(true);
-        try {
-            const genAI = new GoogleGenerativeAI(userInfo.aiConfig.apiKey);
-            const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
-            
-            let prompt = "Analise o texto/imagem/áudio fornecido e extraia as medidas de vidros. Retorne APENAS um objeto JSON válido que contenha uma lista de objetos de medida. Cada objeto de medida deve ter as propriedades: largura (m), altura (m), quantidade, ambiente (use os nomes da lista de ambientes se possível), tipoAplicacao (use os nomes da lista de tipos se possível), e pelicula (nome da película, se puder inferir). Se não puder inferir a película, use 'Desconhecido'. Se não houver medidas, retorne uma lista vazia. O texto/áudio/imagem é: ";
-            
-            let content: any[] = [];
-
-            if (input.type === 'text' && typeof input.data === 'string') {
-                content.push(prompt + input.data);
-            } else if (input.type === 'image' && Array.isArray(input.data)) {
-                prompt = "Analise a imagem fornecida (que contém um rascunho de medidas) e extraia as medidas. Retorne APENAS um objeto JSON válido que contenha uma lista de objetos de medida. Cada objeto de medida deve ter as propriedades: largura (m), altura (m), quantidade, ambiente, tipoAplicacao, e pelicula. Se não puder inferir, use 'Desconhecido'.";
-                content.push(prompt, ...input.data.map(file => file));
-            } else if (input.type === 'audio' && input.data instanceof Blob) {
-                prompt = "Transcreva o áudio fornecido (que contém medidas) e extraia as medidas de vidros. Retorne APENAS um objeto JSON válido que contenha uma lista de objetos de medida. Cada objeto de medida deve ter as propriedades: largura (m), altura (m), quantidade, ambiente, tipoAplicacao, e pelicula. Se não puder inferir, use 'Desconhecido'.";
-                content.push(prompt, input.data);
-            } else {
-                return;
-            }
-
-            const result = await model.generateContent(content);
-            const response = await result.response;
-            const jsonText = response.text().replace(/```json|```/g, '');
-            const extractedMeasurements: Omit<Measurement, 'id' | 'active' | 'discount' | 'discountType'>[] = JSON.parse(jsonText);
-            
-            if (extractedMeasurements.length > 0) {
-                const newMeasurements: UIMeasurement[] = extractedMeasurements.map((m, index) => ({
-                    ...m,
-                    id: Date.now() + index,
-                    active: true,
-                    discount: 0,
-                    discountType: 'percentage',
-                    largura: m.largura || '',
-                    altura: m.altura || '',
-                    quantidade: m.quantidade || 1,
-                    ambiente: m.ambiente || 'Desconhecido',
-                    tipoAplicacao: m.tipoAplicacao || 'Desconhecido',
-                    pelicula: m.pelicula || films[0]?.nome || 'Desconhecido',
-                    isNew: true,
-                }));
-                
-                const updatedMeasurements = [...newMeasurements, ...measurements.map(m => ({...m, isNew: false}))];
-                handleMeasurementsChange(updatedMeasurements);
-                
-                alert(`Sucesso! ${newMeasurements.length} medidas foram adicionadas.`);
-            } else {
-                alert("A IA não conseguiu extrair medidas válidas do conteúdo fornecido.");
-            }
-
-        } catch (error) {
-            console.error("Gemini AI Error:", error);
-            alert(`Erro ao processar com Gemini: ${error instanceof Error ? error.message : String(error)}`);
-        } finally {
-            setIsProcessingAI(false);
-        }
-    };
-
-    const processWithOpenAI = async (input: { type: 'text' | 'image'; data: string | File[] }) => {
-        if (!userInfo?.aiConfig?.apiKey) return;
-        
-        setIsProcessingAI(true);
-        try {
-            const apiKey = userInfo.aiConfig.apiKey;
-            const endpoint = 'https://api.openai.com/v1/chat/completions';
-            const modelName = 'gpt-4o-mini';
-            
-            let prompt = "Analise o texto/imagem fornecido e extraia as medidas de vidros. Retorne APENAS um objeto JSON válido que contenha uma lista de objetos de medida. Cada objeto de medida deve ter as propriedades: largura (m), altura (m), quantidade, ambiente, tipoAplicacao, e pelicula. Se não puder inferir, use 'Desconhecido'. Se não houver medidas, retorne uma lista vazia.";
-            
-            let body: any;
-
-            if (input.type === 'text' && typeof input.data === 'string') {
-                prompt += ` O texto é: ${input.data}`;
-                body = {
-                    model: modelName,
-                    messages: [{ role: "user", content: [{ type: "text", text: prompt }] }],
-                    response_format: { type: "json_object" }
-                };
-            } else if (input.type === 'image' && Array.isArray(input.data)) {
-                prompt += " A imagem contém um rascunho de medidas.";
-                const base64Image = await blobToBase64(input.data[0]);
-                
-                body = {
-                    model: modelName,
-                    messages: [{
-                        role: "user",
-                        content: [
-                            { type: "text", text: prompt },
-                            { type: "image_url", image_url: { url: `data:${base64Image.mimeType};base64,${base64Image.data}` } }
-                        ]
-                    }],
-                    response_format: { type: "json_object" }
-                };
-            } else {
-                return;
-            }
-
-            const response = await fetch(endpoint, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`
-                },
-                body: JSON.stringify(body)
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(`OpenAI API Error: ${response.status} - ${JSON.stringify(errorData)}`);
-            }
-
-            const data = await response.json();
-            const jsonText = data.choices[0].message.content;
-            const extractedMeasurements: Omit<Measurement, 'id' | 'active' | 'discount' | 'discountType'>[] = JSON.parse(jsonText);
-            
-            if (extractedMeasurements.length > 0) {
-                const newMeasurements: UIMeasurement[] = extractedMeasurements.map((m, index) => ({
-                    ...m,
-                    id: Date.now() + index,
-                    active: true,
-                    discount: 0,
-                    discountType: 'percentage',
-                    largura: m.largura || '',
-                    altura: m.altura || '',
-                    quantidade: m.quantidade || 1,
-                    ambiente: m.ambiente || 'Desconhecido',
-                    tipoAplicacao: m.tipoAplicacao || 'Desconhecido',
-                    pelicula: m.pelicula || films[0]?.nome || 'Desconhecido',
-                    isNew: true,
-                }));
-                
-                const updatedMeasurements = [...newMeasurements, ...measurements.map(m => ({...m, isNew: false}))];
-                handleMeasurementsChange(updatedMeasurements);
-                
-                alert(`Sucesso! ${newMeasurements.length} medidas foram adicionadas.`);
-            } else {
-                alert("A IA não conseguiu extrair medidas válidas do conteúdo fornecido.");
-            }
-
-        } catch (error) {
-            console.error("OpenAI AI Error:", error);
-            alert(`Erro ao processar com OpenAI: ${error instanceof Error ? error.message : String(error)}`);
-        } finally {
-            setIsProcessingAI(false);
-        }
-    };
-
     const handleProcessAIInput = async (input: { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob }) => {
         if (!userInfo?.aiConfig?.apiKey || !userInfo?.aiConfig?.provider) {
             alert("Por favor, configure seu provedor e chave de API na aba 'Empresa' para usar esta funcionalidade.");
@@ -993,6 +543,35 @@ const App: React.FC = () => {
             setIsProcessingAI(false);
         }
     };
+
+    const handleProcessAIClientInput = useCallback(async (input: { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob }) => {
+        if (!userInfo?.aiConfig?.apiKey || !userInfo?.aiConfig?.provider) {
+            alert("Por favor, configure seu provedor e chave de API na aba 'Empresa' para usar esta funcionalidade.");
+            return;
+        }
+    
+        setIsProcessingAI(true);
+        setAiClientData(null);
+        try {
+            let extractedData: ExtractedClientData | null = null;
+            if (userInfo.aiConfig.provider === 'gemini') {
+                extractedData = await processClientDataWithGemini(input as { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob });
+            } else if (userInfo.aiConfig.provider === 'openai') {
+                if (input.type === 'audio') {
+                    alert("O provedor OpenAI não suporta entrada de áudio nesta aplicação.");
+                    return;
+                }
+                extractedData = await processClientDataWithOpenAI(input as { type: 'text' | 'image'; data: string | File[] });
+            }
+            
+            if (extractedData) {
+                setAiClientData(extractedData);
+                setIsAIClientModalOpenForClient(true); // Abre o modal de confirmação de cliente
+            }
+        } finally {
+            setIsProcessingAI(false);
+        }
+    }, [userInfo, processClientDataWithGemini, processClientDataWithOpenAI]);
 
     const handleRequestDeletePdf = useCallback((pdfId: number) => {
         setPdfToDeleteId(pdfId);
@@ -1077,7 +656,7 @@ const App: React.FC = () => {
         if (updatedData.largura !== undefined || updatedData.altura !== undefined || updatedData.quantidade !== undefined) {
             // Se o numpad estava aberto, ele já salvou o valor final no estado global (measurements)
             // Aqui apenas garantimos que o objeto no estado local reflita o que está no estado global, se necessário.
-            // Como estamos usando o numpad para salvar diretamente no handleNumpadDone, este callback é mais para campos não numéricos.
+            // Como estamos usando o numpad para salvar diretamente no estado global, este callback é mais para campos não numéricos.
             
             // Para garantir consistência, vamos forçar a atualização no array principal
             const updatedMeasurements = measurements.map(m => m.id === editingMeasurement.id ? updated : m);
@@ -1139,7 +718,7 @@ const App: React.FC = () => {
     
     const handleAddNewClientFromAgendamento = useCallback((clientName: string) => {
         setIsClientSelectionModalOpen(false);
-        setPostClientSaveAction({ type: 'select', id: undefined }); // Indica que deve selecionar o novo cliente
+        setPostClientSaveAction({ type: 'select' });
         setIsClientModalOpen(true);
         setClientModalMode('add');
         handleCloseAgendamentoModal();
@@ -1188,6 +767,7 @@ const App: React.FC = () => {
         
         const updatedInfo: UserInfo = { ...userInfo, aiConfig: updatedConfig };
         await handleSaveUserInfo(updatedInfo);
+        setUserInfo(updatedInfo);
         setIsApiKeyModalOpen(false);
     }, [userInfo, handleSaveUserInfo]);
 
@@ -1824,7 +1404,7 @@ const App: React.FC = () => {
                     onClose={() => setIsClearAllModalOpen(false)}
                     onConfirm={handleConfirmClearAll}
                     title="Confirmar Exclusão de Todas as Medidas"
-                    message="Tem certeza que deseja apagar TODAS as medidas desta opção de orçamento? Esta ação não pode ser desfeita."
+                    message={`Deseja apagar TODAS as medidas desta opção de orçamento? Esta ação não pode ser desfeita.`}
                     confirmButtonText="Sim, Apagar Tudo"
                     confirmButtonVariant="danger"
                 />
