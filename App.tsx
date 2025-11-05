@@ -127,6 +127,9 @@ const App: React.FC = () => {
     
     const mainRef = useRef<HTMLElement>(null);
     const numpadRef = useRef<HTMLDivElement>(null);
+    const lastSavedClientIdRef = useRef<number | null>(null);
+    const lastSavedTabRef = useRef<ActiveTab | null>(null);
+    
     const [numpadConfig, setNumpadConfig] = useState<NumpadConfig>({
         isOpen: false,
         measurementId: null,
@@ -210,6 +213,8 @@ const App: React.FC = () => {
             const loadedUserInfo = await db.getUserInfo();
             
             setUserInfo(loadedUserInfo);
+            lastSavedClientIdRef.current = loadedUserInfo.lastSelectedClientId || null;
+            lastSavedTabRef.current = loadedUserInfo.activeTab || null;
             
             const urlParams = new URLSearchParams(window.location.search);
             const tabParam = urlParams.get('tab');
@@ -227,27 +232,30 @@ const App: React.FC = () => {
         init();
     }, [loadClients, loadFilms]);
 
-    // FIX: Separar a persistência do lastSelectedClientId para evitar loop
+    // FIX: Usar ref para evitar re-renders desnecessários ao salvar lastSelectedClientId
     useEffect(() => {
-        if (selectedClientId !== null && userInfo && userInfo.lastSelectedClientId !== selectedClientId) {
+        if (selectedClientId !== null && userInfo && lastSavedClientIdRef.current !== selectedClientId) {
+            lastSavedClientIdRef.current = selectedClientId;
+            
+            // Salvar de forma assíncrona sem atualizar o estado
             const updatedUserInfo = { ...userInfo, lastSelectedClientId: selectedClientId };
-            db.saveUserInfo(updatedUserInfo).then(() => {
-                setUserInfo(updatedUserInfo);
-            });
+            db.saveUserInfo(updatedUserInfo);
         }
         setClientTransitionKey(prev => prev + 1);
-    }, [selectedClientId]);
+    }, [selectedClientId, userInfo]);
     
     const handleTabChange = useCallback((tab: ActiveTab) => {
         setActiveTab(tab);
     }, []);
 
+    // FIX: Usar ref para evitar re-renders ao salvar activeTab
     useEffect(() => {
-        if (userInfo && userInfo.activeTab !== activeTab) {
+        if (userInfo && lastSavedTabRef.current !== activeTab) {
+            lastSavedTabRef.current = activeTab;
+            
+            // Salvar de forma assíncrona sem atualizar o estado
             const updatedUserInfo = { ...userInfo, activeTab: activeTab };
-            db.saveUserInfo(updatedUserInfo).then(() => {
-                setUserInfo(updatedUserInfo);
-            });
+            db.saveUserInfo(updatedUserInfo);
         }
     }, [activeTab, userInfo]);
 
@@ -445,6 +453,681 @@ const App: React.FC = () => {
     const handleSaveUserInfo = useCallback(async (info: UserInfo) => {
         await db.saveUserInfo(info);
         setUserInfo(info);
+        lastSavedClientIdRef.current = info.lastSelectedClientId || null;
+        lastSavedTabRef.current = info.activeTab || null;
+    }, []);
+
+    const handleSavePaymentMethods = useCallback(async (methods: PaymentMethods) => {
+        if (userInfo) {
+            const updatedInfo: UserInfo = { ...userInfo, payment_methods: methods };
+            await db.saveUserInfo(updatedInfo);
+            setUserInfo(updatedInfo);
+        }
+    }, [userInfo]);
+    
+    const handleOpenFilmModal = useCallback((film: Film | null) => {
+        setFilmToEdit(film);
+        setIsFilmModalOpen(true);
+    }, []);
+
+    const handleEditFilmFromSelection = useCallback((film: Film) => {
+        setFilmToEdit(film);
+        setIsFilmModalOpen(true);
+        setIsFilmSelectionModalOpen(false);
+    }, []);
+
+    const handleSaveFilm = useCallback(async (newFilmData: Film, originalFilm: Film | null) => {
+        await db.saveFilm(newFilmData);
+        await loadFilms();
+        setIsFilmModalOpen(false);
+        setFilmToEdit(null);
+        
+        if (originalFilm && originalFilm.nome !== newFilmData.nome) {
+            await db.updateMeasurementFilmName(originalFilm.nome, newFilmData.nome);
+            await loadAllPdfs();
+            if (activeOption) {
+                const updatedMeasurements = activeOption.measurements.map(m => 
+                    m.pelicula === originalFilm.nome ? { ...m, pelicula: newFilmData.nome } : m
+                );
+                handleMeasurementsChange(updatedMeasurements);
+            }
+        }
+    }, [loadFilms, handleMeasurementsChange, activeOption, loadAllPdfs]);
+
+    const handleDeleteFilm = useCallback(async (filmName: string) => {
+        await db.deleteFilm(filmName);
+        await loadFilms();
+        setFilmToDeleteName(null);
+        await loadAllPdfs();
+        
+        if (activeOption) {
+            const updatedMeasurements = activeOption.measurements
+                .filter(m => m.pelicula !== filmName)
+                .map(m => ({ ...m, isNew: false }));
+            handleMeasurementsChange(updatedMeasurements);
+        }
+    }, [loadFilms, handleMeasurementsChange, activeOption, loadAllPdfs]);
+
+    const handleRequestDeleteFilm = useCallback((filmName: string) => {
+        setFilmToDeleteName(filmName);
+    }, []);
+
+    const handleConfirmDeleteFilm = useCallback(async () => {
+        if (filmToDeleteName) {
+            await handleDeleteFilm(filmToDeleteName);
+        }
+    }, [filmToDeleteName, handleDeleteFilm]);
+
+
+    const downloadBlob = useCallback((blob: Blob, filename: string) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }, []);
+    
+    const totals = useMemo(() => {
+        const activeMeasurements = measurements.filter(m => m.active);
+        
+        const pricePerM2Map = new Map<string, number>();
+        films.forEach(f => {
+            pricePerM2Map.set(f.nome, f.preco > 0 ? f.preco : (f.maoDeObra || 0));
+        });
+
+        let priceAfterItemDiscounts = 0;
+        let totalItemDiscount = 0;
+        let totalM2 = 0;
+
+        activeMeasurements.forEach(m => {
+            const largura = parseFloat(String(m.largura).replace(',', '.')) || 0;
+            const altura = parseFloat(String(m.altura).replace(',', '.')) || 0;
+            const m2 = largura * altura * m.quantidade;
+            totalM2 += m2;
+            
+            const price = (pricePerM2Map.get(m.pelicula) || 0) * m2;
+            let itemDiscountAmount = 0;
+            const discountValue = m.discount || 0;
+            
+            if (m.discountType === 'percentage' && discountValue > 0) {
+                itemDiscountAmount = price * (discountValue / 100);
+            } else if (m.discountType === 'fixed' && discountValue > 0) {
+                itemDiscountAmount = discountValue;
+            }
+            
+            totalItemDiscount += itemDiscountAmount;
+            priceAfterItemDiscounts += Math.max(0, price - itemDiscountAmount);
+        });
+        
+        const generalDiscount = proposalOptions.find(opt => opt.id === activeOptionId)?.generalDiscount || { value: '', type: 'percentage' };
+        const finalGeneralDiscount = generalDiscount.value ? parseFloat(String(generalDiscount.value).replace(',', '.')) || 0 : 0;
+        let generalDiscountAmount = 0;
+        
+        if (generalDiscount.type === 'percentage' && finalGeneralDiscount > 0) {
+            generalDiscountAmount = priceAfterItemDiscounts * (finalGeneralDiscount / 100);
+        } else if (generalDiscount.type === 'fixed' && finalGeneralDiscount > 0) {
+            generalDiscountAmount = finalGeneralDiscount;
+        }
+        
+        const finalTotal = Math.max(0, priceAfterItemDiscounts - generalDiscountAmount);
+
+        return {
+            totalM2,
+            subtotal: priceAfterItemDiscounts + totalItemDiscount,
+            totalItemDiscount,
+            priceAfterItemDiscounts,
+            generalDiscountAmount,
+            finalTotal
+        };
+    }, [measurements, films, proposalOptions, activeOptionId]);
+
+    const handleGeneratePdf = useCallback(async () => {
+        if (!selectedClient || !userInfo || !activeOption || isDirty) return;
+        if (measurements.length === 0) {
+            alert("Adicione pelo menos uma medida antes de gerar o PDF.");
+            return;
+        }
+        
+        setPdfGenerationStatus('generating');
+        
+        try {
+            const pdfBlob = await generatePDF(selectedClient, userInfo, measurements, films, activeOption.generalDiscount, totals);
+            
+            const nomeArquivo = `Orcamento_${selectedClient.nome.replace(/\s/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+            
+            const newPdf: SavedPDF = {
+                clienteId: selectedClient.id!,
+                date: new Date().toISOString(),
+                nomeArquivo,
+                totalM2: totals.totalM2,
+                totalPreco: totals.finalTotal,
+                pdfBlob,
+                status: 'pending',
+                expirationDate: new Date(Date.now() + (userInfo.proposalValidityDays || 60) * 24 * 60 * 60 * 1000).toISOString(),
+                proposalOptionName: activeOption.name,
+            };
+            
+            await db.savePDF(newPdf);
+            setAllSavedPdfs(prev => [newPdf, ...prev]);
+            
+            setPdfGenerationStatus('success');
+            
+            if (schedulingInfo && schedulingInfo.agendamento && !schedulingInfo.agendamento.pdfId) {
+                const savedPdfId = await db.getLatestPdfIdForClient(selectedClient.id!);
+                if (savedPdfId) {
+                    const updatedAgendamento: Agendamento = {
+                        ...schedulingInfo.agendamento,
+                        pdfId: savedPdfId,
+                    };
+                    await db.saveAgendamento(updatedAgendamento);
+                    setAgendamentos(prev => prev.map(ag => ag.id === schedulingInfo.agendamento.id ? updatedAgendamento : ag));
+                    setSchedulingInfo(prev => prev ? { ...prev, agendamento: updatedAgendamento } : null);
+                }
+            }
+
+            downloadBlob(pdfBlob, nomeArquivo);
+
+        } catch (error) {
+            console.error("Erro ao gerar PDF:", error);
+            setPdfGenerationStatus('success');
+            alert("Falha ao gerar PDF. Verifique o console.");
+        }
+    }, [selectedClient, userInfo, activeOption, isDirty, measurements, films, totals, downloadBlob, schedulingInfo]);
+
+    const handleGoToHistoryFromPdf = useCallback(() => {
+        setPdfGenerationStatus('idle');
+        setActiveTab('history');
+    }, []);
+
+    const handleClosePdfStatusModal = useCallback(() => {
+        setPdfGenerationStatus('idle');
+    }, []);
+
+    const blobToBase64 = useCallback((blob: Blob): Promise<{mimeType: string, data: string}> => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                const base64data = reader.result as string;
+                const parts = base64data.split(',');
+                const mimeType = parts[0].match(/:(.*?);/)?.[1] || blob.type;
+                resolve({ mimeType, data: parts[1] });
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+    }, []);
+
+    const processClientDataWithGemini = async (input: { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob }): Promise<ExtractedClientData | null> => {
+        if (!userInfo?.aiConfig?.apiKey) return null;
+        
+        try {
+            const genAI = new GoogleGenerativeAI(userInfo.aiConfig.apiKey);
+            const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
+            
+            let prompt = "Analise o texto/imagem/áudio fornecido e extraia as seguintes informações de um cliente de instalação de películas. Retorne APENAS um objeto JSON válido com as propriedades: nome<dyad-problem-report summary="2 problems">
+<problem file="App.tsx" line="1346" column="27" code="1005">',' expected.</problem>
+<problem file="App.tsx" line="1346" column="13" code="18004">No value exists in scope for the shorthand property 'shouldClearOn'. Either declare one or provide an initializer.</problem>
+</dyad-problem-report><dyad-write path="App.tsx" description="Corrigindo erro de digitação no nome da propriedade shouldClearOnNextInput">
+import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense, useRef } from 'react';
+import { Client, Measurement, UserInfo, Film, PaymentMethods, SavedPDF, Agendamento, ProposalOption, ActiveTab } from './types';
+import * as db from './services/db';
+import { generatePDF } from './services/pdfGenerator';
+import Header from './components/Header';
+import ClientBar from './components/ClientBar';
+import MeasurementList from './components/MeasurementList';
+import SummaryBar from './components/SummaryBar';
+import ActionsBar from './components/ActionsBar';
+import MobileFooter from './components/MobileFooter';
+import ClientModal from './components/modals/ClientModal';
+import ClientSelectionModal from './components/modals/ClientSelectionModal';
+import PaymentMethodsModal from './components/modals/PaymentMethodsModal';
+import FilmModal from './components/modals/FilmModal';
+import ConfirmationModal from './components/modals/ConfirmationModal';
+import CustomNumpad from './components/ui/CustomNumpad';
+import FilmSelectionModal from './components/modals/FilmSelectionModal';
+import PdfGenerationStatusModal from './components/modals/PdfGenerationStatusModal';
+import EditMeasurementModal from './components/modals/EditMeasurementModal';
+import AgendamentoModal from './components/modals/AgendamentoModal';
+import DiscountModal from './components/modals/DiscountModal';
+import GeneralDiscountModal from './components/modals/GeneralDiscountModal';
+import AIMeasurementModal from './components/modals/AIMeasurementModal';
+import AIClientModal from './components/modals/AIClientModal';
+import ApiKeyModal from './components/modals/ApiKeyModal';
+import ProposalOptionsCarousel from './components/ProposalOptionsCarousel';
+import ImageGalleryModal from './components/modals/ImageGalleryModal';
+import { usePwaInstallPrompt } from './src/hooks/usePwaInstallPrompt';
+import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
+
+
+const UserSettingsView = lazy(() => import('./components/views/UserSettingsView'));
+const PdfHistoryView = lazy(() => import('./components/views/PdfHistoryView'));
+const FilmListView = lazy(() => import('./components/views/FilmListView'));
+const AgendaView = lazy(() => import('./components/views/AgendaView'));
+
+
+type UIMeasurement = Measurement & { isNew?: boolean };
+
+type NumpadConfig = {
+    isOpen: boolean;
+    measurementId: number | null;
+    field: 'largura' | 'altura' | 'quantidade' | null;
+    currentValue: string;
+    shouldClearOnNextInput: boolean;
+};
+
+export type SchedulingInfo = {
+    agendamento: Agendamento;
+    pdf?: SavedPDF;
+} | {
+    pdf: SavedPDF;
+    agendamento?: Agendamento;
+};
+
+interface ExtractedClientData {
+    nome?: string;
+    telefone?: string;
+    email?: string;
+    cpfCnpj?: string;
+    cep?: string;
+    logradouro?: string;
+    numero?: string;
+    complemento?: string;
+    bairro?: string;
+    cidade?: string;
+    uf?: string;
+}
+
+
+const App: React.FC = () => {
+    const { deferredPrompt, promptInstall, isInstalled } = usePwaInstallPrompt();
+    
+    const [isLoading, setIsLoading] = useState(true);
+    const [clients, setClients] = useState<Client[]>([]);
+    const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
+    const [proposalOptions, setProposalOptions] = useState<ProposalOption[]>([]);
+    const [activeOptionId, setActiveOptionId] = useState<number | null>(null);
+    const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
+    const [films, setFilms] = useState<Film[]>([]);
+    const [allSavedPdfs, setAllSavedPdfs] = useState<SavedPDF[]>([]);
+    const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
+    const [activeTab, setActiveTab] = useState<ActiveTab>('client');
+    const [isDirty, setIsDirty] = useState(false);
+    const [hasLoadedHistory, setHasLoadedHistory] = useState(false);
+    const [hasLoadedAgendamentos, setHasLoadedAgendamentos] = useState(false);
+    const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
+    const [swipeDistance, setSwipeDistance] = useState(0);
+    const [clientTransitionKey, setClientTransitionKey] = useState(0);
+
+
+    // Modal States
+    const [isClientModalOpen, setIsClientModalOpen] = useState(false);
+    const [clientModalMode, setClientModalMode] = useState<'add' | 'edit'>('add');
+    const [clientToDeleteId, setClientToDeleteId] = useState<number | null>(null);
+    const [postClientSaveAction, setPostClientSaveAction] = useState<{ type: 'select' | 'add' | 'edit', id?: number } | null>(null);
+    const [isClientSelectionModalOpen, setIsClientSelectionModalOpen] = useState(false);
+    const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+    const [isFilmModalOpen, setIsFilmModalOpen] = useState(false);
+    const [filmToEdit, setFilmToEdit] = useState<Film | null>(null);
+    const [filmToDeleteName, setFilmToDeleteName] = useState<string | null>(null);
+    const [isFilmSelectionModalOpen, setIsFilmSelectionModalOpen] = useState(false);
+    const [editingMeasurementIdForFilm, setEditingMeasurementIdForFilm] = useState<number | null>(null);
+    const [isApplyFilmToAllModalOpen, setIsApplyFilmToAllModalOpen] = useState(false);
+    const [filmToApplyToAll, setFilmToApplyToAll] = useState<string | null>(null);
+    const [isDeleteClientModalOpen, setIsDeleteClientModalOpen] = useState(false);
+    const [pdfToDeleteId, setPdfToDeleteId] = useState<number | null>(null);
+    const [agendamentoToDelete, setAgendamentoToDelete] = useState<Agendamento | null>(null);
+    const [pdfGenerationStatus, setPdfGenerationStatus] = useState<'idle' | 'generating' | 'success'>('idle');
+    const [schedulingInfo, setSchedulingInfo] = useState<SchedulingInfo | null>(null);
+    const [editingMeasurement, setEditingMeasurement] = useState<UIMeasurement | null>(null);
+    const [measurementToDeleteId, setMeasurementToDeleteId] = useState<number | null>(null);
+    const [isClearAllModalOpen, setIsClearAllModalOpen] = useState(false);
+    const [editingMeasurementForDiscount, setEditingMeasurementForDiscount] = useState<UIMeasurement | null>(null);
+    const [isGeneralDiscountModalOpen, setIsGeneralDiscountModalOpen] = useState(false);
+    const [isAIMeasurementModalOpen, setIsAIMeasurementModalOpen] = useState(false);
+    const [isAIClientModalOpen, setIsAIClientModalOpen] = useState(false);
+    const [isProcessingAI, setIsProcessingAI] = useState(false);
+    const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
+    const [apiKeyModalProvider, setApiKeyModalProvider] = useState<'gemini' | 'openai'>('gemini');
+    const [isGalleryOpen, setIsGalleryOpen] = useState(false);
+    const [galleryImages, setGalleryImages] = useState<string[]>([]);
+    const [galleryInitialIndex, setGalleryInitialIndex] = useState(0);
+    const [isDuplicateAllModalOpen, setIsDuplicateAllModalOpen] = useState(false);
+    const [isAIClientModalOpenForClient, setIsAIClientModalOpenForClient] = useState(false);
+    const [aiClientData, setAiClientData] = useState<Partial<Client> | null>(null);
+    
+    const mainRef = useRef<HTMLElement>(null);
+    const numpadRef = useRef<HTMLDivElement>(null);
+    const lastSavedClientIdRef = useRef<number | null>(null);
+    const lastSavedTabRef = useRef<ActiveTab | null>(null);
+    
+    const [numpadConfig, setNumpadConfig] = useState<NumpadConfig>({
+        isOpen: false,
+        measurementId: null,
+        field: null,
+        currentValue: '',
+        shouldClearOnNextInput: false,
+    });
+
+    const loadClients = useCallback(async (clientIdToSelect?: number, shouldReorder: boolean = true) => {
+        const storedClients = await db.getAllClients();
+        
+        let finalClients = storedClients;
+
+        if (shouldReorder) {
+            finalClients = storedClients.sort((a, b) => {
+                const dateA = a.lastUpdated ? new Date(a.lastUpdated).getTime() : 0;
+                const dateB = b.lastUpdated ? new Date(b.lastUpdated).getTime() : 0;
+                return dateB - dateA;
+            });
+        }
+
+        setClients(finalClients);
+        
+        let idToSelect = clientIdToSelect;
+        
+        if (!idToSelect && userInfo?.lastSelectedClientId) {
+            const lastClient = finalClients.find(c => c.id === userInfo.lastSelectedClientId);
+            if (lastClient) {
+                idToSelect = lastClient.id;
+            }
+        }
+
+        if (idToSelect) {
+            setSelectedClientId(idToSelect);
+        } else if (finalClients.length > 0) {
+            setSelectedClientId(finalClients[0].id!);
+        } else {
+            setSelectedClientId(null);
+        }
+    }, [userInfo?.lastSelectedClientId]);
+
+    const loadFilms = useCallback(async () => {
+        const loadedFilms = await db.getAllFilms();
+        setFilms(loadedFilms);
+    }, []);
+
+    const loadAllPdfs = useCallback(async () => {
+        if (!selectedClientId) return;
+        const loadedPdfs = await db.getPDFsForClient(selectedClientId);
+        setAllSavedPdfs(loadedPdfs);
+    }, [selectedClientId]);
+    
+    const loadAgendamentos = useCallback(async () => {
+        const loadedAgendamentos = await db.getAllAgendamentos();
+        setAgendamentos(loadedAgendamentos);
+    }, []);
+
+    const loadProposalOptions = useCallback(async (clientId: number) => {
+        const savedOptions = await db.getProposalOptions(clientId);
+        
+        if (savedOptions.length === 0) {
+            const defaultOption: ProposalOption = {
+                id: Date.now(),
+                name: 'Opção 1',
+                measurements: [],
+                generalDiscount: { value: '', type: 'percentage' }
+            };
+            setProposalOptions([defaultOption]);
+            setActiveOptionId(defaultOption.id);
+        } else {
+            setProposalOptions(savedOptions);
+            setActiveOptionId(savedOptions[0].id);
+        }
+        setIsDirty(false);
+    }, []);
+
+
+    useEffect(() => {
+        const init = async () => {
+            setIsLoading(true);
+            const loadedUserInfo = await db.getUserInfo();
+            
+            setUserInfo(loadedUserInfo);
+            lastSavedClientIdRef.current = loadedUserInfo.lastSelectedClientId || null;
+            lastSavedTabRef.current = loadedUserInfo.activeTab || null;
+            
+            const urlParams = new URLSearchParams(window.location.search);
+            const tabParam = urlParams.get('tab');
+            const initialTab: ActiveTab = tabParam && ['client', 'films', 'settings', 'history', 'agenda'].includes(tabParam) 
+                ? tabParam as ActiveTab 
+                : loadedUserInfo.activeTab || 'client';
+            
+            setActiveTab(initialTab);
+            
+            await loadClients(undefined, true); 
+            await loadFilms();
+            
+            setIsLoading(false);
+        };
+        init();
+    }, [loadClients, loadFilms]);
+
+    // FIX: Usar ref para evitar re-renders desnecessários ao salvar lastSelectedClientId
+    useEffect(() => {
+        if (selectedClientId !== null && userInfo && lastSavedClientIdRef.current !== selectedClientId) {
+            lastSavedClientIdRef.current = selectedClientId;
+            
+            // Salvar de forma assíncrona sem atualizar o estado
+            const updatedUserInfo = { ...userInfo, lastSelectedClientId: selectedClientId };
+            db.saveUserInfo(updatedUserInfo);
+        }
+        setClientTransitionKey(prev => prev + 1);
+    }, [selectedClientId, userInfo]);
+    
+    const handleTabChange = useCallback((tab: ActiveTab) => {
+        setActiveTab(tab);
+    }, []);
+
+    // FIX: Usar ref para evitar re-renders ao salvar activeTab
+    useEffect(() => {
+        if (userInfo && lastSavedTabRef.current !== activeTab) {
+            lastSavedTabRef.current = activeTab;
+            
+            // Salvar de forma assíncrona sem atualizar o estado
+            const updatedUserInfo = { ...userInfo, activeTab: activeTab };
+            db.saveUserInfo(updatedUserInfo);
+        }
+    }, [activeTab, userInfo]);
+
+
+    useEffect(() => {
+        if (selectedClientId) {
+            loadProposalOptions(selectedClientId);
+            loadAllPdfs(); 
+            loadAgendamentos(); 
+        }
+    }, [selectedClientId, loadProposalOptions, loadAllPdfs, loadAgendamentos]);
+
+    const activeOption = useMemo(() => {
+        return proposalOptions.find(opt => opt.id === activeOptionId) || null;
+    }, [proposalOptions, activeOptionId]);
+
+    const measurements = activeOption?.measurements || [];
+
+    const handleSaveChanges = useCallback(async () => {
+        if (selectedClientId && proposalOptions.length > 0) {
+            await db.saveProposalOptions(selectedClientId, proposalOptions);
+            setIsDirty(false);
+        }
+    }, [selectedClientId, proposalOptions]);
+
+    useEffect(() => {
+        if (isDirty) {
+            const timerId = setTimeout(() => {
+                handleSaveChanges();
+            }, 1500);
+
+            return () => clearTimeout(timerId);
+        }
+    }, [proposalOptions, isDirty, handleSaveChanges]);
+
+
+    const handleMeasurementsChange = useCallback((newMeasurements: UIMeasurement[]) => {
+        if (!activeOptionId) return;
+        
+        setProposalOptions(prev => prev.map(opt =>
+            opt.id === activeOptionId
+                ? { ...opt, measurements: newMeasurements }
+                : opt
+        ));
+        setIsDirty(true);
+    }, [activeOptionId]);
+
+    const handleGeneralDiscountChange = useCallback((discount: { value: string; type: 'percentage' | 'fixed' }) => {
+        if (!activeOptionId) return;
+        
+        setProposalOptions(prev => prev.map(opt =>
+            opt.id === activeOptionId
+                ? { ...opt, generalDiscount: discount }
+                : opt
+        ));
+        setIsDirty(true);
+    }, [activeOptionId]);
+
+    const handleSwipeDirectionChange = useCallback((direction: 'left' | 'right' | null, distance: number) => {
+        setSwipeDirection(direction);
+        setSwipeDistance(distance);
+    }, []);
+
+    const duplicateAllMeasurements = useCallback(() => {
+        if (!activeOption) return;
+        const newMeasurements: UIMeasurement[] = activeOption.measurements.map((m, index) => ({
+            ...m,
+            id: Date.now() + index,
+            isNew: false,
+        }));
+        handleMeasurementsChange(newMeasurements);
+    }, [activeOption, handleMeasurementsChange]);
+    
+    const handleConfirmDuplicateAll = useCallback(() => {
+        duplicateAllMeasurements();
+        setIsDuplicateAllModalOpen(false);
+    }, [duplicateAllMeasurements]);
+
+    const handleAddProposalOption = useCallback(() => {
+        const newOption: ProposalOption = {
+            id: Date.now(),
+            name: `Opção ${proposalOptions.length + 1}`,
+            measurements: [],
+            generalDiscount: { value: '', type: 'percentage' }
+        };
+        
+        setProposalOptions(prev => [...prev, newOption]);
+        setActiveOptionId(newOption.id);
+        setIsDirty(true);
+    }, [proposalOptions.length]);
+
+    const handleRenameProposalOption = useCallback((optionId: number, newName: string) => {
+        setProposalOptions(prev => prev.map(opt =>
+            opt.id === optionId ? { ...opt, name: newName } : opt
+        ));
+        setIsDirty(true);
+    }, []);
+
+    const handleDeleteProposalOption = useCallback((optionId: number) => {
+        const remainingOptions = proposalOptions.filter(opt => opt.id !== optionId);
+        setProposalOptions(remainingOptions);
+        
+        if (activeOptionId === optionId && remainingOptions.length > 0) {
+            setActiveOptionId(remainingOptions[0].id);
+        } else if (remainingOptions.length === 0) {
+            setActiveOptionId(null);
+        }
+        setIsDirty(true);
+    }, [proposalOptions, activeOptionId]);
+
+    const handleConfirmClearAll = useCallback(() => {
+        handleMeasurementsChange([]);
+        setIsClearAllModalOpen(false);
+    }, [handleMeasurementsChange]);
+
+    const selectedClient = useMemo(() => {
+        return clients.find(c => c.id === selectedClientId) || null;
+    }, [clients, selectedClientId]);
+    
+    const handleOpenClientModal = useCallback((mode: 'add' | 'edit') => {
+        setClientModalMode(mode);
+        setIsClientModalOpen(true);
+    }, []);
+    
+    const handleOpenAgendamentoModal = useCallback((info: SchedulingInfo) => {
+        setSchedulingInfo(info);
+    }, []);
+
+    const handleSaveClient = useCallback(async (clientData: Omit<Client, 'id'> | Client) => {
+        const newClient = await db.saveClient(clientData as Client);
+        
+        // FIX: Atualiza a lista de clientes de forma otimizada sem recarregar
+        setClients(prevClients => {
+            if ('id' in clientData && clientData.id) {
+                // Editando cliente existente
+                return prevClients.map(client => 
+                    client.id === clientData.id ? { ...newClient, lastUpdated: new Date().toISOString() } : client
+                ).sort((a, b) => {
+                    const dateA = a.lastUpdated ? new Date(a.lastUpdated).getTime() : 0;
+                    const dateB = b.lastUpdated ? new Date(b.lastUpdated).getTime() : 0;
+                    return dateB - dateA;
+                });
+            } else {
+                // Adicionando novo cliente
+                return [newClient, ...prevClients].sort((a, b) => {
+                    const dateA = a.lastUpdated ? new Date(a.lastUpdated).getTime() : 0;
+                    const dateB = b.lastUpdated ? new Date(b.lastUpdated).getTime() : 0;
+                    return dateB - dateA;
+                });
+            }
+        });
+        
+        // Define o cliente selecionado
+        setSelectedClientId(newClient.id!);
+        
+        setIsClientModalOpen(false);
+        setPostClientSaveAction(null);
+        setAiClientData(null);
+    }, []);
+
+    const handleDeleteClient = useCallback(() => {
+        if (selectedClientId) {
+            setIsDeleteClientModalOpen(true);
+        }
+    }, [selectedClientId]);
+
+    const handleConfirmDeleteClient = useCallback(async () => {
+        if (!selectedClientId) return;
+        
+        await db.deleteClient(selectedClientId);
+        await db.deleteProposalOptions(selectedClientId);
+        
+        const pdfsForClient = await db.getPDFsForClient(selectedClientId);
+        for (const pdf of pdfsForClient) {
+            if (pdf.id) {
+                await db.deletePDF(pdf.id);
+            }
+        }
+        
+        await db.deleteAgendamentosForClient(selectedClientId);
+
+        setClients(prevClients => {
+            const remainingClients = prevClients.filter(c => c.id !== selectedClientId);
+            if (remainingClients.length > 0) {
+                setSelectedClientId(remainingClients[0].id!);
+            } else {
+                setSelectedClientId(null);
+            }
+            return remainingClients;
+        });
+        
+        setIsDeleteClientModalOpen(false);
+    }, [selectedClientId]);
+
+    const handleSaveUserInfo = useCallback(async (info: UserInfo) => {
+        await db.saveUserInfo(info);
+        setUserInfo(info);
+        lastSavedClientIdRef.current = info.lastSelectedClientId || null;
+        lastSavedTabRef.current = info.activeTab || null;
     }, []);
 
     const handleSavePaymentMethods = useCallback(async (methods: PaymentMethods) => {
