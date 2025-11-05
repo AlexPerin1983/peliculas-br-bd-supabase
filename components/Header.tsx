@@ -17,21 +17,21 @@ const Header: React.FC<HeaderProps> = ({ activeTab, onTabChange }) => {
 
     return (
         <div className="flex justify-center items-center">
-            {/* Alterado para justify-between e w-full para espalhar os botões */}
-            <div className="flex justify-between overflow-x-auto space-x-2 sm:space-x-4 w-full sm:w-auto">
+            <div className="flex justify-between overflow-x-auto space-x-1 sm:space-x-4 w-full sm:w-auto">
                 {tabs.map(tab => (
                     <button
                         key={tab.id}
                         onClick={() => onTabChange(tab.id)}
-                        // Removido px-3 para dar mais espaço, e adicionado flex-1 no mobile para forçar a distribuição
-                        className={`flex items-center justify-center px-1 py-2 rounded-lg transition-colors duration-200 flex-shrink-0 sm:flex-shrink sm:px-3 ${
+                        className={`flex flex-col items-center justify-center p-2 sm:p-3 rounded-xl transition-colors duration-200 flex-shrink-0 flex-1 sm:flex-shrink-0 ${
                             activeTab === tab.id
                                 ? 'bg-slate-800 text-white shadow-md'
                                 : 'text-slate-600 hover:bg-slate-100'
                         }`}
+                        aria-label={tab.label}
                     >
-                        <i className={`${tab.icon} text-lg sm:mr-2`}></i>
-                        <span className="hidden sm:inline text-sm font-semibold">{tab.label}</span>
+                        <i className={`${tab.icon} text-xl sm:text-2xl`}></i>
+                        <span className="text-[10px] sm:hidden mt-1 font-medium">{tab.label}</span>
+                        <span className="hidden sm:inline text-sm font-semibold mt-1">{tab.label}</span>
                     </button>
                 ))}
             </div>

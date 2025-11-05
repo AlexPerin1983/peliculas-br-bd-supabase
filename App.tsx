@@ -1104,7 +1104,7 @@ const App: React.FC = () => {
     
     const handleAddNewClientFromAgendamento = useCallback((clientName: string) => {
         setIsClientSelectionModalOpen(false);
-        setPostClientSaveAction({ type: 'add', id: undefined }); // Indica que deve selecionar o novo cliente
+        setPostClientSaveAction({ type: 'select', id: undefined }); // Indica que deve selecionar o novo cliente
         setIsClientModalOpen(true);
         setClientModalMode('add');
         handleCloseAgendamentoModal();
@@ -1585,7 +1585,7 @@ const App: React.FC = () => {
     return (
         <div className="h-full font-roboto flex flex-col">
             <main ref={mainRef} className="flex-grow overflow-y-auto pb-36 sm:pb-0">
-                <div className="sticky top-0 bg-white/80 backdrop-blur-sm z-10 border-b border-slate-200">
+                <div className="sticky top-0 bg-white/80 backdrop-blur-sm z-10">
                     <div className="container mx-auto px-2 sm:px-4 w-full max-w-2xl">
                         <div className="pt-2 pb-1 sm:py-3">
                             <Header
