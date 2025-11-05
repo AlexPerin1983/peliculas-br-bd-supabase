@@ -1,8 +1,6 @@
-import { Client, Measurement, UserInfo } from '../types';
-
-// Logo padrão da empresa "Películas Brasil"
-const mockLogo = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
-
+import { UserInfo, Client } from '../types';
+// File contents excluded from context
+export const mockLogo = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1MTIiIGhlaWdodD0iNTEyIiB2aWV3Qm94PSIwIDAgNTEyIDUxMiI+CiAgPHJlY3Qgd2lkdGg9IjUxMiIgaGVpZ2h0PSI1MTIiIGZpbGw9IiMzNjQ1NjIiLz4KICA8dGV4dCB4PScyNTYiIHk9IjI4NiIgbGFiZWwtcmVzZXJ2ZT0idHJ1ZSIgZm9udC1mYW1pbHk9Ik1vbnRzZXJyYXQiIGZvbnQtc2l6ZT0iMTUwIiBmb250LXdlaWdodD0iYm9sZCIgZmlsbD0id2hpdGUiIHRleHQtYWxpZ249ImNlbnRlciIgdGV4dC1iYXNlbGluZT0ibWVkaWFuIiBzdHJva2U9IiM5MzdlNDQiIHN0cm9rZS13aWR0aD0iNSI+UEI8L3RleHQ+CiAgPHRleHQgeD0iMjU2IiB5PSIzODUiIGxhYmVsLXJlc2VydGU9InRydWUiIGZvbnQtZmFtaWx5PSJSb2JvdG8iIGZvbnQtc2l6ZT0iMzUiIGZpbGw9IiNmZmYiIHRleHQtYWxpZ249ImNlbnRlciIgdGV4dC1iYXNlbGluZT0ibWVkaWFuIj5QZWxpY3VsYXM8L3RleHQ+CiAgPHRleHQgeD0iMjU2IiB5PSI0MjUiIGxhYmVsLXJlc2VydGU9InRydWUiIGZvbnQtZmFtaWx5PSJSb2JvdG8iIGZvbnQtc2l6ZT0iMzUiIGZpbGw9IiNmZmYiIHRleHQtYWxpZ249ImNlbnRlciIgdGV4dC1iYXNlbGluZT0ibWVkaWFuIj5CcmlzaWwgPC90ZXh0Pgo8L3N2Zz4=';
 export const mockUserInfo: UserInfo = {
     id: 'info',
     nome: 'Alex Renato Lacerda Perin',
@@ -35,8 +33,8 @@ export const mockUserInfo: UserInfo = {
         provider: 'gemini',
         apiKey: '', // User needs to fill this in
     },
+    lastSelectedClientId: null,
+    activeTab: 'client', // Definindo aba padrão
 };
 
 export const mockClients: Omit<Client, 'id'>[] = [];
-
-export const mockMeasurements: { [key: number]: Measurement[] } = {};

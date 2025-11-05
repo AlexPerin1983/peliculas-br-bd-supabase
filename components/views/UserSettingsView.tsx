@@ -3,7 +3,6 @@ import { UserInfo } from '../../types';
 import Input from '../ui/Input';
 import ColorPicker from '../ui/ColorPicker';
 import SignatureModal from '../modals/SignatureModal';
-import PwaQrCode from '../PwaQrCode'; // Importado
 
 interface UserSettingsViewProps {
     userInfo: UserInfo;
@@ -328,7 +327,7 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({ userInfo, onSave, o
                             <div className="mt-4 flex gap-4">
                                 <button
                                     type="button"
-                                    onClick={() => { /* Implementar abertura do modal de assinatura */ }}
+                                    onClick={() => setIsSignatureModalOpen(true)}
                                     className="px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-200 hover:bg-slate-300 rounded-lg transition-colors"
                                 >
                                     Alterar Assinatura
@@ -347,7 +346,7 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({ userInfo, onSave, o
                             <p className="text-slate-500 mb-4">Nenhuma assinatura salva.</p>
                              <button
                                 type="button"
-                                onClick={() => { /* Implementar abertura do modal de assinatura */ }}
+                                onClick={() => setIsSignatureModalOpen(true)}
                                 className="px-5 py-2.5 bg-slate-800 text-white font-semibold rounded-lg hover:bg-slate-700 transition duration-300 shadow-sm flex items-center justify-center gap-2"
                             >
                                 <i className="fas fa-signature"></i>
@@ -448,7 +447,7 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({ userInfo, onSave, o
                 <div className="mt-4">
                     <button
                         type="button"
-                        onClick={() => onOpenPaymentMethods()} // Reutilizando onOpenPaymentMethods como placeholder para onOpenApiKeyModal
+                        onClick={() => onOpenApiKeyModal(formData.aiConfig?.provider || 'gemini')}
                         className="w-full px-4 py-3 bg-slate-100 text-slate-700 font-semibold rounded-lg hover:bg-slate-200 transition-colors flex items-center justify-center gap-2"
                     >
                         <i className="fas fa-key"></i>
@@ -458,83 +457,27 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({ userInfo, onSave, o
             </div>
             
             <div className={sectionClass}>
-                <div className="flex justify-between items-center">
-                    <h3 className={sectionTitleClass}>Aplicativo (PWA)</h3>
-                    <button
-                        type="button"
-                        onClick={() => { /* Implementar toggle de diagnóstico */ }}
-                        className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1"
-                    >
-                        <i className="fas fa-info-circle"></i>
-                        {/* {showDiagnostics ? 'Ocultar' : 'Diagnóstico'} */}
-                        Diagnóstico
-                    </button>
-                </div>
+                <h3 className={sectionTitleClass}>Informações Legais</h3>
                 <p className="text-sm text-slate-500 mt-2">
-                    Instale o aplicativo no seu dispositivo para acesso rápido e uso offline.
+                    Acesse a política de privacidade do aplicativo.
                 </p>
                 
-                <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {/* PwaQrCode Component Placeholder */}
-                    <div className="text-center p-4 bg-white rounded-lg border border-slate-200">QR Code Placeholder</div>
-                    <div className="space-y-4">
-                        {/* Iframe warning placeholder */}
-                        <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                            <div className="flex items-start gap-2">
-                                <i className="fas fa-exclamation-triangle text-yellow-600 mt-0.5"></i>
-                                <div className="flex-1">
-                                    <p className="text-sm text-yellow-800 font-medium">App rodando em iframe</p>
-                                    <p className="text-xs text-yellow-700 mt-1">
-                                        PWAs não podem ser instalados de dentro de iframes. Abra em uma nova janela para instalar.
-                                    </p>
-                                    <button
-                                        type="button"
-                                        onClick={() => handleOpenInNewWindow()}
-                                        className="mt-2 px-3 py-1.5 bg-yellow-600 text-white text-xs font-semibold rounded-md hover:bg-yellow-700 transition-colors flex items-center gap-1"
-                                    >
-                                        <i className="fas fa-external-link-alt"></i>
-                                        Abrir em Nova Janela
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        {/* PWA Install Button Placeholder */}
-                        <button
-                            type="button"
-                            onClick={() => { /* Implementar onPromptPwaInstall */ }}
-                            className="w-full px-4 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 shadow-md"
-                        >
-                            <i className="fas fa-download"></i>
-                            Instalar Aplicativo
-                        </button>
-                        
-                        {/* Privacy Policy Link Placeholder */}
-                        <a
-                            href="/privacy-policy"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="w-full px-4 py-3 bg-slate-100 text-slate-700 font-semibold rounded-lg hover:bg-slate-200 transition-colors flex items-center justify-center gap-2 text-sm"
-                        >
-                            <i className="fas fa-shield-alt"></i>
-                            Ver Política de Privacidade
-                        </a>
-                    </div>
-                </div>
-                
-                {/* PwaDiagnostics Placeholder */}
-                <div className="mt-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
-                    <h4 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
-                        <i className="fas fa-stethoscope"></i>
-                        Diagnóstico PWA
-                    </h4>
-                    <div className="text-xs text-slate-500">Diagnóstico oculto.</div>
+                <div className="mt-4 space-y-3">
+                    <a
+                        href="/privacy-policy"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full px-4 py-3 bg-slate-100 text-slate-700 font-semibold rounded-lg hover:bg-slate-200 transition-colors flex items-center justify-center gap-2 text-sm"
+                    >
+                        <i className="fas fa-shield-alt"></i>
+                        Ver Política de Privacidade
+                    </a>
                 </div>
             </div>
 
             <div className={`${sectionClass} flex justify-end items-center`}>
                 <div className="flex items-center gap-4">
-                    <div className="text-green-600 font-medium text-sm flex items-center gap-2 transition-opacity duration-300">
+                    <div className={`text-green-600 font-medium text-sm flex items-center gap-2 transition-opacity duration-300 ${showSuccess ? 'opacity-100' : 'opacity-0'}`}>
                         <i className="fas fa-check-circle"></i>
                         <span>Salvo!</span>
                     </div>
@@ -551,7 +494,13 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({ userInfo, onSave, o
                     </button>
                 </div>
             </div>
-            {/* SignatureModal Placeholder */}
+            {isSignatureModalOpen && (
+                <SignatureModal
+                    isOpen={isSignatureModalOpen}
+                    onClose={() => setIsSignatureModalOpen(false)}
+                    onSave={handleSaveSignature}
+                />
+            )}
         </form>
     );
 };
