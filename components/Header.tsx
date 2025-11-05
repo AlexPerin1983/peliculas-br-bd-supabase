@@ -16,9 +16,9 @@ const Header: React.FC<HeaderProps> = ({ activeTab, onTabChange }) => {
     ];
 
     return (
-        <div className="flex justify-between items-center">
-            <h1 className="text-xl font-bold text-slate-800 hidden sm:block">Películas BR</h1>
-            <div className="flex sm:justify-center overflow-x-auto space-x-2 sm:space-x-4 w-full sm:w-auto">
+        <div className="flex justify-center items-center">
+            {/* O título 'Películas BR' foi removido daqui para evitar quebras de layout no mobile/desktop */}
+            <div className="flex justify-center overflow-x-auto space-x-2 sm:space-x-4 w-full sm:w-auto">
                 {tabs.map(tab => (
                     <button
                         key={tab.id}
