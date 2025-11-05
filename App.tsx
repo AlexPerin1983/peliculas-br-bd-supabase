@@ -273,9 +273,9 @@ const App: React.FC = () => {
             await db.saveProposalOptions(selectedClientId, proposalOptions);
             setIsDirty(false);
             
-            await loadClients(selectedClientId);
+            // Removido o reload de clientes aqui para evitar loop
         }
-    }, [selectedClientId, proposalOptions, loadClients]);
+    }, [selectedClientId, proposalOptions]);
 
     useEffect(() => {
         if (isDirty) {
@@ -382,7 +382,32 @@ const App: React.FC = () => {
 
     const handleSaveClient = useCallback(async (clientData: Omit<Client, 'id'> | Client) => {
         const newClient = await db.saveClient(clientData as Client);
-        await loadClients(); // Recarrega lista e seleciona o novo/editado
+        
+        // Atualiza a lista de clientes sem recarregar tudo
+        setClients(prevClients => {
+            // Se estiver editando, atualiza o cliente existente
+            if ('id' in clientData && clientData.id) {
+                return prevClients.map(client => 
+                    client.id === clientData.id ? { ...newClient, lastUpdated: new Date().toISOString() } : client
+                ).sort((a, b) => {
+                    const dateA = a.lastUpdated ? new Date(a.lastUpdated).getTime() : 0;
+                    const dateB = b.lastUpdated ? new Date(b.lastUpdated).getTime() : 0;
+                    return dateB - dateA;
+                });
+            } else {
+                // Se estiver adicionando, coloca o novo cliente no início
+                return [newClient, ...prevClients].sort((a, b) => {
+                    const dateA = a.lastUpdated ? new Date(a.lastUpdated).getTime() : 0;
+                    const dateB = b.lastUpdated ? new Date(b.lastUpdated).getTime() : 0;
+                    return dateB - dateA;
+                });
+            }
+        });
+        
+        // Define o cliente selecionado apenas se for um novo cliente
+        if (!('id' in clientData) || !clientData.id) {
+            setSelectedClientId(newClient.id!);
+        }
         
         if (postClientSaveAction) {
             if (postClientSaveAction.type === 'select') {
@@ -405,7 +430,7 @@ const App: React.FC = () => {
         
         setIsClientModalOpen(false);
         setPostClientSaveAction(null);
-    }, [clientModalMode, selectedClientId, postClientSaveAction, handleOpenAgendamentoModal, schedulingInfo, loadClients]);
+    }, [clientModalMode, selectedClientId, postClientSaveAction, handleOpenAgendamentoModal, schedulingInfo]);
 
     const handleDeleteClient = useCallback(() => {
         if (selectedClientId) {
@@ -429,13 +454,23 @@ const App: React.FC = () => {
         // Remove agendamentos relacionados
         await db.deleteAgendamentosForClient(selectedClientId);
 
-        await loadClients(); // Recarrega clientes
-        await loadAllPdfs(); // Recarrega PDFs
-        await loadAgendamentos(); // Recarrega agendamentos
+        // Atualiza a lista de clientes sem recarregar tudo
+        setClients(prevClients => prevClients.filter(c => c.id !== selectedClientId));
+        
+        // Seleciona o próximo cliente ou null se não houver mais
+        setClients(prevClients => {
+            const remainingClients = prevClients.filter(c => c.id !== selectedClientId);
+            if (remainingClients.length > 0) {
+                setSelectedClientId(remainingClients[0].id!);
+            } else {
+                setSelectedClientId(null);
+            }
+            return remainingClients;
+        });
         
         setIsDeleteClientModalOpen(false);
-    }, [selectedClientId, loadClients, loadAllPdfs, loadAgendamentos]);
-    
+    }, [selectedClientId]);
+
     const handleSaveUserInfo = useCallback(async (info: UserInfo) => {
         await db.saveUserInfo(info);
         setUserInfo(info);

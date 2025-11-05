@@ -113,6 +113,7 @@ const ClientBar: React.FC<ClientBarProps> = ({
                         : `text-slate-600 bg-white hover:bg-slate-200 hover:text-slate-800 ${className}`
                 }`}
                 aria-label={tooltip}
+                type="button"
             >
                 <i className={`${icon} text-sm`}></i>
             </button>
@@ -141,6 +142,7 @@ const ClientBar: React.FC<ClientBarProps> = ({
                     ? 'text-red-600 hover:bg-red-50'
                     : 'text-slate-700 hover:bg-slate-100'
             }`}
+            type="button"
         >
             <i className={`${icon} w-4 text-center`}></i>
             <span className="font-medium">{label}</span>
@@ -218,6 +220,7 @@ const ClientBar: React.FC<ClientBarProps> = ({
                                     }}
                                     className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 transition-colors"
                                     aria-label="Menu de opções"
+                                    type="button"
                                 >
                                     <i className="fas fa-ellipsis-v"></i>
                                 </button>
@@ -274,6 +277,7 @@ const ClientBar: React.FC<ClientBarProps> = ({
                                 }}
                                 className="w-9 h-9 flex items-center justify-center rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
                                 aria-label="Adicionar cliente"
+                                type="button"
                             >
                                 <i className="fas fa-plus text-sm"></i>
                             </button>

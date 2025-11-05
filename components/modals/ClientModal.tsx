@@ -234,11 +234,8 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSave, mode
         onSave(formData);
     };
     
-    const modalTitle = (
-        <h2 className="text-xl font-semibold text-slate-800">
-            {mode === 'add' ? (aiData ? 'Confirmar Dados da IA' : 'Adicionar Novo Cliente') : 'Editar Cliente'}
-        </h2>
-    );
+    // Corrigindo o título para não ser um elemento React aninhado
+    const modalTitle = mode === 'add' ? (aiData ? 'Confirmar Dados da IA' : 'Adicionar Novo Cliente') : 'Editar Cliente';
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} title={modalTitle}>
@@ -254,7 +251,6 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSave, mode
                         value={formData.cpfCnpj} 
                         onChange={handleChange} 
                         maxLength={18} 
-                        // REMOVIDO: required
                         placeholder="000.000.000-00 ou 00.000.000/0000-00" 
                     />
                     
