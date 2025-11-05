@@ -231,7 +231,7 @@ const App: React.FC = () => {
             setIsLoading(false);
         };
         init();
-    }, [loadClients, loadFilms]); // Dependências mantidas, mas a lógica interna de loadClients foi ajustada para ser mais robusta
+    }, [loadClients, loadFilms]);
 
     useEffect(() => {
         if (selectedClientId !== null && userInfo) {
@@ -1698,7 +1698,7 @@ const App: React.FC = () => {
 
                         {activeTab === 'client' && selectedClientId && (
                             <>
-                                <div className="hidden sm:block mt-0 pt-0 border-t border-slate-200"> {/* REMOVIDO MARGIN SUPERIOR PARA ELIMINAR ESPAÇO EM BRANCO */}
+                                <div className="hidden sm:block mt-0 pt-0 border-t border-slate-200">
                                    <SummaryBar 
                                         totals={totals}
                                         generalDiscount={generalDiscount}
