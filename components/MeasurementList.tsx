@@ -2,34 +2,33 @@ import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { Measurement, Film } from '../types';
 import MeasurementGroup from './MeasurementGroup';
 import ConfirmationModal from './modals/ConfirmationModal';
-// Corrigindo importação: NumpadConfig é exportado de useNumpad, mas vamos redefinir o tipo aqui para evitar erro de importação se não estiver exportado em CustomNumpad
-interface NumpadConfig {
+
+type UIMeasurement = Measurement & { isNew?: boolean };
+
+type NumpadConfig = {
     isOpen: boolean;
     measurementId: number | null;
     field: 'largura' | 'altura' | 'quantidade' | null;
     currentValue: string;
-    shouldClearOnNextInput: boolean;
-}
+};
 
 interface MeasurementListProps {
-    measurements: (Measurement & { isNew?: boolean })[];
+    measurements: UIMeasurement[];
     films: Film[];
-    onMeasurementsChange: (measurements: (Measurement & { isNew?: boolean })[]) => void;
+    onMeasurementsChange: (measurements: UIMeasurement[]) => void;
     onOpenFilmModal: (film: Film | null) => void;
-    onOpenFilmSelectionModal: (measurementId: number | null) => void;
+    onOpenFilmSelectionModal: (measurementId: number) => void;
     onOpenClearAllModal: () => void;
     onOpenApplyFilmToAllModal: () => void;
     numpadConfig: NumpadConfig;
     onOpenNumpad: (measurementId: number, field: 'largura' | 'altura' | 'quantidade', currentValue: string | number) => void;
     activeMeasurementId: number | null;
-    onOpenEditModal: (measurement: Measurement & { isNew?: boolean }) => void;
-    onOpenDiscountModal: (measurement: Measurement) => void;
+    onOpenEditModal: (measurement: UIMeasurement) => void;
+    onOpenDiscountModal: (measurement: UIMeasurement) => void;
     onDeleteMeasurement: (measurementId: number) => void; // Prop que aciona o modal no App.tsx
     swipeDirection?: 'left' | 'right' | null;
     swipeDistance?: number;
     totalM2: number; // NOVA PROP
-    measurementToFocusId: number | null; // NOVO PROP
-    onSetMeasurementToFocusId: (id: number | null) => void; // NOVO PROP
 }
 
 const MeasurementList: React.FC<MeasurementListProps> = ({ 
@@ -48,9 +47,7 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
     onDeleteMeasurement, // Usando a prop
     swipeDirection = null,
     swipeDistance = 0,
-    totalM2, // Usando a nova prop
-    measurementToFocusId, // Usando o novo prop
-    onSetMeasurementToFocusId // Usando o novo prop
+    totalM2 // Usando a nova prop
 }) => {
     const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
     const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
@@ -66,27 +63,19 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
     const listContainerRef = useRef<HTMLDivElement>(null);
     const actionsMenuRef = useRef<HTMLDivElement>(null);
 
-    // Efeito para focar no campo de Largura da medida recém-adicionada
     useEffect(() => {
-        if (measurementToFocusId !== null) {
-            // Procuramos pelo elemento que representa o campo de Largura (data-field='largura')
-            const element = listContainerRef.current?.querySelector(`[data-measurement-id='${measurementToFocusId}'] [data-field='largura']`);
-            
-            if (element) {
-                // Tentamos focar no input ou no botão que representa o campo
-                const focusableElement = element.querySelector('input, [role="button"]');
-                if (focusableElement instanceof HTMLElement) {
-                    focusableElement.focus();
-                }
+        const handleClickOutside = (event: MouseEvent) => {
+            if (actionsMenuRef.current && !actionsMenuRef.current.contains(event.target as Node)) {
+                setIsActionsMenuOpen(false);
             }
-            
-            // Limpa o ID de foco após um pequeno delay para garantir que o DOM foi atualizado
-            const timer = setTimeout(() => {
-                onSetMeasurementToFocusId(null);
-            }, 100);
-            return () => clearTimeout(timer);
+        };
+        if (isActionsMenuOpen) {
+            document.addEventListener('mousedown', handleClickOutside);
         }
-    }, [measurementToFocusId, onSetMeasurementToFocusId]);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [isActionsMenuOpen]);
 
     const scrollLoop = useCallback(() => {
         const mainContainer = document.querySelector('main');
@@ -98,20 +87,6 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
             animationFrameRef.current = null;
         }
     }, []);
-
-    useEffect(() => {
-        const mainContainer = document.querySelector('main');
-        if (!mainContainer) return;
-        
-        const handleScroll = () => {
-            if (scrollVelocityRef.current !== 0 && !animationFrameRef.current) {
-                animationFrameRef.current = requestAnimationFrame(scrollLoop);
-            }
-        };
-
-        mainContainer.addEventListener('scroll', handleScroll);
-        return () => mainContainer.removeEventListener('scroll', handleScroll);
-    }, [scrollLoop]);
 
     const handleDragOver = useCallback((e: React.DragEvent) => {
         e.preventDefault();
@@ -139,25 +114,6 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
             animationFrameRef.current = requestAnimationFrame(scrollLoop);
         }
     }, [draggedIndex, scrollLoop]);
-
-    const handleDragEnd = () => {
-        if (isSelectionMode) return;
-        
-        scrollVelocityRef.current = 0;
-        if (animationFrameRef.current) {
-            cancelAnimationFrame(animationFrameRef.current);
-            animationFrameRef.current = null;
-        }
-
-        if (draggedIndex !== null && dragOverIdx !== null && draggedIndex !== dragOverIdx) {
-            const newMeasurements = [...measurements];
-            const [draggedItem] = newMeasurements.splice(draggedIndex, 1);
-            newMeasurements.splice(dragOverIdx, 0, draggedItem);
-            onMeasurementsChange(newMeasurements);
-        }
-        setDraggedIndex(null);
-        setDragOverIdx(null);
-    };
 
     const handleEnterSelectionMode = () => {
         setIsSelectionMode(true);
@@ -222,15 +178,34 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
     };
 
     const handleDragStart = (index: number) => {
-        if (isSelectionMode || isSwipedItemActive(index)) return;
+        if (isSelectionMode) return;
         setDraggedIndex(index);
     };
-    
-    const isSwipedItemActive = (index: number) => swipedItemId === measurements[index].id;
 
     const handleDragEnter = (index: number) => {
-        if (isSelectionMode || draggedIndex === null || isSwipedItemActive(index)) return;
-        setDragOverIdx(index);
+        if (isSelectionMode) return;
+        if (draggedIndex !== null && draggedIndex !== index) {
+            setDragOverIdx(index);
+        }
+    };
+
+    const handleDragEnd = () => {
+        if (isSelectionMode) return;
+        
+        scrollVelocityRef.current = 0;
+        if (animationFrameRef.current) {
+            cancelAnimationFrame(animationFrameRef.current);
+            animationFrameRef.current = null;
+        }
+
+        if (draggedIndex !== null && dragOverIdx !== null && draggedIndex !== dragOverIdx) {
+            const newMeasurements = [...measurements];
+            const [draggedItem] = newMeasurements.splice(draggedIndex, 1);
+            newMeasurements.splice(dragOverIdx, 0, draggedItem);
+            onMeasurementsChange(newMeasurements);
+        }
+        setDraggedIndex(null);
+        setDragOverIdx(null);
     };
 
     const updateMeasurement = (id: number, updatedMeasurement: Partial<Measurement>) => {
@@ -240,7 +215,7 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
     
     // Função que o MeasurementGroup chama para iniciar a exclusão
     const requestDeleteMeasurement = (id: number) => {
-        onDeleteMeasurement(id); // Chama a função que irá abrir o modal de confirmação no App.tsx
+        onDeleteMeasurement(id); // Chama a função do App.tsx que abre o modal
     };
     
     const duplicateMeasurement = (id: number) => {
@@ -248,16 +223,16 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
         if (measurementToDuplicate) {
             const newMeasurement: UIMeasurement = { 
                 ...measurementToDuplicate, 
-                id: Date.now() + Math.random(), // ID único
+                id: Date.now(), 
                 isNew: true 
             };
             
-            const index = measurements.findIndex(m => m.id === id);
-            const newMeasurements = [...measurements.map(m => ({...m, isNew: false}))];
-            newMeasurements.splice(index + 1, 0, newMeasurement);
+            const updatedMeasurements = [
+                newMeasurement,
+                ...measurements.map(m => ({ ...m, isNew: false }))
+            ];
             
-            onMeasurementsChange(newMeasurements);
-            onSetMeasurementToFocusId(newMeasurement.id);
+            onMeasurementsChange(updatedMeasurements);
         }
     };
 
@@ -324,7 +299,7 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
                             </button>
                             <button 
                                 onClick={handleDeleteSelected} 
-                                className="text-sm text-white bg-red-600 hover:bg-red-700 rounded-md px-3 py-1.5 transition-colors duration-200 flex items-center gap-2"
+                                className="text-sm text-white bg-red-600 hover:bg-red-700 rounded-md px-3 py-1.5 transition-colors duration-200 flex items-center gap-2 disabled:bg-red-400 disabled:cursor-not-allowed"
                                 disabled={selectedIds.size === 0}
                             >
                                 <i className="fas fa-trash-alt"></i>
@@ -353,7 +328,7 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
                             </button>
 
                             {isActionsMenuOpen && (
-                                <div className="absolute right-0 mt-2 w-56 origin-top-right bg-white rounded-lg shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-20 p-1">
+                                <div className="absolute right-0 mt-2 w-56 origin-top-right bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-20 p-1">
                                     <ul className="space-y-1">
                                         <ActionMenuItem
                                             onClick={handleEnterSelectionMode}
@@ -397,8 +372,8 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
                             onOpenEditModal={onOpenEditModal}
                             index={index}
                             isDragging={draggedIndex === index}
-                            onDragStart={handleDragStart}
-                            onDragEnter={handleDragEnter}
+                            onDragStart={() => handleDragStart(index)}
+                            onDragEnter={() => handleDragEnter(index)}
                             onDragEnd={handleDragEnd}
                             isSelectionMode={isSelectionMode}
                             isSelected={selectedIds.has(measurement.id)}

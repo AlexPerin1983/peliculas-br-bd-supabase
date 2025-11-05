@@ -1,6 +1,6 @@
 import React from 'react';
 
-export type ActiveTab = 'client' | 'films' | 'settings' | 'history' | 'agenda';
+type ActiveTab = 'client' | 'films' | 'settings' | 'history' | 'agenda';
 
 interface HeaderProps {
     activeTab: ActiveTab;
