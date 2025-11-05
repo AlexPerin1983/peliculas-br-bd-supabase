@@ -22,14 +22,16 @@ const Header: React.FC<HeaderProps> = ({ activeTab, onTabChange }) => {
                     <button
                         key={tab.id}
                         onClick={() => onTabChange(tab.id)}
-                        className={`flex flex-col items-center justify-center py-3 rounded-2xl transition-all duration-300 ease-in-out flex-1 mx-0.5 first:ml-0 last:mr-0 ${
+                        // py-2.5 para reduzir a altura em ~10% e text-lg para reduzir o ícone em ~20%
+                        className={`flex flex-col items-center justify-center py-2.5 rounded-2xl transition-all duration-300 ease-in-out flex-1 mx-0.5 first:ml-0 last:mr-0 ${
                             activeTab === tab.id
                                 ? 'bg-slate-800 text-white shadow-sm'
                                 : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
                         }`}
                         aria-label={tab.label}
                     >
-                        <i className={`${tab.icon} text-xl`}></i>
+                        {/* text-lg para ícone ~20% menor */}
+                        <i className={`${tab.icon} text-lg`}></i>
                         <span className="hidden sm:inline text-xs font-medium mt-1">{tab.label}</span>
                     </button>
                 ))}
