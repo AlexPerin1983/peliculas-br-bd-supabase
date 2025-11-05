@@ -3,7 +3,6 @@ import { UserInfo } from '../../types';
 import Input from '../ui/Input';
 import ColorPicker from '../ui/ColorPicker';
 import SignatureModal from '../modals/SignatureModal';
-// import PwaQrCode from '../PwaQrCode'; // Removido
 
 interface UserSettingsViewProps {
     userInfo: UserInfo;
