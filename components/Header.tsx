@@ -16,26 +16,21 @@ const Header: React.FC<HeaderProps> = ({ activeTab, onTabChange }) => {
     ];
 
     return (
-        <div className="flex justify-center items-center">
-            <div className="flex justify-between overflow-x-auto space-x-1 sm:space-x-4 w-full sm:w-auto">
+        <div className="flex justify-center items-center bg-white/70 backdrop-blur-sm">
+            <div className="flex justify-between overflow-x-auto w-full">
                 {tabs.map(tab => (
                     <button
                         key={tab.id}
                         onClick={() => onTabChange(tab.id)}
-                        // Mobile: py-3 para altura compacta, flex-1 para largura total.
-                        // Desktop (sm:): py-2 e texto visível.
-                        className={`flex flex-col items-center justify-center py-3 sm:py-2 rounded-xl transition-colors duration-200 flex-shrink-0 flex-1 sm:flex-shrink-0 sm:px-4 ${
+                        className={`flex flex-col items-center justify-center py-3 rounded-2xl transition-all duration-300 ease-in-out flex-1 mx-0.5 first:ml-0 last:mr-0 ${
                             activeTab === tab.id
-                                ? 'bg-slate-800 text-white shadow-md'
-                                : 'text-slate-600 hover:bg-slate-100'
+                                ? 'bg-slate-800 text-white shadow-sm'
+                                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
                         }`}
                         aria-label={tab.label}
                     >
-                        {/* Ícone maior em mobile, menor em desktop */}
-                        <i className={`${tab.icon} text-xl sm:text-xl`}></i>
-                        
-                        {/* Texto visível apenas em desktop */}
-                        <span className="hidden sm:inline text-sm font-semibold mt-0.5">{tab.label}</span>
+                        <i className={`${tab.icon} text-xl`}></i>
+                        <span className="hidden sm:inline text-xs font-medium mt-1">{tab.label}</span>
                     </button>
                 ))}
             </div>
