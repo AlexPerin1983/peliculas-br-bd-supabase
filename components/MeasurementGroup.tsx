@@ -183,16 +183,6 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
             onSetSwipedItem(null);
         }
     };
-
-    // REMOVIDO: useEffect que abria o numpad automaticamente ao carregar uma nova medida.
-    /*
-    useEffect(() => {
-        if (measurement.isNew) {
-            onOpenNumpad(measurement.id, 'largura', measurement.largura);
-        }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [measurement.isNew]);
-    */
     
     const handleInputChange = (field: keyof Measurement, value: any) => {
         onUpdate({ [field]: value });
@@ -250,7 +240,7 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
         if (discountValue > 0) {
             if (measurement.discountType === 'percentage') {
                 final = price * (1 - discountValue / 100);
-            } else { // fixed
+            } else {
                 final = price - discountValue;
             }
         }
@@ -259,14 +249,11 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
     
     const hasDiscount = (measurement.discount || 0) > 0;
 
-    // Mantendo o padding principal e espaçamento interno compactos
-    // Removendo p-2 e substituindo por py-2 e px-3 para manter o espaçamento interno mínimo
     const baseClasses = `border rounded-lg py-2 px-3 space-y-1.5 bg-white transition-shadow, transform`;
     const selectionClasses = isSelectionMode
         ? `cursor-pointer ${isSelected ? 'border-blue-500 bg-blue-50/70 ring-1 ring-blue-500' : 'border-slate-200 hover:bg-slate-50/80'}`
         : 'border-slate-200';
     
-    // Inputs numéricos: text-sm e py-2
     const inputBaseClasses = "w-full text-center py-2 px-1.5 rounded-lg border text-sm transition-colors duration-200";
     
     const isDraggable = !isSelectionMode && translateX === 0 && !isModalMode;
@@ -292,7 +279,6 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
         };
         
         const renderContent = () => {
-            // Usando text-sm para o conteúdo
             const displayValWithComma = (isEditing ? displayValue.replace('.', ',') : displayValue);
 
             if (isEditing) {
@@ -306,7 +292,6 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
                 return (
                     <>
                         {displayValWithComma}
-                        {/* Aumentando a altura do cursor para text-sm */}
                         <span className="inline-block w-px h-4 bg-blue-500 align-text-bottom ml-0.5 animate-blink" />
                     </>
                 );
@@ -372,7 +357,7 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
                         onDragEnter={onDragEnter}
                         onDragEnd={onDragEnd}
                         onDragOver={(e) => e.preventDefault()}
-                        className={`relative z-10 ${baseClasses} ${selectionClasses} ${isDragging ? 'shadow-2xl scale-[1.02]' : ''} ${isActive ? 'ring-2 ring-blue-500' : ''}`}
+                        className={`relative z-10 ${baseClasses} ${selectionClasses} ${isDragging ? 'shadow-2xl scale-[1.02] opacity-50' : ''} ${isActive ? 'ring-2 ring-blue-500' : ''} measurement-group`}
                     >
                         {/* Top Row: Film selector and Price */}
                         <div className="flex items-start justify-between">
