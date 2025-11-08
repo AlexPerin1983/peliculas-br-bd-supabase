@@ -235,9 +235,24 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSave, mode
     };
     
     const modalTitle = (
-        <h2 className="text-xl font-semibold text-slate-800">
-            {mode === 'add' ? (aiData ? 'Confirmar Dados da IA' : 'Adicionar Novo Cliente') : 'Editar Cliente'}
-        </h2>
+        <div className="flex justify-between items-center w-full">
+            <h2 className="text-xl font-semibold text-slate-800">
+                {mode === 'add' ? (aiData ? 'Confirmar Dados da IA' : 'Adicionar Novo Cliente') : 'Editar Cliente'}
+            </h2>
+            {mode === 'add' && !aiData && (
+                <Tooltip text="Preencher com IA">
+                    <button
+                        type="button"
+                        onClick={(e) => { e.preventDefault(); onOpenAIModal(); }}
+                        className="px-3 py-1.5 bg-slate-100 text-slate-700 font-semibold rounded-lg hover:bg-slate-200 transition-colors flex items-center gap-2 text-sm"
+                        aria-label="Preencher formulário com Inteligência Artificial"
+                    >
+                        <i className="fas fa-robot"></i>
+                        <span className="hidden sm:inline">com IA</span>
+                    </button>
+                </Tooltip>
+            )}
+        </div>
     );
 
     return (
