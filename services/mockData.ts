@@ -16,7 +16,7 @@ export const mockUserInfo: UserInfo = {
     assinatura: '',
     cores: { primaria: '#364562', secundaria: '#937e44' },
     payment_methods: [
-        { tipo: 'pix', ativo: true, chave_pix: '32635503818', tipo_chave_pix: 'cpf', nome_responsavel_pix: 'Alex Renato Lacerda Perin' },
+        { tipo: 'pix', ativo: true, chave_pix: 'chavepixtest@gmail.com', tipo_chave_pix: 'email', nome_responsavel_pix: 'Alex Renato Lacerda Perin' },
         { tipo: 'boleto', ativo: true },
         { tipo: 'parcelado_sem_juros', ativo: true, parcelas_max: 1 },
         { tipo: 'adiantamento', ativo: false, porcentagem: 30 },
