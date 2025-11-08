@@ -803,6 +803,9 @@ const App: React.FC = () => {
                 **Regra Crítica para Telefone:** O telefone deve ser extraído APENAS com o DDD e o número (máximo 11 dígitos). Remova qualquer código de país (ex: +55) se presente. Ex: Se for "+55 83 99999-8888", extraia "83999998888".
                 
                 Formate os campos de telefone, CPF/CNPJ e CEP APENAS com dígitos, sem pontuação ou espaços.
+                
+                **Regra para UF:** O campo UF deve conter APENAS a sigla do estado (2 letras).
+                
                 Responda APENAS com um objeto JSON válido que corresponda ao schema fornecido. Não inclua nenhuma outra explicação ou texto.
             `;
     
