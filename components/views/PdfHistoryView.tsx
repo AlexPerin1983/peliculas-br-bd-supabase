@@ -1,15 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { SavedPDF, Client, Agendamento } from '../../types';
 
-type SchedulingInfo = {
-    pdf: SavedPDF;
-    agendamento?: Agendamento;
-} | {
-    agendamento: Agendamento;
-    pdf?: SavedPDF;
-};
-
-
 interface PdfHistoryViewProps {
     pdfs: SavedPDF[];
     clients: Client[];
@@ -17,7 +8,7 @@ interface PdfHistoryViewProps {
     onDelete: (pdfId: number) => void;
     onDownload: (blob: Blob, filename: string) => void;
     onUpdateStatus: (pdfId: number, status: SavedPDF['status']) => void;
-    onSchedule: (info: SchedulingInfo) => void;
+    onSchedule: (info: { pdf: SavedPDF; agendamento?: Agendamento } | { agendamento: Agendamento; pdf?: SavedPDF }) => void;
 }
 
 const formatNumberBR = (number: number) => {
@@ -34,7 +25,7 @@ const PdfHistoryItem: React.FC<{
     onDownload: (blob: Blob, filename: string) => void;
     onDelete: (id: number) => void;
     onUpdateStatus: (id: number, status: SavedPDF['status']) => void;
-    onSchedule: (info: SchedulingInfo) => void;
+    onSchedule: (info: { pdf: SavedPDF; agendamento?: Agendamento } | { agendamento: Agendamento; pdf?: SavedPDF }) => void;
     swipedItemId: number | null;
     onSetSwipedItem: (id: number | null) => void;
 }> = React.memo(({ pdf, clientName, agendamento, onDownload, onDelete, onUpdateStatus, onSchedule, swipedItemId, onSetSwipedItem }) => {
@@ -190,14 +181,15 @@ const PdfHistoryItem: React.FC<{
                 <div className="relative z-10 w-full p-4 bg-white rounded-lg border border-slate-200/80 shadow-md">
                     <div className="flex items-start justify-between gap-4">
                         <div className="flex-grow min-w-0">
-                            <p className="font-bold text-slate-900 text-xl truncate">
-                                {clientName}
-                            </p>
+                            {/* Removed clientName here, as it's now displayed in the group header */}
                             {pdf.proposalOptionName && (
-                                <p className="text-sm text-slate-500 mt-0.5">
+                                <p className="font-bold text-slate-900 text-lg truncate">
                                     {pdf.proposalOptionName}
                                 </p>
                             )}
+                            <p className="text-sm text-slate-500 mt-0.5">
+                                {new Date(pdf.date).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            </p>
                         </div>
                         <div className="flex items-center space-x-1 text-slate-500 flex-shrink-0">
                             <button
@@ -218,17 +210,14 @@ const PdfHistoryItem: React.FC<{
                     </div>
                     <div className="flex items-center gap-3 mt-2 flex-wrap">
                         <StatusBadge status={pdf.status} />
-                        <p className="text-sm text-slate-500">
-                            {new Date(pdf.date).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                        </p>
+                        {expirationDate && (
+                            <div className={`flex items-center text-sm ${isExpired ? 'text-red-600 font-semibold' : 'text-slate-600'}`}>
+                                <i className="far fa-calendar-alt mr-2 text-slate-400"></i>
+                                <span>Vence em: {expirationDate.toLocaleDateString('pt-BR')}</span>
+                            </div>
+                        )}
                     </div>
 
-                    {expirationDate && (
-                        <div className={`mt-2.5 flex items-center text-sm ${isExpired ? 'text-red-600 font-semibold' : 'text-slate-600'}`}>
-                            <i className="far fa-calendar-alt mr-2 text-slate-400"></i>
-                            <span>Vence em: {expirationDate.toLocaleDateString('pt-BR')}</span>
-                        </div>
-                    )}
                     
                     <div className="flex items-end justify-between mt-4 pt-4 border-t border-slate-100">
                         <div className="flex flex-col">
@@ -265,41 +254,12 @@ const PdfHistoryItem: React.FC<{
 
 const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendamentos, onDelete, onDownload, onUpdateStatus, onSchedule }) => {
     const [swipedItemId, setSwipedItemId] = useState<number | null>(null);
-    const [currentPage, setCurrentPage] = useState(1);
-    const ITEMS_PER_PAGE = 10;
+    const [expandedClientId, setExpandedClientId] = useState<number | null>(null); 
 
-    const getClientName = (clientId: number) => {
-        const client = clients.find(c => c.id === clientId);
-        return client ? client.nome : 'Cliente excluído';
-    };
+    const clientsById = useMemo(() => {
+        return new Map(clients.map(c => [c.id, c]));
+    }, [clients]);
 
-    const sortedPdfs = useMemo(() => {
-        return [...pdfs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [pdfs]);
-
-    // Pagination logic
-    const totalPages = Math.ceil(sortedPdfs.length / ITEMS_PER_PAGE);
-    const paginatedPdfs = sortedPdfs.slice(
-        (currentPage - 1) * ITEMS_PER_PAGE,
-        currentPage * ITEMS_PER_PAGE
-    );
-
-    const handleNextPage = () => {
-        setCurrentPage(prev => Math.min(prev + 1, totalPages));
-    };
-
-    const handlePrevPage = () => {
-        setCurrentPage(prev => Math.max(prev - 1, 1));
-    };
-    
-    useEffect(() => {
-        if (currentPage > totalPages && totalPages > 0) {
-            setCurrentPage(totalPages);
-        } else if (totalPages === 0) {
-            setCurrentPage(1);
-        }
-    }, [totalPages, currentPage]);
-    
     const agendamentosByPdfId = useMemo(() => {
         return agendamentos.reduce((acc, ag) => {
             if (ag.pdfId) {
@@ -309,24 +269,107 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
         }, {} as Record<number, Agendamento>);
     }, [agendamentos]);
 
+    const groupedHistory = useMemo(() => {
+        const groups = new Map<number, { client: Client, pdfs: SavedPDF[] }>();
+        
+        // 1. Sort PDFs by date descending
+        const sortedPdfs = [...pdfs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+        // 2. Group by client
+        sortedPdfs.forEach(pdf => {
+            const clientId = pdf.clienteId;
+            const client = clientsById.get(clientId);
+
+            if (!client) return; 
+
+            if (!groups.has(clientId)) {
+                groups.set(clientId, { client, pdfs: [] });
+            }
+
+            groups.get(clientId)!.pdfs.push(pdf);
+        });
+
+        // 3. Convert Map values to array
+        return Array.from(groups.values());
+    }, [pdfs, clientsById]);
+    
+    const handleToggleExpand = (clientId: number) => {
+        setExpandedClientId(prev => prev === clientId ? null : clientId);
+        setSwipedItemId(null); // Fecha qualquer item que esteja swiped ao expandir/recolher
+    };
+
+    const ClientHistoryGroup: React.FC<{
+        group: typeof groupedHistory[0];
+    }> = React.memo(({ group }) => {
+        const { client, pdfs } = group;
+        const isExpanded = expandedClientId === client.id;
+
+        // Calculate summary data for the header
+        const totalPdfs = pdfs.length;
+        const latestPdf = pdfs[0]; // Já ordenado pela data mais recente
+        const approvedCount = pdfs.filter(p => p.status === 'approved').length;
+        
+        // Determine overall status for display
+        let statusText = `${totalPdfs} Orçamento${totalPdfs > 1 ? 's' : ''}`;
+        if (approvedCount > 0) {
+            statusText = `${approvedCount} Aprovado${approvedCount > 1 ? 's' : ''}`;
+        } else if (pdfs.some(p => p.status === 'revised')) {
+            statusText = 'Revisão Pendente';
+        } else {
+            statusText = 'Aguardando Resposta';
+        }
+
+        return (
+            <div className="rounded-lg border border-slate-200 shadow-md bg-white overflow-hidden">
+                {/* Header Row (Clickable) */}
+                <button
+                    onClick={() => handleToggleExpand(client.id!)}
+                    className="w-full p-4 flex justify-between items-center hover:bg-slate-50 transition-colors"
+                    aria-expanded={isExpanded}
+                >
+                    <div className="text-left flex-grow min-w-0 pr-4">
+                        <h3 className="font-bold text-xl text-slate-800 truncate">{client.nome}</h3>
+                        <p className="text-sm text-slate-500 mt-1">{statusText}</p>
+                    </div>
+                    <div className="flex items-center gap-4 flex-shrink-0">
+                        <div className="text-right hidden sm:block">
+                            <p className="text-xs text-slate-500">Último Orçamento</p>
+                            <p className="font-bold text-slate-800">{formatNumberBR(latestPdf.totalPreco)}</p>
+                        </div>
+                        <i className={`fas fa-chevron-down text-slate-400 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}></i>
+                    </div>
+                </button>
+
+                {/* Expanded Content */}
+                <div className={`transition-[max-height] duration-500 ease-in-out overflow-hidden ${isExpanded ? 'max-h-[2000px]' : 'max-h-0'}`}>
+                    <div className="p-4 pt-0 space-y-3 border-t border-slate-100">
+                        {pdfs.map(pdf => (
+                            <PdfHistoryItem
+                                key={pdf.id}
+                                pdf={pdf}
+                                clientName={client.nome} // Mantido para compatibilidade, mas não é mais exibido no item
+                                agendamento={agendamentosByPdfId[pdf.id!]}
+                                onDownload={onDownload}
+                                onDelete={onDelete}
+                                onUpdateStatus={onUpdateStatus}
+                                onSchedule={onSchedule}
+                                swipedItemId={swipedItemId}
+                                onSetSwipedItem={setSwipedItemId}
+                            />
+                        ))}
+                    </div>
+                </div>
+            </div>
+        );
+    });
+
 
     return (
         <div>
             <div className="space-y-4">
-                {paginatedPdfs.length > 0 ? (
-                    paginatedPdfs.map(pdf => (
-                        <PdfHistoryItem
-                            key={pdf.id}
-                            pdf={pdf}
-                            clientName={getClientName(pdf.clienteId)}
-                            agendamento={pdf.id ? agendamentosByPdfId[pdf.id] : undefined}
-                            onDownload={onDownload}
-                            onDelete={onDelete}
-                            onUpdateStatus={onUpdateStatus}
-                            onSchedule={onSchedule}
-                            swipedItemId={swipedItemId}
-                            onSetSwipedItem={setSwipedItemId}
-                        />
+                {groupedHistory.length > 0 ? (
+                    groupedHistory.map(group => (
+                        <ClientHistoryGroup key={group.client.id} group={group} />
                     ))
                 ) : (
                     <div className="text-center text-slate-500 p-8 flex flex-col items-center justify-center h-full min-h-[300px] bg-white/50 rounded-lg border-2 border-dashed border-slate-200">
@@ -336,28 +379,6 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
                     </div>
                 )}
             </div>
-            
-            {totalPages > 1 && (
-                <div className="flex justify-between items-center mt-6 pt-4 border-t border-slate-200">
-                    <button 
-                        onClick={handlePrevPage} 
-                        disabled={currentPage === 1}
-                        className="px-4 py-2 bg-white border border-slate-300 rounded-md text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        Anterior
-                    </button>
-                    <span className="text-sm text-slate-600 font-medium">
-                        Página {currentPage} de {totalPages}
-                    </span>
-                    <button 
-                        onClick={handleNextPage} 
-                        disabled={currentPage === totalPages}
-                        className="px-4 py-2 bg-white border border-slate-300 rounded-md text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        Próximo
-                    </button>
-                </div>
-            )}
         </div>
     );
 };
