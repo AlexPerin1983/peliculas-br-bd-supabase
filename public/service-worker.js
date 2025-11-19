@@ -6,9 +6,15 @@ const { CacheableResponsePlugin } = workbox.cacheableResponse;
 const { ExpirationPlugin } = workbox.expiration;
 const { precacheAndRoute } = workbox.precaching;
 
+// Força o Service Worker a assumir o controle imediatamente após a instalação
+self.addEventListener('install', (event) => {
+    self.skipWaiting();
+    console.log('[SW] Instalado e pulando espera.');
+});
+
 // Precache and route
 precacheAndRoute([
-    { url: '/index.html', revision: '2' },
+    { url: '/index.html', revision: '3' }, // Aumentar a revisão para forçar o cache
     { url: '/offline.html', revision: '1' }
 ]);
 
@@ -57,6 +63,14 @@ registerRoute(
         ],
     })
 );
+
+// Listener para a mensagem 'SKIP_WAITING'
+self.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'SKIP_WAITING') {
+        self.skipWaiting();
+        console.log('[SW] Mensagem SKIP_WAITING recebida. Forçando ativação.');
+    }
+});
 
 // Offline fallback
 self.addEventListener('fetch', (event) => {

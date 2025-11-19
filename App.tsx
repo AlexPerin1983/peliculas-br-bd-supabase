@@ -25,7 +25,9 @@ import AIClientModal from './components/modals/AIClientModal';
 import ApiKeyModal from './components/modals/ApiKeyModal';
 import ProposalOptionsCarousel from './components/ProposalOptionsCarousel';
 import ImageGalleryModal from './components/modals/ImageGalleryModal';
+import UpdateNotification from './components/UpdateNotification';
 import { usePwaInstallPrompt } from './src/hooks/usePwaInstallPrompt';
+import { usePwaUpdate } from './src/hooks/usePwaUpdate';
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 
 
@@ -71,6 +73,7 @@ interface ExtractedClientData {
 
 const App: React.FC = () => {
     const { deferredPrompt, promptInstall, isInstalled } = usePwaInstallPrompt();
+    const { newVersionAvailable, handleUpdate } = usePwaUpdate();
     
     const [isLoading, setIsLoading] = useState(true);
     const [clients, setClients] = useState<Client[]>([]);
@@ -474,6 +477,7 @@ const App: React.FC = () => {
 
     const handleNumpadClose = useCallback(() => {
         setNumpadConfig(prev => {
+            // Salva o valor atual antes de fechar
             const updatedMeasurements = saveCurrentNumpadValue(prev, measurements);
             handleMeasurementsChange(updatedMeasurements);
             
@@ -1950,6 +1954,9 @@ const App: React.FC = () => {
                 </div>
             </main>
 
+            {newVersionAvailable && (
+                <UpdateNotification onUpdate={handleUpdate} />
+            )}
             
             {isClientModalOpen && (
                 <ClientModal
