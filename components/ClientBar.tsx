@@ -245,7 +245,7 @@ const ClientBar: React.FC<ClientBarProps> = ({
 
                                 {/* Dropdown menu */}
                                 {isMenuOpen && (
-                                    <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-30">
+                                    <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-40">
                                         <MenuItem
                                             onClick={handleOpenWhatsApp}
                                             icon="fab fa-whatsapp"
