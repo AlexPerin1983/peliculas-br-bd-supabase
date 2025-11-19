@@ -1812,6 +1812,7 @@ const App: React.FC = () => {
                     swipeDistance={swipeDistance}
                     onDeleteMeasurement={handleDeleteMeasurementFromGroup}
                     totalM2={totals.totalM2}
+                    totalQuantity={totals.totalQuantity}
                 />
             );
         }
