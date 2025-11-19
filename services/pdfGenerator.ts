@@ -313,8 +313,22 @@ const renderPdfContent = async (
             safeText(client.telefone || '', margin, yPos);
             safeText(userInfo.empresa, pageWidth / 2 + 10, yPos);
             yPos += 5;
-            safeText(formatAddressForPdf(client), margin, yPos);
-            safeText(userInfo.endereco, pageWidth / 2 + 10, yPos);
+            
+            // --- CORREÇÃO DE QUEBRA DE LINHA DO ENDEREÇO DO CLIENTE ---
+            const clientAddress = formatAddressForPdf(client);
+            const maxClientAddressWidth = (pageWidth / 2) - margin - 10; // Largura máxima para o endereço do cliente
+            
+            const clientAddressLines = doc.splitTextToSize(clientAddress, maxClientAddressWidth);
+            
+            let currentClientY = yPos;
+            for (const line of clientAddressLines) {
+                safeText(line, margin, currentClientY);
+                currentClientY += 5; // Incrementa a posição Y para cada linha
+            }
+            
+            // Garante que o endereço da empresa comece na mesma linha vertical do nome da empresa
+            safeText(userInfo.endereco, pageWidth / 2 + 10, yPos + 5);
+            // --- FIM DA CORREÇÃO ---
             
             // Add first content page
             await addNewPage();
@@ -484,7 +498,7 @@ const renderPdfContent = async (
             }
         }
         
-        // --- Total Geral Combinado (REMOVIDO/MODIFICADO) ---
+        // --- Total Geral Combinado (MODIFICADO) ---
         if (isCombined) {
             // Substituindo o bloco de soma por uma nota de esclarecimento
             if (yPos > pageHeight - 60) await addNewPage();
