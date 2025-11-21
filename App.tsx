@@ -29,6 +29,7 @@ import UpdateNotification from './components/UpdateNotification';
 import { usePwaInstallPrompt } from './src/hooks/usePwaInstallPrompt';
 import { usePwaUpdate } from './src/hooks/usePwaUpdate';
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
+import { useError } from './src/contexts/ErrorContext';
 
 
 const UserSettingsView = lazy(() => import('./components/views/UserSettingsView'));
@@ -72,6 +73,7 @@ interface ExtractedClientData {
 
 
 const App: React.FC = () => {
+    const { showError } = useError();
     const { deferredPrompt, promptInstall, isInstalled } = usePwaInstallPrompt();
     const { newVersionAvailable, handleUpdate } = usePwaUpdate();
 
@@ -887,13 +889,13 @@ const App: React.FC = () => {
     };
 
     const processClientDataWithOpenAI = async (input: { type: 'text' | 'image'; data: string | File[] }): Promise<ExtractedClientData | null> => {
-        alert("O preenchimento de dados do cliente com OpenAI ainda não está totalmente implementado. Por favor, use o Gemini ou preencha manualmente.");
+        showError("O preenchimento de dados do cliente com OpenAI ainda não está totalmente implementado. Por favor, use o Gemini ou preencha manualmente.");
         return null;
     };
 
     const handleProcessAIClientInput = useCallback(async (input: { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob }) => {
         if (!userInfo?.aiConfig?.apiKey || !userInfo?.aiConfig?.provider) {
-            alert("Por favor, configure seu provedor e chave de API na aba 'Empresa' para usar esta funcionalidade.");
+            showError("Por favor, configure seu provedor e chave de API na aba 'Empresa' para usar esta funcionalidade.");
             return;
         }
 
@@ -905,7 +907,7 @@ const App: React.FC = () => {
                 extractedData = await processClientDataWithGemini(input);
             } else if (userInfo.aiConfig.provider === 'openai') {
                 if (input.type === 'audio') {
-                    alert("O provedor OpenAI não suporta entrada de áudio para esta funcionalidade.");
+                    showError("O provedor OpenAI não suporta entrada de áudio para esta funcionalidade.");
                     return;
                 }
                 extractedData = await processClientDataWithOpenAI(input as { type: 'text' | 'image'; data: string | File[] });
@@ -919,11 +921,11 @@ const App: React.FC = () => {
 
         } catch (error) {
             console.error("Erro ao processar dados do cliente com IA:", error);
-            alert(`Ocorreu um erro com a IA: ${error instanceof Error ? error.message : String(error)} `);
+            showError(`Ocorreu um erro com a IA: ${error instanceof Error ? error.message : String(error)}`);
         } finally {
             setIsProcessingAI(false);
         }
-    }, [userInfo]);
+    }, [userInfo, showError]);
 
     const processWithGemini = async (input: { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob }) => {
         try {
@@ -1008,7 +1010,7 @@ const App: React.FC = () => {
                         handleMeasurementsChange([...measurements.map(m => ({ ...m, isNew: false })), ...newMeasurements]);
                         setIsAIMeasurementModalOpen(false);
                     } else {
-                        alert("Nenhuma medida foi extraída. Tente novamente com mais detalhes.");
+                        showError("Nenhuma medida foi extraída. Tente novamente com mais detalhes.");
                     }
                 } else {
                     throw new Error("A resposta da IA não está no formato de array esperado.");
@@ -1110,7 +1112,7 @@ const App: React.FC = () => {
                 handleMeasurementsChange([...measurements.map(m => ({ ...m, isNew: false })), ...newMeasurements]);
                 setIsAIMeasurementModalOpen(false);
             } else {
-                alert("Nenhuma medida foi extraída com OpenAI. Tente novamente com mais detalhes.");
+                showError("Nenhuma medida foi extraída com OpenAI. Tente novamente com mais detalhes.");
             }
 
         } catch (error) {
@@ -1121,7 +1123,7 @@ const App: React.FC = () => {
 
     const handleProcessAIInput = async (input: { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob }) => {
         if (!userInfo?.aiConfig?.apiKey) {
-            alert("Por favor, configure sua chave de API na aba 'Empresa' para usar esta funcionalidade.");
+            showError("Por favor, configure sua chave de API na aba 'Empresa' para usar esta funcionalidade.");
             return;
         }
 
@@ -1132,14 +1134,14 @@ const App: React.FC = () => {
                 await processWithGemini(input);
             } else if (userInfo.aiConfig.provider === 'openai') {
                 if (input.type === 'audio') {
-                    alert("O provedor OpenAI não suporta entrada de áudio nesta aplicação.");
+                    showError("O provedor OpenAI não suporta entrada de áudio nesta aplicação.");
                     return;
                 }
                 await processWithOpenAI(input as { type: 'text' | 'image'; data: string | File[] });
             }
         } catch (error) {
             console.error("Erro ao processar com IA:", error);
-            alert(`Ocorreu um erro com a IA: ${error instanceof Error ? error.message : String(error)} `);
+            showError(`Ocorreu um erro com a IA: ${error instanceof Error ? error.message : String(error)}`);
         } finally {
             setIsProcessingAI(false);
         }
