@@ -74,7 +74,7 @@ interface ExtractedClientData {
 const App: React.FC = () => {
     const { deferredPrompt, promptInstall, isInstalled } = usePwaInstallPrompt();
     const { newVersionAvailable, handleUpdate } = usePwaUpdate();
-    
+
     const [isLoading, setIsLoading] = useState(true);
     const [clients, setClients] = useState<Client[]>([]);
     const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
@@ -122,9 +122,9 @@ const App: React.FC = () => {
     const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
     const [apiKeyModalProvider, setApiKeyModalProvider] = useState<'gemini' | 'openai'>('gemini');
     const [isGeneralDiscountModalOpen, setIsGeneralDiscountModalOpen] = useState(false);
-    const [isDuplicateAllModalOpen, setIsDuplicateAllModalOpen] = useState(false); 
-    const [measurementToDeleteId, setMeasurementToDeleteId] = useState<number | null>(null); 
-    
+    const [isDuplicateAllModalOpen, setIsDuplicateAllModalOpen] = useState(false);
+    const [measurementToDeleteId, setMeasurementToDeleteId] = useState<number | null>(null);
+
     const [isGalleryOpen, setIsGalleryOpen] = useState(false);
     const [galleryImages, setGalleryImages] = useState<string[]>([]);
     const [galleryInitialIndex, setGalleryInitialIndex] = useState(0);
@@ -137,20 +137,20 @@ const App: React.FC = () => {
         currentValue: '',
         shouldClearOnNextInput: false,
     });
-    
+
     const mainRef = useRef<HTMLElement>(null);
     const numpadRef = useRef<HTMLDivElement>(null);
 
     // Handle URL parameters (shortcuts, share target, etc.)
     useEffect(() => {
         const urlParams = new URLSearchParams(window.location.search);
-        
+
         // Handle tab parameter from shortcuts
         const tabParam = urlParams.get('tab');
         if (tabParam && ['client', 'films', 'settings', 'history', 'agenda'].includes(tabParam)) {
             setActiveTab(tabParam as ActiveTab);
         }
-        
+
         // Handle action parameter
         const actionParam = urlParams.get('action');
         if (actionParam === 'new') {
@@ -160,19 +160,19 @@ const App: React.FC = () => {
                 setIsClientModalOpen(true);
             }, 500);
         }
-        
+
         // Handle share target parameters
         const sharedTitle = urlParams.get('title');
         const sharedText = urlParams.get('text');
         const sharedUrl = urlParams.get('url');
-        
+
         if (sharedText || sharedTitle) {
             // If text was shared, open AI modal with the text
             setTimeout(() => {
                 setIsAIMeasurementModalOpen(true);
             }, 500);
         }
-        
+
         // Clear URL parameters after processing
         if (urlParams.toString()) {
             window.history.replaceState({}, '', window.location.pathname);
@@ -182,19 +182,19 @@ const App: React.FC = () => {
     useEffect(() => {
         const mainEl = mainRef.current;
         if (!mainEl) return;
-    
+
         if (numpadConfig.isOpen) {
             const timer = setTimeout(() => {
                 if (numpadRef.current) {
                     const numpadHeight = numpadRef.current.offsetHeight;
                     mainEl.style.paddingBottom = `${numpadHeight}px`;
-    
+
                     if (numpadConfig.measurementId) {
                         const activeElement = mainEl.querySelector(`[data-measurement-id='${numpadConfig.measurementId}']`);
                         if (activeElement) {
                             const elementRect = activeElement.getBoundingClientRect();
                             const mainRect = mainEl.getBoundingClientRect();
-                            
+
                             const targetY = mainRect.top + (mainEl.clientHeight * 0.3);
                             const scrollAmount = elementRect.top - targetY;
 
@@ -214,7 +214,7 @@ const App: React.FC = () => {
 
     const loadClients = useCallback(async (clientIdToSelect?: number, shouldReorder: boolean = true) => {
         const storedClients = await db.getAllClients();
-        
+
         let finalClients = storedClients;
 
         if (shouldReorder) {
@@ -226,9 +226,9 @@ const App: React.FC = () => {
         }
 
         setClients(finalClients);
-        
+
         let idToSelect = clientIdToSelect;
-        
+
         if (!idToSelect && userInfo?.lastSelectedClientId) {
             const lastClient = finalClients.find(c => c.id === userInfo.lastSelectedClientId);
             if (lastClient) {
@@ -255,7 +255,7 @@ const App: React.FC = () => {
         const pdfs = await db.getAllPDFs();
         setAllSavedPdfs(pdfs);
     }, []);
-    
+
     const loadAgendamentos = useCallback(async () => {
         const data = await db.getAllAgendamentos();
         setAgendamentos(data);
@@ -266,10 +266,10 @@ const App: React.FC = () => {
             setIsLoading(true);
             const loadedUserInfo = await db.getUserInfo();
             setUserInfo(loadedUserInfo);
-            
-            await loadClients(); 
+
+            await loadClients();
             await loadFilms();
-            
+
             setIsLoading(false);
         };
         init();
@@ -288,7 +288,7 @@ const App: React.FC = () => {
         const loadDataForClient = async () => {
             if (selectedClientId) {
                 const savedOptions = await db.getProposalOptions(selectedClientId);
-                
+
                 if (savedOptions.length === 0) {
                     const defaultOption: ProposalOption = {
                         id: Date.now(),
@@ -323,7 +323,7 @@ const App: React.FC = () => {
         if (selectedClientId && proposalOptions.length > 0) {
             await db.saveProposalOptions(selectedClientId, proposalOptions);
             setIsDirty(false);
-            
+
             await loadClients(selectedClientId);
         }
     }, [selectedClientId, proposalOptions, loadClients]);
@@ -342,7 +342,7 @@ const App: React.FC = () => {
 
     const handleMeasurementsChange = useCallback((newMeasurements: UIMeasurement[]) => {
         if (!activeOptionId) return;
-        
+
         setProposalOptions(prev => prev.map(opt =>
             opt.id === activeOptionId
                 ? { ...opt, measurements: newMeasurements }
@@ -353,7 +353,7 @@ const App: React.FC = () => {
 
     const handleGeneralDiscountChange = useCallback((discount: { value: string; type: 'percentage' | 'fixed' }) => {
         if (!activeOptionId) return;
-        
+
         setProposalOptions(prev => prev.map(opt =>
             opt.id === activeOptionId
                 ? { ...opt, generalDiscount: discount }
@@ -379,25 +379,25 @@ const App: React.FC = () => {
         discount: 0,
         discountType: 'percentage',
     }), [films]);
-    
+
     const addMeasurement = useCallback(() => {
         const newMeasurement: UIMeasurement = { ...createEmptyMeasurement(), isNew: true };
         const updatedMeasurements = [
             ...measurements.map(m => ({ ...m, isNew: false })),
-            newMeasurement, 
+            newMeasurement,
         ];
         handleMeasurementsChange(updatedMeasurements);
     }, [createEmptyMeasurement, measurements, handleMeasurementsChange]);
-    
+
     const duplicateAllMeasurements = useCallback(() => {
         if (!activeOption) return;
-        
+
         setIsDuplicateAllModalOpen(true);
     }, [activeOption]);
-    
+
     const handleConfirmDuplicateAll = useCallback(() => {
         if (!activeOption) return;
-        
+
         const newOption: ProposalOption = {
             id: Date.now(),
             name: `Opção ${proposalOptions.length + 1}`,
@@ -408,7 +408,7 @@ const App: React.FC = () => {
             })),
             generalDiscount: { ...activeOption.generalDiscount }
         };
-        
+
         setProposalOptions(prev => [...prev, newOption]);
         setActiveOptionId(newOption.id);
         setIsDirty(true);
@@ -423,7 +423,7 @@ const App: React.FC = () => {
                 measurements: [],
                 generalDiscount: { value: '', type: 'percentage' }
             };
-            
+
             const newOptions = [...prevOptions, newOption];
             setActiveOptionId(newOption.id);
             setIsDirty(true);
@@ -441,7 +441,7 @@ const App: React.FC = () => {
     const handleDeleteProposalOption = useCallback((optionId: number) => {
         const remainingOptions = proposalOptions.filter(opt => opt.id !== optionId);
         setProposalOptions(remainingOptions);
-        
+
         if (activeOptionId === optionId && remainingOptions.length > 0) {
             setActiveOptionId(remainingOptions[0].id);
         }
@@ -456,7 +456,7 @@ const App: React.FC = () => {
     const selectedClient = useMemo(() => {
         return clients.find(c => c.id === selectedClientId) || null;
     }, [clients, selectedClientId]);
-    
+
     // Função auxiliar para salvar o valor atual do Numpad no Measurement
     const saveCurrentNumpadValue = useCallback((config: NumpadConfig, currentMeasurements: UIMeasurement[]) => {
         const { measurementId, field, currentValue } = config;
@@ -480,7 +480,7 @@ const App: React.FC = () => {
             // Salva o valor atual antes de fechar
             const updatedMeasurements = saveCurrentNumpadValue(prev, measurements);
             handleMeasurementsChange(updatedMeasurements);
-            
+
             return { isOpen: false, measurementId: null, field: null, currentValue: '', shouldClearOnNextInput: false };
         });
     }, [measurements, handleMeasurementsChange, saveCurrentNumpadValue]);
@@ -497,7 +497,7 @@ const App: React.FC = () => {
         setAiClientData(undefined);
         setIsClientModalOpen(true);
     }, [selectedClientId, numpadConfig.isOpen, handleNumpadClose]);
-    
+
     const handleOpenAgendamentoModal = useCallback((info: SchedulingInfo) => {
         setSchedulingInfo(info);
     }, []);
@@ -509,9 +509,9 @@ const App: React.FC = () => {
         } else {
             savedClient = await db.saveClient(client);
         }
-        
-        await loadClients(savedClient.id!); 
-        
+
+        await loadClients(savedClient.id!);
+
         setIsClientModalOpen(false);
         setNewClientName('');
         setAiClientData(undefined);
@@ -539,7 +539,7 @@ const App: React.FC = () => {
 
         await db.deleteClient(selectedClientId);
         await db.deleteProposalOptions(selectedClientId);
-        
+
         const pdfsForClient = await db.getPDFsForClient(selectedClientId);
         for (const pdf of pdfsForClient) {
             if (pdf.id) {
@@ -548,17 +548,17 @@ const App: React.FC = () => {
         }
 
         await loadClients();
-        
+
         if (hasLoadedHistory) {
             await loadAllPdfs();
         }
         if (hasLoadedAgendamentos) {
             await loadAgendamentos();
         }
-        
+
         setIsDeleteClientModalOpen(false);
     }, [selectedClientId, hasLoadedHistory, loadAllPdfs, hasLoadedAgendamentos, loadAgendamentos, loadClients]);
-    
+
     const handleSaveUserInfo = useCallback(async (info: UserInfo) => {
         await db.saveUserInfo(info);
         setUserInfo(info);
@@ -572,7 +572,7 @@ const App: React.FC = () => {
             setIsPaymentModalOpen(false);
         }
     }, [userInfo]);
-    
+
     const handleOpenFilmModal = useCallback((film: Film | null) => {
         setEditingFilm(film);
         setIsFilmModalOpen(true);
@@ -582,7 +582,7 @@ const App: React.FC = () => {
         setIsFilmSelectionModalOpen(false);
         setIsApplyFilmToAllModalOpen(false);
         setEditingMeasurementIdForFilm(null);
-        
+
         handleOpenFilmModal(film);
     }, [handleOpenFilmModal]);
 
@@ -590,7 +590,7 @@ const App: React.FC = () => {
         if (originalFilm && originalFilm.nome !== newFilmData.nome) {
             await db.deleteCustomFilm(originalFilm.nome);
         }
-    
+
         await db.saveCustomFilm(newFilmData);
         await loadFilms();
         setIsFilmModalOpen(false);
@@ -629,7 +629,7 @@ const App: React.FC = () => {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
     }, []);
-    
+
     const totals = useMemo(() => {
         const result = measurements.reduce((acc, m) => {
             if (m.active) {
@@ -638,7 +638,7 @@ const App: React.FC = () => {
                 const quantidade = parseInt(String(m.quantidade), 10) || 0;
                 const m2 = largura * altura * quantidade;
                 const film = films.find(f => f.nome === m.pelicula);
-                
+
                 let pricePerM2 = 0;
                 if (film) {
                     if (film.preco > 0) {
@@ -647,7 +647,7 @@ const App: React.FC = () => {
                         pricePerM2 = film.maoDeObra;
                     }
                 }
-                
+
                 const basePrice = pricePerM2 * m2;
 
                 let itemDiscountAmount = 0;
@@ -657,9 +657,9 @@ const App: React.FC = () => {
                 } else if (m.discountType === 'fixed' && discountValue > 0) {
                     itemDiscountAmount = discountValue;
                 }
-                
+
                 const finalItemPrice = Math.max(0, basePrice - itemDiscountAmount);
-                
+
                 acc.totalM2 += m2;
                 acc.subtotal += basePrice;
                 acc.totalItemDiscount += itemDiscountAmount;
@@ -678,7 +678,7 @@ const App: React.FC = () => {
                 generalDiscountAmount = discountInputValue;
             }
         }
-        
+
         const finalTotal = Math.max(0, result.priceAfterItemDiscounts - generalDiscountAmount);
 
         return {
@@ -694,7 +694,7 @@ const App: React.FC = () => {
             return;
         }
         if (isDirty) {
-            if(window.confirm("Você tem alterações não salvas. Deseja salvar antes de gerar o PDF?")) {
+            if (window.confirm("Você tem alterações não salvas. Deseja salvar antes de gerar o PDF?")) {
                 await handleSaveChanges();
             } else {
                 alert("Geração de PDF cancelada. Salve ou descarte suas alterações.");
@@ -702,7 +702,7 @@ const App: React.FC = () => {
             }
         }
         const activeMeasurements = measurements.filter(m => m.active && parseFloat(String(m.largura).replace(',', '.')) > 0 && parseFloat(String(m.altura).replace(',', '.')) > 0);
-        if(activeMeasurements.length === 0) {
+        if (activeMeasurements.length === 0) {
             alert("Não há medidas válidas para gerar um orçamento.");
             return;
         }
@@ -712,13 +712,13 @@ const App: React.FC = () => {
             // Passando o nome da opção de proposta para o gerador de PDF
             const pdfBlob = await generatePDF(selectedClient, userInfo, activeMeasurements, films, generalDiscount, totals, activeOption.name);
             const filename = `orcamento_${selectedClient.nome.replace(/\s+/g, '_').toLowerCase()}_${activeOption.name.replace(/\s+/g, '_').toLowerCase()}_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.pdf`;
-            
+
             const generalDiscountForDb: SavedPDF['generalDiscount'] = {
                 ...generalDiscount,
                 value: parseFloat(String(generalDiscount.value).replace(',', '.')) || 0,
                 type: generalDiscount.value ? generalDiscount.type : 'none',
             };
-            
+
             const validityDays = userInfo.proposalValidityDays || 60;
             const issueDate = new Date();
             const expirationDate = new Date();
@@ -740,11 +740,11 @@ const App: React.FC = () => {
                 proposalOptionName: activeOption.name
             };
             await db.savePDF(pdfToSave);
-            
+
             downloadBlob(pdfBlob, filename);
-            
+
             setPdfGenerationStatus('success');
-            
+
             if (hasLoadedHistory) {
                 await loadAllPdfs();
             }
@@ -764,12 +764,12 @@ const App: React.FC = () => {
             if (!client) throw new Error("Cliente não encontrado para os orçamentos selecionados.");
 
             const pdfBlob = await generateCombinedPDF(client, userInfo, selectedPdfs, films);
-            
+
             const firstOptionName = selectedPdfs[0].proposalOptionName || 'Opcao';
             const filename = `orcamento_combinado_${client.nome.replace(/\s+/g, '_').toLowerCase()}_${firstOptionName.replace(/\s+/g, '_').toLowerCase()}_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.pdf`;
-            
+
             downloadBlob(pdfBlob, filename);
-            
+
             setPdfGenerationStatus('success');
         } catch (error) {
             console.error("Erro ao gerar PDF combinado:", error);
@@ -787,7 +787,7 @@ const App: React.FC = () => {
         setPdfGenerationStatus('idle');
     }, []);
 
-    const blobToBase64 = (blob: Blob): Promise<{mimeType: string, data: string}> => {
+    const blobToBase64 = (blob: Blob): Promise<{ mimeType: string, data: string }> => {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onloadend = () => {
@@ -805,46 +805,40 @@ const App: React.FC = () => {
         if (!userInfo?.aiConfig?.apiKey) {
             throw new Error("Chave de API do Gemini não configurada.");
         }
-        
+
         try {
             const genAI = new GoogleGenerativeAI(userInfo!.aiConfig!.apiKey);
-            const model = genAI.getGenerativeModel({ 
-                model: "gemini-2.5-flash",
-                generationConfig: {
-                    responseMimeType: "application/json",
-                    responseSchema: {
-                        type: SchemaType.OBJECT,
-                        properties: {
-                            nome: { type: SchemaType.STRING, description: 'Nome completo do cliente.' },
-                            telefone: { type: SchemaType.STRING, description: 'Telefone do cliente, apenas dígitos. Ex: 83999998888' },
-                            email: { type: SchemaType.STRING, description: 'Email do cliente.' },
-                            cpfCnpj: { type: SchemaType.STRING, description: 'CPF ou CNPJ do cliente, apenas dígitos.' },
-                            cep: { type: SchemaType.STRING, description: 'CEP do endereço, apenas dígitos.' },
-                            logradouro: { type: SchemaType.STRING, description: 'Rua ou Logradouro.' },
-                            numero: { type: SchemaType.STRING, description: 'Número do endereço.' },
-                            complemento: { type: SchemaType.STRING, description: 'Complemento (opcional).' },
-                            bairro: { type: SchemaType.STRING, description: 'Bairro.' },
-                            cidade: { type: SchemaType.STRING, description: 'Cidade.' },
-                            uf: { type: SchemaType.STRING, description: 'Estado (UF).' },
-                        },
-                    }
-                }
+            const model = genAI.getGenerativeModel({
+                model: "gemini-2.0-flash-exp",
             });
-    
+
             const prompt = `
                 Você é um assistente especialista em extração de dados de clientes. Sua tarefa é extrair o máximo de informações de contato, endereço completo (incluindo CEP, logradouro, número, bairro, cidade e UF) e documento (CPF ou CNPJ) de um cliente a partir da entrada fornecida (texto, imagem ou áudio).
                 
-                **Regra Crítica para Telefone:** O telefone deve ser extraído APENAS com o DDD e o número (máximo 11 dígitos). Remova qualquer código de país (ex: +55) se presente. Ex: Se for "+55 83 99999-8888", extraia "83999998888".
+                **Instrução Principal:** Analise todo o texto de entrada em busca de dados. Não pare no primeiro dado encontrado.
                 
-                Formate os campos de telefone, CPF/CNPJ e CEP APENAS com dígitos, sem pontuação ou espaços.
+                **Regra para Nome:** Identifique o nome do cliente. Se a entrada for apenas "Nome Telefone", separe-os.
                 
-                **Regra para UF:** O campo UF deve conter APENAS a sigla do estado (2 letras).
+                **Regra de Extração de Números (CRÍTICO):**
+                Varra o texto procurando por sequências numéricas. Use palavras-chave como "cep", "cpf", "cnpj", "tel", "cel" como dicas fortes, mas identifique também números soltos baseando-se na contagem de dígitos (ignorando símbolos):
+                  - **CNPJ:** 14 dígitos. (Ex: 28533595000160). Se encontrar, preencha o campo 'cpfCnpj'.
+                  - **CPF:** 11 dígitos. (Ex: 12345678900). Se encontrar, preencha o campo 'cpfCnpj'.
+                  - **Telefone:** 10 ou 11 dígitos (DDD + Número). (Ex: 83999998888).
+                  - **CEP:** 8 dígitos. (Ex: 58056170).
                 
-                Responda APENAS com um objeto JSON válido que corresponda ao schema fornecido. Não inclua nenhuma outra explicação ou texto.
+                **Regra Crítica para Telefone:** Remova código de país (+55). Mantenha apenas DDD + Número.
+                
+                **Formatação de Saída:** Retorne TODOS os campos numéricos (Telefone, CPF, CNPJ, CEP) APENAS com dígitos (string pura de números), removendo qualquer formatação original (pontos, traços, espaços).
+                
+                **Endereço:** Tente separar inteligentemente o logradouro, número, bairro e cidade se estiverem misturados.
+                
+                **Regra para UF:** O campo UF deve conter APENAS a sigla do estado (2 letras). **SE NÃO ENCONTRAR, RETORNE UMA STRING VAZIA "". JAMAIS RETORNE A PALAVRA "string".**
+                
+                Responda APENAS com um objeto JSON válido, sem markdown, contendo os campos: nome, telefone, email, cpfCnpj, cep, logradouro, numero, complemento, bairro, cidade, uf.
             `;
-    
+
             const parts: any[] = [prompt];
-    
+
             if (input.type === 'text') {
                 parts.push(input.data as string);
             } else if (input.type === 'image') {
@@ -854,12 +848,12 @@ const App: React.FC = () => {
                 }
             } else if (input.type === 'audio') {
                 const { mimeType, data } = await blobToBase64(input.data as Blob);
-                    parts.push({ inlineData: { mimeType, data } });
+                parts.push({ inlineData: { mimeType, data } });
             }
-    
-            const result = await model.generateContent({ contents: parts });
+
+            const result = await model.generateContent(parts);
             const response = await result.response;
-            
+
             // Tenta fazer o parse do JSON
             try {
                 const extractedData = JSON.parse(response.text());
@@ -870,7 +864,7 @@ const App: React.FC = () => {
                 const jsonText = response.text().trim();
                 const start = jsonText.indexOf('{');
                 const end = jsonText.lastIndexOf('}');
-                
+
                 if (start !== -1 && end !== -1 && end > start) {
                     const cleanedJson = jsonText.substring(start, end + 1);
                     try {
@@ -879,11 +873,11 @@ const App: React.FC = () => {
                         return extractedData as ExtractedClientData;
                     } catch (e2) {
                         // Se a correção falhar, lança o erro original
-                        throw new Error(`A resposta da IA não é um JSON válido. Erro: ${e instanceof Error ? e.message : 'JSON malformado'}`);
+                        throw new Error(`A resposta da IA não é um JSON válido.Erro: ${e instanceof Error ? e.message : 'JSON malformado'} `);
                     }
                 }
-                
-                throw new Error(`A resposta da IA não é um JSON válido. Erro: ${e instanceof Error ? e.message : 'JSON malformado'}`);
+
+                throw new Error(`A resposta da IA não é um JSON válido.Erro: ${e instanceof Error ? e.message : 'JSON malformado'} `);
             }
 
         } catch (error) {
@@ -902,10 +896,10 @@ const App: React.FC = () => {
             alert("Por favor, configure seu provedor e chave de API na aba 'Empresa' para usar esta funcionalidade.");
             return;
         }
-    
+
         setIsProcessingAI(true);
         let extractedData: ExtractedClientData | null = null;
-    
+
         try {
             if (userInfo.aiConfig.provider === 'gemini') {
                 extractedData = await processClientDataWithGemini(input);
@@ -916,7 +910,7 @@ const App: React.FC = () => {
                 }
                 extractedData = await processClientDataWithOpenAI(input as { type: 'text' | 'image'; data: string | File[] });
             }
-            
+
             if (extractedData) {
                 setAiClientData(extractedData);
                 setIsAIClientModalOpen(false);
@@ -925,7 +919,7 @@ const App: React.FC = () => {
 
         } catch (error) {
             console.error("Erro ao processar dados do cliente com IA:", error);
-            alert(`Ocorreu um erro com a IA: ${error instanceof Error ? error.message : String(error)}`);
+            alert(`Ocorreu um erro com a IA: ${error instanceof Error ? error.message : String(error)} `);
         } finally {
             setIsProcessingAI(false);
         }
@@ -934,8 +928,8 @@ const App: React.FC = () => {
     const processWithGemini = async (input: { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob }) => {
         try {
             const genAI = new GoogleGenerativeAI(userInfo!.aiConfig!.apiKey);
-            const model = genAI.getGenerativeModel({ 
-                model: "gemini-2.5-flash",
+            const model = genAI.getGenerativeModel({
+                model: "gemini-2.0-flash-exp",
                 generationConfig: {
                     responseMimeType: "application/json",
                     responseSchema: {
@@ -943,21 +937,21 @@ const App: React.FC = () => {
                         items: {
                             type: SchemaType.OBJECT,
                             properties: {
-                                largura: { 
-                                    type: SchemaType.STRING, 
-                                    description: 'Largura em metros, com vírgula como separador decimal. Ex: "1,50"' 
+                                largura: {
+                                    type: SchemaType.STRING,
+                                    description: 'Largura em metros, com vírgula como separador decimal. Ex: "1,50"'
                                 },
-                                altura: { 
-                                    type: SchemaType.STRING, 
-                                    description: 'Altura em metros, com vírgula como separador decimal. Ex: "2,10"' 
+                                altura: {
+                                    type: SchemaType.STRING,
+                                    description: 'Altura em metros, com vírgula como separador decimal. Ex: "2,10"'
                                 },
-                                quantidade: { 
-                                    type: SchemaType.NUMBER, 
-                                    description: 'A quantidade de itens com essa medida.' 
+                                quantidade: {
+                                    type: SchemaType.NUMBER,
+                                    description: 'A quantidade de itens com essa medida.'
                                 },
-                                ambiente: { 
-                                    type: SchemaType.STRING, 
-                                    description: 'O local ou descrição do item. Ex: "Janela da Sala", "Porta do Quarto"' 
+                                ambiente: {
+                                    type: SchemaType.STRING,
+                                    description: 'O local ou descrição do item. Ex: "Janela da Sala", "Porta do Quarto"'
                                 },
                             },
                             required: ['largura', 'altura', 'quantidade', 'ambiente'],
@@ -965,18 +959,18 @@ const App: React.FC = () => {
                     }
                 }
             });
-    
+
             const prompt = `
-                Você é um assistente especialista para uma empresa de instalação de películas de vidro. Sua tarefa é extrair dados de medidas de uma entrada fornecida pelo usuário.
-                A entrada pode ser texto, imagem (de uma lista, rascunho ou foto) ou áudio.
-                Extraia as seguintes informações para cada medida: largura, altura, quantidade e uma descrição do ambiente/local (ex: "sala", "quarto", "janela da cozinha").
-                As medidas estão em metros. Se o usuário disser '1 e meio por 2', interprete como 1,50m por 2,00m. Sempre formate as medidas com duas casas decimais e vírgula como separador.
+                Você é um assistente especialista para uma empresa de instalação de películas de vidro.Sua tarefa é extrair dados de medidas de uma entrada fornecida pelo usuário.
+                A entrada pode ser texto, imagem(de uma lista, rascunho ou foto) ou áudio.
+            Extraia as seguintes informações para cada medida: largura, altura, quantidade e uma descrição do ambiente / local(ex: "sala", "quarto", "janela da cozinha").
+                As medidas estão em metros.Se o usuário disser '1 e meio por 2', interprete como 1, 50m por 2,00m.Sempre formate as medidas com duas casas decimais e vírgula como separador.
                 O ambiente deve ser uma descrição curta e útil.
-                Responda APENAS com um objeto JSON válido que corresponda ao schema fornecido. Não inclua nenhuma outra explicação ou texto.
+                Responda APENAS com um objeto JSON válido que corresponda ao schema fornecido.Não inclua nenhuma outra explicação ou texto.
             `;
-    
+
             const parts: any[] = [prompt];
-    
+
             if (input.type === 'text') {
                 parts.push(input.data as string);
             } else if (input.type === 'image') {
@@ -986,15 +980,15 @@ const App: React.FC = () => {
                 }
             } else if (input.type === 'audio') {
                 const { mimeType, data } = await blobToBase64(input.data as Blob);
-                    parts.push({ inlineData: { mimeType, data } });
+                parts.push({ inlineData: { mimeType, data } });
             }
-    
-            const result = await model.generateContent({ contents: parts });
+
+            const result = await model.generateContent(parts);
             const response = await result.response;
-            
+
             try {
                 const extractedData = JSON.parse(response.text());
-    
+
                 if (Array.isArray(extractedData)) {
                     const newMeasurements: UIMeasurement[] = extractedData.map((item: any, index: number) => ({
                         id: Date.now() + index,
@@ -1009,9 +1003,9 @@ const App: React.FC = () => {
                         discount: 0,
                         discountType: 'percentage',
                     }));
-        
+
                     if (newMeasurements.length > 0) {
-                        handleMeasurementsChange([...measurements.map(m => ({...m, isNew: false})), ...newMeasurements]);
+                        handleMeasurementsChange([...measurements.map(m => ({ ...m, isNew: false })), ...newMeasurements]);
                         setIsAIMeasurementModalOpen(false);
                     } else {
                         alert("Nenhuma medida foi extraída. Tente novamente com mais detalhes.");
@@ -1021,7 +1015,7 @@ const App: React.FC = () => {
                 }
             } catch (e) {
                 console.error("Erro de JSON.parse:", e);
-                throw new Error(`A resposta da IA não é um JSON válido. Erro: ${e instanceof Error ? e.message : 'JSON malformado'}`);
+                throw new Error(`A resposta da IA não é um JSON válido.Erro: ${e instanceof Error ? e.message : 'JSON malformado'} `);
             }
         } catch (error) {
             console.error("Erro ao processar com Gemini:", error);
@@ -1031,7 +1025,7 @@ const App: React.FC = () => {
 
     const processWithOpenAI = async (input: { type: 'text' | 'image'; data: string | File[] }) => {
         try {
-            const prompt = `Você é um assistente especialista para uma empresa de instalação de películas de vidro. Sua tarefa é extrair dados de medidas da entrada fornecida pelo usuário. Extraia as seguintes informações para cada medida: largura, altura, quantidade e uma descrição do ambiente/local (ex: "sala", "quarto", "janela da cozinha"). As medidas estão em metros. Se o usuário disser '1 e meio por 2', interprete como 1,50m por 2,00m. Sempre formate as medidas com duas casas decimais e vírgula como separador. O ambiente deve ser uma descrição curta e útil.`;
+            const prompt = `Você é um assistente especialista para uma empresa de instalação de películas de vidro.Sua tarefa é extrair dados de medidas da entrada fornecida pelo usuário.Extraia as seguintes informações para cada medida: largura, altura, quantidade e uma descrição do ambiente / local(ex: "sala", "quarto", "janela da cozinha").As medidas estão em metros.Se o usuário disser '1 e meio por 2', interprete como 1, 50m por 2,00m.Sempre formate as medidas com duas casas decimais e vírgula como separador.O ambiente deve ser uma descrição curta e útil.`;
 
             const tools = [
                 {
@@ -1062,7 +1056,7 @@ const App: React.FC = () => {
                 const { mimeType, data } = await blobToBase64(file);
                 userContent = [
                     { type: 'text', text: 'Extraia as medidas desta imagem.' },
-                    { type: 'image_url', image_url: { url: `data:${mimeType};base64,${data}` } }
+                    { type: 'image_url', image_url: { url: `data:${mimeType}; base64, ${data} ` } }
                 ];
             }
 
@@ -1070,7 +1064,7 @@ const App: React.FC = () => {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${userInfo!.aiConfig!.apiKey}`
+                    'Authorization': `Bearer ${userInfo!.aiConfig!.apiKey} `
                 },
                 body: JSON.stringify({
                     model: 'gpt-4o',
@@ -1085,7 +1079,7 @@ const App: React.FC = () => {
 
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(`OpenAI API Error: ${errorData.error.message}`);
+                throw new Error(`OpenAI API Error: ${errorData.error.message} `);
             }
 
             const data = await response.json();
@@ -1112,8 +1106,8 @@ const App: React.FC = () => {
                     discount: 0,
                     discountType: 'percentage',
                 }));
-    
-                handleMeasurementsChange([...measurements.map(m => ({...m, isNew: false})), ...newMeasurements]);
+
+                handleMeasurementsChange([...measurements.map(m => ({ ...m, isNew: false })), ...newMeasurements]);
                 setIsAIMeasurementModalOpen(false);
             } else {
                 alert("Nenhuma medida foi extraída com OpenAI. Tente novamente com mais detalhes.");
@@ -1130,9 +1124,9 @@ const App: React.FC = () => {
             alert("Por favor, configure sua chave de API na aba 'Empresa' para usar esta funcionalidade.");
             return;
         }
-    
+
         setIsProcessingAI(true);
-    
+
         try {
             if (userInfo.aiConfig.provider === 'gemini') {
                 await processWithGemini(input);
@@ -1145,7 +1139,7 @@ const App: React.FC = () => {
             }
         } catch (error) {
             console.error("Erro ao processar com IA:", error);
-            alert(`Ocorreu um erro com a IA: ${error instanceof Error ? error.message : String(error)}`);
+            alert(`Ocorreu um erro com a IA: ${error instanceof Error ? error.message : String(error)} `);
         } finally {
             setIsProcessingAI(false);
         }
@@ -1159,17 +1153,17 @@ const App: React.FC = () => {
         if (pdfToDeleteId === null) return;
         await db.deletePDF(pdfToDeleteId);
         await loadAllPdfs();
-        if(hasLoadedAgendamentos) {
+        if (hasLoadedAgendamentos) {
             await loadAgendamentos();
         }
         setPdfToDeleteId(null);
     }, [pdfToDeleteId, loadAllPdfs, hasLoadedAgendamentos, loadAgendamentos]);
-    
+
     const handleUpdatePdfStatus = useCallback(async (pdfId: number, status: SavedPDF['status']) => {
         try {
             const allPdfsFromDb = await db.getAllPDFs();
             const pdfToUpdate = allPdfsFromDb.find(p => p.id === pdfId);
-            
+
             if (pdfToUpdate) {
                 const updatedPdf = { ...pdfToUpdate, status };
                 await db.updatePDF(updatedPdf);
@@ -1185,7 +1179,7 @@ const App: React.FC = () => {
     const toggleFullScreen = useCallback(() => {
         if (!document.fullscreenElement) {
             document.documentElement.requestFullscreen().catch(err => {
-                console.error(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
+                console.error(`Error attempting to enable full - screen mode: ${err.message} (${err.name})`);
             });
         } else {
             if (document.exitFullscreen) {
@@ -1197,13 +1191,13 @@ const App: React.FC = () => {
     const handleOpenNumpad = useCallback((measurementId: number, field: 'largura' | 'altura' | 'quantidade', currentValue: string | number) => {
         setNumpadConfig(prev => {
             const isSameButton = prev.isOpen && prev.measurementId === measurementId && prev.field === field;
-            
+
             // 1. Se o Numpad já estava aberto em um campo diferente, salve o valor anterior.
             if (prev.isOpen && (prev.measurementId !== measurementId || prev.field !== field)) {
                 const updatedMeasurements = saveCurrentNumpadValue(prev, measurements);
                 handleMeasurementsChange(updatedMeasurements);
             }
-            
+
             if (isSameButton) {
                 return {
                     ...prev,
@@ -1292,7 +1286,7 @@ const App: React.FC = () => {
                     const nextField = fieldSequence[nextIndex];
                     const currentMeasurement = measurementsWithSavedValue.find(m => m.id === prev.measurementId);
                     const nextValueForField = currentMeasurement ? currentMeasurement[nextField] : '';
-                    
+
                     return {
                         isOpen: true,
                         measurementId: prev.measurementId,
@@ -1311,10 +1305,10 @@ const App: React.FC = () => {
     }, [measurements, handleMeasurementsChange]);
 
     const handleNumpadDelete = useCallback(() => {
-        setNumpadConfig(prev => ({ 
-            ...prev, 
+        setNumpadConfig(prev => ({
+            ...prev,
             currentValue: prev.currentValue.slice(0, -1),
-            shouldClearOnNextInput: false 
+            shouldClearOnNextInput: false
         }));
     }, []);
 
@@ -1332,21 +1326,21 @@ const App: React.FC = () => {
         const measurementsWithSavedValue = measurements.map(m =>
             m.id === measurementId ? { ...m, [field]: finalValue } : m
         );
-        
+
         const measurementToDuplicate = measurementsWithSavedValue.find(m => m.id === measurementId);
-        
+
         if (measurementToDuplicate) {
-            const newMeasurement: UIMeasurement = { 
-                ...measurementToDuplicate, 
-                id: Date.now(), 
+            const newMeasurement: UIMeasurement = {
+                ...measurementToDuplicate,
+                id: Date.now(),
                 isNew: false
             };
-            
+
             const index = measurementsWithSavedValue.findIndex(m => m.id === measurementId);
             const finalMeasurements = [...measurementsWithSavedValue];
             finalMeasurements.splice(index + 1, 0, newMeasurement);
-            
-            handleMeasurementsChange(finalMeasurements.map(m => 
+
+            handleMeasurementsChange(finalMeasurements.map(m =>
                 m.id === newMeasurement.id ? m : { ...m, isNew: false }
             ));
 
@@ -1372,13 +1366,13 @@ const App: React.FC = () => {
 
     const handleNumpadAddGroup = useCallback(() => {
         const { measurementId, field, currentValue } = numpadConfig;
-    
+
         setProposalOptions(currentOptions => {
             if (!activeOptionId) return currentOptions;
-            
+
             return currentOptions.map(opt => {
                 if (opt.id !== activeOptionId) return opt;
-                
+
                 let measurementsWithSavedValue = opt.measurements;
                 if (measurementId !== null && field !== null) {
                     let finalValue: string | number;
@@ -1391,19 +1385,19 @@ const App: React.FC = () => {
                         m.id === measurementId ? { ...m, [field]: finalValue } : m
                     );
                 }
-        
+
                 const newMeasurement: UIMeasurement = { ...createEmptyMeasurement(), isNew: true };
                 const finalMeasurements = [
                     ...measurementsWithSavedValue.map(m => ({ ...m, isNew: false })),
                     newMeasurement,
                 ];
-                
+
                 return { ...opt, measurements: finalMeasurements };
             });
         });
-    
+
         setIsDirty(true);
-        
+
         setNumpadConfig({ isOpen: false, measurementId: null, field: null, currentValue: '', shouldClearOnNextInput: false });
     }, [numpadConfig, createEmptyMeasurement, activeOptionId]);
 
@@ -1425,11 +1419,11 @@ const App: React.FC = () => {
     const handleSelectFilmForMeasurement = useCallback((filmName: string) => {
         if (editingMeasurementIdForFilm === null) return;
 
-        const updatedMeasurements = measurements.map(m => 
+        const updatedMeasurements = measurements.map(m =>
             m.id === editingMeasurementIdForFilm ? { ...m, pelicula: filmName } : m
         );
         handleMeasurementsChange(updatedMeasurements);
-        
+
         setIsFilmSelectionModalOpen(false);
         setEditingMeasurementIdForFilm(null);
     }, [editingMeasurementIdForFilm, measurements, handleMeasurementsChange]);
@@ -1438,7 +1432,7 @@ const App: React.FC = () => {
         setIsApplyFilmToAllModalOpen(false);
         setFilmToApplyToAll(filmName);
     }, []);
-    
+
     const handleConfirmApplyFilmToAll = useCallback(() => {
         if (!filmToApplyToAll) return;
 
@@ -1466,7 +1460,7 @@ const App: React.FC = () => {
         };
         handleOpenFilmModal(newFilmTemplate);
     }, [handleOpenFilmModal]);
-    
+
     const handleAddNewClientFromSelection = useCallback((clientName: string) => {
         setIsClientSelectionModalOpen(false);
         setClientModalMode('add');
@@ -1493,25 +1487,25 @@ const App: React.FC = () => {
         const newMeasurements = measurements.map(m => m.id === updatedMeasurement.id ? updatedMeasurement : m);
         handleMeasurementsChange(newMeasurements);
     }, [editingMeasurement, measurements, handleMeasurementsChange]);
-    
+
     const handleRequestDeleteMeasurement = useCallback((measurementId: number) => {
-        handleCloseEditMeasurementModal(); 
-        setMeasurementToDeleteId(measurementId); 
+        handleCloseEditMeasurementModal();
+        setMeasurementToDeleteId(measurementId);
     }, [handleCloseEditMeasurementModal]);
-    
+
     const handleConfirmDeleteIndividualMeasurement = useCallback(() => {
         if (measurementToDeleteId !== null) {
             handleMeasurementsChange(measurements.filter(m => m.id !== measurementToDeleteId));
             setMeasurementToDeleteId(null);
         }
     }, [measurementToDeleteId, measurements, handleMeasurementsChange]);
-    
+
     const handleDeleteMeasurementFromEditModal = useCallback(() => {
         if (editingMeasurement) {
             handleRequestDeleteMeasurement(editingMeasurement.id);
         }
     }, [editingMeasurement, handleRequestDeleteMeasurement]);
-    
+
     const handleDeleteMeasurementFromGroup = useCallback((measurementId: number) => {
         handleRequestDeleteMeasurement(measurementId);
     }, [handleRequestDeleteMeasurement]);
@@ -1524,18 +1518,18 @@ const App: React.FC = () => {
     const handleSaveAgendamento = useCallback(async (agendamentoData: Omit<Agendamento, 'id'> | Agendamento) => {
         try {
             const savedAgendamento = await db.saveAgendamento(agendamentoData);
-    
+
             if (savedAgendamento.pdfId) {
                 const allPdfsFromDb = await db.getAllPDFs();
                 const pdfToUpdate = allPdfsFromDb.find(p => p.id === savedAgendamento.pdfId);
-                
+
                 if (pdfToUpdate && pdfToUpdate.agendamentoId !== savedAgendamento.id) {
                     await db.updatePDF({ ...pdfToUpdate, agendamentoId: savedAgendamento.id });
                 }
             }
-            
+
             await Promise.all([loadAgendamentos(), loadAllPdfs()]);
-    
+
             handleCloseAgendamentoModal();
         } catch (error) {
             console.error("Erro ao salvar agendamento:", error);
@@ -1555,15 +1549,15 @@ const App: React.FC = () => {
             const agendamentoId = agendamentoToDelete.id;
             const allPdfsFromDb = await db.getAllPDFs();
             const pdfToUnlink = allPdfsFromDb.find(p => p.agendamentoId === agendamentoId);
-            
+
             await db.deleteAgendamento(agendamentoId);
-            
+
             if (pdfToUnlink) {
                 const updatedPdf = { ...pdfToUnlink };
                 delete updatedPdf.agendamentoId;
                 await db.updatePDF(updatedPdf);
             }
-            
+
             await Promise.all([loadAgendamentos(), loadAllPdfs()]);
         } catch (error) {
             console.error("Erro ao excluir agendamento:", error);
@@ -1572,7 +1566,7 @@ const App: React.FC = () => {
             setAgendamentoToDelete(null);
         }
     }, [agendamentoToDelete, loadAgendamentos, loadAllPdfs]);
-    
+
     const handleAddNewClientFromAgendamento = useCallback((clientName: string) => {
         handleCloseAgendamentoModal();
         setPostClientSaveAction('openAgendamentoModal');
@@ -1613,8 +1607,8 @@ const App: React.FC = () => {
 
     const handleSaveDiscount = useCallback((discount: number, discountType: 'percentage' | 'fixed') => {
         if (!editingMeasurementForDiscount) return;
-        
-        const updatedMeasurements = measurements.map(m => 
+
+        const updatedMeasurements = measurements.map(m =>
             m.id === editingMeasurementForDiscount.id ? { ...m, discount, discountType } : m
         );
         handleMeasurementsChange(updatedMeasurements);
@@ -1645,7 +1639,7 @@ const App: React.FC = () => {
         handleGeneralDiscountChange(discount);
         setIsGeneralDiscountModalOpen(false);
     }, [handleGeneralDiscountChange]);
-    
+
     const handleOpenGallery = useCallback((images: string[], initialIndex: number) => {
         setIsGalleryOpen(true);
         setGalleryImages(images);
@@ -1682,7 +1676,7 @@ const App: React.FC = () => {
         if (clients.length <= 1 || !selectedClientId) return;
         const currentIndex = clients.findIndex(c => c.id === selectedClientId);
         const nextIndex = (currentIndex + 1) % clients.length;
-        
+
         setSelectedClientId(clients[nextIndex].id!);
     }, [clients, selectedClientId]);
 
@@ -1690,7 +1684,7 @@ const App: React.FC = () => {
         if (clients.length <= 1 || !selectedClientId) return;
         const currentIndex = clients.findIndex(c => c.id === selectedClientId);
         const prevIndex = (currentIndex - 1 + clients.length) % clients.length;
-        
+
         setSelectedClientId(clients[prevIndex].id!);
     }, [clients, selectedClientId]);
 
@@ -1738,7 +1732,7 @@ const App: React.FC = () => {
                 </Suspense>
             );
         }
-        
+
         if (activeTab === 'agenda') {
             if (!hasLoadedAgendamentos) {
                 loadAgendamentos();
@@ -1794,7 +1788,7 @@ const App: React.FC = () => {
             );
         }
         if (selectedClientId && measurements.length > 0) {
-             return (
+            return (
                 <MeasurementList
                     measurements={measurements}
                     films={films}
@@ -1817,7 +1811,7 @@ const App: React.FC = () => {
             );
         }
         if (selectedClientId && measurements.length === 0) {
-             return (
+            return (
                 <div className="text-center p-8 flex flex-col items-center justify-center h-full min-h-[300px] bg-slate-50 rounded-lg border-2 border-dashed border-slate-200">
                     <div className="w-16 h-16 bg-slate-200 rounded-full flex items-center justify-center mb-4">
                         <i className="fas fa-ruler-combined fa-2x text-slate-500"></i>
@@ -1834,7 +1828,7 @@ const App: React.FC = () => {
                 </div>
             );
         }
-         return (
+        return (
             <div className="text-center text-slate-500 p-8 flex flex-col items-center justify-center h-full min-h-[300px]">
                 <i className="fas fa-user-check fa-3x mb-4 text-slate-300"></i>
                 <h3 className="text-xl font-semibold">Selecione um Cliente</h3>
@@ -1861,23 +1855,23 @@ const App: React.FC = () => {
 
                 <div className="container mx-auto px-0.5 sm:px-4 py-4 sm:py-8 w-full max-w-2xl">
                     <div className="bg-white rounded-2xl shadow-lg p-4 sm:p-6">
-                       {deferredPrompt && !isInstalled && (
+                        {deferredPrompt && !isInstalled && (
                             <div className="mb-4 p-3 bg-blue-100 border border-blue-200 rounded-lg flex justify-between items-center">
                                 <p className="text-sm text-blue-800 font-medium">Instale o app para usar offline!</p>
-                                <button 
+                                <button
                                     onClick={handlePromptPwaInstall}
                                     className="px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-md hover:bg-blue-700 transition-colors"
                                 >
                                     Instalar
                                 </button>
                             </div>
-                       )}
-                       
-                       {activeTab === 'client' ? (
-                           <>
-                               {clients.length > 0 ? (
-                                   <div className="bg-slate-100 p-2 px-2 rounded-xl">
-                                       <div className="relative z-20">
+                        )}
+
+                        {activeTab === 'client' ? (
+                            <>
+                                {clients.length > 0 ? (
+                                    <div className="bg-slate-100 p-2 px-2 rounded-xl">
+                                        <div className="relative z-20">
                                             <ClientBar
                                                 key={clientTransitionKey}
                                                 selectedClient={selectedClient}
@@ -1888,59 +1882,59 @@ const App: React.FC = () => {
                                                 onSwipeLeft={goToNextClient}
                                                 onSwipeRight={goToPrevClient}
                                             />
-                                       </div>
-                                       
-                                       {proposalOptions.length > 0 && activeOptionId && (
-                                           <ProposalOptionsCarousel
-                                               options={proposalOptions}
-                                               activeOptionId={activeOptionId}
-                                               onSelectOption={setActiveOptionId}
-                                               onRenameOption={handleRenameProposalOption}
-                                               onDeleteOption={handleDeleteProposalOption}
-                                               onAddOption={handleAddProposalOption}
-                                               onSwipeDirectionChange={handleSwipeDirectionChange}
-                                           />
-                                       )}
-                                       
-                                       <div id="contentContainer" className="w-full min-h-[300px]">
-                                           {renderContent()}
-                                       </div>
-                                   </div>
-                               ) : (
-                                   <div id="contentContainer" className="w-full min-h-[300px]">
-                                       {renderContent()}
-                                   </div>
-                               )}
-                           </>
-                       ) : ['history', 'agenda'].includes(activeTab) ? (
-                           <div className="bg-blue-50 -m-4 sm:-m-6 p-4 sm:p-6 rounded-2xl">
-                               <div id="contentContainer" className="w-full min-h-[300px]">
-                                   {renderContent()}
-                               </div>
-                           </div>
-                       ) : (
-                           <div id="contentContainer" className="w-full min-h-[300px]">
-                               {renderContent()}
-                           </div>
-                       )}
+                                        </div>
+
+                                        {proposalOptions.length > 0 && activeOptionId && (
+                                            <ProposalOptionsCarousel
+                                                options={proposalOptions}
+                                                activeOptionId={activeOptionId}
+                                                onSelectOption={setActiveOptionId}
+                                                onRenameOption={handleRenameProposalOption}
+                                                onDeleteOption={handleDeleteProposalOption}
+                                                onAddOption={handleAddProposalOption}
+                                                onSwipeDirectionChange={handleSwipeDirectionChange}
+                                            />
+                                        )}
+
+                                        <div id="contentContainer" className="w-full min-h-[300px]">
+                                            {renderContent()}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div id="contentContainer" className="w-full min-h-[300px]">
+                                        {renderContent()}
+                                    </div>
+                                )}
+                            </>
+                        ) : ['history', 'agenda'].includes(activeTab) ? (
+                            <div className="bg-blue-50 -m-4 sm:-m-6 p-4 sm:p-6 rounded-2xl">
+                                <div id="contentContainer" className="w-full min-h-[300px]">
+                                    {renderContent()}
+                                </div>
+                            </div>
+                        ) : (
+                            <div id="contentContainer" className="w-full min-h-[300px]">
+                                {renderContent()}
+                            </div>
+                        )}
 
 
                         {activeTab === 'client' && selectedClientId && (
                             <>
                                 <div className="hidden sm:block mt-6 pt-6 border-t border-slate-200">
-                                   <SummaryBar 
+                                    <SummaryBar
                                         totals={totals}
                                         generalDiscount={generalDiscount}
                                         onOpenGeneralDiscountModal={() => setIsGeneralDiscountModalOpen(true)}
                                         isDesktop
                                     />
-                                   <ActionsBar
+                                    <ActionsBar
                                         onAddMeasurement={addMeasurement}
                                         onDuplicateMeasurements={duplicateAllMeasurements}
                                         onGeneratePdf={handleGeneratePdf}
                                         isGeneratingPdf={pdfGenerationStatus === 'generating'}
                                         onOpenAIModal={() => setIsAIMeasurementModalOpen(true)}
-                                   />
+                                    />
                                 </div>
                                 <MobileFooter
                                     totals={totals}
@@ -1961,7 +1955,7 @@ const App: React.FC = () => {
             {newVersionAvailable && (
                 <UpdateNotification onUpdate={handleUpdate} />
             )}
-            
+
             {isClientModalOpen && (
                 <ClientModal
                     isOpen={isClientModalOpen}
@@ -1997,7 +1991,7 @@ const App: React.FC = () => {
                 />
             )}
             {isFilmModalOpen && (
-                 <FilmModal
+                <FilmModal
                     isOpen={isFilmModalOpen}
                     onClose={() => {
                         setIsFilmModalOpen(false);
@@ -2006,7 +2000,7 @@ const App: React.FC = () => {
                     onSave={handleSaveFilm}
                     onDelete={handleDeleteFilm}
                     film={editingFilm}
-                 />
+                />
             )}
             {isFilmSelectionModalOpen && (
                 <FilmSelectionModal
@@ -2022,7 +2016,7 @@ const App: React.FC = () => {
                     onDeleteFilm={handleRequestDeleteFilm}
                 />
             )}
-             {isApplyFilmToAllModalOpen && (
+            {isApplyFilmToAllModalOpen && (
                 <FilmSelectionModal
                     isOpen={isApplyFilmToAllModalOpen}
                     onClose={() => setIsApplyFilmToAllModalOpen(false)}
@@ -2033,7 +2027,7 @@ const App: React.FC = () => {
                     onDeleteFilm={handleRequestDeleteFilm}
                 />
             )}
-             {schedulingInfo && (
+            {schedulingInfo && (
                 <AgendamentoModal
                     isOpen={!!schedulingInfo}
                     onClose={handleCloseAgendamentoModal}
@@ -2057,9 +2051,9 @@ const App: React.FC = () => {
                     onDuplicate={() => {
                         const measurementToDuplicate = measurements.find(m => m.id === editingMeasurement.id);
                         if (measurementToDuplicate) {
-                            const newMeasurement: UIMeasurement = { 
-                                ...measurementToDuplicate, 
-                                id: Date.now(), 
+                            const newMeasurement: UIMeasurement = {
+                                ...measurementToDuplicate,
+                                id: Date.now(),
                                 isNew: false
                             };
                             const index = measurements.findIndex(m => m.id === measurementToDuplicate.id);
@@ -2086,7 +2080,7 @@ const App: React.FC = () => {
                     confirmButtonVariant="danger"
                 />
             )}
-             {filmToDeleteName !== null && (
+            {filmToDeleteName !== null && (
                 <ConfirmationModal
                     isOpen={filmToDeleteName !== null}
                     onClose={() => setFilmToDeleteName(null)}
@@ -2160,14 +2154,14 @@ const App: React.FC = () => {
                     confirmButtonVariant="danger"
                 />
             )}
-             {pdfGenerationStatus !== 'idle' && (
+            {pdfGenerationStatus !== 'idle' && (
                 <PdfGenerationStatusModal
                     status={pdfGenerationStatus as 'generating' | 'success'}
                     onClose={handleClosePdfStatusModal}
                     onGoToHistory={handleGoToHistoryFromPdf}
                 />
             )}
-             {editingMeasurementForDiscount && (
+            {editingMeasurementForDiscount && (
                 <DiscountModal
                     isOpen={!!editingMeasurementForDiscount}
                     onClose={handleCloseDiscountModal}
