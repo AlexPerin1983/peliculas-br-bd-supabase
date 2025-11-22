@@ -31,6 +31,7 @@ import { usePwaInstallPrompt } from './src/hooks/usePwaInstallPrompt';
 import { usePwaUpdate } from './src/hooks/usePwaUpdate';
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 import { useError } from './src/contexts/ErrorContext';
+import { CardSkeleton } from './components/ui/Skeleton';
 
 
 const UserSettingsView = lazy(() => import('./components/views/UserSettingsView'));
@@ -1686,8 +1687,8 @@ const App: React.FC = () => {
 
 
     const LoadingSpinner = () => (
-        <div className="flex items-center justify-center h-full min-h-[300px]">
-            <div className="loader"></div>
+        <div className="w-full p-4">
+            <CardSkeleton count={3} />
         </div>
     );
 

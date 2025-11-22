@@ -255,6 +255,26 @@ const FilmCard: React.FC<{
 const FilmListView: React.FC<FilmListViewProps> = ({ films, onAdd, onEdit, onDelete, onOpenGallery }) => {
     const [expandedFilmName, setExpandedFilmName] = useState<string | null>(null);
     const [swipedItemName, setSwipedItemName] = useState<string | null>(null);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [visibleCount, setVisibleCount] = useState(10);
+
+    const filteredFilms = React.useMemo(() => {
+        if (!searchTerm.trim()) return films;
+        const lowerTerm = searchTerm.toLowerCase().trim();
+        return films.filter(film =>
+            film.nome.toLowerCase().includes(lowerTerm) ||
+            (film.preco && film.preco.toString().includes(lowerTerm)) ||
+            (film.maoDeObra && film.maoDeObra.toString().includes(lowerTerm))
+        );
+    }, [films, searchTerm]);
+
+    const displayedFilms = React.useMemo(() => {
+        return filteredFilms.slice(0, visibleCount);
+    }, [filteredFilms, visibleCount]);
+
+    const handleLoadMore = () => {
+        setVisibleCount(prev => prev + 10);
+    };
 
     const handleToggleExpand = (filmName: string) => {
         setExpandedFilmName(prev => (prev === filmName ? null : filmName));
@@ -275,9 +295,39 @@ const FilmListView: React.FC<FilmListViewProps> = ({ films, onAdd, onEdit, onDel
                 )}
             </div>
 
-            {films.length > 0 ? (
+            {/* Search Bar */}
+            {films.length > 0 && (
+                <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <i className="fas fa-search text-slate-400 text-lg"></i>
+                    </div>
+                    <input
+                        type="text"
+                        placeholder="Buscar película..."
+                        className="w-full pl-12 pr-10 py-4 rounded-xl border-none bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 shadow-sm focus:ring-2 focus:ring-slate-500 transition-all text-base"
+                        value={searchTerm}
+                        onChange={(e) => {
+                            setSearchTerm(e.target.value);
+                            setVisibleCount(10);
+                        }}
+                    />
+                    {searchTerm && (
+                        <button
+                            onClick={() => {
+                                setSearchTerm('');
+                                setVisibleCount(10);
+                            }}
+                            className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                        >
+                            <i className="fas fa-times-circle text-lg"></i>
+                        </button>
+                    )}
+                </div>
+            )}
+
+            {displayedFilms.length > 0 ? (
                 <div className="space-y-3">
-                    {films.map(film => (
+                    {displayedFilms.map(film => (
                         <FilmCard
                             key={film.nome}
                             film={film}
@@ -290,6 +340,26 @@ const FilmListView: React.FC<FilmListViewProps> = ({ films, onAdd, onEdit, onDel
                             onOpenGallery={onOpenGallery}
                         />
                     ))}
+
+                    {visibleCount < filteredFilms.length && (
+                        <div className="pt-4 flex justify-center">
+                            <button
+                                onClick={handleLoadMore}
+                                className="group flex items-center gap-2 px-6 py-3 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-semibold rounded-full shadow-md hover:shadow-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-all duration-300"
+                            >
+                                <span>Carregar mais</span>
+                                <i className="fas fa-chevron-down text-sm group-hover:translate-y-0.5 transition-transform"></i>
+                            </button>
+                        </div>
+                    )}
+                </div>
+            ) : searchTerm ? (
+                <div className="text-center py-12">
+                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 mb-4">
+                        <i className="fas fa-search text-slate-400 text-2xl"></i>
+                    </div>
+                    <h3 className="text-lg font-medium text-slate-900 dark:text-slate-100">Nenhuma película encontrada</h3>
+                    <p className="text-slate-500 dark:text-slate-400 mt-1">Tente buscar com outros termos.</p>
                 </div>
             ) : (
                 <div className="text-center p-8 flex flex-col items-center justify-center h-full min-h-[300px] bg-slate-50 dark:bg-slate-900 rounded-lg border-2 border-dashed border-slate-200 dark:border-slate-700 mt-4">

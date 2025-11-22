@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Client } from '../../types';
+import { ListSkeleton } from '../ui/Skeleton';
 
 const useDebounce = (value: string, delay: number) => {
     const [debouncedValue, setDebouncedValue] = useState(value);
@@ -127,10 +128,7 @@ const ClientSelectionModal: React.FC<ClientSelectionModalProps> = ({
             <div className="flex-grow overflow-y-auto p-4">
                 <div className="max-w-3xl mx-auto space-y-2">
                     {isLoading ? (
-                        <div className="text-center p-10 text-slate-500 dark:text-slate-400">
-                            <i className="fas fa-spinner fa-spin text-2xl"></i>
-                            <p className="mt-2">Carregando clientes...</p>
-                        </div>
+                        <ListSkeleton count={6} />
                     ) : (
                         <>
 
