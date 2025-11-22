@@ -19,16 +19,16 @@ const ToggleSwitch: React.FC<{ id: string; checked: boolean; onChange: (checked:
             onChange={(e) => onChange(e.target.checked)}
             className="sr-only peer"
         />
-        <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-slate-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-slate-800"></div>
+        <div className="w-11 h-6 bg-slate-200 dark:bg-slate-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-slate-300 dark:peer-focus:ring-slate-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-slate-800 dark:peer-checked:bg-slate-500"></div>
     </label>
 );
 
 const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({ isOpen, onClose, onSave, paymentMethods }) => {
-    
+
     const getMethod = (type: PaymentMethod['tipo']): Partial<PaymentMethod> => {
         return paymentMethods.find(m => m.tipo === type) || { ativo: false };
     };
-    
+
     const [methods, setMethods] = useState({
         pix: getMethod('pix'),
         boleto: getMethod('boleto'),
@@ -37,10 +37,10 @@ const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({ isOpen, onClo
         adiantamento: getMethod('adiantamento'),
         observacao: getMethod('observacao')
     });
-    
+
     useEffect(() => {
-        if(isOpen) {
-             setMethods({
+        if (isOpen) {
+            setMethods({
                 pix: getMethod('pix'),
                 boleto: getMethod('boleto'),
                 semJuros: getMethod('parcelado_sem_juros'),
@@ -49,13 +49,13 @@ const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({ isOpen, onClo
                 observacao: getMethod('observacao')
             });
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen, paymentMethods]);
 
     const handleToggleChange = (methodKey: keyof typeof methods, checked: boolean) => {
         setMethods(prev => ({ ...prev, [methodKey]: { ...prev[methodKey], ativo: checked } }));
     };
-    
+
     const handleInputChange = (methodKey: keyof typeof methods, field: keyof PaymentMethod, value: any) => {
         setMethods(prev => ({ ...prev, [methodKey]: { ...prev[methodKey], [field]: value } }));
     };
@@ -89,7 +89,7 @@ const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({ isOpen, onClo
         ];
         onSave(finalMethods);
     };
-    
+
     const renderMethod = (
         methodKey: keyof typeof methods,
         title: string,
@@ -99,10 +99,10 @@ const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({ isOpen, onClo
         const isActive = !!method.ativo;
 
         return (
-            <div className={`p-4 rounded-lg border transition-all duration-300 ${isActive ? 'bg-white border-slate-300 shadow-sm' : 'bg-slate-50 border-slate-200'}`}>
+            <div className={`p-4 rounded-lg border transition-all duration-300 ${isActive ? 'bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 shadow-sm' : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700'}`}>
                 <div className="flex justify-between items-center">
                     {/* FIX: Explicitly convert methodKey to string to avoid implicit conversion error. */}
-                    <label htmlFor={`toggle-${String(methodKey)}`} className="font-semibold text-slate-800 cursor-pointer select-none">{title}</label>
+                    <label htmlFor={`toggle-${String(methodKey)}`} className="font-semibold text-slate-800 dark:text-slate-200 cursor-pointer select-none">{title}</label>
                     <ToggleSwitch
                         // FIX: Explicitly convert methodKey to string to avoid implicit conversion error.
                         id={`toggle-${String(methodKey)}`}
@@ -111,7 +111,7 @@ const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({ isOpen, onClo
                     />
                 </div>
                 {isActive && children && (
-                    <div className="mt-4 pt-4 border-t border-slate-200 space-y-3">
+                    <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 space-y-3">
                         {children}
                     </div>
                 )}
@@ -119,15 +119,15 @@ const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({ isOpen, onClo
         );
     };
 
-     const footer = (
+    const footer = (
         <>
-            <button onClick={onClose} className="px-4 py-2 text-sm font-semibold rounded-md hover:bg-slate-100">
+            <button onClick={onClose} className="px-4 py-2 text-sm font-semibold rounded-md hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700">
                 Cancelar
             </button>
             <button
                 type="submit"
                 form="paymentMethodsForm"
-                className="px-4 py-2 bg-slate-800 text-white text-sm font-semibold rounded-md hover:bg-slate-700"
+                className="px-4 py-2 bg-slate-800 text-white text-sm font-semibold rounded-md hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600"
             >
                 Salvar Alterações
             </button>
@@ -148,7 +148,7 @@ const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({ isOpen, onClo
                             placeholder="Digite a chave Pix"
                         />
                         <div>
-                            <label className="block text-sm font-medium text-slate-700">Tipo da Chave:</label>
+                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Tipo da Chave:</label>
                             <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
                                 {([
                                     { value: 'cpf', label: 'CPF' },
@@ -157,16 +157,16 @@ const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({ isOpen, onClo
                                     { value: 'email', label: 'Email' },
                                     { value: 'aleatoria', label: 'Chave Aleatória' },
                                 ] as const).map(option => (
-                                    <label key={option.value} className={`flex items-center p-3 rounded-md border hover:bg-slate-50 transition-colors cursor-pointer ${methods.pix.tipo_chave_pix === option.value ? 'bg-slate-100 border-slate-400' : 'border-slate-200'}`}>
+                                    <label key={option.value} className={`flex items-center p-3 rounded-md border hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors cursor-pointer ${methods.pix.tipo_chave_pix === option.value ? 'bg-slate-100 dark:bg-slate-700 border-slate-400 dark:border-slate-500' : 'border-slate-200 dark:border-slate-600'}`}>
                                         <input
                                             type="radio"
                                             name="tipo_chave_pix"
                                             value={option.value}
                                             checked={methods.pix.tipo_chave_pix === option.value}
                                             onChange={() => handleInputChange('pix', 'tipo_chave_pix', option.value)}
-                                            className="h-4 w-4 text-slate-800 border-slate-300 focus:ring-slate-500"
+                                            className="h-4 w-4 text-slate-800 border-slate-300 focus:ring-slate-500 dark:bg-slate-600 dark:border-slate-500"
                                         />
-                                        <span className="ml-3 text-sm font-medium text-slate-800">{option.label}</span>
+                                        <span className="ml-3 text-sm font-medium text-slate-800 dark:text-slate-200">{option.label}</span>
                                     </label>
                                 ))}
                             </div>
@@ -184,7 +184,7 @@ const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({ isOpen, onClo
                 {renderMethod('boleto', 'Boleto Bancário')}
 
                 {renderMethod('semJuros', 'Parcelado s/ Juros', (
-                    <Input 
+                    <Input
                         id="parcelas_sem_juros"
                         label="Nº Máximo de Parcelas:"
                         type="number"
@@ -197,7 +197,7 @@ const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({ isOpen, onClo
 
                 {renderMethod('comJuros', 'Parcelado c/ Juros', (
                     <div className="grid grid-cols-2 gap-3 items-end">
-                         <Input
+                        <Input
                             id="parcelas_com_juros"
                             label="Nº Máximo de Parcelas:"
                             type="number"
@@ -206,7 +206,7 @@ const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({ isOpen, onClo
                             value={String(methods.comJuros.parcelas_max || '')}
                             onChange={e => handleNumericInputChange('comJuros', 'parcelas_max', e.target.value)}
                         />
-                         <Input
+                        <Input
                             id="taxa_juros"
                             label="Taxa de Juros (%):"
                             type="number"
@@ -218,7 +218,7 @@ const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({ isOpen, onClo
                         />
                     </div>
                 ))}
-                
+
                 {renderMethod('adiantamento', 'Solicitar Adiantamento', (
                     <Input
                         id="porcentagem_adiantamento"
@@ -231,7 +231,7 @@ const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({ isOpen, onClo
                         onChange={e => handleNumericInputChange('adiantamento', 'porcentagem', e.target.value, true)}
                     />
                 ))}
-                
+
                 {renderMethod('observacao', 'Adicionar Observação', (
                     <Input
                         as="textarea"

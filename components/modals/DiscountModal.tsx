@@ -25,7 +25,7 @@ const DiscountModal: React.FC<DiscountModalProps> = ({ isOpen, onClose, onSave, 
             setTimeout(() => inputRef.current?.focus(), 100);
         }
     }, [isOpen, initialValue, initialType]);
-    
+
     const handleValueChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const val = e.target.value;
         // Permite apenas números, vírgula e ponto
@@ -33,7 +33,7 @@ const DiscountModal: React.FC<DiscountModalProps> = ({ isOpen, onClose, onSave, 
             setValue(val);
         }
     };
-    
+
     const handleSubmit = (e: FormEvent) => {
         e.preventDefault();
         // Converte para número usando ponto como separador antes de salvar
@@ -47,31 +47,31 @@ const DiscountModal: React.FC<DiscountModalProps> = ({ isOpen, onClose, onSave, 
     };
 
     const footer = (
-      <>
-        <button onClick={onClose} className="px-4 py-2 text-sm font-semibold rounded-md hover:bg-slate-100">
-          Cancelar
-        </button>
-        <button
-          type="submit"
-          form="discountForm"
-          className="px-4 py-2 bg-slate-800 text-white text-sm font-semibold rounded-md hover:bg-slate-700"
-        >
-          Salvar Desconto
-        </button>
-      </>
+        <>
+            <button onClick={onClose} className="px-4 py-2 text-sm font-semibold rounded-md hover:bg-slate-100">
+                Cancelar
+            </button>
+            <button
+                type="submit"
+                form="discountForm"
+                className="px-4 py-2 bg-slate-800 text-white text-sm font-semibold rounded-md hover:bg-slate-700"
+            >
+                Salvar Desconto
+            </button>
+        </>
     );
 
     return (
-        <Modal 
-            isOpen={isOpen} 
-            onClose={onClose} 
-            title="Aplicar Desconto no Item" 
+        <Modal
+            isOpen={isOpen}
+            onClose={onClose}
+            title="Aplicar Desconto no Item"
             footer={footer}
             wrapperClassName="sm:items-center items-start pt-20 sm:pt-4"
         >
             <form id="discountForm" onSubmit={handleSubmit} className="space-y-4">
-                 <div>
-                    <label className="block text-sm font-medium text-slate-600">Valor do Desconto</label>
+                <div>
+                    <label className="block text-sm font-medium text-slate-600 dark:text-slate-300">Valor do Desconto</label>
                     <div className="mt-1 flex">
                         <input
                             ref={inputRef}
@@ -85,24 +85,24 @@ const DiscountModal: React.FC<DiscountModalProps> = ({ isOpen, onClose, onSave, 
                                     inputRef.current?.focus();
                                 }
                             }}
-                            className="w-full p-2 bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-l-md shadow-sm focus:ring-slate-500 focus:border-slate-500 sm:text-sm"
+                            className="w-full p-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 border border-slate-300 dark:border-slate-600 rounded-l-md shadow-sm focus:ring-slate-500 focus:border-slate-500 sm:text-sm"
                             placeholder="0"
                             inputMode="decimal"
                         />
                         <div className="flex">
-                            <button 
-                                type="button" 
-                                onClick={() => setType('percentage')} 
+                            <button
+                                type="button"
+                                onClick={() => setType('percentage')}
                                 onMouseDown={handleButtonMouseDown}
-                                className={`px-4 py-2 text-sm font-semibold border-t border-b transition-colors ${type === 'percentage' ? 'bg-slate-800 text-white border-slate-800 z-10' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}
+                                className={`px-4 py-2 text-sm font-semibold border-t border-b transition-colors ${type === 'percentage' ? 'bg-slate-800 text-white border-slate-800 z-10 dark:bg-slate-600 dark:border-slate-500' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50 dark:bg-slate-700 dark:text-slate-300 dark:border-slate-600 dark:hover:bg-slate-600'}`}
                             >
                                 %
                             </button>
-                            <button 
-                                type="button" 
-                                onClick={() => setType('fixed')} 
+                            <button
+                                type="button"
+                                onClick={() => setType('fixed')}
                                 onMouseDown={handleButtonMouseDown}
-                                className={`px-4 py-2 text-sm font-semibold border rounded-r-md ${type === 'fixed' ? 'bg-slate-800 text-white border-slate-800 z-10' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}
+                                className={`px-4 py-2 text-sm font-semibold border rounded-r-md ${type === 'fixed' ? 'bg-slate-800 text-white border-slate-800 z-10 dark:bg-slate-600 dark:border-slate-500' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50 dark:bg-slate-700 dark:text-slate-300 dark:border-slate-600 dark:hover:bg-slate-600'}`}
                             >
                                 R$
                             </button>
