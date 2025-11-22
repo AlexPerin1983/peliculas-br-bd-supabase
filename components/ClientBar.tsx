@@ -41,6 +41,44 @@ const ClientBar: React.FC<ClientBarProps> = ({
     const SWIPE_THRESHOLD = 50;
     const TIME_THRESHOLD = 500;
 
+    // Sheet Swipe Logic
+    const sheetTouchStartY = useRef(0);
+    const sheetRef = useRef<HTMLDivElement>(null);
+
+    const handleSheetTouchStart = (e: React.TouchEvent) => {
+        sheetTouchStartY.current = e.touches[0].clientY;
+        // Disable transition during drag for instant response
+        if (sheetRef.current) {
+            sheetRef.current.style.transition = 'none';
+        }
+    };
+
+    const handleSheetTouchMove = (e: React.TouchEvent) => {
+        // We don't call preventDefault here to avoid 'passive event listener' warnings
+        // Instead, we rely on CSS 'touch-action: none' on the handle
+
+        const currentY = e.touches[0].clientY;
+        const deltaY = currentY - sheetTouchStartY.current;
+
+        // Only allow dragging down (positive deltaY)
+        if (deltaY > 0 && sheetRef.current) {
+            sheetRef.current.style.transform = `translateY(${deltaY}px)`;
+        }
+    };
+
+    const handleSheetTouchEnd = (e: React.TouchEvent) => {
+        const currentY = e.changedTouches[0].clientY;
+        const deltaY = currentY - sheetTouchStartY.current;
+
+        if (deltaY > 100) { // Threshold to close
+            setIsMenuOpen(false);
+        } else if (sheetRef.current) {
+            // Snap back if not dragged enough
+            sheetRef.current.style.transition = 'transform 0.3s ease-out';
+            sheetRef.current.style.transform = '';
+        }
+    };
+
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
@@ -120,6 +158,17 @@ const ClientBar: React.FC<ClientBarProps> = ({
         const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
 
         window.open(whatsappUrl, '_blank');
+    };
+
+    const handleCall = () => {
+        if (!selectedClient || !selectedClient.telefone) return;
+        window.open(`tel:${selectedClient.telefone}`, '_self');
+    };
+
+    const handleOpenMaps = () => {
+        if (!fullAddress) return;
+        const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullAddress)}`;
+        window.open(mapsUrl, '_blank');
     };
 
     const ActionButton: React.FC<{
@@ -263,6 +312,18 @@ const ClientBar: React.FC<ClientBarProps> = ({
                                             label="WhatsApp"
                                             isWhatsApp
                                             disabled={!selectedClient.telefone}
+                                        />
+                                        <MenuItem
+                                            onClick={handleCall}
+                                            icon="fas fa-phone"
+                                            label="Ligar"
+                                            disabled={!selectedClient.telefone}
+                                        />
+                                        <MenuItem
+                                            onClick={handleOpenMaps}
+                                            icon="fas fa-map-marker-alt"
+                                            label="Endereço"
+                                            disabled={!fullAddress}
                                         />
                                         <div className="border-t border-slate-200 dark:border-slate-700 my-1"></div>
                                         <MenuItem
@@ -409,12 +470,22 @@ const ClientBar: React.FC<ClientBarProps> = ({
                     ></div>
 
                     {/* Sheet */}
-                    <div className="relative w-full bg-white dark:bg-slate-800 rounded-t-2xl shadow-2xl overflow-hidden animate-slide-up max-w-md mx-auto">
-                        <div className="flex justify-center pt-3 pb-2">
+                    <div
+                        ref={sheetRef}
+                        className="relative w-full bg-white dark:bg-slate-800 rounded-t-2xl shadow-2xl animate-slide-up max-w-md mx-auto flex flex-col max-h-[85vh]"
+                    >
+                        {/* Drag Handle Area - Fixed at top */}
+                        <div
+                            className="flex justify-center pt-3 pb-2 cursor-grab active:cursor-grabbing flex-shrink-0 touch-none"
+                            onTouchStart={handleSheetTouchStart}
+                            onTouchMove={handleSheetTouchMove}
+                            onTouchEnd={handleSheetTouchEnd}
+                        >
                             <div className="w-12 h-1.5 bg-slate-300 dark:bg-slate-600 rounded-full"></div>
                         </div>
 
-                        <div className="px-4 pb-4 pt-2">
+                        {/* Scrollable Content Area */}
+                        <div className="px-4 pb-4 pt-2 overflow-y-auto overscroll-contain">
                             <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-1 px-2">Ações do Cliente</h3>
                             <p className="text-sm text-slate-500 dark:text-slate-400 px-2 mb-4">O que deseja fazer com {selectedClient?.nome}?</p>
 
@@ -426,6 +497,20 @@ const ClientBar: React.FC<ClientBarProps> = ({
                                     description="Iniciar conversa direta"
                                     isWhatsApp
                                     disabled={!selectedClient?.telefone}
+                                />
+                                <MenuItem
+                                    onClick={handleCall}
+                                    icon="fas fa-phone"
+                                    label="Ligar"
+                                    description="Fazer uma chamada de voz"
+                                    disabled={!selectedClient?.telefone}
+                                />
+                                <MenuItem
+                                    onClick={handleOpenMaps}
+                                    icon="fas fa-map-marker-alt"
+                                    label="Ver Endereço"
+                                    description="Abrir no Google Maps"
+                                    disabled={!fullAddress}
                                 />
                                 <div className="h-px bg-slate-100 dark:bg-slate-700 my-1 mx-4"></div>
                                 <MenuItem
