@@ -50,6 +50,17 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
         }
     }, [measurement, isOpen]);
 
+    const larguraRef = useRef<HTMLInputElement>(null);
+    const alturaRef = useRef<HTMLInputElement>(null);
+    const quantidadeRef = useRef<HTMLInputElement>(null);
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, nextRef: React.RefObject<HTMLInputElement>) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            nextRef.current?.focus();
+        }
+    };
+
     if (!isOpen) return null;
 
     const handleLocalUpdate = (updatedData: Partial<Measurement>) => {
@@ -156,28 +167,36 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
                         <div className="grid grid-cols-3 gap-3">
                             <LabeledInput label="Largura (m)">
                                 <input
+                                    ref={larguraRef}
                                     type="text"
                                     inputMode="decimal"
+                                    enterKeyHint="next"
                                     defaultValue={String(localMeasurement.largura)}
                                     onBlur={(e) => handleBlur(e, 'largura')}
                                     onFocus={handleFocus}
+                                    onKeyDown={(e) => handleKeyDown(e, alturaRef)}
                                     className={inputClasses}
                                 />
                             </LabeledInput>
                             <LabeledInput label="Altura (m)">
                                 <input
+                                    ref={alturaRef}
                                     type="text"
                                     inputMode="decimal"
+                                    enterKeyHint="next"
                                     defaultValue={String(localMeasurement.altura)}
                                     onBlur={(e) => handleBlur(e, 'altura')}
                                     onFocus={handleFocus}
+                                    onKeyDown={(e) => handleKeyDown(e, quantidadeRef)}
                                     className={inputClasses}
                                 />
                             </LabeledInput>
                             <LabeledInput label="Quantidade">
                                 <input
+                                    ref={quantidadeRef}
                                     type="text"
                                     inputMode="numeric"
+                                    enterKeyHint="done"
                                     defaultValue={String(localMeasurement.quantidade)}
                                     onBlur={(e) => handleBlur(e, 'quantidade')}
                                     onFocus={handleFocus}
