@@ -34,14 +34,20 @@ const ClientSelectionModal: React.FC<ClientSelectionModalProps> = ({
 }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const debouncedSearchTerm = useDebounce(searchTerm, 200);
+    const [visibleCount, setVisibleCount] = useState(10);
     const inputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         if (isOpen) {
             setSearchTerm('');
+            setVisibleCount(10);
             setTimeout(() => inputRef.current?.focus(), 100);
         }
     }, [isOpen]);
+
+    useEffect(() => {
+        setVisibleCount(10);
+    }, [debouncedSearchTerm]);
 
     const filteredClients = useMemo(() => {
         if (isLoading) return [];
@@ -52,6 +58,14 @@ const ClientSelectionModal: React.FC<ClientSelectionModalProps> = ({
             client.nome.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
         );
     }, [clients, debouncedSearchTerm, isLoading]);
+
+    const displayedClients = useMemo(() => {
+        return filteredClients.slice(0, visibleCount);
+    }, [filteredClients, visibleCount]);
+
+    const handleLoadMore = () => {
+        setVisibleCount(prev => prev + 10);
+    };
 
     if (!isOpen) return null;
 
@@ -84,21 +98,23 @@ const ClientSelectionModal: React.FC<ClientSelectionModalProps> = ({
                     </button>
                 </div>
                 <div className="mt-4 max-w-3xl mx-auto relative">
-                    <i className="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <i className="fas fa-search text-slate-400 text-lg"></i>
+                    </div>
                     <input
                         ref={inputRef}
                         type="text"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         placeholder="Buscar pelo nome do cliente..."
-                        className="w-full pl-12 pr-4 py-3 bg-slate-100 dark:bg-slate-800 border border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400"
+                        className="w-full pl-12 pr-10 py-4 rounded-xl border-none bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 shadow-inner focus:ring-2 focus:ring-slate-500 transition-all text-base"
                         disabled={isLoading}
                     />
                     {searchTerm && (
                         <button
                             type="button"
                             onClick={handleClearSearch}
-                            className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 h-8 w-8 flex items-center justify-center"
+                            className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
                             aria-label="Limpar busca"
                         >
                             <i className="fas fa-times-circle text-lg"></i>
@@ -117,7 +133,8 @@ const ClientSelectionModal: React.FC<ClientSelectionModalProps> = ({
                         </div>
                     ) : (
                         <>
-                            {filteredClients.map(client => (
+
+                            {displayedClients.map(client => (
                                 <button
                                     key={client.id}
                                     onClick={() => handleSelectClient(client.id!)}
@@ -130,6 +147,18 @@ const ClientSelectionModal: React.FC<ClientSelectionModalProps> = ({
                                     <i className="fas fa-chevron-right text-slate-400"></i>
                                 </button>
                             ))}
+
+                            {visibleCount < filteredClients.length && (
+                                <div className="pt-4 flex justify-center">
+                                    <button
+                                        onClick={handleLoadMore}
+                                        className="group flex items-center gap-2 px-6 py-3 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-semibold rounded-full shadow-md hover:shadow-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-all duration-300"
+                                    >
+                                        <span>Carregar mais</span>
+                                        <i className="fas fa-chevron-down text-sm group-hover:translate-y-0.5 transition-transform"></i>
+                                    </button>
+                                </div>
+                            )}
                             {filteredClients.length === 0 && debouncedSearchTerm && (
                                 <div className="text-center py-10 px-4">
                                     <p className="text-slate-500 dark:text-slate-400 mb-4">Nenhum cliente encontrado com o nome <strong className="text-slate-700 dark:text-slate-300">"{debouncedSearchTerm}"</strong>.</p>
