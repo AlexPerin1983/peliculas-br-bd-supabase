@@ -19,6 +19,7 @@ interface MeasurementGroupProps {
     films: Film[];
     onUpdate: (updatedMeasurement: Partial<Measurement>) => void;
     onDelete: () => void;
+    onDeleteImmediate: () => void;
     onDuplicate: () => void;
     onOpenFilmSelectionModal: (measurementId: number) => void;
     onOpenEditModal: (measurement: UIMeasurement) => void;
@@ -45,6 +46,7 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
     films,
     onUpdate,
     onDelete,
+    onDeleteImmediate,
     onDuplicate,
     onOpenFilmSelectionModal,
     onOpenEditModal,
@@ -75,7 +77,15 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
     const gestureDirection = useRef<'horizontal' | 'vertical' | null>(null);
     const currentTranslateX = useRef(0);
     const swipeableRef = useRef<HTMLDivElement>(null);
-    const ACTIONS_WIDTH = 160;
+
+    // New Physics & Thresholds
+    const EDIT_THRESHOLD = 60;             // Reduced from 80
+    const DUPLICATE_THRESHOLD = 140;       // Reduced from 180
+    const DELETE_REVEAL_THRESHOLD = -60;   // Reduced from -80
+    const DELETE_AUTO_THRESHOLD = -170;    // Reduced from -220
+
+    // We use translateX directly for rendering, but keep track of the "intent" for vibration
+    const lastVibrationIntent = useRef<'none' | 'edit' | 'duplicate' | 'delete' | 'auto-delete'>('none');
 
     useEffect(() => {
         if (swipedItemId !== measurement.id && swipeableRef.current) {
@@ -83,6 +93,7 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
             swipeableRef.current.style.transform = `translateX(0px)`;
             currentTranslateX.current = 0;
             setTranslateX(0);
+            lastVibrationIntent.current = 'none';
         }
     }, [swipedItemId, measurement.id]);
 
@@ -96,6 +107,7 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
         gestureDirection.current = null;
         touchStartX.current = e.touches[0].clientX;
         touchStartY.current = e.touches[0].clientY;
+        lastVibrationIntent.current = 'none';
 
         if (swipeableRef.current) {
             swipeableRef.current.style.transition = 'none';
@@ -118,17 +130,51 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
 
         if (e.cancelable) e.preventDefault();
 
-        const newTranslateX = currentTranslateX.current + deltaX;
+        // Calculate raw translation
+        let newTranslateX = currentTranslateX.current + deltaX;
 
-        let finalTranslateX = newTranslateX;
+        // Smoother Physics: Linear Damping (Rubber Band)
+        // Instead of complex power curves, use simple damping factors
+        // This feels more "responsive" and less "heavy"
+
         if (newTranslateX > 0) {
-            finalTranslateX = Math.pow(newTranslateX, 0.7);
-        } else if (newTranslateX < -ACTIONS_WIDTH) {
-            const overflow = -ACTIONS_WIDTH - newTranslateX;
-            finalTranslateX = -ACTIONS_WIDTH - Math.pow(overflow, 0.7);
+            // Right Swipe (Edit -> Duplicate)
+            if (newTranslateX > EDIT_THRESHOLD) {
+                // Apply 0.4x resistance after the first threshold
+                const extra = newTranslateX - EDIT_THRESHOLD;
+                newTranslateX = EDIT_THRESHOLD + (extra * 0.4);
+            }
+        } else {
+            // Left Swipe (Delete)
+            if (newTranslateX < DELETE_REVEAL_THRESHOLD) {
+                // Apply 0.4x resistance after the reveal threshold
+                const extra = newTranslateX - DELETE_REVEAL_THRESHOLD;
+                newTranslateX = DELETE_REVEAL_THRESHOLD + (extra * 0.4);
+            }
         }
 
-        swipeableRef.current.style.transform = `translateX(${finalTranslateX}px)`;
+        // Haptic Feedback Logic based on Threshold Crossings
+        let currentIntent: 'none' | 'edit' | 'duplicate' | 'delete' | 'auto-delete' = 'none';
+
+        if (newTranslateX > DUPLICATE_THRESHOLD) currentIntent = 'duplicate';
+        else if (newTranslateX > EDIT_THRESHOLD / 2) currentIntent = 'edit';
+        else if (newTranslateX < DELETE_AUTO_THRESHOLD) currentIntent = 'auto-delete';
+        else if (newTranslateX < DELETE_REVEAL_THRESHOLD / 2) currentIntent = 'delete';
+
+        if (currentIntent !== lastVibrationIntent.current) {
+            if (
+                (currentIntent === 'duplicate' && lastVibrationIntent.current === 'edit') ||
+                (currentIntent === 'auto-delete' && lastVibrationIntent.current === 'delete')
+            ) {
+                if (navigator.vibrate) navigator.vibrate(50);
+            }
+            lastVibrationIntent.current = currentIntent;
+        }
+
+        swipeableRef.current.style.transform = `translateX(${newTranslateX}px)`;
+
+        // Update state for render
+        setTranslateX(newTranslateX);
     };
 
     const handleTouchEnd = () => {
@@ -142,19 +188,62 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
         }
         gestureDirection.current = null;
 
+        // FIX: Read the ACTUAL position from the DOM, not the stored start position
         const transformValue = swipeableRef.current.style.transform;
         const matrix = new DOMMatrix(transformValue);
         const currentX = matrix.m41;
 
-        swipeableRef.current.style.transition = 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)';
-        const threshold = -ACTIONS_WIDTH / 2;
+        let finalAction: 'none' | 'edit' | 'duplicate' | 'delete' = 'none';
 
-        if (currentX < threshold) {
-            swipeableRef.current.style.transform = `translateX(-${ACTIONS_WIDTH}px)`;
-            currentTranslateX.current = -ACTIONS_WIDTH;
-            setTranslateX(-ACTIONS_WIDTH);
+        // Determine action based on final position
+        if (currentX > DUPLICATE_THRESHOLD) {
+            finalAction = 'duplicate';
+        } else if (currentX > EDIT_THRESHOLD) {
+            finalAction = 'edit';
+        } else if (currentX < DELETE_AUTO_THRESHOLD) {
+            finalAction = 'delete';
+        } else if (currentX < DELETE_REVEAL_THRESHOLD) {
+            // For reveal, we don't execute an action immediately, we just snap to open
+            // But here we handle the snap logic
+        }
+
+        // Execute Action or Snap Back
+        if (finalAction === 'duplicate') {
+            onDuplicate();
+            if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
+
+            // Reset
+            swipeableRef.current.style.transition = 'transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)';
+            swipeableRef.current.style.transform = `translateX(0px)`;
+            currentTranslateX.current = 0;
+            setTranslateX(0);
+        } else if (finalAction === 'delete') {
+            onDeleteImmediate();
+            if (navigator.vibrate) navigator.vibrate(100);
+
+            // Animate out
+            swipeableRef.current.style.transition = 'transform 0.3s ease-out';
+            swipeableRef.current.style.transform = `translateX(-100%)`;
+            onSetSwipedItem(null);
+        } else if (finalAction === 'edit') {
+            // Open Edit Modal
+            onOpenEditModal(measurement);
+
+            // Reset
+            swipeableRef.current.style.transition = 'transform 0.3s ease-out';
+            swipeableRef.current.style.transform = `translateX(0px)`;
+            currentTranslateX.current = 0;
+            setTranslateX(0);
+        } else if (currentX < DELETE_REVEAL_THRESHOLD) {
+            // Snap to reveal delete button
+            swipeableRef.current.style.transition = 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)';
+            swipeableRef.current.style.transform = `translateX(${DELETE_REVEAL_THRESHOLD}px)`;
+            currentTranslateX.current = DELETE_REVEAL_THRESHOLD;
+            setTranslateX(DELETE_REVEAL_THRESHOLD);
             onSetSwipedItem(measurement.id);
         } else {
+            // Snap back to center
+            swipeableRef.current.style.transition = 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)';
             swipeableRef.current.style.transform = `translateX(0px)`;
             currentTranslateX.current = 0;
             setTranslateX(0);
@@ -348,26 +437,71 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
         );
     };
 
+    const renderSwipeBackground = () => {
+        if (translateX === 0) return null;
+
+        const isRightSwipe = translateX > 0;
+        const isLeftSwipe = translateX < 0;
+        const absX = Math.abs(translateX);
+
+        // Right Swipe: Edit -> Duplicate
+        if (isRightSwipe) {
+            const isDuplicate = absX > DUPLICATE_THRESHOLD;
+            // Interpolate color from Slate (Edit) to Green (Duplicate)
+            // We switch class based on threshold for simplicity, but could interpolate
+            const bgClass = isDuplicate
+                ? 'bg-green-500'
+                : 'bg-slate-600';
+
+            const iconClass = isDuplicate ? 'fa-copy' : 'fa-expand-arrows-alt';
+            const text = isDuplicate ? 'Solte para Duplicar' : 'Editar';
+
+            // Scale icon based on pull distance
+            const scale = Math.min(1 + (absX / 300), 1.5);
+
+            return (
+                <div className={`absolute inset-y-0 left-0 flex items-center pl-6 transition-colors duration-200 ${bgClass} w-full rounded-lg`}>
+                    <div className="flex items-center text-white font-bold gap-3" style={{ transform: `scale(${scale})`, transformOrigin: 'left center' }}>
+                        <i className={`fas ${iconClass} text-xl transition-all duration-200`}></i>
+                        <span className="text-sm font-medium">{text}</span>
+                    </div>
+                </div>
+            );
+        }
+
+        // Left Swipe: Delete
+        if (isLeftSwipe) {
+            const isAutoDelete = translateX < DELETE_AUTO_THRESHOLD;
+            const bgClass = 'bg-red-600';
+
+            // For auto-delete, we might want a more intense visual or just the same
+            // The "reveal" logic is handled by the fact that we see this background
+
+            const scale = Math.min(1 + (absX / 300), 1.5);
+
+            return (
+                <div
+                    className={`absolute inset-y-0 right-0 flex items-center justify-end pr-6 transition-colors duration-200 ${bgClass} w-full rounded-lg cursor-pointer`}
+                    onClick={handleDeleteClick}
+                    role="button"
+                    aria-label="Confirmar exclusão"
+                >
+                    <div className="flex items-center text-white font-bold gap-3" style={{ transform: `scale(${scale})`, transformOrigin: 'right center' }}>
+                        <span className="text-sm font-medium">Excluir</span>
+                        <i className="fas fa-trash-alt text-xl"></i>
+                    </div>
+                </div>
+            );
+        }
+
+        return null;
+    };
+
     return (
         <div className={`relative my-2 rounded-lg ${!isModalMode ? 'sm:overflow-visible overflow-hidden' : ''}`}>
-            {/* Background Actions (Swipe) */}
-            <div className="absolute inset-y-0 right-0 flex rounded-r-lg overflow-hidden">
-                <button
-                    onClick={handleMenuClick}
-                    className="w-20 h-full bg-slate-600 text-white flex flex-col items-center justify-center transition-colors hover:bg-slate-700"
-                    aria-label="Editar"
-                >
-                    <i className="fas fa-expand-arrows-alt text-xl"></i>
-                    <span className="text-xs mt-1">Editar</span>
-                </button>
-                <button
-                    onClick={handleDeleteClick}
-                    className="w-20 h-full bg-red-600 text-white flex flex-col items-center justify-center transition-colors hover:bg-red-700"
-                    aria-label="Excluir medida"
-                >
-                    <i className="fas fa-trash-alt text-xl"></i>
-                    <span className="text-xs mt-1">Excluir</span>
-                </button>
+            {/* Dynamic Single Layer Background */}
+            <div className="absolute inset-0 z-0 rounded-lg overflow-hidden">
+                {renderSwipeBackground()}
             </div>
 
             {/* Foreground Content (Swipeable) */}
@@ -377,7 +511,7 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
                 onTouchStart={handleTouchStart}
                 onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}
-                className="relative z-10 w-full"
+                className="relative z-30 w-full"
             >
                 <div
                     ref={groupRef}

@@ -46,6 +46,7 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
     onOpenEditModal,
     onOpenDiscountModal,
     onDeleteMeasurement, // Usando a prop
+    onDeleteMeasurementImmediate,
     swipeDirection = null,
     swipeDistance = 0,
     totalM2,
@@ -477,6 +478,7 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
                             films={films}
                             onUpdate={(updated) => updateMeasurement(measurement.id, updated)}
                             onDelete={() => requestDeleteMeasurement(measurement.id)}
+                            onDeleteImmediate={() => onDeleteMeasurementImmediate(measurement.id)}
                             onDuplicate={() => duplicateMeasurement(measurement.id)}
                             onOpenFilmSelectionModal={onOpenFilmSelectionModal}
                             onOpenEditModal={onOpenEditModal}

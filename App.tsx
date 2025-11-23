@@ -32,6 +32,8 @@ import { usePwaUpdate } from './src/hooks/usePwaUpdate';
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 import { useError } from './src/contexts/ErrorContext';
 import { CardSkeleton } from './components/ui/Skeleton';
+import Toast from './components/ui/Toast';
+
 
 
 const UserSettingsView = lazy(() => import('./components/views/UserSettingsView'));
@@ -134,6 +136,12 @@ const App: React.FC = () => {
     const [galleryInitialIndex, setGalleryInitialIndex] = useState(0);
     const [infoModalConfig, setInfoModalConfig] = useState<{ isOpen: boolean; title: string; message: string }>({ isOpen: false, title: '', message: '' });
     const [isSaveBeforePdfModalOpen, setIsSaveBeforePdfModalOpen] = useState(false);
+
+    // Undo states
+    const [deletedMeasurement, setDeletedMeasurement] = useState<UIMeasurement | null>(null);
+    const [deletedMeasurementIndex, setDeletedMeasurementIndex] = useState<number | null>(null);
+    const [showUndoToast, setShowUndoToast] = useState(false);
+
 
 
     const [numpadConfig, setNumpadConfig] = useState<NumpadConfig>({
@@ -1541,6 +1549,41 @@ const App: React.FC = () => {
         handleRequestDeleteMeasurement(measurementId);
     }, [handleRequestDeleteMeasurement]);
 
+    const handleImmediateDeleteMeasurement = useCallback((measurementId: number) => {
+        const measurementIndex = measurements.findIndex(m => m.id === measurementId);
+        const measurement = measurements[measurementIndex];
+
+        if (measurement && measurementIndex !== -1) {
+            // Save for undo
+            setDeletedMeasurement(measurement);
+            setDeletedMeasurementIndex(measurementIndex);
+            setShowUndoToast(true);
+
+            // Delete
+            handleMeasurementsChange(measurements.filter(m => m.id !== measurementId));
+        }
+    }, [measurements, handleMeasurementsChange]);
+
+    const handleUndoDelete = useCallback(() => {
+        if (deletedMeasurement && deletedMeasurementIndex !== null) {
+            const newMeasurements = [...measurements];
+            newMeasurements.splice(deletedMeasurementIndex, 0, deletedMeasurement);
+            handleMeasurementsChange(newMeasurements);
+
+            // Clear undo state
+            setDeletedMeasurement(null);
+            setDeletedMeasurementIndex(null);
+            setShowUndoToast(false);
+        }
+    }, [deletedMeasurement, deletedMeasurementIndex, measurements, handleMeasurementsChange]);
+
+    const handleDismissUndo = useCallback(() => {
+        setDeletedMeasurement(null);
+        setDeletedMeasurementIndex(null);
+        setShowUndoToast(false);
+    }, []);
+
+
 
     const handleCloseAgendamentoModal = useCallback(() => {
         setSchedulingInfo(null);
@@ -1818,6 +1861,8 @@ const App: React.FC = () => {
                 </div>
             );
         }
+
+
         if (selectedClientId && measurements.length > 0) {
             return (
                 <MeasurementList
@@ -1836,6 +1881,7 @@ const App: React.FC = () => {
                     swipeDirection={swipeDirection}
                     swipeDistance={swipeDistance}
                     onDeleteMeasurement={handleDeleteMeasurementFromGroup}
+                    onDeleteMeasurementImmediate={handleImmediateDeleteMeasurement}
                     totalM2={totals.totalM2}
                     totalQuantity={totals.totalQuantity}
                 />
@@ -2320,6 +2366,14 @@ const App: React.FC = () => {
             )}
             {newVersionAvailable && (
                 <UpdateNotification onUpdate={handleUpdate} />
+            )}
+            {showUndoToast && deletedMeasurement && (
+                <Toast
+                    message="Medida excluída"
+                    onUndo={handleUndoDelete}
+                    onDismiss={handleDismissUndo}
+                    duration={5000}
+                />
             )}
         </div>
     );
