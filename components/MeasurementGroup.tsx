@@ -79,10 +79,10 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
     const swipeableRef = useRef<HTMLDivElement>(null);
 
     // New Physics & Thresholds
-    const EDIT_THRESHOLD = 60;             // Reduced from 80
-    const DUPLICATE_THRESHOLD = 140;       // Reduced from 180
-    const DELETE_REVEAL_THRESHOLD = -60;   // Reduced from -80
-    const DELETE_AUTO_THRESHOLD = -170;    // Reduced from -220
+    const EDIT_THRESHOLD = 60;
+    const DUPLICATE_THRESHOLD = 110;       // Reduced from 140
+    const DELETE_REVEAL_THRESHOLD = -60;
+    const DELETE_AUTO_THRESHOLD = -130;    // Reduced from -170
 
     // We use translateX directly for rendering, but keep track of the "intent" for vibration
     const lastVibrationIntent = useRef<'none' | 'edit' | 'duplicate' | 'delete' | 'auto-delete'>('none');
@@ -121,8 +121,20 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
         const deltaY = e.touches[0].clientY - touchStartY.current;
 
         if (gestureDirection.current === null) {
-            if (Math.abs(deltaX) > 10 || Math.abs(deltaY) > 10) {
-                gestureDirection.current = Math.abs(deltaX) > Math.abs(deltaY) ? 'horizontal' : 'vertical';
+            // More sensitive horizontal detection (5px) vs vertical (10px)
+            // This prevents "locking" into vertical scroll when starting a diagonal swipe
+            if (Math.abs(deltaX) > 5) {
+                // If X is dominant, lock horizontal immediately
+                if (Math.abs(deltaX) > Math.abs(deltaY)) {
+                    gestureDirection.current = 'horizontal';
+                }
+            }
+
+            // Only lock vertical if it's clearly vertical and moved enough
+            if (Math.abs(deltaY) > 10) {
+                if (Math.abs(deltaY) > Math.abs(deltaX)) {
+                    gestureDirection.current = 'vertical';
+                }
             }
         }
 
