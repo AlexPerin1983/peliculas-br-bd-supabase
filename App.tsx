@@ -1843,27 +1843,33 @@ const App: React.FC = () => {
         }
         if (selectedClientId && measurements.length === 0) {
             return (
-                <div className="text-center p-8 flex flex-col items-center justify-center h-full min-h-[300px] bg-slate-50 dark:bg-slate-900 rounded-lg border-2 border-dashed border-slate-200 dark:border-slate-700">
-                    <div className="w-16 h-16 bg-slate-200 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
-                        <i className="fas fa-ruler-combined fa-2x text-slate-500 dark:text-slate-400"></i>
+                <div className="text-center p-8 flex flex-col items-center justify-center h-full min-h-[350px] opacity-0 animate-fade-in">
+                    <div className="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-2xl flex items-center justify-center mb-6 shadow-sm">
+                        <i className="fas fa-ruler-combined text-4xl text-slate-400 dark:text-slate-500"></i>
                     </div>
-                    <h3 className="text-xl font-semibold text-slate-800 dark:text-slate-200">Adicione a Primeira Medida</h3>
-                    <p className="mt-2 text-slate-600 dark:text-slate-400 max-w-xs mx-auto">Insira as dimensões (largura, altura, etc.) para calcular o orçamento deste cliente.</p>
+                    <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-2">Nenhuma Medida Ainda</h3>
+                    <p className="text-slate-600 dark:text-slate-400 max-w-xs mx-auto leading-relaxed mb-8 text-sm">
+                        Adicione as dimensões das janelas para começar o orçamento.
+                    </p>
                     <button
                         onClick={addMeasurement}
-                        className="mt-6 px-6 py-3 bg-slate-800 dark:bg-slate-700 text-white font-semibold rounded-lg hover:bg-slate-700 dark:hover:bg-slate-600 transition duration-300 shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 flex items-center gap-2"
+                        className="px-8 py-3.5 bg-slate-800 dark:bg-slate-700 text-white font-semibold rounded-xl hover:bg-slate-700 dark:hover:bg-slate-600 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-[1.02] flex items-center gap-3"
                     >
-                        <i className="fas fa-plus"></i>
-                        Adicionar Medida
+                        <i className="fas fa-plus text-lg"></i>
+                        <span>Adicionar Medida</span>
                     </button>
                 </div>
             );
         }
         return (
-            <div className="text-center text-slate-500 p-8 flex flex-col items-center justify-center h-full min-h-[300px]">
-                <i className="fas fa-user-check fa-3x mb-4 text-slate-300"></i>
-                <h3 className="text-xl font-semibold">Selecione um Cliente</h3>
-                <p>Use o menu acima para escolher um cliente e ver suas medidas.</p>
+            <div className="text-center p-8 flex flex-col items-center justify-center h-full min-h-[350px] opacity-0 animate-fade-in">
+                <div className="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-2xl flex items-center justify-center mb-6 shadow-sm">
+                    <i className="fas fa-user-check text-4xl text-slate-400 dark:text-slate-500"></i>
+                </div>
+                <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-2">Nenhum Cliente Selecionado</h3>
+                <p className="text-slate-600 dark:text-slate-400 max-w-xs mx-auto leading-relaxed text-sm">
+                    Escolha um cliente no menu acima para ver suas medidas.
+                </p>
             </div>
         );
     }
