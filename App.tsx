@@ -2262,19 +2262,18 @@ const App: React.FC = () => {
                     provider={apiKeyModalProvider}
                 />
             )}
-            {numpadConfig.isOpen && (
-                <CustomNumpad
-                    ref={numpadRef}
-                    onInput={handleNumpadInput}
-                    onDelete={handleNumpadDelete}
-                    onDone={handleNumpadDone}
-                    onClose={handleNumpadClose}
-                    onDuplicate={handleNumpadDuplicate}
-                    onClear={handleNumpadClear}
-                    onAddGroup={handleNumpadAddGroup}
-                    activeField={numpadConfig.field}
-                />
-            )}
+            <CustomNumpad
+                ref={numpadRef}
+                isOpen={numpadConfig.isOpen}
+                onInput={handleNumpadInput}
+                onDelete={handleNumpadDelete}
+                onDone={handleNumpadDone}
+                onClose={handleNumpadClose}
+                onDuplicate={handleNumpadDuplicate}
+                onClear={handleNumpadClear}
+                onAddGroup={handleNumpadAddGroup}
+                activeField={numpadConfig.field}
+            />
             {isGalleryOpen && (
                 <ImageGalleryModal
                     isOpen={isGalleryOpen}
