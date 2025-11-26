@@ -141,6 +141,7 @@ const App: React.FC = () => {
     const [galleryInitialIndex, setGalleryInitialIndex] = useState(0);
     const [infoModalConfig, setInfoModalConfig] = useState<{ isOpen: boolean; title: string; message: string }>({ isOpen: false, title: '', message: '' });
     const [isSaveBeforePdfModalOpen, setIsSaveBeforePdfModalOpen] = useState(false);
+    const [isExitConfirmModalOpen, setIsExitConfirmModalOpen] = useState(false);
 
     // Undo states
     const [deletedMeasurement, setDeletedMeasurement] = useState<UIMeasurement | null>(null);
@@ -159,6 +160,8 @@ const App: React.FC = () => {
 
     const mainRef = useRef<HTMLElement>(null);
     const numpadRef = useRef<HTMLDivElement>(null);
+    const backButtonPressedOnce = useRef(false);
+    const backButtonTimeout = useRef<NodeJS.Timeout | null>(null);
 
     // Handle URL parameters (shortcuts, share target, etc.)
     useEffect(() => {
@@ -197,6 +200,63 @@ const App: React.FC = () => {
             window.history.replaceState({}, '', window.location.pathname);
         }
     }, []);
+
+    // Intercepta o botão voltar do navegador/Android
+    useEffect(() => {
+        const handleBackButton = (event: PopStateEvent) => {
+            // Se o teclado numérico estiver aberto, fecha ele primeiro
+            if (numpadConfig.isOpen) {
+                event.preventDefault();
+                handleNumpadClose();
+                // Adiciona um estado ao histórico para manter o usuário na página
+                window.history.pushState(null, '', window.location.pathname);
+                return;
+            }
+
+            // Se algum modal estiver aberto, não mostra confirmação de saída
+            if (isClientModalOpen || isFilmModalOpen || editingMeasurement ||
+                isFilmSelectionModalOpen || isGalleryOpen || schedulingInfo) {
+                return;
+            }
+
+            // Previne a navegação padrão
+            event.preventDefault();
+
+            // Se já pressionou uma vez recentemente, mostra o modal
+            if (backButtonPressedOnce.current) {
+                setIsExitConfirmModalOpen(true);
+                window.history.pushState(null, '', window.location.pathname);
+            } else {
+                // Primeira vez, apenas marca e adiciona estado ao histórico
+                backButtonPressedOnce.current = true;
+                window.history.pushState(null, '', window.location.pathname);
+
+                // Mostra um toast informando
+                handleShowInfo('Pressione voltar novamente para sair');
+
+                // Reseta após 2 segundos
+                if (backButtonTimeout.current) {
+                    clearTimeout(backButtonTimeout.current);
+                }
+                backButtonTimeout.current = setTimeout(() => {
+                    backButtonPressedOnce.current = false;
+                }, 2000);
+            }
+        };
+
+        // Adiciona um estado inicial ao histórico
+        window.history.pushState(null, '', window.location.pathname);
+
+        window.addEventListener('popstate', handleBackButton);
+
+        return () => {
+            window.removeEventListener('popstate', handleBackButton);
+            if (backButtonTimeout.current) {
+                clearTimeout(backButtonTimeout.current);
+            }
+        };
+    }, [numpadConfig.isOpen, isClientModalOpen, isFilmModalOpen, editingMeasurement,
+        isFilmSelectionModalOpen, isGalleryOpen, schedulingInfo]);
 
     useEffect(() => {
         const mainEl = mainRef.current;
@@ -2276,6 +2336,20 @@ const App: React.FC = () => {
                     }
                     confirmButtonText="Sim, Excluir Agendamento"
                     confirmButtonVariant="danger"
+                />
+            )}
+            {isExitConfirmModalOpen && (
+                <ConfirmationModal
+                    isOpen={isExitConfirmModalOpen}
+                    onClose={() => setIsExitConfirmModalOpen(false)}
+                    onConfirm={() => {
+                        setIsExitConfirmModalOpen(false);
+                        window.history.back();
+                    }}
+                    title="Sair do Aplicativo"
+                    message="Tem certeza que deseja sair do aplicativo?"
+                    confirmButtonText="Sim, Sair"
+                    cancelButtonText="Cancelar"
                 />
             )}
             {pdfGenerationStatus !== 'idle' && (
