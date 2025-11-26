@@ -273,10 +273,19 @@ const FilmSelectionModal: React.FC<FilmSelectionModalProps> = ({ isOpen, onClose
                 film.nome.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
             );
         }
-        // Ordenar: fixados primeiro, depois por nome
+        // Ordenar: fixados primeiro (pelo mais recente), depois por nome
         return result.sort((a, b) => {
             if (a.pinned && !b.pinned) return -1;
             if (!a.pinned && b.pinned) return 1;
+            if (a.pinned && b.pinned) {
+                // Ambos fixados: ordenar por pinnedAt decrescente (mais recente no topo)
+                if (a.pinnedAt && b.pinnedAt) {
+                    return b.pinnedAt - a.pinnedAt;
+                }
+                // Se não tiver pinnedAt (legado), mantém alfabético
+                if (a.pinnedAt && !b.pinnedAt) return -1;
+                if (!a.pinnedAt && b.pinnedAt) return 1;
+            }
             return a.nome.localeCompare(b.nome);
         });
     }, [films, debouncedSearchTerm]);

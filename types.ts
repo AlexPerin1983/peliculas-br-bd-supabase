@@ -14,6 +14,7 @@ export interface Client {
     uf?: string;
     lastUpdated?: string; // Novo campo para rastrear a última modificação
     pinned?: boolean; // Fixar cliente no topo da lista
+    pinnedAt?: number; // Timestamp de quando foi fixado
 }
 
 export interface Measurement {
@@ -57,6 +58,7 @@ export interface Film {
     tser?: number;
     imagens?: string[]; // Alterado para array de strings (Base64)
     pinned?: boolean; // Fixar película no topo da lista
+    pinnedAt?: number; // Timestamp de quando foi fixado
 }
 
 export type PaymentMethodType = 'pix' | 'boleto' | 'parcelado_sem_juros' | 'parcelado_com_juros' | 'adiantamento' | 'observacao';

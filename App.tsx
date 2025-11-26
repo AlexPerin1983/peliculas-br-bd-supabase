@@ -712,7 +712,12 @@ const App: React.FC = () => {
     const handleToggleClientPin = useCallback(async (clientId: number) => {
         const client = clients.find(c => c.id === clientId);
         if (client) {
-            const updatedClient = { ...client, pinned: !client.pinned };
+            const isPinned = !client.pinned;
+            const updatedClient = {
+                ...client,
+                pinned: isPinned,
+                pinnedAt: isPinned ? Date.now() : undefined
+            };
             await db.saveClient(updatedClient);
             await loadClients();
         }
@@ -721,7 +726,12 @@ const App: React.FC = () => {
     const handleToggleFilmPin = useCallback(async (filmName: string) => {
         const film = films.find(f => f.nome === filmName);
         if (film) {
-            const updatedFilm = { ...film, pinned: !film.pinned };
+            const isPinned = !film.pinned;
+            const updatedFilm = {
+                ...film,
+                pinned: isPinned,
+                pinnedAt: isPinned ? Date.now() : undefined
+            };
             await db.saveCustomFilm(updatedFilm);
             await loadFilms();
         }
