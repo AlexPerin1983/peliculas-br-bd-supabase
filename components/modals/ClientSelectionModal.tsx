@@ -167,8 +167,11 @@ const ClientSelectionModal: React.FC<ClientSelectionModalProps> = ({
                 client.nome.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
             );
         }
-        // Ordenar: fixados primeiro (pelo mais recente), depois por nome
-        return result.sort((a, b) => {
+        // Ordenar: fixados primeiro (pelo mais recente), depois por ID decrescente (mais recentes criados)
+        // Importante: criar uma cópia do array para não mutar a prop original
+        const resultCopy = [...result];
+
+        return resultCopy.sort((a, b) => {
             if (a.pinned && !b.pinned) return -1;
             if (!a.pinned && b.pinned) return 1;
             if (a.pinned && b.pinned) {
@@ -176,11 +179,13 @@ const ClientSelectionModal: React.FC<ClientSelectionModalProps> = ({
                 if (a.pinnedAt && b.pinnedAt) {
                     return b.pinnedAt - a.pinnedAt;
                 }
-                // Se não tiver pinnedAt (legado), mantém alfabético ou ordem estável
+                // Se não tiver pinnedAt (legado), mantém ordem estável ou por ID
                 if (a.pinnedAt && !b.pinnedAt) return -1;
                 if (!a.pinnedAt && b.pinnedAt) return 1;
+                return (b.id || 0) - (a.id || 0);
             }
-            return a.nome.localeCompare(b.nome);
+            // Não fixados: ordenar por ID decrescente (mais recentes primeiro)
+            return (b.id || 0) - (a.id || 0);
         });
     }, [clients, debouncedSearchTerm, isLoading]);
 

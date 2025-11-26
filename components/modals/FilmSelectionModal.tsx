@@ -267,27 +267,40 @@ const FilmSelectionModal: React.FC<FilmSelectionModalProps> = ({ isOpen, onClose
     }, [isOpen]);
 
     const filteredFilms = useMemo(() => {
-        let result = films;
+        // Mapear para preservar o índice original (assumindo que a entrada é cronológica/ordem de inserção)
+        // Isso nos permite ordenar por "mais recente" (índice maior) sem ter um campo de data
+        let result = films.map((film, index) => ({ film, index }));
+
         if (debouncedSearchTerm) {
-            result = films.filter(film =>
-                film.nome.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
+            result = result.filter(item =>
+                item.film.nome.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
             );
         }
-        // Ordenar: fixados primeiro (pelo mais recente), depois por nome
-        return result.sort((a, b) => {
-            if (a.pinned && !b.pinned) return -1;
-            if (!a.pinned && b.pinned) return 1;
-            if (a.pinned && b.pinned) {
+
+        // Ordenar: fixados primeiro (pelo mais recente), depois por índice decrescente (mais recentes adicionados)
+        result.sort((a, b) => {
+            const filmA = a.film;
+            const filmB = b.film;
+
+            if (filmA.pinned && !filmB.pinned) return -1;
+            if (!filmA.pinned && filmB.pinned) return 1;
+
+            if (filmA.pinned && filmB.pinned) {
                 // Ambos fixados: ordenar por pinnedAt decrescente (mais recente no topo)
-                if (a.pinnedAt && b.pinnedAt) {
-                    return b.pinnedAt - a.pinnedAt;
+                if (filmA.pinnedAt && filmB.pinnedAt) {
+                    return filmB.pinnedAt - filmA.pinnedAt;
                 }
-                // Se não tiver pinnedAt (legado), mantém alfabético
-                if (a.pinnedAt && !b.pinnedAt) return -1;
-                if (!a.pinnedAt && b.pinnedAt) return 1;
+                // Se não tiver pinnedAt (legado), mantém ordem de índice (mais recente primeiro)
+                if (filmA.pinnedAt && !filmB.pinnedAt) return -1;
+                if (!filmA.pinnedAt && filmB.pinnedAt) return 1;
+                return b.index - a.index;
             }
-            return a.nome.localeCompare(b.nome);
+
+            // Não fixados: ordenar por índice decrescente (mais recentes primeiro)
+            return b.index - a.index;
         });
+
+        return result.map(item => item.film);
     }, [films, debouncedSearchTerm]);
 
     if (!isOpen) return null;
