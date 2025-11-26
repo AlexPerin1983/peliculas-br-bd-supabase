@@ -289,6 +289,21 @@ const App: React.FC = () => {
             await loadClients();
             await loadFilms();
 
+            // Migração automática de PDFs (roda apenas uma vez)
+            const migrationKey = 'pdf_migration_v1_completed';
+            const migrationCompleted = localStorage.getItem(migrationKey);
+
+            if (!migrationCompleted) {
+                try {
+                    console.log('Iniciando migração automática de PDFs...');
+                    const result = await db.migratePDFsWithProposalOptionId();
+                    console.log('Migração concluída:', result);
+                    localStorage.setItem(migrationKey, 'true');
+                } catch (error) {
+                    console.error('Erro na migração automática:', error);
+                }
+            }
+
             setIsLoading(false);
         };
         init();

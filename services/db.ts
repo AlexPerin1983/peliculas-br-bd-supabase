@@ -33,7 +33,7 @@ const openDB = (): Promise<IDBDatabase> => {
                 const pdfStore = db.createObjectStore('pdfs_salvos', { keyPath: 'id', autoIncrement: true });
                 pdfStore.createIndex('clienteId', 'clienteId', { unique: false });
             }
-            
+
             if (event.oldVersion < 5) {
                 if (!db.objectStoreNames.contains('agendamentos')) {
                     const appointmentStore = db.createObjectStore('agendamentos', { keyPath: 'id', autoIncrement: true });
@@ -113,7 +113,7 @@ const dbGetAll = async <T,>(storeName: string): Promise<T[]> => {
 const dbPut = async <T,>(storeName: string, value: any): Promise<T> => {
     const store = await getStore(storeName, 'readwrite');
     const transaction = store.transaction;
-    
+
     return new Promise<T>((resolve, reject) => {
         const request = store.put(value);
         let generatedKey: IDBValidKey | undefined;
@@ -122,7 +122,7 @@ const dbPut = async <T,>(storeName: string, value: any): Promise<T> => {
         request.onsuccess = () => {
             generatedKey = request.result;
         };
-        
+
         // Se a requisição falhar, rejeita imediatamente
         request.onerror = () => {
             reject(request.error);
@@ -243,4 +243,64 @@ export const getAgendamentoByPdfId = async (pdfId: number): Promise<Agendamento 
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error);
     });
+};
+
+// Migração segura: adiciona proposalOptionId aos PDFs antigos
+export const migratePDFsWithProposalOptionId = async (): Promise<{ updated: number; skipped: number; errors: number }> => {
+    try {
+        const allPDFs = await getAllPDFs();
+        const allClients = await getAllClients();
+
+        let updated = 0;
+        let skipped = 0;
+        let errors = 0;
+
+        for (const pdf of allPDFs) {
+            // Pula se já tem proposalOptionId ou não tem proposalOptionName
+            if (pdf.proposalOptionId || !pdf.proposalOptionName) {
+                skipped++;
+                continue;
+            }
+
+            try {
+                // Busca o cliente correspondente
+                const client = allClients.find(c => c.id === pdf.clienteId);
+                if (!client) {
+                    skipped++;
+                    continue;
+                }
+
+                // Busca as opções de proposta do cliente
+                const options = await getProposalOptions(pdf.clienteId);
+
+                // Tenta encontrar a opção pelo nome (case-insensitive e trim)
+                const matchingOption = options.find(opt =>
+                    opt.name.trim().toLowerCase() === pdf.proposalOptionName!.trim().toLowerCase()
+                );
+
+                if (matchingOption) {
+                    // ATUALIZAÇÃO SEGURA: só adiciona o ID, mantém todos os outros dados
+                    const updatedPDF: SavedPDF = {
+                        ...pdf,
+                        proposalOptionId: matchingOption.id
+                    };
+
+                    await updatePDF(updatedPDF);
+                    updated++;
+                } else {
+                    // Não encontrou correspondência, mantém como está
+                    skipped++;
+                }
+            } catch (error) {
+                console.error(`Erro ao migrar PDF ${pdf.id}:`, error);
+                errors++;
+            }
+        }
+
+        console.log(`Migração de PDFs concluída: ${updated} atualizados, ${skipped} ignorados, ${errors} erros`);
+        return { updated, skipped, errors };
+    } catch (error) {
+        console.error('Erro na migração de PDFs:', error);
+        return { updated: 0, skipped: 0, errors: 1 };
+    }
 };
