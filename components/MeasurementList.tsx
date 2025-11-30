@@ -3,6 +3,7 @@ import { MobileActionsDrawer } from './MobileActionsDrawer';
 import { Measurement, Film, UIMeasurement } from '../types';
 import MeasurementGroup from './MeasurementGroup';
 import ConfirmationModal from './modals/ConfirmationModal';
+import CuttingOptimizationPanel from './CuttingOptimizationPanel';
 
 type NumpadConfig = {
     isOpen: boolean;
@@ -30,6 +31,8 @@ interface MeasurementListProps {
     swipeDistance?: number;
     totalM2: number;
     totalQuantity: number; // NOVA PROP
+    clientId?: number;
+    optionId?: number;
 }
 
 const MeasurementList: React.FC<MeasurementListProps> = ({
@@ -50,7 +53,9 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
     swipeDirection = null,
     swipeDistance = 0,
     totalM2,
-    totalQuantity // Usando a nova prop
+    totalQuantity, // Usando a nova prop
+    clientId,
+    optionId
 }) => {
     const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
     const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
@@ -503,6 +508,17 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
                 {/* Empty droppable area at the end of the list */}
                 <div onDragEnter={() => handleDragEnter(measurements.length)} className="h-10" />
             </div>
+
+            {/* Cutting Optimization Panel */}
+            {measurements.length > 0 && (
+                <div className="mb-8">
+                    <CuttingOptimizationPanel
+                        measurements={measurements}
+                        clientId={clientId}
+                        optionId={optionId}
+                    />
+                </div>
+            )}
 
             {isDeleteSelectedModalOpen && (
                 <ConfirmationModal

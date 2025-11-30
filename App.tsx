@@ -1976,6 +1976,8 @@ const App: React.FC = () => {
                 <MeasurementList
                     measurements={measurements}
                     films={films}
+                    clientId={selectedClientId}
+                    optionId={activeOptionId}
                     onMeasurementsChange={handleMeasurementsChange}
                     onOpenFilmModal={handleOpenFilmModal}
                     onOpenFilmSelectionModal={handleOpenFilmSelectionModal}

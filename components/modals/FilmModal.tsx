@@ -19,6 +19,7 @@ const FilmModal: React.FC<FilmModalProps> = ({ isOpen, onClose, onSave, onDelete
     const [formData, setFormData] = useState<Film>({
         nome: '',
         preco: 0,
+        precoMetroLinear: 0,
         maoDeObra: 0,
         garantiaFabricante: 0,
         garantiaMaoDeObra: 30,
@@ -36,6 +37,7 @@ const FilmModal: React.FC<FilmModalProps> = ({ isOpen, onClose, onSave, onDelete
             setFormData({
                 nome: film.nome || '',
                 preco: film.preco || 0,
+                precoMetroLinear: film.precoMetroLinear || 0,
                 maoDeObra: film.maoDeObra || 0,
                 garantiaFabricante: film.garantiaFabricante || 0,
                 garantiaMaoDeObra: film.garantiaMaoDeObra || 30,
@@ -50,6 +52,7 @@ const FilmModal: React.FC<FilmModalProps> = ({ isOpen, onClose, onSave, onDelete
             setFormData({
                 nome: initialName || '', // Use initialName if provided
                 preco: 0,
+                precoMetroLinear: 0,
                 maoDeObra: 0,
                 garantiaFabricante: 0,
                 garantiaMaoDeObra: 30,
@@ -176,7 +179,7 @@ const FilmModal: React.FC<FilmModalProps> = ({ isOpen, onClose, onSave, onDelete
                             required
                         />
                     </div>
-                    <div className="grid grid-cols-2 gap-4 items-start">
+                    <div className="grid grid-cols-3 gap-4 items-start">
                         <Input
                             id="preco"
                             label="Preço por m² (R$)"
@@ -187,6 +190,17 @@ const FilmModal: React.FC<FilmModalProps> = ({ isOpen, onClose, onSave, onDelete
                             min="0"
                             step="0.01"
                             required
+                        />
+                        <Input
+                            id="precoMetroLinear"
+                            label="Custo Metro Linear (R$)"
+                            type="number"
+                            value={formData.precoMetroLinear}
+                            onChange={handleChange}
+                            onFocus={handleFocus}
+                            min="0"
+                            step="0.01"
+                            placeholder="Opcional"
                         />
                         <Input
                             id="maoDeObra"

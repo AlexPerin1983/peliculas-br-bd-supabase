@@ -48,6 +48,7 @@ export interface ProposalOption {
 export interface Film {
     nome: string;
     preco: number;
+    precoMetroLinear?: number; // Preço por metro linear
     maoDeObra?: number; // NOVO CAMPO: Valor fixo de mão de obra por m²
     garantiaFabricante?: number;
     garantiaMaoDeObra?: number;
