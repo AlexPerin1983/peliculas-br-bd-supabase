@@ -222,8 +222,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
     const baseScale = result && result.rollWidth > 0 ? availableWidth / result.rollWidth : 2;
     const scale = baseScale * zoomLevel;
 
-    const getColor = (w: number, h: number) => `hsla(${(w * h * 137) % 360}, 70%, 85%, 0.3)`;
-    const getBorderColor = (w: number, h: number) => `hsl(${(w * h * 137) % 360}, 70%, 30%)`;
+
 
     const groupedItems = useMemo(() => {
         if (!result) return [];
@@ -439,71 +438,126 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                         </div>
 
                         {/* Drawing */}
-                        <div className="relative overflow-x-auto pb-8 border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-100/50 dark:bg-slate-900/50 min-h-[300px] text-center">
-                            <div className="inline-block relative m-8 shadow-xl" style={{ textAlign: 'initial' }}>
-                                {/* Roll Background */}
+                        <div className="relative overflow-x-auto pb-8 border border-slate-800 rounded-lg bg-slate-950 min-h-[400px] text-center shadow-2xl">
+                            <div className="inline-block relative m-12" style={{ textAlign: 'initial' }}>
+
+                                {/* Horizontal Ruler (Top) */}
+                                <div className="absolute top-[-30px] left-0 w-full h-[30px] border-b border-slate-700">
+                                    {Array.from({ length: Math.ceil(result.rollWidth / 10) + 1 }).map((_, i) => {
+                                        const val = i * 10;
+                                        if (val > result.rollWidth) return null;
+                                        const isMajor = true; // Every 10cm is major in this loop
+                                        return (
+                                            <div key={val} className="absolute bottom-0 flex flex-col items-center" style={{ left: `${val * scale}px`, transform: 'translateX(-50%)' }}>
+                                                <span className="text-[10px] font-mono text-slate-400 mb-1">{val === 0 ? '0' : (val / 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })}</span>
+                                                <div className="h-2 w-px bg-slate-500"></div>
+                                            </div>
+                                        );
+                                    })}
+                                    {/* Last Value Marker (if not exact multiple) */}
+                                    {result.rollWidth % 10 !== 0 && (
+                                        <div className="absolute bottom-0 flex flex-col items-center" style={{ left: `${result.rollWidth * scale}px`, transform: 'translateX(-50%)' }}>
+                                            <span className="text-[10px] font-mono text-cyan-400 font-bold mb-1">{(result.rollWidth / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                            <div className="h-3 w-px bg-cyan-500"></div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Vertical Ruler (Left) */}
+                                <div className="absolute left-[-35px] top-0 h-full w-[35px] border-r border-slate-700">
+                                    {Array.from({ length: Math.ceil(result.totalHeight / 10) + 1 }).map((_, i) => {
+                                        const val = i * 10;
+                                        if (val > result.totalHeight) return null;
+                                        return (
+                                            <div key={val} className="absolute right-0 flex items-center" style={{ top: `${val * scale}px`, transform: 'translateY(-50%)' }}>
+                                                <span className="text-[10px] font-mono text-slate-400 mr-1">{val === 0 ? '0' : (val / 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })}</span>
+                                                <div className="w-2 h-px bg-slate-500"></div>
+                                            </div>
+                                        );
+                                    })}
+                                    {/* Last Height Marker */}
+                                    <div className="absolute right-0 flex items-center" style={{ top: `${result.totalHeight * scale}px`, transform: 'translateY(-50%)' }}>
+                                        <span className="text-[10px] font-mono text-cyan-400 font-bold mr-1">{(result.totalHeight / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                        <div className="w-3 h-px bg-cyan-500"></div>
+                                    </div>
+                                </div>
+
+                                {/* Roll Background & Grid */}
                                 <div
-                                    className="relative bg-slate-800 border-x-2 border-slate-700 shadow-inner"
+                                    className="relative bg-slate-900/50 shadow-inner overflow-hidden"
                                     style={{
                                         width: `${result.rollWidth * scale}px`,
                                         height: `${result.totalHeight * scale}px`,
                                         backgroundImage: `
-                                            linear-gradient(to right, rgba(255,255,255,0.05) 1px, transparent 1px),
-                                            linear-gradient(to bottom, rgba(255,255,255,0.05) 1px, transparent 1px)
+                                            linear-gradient(to right, rgba(148, 163, 184, 0.1) 1px, transparent 1px),
+                                            linear-gradient(to bottom, rgba(148, 163, 184, 0.1) 1px, transparent 1px),
+                                            linear-gradient(to right, rgba(148, 163, 184, 0.05) 1px, transparent 1px),
+                                            linear-gradient(to bottom, rgba(148, 163, 184, 0.05) 1px, transparent 1px)
                                         `,
-                                        backgroundSize: `${scale}px ${scale}px`
+                                        backgroundSize: `
+                                            ${10 * scale}px ${10 * scale}px,
+                                            ${10 * scale}px ${10 * scale}px,
+                                            ${1 * scale}px ${1 * scale}px,
+                                            ${1 * scale}px ${1 * scale}px
+                                        `,
+                                        backgroundPosition: '-1px -1px' // Align grid lines
                                     }}
                                 >
                                     {/* Items */}
                                     {result.placedItems.map((item, index) => (
                                         <div
                                             key={index}
-                                            className="absolute flex items-center justify-center text-xs font-bold border transition-all hover:z-10 hover:shadow-lg hover:scale-[1.02] cursor-default group backdrop-blur-[1px]"
+                                            className="absolute flex items-center justify-center text-xs font-bold border transition-all hover:z-10 hover:shadow-[0_0_15px_rgba(56,189,248,0.3)] hover:scale-[1.005] cursor-default group backdrop-blur-[1px]"
                                             style={{
                                                 left: `${item.x * scale}px`,
                                                 top: `${item.y * scale}px`,
                                                 width: `${item.w * scale}px`,
                                                 height: `${item.h * scale}px`,
-                                                backgroundColor: getColor(item.w, item.h),
-                                                borderColor: getBorderColor(item.w, item.h),
-                                                color: getBorderColor(item.w, item.h)
+                                                backgroundColor: 'rgba(14, 165, 233, 0.15)', // Sky-500 with low opacity
+                                                borderColor: 'rgba(56, 189, 248, 0.6)', // Sky-400
+                                                color: 'rgba(224, 242, 254, 0.9)' // Sky-100
                                             }}
                                             title={`#${index + 1}: ${item.label} (${item.w.toFixed(1)} x ${item.h.toFixed(1)})`}
                                         >
-                                            <div className="absolute top-0.5 left-1 opacity-70 font-mono leading-none" style={{ fontSize: `${Math.max(8, Math.min(10, (item.w * scale) / 6))}px` }}>#{index + 1}</div>
+                                            {/* Large Watermark ID */}
+                                            <div
+                                                className="absolute inset-0 flex items-center justify-center font-black text-white/10 pointer-events-none select-none"
+                                                style={{ fontSize: `${Math.min(item.w, item.h) * scale * 0.6}px` }}
+                                            >
+                                                {index + 1}
+                                            </div>
 
-                                            {item.w * scale > 25 && item.h * scale > 25 && (
+                                            {/* Dimensions - Only show if piece is big enough */}
+                                            {item.w * scale > 40 && item.h * scale > 40 && (
                                                 <>
-                                                    {/* Width - Bottom Center */}
-                                                    <div
-                                                        className="absolute bottom-0.5 left-0 w-full text-center leading-none pointer-events-none font-mono"
-                                                        style={{ fontSize: `${Math.max(8, Math.min(14, (item.w * scale) / 5))}px` }}
-                                                    >
-                                                        {item.w.toFixed(1)}
-                                                    </div>
-
-                                                    {/* Height - Right Center (Rotated) */}
-                                                    <div
-                                                        className="absolute right-0 top-0 h-full flex items-center justify-center pointer-events-none"
-                                                        style={{ width: '1.5em' }}
-                                                    >
-                                                        <div
-                                                            className="origin-center rotate-90 whitespace-nowrap leading-none font-mono"
-                                                            style={{ fontSize: `${Math.max(8, Math.min(14, (item.h * scale) / 5))}px` }}
-                                                        >
-                                                            {item.h.toFixed(1)}
-                                                        </div>
+                                                    {/* Width Label (Bottom Right inside) */}
+                                                    <div className="absolute bottom-1 right-2 text-[10px] sm:text-xs font-mono text-sky-200 font-medium bg-slate-900/40 px-1 rounded">
+                                                        {(item.w / 100).toFixed(2)}
                                                     </div>
                                                 </>
                                             )}
 
+                                            {/* External Dimensions (Ruler-style) */}
+                                            {/* Height on the right */}
+                                            <div className="absolute -right-6 top-0 h-full flex items-center">
+                                                <span className="origin-center -rotate-90 text-[9px] text-slate-500 font-mono">
+                                                    {(item.h / 100).toFixed(2)}
+                                                </span>
+                                            </div>
+
+                                            {/* Width on the bottom (only for bottom-most items in their column to avoid clutter? Or just all?) 
+                                                Let's stick to the internal label for width as per the reference image having internal numbers.
+                                                Actually reference has internal numbers like 1.00, 0.85.
+                                            */}
+
                                             {item.rotated && (
                                                 <div className="absolute top-1 right-1 opacity-60">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3 text-sky-400">
                                                         <path fillRule="evenodd" d="M4.755 10.059a7.5 7.5 0 0112.548-3.364l1.903 1.903h-3.183a.75.75 0 100 1.5h4.992a.75.75 0 00.75-.75V4.356a.75.75 0 00-1.5 0v3.18l-1.9-1.9A9 9 0 003.306 9.67a.75.75 0 101.45.388zm15.408 3.352a.75.75 0 00-.919.53 7.5 7.5 0 01-12.548 3.364l-1.902-1.903h3.183a.75.75 0 000-1.5H2.984a.75.75 0 00-.75.75v4.992a.75.75 0 001.5 0v-3.18l1.9 1.9a9 9 0 0015.059-4.035.75.75 0 00-.53-.918z" clipRule="evenodd" />
                                                     </svg>
                                                 </div>
                                             )}
+
                                             {/* Rotation Toggle Button */}
                                             <button
                                                 onClick={(e) => {
@@ -516,25 +570,15 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                                         }));
                                                     }
                                                 }}
-                                                className="absolute -top-2 -right-2 bg-white rounded-full p-1 shadow-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-blue-50 z-20"
+                                                className="absolute -top-2 -right-2 bg-slate-800 border border-slate-600 rounded-full p-1 shadow-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-slate-700 z-20"
                                                 title="Girar peça"
                                             >
-                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3 text-blue-600">
+                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3 text-sky-400">
                                                     <path fillRule="evenodd" d="M4.755 10.059a7.5 7.5 0 0112.548-3.364l1.903 1.903h-3.183a.75.75 0 100 1.5h4.992a.75.75 0 00.75-.75V4.356a.75.75 0 00-1.5 0v3.18l-1.9-1.9A9 9 0 003.306 9.67a.75.75 0 101.45.388zm15.408 3.352a.75.75 0 00-.919.53 7.5 7.5 0 01-12.548 3.364l-1.902-1.903h3.183a.75.75 0 000-1.5H2.984a.75.75 0 00-.75.75v4.992a.75.75 0 001.5 0v-3.18l1.9 1.9a9 9 0 0015.059-4.035.75.75 0 00-.53-.918z" clipRule="evenodd" />
                                                 </svg>
                                             </button>
                                         </div>
                                     ))}
-                                </div>
-
-                                {/* Dimensions Labels */}
-                                <div className="absolute -top-6 left-0 w-full text-center text-xs font-mono text-slate-500">
-                                    {result.rollWidth} cm
-                                </div>
-                                <div className="absolute top-0 -left-8 h-full flex items-center">
-                                    <div className="origin-center -rotate-90 whitespace-nowrap text-xs font-mono text-slate-500">
-                                        {result.totalHeight.toFixed(1)} cm
-                                    </div>
                                 </div>
                             </div>
                         </div>
