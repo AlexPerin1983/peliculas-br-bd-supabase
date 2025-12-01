@@ -34,9 +34,10 @@ export const usePwaUpdate = () => {
                         installingWorker.addEventListener('statechange', () => {
                             if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
                                 // Nova versão instalada e esperando para ser ativada
+                                console.log('🔄 Nova versão do PWA disponível.');
+                                console.log('🎯 Setting newVersionAvailable to TRUE');
                                 setNewVersionAvailable(true);
                                 setWaitingWorker(reg.waiting);
-                                console.log('🔄 Nova versão do PWA disponível.');
                             }
                         });
                     }

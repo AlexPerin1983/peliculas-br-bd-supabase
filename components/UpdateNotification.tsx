@@ -1,12 +1,16 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 
 interface UpdateNotificationProps {
     onUpdate: () => void;
 }
 
 const UpdateNotification: React.FC<UpdateNotificationProps> = ({ onUpdate }) => {
+    useEffect(() => {
+        console.log('🔔 UpdateNotification component mounted and visible!');
+    }, []);
+
     return (
-        <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-[70] w-full max-w-sm px-4 animate-fade-in-up">
+        <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-[9999] w-full max-w-sm px-4 animate-fade-in-up">
             <div className="bg-slate-800 text-white p-4 rounded-xl shadow-2xl flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
                     <i className="fas fa-sync-alt text-xl text-green-400"></i>

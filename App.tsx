@@ -163,6 +163,11 @@ const App: React.FC = () => {
     const backButtonPressedOnce = useRef(false);
     const backButtonTimeout = useRef<NodeJS.Timeout | null>(null);
 
+    // Debug: Monitor newVersionAvailable changes
+    useEffect(() => {
+        console.log('📊 newVersionAvailable changed to:', newVersionAvailable);
+    }, [newVersionAvailable]);
+
     // Handle URL parameters (shortcuts, share target, etc.)
     useEffect(() => {
         const urlParams = new URLSearchParams(window.location.search);
