@@ -222,8 +222,8 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
     const baseScale = result && result.rollWidth > 0 ? availableWidth / result.rollWidth : 2;
     const scale = baseScale * zoomLevel;
 
-    const getColor = (w: number, h: number) => `hsl(${(w * h * 137) % 360}, 70%, 90%)`;
-    const getBorderColor = (w: number, h: number) => `hsl(${(w * h * 137) % 360}, 60%, 40%)`;
+    const getColor = (w: number, h: number) => `hsla(${(w * h * 137) % 360}, 70%, 85%, 0.3)`;
+    const getBorderColor = (w: number, h: number) => `hsl(${(w * h * 137) % 360}, 70%, 30%)`;
 
     const groupedItems = useMemo(() => {
         if (!result) return [];
@@ -443,20 +443,22 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                             <div className="inline-block relative m-8 shadow-xl" style={{ textAlign: 'initial' }}>
                                 {/* Roll Background */}
                                 <div
-                                    className="relative bg-white border-x-2 border-slate-800"
+                                    className="relative bg-slate-800 border-x-2 border-slate-700 shadow-inner"
                                     style={{
                                         width: `${result.rollWidth * scale}px`,
                                         height: `${result.totalHeight * scale}px`,
-                                        backgroundImage: 'linear-gradient(45deg, #f8fafc 25%, transparent 25%, transparent 75%, #f8fafc 75%, #f8fafc), linear-gradient(45deg, #f8fafc 25%, transparent 25%, transparent 75%, #f8fafc 75%, #f8fafc)',
-                                        backgroundSize: '20px 20px',
-                                        backgroundPosition: '0 0, 10px 10px'
+                                        backgroundImage: `
+                                            linear-gradient(to right, rgba(255,255,255,0.05) 1px, transparent 1px),
+                                            linear-gradient(to bottom, rgba(255,255,255,0.05) 1px, transparent 1px)
+                                        `,
+                                        backgroundSize: `${scale}px ${scale}px`
                                     }}
                                 >
                                     {/* Items */}
                                     {result.placedItems.map((item, index) => (
                                         <div
                                             key={index}
-                                            className="absolute flex items-center justify-center text-xs font-bold border transition-all hover:z-10 hover:shadow-lg hover:scale-[1.02] cursor-default group"
+                                            className="absolute flex items-center justify-center text-xs font-bold border transition-all hover:z-10 hover:shadow-lg hover:scale-[1.02] cursor-default group backdrop-blur-[1px]"
                                             style={{
                                                 left: `${item.x * scale}px`,
                                                 top: `${item.y * scale}px`,
@@ -468,13 +470,13 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                             }}
                                             title={`#${index + 1}: ${item.label} (${item.w.toFixed(1)} x ${item.h.toFixed(1)})`}
                                         >
-                                            <div className="absolute top-0.5 left-1 text-[10px] opacity-50 font-mono" style={{ fontSize: `${Math.max(8, Math.min(10, (item.w * scale) / 5))}px` }}>#{index + 1}</div>
+                                            <div className="absolute top-0.5 left-1 opacity-70 font-mono leading-none" style={{ fontSize: `${Math.max(8, Math.min(10, (item.w * scale) / 6))}px` }}>#{index + 1}</div>
 
-                                            {item.w * scale > 25 && item.h * scale > 25 ? (
+                                            {item.w * scale > 25 && item.h * scale > 25 && (
                                                 <>
                                                     {/* Width - Bottom Center */}
                                                     <div
-                                                        className="absolute bottom-0.5 left-0 w-full text-center leading-none pointer-events-none"
+                                                        className="absolute bottom-0.5 left-0 w-full text-center leading-none pointer-events-none font-mono"
                                                         style={{ fontSize: `${Math.max(8, Math.min(14, (item.w * scale) / 5))}px` }}
                                                     >
                                                         {item.w.toFixed(1)}
@@ -486,43 +488,41 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                                         style={{ width: '1.5em' }}
                                                     >
                                                         <div
-                                                            className="origin-center rotate-90 whitespace-nowrap leading-none"
+                                                            className="origin-center rotate-90 whitespace-nowrap leading-none font-mono"
                                                             style={{ fontSize: `${Math.max(8, Math.min(14, (item.h * scale) / 5))}px` }}
                                                         >
                                                             {item.h.toFixed(1)}
                                                         </div>
                                                     </div>
-
-                                                    {item.rotated && (
-                                                        <div className="absolute top-1 right-1 opacity-60">
-                                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3">
-                                                                <path fillRule="evenodd" d="M4.755 10.059a7.5 7.5 0 0112.548-3.364l1.903 1.903h-3.183a.75.75 0 100 1.5h4.992a.75.75 0 00.75-.75V4.356a.75.75 0 00-1.5 0v3.18l-1.9-1.9A9 9 0 003.306 9.67a.75.75 0 101.45.388zm15.408 3.352a.75.75 0 00-.919.53 7.5 7.5 0 01-12.548 3.364l-1.902-1.903h3.183a.75.75 0 000-1.5H2.984a.75.75 0 00-.75.75v4.992a.75.75 0 001.5 0v-3.18l1.9 1.9a9 9 0 0015.059-4.035.75.75 0 00-.53-.918z" clipRule="evenodd" />
-                                                            </svg>
-                                                        </div>
-                                                    )}
-                                                    {/* Rotation Toggle Button */}
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            if (item.id) {
-                                                                const currentRotated = item.rotated || false;
-                                                                setManualRotations(prev => ({
-                                                                    ...prev,
-                                                                    [item.id!]: !currentRotated
-                                                                }));
-                                                            }
-                                                        }}
-                                                        className="absolute -top-2 -right-2 bg-white rounded-full p-1 shadow-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-blue-50 z-20"
-                                                        title="Girar peça"
-                                                    >
-                                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3 text-blue-600">
-                                                            <path fillRule="evenodd" d="M4.755 10.059a7.5 7.5 0 0112.548-3.364l1.903 1.903h-3.183a.75.75 0 100 1.5h4.992a.75.75 0 00.75-.75V4.356a.75.75 0 00-1.5 0v3.18l-1.9-1.9A9 9 0 003.306 9.67a.75.75 0 101.45.388zm15.408 3.352a.75.75 0 00-.919.53 7.5 7.5 0 01-12.548 3.364l-1.902-1.903h3.183a.75.75 0 000-1.5H2.984a.75.75 0 00-.75.75v4.992a.75.75 0 001.5 0v-3.18l1.9 1.9a9 9 0 0015.059-4.035.75.75 0 00-.53-.918z" clipRule="evenodd" />
-                                                        </svg>
-                                                    </button>
                                                 </>
-                                            ) : (
-                                                <span style={{ fontSize: `${Math.max(8, Math.min(12, (Math.min(item.w, item.h) * scale) / 4))}px` }}>#{index + 1}</span>
                                             )}
+
+                                            {item.rotated && (
+                                                <div className="absolute top-1 right-1 opacity-60">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3">
+                                                        <path fillRule="evenodd" d="M4.755 10.059a7.5 7.5 0 0112.548-3.364l1.903 1.903h-3.183a.75.75 0 100 1.5h4.992a.75.75 0 00.75-.75V4.356a.75.75 0 00-1.5 0v3.18l-1.9-1.9A9 9 0 003.306 9.67a.75.75 0 101.45.388zm15.408 3.352a.75.75 0 00-.919.53 7.5 7.5 0 01-12.548 3.364l-1.902-1.903h3.183a.75.75 0 000-1.5H2.984a.75.75 0 00-.75.75v4.992a.75.75 0 001.5 0v-3.18l1.9 1.9a9 9 0 0015.059-4.035.75.75 0 00-.53-.918z" clipRule="evenodd" />
+                                                    </svg>
+                                                </div>
+                                            )}
+                                            {/* Rotation Toggle Button */}
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    if (item.id) {
+                                                        const currentRotated = item.rotated || false;
+                                                        setManualRotations(prev => ({
+                                                            ...prev,
+                                                            [item.id!]: !currentRotated
+                                                        }));
+                                                    }
+                                                }}
+                                                className="absolute -top-2 -right-2 bg-white rounded-full p-1 shadow-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-blue-50 z-20"
+                                                title="Girar peça"
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3 text-blue-600">
+                                                    <path fillRule="evenodd" d="M4.755 10.059a7.5 7.5 0 0112.548-3.364l1.903 1.903h-3.183a.75.75 0 100 1.5h4.992a.75.75 0 00.75-.75V4.356a.75.75 0 00-1.5 0v3.18l-1.9-1.9A9 9 0 003.306 9.67a.75.75 0 101.45.388zm15.408 3.352a.75.75 0 00-.919.53 7.5 7.5 0 01-12.548 3.364l-1.902-1.903h3.183a.75.75 0 000-1.5H2.984a.75.75 0 00-.75.75v4.992a.75.75 0 001.5 0v-3.18l1.9 1.9a9 9 0 0015.059-4.035.75.75 0 00-.53-.918z" clipRule="evenodd" />
+                                                </svg>
+                                            </button>
                                         </div>
                                     ))}
                                 </div>
