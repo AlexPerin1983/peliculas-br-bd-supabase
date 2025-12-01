@@ -231,8 +231,7 @@
     // Service Worker Registration (PWABuilder compatible)
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        // Adicionando timestamp para forçar atualização do SW
-        navigator.serviceWorker.register('/service-worker.js?v=' + Date.now(), {
+        navigator.serviceWorker.register('/service-worker.js', {
           scope: '/'
         })
           .then(registration => {

@@ -145,7 +145,7 @@ const PwaDiagnostics: React.FC = () => {
         <div className="mt-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
             <h4 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
                 <i className="fas fa-stethoscope"></i>
-                Diagnóstico PWA <span className="text-xs font-normal text-slate-500">(v67)</span>
+                Diagnóstico PWA <span className="text-xs font-normal text-slate-500">(v68)</span>
             </h4>
             <div className="space-y-1">
                 <DiagnosticItem label="Navegador" value={diagnostics.browser} />
