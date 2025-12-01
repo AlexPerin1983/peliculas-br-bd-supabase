@@ -236,7 +236,7 @@
       navigator.serviceWorker.addEventListener('controllerchange', () => {
         if (refreshing) return;
         refreshing = true;
-        console.log('🔄 Controlador do Service Worker mudou, recarregando...');
+        // console.log('🔄 Controlador do Service Worker mudou, recarregando...');
         window.location.reload();
       });
 
@@ -245,11 +245,11 @@
           scope: '/'
         })
           .then(registration => {
-            console.log('✅ Service Worker registrado:', registration.scope);
+            // console.log('✅ Service Worker registrado:', registration.scope);
 
             // Check for updates every 60 seconds
             setInterval(() => {
-              console.log('🔍 Verificando atualizações...');
+              // console.log('🔍 Verificando atualizações...');
               registration.update();
             }, 60000);
 
@@ -258,27 +258,25 @@
 
             registration.addEventListener('updatefound', () => {
               const newWorker = registration.installing;
-              console.log('🔄 Nova versão do Service Worker encontrada!');
+              // console.log('🔄 Nova versão do Service Worker encontrada!');
 
               if (newWorker) {
                 newWorker.addEventListener('statechange', () => {
-                  console.log('📊 Estado do novo SW:', newWorker.state);
+                  // console.log('📊 Estado do novo SW:', newWorker.state);
 
                   // When the new service worker is installed and waiting
                   if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                    console.log('⏳ Novo Service Worker instalado, enviando SKIP_WAITING...');
-
-                    // Send skip waiting message
+                    // console.log('⏳ Novo Service Worker instalado, enviando S                   // Send skip waiting message
                     newWorker.postMessage({ type: 'SKIP_WAITING' });
 
-                    // Show notification to user (optional)
+ / Show notification to user (optional)
                     if (window.showUpdateNotification) {
                       window.showUpdateNotification();
                     }
                   }
 
                   if (newWorker.state === 'activated') {
-                    console.log('✅ Novo Service Worker ativado!');
+                    // console.log('✅ Novo Service Worker ativado!');
                   }
                 });
               }
@@ -286,7 +284,7 @@
 
             // Check if there's a waiting service worker
             if (registration.waiting) {
-              console.log('⚠️ Service Worker em espera detectado, forçando ativação...');
+              // console.log('⚠️ Service Worker em espera detectado, forçando ativação...');
               registration.waiting.postMessage({ type: 'SKIP_WAITING' });
             }
           })

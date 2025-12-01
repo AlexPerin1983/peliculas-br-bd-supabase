@@ -1,4 +1,5 @@
 // Simple Service Worker without Workbox CDN
+// PARA FORÇAR UMA NOVA VERSÃO: Altere o número da versão abaixo (ex: v71 -> v72)
 const CACHE_NAME = 'app-cache-v71';
 const urlsToCache = [
     '/',
@@ -7,13 +8,13 @@ const urlsToCache = [
 
 // Força o Service Worker a assumir o controle imediatamente após a instalação
 self.addEventListener('install', (event) => {
-    console.log('[SW] Installing version 71...');
+    // console.log('[SW] Installing version 71...');
     event.waitUntil(
         caches.open(CACHE_NAME).then((cache) => {
-            console.log('[SW] Caching app shell');
+            // console.log('[SW] Caching app shell');
             return cache.addAll(urlsToCache);
         }).then(() => {
-            console.log('[SW] Skip waiting - force activation');
+            // console.log('[SW] Skip waiting - force activation');
             return self.skipWaiting();
         })
     );
@@ -21,13 +22,13 @@ self.addEventListener('install', (event) => {
 
 // Ativa imediatamente quando houver uma nova versão
 self.addEventListener('activate', (event) => {
-    console.log('[SW] Activating version 71...');
+    // console.log('[SW] Activating version 71...');
     event.waitUntil(
         caches.keys().then((cacheNames) => {
             return Promise.all(
                 cacheNames.map((cacheName) => {
                     if (cacheName !== CACHE_NAME) {
-                        console.log('[SW] Deleting old cache:', cacheName);
+                        // console.log('[SW] Deleting old cache:', cacheName);
                         return caches.delete(cacheName);
                     }
                 })
@@ -94,9 +95,9 @@ self.addEventListener('fetch', (event) => {
 // Listen for skip waiting message
 self.addEventListener('message', (event) => {
     if (event.data && event.data.type === 'SKIP_WAITING') {
-        console.log('[SW] Skip waiting message received');
+        // console.log('[SW] Skip waiting message received');
         self.skipWaiting();
     }
 });
 
-console.log('[SW] Service Worker v71 loaded');
+// console.log('[SW] Service Worker v71 loaded');
