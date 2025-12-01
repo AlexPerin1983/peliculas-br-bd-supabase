@@ -468,15 +468,33 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                             }}
                                             title={`#${index + 1}: ${item.label} (${item.w.toFixed(1)} x ${item.h.toFixed(1)})`}
                                         >
-                                            <div className="absolute top-0.5 left-1 text-[10px] opacity-50 font-mono">#{index + 1}</div>
+                                            <div className="absolute top-0.5 left-1 text-[10px] opacity-50 font-mono" style={{ fontSize: `${Math.max(8, Math.min(10, (item.w * scale) / 5))}px` }}>#{index + 1}</div>
 
-                                            {item.w * scale > 50 && item.h * scale > 30 ? (
-                                                <div className="flex flex-col items-center leading-tight">
-                                                    <span>{(item.w).toFixed(1)}</span>
-                                                    <span className="opacity-40 text-[9px]">x</span>
-                                                    <span>{(item.h).toFixed(1)}</span>
+                                            {item.w * scale > 25 && item.h * scale > 25 ? (
+                                                <>
+                                                    {/* Width - Bottom Center */}
+                                                    <div
+                                                        className="absolute bottom-0.5 left-0 w-full text-center leading-none pointer-events-none"
+                                                        style={{ fontSize: `${Math.max(8, Math.min(14, (item.w * scale) / 5))}px` }}
+                                                    >
+                                                        {item.w.toFixed(1)}
+                                                    </div>
+
+                                                    {/* Height - Right Center (Rotated) */}
+                                                    <div
+                                                        className="absolute right-0 top-0 h-full flex items-center justify-center pointer-events-none"
+                                                        style={{ width: '1.5em' }}
+                                                    >
+                                                        <div
+                                                            className="origin-center rotate-90 whitespace-nowrap leading-none"
+                                                            style={{ fontSize: `${Math.max(8, Math.min(14, (item.h * scale) / 5))}px` }}
+                                                        >
+                                                            {item.h.toFixed(1)}
+                                                        </div>
+                                                    </div>
+
                                                     {item.rotated && (
-                                                        <div className="absolute bottom-1 right-1 opacity-60">
+                                                        <div className="absolute top-1 right-1 opacity-60">
                                                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3">
                                                                 <path fillRule="evenodd" d="M4.755 10.059a7.5 7.5 0 0112.548-3.364l1.903 1.903h-3.183a.75.75 0 100 1.5h4.992a.75.75 0 00.75-.75V4.356a.75.75 0 00-1.5 0v3.18l-1.9-1.9A9 9 0 003.306 9.67a.75.75 0 101.45.388zm15.408 3.352a.75.75 0 00-.919.53 7.5 7.5 0 01-12.548 3.364l-1.902-1.903h3.183a.75.75 0 000-1.5H2.984a.75.75 0 00-.75.75v4.992a.75.75 0 001.5 0v-3.18l1.9 1.9a9 9 0 0015.059-4.035.75.75 0 00-.53-.918z" clipRule="evenodd" />
                                                             </svg>
@@ -501,9 +519,9 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                                             <path fillRule="evenodd" d="M4.755 10.059a7.5 7.5 0 0112.548-3.364l1.903 1.903h-3.183a.75.75 0 100 1.5h4.992a.75.75 0 00.75-.75V4.356a.75.75 0 00-1.5 0v3.18l-1.9-1.9A9 9 0 003.306 9.67a.75.75 0 101.45.388zm15.408 3.352a.75.75 0 00-.919.53 7.5 7.5 0 01-12.548 3.364l-1.902-1.903h3.183a.75.75 0 000-1.5H2.984a.75.75 0 00-.75.75v4.992a.75.75 0 001.5 0v-3.18l1.9 1.9a9 9 0 0015.059-4.035.75.75 0 00-.53-.918z" clipRule="evenodd" />
                                                         </svg>
                                                     </button>
-                                                </div>
+                                                </>
                                             ) : (
-                                                <span>#{index + 1}</span>
+                                                <span style={{ fontSize: `${Math.max(8, Math.min(12, (Math.min(item.w, item.h) * scale) / 4))}px` }}>#{index + 1}</span>
                                             )}
                                         </div>
                                     ))}

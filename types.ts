@@ -29,6 +29,7 @@ export interface Measurement {
     discount?: number;
     discountType?: 'percentage' | 'fixed';
     observation?: string;
+    locked?: boolean;
 }
 
 export interface UIMeasurement extends Measurement {
