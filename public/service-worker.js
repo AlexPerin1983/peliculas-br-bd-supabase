@@ -20,7 +20,7 @@ precacheAndRoute([
     { url: '/offline.html', revision: '1' }
 ]);
 
-console.log('[Service Worker] Version 66 - NetworkFirst for HTML');
+console.log('[Service Worker] Version 67 - Update Test');
 
 // Cache page navigations (HTML) with a Network First strategy
 registerRoute(
