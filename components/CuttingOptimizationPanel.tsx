@@ -243,7 +243,10 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
             {/* Header */}
             <div className="p-3 sm:p-4 bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700">
                 <div className="flex items-center justify-between">
-                    <h3 className="text-base sm:text-lg font-bold text-slate-800 dark:text-slate-100">Otimizador de Corte</h3>
+                    <h3 className="text-base sm:text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                        Otimizador de Corte
+                        <span className="text-[9px] sm:text-[10px] text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-1.5 py-0.5 rounded-full border border-blue-100 dark:border-blue-800 font-semibold">BETA</span>
+                    </h3>
                     <button
                         onClick={() => setIsSettingsOpen(!isSettingsOpen)}
                         className="sm:hidden flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
