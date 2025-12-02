@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Measurement } from '../types';
+﻿import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Measurement, Film } from '../types';
 import { CuttingOptimizer, OptimizationResult, Rect } from '../utils/CuttingOptimizer';
 import ConfirmationModal from './modals/ConfirmationModal';
 
@@ -7,9 +7,10 @@ interface CuttingOptimizationPanelProps {
     measurements: Measurement[];
     clientId?: number;
     optionId?: number;
+    films: Film[];
 }
 
-const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ measurements, clientId, optionId }) => {
+const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ measurements, clientId, optionId, films }) => {
     const uniqueFilms = useMemo(() => {
         const films = new Set(measurements.filter(m => m.active).map(m => m.pelicula));
         const sorted = Array.from(films).sort();
@@ -306,8 +307,8 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                 key={film}
                                 onClick={() => setActiveFilm(film)}
                                 className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeFilm === film
-                                        ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400'
-                                        : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+                                    ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400'
+                                    : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
                                     }`}
                             >
                                 {film}
@@ -475,6 +476,24 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                 <span className="font-bold text-slate-800 dark:text-slate-100 text-base sm:text-lg">{result.placedItems.length}</span>
                             </div>
                         </div>
+
+                        {/* Estimated Cost */}
+                        {(() => {
+                            const film = films.find(f => f.nome === activeFilm);
+                            if (!film || !film.precoMetroLinear) return null;
+                            const cost = (result.totalHeight / 100) * film.precoMetroLinear;
+                            return (
+                                <div className="mb-4 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-xs text-green-700 dark:text-green-400 uppercase tracking-wider font-medium">Custo Estimado de Material</span>
+                                        <span className="font-bold text-green-800 dark:text-green-300 text-lg">R$ {cost.toFixed(2).replace('.', ',')}</span>
+                                    </div>
+                                    <div className="text-[10px] text-green-600/70 dark:text-green-400/70 mt-1">
+                                        {(result.totalHeight / 100).toFixed(2)}m Ã— R$ {film.precoMetroLinear.toFixed(2)}/m
+                                    </div>
+                                </div>
+                            );
+                        })()}
 
                         {/* Zoom Slider - Positioned above visualization */}
                         <div className="mb-3 sm:mb-4 flex items-center justify-center gap-2 sm:gap-3 px-2 sm:px-4">

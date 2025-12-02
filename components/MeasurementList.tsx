@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+﻿import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { MobileActionsDrawer } from './MobileActionsDrawer';
 import { Measurement, Film, UIMeasurement } from '../types';
 import MeasurementGroup from './MeasurementGroup';
@@ -550,6 +550,7 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
                             measurements={measurements}
                             clientId={clientId}
                             optionId={optionId}
+                            films={films}
                         />
                     </div>
                 </div>
