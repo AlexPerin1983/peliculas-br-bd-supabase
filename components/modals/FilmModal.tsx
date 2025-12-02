@@ -29,7 +29,9 @@ const FilmModal: React.FC<FilmModalProps> = ({ isOpen, onClose, onSave, onDelete
         espessura: 0,
         tser: 0,
         imagens: [],
+        customFields: {},
     });
+    const [customFields, setCustomFields] = useState<{ key: string; value: string }[]>([]);
     const [infoModalConfig, setInfoModalConfig] = useState<{ isOpen: boolean; message: string }>({ isOpen: false, message: '' });
 
     useEffect(() => {
@@ -47,7 +49,11 @@ const FilmModal: React.FC<FilmModalProps> = ({ isOpen, onClose, onSave, onDelete
                 espessura: film.espessura || 0,
                 tser: film.tser || 0,
                 imagens: film.imagens || [],
+                customFields: film.customFields || {},
             });
+            // Converter customFields de objeto para array para edição
+            const fieldsArray = Object.entries(film.customFields || {}).map(([key, value]) => ({ key, value }));
+            setCustomFields(fieldsArray);
         } else {
             setFormData({
                 nome: initialName || '', // Use initialName if provided
@@ -62,7 +68,9 @@ const FilmModal: React.FC<FilmModalProps> = ({ isOpen, onClose, onSave, onDelete
                 espessura: 0,
                 tser: 0,
                 imagens: [],
+                customFields: {},
             });
+            setCustomFields([]);
         }
     }, [film, isOpen, initialName]);
 
@@ -126,9 +134,32 @@ const FilmModal: React.FC<FilmModalProps> = ({ isOpen, onClose, onSave, onDelete
         }));
     };
 
+    const addCustomField = () => {
+        setCustomFields([...customFields, { key: '', value: '' }]);
+    };
+
+    const removeCustomField = (index: number) => {
+        setCustomFields(customFields.filter((_, i) => i !== index));
+    };
+
+    const handleCustomFieldChange = (index: number, field: 'key' | 'value', value: string) => {
+        const updated = [...customFields];
+        updated[index][field] = value;
+        setCustomFields(updated);
+    };
+
     const handleSubmit = (e: FormEvent) => {
         e.preventDefault();
-        onSave(formData, film);
+
+        // Converter array de campos customizados para objeto
+        const customFieldsObject = customFields.reduce((acc, field) => {
+            if (field.key.trim()) {
+                acc[field.key.trim()] = field.value;
+            }
+            return acc;
+        }, {} as { [key: string]: string });
+
+        onSave({ ...formData, customFields: customFieldsObject }, film);
     };
 
     const handleDelete = () => {
@@ -301,6 +332,54 @@ const FilmModal: React.FC<FilmModalProps> = ({ isOpen, onClose, onSave, onDelete
                         />
                         {/* Adicionar um placeholder para manter o grid alinhado em 3 colunas */}
                         <div className="hidden sm:block"></div>
+                    </div>
+
+                    {/* Campos Customizados */}
+                    <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-700">
+                        <div className="flex items-center justify-between mb-3">
+                            <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Campos Personalizados</h4>
+                            <button
+                                type="button"
+                                onClick={addCustomField}
+                                className="flex items-center gap-2 text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+                            >
+                                <i className="fas fa-plus" />
+                                Adicionar Campo
+                            </button>
+                        </div>
+                        {customFields.length > 0 && (
+                            <div className="space-y-3">
+                                {customFields.map((field, index) => (
+                                    <div key={index} className="grid grid-cols-[1fr_1fr_auto] gap-3 items-end">
+                                        <Input
+                                            id={`custom-key-${index}`}
+                                            label={index === 0 ? "Nome do Campo" : ""}
+                                            placeholder="Ex: Garantia"
+                                            value={field.key}
+                                            onChange={(e) => handleCustomFieldChange(index, 'key', e.target.value)}
+                                        />
+                                        <Input
+                                            id={`custom-value-${index}`}
+                                            label={index === 0 ? "Valor" : ""}
+                                            placeholder="Ex: 10 anos"
+                                            value={field.value}
+                                            onChange={(e) => handleCustomFieldChange(index, 'value', e.target.value)}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => removeCustomField(index)}
+                                            className="h-10 px-3 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                            title="Remover campo"
+                                        >
+                                            <i className="fas fa-trash-alt" />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                        {customFields.length === 0 && (
+                            <p className="text-xs text-slate-500 dark:text-slate-400 italic">Nenhum campo personalizado adicionado.</p>
+                        )}
                     </div>
                 </div>
 

@@ -226,6 +226,21 @@ const FilmCard: React.FC<{
                             </>
                         )}
 
+                        {/* Campos Customizados */}
+                        {film.customFields && Object.entries(film.customFields).length > 0 && (
+                            <div className="mb-4 pb-4 border-b border-slate-200 dark:border-slate-700">
+                                <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Outros Detalhes</h4>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2 text-sm">
+                                    {Object.entries(film.customFields).map(([key, value]) => (
+                                        <div key={key}>
+                                            <span className="text-xs text-slate-500 dark:text-slate-400">{key}</span>
+                                            <p className="font-medium text-slate-700 dark:text-slate-300">{value}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
                         {hasImages && (
                             <>
                                 <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">

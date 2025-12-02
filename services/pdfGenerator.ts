@@ -3,9 +3,9 @@ import { Client, UserInfo, Measurement, Film, SavedPDF, ProposalOption } from '.
 declare const jspdf: any;
 
 const formatNumberBR = (number: number): string => {
-    return new Intl.NumberFormat('pt-BR', { 
-        minimumFractionDigits: 2, 
-        maximumFractionDigits: 2 
+    return new Intl.NumberFormat('pt-BR', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
     }).format(number);
 };
 
@@ -38,10 +38,10 @@ const calculateTotalsFromSavedPDF = (pdf: SavedPDF): Totals => {
     const totalItemDiscount = (pdf as any).totalItemDiscount || 0;
     const generalDiscountAmount = pdf.generalDiscountAmount || 0;
     const finalTotal = pdf.totalPreco;
-    
+
     // Se subtotal não estiver disponível, calcula a partir do finalTotal e descontos
     const calculatedSubtotal = subtotal || (finalTotal + generalDiscountAmount + totalItemDiscount);
-    
+
     // Recalcula priceAfterItemDiscounts para garantir consistência
     const priceAfterItemDiscounts = calculatedSubtotal - totalItemDiscount;
 
@@ -59,9 +59,9 @@ const calculateTotalsFromSavedPDF = (pdf: SavedPDF): Totals => {
 export const generatePDF = async (client: Client, userInfo: UserInfo, measurements: Measurement[], allFilms: Film[], generalDiscount: GeneralDiscount, totals: Totals, proposalOptionName: string): Promise<Blob> => {
     const { jsPDF } = jspdf;
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    
+
     await renderPdfContent(doc, client, userInfo, [{ measurements, generalDiscount, totals, proposalOptionName }], allFilms, true);
-    
+
     return doc.output('blob');
 };
 
@@ -69,7 +69,7 @@ export const generatePDF = async (client: Client, userInfo: UserInfo, measuremen
 export const generateCombinedPDF = async (client: Client, userInfo: UserInfo, savedPdfs: SavedPDF[], allFilms: Film[]): Promise<Blob> => {
     const { jsPDF } = jspdf;
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    
+
     const optionsData = savedPdfs.map(pdf => ({
         measurements: pdf.measurements || [],
         generalDiscount: {
@@ -79,20 +79,20 @@ export const generateCombinedPDF = async (client: Client, userInfo: UserInfo, sa
         totals: calculateTotalsFromSavedPDF(pdf),
         proposalOptionName: pdf.proposalOptionName || 'Opção',
     }));
-    
+
     await renderPdfContent(doc, client, userInfo, optionsData, allFilms, true, true);
-    
+
     return doc.output('blob');
 };
 
 
 // Função de renderização unificada
 const renderPdfContent = async (
-    doc: any, 
-    client: Client, 
-    userInfo: UserInfo, 
-    optionsData: { measurements: Measurement[], generalDiscount: GeneralDiscount, totals: Totals, proposalOptionName: string }[], 
-    allFilms: Film[], 
+    doc: any,
+    client: Client,
+    userInfo: UserInfo,
+    optionsData: { measurements: Measurement[], generalDiscount: GeneralDiscount, totals: Totals, proposalOptionName: string }[],
+    allFilms: Film[],
     includeCover: boolean,
     isCombined: boolean = false
 ) => {
@@ -105,7 +105,7 @@ const renderPdfContent = async (
             const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
             return result ? [parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16)] : [0, 0, 0];
         };
-        
+
         const bodyText = [33, 37, 41];
 
         const safeText = (text: any, x: number, y: number, options = {}) => {
@@ -122,7 +122,7 @@ const renderPdfContent = async (
                         img.onload = resolve;
                         img.onerror = resolve; // Continue even if logo fails
                     });
-                    
+
                     let imgWidth = img.width;
                     let imgHeight = img.height;
                     let ratio = imgWidth / imgHeight;
@@ -135,7 +135,7 @@ const renderPdfContent = async (
                         imgHeight = maxHeight;
                         imgWidth = imgHeight * ratio;
                     }
-                    
+
                     doc.addImage(userInfo.logo, 'PNG', x, y, imgWidth, imgHeight);
                 } catch (error) {
                     console.error("Erro ao adicionar logo:", error);
@@ -149,10 +149,10 @@ const renderPdfContent = async (
             doc.setDrawColor(...hexToRgb('#dddddd'));
             doc.setLineWidth(0.2);
             doc.line(margin, footerY, pageWidth - margin, footerY);
-            
+
             doc.setTextColor(...bodyText);
             doc.setFontSize(8);
-            
+
             safeText(userInfo.empresa || '', margin, footerY + 7);
             safeText(`Página ${pageCounter}`, pageWidth - margin, footerY + 7, { align: 'right' });
         };
@@ -184,11 +184,11 @@ const renderPdfContent = async (
                     logoBottomY = headerStartY + 8;
                 }
             } else {
-                 doc.setFont("helvetica", 'bold');
-                 doc.setFontSize(10);
-                 doc.setTextColor(...bodyText);
-                 safeText(userInfo.nome, margin, headerStartY + 4);
-                 logoBottomY = headerStartY + 8;
+                doc.setFont("helvetica", 'bold');
+                doc.setFontSize(10);
+                doc.setTextColor(...bodyText);
+                safeText(userInfo.nome, margin, headerStartY + 4);
+                logoBottomY = headerStartY + 8;
             }
 
             // Right-aligned contact info
@@ -198,13 +198,13 @@ const renderPdfContent = async (
             safeText(`Tel: ${userInfo.telefone || 'N/A'}`, rightAlignX, headerStartY + 1, { align: 'right' });
             safeText(`Email: ${userInfo.email || 'N/A'}`, rightAlignX, headerStartY + 5, { align: 'right' });
             safeText(`Site: ${userInfo.site || 'N/A'}`, rightAlignX, headerStartY + 9, { align: 'right' });
-            
+
             const lineY = Math.max(logoBottomY, headerStartY + 12) + 2;
             doc.setDrawColor(...userPrimaryColor);
             doc.setLineWidth(0.5);
             doc.line(margin, lineY, pageWidth - margin, lineY);
         };
-        
+
         let yPos = 0;
         const addNewPage = async () => {
             doc.addPage();
@@ -282,13 +282,13 @@ const renderPdfContent = async (
             doc.setFontSize(14);
             doc.setFont("helvetica", 'normal');
             doc.setTextColor(...textDark);
-            safeText("PROPOSTA DE ORÇAMENTO", pageWidth - margin, yPos, { align: 'right'});
-            
+            safeText("PROPOSTA DE ORÇAMENTO", pageWidth - margin, yPos, { align: 'right' });
+
             yPos += 20;
             doc.setFontSize(48);
             doc.setFont("helvetica", 'bold');
             doc.setTextColor(...primaryColor);
-            safeText("ORÇAMENTO", pageWidth - margin, yPos, { align: 'right'});
+            safeText("ORÇAMENTO", pageWidth - margin, yPos, { align: 'right' });
 
             // Divider Line
             const lineY = pageHeight - 80;
@@ -313,23 +313,23 @@ const renderPdfContent = async (
             safeText(client.telefone || '', margin, yPos);
             safeText(userInfo.empresa, pageWidth / 2 + 10, yPos);
             yPos += 5;
-            
+
             // --- CORREÇÃO DE QUEBRA DE LINHA DO ENDEREÇO DO CLIENTE ---
             const clientAddress = formatAddressForPdf(client);
             const maxClientAddressWidth = (pageWidth / 2) - margin - 10; // Largura máxima para o endereço do cliente
-            
+
             const clientAddressLines = doc.splitTextToSize(clientAddress, maxClientAddressWidth);
-            
+
             let currentClientY = yPos;
             for (const line of clientAddressLines) {
                 safeText(line, margin, currentClientY);
                 currentClientY += 5; // Incrementa a posição Y para cada linha
             }
-            
+
             // Garante que o endereço da empresa comece na mesma linha vertical do nome da empresa
             safeText(userInfo.endereco, pageWidth / 2 + 10, yPos + 5);
             // --- FIM DA CORREÇÃO ---
-            
+
             // Add first content page
             await addNewPage();
         } else {
@@ -350,7 +350,7 @@ const renderPdfContent = async (
             text: bodyText,
             white: [255, 255, 255]
         };
-        
+
         let grandTotalCombined = 0;
         let totalM2Combined = 0;
         let totalItemDiscountCombined = 0;
@@ -359,7 +359,7 @@ const renderPdfContent = async (
 
         for (const optionData of optionsData) {
             const { measurements, generalDiscount: optionGeneralDiscount, totals: optionTotals, proposalOptionName } = optionData;
-            
+
             // 1. Group measurements by film for this option
             const measurementsByFilm: { [key: string]: Measurement[] } = {};
             measurements.forEach(m => {
@@ -373,7 +373,7 @@ const renderPdfContent = async (
             for (const filmName of Object.keys(measurementsByFilm)) {
                 const film = allFilms.find(f => f.nome === filmName);
                 const filmMeasurements = measurementsByFilm[filmName];
-                
+
                 if (yPos > pageHeight - 60) await addNewPage();
 
                 doc.setTextColor(...colors.secondary);
@@ -388,7 +388,7 @@ const renderPdfContent = async (
                     const altura = parseFloat(String(m.altura).replace(',', '.')) || 0;
                     const quantidade = parseInt(String(m.quantidade), 10) || 0;
                     const m2 = largura * altura * quantidade;
-                    
+
                     let pricePerM2 = 0;
                     if (film) {
                         if (film.preco > 0) {
@@ -397,9 +397,9 @@ const renderPdfContent = async (
                             pricePerM2 = film.maoDeObra;
                         }
                     }
-                    
+
                     const basePrice = pricePerM2 * m2;
-                    
+
                     let itemDiscountAmount = 0;
                     let discountDisplay = '-';
                     const discountValue = m.discount || 0;
@@ -442,25 +442,25 @@ const renderPdfContent = async (
 
                 yPos = (doc as any).lastAutoTable.finalY + 10;
             }
-            
+
             // 3. Render Totals for this specific option
             if (yPos > pageHeight - 60) await addNewPage();
-            
+
             doc.setFont("helvetica", 'bold');
             doc.setFontSize(11);
             doc.setTextColor(...colors.primary);
             safeText(`Total da Opção: ${proposalOptionName}`, margin, yPos);
-            
+
             doc.setFont("helvetica", 'normal');
             doc.setFontSize(10);
             doc.setTextColor(...bodyText);
-            
+
             const summaryYStart = yPos + 7;
             const summaryXAlign = pageWidth - margin;
-            
+
             safeText(`Subtotal:`, margin, summaryYStart);
             safeText(`R$ ${formatNumberBR(optionTotals.subtotal)}`, summaryXAlign, summaryYStart, { align: 'right' });
-            
+
             safeText(`Descontos nos Itens:`, margin, summaryYStart + 7);
             safeText(`- R$ ${formatNumberBR(optionTotals.totalItemDiscount)}`, summaryXAlign, summaryYStart + 7, { align: 'right' });
 
@@ -470,23 +470,23 @@ const renderPdfContent = async (
             doc.setDrawColor(...colors.primary);
             doc.setLineWidth(0.2);
             doc.line(margin, summaryYStart + 18, pageWidth - margin, summaryYStart + 18);
-            
+
             doc.setFont("helvetica", 'bold');
             doc.setFontSize(12);
             doc.setTextColor(...colors.primary);
             safeText(`Valor Final da Opção:`, margin, summaryYStart + 25);
             safeText(`R$ ${formatNumberBR(optionTotals.finalTotal)}`, summaryXAlign, summaryYStart + 25, { align: 'right' });
-            
+
             yPos = summaryYStart + 35;
             doc.setTextColor(...bodyText);
-            
+
             // 4. Acumular totais combinados (Ainda precisamos disso para o cálculo de pagamento, mas não para o display)
             grandTotalCombined += optionTotals.finalTotal;
             totalM2Combined += optionTotals.totalM2;
             totalItemDiscountCombined += optionTotals.totalItemDiscount;
             totalGeneralDiscountCombined += optionTotals.generalDiscountAmount;
             subtotalCombined += optionTotals.subtotal;
-            
+
             if (isCombined && optionsData.indexOf(optionData) < optionsData.length - 1) {
                 // Adicionar uma quebra de página entre opções se for combinado
                 await addNewPage();
@@ -497,30 +497,30 @@ const renderPdfContent = async (
                 yPos += 15;
             }
         }
-        
+
         // --- Total Geral Combinado (MODIFICADO) ---
         if (isCombined) {
             // Substituindo o bloco de soma por uma nota de esclarecimento
             if (yPos > pageHeight - 60) await addNewPage();
-            
+
             doc.setFont("helvetica", 'bold');
             doc.setFontSize(12);
             doc.setTextColor(...colors.primary);
             safeText("Opções de Proposta para Avaliação", margin, yPos);
             yPos += 6;
-            
+
             doc.setFont("helvetica", 'normal');
             doc.setFontSize(10);
             doc.setTextColor(...bodyText);
             safeText("Os valores acima representam opções separadas para sua escolha, e não um total somado.", margin, yPos);
             yPos += 15;
         }
-        
+
         // --- Garantias e Especificações (Baseado em todas as opções) ---
-        
+
         const allFilmsUsed = optionsData.flatMap(opt => opt.measurements.map(m => m.pelicula));
         const uniqueFilmNames = Array.from(new Set(allFilmsUsed));
-        
+
         await addSectionTitle("Garantias");
         for (const filmName of uniqueFilmNames) {
             const film = allFilms.find(f => f.nome === filmName);
@@ -536,7 +536,7 @@ const renderPdfContent = async (
                 yPos += 8;
             }
         }
-        
+
         const filmsWithTechData = uniqueFilmNames
             .map(filmName => allFilms.find(f => f.nome === filmName))
             .filter((film): film is Film => !!film && (
@@ -544,20 +544,27 @@ const renderPdfContent = async (
                 (typeof film.ir === 'number' && film.ir > 0) ||
                 (typeof film.vtl === 'number' && film.vtl > 0) ||
                 (typeof film.tser === 'number' && film.tser > 0) ||
-                (typeof film.espessura === 'number' && film.espessura > 0)
+                (typeof film.espessura === 'number' && film.espessura > 0) ||
+                (!!film.customFields && Object.keys(film.customFields).length > 0)
             ));
 
         if (filmsWithTechData.length > 0) {
             await addSectionTitle("Especificações Técnicas");
-            
+
             for (const film of filmsWithTechData) {
-                const techData = [
+                const techData: { label: string; value: string | number | undefined; unit: string }[] = [
                     { label: 'Proteção UV', value: film.uv, unit: '%' },
                     { label: 'Rejeição de Infravermelho (IR)', value: film.ir, unit: '%' },
                     { label: 'Transmissão de Luz Visível (VTL)', value: film.vtl, unit: '%' },
                     { label: 'Rejeição Total de Energia Solar (TSER)', value: film.tser, unit: '%' },
                     { label: 'Espessura', value: film.espessura, unit: 'mc' },
                 ].filter(item => typeof item.value === 'number' && item.value > 0);
+
+                if (film.customFields) {
+                    Object.entries(film.customFields).forEach(([key, value]) => {
+                        techData.push({ label: key, value: value, unit: '' });
+                    });
+                }
 
                 if (techData.length > 0) {
                     if (yPos > pageHeight - 30 - (techData.length * 5)) await addNewPage();
@@ -684,12 +691,12 @@ const renderPdfContent = async (
             safeText(line, margin, yPos);
             yPos += LINE_HEIGHT;
         }
-        
+
         // --- Signature Section ---
         if (userInfo.assinatura) {
             const signatureImageHeight = 15;
             const PAGE_BOTTOM_MARGIN_WITH_FOOTER = 25;
-            
+
             if (yPos + SIGNATURE_HEIGHT > pageHeight - PAGE_BOTTOM_MARGIN_WITH_FOOTER) {
                 await addNewPage();
                 yPos = pageHeight - 80;
@@ -716,13 +723,13 @@ const renderPdfContent = async (
                 doc.setDrawColor(...bodyText);
                 doc.setLineWidth(0.2);
                 doc.line(lineXStart, lineY, lineXStart + 80, lineY);
-                
+
                 const nameY = lineY + 5;
                 doc.setFont("helvetica", 'normal');
                 doc.setFontSize(10);
                 doc.setTextColor(...bodyText);
                 safeText(userInfo.nome, pageWidth / 2, nameY, { align: 'center' });
-                
+
                 const cpfCnpjY = nameY + 5;
                 doc.setFontSize(8);
                 doc.setTextColor(100, 100, 100);

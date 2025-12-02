@@ -61,6 +61,7 @@ export interface Film {
     imagens?: string[]; // Alterado para array de strings (Base64)
     pinned?: boolean; // Fixar película no topo da lista
     pinnedAt?: number; // Timestamp de quando foi fixado
+    customFields?: { [key: string]: string }; // Campos técnicos personalizados
 }
 
 export type PaymentMethodType = 'pix' | 'boleto' | 'parcelado_sem_juros' | 'parcelado_com_juros' | 'adiantamento' | 'observacao';
