@@ -2096,6 +2096,130 @@ const App: React.FC = () => {
 
     const measurementToDelete = measurements.find(m => m.id === measurementToDeleteId);
 
+    const modalProps = {
+        isClientModalOpen,
+        setIsClientModalOpen,
+        clientModalMode,
+        selectedClient,
+        newClientName,
+        setNewClientName,
+        aiClientData,
+        setAiClientData,
+        handleSaveClient,
+        handleOpenAIClientModal,
+        isClientSelectionModalOpen,
+        setIsClientSelectionModalOpen,
+        clients,
+        setSelectedClientId,
+        isLoading,
+        handleAddNewClientFromSelection,
+        handleToggleClientPin,
+        isPaymentModalOpen,
+        setIsPaymentModalOpen,
+        userInfo,
+        handleSavePaymentMethods,
+        editingMeasurement,
+        handleCloseEditMeasurementModal,
+        films,
+        handleUpdateEditingMeasurement,
+        handleDeleteMeasurementFromEditModal,
+        handleOpenFilmModal,
+        handleOpenFilmSelectionModal,
+        numpadConfig,
+        handleOpenNumpad,
+        isFilmModalOpen,
+        setIsFilmModalOpen,
+        setEditingFilm,
+        setEditingMeasurementIdForFilm,
+        setNewFilmName,
+        setAiFilmData,
+        handleSaveFilm,
+        handleDeleteFilm,
+        editingFilm,
+        newFilmName,
+        aiFilmData,
+        setIsAIFilmModalOpen,
+        isFilmSelectionModalOpen,
+        setIsFilmSelectionModalOpen,
+        handleSelectFilmForMeasurement,
+        handleAddNewFilmFromSelection,
+        handleEditFilmFromSelection,
+        handleRequestDeleteFilm,
+        handleToggleFilmPin,
+        isApplyFilmToAllModalOpen,
+        setIsApplyFilmToAllModalOpen,
+        handleApplyFilmToAll,
+        schedulingInfo,
+        handleCloseAgendamentoModal,
+        handleSaveAgendamento,
+        handleRequestDeleteAgendamento,
+        agendamentos,
+        handleAddNewClientFromAgendamento,
+        infoModalConfig,
+        handleCloseInfoModal,
+        isSaveBeforePdfModalOpen,
+        setIsSaveBeforePdfModalOpen,
+        handleConfirmSaveBeforePdf,
+        isClearAllModalOpen,
+        setIsClearAllModalOpen,
+        handleConfirmClearAll,
+        filmToDeleteName,
+        setFilmToDeleteName,
+        handleConfirmDeleteFilm,
+        filmToApplyToAll,
+        setFilmToApplyToAll,
+        handleConfirmApplyFilmToAll,
+        isDeleteClientModalOpen,
+        setIsDeleteClientModalOpen,
+        handleConfirmDeleteClient,
+        pdfToDeleteId,
+        setPdfToDeleteId,
+        handleConfirmDeletePdf,
+        agendamentoToDelete,
+        setAgendamentoToDelete,
+        handleConfirmDeleteAgendamento,
+        isExitConfirmModalOpen,
+        setIsExitConfirmModalOpen,
+        pdfGenerationStatus,
+        handleClosePdfStatusModal,
+        handleGoToHistoryFromPdf,
+        editingMeasurementForDiscount,
+        handleCloseDiscountModal,
+        handleSaveDiscount,
+        isGeneralDiscountModalOpen,
+        setIsGeneralDiscountModalOpen,
+        handleSaveGeneralDiscount,
+        generalDiscount,
+        isAIMeasurementModalOpen,
+        setIsAIMeasurementModalOpen,
+        handleProcessAIInput,
+        isProcessingAI,
+        isAIClientModalOpen,
+        setIsAIClientModalOpen,
+        handleProcessAIClientInput,
+        isAIFilmModalOpen,
+
+        handleProcessAIFilmInput,
+        isApiKeyModalOpen,
+        setIsApiKeyModalOpen,
+        handleSaveApiKey,
+        apiKeyModalProvider,
+        isGalleryOpen,
+        handleCloseGallery,
+        galleryImages,
+        galleryInitialIndex,
+        isDuplicateAllModalOpen,
+        setIsDuplicateAllModalOpen,
+        activeOption,
+        handleConfirmDuplicateAll,
+        measurementToDeleteId,
+        setMeasurementToDeleteId,
+        handleConfirmDeleteIndividualMeasurement,
+        measurementToDelete
+    };
+
+
+
     return (
         <div className="h-full font-roboto flex flex-col">
             <main ref={mainRef} className="flex-grow overflow-y-auto pb-36 sm:pb-0">
@@ -2210,310 +2334,8 @@ const App: React.FC = () => {
                 </div>
             </main>
 
-            {newVersionAvailable && (
-                <UpdateNotification onUpdate={handleUpdate} />
-            )}
 
-            {isClientModalOpen && (
-                <ClientModal
-                    isOpen={isClientModalOpen}
-                    onClose={() => {
-                        setIsClientModalOpen(false);
-                        setNewClientName('');
-                        setAiClientData(undefined);
-                    }}
-                    onSave={handleSaveClient}
-                    mode={clientModalMode}
-                    client={clientModalMode === 'edit' ? selectedClient : null}
-                    initialName={newClientName}
-                    aiData={aiClientData}
-                    onOpenAIModal={handleOpenAIClientModal}
-                />
-            )}
-            {isClientSelectionModalOpen && (
-                <ClientSelectionModal
-                    isOpen={isClientSelectionModalOpen}
-                    onClose={() => setIsClientSelectionModalOpen(false)}
-                    clients={clients}
-                    onClientSelect={setSelectedClientId}
-                    isLoading={isLoading}
-                    onAddNewClient={handleAddNewClientFromSelection}
-                    onTogglePin={handleToggleClientPin}
-                />
-            )}
-            {isPaymentModalOpen && userInfo && (
-                <PaymentMethodsModal
-                    isOpen={isPaymentModalOpen}
-                    onClose={() => setIsPaymentModalOpen(false)}
-                    onSave={handleSavePaymentMethods}
-                    paymentMethods={userInfo.payment_methods}
-                />
-            )}
-            {editingMeasurement && (
-                <EditMeasurementModal
-                    isOpen={!!editingMeasurement}
-                    onClose={handleCloseEditMeasurementModal}
-                    measurement={editingMeasurement}
-                    films={films}
-                    onUpdate={handleUpdateEditingMeasurement}
-                    onDelete={handleDeleteMeasurementFromEditModal}
-                    onDuplicate={() => {
-                        const measurementToDuplicate = measurements.find(m => m.id === editingMeasurement.id);
-                        if (measurementToDuplicate) {
-                            const newMeasurement: UIMeasurement = {
-                                ...measurementToDuplicate,
-                                id: Date.now(),
-                                isNew: false
-                            };
-                            const index = measurements.findIndex(m => m.id === measurementToDuplicate.id);
-                            const newMeasurements = [...measurements];
-                            newMeasurements.splice(index + 1, 0, newMeasurement);
-                            handleMeasurementsChange(newMeasurements);
-                        }
-                        handleCloseEditMeasurementModal();
-                    }}
-                    onOpenFilmModal={handleOpenFilmModal}
-                    onOpenFilmSelectionModal={handleOpenFilmSelectionModal}
-                    numpadConfig={numpadConfig}
-                    onOpenNumpad={handleOpenNumpad}
-                />
-            )}
-            {isFilmModalOpen && (
-                <FilmModal
-                    isOpen={isFilmModalOpen}
-                    onClose={() => {
-                        setIsFilmModalOpen(false);
-                        setEditingFilm(null);
-                        setEditingMeasurementIdForFilm(null);
-                        setNewFilmName('');
-                        setAiFilmData(undefined);
-                    }}
-                    onSave={handleSaveFilm}
-                    onDelete={handleDeleteFilm}
-                    film={editingFilm}
-                    initialName={newFilmName}
-                    aiData={aiFilmData}
-                    onOpenAIModal={() => setIsAIFilmModalOpen(true)}
-                />
-            )}
-            {isFilmSelectionModalOpen && (
-                <FilmSelectionModal
-                    isOpen={isFilmSelectionModalOpen}
-                    onClose={() => {
-                        setIsFilmSelectionModalOpen(false);
-                        setEditingMeasurementIdForFilm(null);
-                    }}
-                    films={films}
-                    onSelect={handleSelectFilmForMeasurement}
-                    onAddNewFilm={handleAddNewFilmFromSelection}
-                    onEditFilm={handleEditFilmFromSelection}
-                    onDeleteFilm={handleRequestDeleteFilm}
-                    onTogglePin={handleToggleFilmPin}
-                />
-            )}
-            {isApplyFilmToAllModalOpen && (
-                <FilmSelectionModal
-                    isOpen={isApplyFilmToAllModalOpen}
-                    onClose={() => setIsApplyFilmToAllModalOpen(false)}
-                    films={films}
-                    onSelect={handleApplyFilmToAll}
-                    onAddNewFilm={handleAddNewFilmFromSelection}
-                    onEditFilm={handleEditFilmFromSelection}
-                    onDeleteFilm={handleRequestDeleteFilm}
-                    onTogglePin={handleToggleFilmPin}
-                />
-            )}
-            {schedulingInfo && (
-                <AgendamentoModal
-                    isOpen={!!schedulingInfo}
-                    onClose={handleCloseAgendamentoModal}
-                    onSave={handleSaveAgendamento}
-                    onDelete={handleRequestDeleteAgendamento}
-                    schedulingInfo={schedulingInfo}
-                    clients={clients}
-                    onAddNewClient={handleAddNewClientFromAgendamento}
-                    userInfo={userInfo}
-                    agendamentos={agendamentos}
-                />
-            )}
-
-            <InfoModal
-                isOpen={infoModalConfig.isOpen}
-                onClose={handleCloseInfoModal}
-                title={infoModalConfig.title}
-                message={infoModalConfig.message}
-            />
-            {isSaveBeforePdfModalOpen && (
-                <ConfirmationModal
-                    isOpen={isSaveBeforePdfModalOpen}
-                    onClose={() => setIsSaveBeforePdfModalOpen(false)}
-                    onConfirm={handleConfirmSaveBeforePdf}
-                    title="Alterações Não Salvas"
-                    message="Você tem alterações não salvas. Deseja salvar antes de gerar o PDF?"
-                    confirmButtonText="Sim, Salvar e Gerar"
-                    cancelButtonText="Cancelar"
-                />
-            )}
-            {isClearAllModalOpen && (
-                <ConfirmationModal
-                    isOpen={isClearAllModalOpen}
-                    onClose={() => setIsClearAllModalOpen(false)}
-                    onConfirm={handleConfirmClearAll}
-                    title="Confirmar Exclusão Total"
-                    message="Tem certeza que deseja apagar TODAS as medidas para esta opção? Esta ação não pode ser desfeita."
-                    confirmButtonText="Sim, Excluir Tudo"
-                    confirmButtonVariant="danger"
-                />
-            )}
-            {filmToDeleteName !== null && (
-                <ConfirmationModal
-                    isOpen={filmToDeleteName !== null}
-                    onClose={() => setFilmToDeleteName(null)}
-                    onConfirm={handleConfirmDeleteFilm}
-                    title="Confirmar Exclusão de Película"
-                    message={<>Tem certeza que deseja apagar a película <strong>{filmToDeleteName}</strong>? Esta ação não pode ser desfeita.</>}
-                    confirmButtonText="Sim, Excluir"
-                    confirmButtonVariant="danger"
-                />
-            )}
-            {filmToApplyToAll !== null && (
-                <ConfirmationModal
-                    isOpen={filmToApplyToAll !== null}
-                    onClose={() => setFilmToApplyToAll(null)}
-                    onConfirm={handleConfirmApplyFilmToAll}
-                    title="Aplicar Película a Todos"
-                    message={<>Tem certeza que deseja aplicar a película <strong>{filmToApplyToAll}</strong> a todas as {measurements.length} medidas? Isso substituirá as películas já selecionadas.</>}
-                    confirmButtonText="Sim, Aplicar a Todas"
-                />
-            )}
-            {isDeleteClientModalOpen && selectedClient && (
-                <ConfirmationModal
-                    isOpen={isDeleteClientModalOpen}
-                    onClose={() => setIsDeleteClientModalOpen(false)}
-                    onConfirm={handleConfirmDeleteClient}
-                    title="Confirmar Exclusão de Cliente"
-                    message={
-                        <>
-                            <p className="text-slate-700">Tem certeza que deseja apagar o cliente <strong>{selectedClient.nome}</strong>?</p>
-                            <div className="mt-4 bg-red-50 p-3 rounded-lg border border-red-200 text-sm text-red-800">
-                                <div className="flex">
-                                    <div className="flex-shrink-0">
-                                        <i className="fas fa-exclamation-triangle text-red-500 h-5 w-5" aria-hidden="true"></i>
-                                    </div>
-                                    <div className="ml-3">
-                                        <p>
-                                            Todas as suas medidas, opções de proposta e histórico de orçamentos (PDFs) serão <strong>perdidos permanentemente</strong>. Esta ação não pode ser desfeita.
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-                        </>
-                    }
-                    confirmButtonText="Sim, Excluir Cliente"
-                    confirmButtonVariant="danger"
-                />
-            )}
-            {pdfToDeleteId !== null && (
-                <ConfirmationModal
-                    isOpen={pdfToDeleteId !== null}
-                    onClose={() => setPdfToDeleteId(null)}
-                    onConfirm={handleConfirmDeletePdf}
-                    title="Confirmar Exclusão de Orçamento"
-                    message="Tem certeza que deseja apagar este orçamento do histórico? Esta ação não pode ser desfeita."
-                    confirmButtonText="Sim, Excluir"
-                    confirmButtonVariant="danger"
-                />
-            )}
-            {agendamentoToDelete && (
-                <ConfirmationModal
-                    isOpen={!!agendamentoToDelete}
-                    onClose={() => setAgendamentoToDelete(null)}
-                    onConfirm={handleConfirmDeleteAgendamento}
-                    title="Confirmar Exclusão"
-                    message={
-                        <>
-                            Tem certeza que deseja apagar o agendamento para <strong>{agendamentoToDelete.clienteNome}</strong> em <strong>{new Date(agendamentoToDelete.start).toLocaleDateString('pt-BR')}</strong>?
-                        </>
-                    }
-                    confirmButtonText="Sim, Excluir Agendamento"
-                    confirmButtonVariant="danger"
-                />
-            )}
-            {isExitConfirmModalOpen && (
-                <ConfirmationModal
-                    isOpen={isExitConfirmModalOpen}
-                    onClose={() => setIsExitConfirmModalOpen(false)}
-                    onConfirm={() => {
-                        setIsExitConfirmModalOpen(false);
-                        window.history.back();
-                    }}
-                    title="Sair do Aplicativo"
-                    message="Tem certeza que deseja sair do aplicativo?"
-                    confirmButtonText="Sim, Sair"
-                    cancelButtonText="Cancelar"
-                />
-            )}
-            {pdfGenerationStatus !== 'idle' && (
-                <PdfGenerationStatusModal
-                    status={pdfGenerationStatus as 'generating' | 'success'}
-                    onClose={handleClosePdfStatusModal}
-                    onGoToHistory={handleGoToHistoryFromPdf}
-                />
-            )}
-            {editingMeasurementForDiscount && (
-                <DiscountModal
-                    isOpen={!!editingMeasurementForDiscount}
-                    onClose={handleCloseDiscountModal}
-                    onSave={handleSaveDiscount}
-                    initialValue={editingMeasurementForDiscount.discount}
-                    initialType={editingMeasurementForDiscount.discountType}
-                />
-            )}
-            {isGeneralDiscountModalOpen && (
-                <GeneralDiscountModal
-                    isOpen={isGeneralDiscountModalOpen}
-                    onClose={() => setIsGeneralDiscountModalOpen(false)}
-                    onSave={handleSaveGeneralDiscount}
-                    initialValue={generalDiscount.value}
-                    initialType={generalDiscount.type}
-                />
-            )}
-            {isAIMeasurementModalOpen && (
-                <AIMeasurementModal
-                    isOpen={isAIMeasurementModalOpen}
-                    onClose={() => setIsAIMeasurementModalOpen(false)}
-                    onProcess={handleProcessAIInput}
-                    isProcessing={isProcessingAI}
-                    provider={userInfo?.aiConfig?.provider || 'gemini'}
-                />
-            )}
-            {isAIClientModalOpen && (
-                <AIClientModal
-                    isOpen={isAIClientModalOpen}
-                    onClose={() => setIsAIClientModalOpen(false)}
-                    onProcess={handleProcessAIClientInput}
-                    isProcessing={isProcessingAI}
-                    provider={userInfo?.aiConfig?.provider || 'gemini'}
-                />
-            )}
-            {isAIFilmModalOpen && (
-                <AIFilmModal
-                    isOpen={isAIFilmModalOpen}
-                    onClose={() => setIsAIFilmModalOpen(false)}
-                    onProcess={handleProcessAIFilmInput}
-                    isProcessing={isProcessingAI}
-                    provider={userInfo?.aiConfig?.provider || 'gemini'}
-                />
-            )}
-            {isApiKeyModalOpen && userInfo && (
-                <ApiKeyModal
-                    isOpen={isApiKeyModalOpen}
-                    onClose={() => setIsApiKeyModalOpen(false)}
-                    onSave={handleSaveApiKey}
-                    currentApiKey={userInfo.aiConfig?.provider === apiKeyModalProvider ? userInfo.aiConfig?.apiKey : ''}
-                    provider={apiKeyModalProvider}
-                />
-            )}
+            <ModalsContainer {...modalProps} />
             <CustomNumpad
                 ref={numpadRef}
                 isOpen={numpadConfig.isOpen}
@@ -2526,49 +2348,6 @@ const App: React.FC = () => {
                 onAddGroup={handleNumpadAddGroup}
                 activeField={numpadConfig.field}
             />
-            {isGalleryOpen && (
-                <ImageGalleryModal
-                    isOpen={isGalleryOpen}
-                    onClose={handleCloseGallery}
-                    images={galleryImages}
-                    initialIndex={galleryInitialIndex}
-                />
-            )}
-            {isDuplicateAllModalOpen && activeOption && (
-                <ConfirmationModal
-                    isOpen={isDuplicateAllModalOpen}
-                    onClose={() => setIsDuplicateAllModalOpen(false)}
-                    onConfirm={handleConfirmDuplicateAll}
-                    title="Duplicar Opção de Proposta"
-                    message={
-                        <>
-                            <p className="text-slate-700">
-                                Você está prestes a duplicar a opção atual "<strong>{activeOption.name}</strong>" ({activeOption.measurements.length} medidas) e criar uma nova opção de proposta.
-                            </p>
-                            <p className="mt-2 text-sm text-slate-600">
-                                Deseja continuar?
-                            </p>
-                        </>
-                    }
-                    confirmButtonText="Sim, Duplicar Opção"
-                />
-            )}
-            {measurementToDeleteId !== null && measurementToDelete && (
-                <ConfirmationModal
-                    isOpen={measurementToDeleteId !== null}
-                    onClose={() => setMeasurementToDeleteId(null)}
-                    onConfirm={handleConfirmDeleteIndividualMeasurement}
-                    title="Confirmar Exclusão de Medida"
-                    message={
-                        <>
-                            Tem certeza que deseja apagar a medida de <strong>{measurementToDelete.largura}x{measurementToDelete.altura}</strong> ({measurementToDelete.ambiente})?
-                            Esta ação não pode ser desfeita.
-                        </>
-                    }
-                    confirmButtonText="Sim, Excluir"
-                    confirmButtonVariant="danger"
-                />
-            )}
             {newVersionAvailable && (
                 <UpdateNotification onUpdate={handleUpdate} />
             )}
