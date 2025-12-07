@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense, useRef } from 'react';
+ï»¿import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense, useRef } from 'react';
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 import { Client, Measurement, UserInfo, Film, PaymentMethods, SavedPDF, Agendamento, ProposalOption, SchedulingInfo, ExtractedClientData } from './types';
 import * as db from './services/db';
@@ -376,7 +376,7 @@ const App: React.FC = () => {
                 if (savedOptions.length === 0) {
                     const defaultOption: ProposalOption = {
                         id: Date.now(),
-                        name: 'Opção 1',
+                        name: 'Opï¿½ï¿½o 1',
                         measurements: [],
                         generalDiscount: { value: '', type: 'percentage' }
                     };
@@ -453,7 +453,7 @@ const App: React.FC = () => {
         setSwipeDistance(distance);
     }, []);
 
-    const handleShowInfo = useCallback((message: string, title: string = "Atenção") => {
+    const handleShowInfo = useCallback((message: string, title: string = "Atenï¿½ï¿½o") => {
         setInfoModalConfig({ isOpen: true, title, message });
     }, []);
 
@@ -493,7 +493,7 @@ const App: React.FC = () => {
 
         const newOption: ProposalOption = {
             id: Date.now(),
-            name: `Opção ${proposalOptions.length + 1}`,
+            name: `Opï¿½ï¿½o ${proposalOptions.length + 1}`,
             measurements: activeOption.measurements.map((m, index) => ({
                 ...m,
                 id: Date.now() + index,
@@ -512,7 +512,7 @@ const App: React.FC = () => {
         setProposalOptions(prevOptions => {
             const newOption: ProposalOption = {
                 id: Date.now(),
-                name: `Opção 1`,
+                name: `Opï¿½ï¿½o 1`,
                 measurements: [],
                 generalDiscount: { value: '', type: 'percentage' }
             };
@@ -1762,7 +1762,7 @@ const App: React.FC = () => {
             handleCloseAgendamentoModal();
         } catch (error) {
             console.error("Erro ao salvar agendamento:", error);
-            handleShowInfo("Não foi possível salvar o agendamento. Tente novamente.");
+            handleShowInfo("Nï¿½o foi possï¿½vel salvar o agendamento. Tente novamente.");
         }
     }, [handleCloseAgendamentoModal, loadAgendamentos, loadAllPdfs]);
 
@@ -1790,7 +1790,7 @@ const App: React.FC = () => {
             await Promise.all([loadAgendamentos(), loadAllPdfs()]);
         } catch (error) {
             console.error("Erro ao excluir agendamento:", error);
-            handleShowInfo("Não foi possível excluir o agendamento. Tente novamente.");
+            handleShowInfo("Nï¿½o foi possï¿½vel excluir o agendamento. Tente novamente.");
         } finally {
             setAgendamentoToDelete(null);
         }
@@ -1901,23 +1901,28 @@ const App: React.FC = () => {
             const genAI = new GoogleGenerativeAI(userInfo.aiConfig.apiKey);
             const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
 
-            const prompt = `Você é um assistente especialista em extração de medidas de janelas/vidros para instalação de películas.
+            const prompt = `VocÃƒÂª ÃƒÂ© um assistente especialista em extraÃƒÂ§ÃƒÂ£o de medidas de janelas/vidros para instalaÃƒÂ§ÃƒÂ£o de pelÃƒÂ­culas.
 
-Sua tarefa é extrair TODAS as medidas mencionadas e retornar um array JSON com cada medida individual.
+Sua tarefa ÃƒÂ© extrair TODAS as medidas mencionadas e retornar um array JSON com cada medida individual.
 
-**REGRAS:**
-1. Separe cada medida individual em um item do array
-2. Se for "5 janelas de 1.20 x 2.10", crie 5 itens separados
-3. Largura e Altura devem ser strings com vírgula como decimal (ex: "1,20")
-4. Quantidade é sempre 1 para cada item
-5. Local deve ser descritivo (ex: "Janela da Sala", "Vidro Fixo")
+**REGRAS CRÃƒÂTICAS DE AMBIENTE:**
+1. O campo "local" deve SEMPRE incluir o ambiente mencionado (Sala, Quarto, Cozinha, etc).
+2. Se a entrada for "5 janelas de 1.20 x 2.10 na sala", o local deve ser "Janela da Sala" para TODAS as 5 medidas.
+3. Se a entrada for "2 vidros fixos 0.80x1.50 no escritÃƒÂ³rio", o local deve ser "Vidro Fixo do EscritÃƒÂ³rio".
+4. Se nÃƒÂ£o houver ambiente explÃƒÂ­cito, use uma descriÃƒÂ§ÃƒÂ£o genÃƒÂ©rica (ex: "Janela", "Vidro").
 
-FORMATO:
+**OUTRAS REGRAS:**
+1. Separe cada medida individual em um item do array (quantidade sempre 1).
+2. Se for "5 janelas...", crie 5 objetos separados no array.
+3. Largura e Altura devem ser strings com vÃƒÂ­rgula como decimal (ex: "1,20").
+
+FORMATO DE RESPOSTA (JSON PURO):
 [
+  { "local": "Janela da Sala", "largura": "1,20", "altura": "2,10", "quantidade": 1 },
   { "local": "Janela da Sala", "largura": "1,20", "altura": "2,10", "quantidade": 1 }
 ]
 
-Se não conseguir extrair, retorne: []`;
+Se nÃƒÂ£o conseguir extrair, retorne: []`;
 
             const parts: any[] = [prompt];
 
@@ -1956,7 +1961,7 @@ Se não conseguir extrair, retorne: []`;
             // Parse JSON
             const jsonMatch = responseText.match(/\[[\s\S]*\]/);
             if (!jsonMatch) {
-                handleShowInfo("Não foi possível extrair medidas. Tente reformular.");
+                handleShowInfo("Nï¿½o foi possï¿½vel extrair medidas. Tente reformular.");
                 return;
             }
 
@@ -1967,7 +1972,7 @@ Se não conseguir extrair, retorne: []`;
                 return;
             }
 
-            // Adiciona as medidas extraídas
+            // Adiciona as medidas extraï¿½das
             const newMeasurements = extractedMeasurements.map((m: any) => ({
                 ...createEmptyMeasurement(),
                 local: m.local || '',
@@ -2001,7 +2006,7 @@ Se não conseguir extrair, retorne: []`;
         if (deferredPrompt) {
             promptInstall();
         } else {
-            alert("Para instalar, use o menu 'Compartilhar' do seu navegador e selecione 'Adicionar à Tela de Início'.");
+            alert("Para instalar, use o menu 'Compartilhar' do seu navegador e selecione 'Adicionar ï¿½ Tela de Inï¿½cio'.");
         }
     }, [deferredPrompt, promptInstall]);
 
@@ -2121,7 +2126,7 @@ Se não conseguir extrair, retorne: []`;
                         <i className="fas fa-users fa-2x text-slate-500 dark:text-slate-400"></i>
                     </div>
                     <h3 className="text-xl font-semibold text-slate-800 dark:text-slate-200">Crie seu Primeiro Cliente</h3>
-                    <p className="mt-2 text-slate-600 dark:text-slate-400 max-w-xs mx-auto">Tudo começa com um cliente. Adicione os dados para começar a gerar orçamentos.</p>
+                    <p className="mt-2 text-slate-600 dark:text-slate-400 max-w-xs mx-auto">Tudo comeï¿½a com um cliente. Adicione os dados para comeï¿½ar a gerar orï¿½amentos.</p>
                     <button
                         onClick={() => handleOpenClientModal('add')}
                         className="mt-6 px-6 py-3 bg-slate-800 dark:bg-slate-700 text-white font-semibold rounded-lg hover:bg-slate-700 dark:hover:bg-slate-600 transition duration-300 shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 flex items-center gap-2"
@@ -2168,7 +2173,7 @@ Se não conseguir extrair, retorne: []`;
                     </div>
                     <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-2">Nenhuma Medida Ainda</h3>
                     <p className="text-slate-600 dark:text-slate-400 max-w-xs mx-auto leading-relaxed mb-8 text-sm">
-                        Adicione as dimensões das janelas para começar o orçamento.
+                        Adicione as dimensï¿½es das janelas para comeï¿½ar o orï¿½amento.
                     </p>
                     <button
                         onClick={addMeasurement}
@@ -2459,7 +2464,7 @@ Se não conseguir extrair, retorne: []`;
             )}
             {showUndoToast && deletedMeasurement && (
                 <Toast
-                    message="Medida excluída"
+                    message="Medida excluï¿½da"
                     onUndo={handleUndoDelete}
                     onDismiss={handleDismissUndo}
                     duration={5000}
@@ -2470,3 +2475,4 @@ Se não conseguir extrair, retorne: []`;
 };
 
 export default App;
+
