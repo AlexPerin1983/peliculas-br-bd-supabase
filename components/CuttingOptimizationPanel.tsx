@@ -672,16 +672,20 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                                 const row = rows.get(key)!;
                                                 row.minX = Math.min(row.minX, item.x);
                                                 row.maxX = Math.max(row.maxX, item.x + item.w);
+                                                row.h = Math.max(row.h, item.h); // Ensure we use the max height
                                             }
                                         });
 
                                         // Draw vertical blade gaps (between rows)
                                         const sortedRows = Array.from(rows.entries()).sort((a, b) => a[0] - b[0]);
+                                        console.log('Sangria Debug - Linhas encontradas:', sortedRows.length);
                                         sortedRows.forEach((row, idx) => {
                                             const [y, data] = row;
+                                            console.log(`Linha ${idx}: y=${y}, h=${data.h}, termina em=${y + data.h}`);
                                             const nextRow = sortedRows[idx + 1];
                                             if (nextRow) {
                                                 const bladeY = y + data.h;
+                                                console.log(`  → Sangria vertical em Y=${bladeY}, altura=${bladeWidthCm}cm`);
                                                 bladeElements.push(
                                                     <div
                                                         key={`vblade-${idx}`}
@@ -691,9 +695,10 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                                             top: `${bladeY * scale}px`,
                                                             width: `${result.rollWidth * scale}px`,
                                                             height: `${bladeWidthCm * scale}px`,
-                                                            backgroundColor: 'rgba(239, 68, 68, 0.2)', // red-500 with opacity
-                                                            borderTop: '1px dashed rgba(239, 68, 68, 0.5)',
-                                                            borderBottom: '1px dashed rgba(239, 68, 68, 0.5)'
+                                                            backgroundColor: 'rgba(239, 68, 68, 0.3)', // Increased opacity for better visibility
+                                                            borderTop: '2px dashed rgba(239, 68, 68, 0.8)',
+                                                            borderBottom: '2px dashed rgba(239, 68, 68, 0.8)',
+                                                            zIndex: 10
                                                         }}
                                                         title={`Sangria Vertical: ${bladeWidthCm.toFixed(1)}cm`}
                                                     />
