@@ -665,46 +665,69 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                         // Find unique Y positions (rows)
                                         const rows = new Map<number, { minX: number, maxX: number, h: number }>();
                                         result.placedItems.forEach(item => {
-                                            const key = Math.round(item.y * 10) / 10; // Round to avoid floating point issues
+                                            const key = Math.round(item.y * 10) / 10;
                                             if (!rows.has(key)) {
                                                 rows.set(key, { minX: item.x, maxX: item.x + item.w, h: item.h });
                                             } else {
                                                 const row = rows.get(key)!;
                                                 row.minX = Math.min(row.minX, item.x);
                                                 row.maxX = Math.max(row.maxX, item.x + item.w);
-                                                row.h = Math.max(row.h, item.h); // Ensure we use the max height
+                                                row.h = Math.max(row.h, item.h);
                                             }
                                         });
 
                                         // Draw vertical blade gaps (between rows)
                                         const sortedRows = Array.from(rows.entries()).sort((a, b) => a[0] - b[0]);
-                                        console.log('Sangria Debug - Linhas encontradas:', sortedRows.length);
-                                        sortedRows.forEach((row, idx) => {
-                                            const [y, data] = row;
-                                            console.log(`Linha ${idx}: y=${y}, h=${data.h}, termina em=${y + data.h}`);
-                                            const nextRow = sortedRows[idx + 1];
-                                            if (nextRow) {
-                                                const bladeY = y + data.h;
-                                                console.log(`  → Sangria vertical em Y=${bladeY}, altura=${bladeWidthCm}cm`);
+                                        console.log('🔴 Sangria Debug - Linhas encontradas:', sortedRows.length);
+                                        console.log('🔴 BladeWidthCm:', bladeWidthCm);
+                                        console.log('🔴 Scale:', scale);
+
+                                        for (let idx = 0; idx < sortedRows.length - 1; idx++) {
+                                            const [y1, data1] = sortedRows[idx];
+                                            const [y2, data2] = sortedRows[idx + 1];
+                                            const bladeY = y1 + data1.h;
+                                            const gap = y2 - bladeY;
+
+                                            console.log(`🔴 Linha ${idx} → ${idx + 1}:`);
+                                            console.log(`   Y1=${y1}, h=${data1.h}, termina em=${bladeY}`);
+                                            console.log(`   Y2=${y2}`);
+                                            console.log(`   GAP=${gap}cm`);
+                                            console.log(`   Desenhando em Y=${bladeY}px (scaled: ${bladeY * scale}px)`);
+                                            console.log(`   Altura=${gap}cm (scaled: ${gap * scale}px)`);
+
+                                            if (gap > 0.1) {
                                                 bladeElements.push(
                                                     <div
                                                         key={`vblade-${idx}`}
                                                         className="absolute pointer-events-none"
                                                         style={{
-                                                            left: 0,
+                                                            left: '0',
                                                             top: `${bladeY * scale}px`,
                                                             width: `${result.rollWidth * scale}px`,
-                                                            height: `${bladeWidthCm * scale}px`,
-                                                            backgroundColor: 'rgba(239, 68, 68, 0.3)', // Increased opacity for better visibility
-                                                            borderTop: '2px dashed rgba(239, 68, 68, 0.8)',
-                                                            borderBottom: '2px dashed rgba(239, 68, 68, 0.8)',
-                                                            zIndex: 10
+                                                            height: `${gap * scale}px`,
+                                                            backgroundColor: 'rgba(220, 38, 38, 0.4)',
+                                                            border: '2px solid rgba(220, 38, 38, 0.9)',
+                                                            boxSizing: 'border-box',
+                                                            zIndex: 5
                                                         }}
-                                                        title={`Sangria Vertical: ${bladeWidthCm.toFixed(1)}cm`}
-                                                    />
+                                                        title={`Sangria Vertical: ${gap.toFixed(2)}cm`}
+                                                    >
+                                                        <div style={{
+                                                            position: 'absolute',
+                                                            top: '50%',
+                                                            left: '50%',
+                                                            transform: 'translate(-50%, -50%)',
+                                                            color: 'rgba(220, 38, 38, 0.9)',
+                                                            fontSize: '10px',
+                                                            fontWeight: 'bold',
+                                                            textShadow: '0 0 3px white'
+                                                        }}>
+                                                            SANGRIA {gap.toFixed(1)}cm
+                                                        </div>
+                                                    </div>
                                                 );
                                             }
-                                        });
+                                        }
 
                                         // Draw horizontal blade gaps (between  items in same row)
                                         result.placedItems.forEach((item, idx) => {
