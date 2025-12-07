@@ -240,13 +240,15 @@ export class CuttingOptimizer {
                 const row = rows[bestFit.rowIndex];
                 const item = remainingItems[bestFit.itemIndex];
                 const spacingNeeded = row.items.length > 0 ? this.bladeWidth : 0;
-                const itemWidth = bestFit.useRotated ? item.h + spacingNeeded : item.w + spacingNeeded;
-                const xPos = this.rollWidth - row.remainingWidth;
+                const itemWidth = bestFit.useRotated ? item.h : item.w;
+
+                // Calculate X position: start where remaining width begins, PLUS spacing for gap
+                const xPos = (this.rollWidth - row.remainingWidth) + spacingNeeded;
 
                 placed.push({
                     x: xPos,
                     y: row.y,
-                    w: bestFit.useRotated ? item.h : item.w,
+                    w: itemWidth,
                     h: bestFit.useRotated ? item.w : item.h,
                     id: item.id,
                     label: item.label,
@@ -254,7 +256,8 @@ export class CuttingOptimizer {
                 });
 
                 row.items.push(item);
-                row.remainingWidth -= itemWidth;
+                // Subtract item width AND spacing from remaining width
+                row.remainingWidth -= (itemWidth + spacingNeeded);
                 remainingItems.splice(bestFit.itemIndex, 1);
                 foundFit = true;
             }
