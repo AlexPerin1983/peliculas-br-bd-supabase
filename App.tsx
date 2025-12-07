@@ -1888,6 +1888,24 @@ const App: React.FC = () => {
         setIsAIClientModalOpen(true);
     }, []);
 
+    const handleProcessAIMeasurementInput = useCallback(async (
+        input: { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob }
+    ) => {
+        setIsProcessingAI(true);
+        try {
+            // TODO: Implementar processamento de IA para medidas
+            // Por enquanto, mostra mensagem informativa
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            handleShowInfo("Esta funcionalidade está temporariamente indisponível. Por favor, adicione as medidas manualmente.");
+            setIsAIMeasurementModalOpen(false);
+        } catch (error) {
+            console.error("Erro ao processar medidas com IA:", error);
+            handleShowInfo("Ocorreu um erro ao processar. Tente novamente.");
+        } finally {
+            setIsProcessingAI(false);
+        }
+    }, []);
+
 
     const LoadingSpinner = () => (
         <div className="w-full p-4">
@@ -2192,6 +2210,9 @@ const App: React.FC = () => {
         isAIFilmModalOpen,
 
         handleProcessAIFilmInput,
+        isAIMeasurementModalOpen,
+        setIsAIMeasurementModalOpen,
+        handleProcessAIMeasurementInput,
         isApiKeyModalOpen,
         setIsApiKeyModalOpen,
         handleSaveApiKey,

@@ -119,7 +119,7 @@ interface ModalsContainerProps {
     // AI Measurement Modal
     isAIMeasurementModalOpen: boolean;
     setIsAIMeasurementModalOpen: (value: boolean) => void;
-    handleProcessAIInput: (input: any) => void;
+    handleProcessAIMeasurementInput: (input: any) => Promise<void>;
     isProcessingAI: boolean;
 
     // AI Client Modal
@@ -468,7 +468,7 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
                 <AIMeasurementModal
                     isOpen={props.isAIMeasurementModalOpen}
                     onClose={() => props.setIsAIMeasurementModalOpen(false)}
-                    onProcess={props.handleProcessAIInput}
+                    onProcess={props.handleProcessAIMeasurementInput}
                     isProcessing={props.isProcessingAI}
                     provider={props.userInfo?.aiConfig?.provider || 'gemini'}
                 />
