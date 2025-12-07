@@ -16,8 +16,7 @@ import AIFilmModal from './modals/AIFilmModal';
 import ApiKeyModal from './modals/ApiKeyModal';
 import PdfGenerationStatusModal from './modals/PdfGenerationStatusModal';
 import ImageGalleryModal from './modals/ImageGalleryModal';
-import { Client, Film, UserInfo, SavedPDF, Agendamento, ProposalOption } from '../types';
-import { SchedulingInfo } from '../App';
+import { Client, Film, UserInfo, SavedPDF, Agendamento, ProposalOption, SchedulingInfo } from '../types';
 
 type UIMeasurement = any; // Temporary - will be properly typed later
 
@@ -68,8 +67,9 @@ interface ModalsContainerProps {
     setIsFilmSelectionModalOpen: (value: boolean) => void;
     films: Film[];
     handleSelectFilm: (filmName: string) => void;
-    handleAddNewFilm: () => void;
-    handleEditFilm: (filmName: string) => void;
+    handleAddNewFilm: (filmName: string) => void;
+    handleEditFilm: (film: Film) => void;
+    handleRequestDeleteFilm: (filmName: string) => void;
     handleToggleFilmPin: (filmId: number) => void;
 
     // Clear All Modal
@@ -110,16 +110,10 @@ interface ModalsContainerProps {
     editingMeasurement: UIMeasurement | null;
     setEditingMeasurement: (value: UIMeasurement | null) => void;
     handleSaveMeasurement: (measurement: UIMeasurement) => void;
-
-    // Discount Modal
-    editingMeasurementForDiscount: UIMeasurement | null;
-    handleCloseDiscountModal: () => void;
-    handleSaveDiscount: (value: number, type: 'percentage' | 'value') => void;
-
-    // General Discount Modal
-    isGeneralDiscountModalOpen: boolean;
-    setIsGeneralDiscountModalOpen: (value: boolean) => void;
-    handleSaveGeneralDiscount: (value: number, type: 'percentage' | 'value') => void;
+    handleDeleteMeasurementFromEditModal: () => void;
+    handleDuplicateMeasurement: () => void;
+    handleOpenFilmSelectionModal: (measurementId: number) => void;
+    numpadConfig: any;
     generalDiscount: { value: number; type: 'percentage' | 'value' };
 
     // AI Measurement Modal
@@ -154,6 +148,8 @@ interface ModalsContainerProps {
     setSchedulingInfo: (value: SchedulingInfo | null) => void;
     handleSaveAgendamento: (agendamento: Partial<Agendamento>) => Promise<void>;
     handleConfirmAgendamento: (clientId: number) => void;
+    handleRequestDeleteAgendamento: (agendamento: Agendamento) => void;
+    handleAddNewClientFromAgendamento: (clientName: string) => void;
     allSavedPdfs: SavedPDF[];
     agendamentos: Agendamento[];
 
@@ -183,6 +179,12 @@ interface ModalsContainerProps {
     setMeasurementToDeleteId: (value: number | null) => void;
     handleConfirmDeleteIndividualMeasurement: () => void;
     measurementToDelete: UIMeasurement | null;
+
+    // Delete Proposal Option Modal
+    isDeleteProposalOptionModalOpen: boolean;
+    setIsDeleteProposalOptionModalOpen: (value: boolean) => void;
+    handleConfirmDeleteProposalOption: () => void;
+    proposalOptionToDeleteName: string | null;
 }
 
 export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
@@ -255,9 +257,10 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
                     isOpen={props.isFilmSelectionModalOpen}
                     onClose={() => props.setIsFilmSelectionModalOpen(false)}
                     films={props.films}
-                    onFilmSelect={props.handleSelectFilm}
+                    onSelect={props.handleSelectFilm}
                     onAddNewFilm={props.handleAddNewFilm}
                     onEditFilm={props.handleEditFilm}
+                    onDeleteFilm={props.handleRequestDeleteFilm}
                     onTogglePin={props.handleToggleFilmPin}
                 />
             )}
@@ -295,6 +298,14 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
                     onClose={() => props.setEditingMeasurement(null)}
                     onSave={props.handleSaveMeasurement}
                     measurement={props.editingMeasurement}
+                    films={props.films}
+                    onUpdate={(updated) => props.handleSaveMeasurement({ ...props.editingMeasurement!, ...updated })}
+                    onDelete={props.handleDeleteMeasurementFromEditModal}
+                    onDuplicate={props.handleDuplicateMeasurement}
+                    onOpenFilmModal={props.handleOpenFilmModal}
+                    onOpenFilmSelectionModal={props.handleOpenFilmSelectionModal}
+                    numpadConfig={props.numpadConfig}
+                    onOpenNumpad={props.handleOpenNumpad}
                 />
             )}
 
@@ -304,11 +315,11 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
                     isOpen={!!props.schedulingInfo}
                     onClose={() => props.setSchedulingInfo(null)}
                     onSave={props.handleSaveAgendamento}
-                    onConfirm={props.handleConfirmAgendamento}
-                    initialData={'agendamento' in props.schedulingInfo ? props.schedulingInfo.agendamento : undefined}
-                    pdfData={'pdf' in props.schedulingInfo ? props.schedulingInfo.pdf : undefined}
-                    savedPdfs={props.allSavedPdfs}
+                    onDelete={props.handleRequestDeleteAgendamento}
+                    schedulingInfo={props.schedulingInfo}
                     clients={props.clients}
+                    onAddNewClient={props.handleAddNewClientFromAgendamento}
+                    userInfo={props.userInfo}
                     agendamentos={props.agendamentos}
                 />
             )}
@@ -435,8 +446,9 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
                     isOpen={!!props.editingMeasurementForDiscount}
                     onClose={props.handleCloseDiscountModal}
                     onSave={props.handleSaveDiscount}
-                    initialValue={props.editingMeasurementForDiscount.discount}
-                    initialType={props.editingMeasurementForDiscount.discountType}
+                    initialValue={props.editingMeasurementForDiscount.discount?.value}
+                    initialType={props.editingMeasurementForDiscount.discount?.type}
+                    basePrice={props.editingMeasurementBasePrice}
                 />
             )}
 
@@ -535,6 +547,18 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
                     title="Confirmar Exclusão de Medida"
                     message={`Tem certeza que deseja excluir a medida "${props.measurementToDelete.local}"? Esta ação não pode ser desfeita.`}
                     confirmButtonText="Sim, Excluir Medida"
+                    confirmButtonVariant="danger"
+                />
+            )}
+            {/* Delete Proposal Option Confirmation Modal */}
+            {props.isDeleteProposalOptionModalOpen && (
+                <ConfirmationModal
+                    isOpen={props.isDeleteProposalOptionModalOpen}
+                    onClose={() => props.setIsDeleteProposalOptionModalOpen(false)}
+                    onConfirm={props.handleConfirmDeleteProposalOption}
+                    title="Excluir Opção de Proposta"
+                    message={`Tem certeza que deseja excluir a opção "${props.proposalOptionToDeleteName || ''}"? Esta ação não pode ser desfeita.`}
+                    confirmButtonText="Sim, Excluir Opção"
                     confirmButtonVariant="danger"
                 />
             )}

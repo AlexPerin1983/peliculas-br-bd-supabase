@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense, useRef } from 'react';
-import { Client, Measurement, UserInfo, Film, PaymentMethods, SavedPDF, Agendamento, ProposalOption } from './types';
+﻿import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense, useRef } from 'react';
+import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
+import { Client, Measurement, UserInfo, Film, PaymentMethods, SavedPDF, Agendamento, ProposalOption, SchedulingInfo, ExtractedClientData } from './types';
 import * as db from './services/db';
 import { generatePDF, generateCombinedPDF } from './services/pdfGenerator';
 import Header from './components/Header';
@@ -31,7 +32,7 @@ import UpdateNotification from './components/UpdateNotification';
 import { ModalsContainer } from './components/ModalsContainer';
 import { usePwaInstallPrompt } from './src/hooks/usePwaInstallPrompt';
 import { usePwaUpdate } from './src/hooks/usePwaUpdate';
-import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
+
 import { useError } from './src/contexts/ErrorContext';
 import { CardSkeleton } from './components/ui/Skeleton';
 import Toast from './components/ui/Toast';
@@ -55,27 +56,7 @@ type NumpadConfig = {
     shouldClearOnNextInput: boolean;
 };
 
-export type SchedulingInfo = {
-    pdf: SavedPDF;
-    agendamento?: Agendamento;
-} | {
-    agendamento: Partial<Agendamento>;
-    pdf?: SavedPDF;
-};
 
-interface ExtractedClientData {
-    nome?: string;
-    telefone?: string;
-    email?: string;
-    cpfCnpj?: string;
-    cep?: string;
-    logradouro?: string;
-    numero?: string;
-    complemento?: string;
-    bairro?: string;
-    cidade?: string;
-    uf?: string;
-}
 
 
 const App: React.FC = () => {
@@ -128,6 +109,7 @@ const App: React.FC = () => {
     const [agendamentoToDelete, setAgendamentoToDelete] = useState<Agendamento | null>(null);
     const [postClientSaveAction, setPostClientSaveAction] = useState<'openAgendamentoModal' | null>(null);
     const [editingMeasurementForDiscount, setEditingMeasurementForDiscount] = useState<UIMeasurement | null>(null);
+    const [editingMeasurementBasePrice, setEditingMeasurementBasePrice] = useState<number>(0);
     const [isAIMeasurementModalOpen, setIsAIMeasurementModalOpen] = useState(false);
     const [isAIClientModalOpen, setIsAIClientModalOpen] = useState(false);
     const [aiClientData, setAiClientData] = useState<Partial<Client> | undefined>(undefined);
@@ -139,6 +121,8 @@ const App: React.FC = () => {
     const [isGeneralDiscountModalOpen, setIsGeneralDiscountModalOpen] = useState(false);
     const [isDuplicateAllModalOpen, setIsDuplicateAllModalOpen] = useState(false);
     const [measurementToDeleteId, setMeasurementToDeleteId] = useState<number | null>(null);
+    const [isDeleteProposalOptionModalOpen, setIsDeleteProposalOptionModalOpen] = useState(false);
+    const [proposalOptionToDeleteId, setProposalOptionToDeleteId] = useState<number | null>(null);
 
     const [isGalleryOpen, setIsGalleryOpen] = useState(false);
     const [galleryImages, setGalleryImages] = useState<string[]>([]);
@@ -167,10 +151,7 @@ const App: React.FC = () => {
     const backButtonPressedOnce = useRef(false);
     const backButtonTimeout = useRef<NodeJS.Timeout | null>(null);
 
-    // Debug: Monitor newVersionAvailable changes
-    useEffect(() => {
-        console.log('📊 newVersionAvailable changed to:', newVersionAvailable);
-    }, [newVersionAvailable]);
+
 
     // Handle URL parameters (shortcuts, share target, etc.)
     useEffect(() => {
@@ -210,40 +191,40 @@ const App: React.FC = () => {
         }
     }, []);
 
-    // Intercepta o botão voltar do navegador/Android
+    // Intercepta o botÃ£o voltar do navegador/Android
     useEffect(() => {
         const handleBackButton = (event: PopStateEvent) => {
-            // Se o teclado numérico estiver aberto, fecha ele primeiro
+            // Se o teclado numÃ©rico estiver aberto, fecha ele primeiro
             if (numpadConfig.isOpen) {
                 event.preventDefault();
                 handleNumpadClose();
-                // Adiciona um estado ao histórico para manter o usuário na página
+                // Adiciona um estado ao histÃ³rico para manter o usuÃ¡rio na pÃ¡gina
                 window.history.pushState(null, '', window.location.pathname);
                 return;
             }
 
-            // Se algum modal estiver aberto, não mostra confirmação de saída
+            // Se algum modal estiver aberto, nÃ£o mostra confirmaÃ§Ã£o de saÃ­da
             if (isClientModalOpen || isFilmModalOpen || editingMeasurement ||
                 isFilmSelectionModalOpen || isGalleryOpen || schedulingInfo) {
                 return;
             }
 
-            // Previne a navegação padrão
+            // Previne a navegaÃ§Ã£o padrÃ£o
             event.preventDefault();
 
-            // Se já pressionou uma vez recentemente, mostra o modal
+            // Se jÃ¡ pressionou uma vez recentemente, mostra o modal
             if (backButtonPressedOnce.current) {
                 setIsExitConfirmModalOpen(true);
                 window.history.pushState(null, '', window.location.pathname);
             } else {
-                // Primeira vez, apenas marca e adiciona estado ao histórico
+                // Primeira vez, apenas marca e adiciona estado ao histÃ³rico
                 backButtonPressedOnce.current = true;
                 window.history.pushState(null, '', window.location.pathname);
 
                 // Mostra um toast informando
                 handleShowInfo('Pressione voltar novamente para sair');
 
-                // Reseta após 2 segundos
+                // Reseta apÃ³s 2 segundos
                 if (backButtonTimeout.current) {
                     clearTimeout(backButtonTimeout.current);
                 }
@@ -253,7 +234,7 @@ const App: React.FC = () => {
             }
         };
 
-        // Adiciona um estado inicial ao histórico
+        // Adiciona um estado inicial ao histÃ³rico
         window.history.pushState(null, '', window.location.pathname);
 
         window.addEventListener('popstate', handleBackButton);
@@ -358,18 +339,18 @@ const App: React.FC = () => {
             await loadClients();
             await loadFilms();
 
-            // Migração automática de PDFs (roda apenas uma vez)
+            // MigraÃ§Ã£o automÃ¡tica de PDFs (roda apenas uma vez)
             const migrationKey = 'pdf_migration_v1_completed';
             const migrationCompleted = localStorage.getItem(migrationKey);
 
             if (!migrationCompleted) {
                 try {
-                    console.log('Iniciando migração automática de PDFs...');
+
                     const result = await db.migratePDFsWithProposalOptionId();
-                    console.log('Migração concluída:', result);
+
                     localStorage.setItem(migrationKey, 'true');
                 } catch (error) {
-                    console.error('Erro na migração automática:', error);
+                    console.error('Erro na migraÃ§Ã£o automÃ¡tica:', error);
                 }
             }
 
@@ -431,6 +412,17 @@ const App: React.FC = () => {
         }
     }, [selectedClientId, proposalOptions, loadClients]);
 
+    const handleMeasurementsChange = useCallback((newMeasurements: UIMeasurement[]) => {
+        if (!activeOptionId) return;
+
+        setProposalOptions(prev => prev.map(opt =>
+            opt.id === activeOptionId
+                ? { ...opt, measurements: newMeasurements }
+                : opt
+        ));
+        setIsDirty(true);
+    }, [activeOptionId]);
+
     useEffect(() => {
         if (!isDirty) {
             return;
@@ -443,16 +435,7 @@ const App: React.FC = () => {
     }, [proposalOptions, isDirty, handleSaveChanges]);
 
 
-    const handleMeasurementsChange = useCallback((newMeasurements: UIMeasurement[]) => {
-        if (!activeOptionId) return;
 
-        setProposalOptions(prev => prev.map(opt =>
-            opt.id === activeOptionId
-                ? { ...opt, measurements: newMeasurements }
-                : opt
-        ));
-        setIsDirty(true);
-    }, [activeOptionId]);
 
     const handleGeneralDiscountChange = useCallback((discount: { value: string; type: 'percentage' | 'fixed' }) => {
         if (!activeOptionId) return;
@@ -487,8 +470,7 @@ const App: React.FC = () => {
         tipoAplicacao: 'Desconhecido',
         pelicula: films[0]?.nome || 'Nenhuma',
         active: true,
-        discount: 0,
-        discountType: 'percentage',
+        discount: { value: '0', type: 'percentage' },
     }), [films]);
 
     const addMeasurement = useCallback(() => {
@@ -559,8 +541,21 @@ const App: React.FC = () => {
         setIsDirty(true);
     }, [proposalOptions, activeOptionId]);
 
+    const handleRequestDeleteProposalOption = useCallback((optionId: number) => {
+        setProposalOptionToDeleteId(optionId);
+        setIsDeleteProposalOptionModalOpen(true);
+    }, []);
+
+    const handleConfirmDeleteProposalOption = useCallback(() => {
+        if (proposalOptionToDeleteId !== null) {
+            handleDeleteProposalOption(proposalOptionToDeleteId);
+            setIsDeleteProposalOptionModalOpen(false);
+            setProposalOptionToDeleteId(null);
+        }
+    }, [proposalOptionToDeleteId, handleDeleteProposalOption]);
+
     const handleConfirmClearAll = useCallback(() => {
-        console.log('[App] handleConfirmClearAll called');
+
         handleMeasurementsChange([]);
         setIsClearAllModalOpen(false);
     }, [handleMeasurementsChange]);
@@ -569,7 +564,7 @@ const App: React.FC = () => {
         return clients.find(c => c.id === selectedClientId) || null;
     }, [clients, selectedClientId]);
 
-    // Função auxiliar para salvar o valor atual do Numpad no Measurement
+    // FunÃ§Ã£o auxiliar para salvar o valor atual do Numpad no Measurement
     const saveCurrentNumpadValue = useCallback((config: NumpadConfig, currentMeasurements: UIMeasurement[]) => {
         const { measurementId, field, currentValue } = config;
         if (measurementId === null || field === null) return currentMeasurements;
@@ -578,7 +573,7 @@ const App: React.FC = () => {
         if (field === 'quantidade') {
             finalValue = parseInt(String(currentValue), 10) || 1;
         } else {
-            // Garante que o valor seja salvo com vírgula, se for numérico
+            // Garante que o valor seja salvo com vÃ­rgula, se for numÃ©rico
             finalValue = (String(currentValue) === '' || String(currentValue) === '.') ? '0' : String(currentValue).replace('.', ',');
         }
 
@@ -795,10 +790,12 @@ const App: React.FC = () => {
                 const basePrice = pricePerM2 * m2;
 
                 let itemDiscountAmount = 0;
-                const discountValue = m.discount || 0;
-                if (m.discountType === 'percentage' && discountValue > 0) {
+                const discountObj = m.discount || { value: '0', type: 'percentage' };
+                const discountValue = parseFloat(String(discountObj.value).replace(',', '.')) || 0;
+
+                if (discountObj.type === 'percentage' && discountValue > 0) {
                     itemDiscountAmount = basePrice * (discountValue / 100);
-                } else if (m.discountType === 'fixed' && discountValue > 0) {
+                } else if (discountObj.type === 'fixed' && discountValue > 0) {
                     itemDiscountAmount = discountValue;
                 }
 
@@ -835,13 +832,13 @@ const App: React.FC = () => {
     const executePdfGeneration = useCallback(async () => {
         const activeMeasurements = measurements.filter(m => m.active && parseFloat(String(m.largura).replace(',', '.')) > 0 && parseFloat(String(m.altura).replace(',', '.')) > 0);
         if (activeMeasurements.length === 0) {
-            handleShowInfo("Não há medidas válidas para gerar um orçamento.");
+            handleShowInfo("NÃ£o hÃ¡ medidas vÃ¡lidas para gerar um orÃ§amento.");
             return;
         }
 
         setPdfGenerationStatus('generating');
         try {
-            // Passando o nome da opção de proposta para o gerador de PDF
+            // Passando o nome da opÃ§Ã£o de proposta para o gerador de PDF
             const pdfBlob = await generatePDF(selectedClient!, userInfo!, activeMeasurements, films, generalDiscount, totals, activeOption!.name);
             const filename = `orcamento_${selectedClient!.nome.replace(/\s+/g, '_').toLowerCase()}_${activeOption!.name.replace(/\s+/g, '_').toLowerCase()}_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.pdf`;
 
@@ -890,7 +887,7 @@ const App: React.FC = () => {
 
     const handleGeneratePdf = useCallback(async () => {
         if (!selectedClient || !userInfo || !activeOption) {
-            handleShowInfo("Selecione um cliente e preencha as informações da empresa antes de gerar o PDF.");
+            handleShowInfo("Selecione um cliente e preencha as informaÃ§Ãµes da empresa antes de gerar o PDF.");
             return;
         }
         if (isDirty) {
@@ -912,7 +909,7 @@ const App: React.FC = () => {
         setPdfGenerationStatus('generating');
         try {
             const client = clients.find(c => c.id === selectedPdfs[0].clienteId);
-            if (!client) throw new Error("Cliente não encontrado para os orçamentos selecionados.");
+            if (!client) throw new Error("Cliente nÃ£o encontrado para os orÃ§amentos selecionados.");
 
             const pdfBlob = await generateCombinedPDF(client, userInfo, selectedPdfs, films);
 
@@ -954,7 +951,7 @@ const App: React.FC = () => {
 
     const processClientDataWithGemini = async (input: { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob }): Promise<ExtractedClientData | null> => {
         if (!userInfo?.aiConfig?.apiKey) {
-            throw new Error("Chave de API do Gemini não configurada.");
+            throw new Error("Chave de API do Gemini nÃ£o configurada.");
         }
 
         try {
@@ -964,28 +961,28 @@ const App: React.FC = () => {
             });
 
             const prompt = `
-                Você é um assistente especialista em extração de dados de clientes.Sua tarefa é extrair o máximo de informações de contato, endereço completo(incluindo CEP, logradouro, número, bairro, cidade e UF) e documento(CPF ou CNPJ) de um cliente a partir da entrada fornecida(texto, imagem ou áudio).
+                VocÃª Ã© um assistente especialista em extraÃ§Ã£o de dados de clientes.Sua tarefa Ã© extrair o mÃ¡ximo de informaÃ§Ãµes de contato, endereÃ§o completo(incluindo CEP, logradouro, nÃºmero, bairro, cidade e UF) e documento(CPF ou CNPJ) de um cliente a partir da entrada fornecida(texto, imagem ou Ã¡udio).
                 
-                ** Instrução Principal:** Analise todo o texto de entrada em busca de dados.Não pare no primeiro dado encontrado.
+                ** InstruÃ§Ã£o Principal:** Analise todo o texto de entrada em busca de dados.NÃ£o pare no primeiro dado encontrado.
                 
                 ** Regra para Nome:** Identifique o nome do cliente.Se a entrada for apenas "Nome Telefone", separe - os.
                 
-                ** Regra de Extração de Números(CRÍTICO):**
-            Varra o texto procurando por sequências numéricas.Use palavras - chave como "cep", "cpf", "cnpj", "tel", "cel" como dicas fortes, mas identifique também números soltos baseando - se na contagem de dígitos(ignorando símbolos):
-                  - ** CNPJ:** 14 dígitos. (Ex: 28533595000160).Se encontrar, preencha o campo 'cpfCnpj'.
-                  - ** CPF:** 11 dígitos. (Ex: 12345678900).Se encontrar, preencha o campo 'cpfCnpj'.
-                  - ** Telefone:** 10 ou 11 dígitos(DDD + Número). (Ex: 83999998888).
-                  - ** CEP:** 8 dígitos. (Ex: 58056170).
+                ** Regra de ExtraÃ§Ã£o de NÃºmeros(CRÃTICO):**
+            Varra o texto procurando por sequÃªncias numÃ©ricas.Use palavras - chave como "cep", "cpf", "cnpj", "tel", "cel" como dicas fortes, mas identifique tambÃ©m nÃºmeros soltos baseando - se na contagem de dÃ­gitos(ignorando sÃ­mbolos):
+                  - ** CNPJ:** 14 dÃ­gitos. (Ex: 28533595000160).Se encontrar, preencha o campo 'cpfCnpj'.
+                  - ** CPF:** 11 dÃ­gitos. (Ex: 12345678900).Se encontrar, preencha o campo 'cpfCnpj'.
+                  - ** Telefone:** 10 ou 11 dÃ­gitos(DDD + NÃºmero). (Ex: 83999998888).
+                  - ** CEP:** 8 dÃ­gitos. (Ex: 58056170).
                 
-                ** Regra Crítica para Telefone:** Remova código de país(+55).Mantenha apenas DDD + Número.
+                ** Regra CrÃ­tica para Telefone:** Remova cÃ³digo de paÃ­s(+55).Mantenha apenas DDD + NÃºmero.
                 
-                ** Formatação de Saída:** Retorne TODOS os campos numéricos(Telefone, CPF, CNPJ, CEP) APENAS com dígitos(string pura de números), removendo qualquer formatação original(pontos, traços, espaços).
+                ** FormataÃ§Ã£o de SaÃ­da:** Retorne TODOS os campos numÃ©ricos(Telefone, CPF, CNPJ, CEP) APENAS com dÃ­gitos(string pura de nÃºmeros), removendo qualquer formataÃ§Ã£o original(pontos, traÃ§os, espaÃ§os).
                 
-                ** Endereço:** Tente separar inteligentemente o logradouro, número, bairro e cidade se estiverem misturados.
+                ** EndereÃ§o:** Tente separar inteligentemente o logradouro, nÃºmero, bairro e cidade se estiverem misturados.
                 
-                ** Regra para UF:** O campo UF deve conter APENAS a sigla do estado(2 letras). ** SE NÃO ENCONTRAR, RETORNE UMA STRING VAZIA "".JAMAIS RETORNE A PALAVRA "string".**
+                ** Regra para UF:** O campo UF deve conter APENAS a sigla do estado(2 letras). ** SE NÃƒO ENCONTRAR, RETORNE UMA STRING VAZIA "".JAMAIS RETORNE A PALAVRA "string".**
 
-            Responda APENAS com um objeto JSON válido, sem markdown, contendo os campos: nome, telefone, email, cpfCnpj, cep, logradouro, numero, complemento, bairro, cidade, uf.
+            Responda APENAS com um objeto JSON vÃ¡lido, sem markdown, contendo os campos: nome, telefone, email, cpfCnpj, cep, logradouro, numero, complemento, bairro, cidade, uf.
             `;
 
             const parts: any[] = [prompt];
@@ -1020,15 +1017,15 @@ const App: React.FC = () => {
                     const cleanedJson = jsonText.substring(start, end + 1);
                     try {
                         const extractedData = JSON.parse(cleanedJson);
-                        console.log("JSON corrigido com sucesso.");
+
                         return extractedData as ExtractedClientData;
                     } catch (e2) {
-                        // Se a correção falhar, lança o erro original
-                        throw new Error(`A resposta da IA não é um JSON válido.Erro: ${e instanceof Error ? e.message : 'JSON malformado'} `);
+                        // Se a correÃ§Ã£o falhar, lanÃ§a o erro original
+                        throw new Error(`A resposta da IA nÃ£o Ã© um JSON vÃ¡lido.Erro: ${e instanceof Error ? e.message : 'JSON malformado'} `);
                     }
                 }
 
-                throw new Error(`A resposta da IA não é um JSON válido.Erro: ${e instanceof Error ? e.message : 'JSON malformado'} `);
+                throw new Error(`A resposta da IA nÃ£o Ã© um JSON vÃ¡lido.Erro: ${e instanceof Error ? e.message : 'JSON malformado'} `);
             }
 
         } catch (error) {
@@ -1038,7 +1035,7 @@ const App: React.FC = () => {
     };
 
     const processClientDataWithOpenAI = async (input: { type: 'text' | 'image'; data: string | File[] }): Promise<ExtractedClientData | null> => {
-        showError("O preenchimento de dados do cliente com OpenAI ainda não está totalmente implementado. Por favor, use o Gemini ou preencha manualmente.");
+        showError("O preenchimento de dados do cliente com OpenAI ainda nÃ£o estÃ¡ totalmente implementado. Por favor, use o Gemini ou preencha manualmente.");
         return null;
     };
 
@@ -1056,7 +1053,7 @@ const App: React.FC = () => {
                 extractedData = await processClientDataWithGemini(input);
             } else if (userInfo.aiConfig.provider === 'openai') {
                 if (input.type === 'audio') {
-                    showError("O provedor OpenAI não suporta entrada de áudio para esta funcionalidade.");
+                    showError("O provedor OpenAI nÃ£o suporta entrada de Ã¡udio para esta funcionalidade.");
                     return;
                 }
                 extractedData = await processClientDataWithOpenAI(input as { type: 'text' | 'image'; data: string | File[] });
@@ -1088,7 +1085,7 @@ const App: React.FC = () => {
             const genAI = new GoogleGenerativeAI(userInfo.aiConfig.apiKey);
             const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
 
-            const prompt = `Você é um assistente especialista em extração de dados de películas automotivas (insulfilm). Sua tarefa é extrair o máximo de informações técnicas de películas a partir da entrada fornecida (texto ou imagem). Retorne APENAS um objeto JSON válido, sem markdown. Campos: nome, preco (apenas números), uv (%), ir (%), vtl (%), tser (%), espessura (micras), garantiaFabricante (anos), precoMetroLinear. Se algum campo não for encontrado, NÃO inclua no JSON.`;
+            const prompt = `VocÃª Ã© um assistente especialista em extraÃ§Ã£o de dados de pelÃ­culas automotivas (insulfilm). Sua tarefa Ã© extrair o mÃ¡ximo de informaÃ§Ãµes tÃ©cnicas de pelÃ­culas a partir da entrada fornecida (texto ou imagem). Retorne APENAS um objeto JSON vÃ¡lido, sem markdown. Campos: nome, preco (apenas nÃºmeros), uv (%), ir (%), vtl (%), tser (%), espessura (micras), garantiaFabricante (anos), precoMetroLinear. Se algum campo nÃ£o for encontrado, NÃƒO inclua no JSON.`;
 
             const parts: any[] = [prompt];
 
@@ -1105,7 +1102,7 @@ const App: React.FC = () => {
                     parts.push({ inlineData: { mimeType: file.type, data: base64Data } });
                 }
             } else {
-                showError("Entrada de áudio ainda não é suportada para películas.");
+                showError("Entrada de Ã¡udio ainda nÃ£o Ã© suportada para pelÃ­culas.");
                 setIsProcessingAI(false);
                 return;
             }
@@ -1121,10 +1118,10 @@ const App: React.FC = () => {
                 setNewFilmName(filmData.nome || '');
                 setIsFilmModalOpen(true);
             } else {
-                showError("Não foi possível extrair dados da película. Tente reformular a entrada.");
+                showError("NÃ£o foi possÃ­vel extrair dados da pelÃ­cula. Tente reformular a entrada.");
             }
         } catch (error) {
-            console.error("Erro ao processar dados da película com IA:", error);
+            console.error("Erro ao processar dados da pelÃ­cula com IA:", error);
             showError(`Ocorreu um erro com a IA: ${error instanceof Error ? error.message : String(error)}`);
         } finally {
             setIsProcessingAI(false);
@@ -1145,11 +1142,11 @@ const App: React.FC = () => {
                             properties: {
                                 largura: {
                                     type: SchemaType.STRING,
-                                    description: 'Largura em metros, com vírgula como separador decimal. Ex: "1,50"'
+                                    description: 'Largura em metros, com vÃ­rgula como separador decimal. Ex: "1,50"'
                                 },
                                 altura: {
                                     type: SchemaType.STRING,
-                                    description: 'Altura em metros, com vírgula como separador decimal. Ex: "2,10"'
+                                    description: 'Altura em metros, com vÃ­rgula como separador decimal. Ex: "2,10"'
                                 },
                                 quantidade: {
                                     type: SchemaType.NUMBER,
@@ -1157,7 +1154,7 @@ const App: React.FC = () => {
                                 },
                                 ambiente: {
                                     type: SchemaType.STRING,
-                                    description: 'O local ou descrição do item. Ex: "Janela da Sala", "Porta do Quarto"'
+                                    description: 'O local ou descriÃ§Ã£o do item. Ex: "Janela da Sala", "Porta do Quarto"'
                                 },
                             },
                             required: ['largura', 'altura', 'quantidade', 'ambiente'],
@@ -1167,12 +1164,12 @@ const App: React.FC = () => {
             });
 
             const prompt = `
-                Você é um assistente especialista para uma empresa de instalação de películas de vidro.Sua tarefa é extrair dados de medidas de uma entrada fornecida pelo usuário.
-                A entrada pode ser texto, imagem(de uma lista, rascunho ou foto) ou áudio.
-        Extraia as seguintes informações para cada medida: largura, altura, quantidade e uma descrição do ambiente / local(ex: "sala", "quarto", "janela da cozinha").
-                As medidas estão em metros.Se o usuário disser '1 e meio por 2', interprete como 1, 50m por 2,00m.Sempre formate as medidas com duas casas decimais e vírgula como separador.
-                O ambiente deve ser uma descrição curta e útil.
-                Responda APENAS com um objeto JSON válido que corresponda ao schema fornecido.Não inclua nenhuma outra explicação ou texto.
+                VocÃª Ã© um assistente especialista para uma empresa de instalaÃ§Ã£o de pelÃ­culas de vidro.Sua tarefa Ã© extrair dados de medidas de uma entrada fornecida pelo usuÃ¡rio.
+                A entrada pode ser texto, imagem(de uma lista, rascunho ou foto) ou Ã¡udio.
+        Extraia as seguintes informaÃ§Ãµes para cada medida: largura, altura, quantidade e uma descriÃ§Ã£o do ambiente / local(ex: "sala", "quarto", "janela da cozinha").
+                As medidas estÃ£o em metros.Se o usuÃ¡rio disser '1 e meio por 2', interprete como 1, 50m por 2,00m.Sempre formate as medidas com duas casas decimais e vÃ­rgula como separador.
+                O ambiente deve ser uma descriÃ§Ã£o curta e Ãºtil.
+                Responda APENAS com um objeto JSON vÃ¡lido que corresponda ao schema fornecido.NÃ£o inclua nenhuma outra explicaÃ§Ã£o ou texto.
             `;
 
             const parts: any[] = [prompt];
@@ -1206,22 +1203,21 @@ const App: React.FC = () => {
                         pelicula: films[0]?.nome || 'Nenhuma',
                         active: true,
                         isNew: index === 0,
-                        discount: 0,
-                        discountType: 'percentage',
+                        discount: { value: '0', type: 'percentage' },
                     }));
 
                     if (newMeasurements.length > 0) {
                         handleMeasurementsChange([...measurements.map(m => ({ ...m, isNew: false })), ...newMeasurements]);
                         setIsAIMeasurementModalOpen(false);
                     } else {
-                        showError("Nenhuma medida foi extraída. Tente novamente com mais detalhes.");
+                        showError("Nenhuma medida foi extraÃ­da. Tente novamente com mais detalhes.");
                     }
                 } else {
-                    throw new Error("A resposta da IA não está no formato de array esperado.");
+                    throw new Error("A resposta da IA nÃ£o estÃ¡ no formato de array esperado.");
                 }
             } catch (e) {
                 console.error("Erro de JSON.parse:", e);
-                throw new Error(`A resposta da IA não é um JSON válido.Erro: ${e instanceof Error ? e.message : 'JSON malformado'} `);
+                throw new Error(`A resposta da IA nÃ£o Ã© um JSON vÃ¡lido.Erro: ${e instanceof Error ? e.message : 'JSON malformado'} `);
             }
         } catch (error) {
             console.error("Erro ao processar com Gemini:", error);
@@ -1231,19 +1227,19 @@ const App: React.FC = () => {
 
     const processWithOpenAI = async (input: { type: 'text' | 'image'; data: string | File[] }) => {
         try {
-            const prompt = `Você é um assistente especialista para uma empresa de instalação de películas de vidro.Sua tarefa é extrair dados de medidas da entrada fornecida pelo usuário.Extraia as seguintes informações para cada medida: largura, altura, quantidade e uma descrição do ambiente / local(ex: "sala", "quarto", "janela da cozinha").As medidas estão em metros.Se o usuário disser '1 e meio por 2', interprete como 1, 50m por 2,00m.Sempre formate as medidas com duas casas decimais e vírgula como separador.O ambiente deve ser uma descrição curta e útil.`;
+            const prompt = `VocÃª Ã© um assistente especialista para uma empresa de instalaÃ§Ã£o de pelÃ­culas de vidro.Sua tarefa Ã© extrair dados de medidas da entrada fornecida pelo usuÃ¡rio.Extraia as seguintes informaÃ§Ãµes para cada medida: largura, altura, quantidade e uma descriÃ§Ã£o do ambiente / local(ex: "sala", "quarto", "janela da cozinha").As medidas estÃ£o em metros.Se o usuÃ¡rio disser '1 e meio por 2', interprete como 1, 50m por 2,00m.Sempre formate as medidas com duas casas decimais e vÃ­rgula como separador.O ambiente deve ser uma descriÃ§Ã£o curta e Ãºtil.`;
 
             const tools = [
                 {
                     type: "function" as const,
                     function: {
                         name: "extract_measurements",
-                        description: "Extrai os dados de medidas da entrada do usuário.",
+                        description: "Extrai os dados de medidas da entrada do usuÃ¡rio.",
                         parameters: {
                             type: "object",
                             properties: {
-                                largura: { type: "string", description: "Largura em metros, com vírgula. Ex: '1,50'" },
-                                altura: { type: "string", description: "Altura em metros, com vírgula. Ex: '2,10'" },
+                                largura: { type: "string", description: "Largura em metros, com vÃ­rgula. Ex: '1,50'" },
+                                altura: { type: "string", description: "Altura em metros, com vÃ­rgula. Ex: '2,10'" },
                                 quantidade: { type: "number", description: "Quantidade de itens." },
                                 ambiente: { type: "string", description: "Local do item. Ex: 'Janela da Sala'" }
                             },
@@ -1292,7 +1288,7 @@ const App: React.FC = () => {
             const toolCall = data.choices[0].message.tool_calls?.[0];
 
             if (!toolCall || toolCall.type !== 'function') {
-                throw new Error("A resposta da IA (OpenAI) não continha os dados esperados.");
+                throw new Error("A resposta da IA (OpenAI) nÃ£o continha os dados esperados.");
             }
 
             const extractedData = JSON.parse(toolCall.function.arguments);
@@ -1309,14 +1305,13 @@ const App: React.FC = () => {
                     pelicula: films[0]?.nome || 'Nenhuma',
                     active: true,
                     isNew: index === 0,
-                    discount: 0,
-                    discountType: 'percentage',
+                    discount: { value: '0', type: 'percentage' },
                 }));
 
                 handleMeasurementsChange([...measurements.map(m => ({ ...m, isNew: false })), ...newMeasurements]);
                 setIsAIMeasurementModalOpen(false);
             } else {
-                showError("Nenhuma medida foi extraída com OpenAI. Tente novamente com mais detalhes.");
+                showError("Nenhuma medida foi extraÃ­da com OpenAI. Tente novamente com mais detalhes.");
             }
 
         } catch (error) {
@@ -1338,7 +1333,7 @@ const App: React.FC = () => {
                 await processWithGemini(input);
             } else if (userInfo.aiConfig.provider === 'openai') {
                 if (input.type === 'audio') {
-                    showError("O provedor OpenAI não suporta entrada de áudio nesta aplicação.");
+                    showError("O provedor OpenAI nÃ£o suporta entrada de Ã¡udio nesta aplicaÃ§Ã£o.");
                     return;
                 }
                 await processWithOpenAI(input as { type: 'text' | 'image'; data: string | File[] });
@@ -1377,7 +1372,7 @@ const App: React.FC = () => {
             }
         } catch (error) {
             console.error("Failed to update PDF status", error);
-            handleShowInfo("Não foi possível atualizar o status do orçamento.");
+            handleShowInfo("NÃ£o foi possÃ­vel atualizar o status do orÃ§amento.");
         }
     }, [loadAllPdfs]);
 
@@ -1398,7 +1393,7 @@ const App: React.FC = () => {
         setNumpadConfig(prev => {
             const isSameButton = prev.isOpen && prev.measurementId === measurementId && prev.field === field;
 
-            // 1. Se o Numpad já estava aberto em um campo diferente, salve o valor anterior.
+            // 1. Se o Numpad jÃ¡ estava aberto em um campo diferente, salve o valor anterior.
             if (prev.isOpen && (prev.measurementId !== measurementId || prev.field !== field)) {
                 const updatedMeasurements = saveCurrentNumpadValue(prev, measurements);
                 handleMeasurementsChange(updatedMeasurements);
@@ -1501,7 +1496,7 @@ const App: React.FC = () => {
                         shouldClearOnNextInput: true,
                     };
                 } else {
-                    // Se for o último campo, salva e fecha
+                    // Se for o Ãºltimo campo, salva e fecha
                     return { isOpen: false, measurementId: null, field: null, currentValue: '', shouldClearOnNextInput: false };
                 }
             }
@@ -1630,7 +1625,7 @@ const App: React.FC = () => {
         );
         handleMeasurementsChange(updatedMeasurements);
 
-        // Se a medida sendo editada for a mesma que recebeu a nova película, atualiza o estado da modal também
+        // Se a medida sendo editada for a mesma que recebeu a nova pelÃ­cula, atualiza o estado da modal tambÃ©m
         if (editingMeasurement && editingMeasurement.id === editingMeasurementIdForFilm) {
             setEditingMeasurement(prev => prev ? { ...prev, pelicula: filmName } : null);
         }
@@ -1828,22 +1823,24 @@ const App: React.FC = () => {
         setIsClientSelectionModalOpen(true);
     }, [numpadConfig.isOpen, handleNumpadClose]);
 
-    const handleOpenDiscountModal = useCallback((measurement: UIMeasurement) => {
+    const handleOpenDiscountModal = useCallback((measurement: UIMeasurement, basePrice: number = 0) => {
         if (numpadConfig.isOpen) {
             handleNumpadClose();
         }
         setEditingMeasurementForDiscount(measurement);
+        setEditingMeasurementBasePrice(basePrice);
     }, [numpadConfig.isOpen, handleNumpadClose]);
 
     const handleCloseDiscountModal = useCallback(() => {
         setEditingMeasurementForDiscount(null);
+        setEditingMeasurementBasePrice(0);
     }, []);
 
-    const handleSaveDiscount = useCallback((discount: number, discountType: 'percentage' | 'fixed') => {
+    const handleSaveDiscount = useCallback((discount: { value: string; type: 'percentage' | 'fixed' }) => {
         if (!editingMeasurementForDiscount) return;
 
         const updatedMeasurements = measurements.map(m =>
-            m.id === editingMeasurementForDiscount.id ? { ...m, discount, discountType } : m
+            m.id === editingMeasurementForDiscount.id ? { ...m, discount } : m
         );
         handleMeasurementsChange(updatedMeasurements);
         handleCloseDiscountModal();
@@ -1898,6 +1895,7 @@ const App: React.FC = () => {
         </div>
     );
 
+
     const handlePromptPwaInstall = useCallback(() => {
         if (deferredPrompt) {
             promptInstall();
@@ -1927,7 +1925,7 @@ const App: React.FC = () => {
         setActiveTab('client');
         // Seleciona o cliente
         setSelectedClientId(clientId);
-        // Aguarda um momento para garantir que o cliente foi carregado, então seleciona a opção
+        // Aguarda um momento para garantir que o cliente foi carregado, entÃ£o seleciona a opÃ§Ã£o
         setTimeout(() => {
             setActiveOptionId(optionId);
         }, 100);
@@ -2119,6 +2117,8 @@ const App: React.FC = () => {
         userInfo,
         handleSavePaymentMethods,
         editingMeasurement,
+        setEditingMeasurement,
+        handleSaveMeasurement: handleUpdateEditingMeasurement,
         handleCloseEditMeasurementModal,
         films,
         handleUpdateEditingMeasurement,
@@ -2141,21 +2141,23 @@ const App: React.FC = () => {
         setIsAIFilmModalOpen,
         isFilmSelectionModalOpen,
         setIsFilmSelectionModalOpen,
-        handleSelectFilmForMeasurement,
-        handleAddNewFilmFromSelection,
-        handleEditFilmFromSelection,
+        handleSelectFilm: handleSelectFilmForMeasurement,
+        handleAddNewFilm: handleAddNewFilmFromSelection,
+        handleEditFilm: handleEditFilmFromSelection,
         handleRequestDeleteFilm,
         handleToggleFilmPin,
         isApplyFilmToAllModalOpen,
         setIsApplyFilmToAllModalOpen,
         handleApplyFilmToAll,
         schedulingInfo,
+        setSchedulingInfo,
         handleCloseAgendamentoModal,
         handleSaveAgendamento,
         handleRequestDeleteAgendamento,
         agendamentos,
         handleAddNewClientFromAgendamento,
         infoModalConfig,
+        setInfoModalConfig,
         handleCloseInfoModal,
         isSaveBeforePdfModalOpen,
         setIsSaveBeforePdfModalOpen,
@@ -2183,16 +2185,6 @@ const App: React.FC = () => {
         pdfGenerationStatus,
         handleClosePdfStatusModal,
         handleGoToHistoryFromPdf,
-        editingMeasurementForDiscount,
-        handleCloseDiscountModal,
-        handleSaveDiscount,
-        isGeneralDiscountModalOpen,
-        setIsGeneralDiscountModalOpen,
-        handleSaveGeneralDiscount,
-        generalDiscount,
-        isAIMeasurementModalOpen,
-        setIsAIMeasurementModalOpen,
-        handleProcessAIInput,
         isProcessingAI,
         isAIClientModalOpen,
         setIsAIClientModalOpen,
@@ -2215,7 +2207,17 @@ const App: React.FC = () => {
         measurementToDeleteId,
         setMeasurementToDeleteId,
         handleConfirmDeleteIndividualMeasurement,
-        measurementToDelete
+        measurementToDelete,
+        isDeleteProposalOptionModalOpen,
+        setIsDeleteProposalOptionModalOpen,
+        handleConfirmDeleteProposalOption,
+        proposalOptionToDeleteName: proposalOptions.find(opt => opt.id === proposalOptionToDeleteId)?.name || null,
+
+        // Discount Modal
+        editingMeasurementForDiscount,
+        handleCloseDiscountModal,
+        handleSaveDiscount,
+        editingMeasurementBasePrice,
     };
 
 
@@ -2271,7 +2273,7 @@ const App: React.FC = () => {
                                                 activeOptionId={activeOptionId}
                                                 onSelectOption={setActiveOptionId}
                                                 onRenameOption={handleRenameProposalOption}
-                                                onDeleteOption={handleDeleteProposalOption}
+                                                onDeleteOption={handleRequestDeleteProposalOption}
                                                 onAddOption={handleAddProposalOption}
                                                 onSwipeDirectionChange={handleSwipeDirectionChange}
                                             />

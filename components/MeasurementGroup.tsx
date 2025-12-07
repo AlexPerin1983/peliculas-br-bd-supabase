@@ -23,7 +23,7 @@ interface MeasurementGroupProps {
     onDuplicate: () => void;
     onOpenFilmSelectionModal: (measurementId: number) => void;
     onOpenEditModal: (measurement: UIMeasurement) => void;
-    onOpenDiscountModal: (measurement: UIMeasurement) => void;
+    onOpenDiscountModal: (measurement: UIMeasurement, basePrice?: number) => void;
     index: number;
     isDragging: boolean;
     onDragStart: () => void;
@@ -344,18 +344,22 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
 
         const price = pricePerM2 * m2;
         let final = price;
-        const discountValue = measurement.discount || 0;
+
+        const discountObj = measurement.discount;
+        const discountValue = discountObj ? parseFloat(String(discountObj.value).replace(',', '.')) : 0;
+        const discountType = discountObj ? discountObj.type : 'percentage';
+
         if (discountValue > 0) {
-            if (measurement.discountType === 'percentage') {
+            if (discountType === 'percentage') {
                 final = price * (1 - discountValue / 100);
             } else { // fixed
                 final = price - discountValue;
             }
         }
         return { basePrice: price, finalPrice: Math.max(0, final), priceLabel: label };
-    }, [m2, selectedFilm, measurement.discount, measurement.discountType]);
+    }, [m2, selectedFilm, measurement.discount]);
 
-    const hasDiscount = (measurement.discount || 0) > 0;
+    const hasDiscount = (parseFloat(String(measurement.discount?.value || '0').replace(',', '.'))) > 0;
 
     // --- Lógica para exibir o ambiente (AJUSTADA) ---
     const displayFilmName = measurement.pelicula || 'Nenhuma';
@@ -553,10 +557,10 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
                         <div className="flex-1 pr-2 min-w-0">
                             <div
                                 role="button"
-                                tabIndex={(!measurement.active || isSelectionMode) ? -1 : 0}
-                                onClick={() => measurement.active && !isSelectionMode && onOpenFilmSelectionModal(measurement.id)}
+                                tabIndex={isSelectionMode ? -1 : 0}
+                                onClick={() => !isSelectionMode && onOpenFilmSelectionModal(measurement.id)}
                                 onKeyDown={(e) => {
-                                    if (measurement.active && !isSelectionMode && (e.key === 'Enter' || e.key === ' ')) {
+                                    if (!isSelectionMode && (e.key === 'Enter' || e.key === ' ')) {
                                         e.preventDefault();
                                         onOpenFilmSelectionModal(measurement.id);
                                     }
@@ -569,14 +573,31 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
                             </div>
                         </div>
 
+                        {/* Center: Swipe Hint Icon */}
+                        <div className="flex items-center justify-center px-2 opacity-30">
+                            <i className="fas fa-arrows-left-right text-xs text-slate-400 dark:text-slate-500"></i>
+                        </div>
+
                         {/* Right Side: Price & Options Menu */}
-                        <div className="flex items-center">
+                        <div className="flex items-center relative z-50">
                             <Tooltip text={hasDiscount ? 'Editar Desconto' : 'Aplicar Desconto'}>
                                 <div
                                     role="button"
                                     tabIndex={isSelectionMode ? -1 : 0}
-                                    onClick={() => !isSelectionMode && onOpenDiscountModal(measurement)}
-                                    onKeyDown={(e) => !isSelectionMode && (e.key === 'Enter' || e.key === ' ') && onOpenDiscountModal(measurement)}
+                                    onClick={(e) => {
+                                        // Always stop propagation to prevent row selection/expansion
+                                        e.stopPropagation();
+
+                                        if (!isSelectionMode) {
+                                            onOpenDiscountModal(measurement, basePrice);
+                                        }
+                                    }}
+                                    onKeyDown={(e) => {
+                                        if (!isSelectionMode && (e.key === 'Enter' || e.key === ' ')) {
+                                            e.stopPropagation();
+                                            onOpenDiscountModal(measurement, basePrice);
+                                        }
+                                    }}
                                     className={`text-right rounded-lg transition-colors ${isSelectionMode ? 'cursor-default' : 'hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer'}`}
                                     aria-label="Preço, clique para aplicar ou editar desconto"
                                 >

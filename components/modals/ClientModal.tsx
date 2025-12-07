@@ -271,8 +271,19 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSave, mode
         </div>
     );
 
+    const footerContent = (
+        <button
+            type="submit"
+            form="clientForm"
+            disabled={isFetchingCep || isSearchingByAddress}
+            className="w-full p-3 bg-slate-800 dark:bg-slate-700 text-white rounded-md hover:bg-slate-700 dark:hover:bg-slate-600 transition duration-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 disabled:bg-slate-500 disabled:cursor-wait"
+        >
+            {isFetchingCep || isSearchingByAddress ? 'Processando...' : 'Salvar Cliente'}
+        </button>
+    );
+
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title={modalTitle}>
+        <Modal isOpen={isOpen} onClose={onClose} title={modalTitle} footer={footerContent}>
             <form id="clientForm" onSubmit={handleSubmit} className="space-y-4">
                 <fieldset disabled={isFetchingCep || isSearchingByAddress} className="space-y-4">
                     <Input id="nome" label="Nome do Cliente" type="text" value={formData.nome} onChange={handleChange} required placeholder="Ex: João da Silva" />
@@ -342,12 +353,6 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSave, mode
                         {error}
                     </div>
                 )}
-
-                <div className="pt-4">
-                    <button type="submit" disabled={isFetchingCep || isSearchingByAddress} className="w-full p-3 bg-slate-800 dark:bg-slate-700 text-white rounded-md hover:bg-slate-700 dark:hover:bg-slate-600 transition duration-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 disabled:bg-slate-500 disabled:cursor-wait">
-                        {isFetchingCep || isSearchingByAddress ? 'Processando...' : 'Salvar Cliente'}
-                    </button>
-                </div>
             </form>
         </Modal>
     );

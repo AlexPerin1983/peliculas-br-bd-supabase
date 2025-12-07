@@ -337,36 +337,34 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
         URL.revokeObjectURL(url);
     };
 
+    const modalTitle = (
+        <div className="flex items-center gap-3">
+            <span>{isEditing ? "Editar Agendamento" : "Novo Agendamento"}</span>
+            {isEditing && (
+                <button
+                    type="button"
+                    onClick={handleExportToCalendar}
+                    className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"
+                    title="Exportar para Calendário"
+                >
+                    <i className="fas fa-file-export text-sm"></i>
+                </button>
+            )}
+        </div>
+    );
+
     const footerContent = (
         <>
-            <div className="flex items-center gap-2 mr-auto">
-                {isEditing && (
-                    <>
-                        <button
-                            type="button"
-                            onClick={handleDelete}
-                            className="px-4 py-2 text-sm font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
-                        >
-                            Excluir
-                        </button>
-                        <button
-                            type="button"
-                            onClick={handleExportToCalendar}
-                            className="px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-200 hover:bg-slate-300 rounded-lg transition-colors flex items-center gap-2"
-                        >
-                            <i className="fas fa-file-export"></i>
-                            Exportar
-                        </button>
-                    </>
-                )}
-            </div>
-            <button
-                type="button"
-                onClick={onClose}
-                className="font-semibold text-slate-700 dark:text-slate-300 px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-md"
-            >
-                Cancelar
-            </button>
+            {isEditing && (
+                <button
+                    type="button"
+                    onClick={handleDelete}
+                    className="px-4 py-2 text-sm font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+                >
+                    Excluir
+                </button>
+            )}
+            <div className="flex-grow"></div>
             <button
                 type="submit"
                 form="agendamentoForm"
@@ -381,7 +379,7 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
     const textareaClassName = `${inputClassName} min-h-[120px] resize-none`;
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title={isEditing ? "Editar Agendamento" : "Novo Agendamento"} footer={footerContent}>
+        <Modal isOpen={isOpen} onClose={onClose} title={modalTitle} footer={footerContent}>
             <form id="agendamentoForm" onSubmit={handleSubmit} className="space-y-5">
                 <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Cliente</label>
@@ -394,7 +392,7 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                         placeholder="Selecione ou digite um nome"
                         disabled={isClientLocked}
                         autoFocus={!isClientLocked}
-                        onMagicClick={handleClientMagicClick}
+
                         renderNoResults={(searchTerm) => (
                             <li className="p-3 text-center">
                                 <p className="text-sm text-slate-500 mb-3">

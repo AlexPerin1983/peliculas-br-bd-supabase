@@ -186,6 +186,7 @@ const FilmModal: React.FC<FilmModalProps> = ({ isOpen, onClose, onSave, onDelete
     const handleDelete = () => {
         if (film) {
             onDelete(film.nome);
+            onClose();
         }
     };
 

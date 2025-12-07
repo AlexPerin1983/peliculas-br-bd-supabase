@@ -402,13 +402,18 @@ const renderPdfContent = async (
 
                     let itemDiscountAmount = 0;
                     let discountDisplay = '-';
-                    const discountValue = m.discount || 0;
-                    if (m.discountType === 'percentage' && discountValue > 0) {
-                        itemDiscountAmount = basePrice * (discountValue / 100);
-                        discountDisplay = `${formatNumberBR(discountValue).replace('R$', '').trim()}%`;
-                    } else if (m.discountType === 'fixed' && discountValue > 0) {
-                        itemDiscountAmount = discountValue;
-                        discountDisplay = `R$ ${formatNumberBR(discountValue)}`;
+
+                    if (m.discount) {
+                        const discountValue = parseFloat(String(m.discount.value).replace(',', '.')) || 0;
+                        const discountType = m.discount.type;
+
+                        if (discountType === 'percentage' && discountValue > 0) {
+                            itemDiscountAmount = basePrice * (discountValue / 100);
+                            discountDisplay = `${formatNumberBR(discountValue).replace(',', '.')}%`;
+                        } else if (discountType === 'fixed' && discountValue > 0) {
+                            itemDiscountAmount = discountValue;
+                            discountDisplay = `R$ ${formatNumberBR(discountValue)}`;
+                        }
                     }
                     const finalItemPrice = Math.max(0, basePrice - itemDiscountAmount);
 

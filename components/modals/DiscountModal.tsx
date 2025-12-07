@@ -5,21 +5,24 @@ import Input from '../ui/Input';
 interface DiscountModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSave: (discount: number, discountType: 'percentage' | 'fixed') => void;
-    initialValue?: number;
+    onSave: (discount: { value: string; type: 'percentage' | 'fixed' }) => void;
+    initialValue?: string;
     initialType?: 'percentage' | 'fixed';
+    basePrice?: number;
 }
 
-const DiscountModal: React.FC<DiscountModalProps> = ({ isOpen, onClose, onSave, initialValue, initialType = 'percentage' }) => {
+const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+
+const DiscountModal: React.FC<DiscountModalProps> = ({ isOpen, onClose, onSave, initialValue, initialType = 'percentage', basePrice = 0 }) => {
     // Usando string para o estado para permitir a digitação de vírgulas e números parciais
-    const [value, setValue] = useState(initialValue?.toString().replace('.', ',') || '');
+    const [value, setValue] = useState(initialValue || '');
     const [type, setType] = useState<'percentage' | 'fixed'>(initialType);
     const inputRef = React.useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         if (isOpen) {
             // Sincroniza o estado local com as props iniciais ao abrir
-            setValue(initialValue?.toString().replace('.', ',') || '');
+            setValue(initialValue || '');
             setType(initialType);
             // Foca o input ao abrir o modal
             setTimeout(() => inputRef.current?.focus(), 100);
@@ -36,15 +39,28 @@ const DiscountModal: React.FC<DiscountModalProps> = ({ isOpen, onClose, onSave, 
 
     const handleSubmit = (e: FormEvent) => {
         e.preventDefault();
-        // Converte para número usando ponto como separador antes de salvar
-        const numericValue = parseFloat(value.replace(',', '.')) || 0;
-        onSave(numericValue, type);
+        onSave({ value, type });
     };
 
     const handleButtonMouseDown = (e: React.MouseEvent) => {
         // Previne que o botão roube o foco do input antes do clique ser processado
         e.preventDefault();
     };
+
+    const calculatedDiscountValue = React.useMemo(() => {
+        const numValue = parseFloat(value.replace(',', '.')) || 0;
+        if (numValue <= 0) return 0;
+
+        if (type === 'percentage') {
+            return basePrice * (numValue / 100);
+        } else {
+            return numValue;
+        }
+    }, [value, type, basePrice]);
+
+    const finalPrice = React.useMemo(() => {
+        return Math.max(0, basePrice - calculatedDiscountValue);
+    }, [basePrice, calculatedDiscountValue]);
 
     const footer = (
         <>
@@ -71,7 +87,22 @@ const DiscountModal: React.FC<DiscountModalProps> = ({ isOpen, onClose, onSave, 
         >
             <form id="discountForm" onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                    <label className="block text-sm font-medium text-slate-600 dark:text-slate-300">Valor do Desconto</label>
+                    <div className="flex justify-between items-center mb-1">
+                        <label className="block text-sm font-medium text-slate-600 dark:text-slate-300">Valor do Desconto</label>
+                        {basePrice > 0 && calculatedDiscountValue > 0 && (
+                            <span className="text-sm font-bold text-green-600 dark:text-green-400">
+                                - {formatCurrency(calculatedDiscountValue)}
+                            </span>
+                        )}
+                    </div>
+                    {basePrice > 0 && (
+                        <div className="flex justify-between items-center mb-2 px-3 py-2 bg-slate-50 dark:bg-slate-800 rounded-md border border-slate-200 dark:border-slate-700">
+                            <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Valor Final:</span>
+                            <span className="text-lg font-bold text-slate-800 dark:text-slate-100">
+                                {formatCurrency(finalPrice)}
+                            </span>
+                        </div>
+                    )}
                     <div className="mt-1 flex">
                         <input
                             ref={inputRef}

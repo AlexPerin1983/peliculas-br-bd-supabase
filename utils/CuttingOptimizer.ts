@@ -55,22 +55,31 @@ export class CuttingOptimizer {
         this.items.push({ x: 0, y: 0, w, h, id, label });
     }
 
-    public optimize(forcedRotations: { [id: string]: boolean } = {}, useDeepSearch: boolean = false): OptimizationResult {
-        // Prepare items with forced rotations
-        const itemsToPack = this.items.map(item => {
-            if (item.id && forcedRotations[item.id] !== undefined) {
-                const shouldRotate = forcedRotations[item.id];
-                // If forced, we set the dimensions to the desired orientation and mark as locked
-                return {
-                    ...item,
-                    w: shouldRotate ? item.h : item.w,
-                    h: shouldRotate ? item.w : item.h,
-                    rotated: shouldRotate,
-                    locked: true // Custom property to indicate rotation is locked
-                };
-            }
-            return { ...item, locked: false };
-        });
+    public optimize(
+        forcedRotations: { [id: string]: boolean } = {},
+        useDeepSearch: boolean = false,
+        lockedItems: Rect[] = []
+    ): OptimizationResult {
+        // Identify locked IDs
+        const lockedIds = new Set(lockedItems.filter(i => i.id).map(i => i.id));
+
+        // Prepare items to pack (excluding locked ones)
+        const itemsToPack = this.items
+            .filter(item => !item.id || !lockedIds.has(item.id))
+            .map(item => {
+                if (item.id && forcedRotations[item.id] !== undefined) {
+                    const shouldRotate = forcedRotations[item.id];
+                    // If forced, we set the dimensions to the desired orientation and mark as locked
+                    return {
+                        ...item,
+                        w: shouldRotate ? item.h : item.w,
+                        h: shouldRotate ? item.w : item.h,
+                        rotated: shouldRotate,
+                        locked: true // Custom property to indicate rotation is locked
+                    };
+                }
+                return { ...item, locked: false };
+            });
 
         const baseStrategies = [
             { name: 'Height', sort: (a: Rect, b: Rect) => b.h - a.h },
@@ -88,33 +97,31 @@ export class CuttingOptimizer {
         let bestResult: OptimizationResult | null = null;
         let bestMethod = '';
 
-        // Try row-based packing first (best for mixed sizes)
-        const rowResult = this.runRowBasedPacking(itemsToPack);
-        if (rowResult) {
-            bestResult = rowResult;
-            bestMethod = 'Row-based';
-            /* console.log('Row-based packing:', {
-                height: rowResult.totalHeight,
-                efficiency: rowResult.efficiency.toFixed(2),
-                itemsWithRotation: rowResult.placedItems.filter(i => i.rotated).length
-            }); */
-        }
+        // Only use Row and Skyline if no items are locked (they don't support pre-placed items easily)
+        if (lockedItems.length === 0) {
+            // Try row-based packing first (best for mixed sizes)
+            const rowResult = this.runRowBasedPacking(itemsToPack);
+            if (rowResult) {
+                bestResult = rowResult;
+                bestMethod = 'Row-based';
+            }
 
-        // Try Skyline packing
-        const skylineResult = this.runSkylinePacking(itemsToPack);
-        if (skylineResult) {
-            const isBetter = !bestResult ||
-                skylineResult.totalHeight < bestResult.totalHeight ||
-                (Math.abs(skylineResult.totalHeight - bestResult.totalHeight) < 5 && skylineResult.efficiency > bestResult.efficiency);
+            // Try Skyline packing
+            const skylineResult = this.runSkylinePacking(itemsToPack);
+            if (skylineResult) {
+                const isBetter = !bestResult ||
+                    skylineResult.totalHeight < bestResult.totalHeight ||
+                    (Math.abs(skylineResult.totalHeight - bestResult.totalHeight) < 5 && skylineResult.efficiency > bestResult.efficiency);
 
-            if (isBetter) {
-                bestResult = skylineResult;
-                bestMethod = 'Skyline';
+                if (isBetter) {
+                    bestResult = skylineResult;
+                    bestMethod = 'Skyline';
+                }
             }
         }
 
-        // Try MaxRects packing (Best Area Fit)
-        const maxRectsResult = this.runMaxRectsPacking(itemsToPack);
+        // Try MaxRects packing (Best Area Fit) - Supports locked items
+        const maxRectsResult = this.runMaxRectsPacking(itemsToPack, false, lockedItems);
         if (maxRectsResult) {
             const isBetter = !bestResult ||
                 maxRectsResult.totalHeight < bestResult.totalHeight ||
@@ -126,12 +133,12 @@ export class CuttingOptimizer {
             }
         }
 
-        // Try Guillotine strategies as comparison/fallback
+        // Try Guillotine strategies as comparison/fallback - Supports locked items
         for (const orientation of orientations) {
             if (!this.allowRotation && orientation.name !== 'None') continue;
 
             for (const strategy of baseStrategies) {
-                const result = this.runHeuristic(itemsToPack, strategy.sort, orientation.normalize);
+                const result = this.runHeuristic(itemsToPack, strategy.sort, orientation.normalize, lockedItems);
 
                 // Choose best based on: 1) Height (most important), 2) Efficiency
                 const isBetter = !bestResult ||
@@ -147,7 +154,6 @@ export class CuttingOptimizer {
 
         // Deep Search (Randomized / Genetic-lite)
         if (useDeepSearch) {
-            // console.log('Starting Deep Search...');
             const iterations = 50; // Number of random tries
 
             for (let i = 0; i < iterations; i++) {
@@ -155,23 +161,7 @@ export class CuttingOptimizer {
                 const shuffledItems = [...itemsToPack].sort(() => Math.random() - 0.5);
 
                 // Run MaxRects on shuffled items
-                // We use MaxRects as it's generally the most robust for random orders
-                const result = this.runMaxRectsPacking(shuffledItems); // Note: runMaxRects sorts internally, so we might need a variant that respects order or just rely on different sort criteria if we want true random.
-                // Actually, runMaxRects sorts by Area. To get benefit from random search, we need a packing method that respects input order or uses different heuristics.
-                // runSkylinePacking sorts by Height.
-                // runRowBasedPacking sorts by dimensions.
-
-                // Let's try a "First Fit" approach with MaxRects without sorting, or just rely on the fact that we might implement a "Placement Order" heuristic later.
-                // For now, let's modify runMaxRectsPacking to accept an optional "preserveOrder" flag or similar, OR just use the Heuristic method which respects order if we don't sort.
-
-                // Actually, let's use the Heuristic method with "None" sort (preserve order) and "None" orientation normalization (respect inputs)
-                // But we want to allow rotation.
-
-                // Let's use a specific "Randomized" strategy:
-                // 1. Shuffle
-                // 2. Pack using MaxRects but WITHOUT pre-sorting (we need to modify runMaxRects to optionally skip sort)
-
-                const randomResult = this.runMaxRectsPacking(shuffledItems, true); // true = skip internal sort
+                const randomResult = this.runMaxRectsPacking(shuffledItems, true, lockedItems); // true = skip internal sort
 
                 if (randomResult) {
                     const isBetter = !bestResult ||
@@ -412,13 +402,25 @@ export class CuttingOptimizer {
         };
     }
 
-    private runMaxRectsPacking(items: Rect[], skipSort: boolean = false): OptimizationResult | null {
+    private runMaxRectsPacking(items: Rect[], skipSort: boolean = false, prePlacedItems: Rect[] = []): OptimizationResult | null {
         // Sort by Area descending (usually best for MaxRects) unless skipSort is true
         const sortedItems = skipSort ? [...items] : [...items].sort((a, b) => (b.w * b.h) - (a.w * a.h));
 
         this.freeRects = [{ x: 0, y: 0, w: this.rollWidth, h: Number.MAX_SAFE_INTEGER }];
         this.placedItems = [];
         this.binHeight = 0;
+
+        // Process pre-placed items
+        for (const item of prePlacedItems) {
+            this.placedItems.push(item);
+            const reservedRect = {
+                x: item.x,
+                y: item.y,
+                w: item.w + this.bladeWidth,
+                h: item.h + this.bladeWidth
+            };
+            this.splitFreeRects(reservedRect);
+        }
 
         for (const item of sortedItems) {
             this.placeItemMaxRects(item);
@@ -664,7 +666,8 @@ export class CuttingOptimizer {
     private runHeuristic(
         items: Rect[],
         sortFn: (a: Rect, b: Rect) => number,
-        normalizeFn: (item: Rect) => Rect = (i) => i
+        normalizeFn: (item: Rect) => Rect = (i) => i,
+        prePlacedItems: Rect[] = []
     ): OptimizationResult {
         // Clone and normalize items
         const currentItems = items.map(item => normalizeFn({ ...item }));
@@ -673,6 +676,18 @@ export class CuttingOptimizer {
         this.freeRects = [{ x: 0, y: 0, w: this.rollWidth, h: Number.MAX_SAFE_INTEGER }];
         this.placedItems = [];
         this.binHeight = 0;
+
+        // Process pre-placed items
+        for (const item of prePlacedItems) {
+            this.placedItems.push(item);
+            const reservedRect = {
+                x: item.x,
+                y: item.y,
+                w: item.w + this.bladeWidth,
+                h: item.h + this.bladeWidth
+            };
+            this.splitFreeRects(reservedRect);
+        }
 
         // Place items
         for (const item of currentItems) {

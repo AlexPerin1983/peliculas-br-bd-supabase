@@ -26,8 +26,10 @@ export interface Measurement {
     tipoAplicacao: string;
     pelicula: string;
     active: boolean;
-    discount?: number;
-    discountType?: 'percentage' | 'fixed';
+    discount?: {
+        value: string;
+        type: 'percentage' | 'fixed';
+    };
     observation?: string;
     locked?: boolean;
 }
@@ -129,6 +131,7 @@ export interface Agendamento {
 export interface SavedPDF {
     id?: number;
     clienteId: number;
+    clientName?: string;
     date: string;
     expirationDate?: string;
     totalPreco: number; // Final total price
@@ -146,4 +149,25 @@ export interface SavedPDF {
     agendamentoId?: number;
     proposalOptionName?: string;
     proposalOptionId?: number; // ID da opção de proposta para navegação
+}
+export type SchedulingInfo = {
+    pdf: SavedPDF;
+    agendamento?: Agendamento;
+} | {
+    agendamento: Partial<Agendamento>;
+    pdf?: SavedPDF;
+};
+
+export interface ExtractedClientData {
+    nome?: string;
+    telefone?: string;
+    email?: string;
+    cpfCnpj?: string;
+    cep?: string;
+    logradouro?: string;
+    numero?: string;
+    complemento?: string;
+    bairro?: string;
+    cidade?: string;
+    uf?: string;
 }

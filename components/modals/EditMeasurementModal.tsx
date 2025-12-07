@@ -82,15 +82,24 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
             handleLocalUpdate({ quantidade: isNaN(intValue) || intValue < 1 ? 1 : intValue });
         } else if (field === 'discount') {
             const sanitizedValue = value.replace(/[^0-9,.]/g, '');
-            const numericValue = parseFloat(sanitizedValue.replace(',', '.')) || 0;
-            handleLocalUpdate({ discount: numericValue });
+            handleLocalUpdate({
+                discount: {
+                    value: sanitizedValue,
+                    type: localMeasurement.discount?.type || 'percentage'
+                }
+            });
         } else if (field === 'observation') {
             handleLocalUpdate({ observation: value });
         }
     };
 
     const handleDiscountTypeChange = (type: 'percentage' | 'fixed') => {
-        handleLocalUpdate({ discountType: type });
+        handleLocalUpdate({
+            discount: {
+                value: localMeasurement.discount?.value || '0',
+                type: type
+            }
+        });
     };
 
     const handleSave = () => {
@@ -115,9 +124,11 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
 
     const basePrice = pricePerM2 * m2;
     let finalPrice = basePrice;
-    const discountValue = localMeasurement.discount || 0;
+    const discountObj = localMeasurement.discount || { value: '0', type: 'percentage' };
+    const discountValue = parseFloat(discountObj.value.replace(',', '.')) || 0;
+
     if (discountValue > 0) {
-        if (localMeasurement.discountType === 'percentage') {
+        if (discountObj.type === 'percentage') {
             finalPrice = basePrice * (1 - discountValue / 100);
         } else { // fixed
             finalPrice = basePrice - discountValue;
@@ -238,7 +249,7 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
                     </Accordion>
 
                     {/* Seção 3: Detalhes Adicionais */}
-                    <Accordion title="Detalhes Adicionais">
+                    <Accordion title="Detalhes Adicionais" defaultOpen={true}>
                         <div className="space-y-3">
                             <DynamicSelector
                                 label="Ambiente"
@@ -279,7 +290,7 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
                             <div className="flex">
                                 <input
                                     type="text"
-                                    defaultValue={String(localMeasurement.discount || '').replace('.', ',')}
+                                    defaultValue={localMeasurement.discount?.value || ''}
                                     onBlur={(e) => handleBlur(e, 'discount')}
                                     onFocus={handleFocus}
                                     className="w-full p-2.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 border border-slate-300 dark:border-slate-600 rounded-l-md shadow-sm focus:ring-slate-500 focus:border-slate-500 sm:text-sm"
@@ -287,10 +298,10 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
                                     inputMode="decimal"
                                 />
                                 <div className="flex">
-                                    <button type="button" onClick={() => handleDiscountTypeChange('percentage')} className={`px-4 py-2 text-sm font-semibold border-t border-b ${localMeasurement.discountType === 'percentage' ? 'bg-slate-800 dark:bg-slate-700 text-white border-slate-800 dark:border-slate-700 z-10' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
+                                    <button type="button" onClick={() => handleDiscountTypeChange('percentage')} className={`px-4 py-2 text-sm font-semibold border-t border-b ${localMeasurement.discount?.type === 'percentage' ? 'bg-slate-800 dark:bg-slate-700 text-white border-slate-800 dark:border-slate-700 z-10' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
                                         %
                                     </button>
-                                    <button type="button" onClick={() => handleDiscountTypeChange('fixed')} className={`px-4 py-2 text-sm font-semibold border rounded-r-md ${localMeasurement.discountType === 'fixed' ? 'bg-slate-800 dark:bg-slate-700 text-white border-slate-800 dark:border-slate-700 z-10' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
+                                    <button type="button" onClick={() => handleDiscountTypeChange('fixed')} className={`px-4 py-2 text-sm font-semibold border rounded-r-md ${localMeasurement.discount?.type === 'fixed' ? 'bg-slate-800 dark:bg-slate-700 text-white border-slate-800 dark:border-slate-700 z-10' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
                                         R$
                                     </button>
                                 </div>
@@ -304,8 +315,7 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
             <footer className="flex-shrink-0 p-3 border-t border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm fixed bottom-0 left-0 right-0 z-30">
                 <div className="max-w-xl mx-auto flex items-center justify-between gap-2 sm:gap-3">
                     <button onClick={handleDeleteClick} className="px-4 py-2.5 text-sm font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors flex-1 text-center">Excluir</button>
-                    <button onClick={onDuplicate} className="px-4 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-300 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 rounded-lg transition-colors flex-1 text-center">Duplicar</button>
-                    <button onClick={handleSave} className="px-4 py-2.5 text-sm font-semibold text-white bg-slate-800 dark:bg-slate-700 hover:bg-slate-700 dark:hover:bg-slate-600 rounded-lg transition-colors flex-[2] text-center">Salvar Alterações</button>
+                    <button onClick={handleSave} className="px-4 py-2.5 text-sm font-semibold text-white bg-slate-800 dark:bg-slate-700 hover:bg-slate-700 dark:hover:bg-slate-600 rounded-lg transition-colors flex-1 text-center">Salvar Alterações</button>
                 </div>
             </footer>
             <style jsx>{`

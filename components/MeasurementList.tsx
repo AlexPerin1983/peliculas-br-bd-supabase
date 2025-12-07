@@ -33,6 +33,7 @@ interface MeasurementListProps {
     totalQuantity: number; // NOVA PROP
     clientId?: number;
     optionId?: number;
+    onDeleteMeasurementImmediate: (id: number) => void;
 }
 
 const MeasurementList: React.FC<MeasurementListProps> = ({
@@ -515,28 +516,28 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
                 <div className="mb-8">
                     <button
                         onClick={() => setIsOptimizationOpen(!isOptimizationOpen)}
-                        className="w-full flex items-center justify-between p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-sm"
+                        className="w-full flex items-center justify-between p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-sm"
                     >
                         <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-blue-50 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-blue-600 dark:text-blue-400">
+                            <div className="w-8 h-8 bg-blue-50 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-blue-600 dark:text-blue-400">
                                     <path d="M21.731 2.269a2.625 2.625 0 00-3.712 0l-1.157 1.157 3.712 3.712 1.157-1.157a2.625 2.625 0 000-3.712zM19.513 8.199l-3.712-3.712-8.4 8.4a5.25 5.25 0 00-1.32 2.214l-.8 2.685a.75.75 0 00.933.933l2.685-.8a5.25 5.25 0 002.214-1.32l8.4-8.4z" />
                                     <path d="M5.25 5.25a3 3 0 00-3 3v10.5a3 3 0 003 3h10.5a3 3 0 003-3V13.5a.75.75 0 00-1.5 0v5.25a1.5 1.5 0 01-1.5 1.5H5.25a1.5 1.5 0 01-1.5-1.5V8.25a1.5 1.5 0 011.5-1.5h5.25a.75.75 0 000-1.5H5.25z" />
                                 </svg>
                             </div>
                             <div className="text-left">
                                 <div className="flex items-center gap-2">
-                                    <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">Otimizador de Corte</h3>
-                                    <span className="px-1.5 py-0.5 text-[10px] font-semibold tracking-wide bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded border border-green-200 dark:border-green-800">BETA v2</span>
+                                    <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">Otimizador de Corte</h3>
+                                    <span className="px-1.5 py-0.5 text-[9px] font-semibold tracking-wide bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded border border-green-200 dark:border-green-800">BETA v2</span>
                                 </div>
-                                <p className="text-xs text-slate-500 dark:text-slate-400">Gere o plano de corte otimizado</p>
+                                <p className="text-[10px] text-slate-500 dark:text-slate-400">Gere o plano de corte otimizado</p>
                             </div>
                         </div>
                         <svg
                             xmlns="http://www.w3.org/2000/svg"
                             viewBox="0 0 24 24"
                             fill="currentColor"
-                            className={`w-5 h-5 text-slate-400 dark:text-slate-500 transition-transform ${isOptimizationOpen ? 'rotate-180' : ''}`}
+                            className={`w-4 h-4 text-slate-400 dark:text-slate-500 transition-transform ${isOptimizationOpen ? 'rotate-180' : ''}`}
                         >
                             <path fillRule="evenodd" d="M12.53 16.28a.75.75 0 01-1.06 0l-7.5-7.5a.75.75 0 011.06-1.06L12 14.69l6.97-6.97a.75.75 0 111.06 1.06l-7.5 7.5z" clipRule="evenodd" />
                         </svg>

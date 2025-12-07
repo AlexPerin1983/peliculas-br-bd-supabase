@@ -29,6 +29,7 @@ const InfoModal: React.FC<InfoModalProps> = ({
             onClose={onClose}
             title={title}
             footer={footer}
+            wrapperClassName="z-[100]"
         >
             <div className="text-slate-600 flex flex-col items-center text-center p-4">
                 <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center mb-4">

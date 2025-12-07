@@ -52,6 +52,11 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
     const [isOptionsOpen, setIsOptionsOpen] = useState(false);
     const [zoomLevel, setZoomLevel] = useState<number>(1);
     const [manualRotations, setManualRotations] = useState<{ [key: string]: boolean }>({});
+    const [lockedItems, setLockedItems] = useState<{ [key: string]: Rect }>({});
+    const lockedItemsRef = useRef(lockedItems);
+    useEffect(() => {
+        lockedItemsRef.current = lockedItems;
+    }, [lockedItems]);
     const [useDeepSearch, setUseDeepSearch] = useState<boolean>(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
     const [history, setHistory] = useState<{
@@ -59,6 +64,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
         timestamp: number;
         result: OptimizationResult;
         manualRotations: { [key: string]: boolean };
+        lockedItems: { [key: string]: Rect };
         methodName: string;
         filmName?: string;
     }[]>([]);
@@ -68,6 +74,8 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
     // Storage key for this client/option combination
     const storageKey = clientId && optionId ? `cutting_history_${clientId}_${optionId}` : null;
 
+    const [loadedKey, setLoadedKey] = useState<string | null>(null);
+
     // Load history from localStorage on mount or when client/option changes
     useEffect(() => {
         if (storageKey) {
@@ -76,26 +84,28 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                 if (stored) {
                     const parsedHistory = JSON.parse(stored);
                     setHistory(parsedHistory);
+                } else {
+                    setHistory([]);
                 }
             } catch (e) {
                 console.error('Failed to load cutting history:', e);
+                setHistory([]);
             }
+            setLoadedKey(storageKey);
         } else {
-            // Clear history if no valid storage key
             setHistory([]);
+            setLoadedKey(null);
         }
     }, [storageKey]);
 
     // Save history to localStorage whenever it changes
     useEffect(() => {
-        if (storageKey && history.length > 0) {
-            try {
-                localStorage.setItem(storageKey, JSON.stringify(history));
-            } catch (e) {
-                console.error('Failed to save cutting history:', e);
-            }
+        if (storageKey && loadedKey === storageKey) {
+            localStorage.setItem(storageKey, JSON.stringify(history));
         }
-    }, [history, storageKey]);
+    }, [history, storageKey, loadedKey]);
+
+
 
     // Cleanup old histories (run once on mount)
     useEffect(() => {
@@ -168,8 +178,8 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
             return;
         }
 
-        // Create a signature of the current parameters
-        const currentParams = JSON.stringify({
+        // Create a signature of the core parameters (excluding lockedItems)
+        const coreParamsObj = {
             width,
             spacing,
             respectGrain: currentSettings.respectGrain,
@@ -183,21 +193,43 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
             })),
             manualRotations,
             useDeepSearch
+        };
+        const coreParams = JSON.stringify(coreParamsObj);
+
+        // Full signature including lockedItems
+        const fullParams = JSON.stringify({
+            core: coreParamsObj,
+            lockedItems: lockedItemsRef.current
         });
 
-        // If saving to history and parameters haven't changed, reuse the existing result
-        if (saveToHistory && resultRef.current && lastParamsRef.current === currentParams) {
+        // Check if we can skip optimization
+        let lastCoreParams = '';
+        try {
+            if (lastParamsRef.current) {
+                const lastParsed = JSON.parse(lastParamsRef.current);
+                lastCoreParams = JSON.stringify(lastParsed.core);
+            }
+        } catch (e) {
+            // Ignore parse error
+        }
+
+        if (saveToHistory && resultRef.current && coreParams === lastCoreParams) {
+            // Just save the current result with the new lockedItems state
             setHistory(prev => [
                 {
                     id: Date.now().toString(),
                     timestamp: Date.now(),
                     result: resultRef.current!,
                     manualRotations: { ...manualRotations },
+                    lockedItems: { ...lockedItemsRef.current },
                     methodName: useDeepSearch ? 'Otimização Profunda' : 'Automático',
                     filmName: activeFilm
                 },
                 ...prev
             ].slice(0, 10));
+
+            // Update lastParamsRef to match current state so subsequent checks are consistent
+            lastParamsRef.current = fullParams;
             return;
         }
 
@@ -229,9 +261,10 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                 }
             });
 
-            const newResult = optimizer.optimize(manualRotations, useDeepSearch);
+            const newResult = optimizer.optimize(manualRotations, useDeepSearch, Object.values(lockedItemsRef.current));
+
             setResult(newResult);
-            lastParamsRef.current = currentParams;
+            lastParamsRef.current = fullParams;
             setIsOptimizing(false);
 
             if (saveToHistory && newResult) {
@@ -241,6 +274,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                         timestamp: Date.now(),
                         result: newResult,
                         manualRotations: { ...manualRotations },
+                        lockedItems: { ...lockedItemsRef.current },
                         methodName: useDeepSearch ? 'Otimização Profunda' : 'Automático',
                         filmName: activeFilm
                     },
@@ -283,39 +317,66 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
         <div className="mt-8 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
             {/* Header */}
             <div className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700">
-                <div className="p-3 sm:p-4 flex items-center justify-between">
-                    <h3 className="text-base sm:text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                {/* Desktop Header */}
+                <div className="hidden sm:flex p-4 items-center justify-between">
+                    <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
                         Otimizador de Corte
-                        <span className="text-[9px] sm:text-[10px] text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-1.5 py-0.5 rounded-full border border-blue-100 dark:border-blue-800 font-semibold">BETA</span>
+                        <span className="text-[10px] text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-1.5 py-0.5 rounded-full border border-blue-100 dark:border-blue-800 font-semibold">BETA</span>
                     </h3>
-                    <button
-                        onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-                        className="sm:hidden flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-                            <path fillRule="evenodd" d="M11.078 2.25c-.917 0-1.699.663-1.85 1.567L9.05 4.889c-.02.12-.115.26-.297.348a7.493 7.493 0 00-.986.57c-.166.115-.334.126-.45.083L6.3 5.508a1.875 1.875 0 00-2.282.819l-.922 1.597a1.875 1.875 0 00.432 2.385l.84.692c.095.078.17.229.154.43a7.598 7.598 0 000 1.139c.015.2-.059.352-.153.43l-.841.692a1.875 1.875 0 00-.432 2.385l.922 1.597a1.875 1.875 0 002.282.818l1.019-.382c.115-.043.283-.031.45.082.312.214.641.405.985.57.182.088.277.228.297.35l.178 1.071c.151.904.933 1.567 1.85 1.567h1.844c.916 0 1.699-.663 1.85-1.567l.178-1.072c.02-.12.114-.26.297-.349.344-.165.673-.356.985-.57.167-.114.335-.125.45-.082l1.02.382a1.875 1.875 0 002.28-.819l.923-1.597a1.875 1.875 0 00-.432-2.385l-.84-.692c-.095-.078-.17-.229-.154-.43a7.614 7.614 0 000-1.139c-.016-.2.059-.352.153-.43l.84-.692c.708-.582.891-1.59.433-2.385l-.922-1.597a1.875 1.875 0 00-2.282-.818l-1.02.382c-.114.043-.282.031-.449-.083a7.49 7.49 0 00-.985-.57c-.183-.087-.277-.227-.297-.348l-.179-1.072a1.875 1.875 0 00-1.85-1.567h-1.843zM12 15.75a3.75 3.75 0 100-7.5 3.75 3.75 0 000 7.5z" clipRule="evenodd" />
-                        </svg>
-                        {isSettingsOpen ? 'Ocultar' : 'Configurar'}
-                    </button>
+
+                    {/* Desktop Tabs */}
+                    {uniqueFilms.length > 1 && (
+                        <div className="flex overflow-x-auto px-4 pb-0 gap-1 no-scrollbar">
+                            {uniqueFilms.map(film => (
+                                <button
+                                    key={film}
+                                    onClick={() => setActiveFilm(film)}
+                                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeFilm === film
+                                        ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400'
+                                        : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+                                        }`}
+                                >
+                                    {film}
+                                </button>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
-                {/* Film Tabs */}
-                {uniqueFilms.length > 1 && (
-                    <div className="flex overflow-x-auto px-3 sm:px-4 pb-0 gap-1 no-scrollbar">
-                        {uniqueFilms.map(film => (
+                {/* Mobile Header (Merged Tabs + Config Icon) */}
+                <div className="sm:hidden flex items-center justify-between pl-3 pr-2 bg-slate-50 dark:bg-slate-900">
+                    {/* Tabs */}
+                    <div className="flex overflow-x-auto gap-4 no-scrollbar flex-1 mr-2 mask-linear-fade">
+                        {uniqueFilms.length > 0 ? uniqueFilms.map(film => (
                             <button
                                 key={film}
                                 onClick={() => setActiveFilm(film)}
-                                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeFilm === film
+                                className={`py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeFilm === film
                                     ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400'
                                     : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
                                     }`}
                             >
                                 {film}
                             </button>
-                        ))}
+                        )) : (
+                            <span className="py-3 text-sm font-medium text-slate-500">Padrão</span>
+                        )}
                     </div>
-                )}
+
+                    {/* Config Button (Icon Only) */}
+                    <button
+                        onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+                        className={`p-2 rounded-lg transition-colors flex-shrink-0 my-2 ${isSettingsOpen
+                            ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400'
+                            : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                            }`}
+                        aria-label="Configurar"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                            <path fillRule="evenodd" d="M3 6a3 3 0 013-3h2.25a3 3 0 013 3v2.25a3 3 0 01-3 3H6a3 3 0 01-3-3V6zm9.75 0a3 3 0 013-3H18a3 3 0 013 3v2.25a3 3 0 01-3 3h-2.25a3 3 0 01-3-3V6zM3 15.75a3 3 0 013-3h2.25a3 3 0 013 3V18a3 3 0 01-3 3H6a3 3 0 01-3-3v-2.25zm9.75 0a3 3 0 013-3H18a3 3 0 013 3V18a3 3 0 01-3 3h-2.25a3 3 0 01-3-3v-2.25z" clipRule="evenodd" />
+                        </svg>
+                    </button>
+                </div>
             </div>
 
             <div className="p-3 sm:p-6">
@@ -422,6 +483,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                         onClick={() => {
                                             setResult(item.result);
                                             setManualRotations(item.manualRotations);
+                                            setLockedItems(item.lockedItems || {});
                                         }}
                                         className="w-full text-left"
                                     >
@@ -443,10 +505,10 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                             e.stopPropagation();
                                             setHistoryToDelete(item.id);
                                         }}
-                                        className="absolute top-1 right-1 p-1 text-slate-400 hover:text-red-500 dark:text-slate-500 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        className="absolute top-1 right-1 p-1.5 text-slate-400 hover:text-red-500 dark:text-slate-500 dark:hover:text-red-400 transition-colors bg-white/50 dark:bg-slate-800/50 rounded-full backdrop-blur-sm"
                                         title="Excluir versão"
                                     >
-                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3 sm:w-4 sm:h-4">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5 sm:w-4 sm:h-4">
                                             <path fillRule="evenodd" d="M16.5 4.478v.227a48.816 48.816 0 013.878.512.75.75 0 11-.49 1.478l-.565 9.064a2.625 2.625 0 01-2.622 2.44h-5.402a2.625 2.625 0 01-2.622-2.44L5.11 6.695a48.866 48.866 0 01-3.878-.512.75.75 0 11.49-1.478 48.818 48.818 0 013.878-.512h9.752zM15 9a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0115 9zm-3 0a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0112 9zm-3 0a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 019 9z" clipRule="evenodd" />
                                         </svg>
                                     </button>
@@ -460,20 +522,29 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                 {result && (
                     <div className="animate-fade-in" ref={containerRef}>
                         {/* Stats */}
-                        <div className="flex flex-wrap gap-2 sm:gap-4 mb-4 sm:mb-6 p-3 sm:p-4 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 text-xs sm:text-sm">
-                            <div className="flex flex-col flex-1 min-w-[80px]">
-                                <span className="text-slate-500 dark:text-slate-400 text-[10px] sm:text-xs uppercase tracking-wider">Comprimento Total</span>
-                                <span className="font-bold text-slate-800 dark:text-slate-100 text-base sm:text-lg">{result.totalHeight.toFixed(1)} cm</span>
+                        <div className="flex flex-nowrap gap-2 sm:gap-4 mb-4 sm:mb-6 p-3 sm:p-4 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 text-xs sm:text-sm overflow-x-auto no-scrollbar">
+                            <div className="flex flex-col flex-1 min-w-0">
+                                <span className="text-slate-500 dark:text-slate-400 text-[10px] sm:text-xs uppercase tracking-wider truncate" title="Comprimento Total">
+                                    <span className="sm:hidden">Comp.</span>
+                                    <span className="hidden sm:inline">Comprimento Total</span>
+                                </span>
+                                <span className="font-bold text-slate-800 dark:text-slate-100 text-base sm:text-lg whitespace-nowrap">{result.totalHeight.toFixed(1)} cm</span>
                             </div>
-                            <div className="w-px bg-slate-200 dark:bg-slate-700 mx-1 sm:mx-2"></div>
-                            <div className="flex flex-col flex-1 min-w-[80px]">
-                                <span className="text-slate-500 dark:text-slate-400 text-[10px] sm:text-xs uppercase tracking-wider">Eficiência</span>
-                                <span className="font-bold text-slate-800 dark:text-slate-100 text-base sm:text-lg">{result.efficiency.toFixed(1)}%</span>
+                            <div className="w-px bg-slate-200 dark:bg-slate-700 mx-1 sm:mx-2 flex-shrink-0"></div>
+                            <div className="flex flex-col flex-1 min-w-0">
+                                <span className="text-slate-500 dark:text-slate-400 text-[10px] sm:text-xs uppercase tracking-wider truncate" title="Eficiência">
+                                    <span className="sm:hidden">Efic.</span>
+                                    <span className="hidden sm:inline">Eficiência</span>
+                                </span>
+                                <span className="font-bold text-slate-800 dark:text-slate-100 text-base sm:text-lg whitespace-nowrap">{result.efficiency.toFixed(1)}%</span>
                             </div>
-                            <div className="w-px bg-slate-200 dark:bg-slate-700 mx-1 sm:mx-2"></div>
-                            <div className="flex flex-col flex-1 min-w-[80px]">
-                                <span className="text-slate-500 dark:text-slate-400 text-[10px] sm:text-xs uppercase tracking-wider">Peças Encaixadas</span>
-                                <span className="font-bold text-slate-800 dark:text-slate-100 text-base sm:text-lg">{result.placedItems.length}</span>
+                            <div className="w-px bg-slate-200 dark:bg-slate-700 mx-1 sm:mx-2 flex-shrink-0"></div>
+                            <div className="flex flex-col flex-1 min-w-0">
+                                <span className="text-slate-500 dark:text-slate-400 text-[10px] sm:text-xs uppercase tracking-wider truncate" title="Peças Encaixadas">
+                                    <span className="sm:hidden">Peças</span>
+                                    <span className="hidden sm:inline">Peças Encaixadas</span>
+                                </span>
+                                <span className="font-bold text-slate-800 dark:text-slate-100 text-base sm:text-lg whitespace-nowrap">{result.placedItems.length}</span>
                             </div>
                         </div>
 
@@ -496,24 +567,18 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                         })()}
 
                         {/* Zoom Slider - Positioned above visualization */}
-                        <div className="mb-3 sm:mb-4 flex items-center justify-center gap-2 sm:gap-3 px-2 sm:px-4">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-slate-500 dark:text-slate-400">
-                                <path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z" />
-                            </svg>
+                        <div className="mb-3 sm:mb-4 flex items-center justify-center gap-3 px-2 sm:px-4 w-full max-w-3xl mx-auto">
                             <input
                                 type="range"
                                 min="50"
                                 max="300"
                                 value={zoomLevel * 100}
                                 onChange={(e) => setZoomLevel(parseInt(e.target.value) / 100)}
-                                className="flex-1 max-w-xs h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600 hover:accent-blue-700 touch-manipulation"
+                                className="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-green-600 hover:accent-green-700 touch-manipulation"
                                 style={{
-                                    background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${((zoomLevel * 100 - 50) / 250) * 100}%, #e2e8f0 ${((zoomLevel * 100 - 50) / 250) * 100}%, #e2e8f0 100%)`
+                                    background: `linear-gradient(to right, #16a34a 0%, #16a34a ${((zoomLevel * 100 - 50) / 250) * 100}%, #e2e8f0 ${((zoomLevel * 100 - 50) / 250) * 100}%, #e2e8f0 100%)`
                                 }}
                             />
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-slate-500 dark:text-slate-400">
-                                <path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z" />
-                            </svg>
                             <span className="text-[10px] sm:text-xs font-medium text-slate-600 dark:text-slate-400 min-w-[40px] sm:min-w-[45px] text-center">{Math.round(zoomLevel * 100)}%</span>
                         </div>
 
@@ -614,16 +679,15 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                                     <div className="absolute bottom-1 right-2 text-[10px] sm:text-xs font-mono text-sky-200 font-medium bg-slate-900/40 px-1 rounded">
                                                         {(item.w / 100).toFixed(2)}
                                                     </div>
+
+                                                    {/* Height Label (Left inside) */}
+                                                    <div className="absolute left-1 top-0 h-full flex items-center">
+                                                        <span className="origin-center -rotate-90 text-[10px] sm:text-xs font-mono text-sky-200 font-medium bg-slate-900/40 px-1 rounded">
+                                                            {(item.h / 100).toFixed(2)}
+                                                        </span>
+                                                    </div>
                                                 </>
                                             )}
-
-                                            {/* External Dimensions (Ruler-style) */}
-                                            {/* Height on the right */}
-                                            <div className="absolute -right-6 top-0 h-full flex items-center">
-                                                <span className="origin-center -rotate-90 text-[9px] text-slate-500 font-mono">
-                                                    {(item.h / 100).toFixed(2)}
-                                                </span>
-                                            </div>
 
                                             {/* Width on the bottom (only for bottom-most items in their column to avoid clutter? Or just all?) 
                                                 Let's stick to the internal label for width as per the reference image having internal numbers.
@@ -637,6 +701,37 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                                     </svg>
                                                 </div>
                                             )}
+
+                                            {/* Lock Toggle Button */}
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    if (item.id) {
+                                                        setLockedItems(prev => {
+                                                            const newLocked = { ...prev };
+                                                            if (newLocked[item.id!]) {
+                                                                delete newLocked[item.id!];
+                                                            } else {
+                                                                newLocked[item.id!] = { ...item, locked: true };
+                                                            }
+                                                            return newLocked;
+                                                        });
+                                                    }
+                                                }}
+                                                className={`absolute -top-2 left-1/2 -translate-x-1/2 sm:left-auto sm:translate-x-0 sm:right-6 bg-slate-800 border border-slate-600 rounded-full p-1 shadow-md transition-all hover:bg-slate-700 z-20 ${lockedItems[item.id!] ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                                                title={lockedItems[item.id!] ? "Destravar peça" : "Travar peça"}
+                                            >
+                                                {lockedItems[item.id!] ? (
+                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3 text-red-500">
+                                                        <path fillRule="evenodd" d="M12 1.5a5.25 5.25 0 00-5.25 5.25v3a3 3 0 00-3 3v6.75a3 3 0 003 3h10.5a3 3 0 003-3v-6.75a3 3 0 00-3-3v-3c0-2.9-2.35-5.25-5.25-5.25zm3.75 8.25v-3a3.75 3.75 0 10-7.5 0v3h7.5z" clipRule="evenodd" />
+                                                    </svg>
+                                                ) : (
+                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3 text-slate-400">
+                                                        <path d="M18 1.5c2.9 0 5.25 2.35 5.25 5.25v3.75a.75.75 0 01-1.5 0V6.75a3.75 3.75 0 10-7.5 0v3a.75.75 0 01-1.5 0v-3A5.25 5.25 0 0118 1.5zM12.625 14.75a.75.75 0 00-1.25 0v2.625c0 .414.336.75.75.75h3.5a.75.75 0 00.75-.75v-2.625a.75.75 0 00-1.25 0H12.625z" />
+                                                        <path fillRule="evenodd" d="M12.971 10.286a3 3 0 00-1.942 0A6 6 0 004.5 16.125v2.25a3 3 0 003 3h9a3 3 0 003-3v-2.25a6 6 0 00-6.529-5.839z" clipRule="evenodd" />
+                                                    </svg>
+                                                )}
+                                            </button>
 
                                             {/* Rotation Toggle Button */}
                                             <button
@@ -718,7 +813,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                     confirmButtonVariant="danger"
                 />
             </div>
-        </div>
+        </div >
     );
 };
 
