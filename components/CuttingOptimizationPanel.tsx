@@ -657,6 +657,90 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                         backgroundPosition: '-1px -1px' // Align grid lines
                                     }}
                                 >
+                                    {/* Blade width visualization (sangria) */}
+                                    {parseFloat(currentSettings.bladeWidth) > 0 && (() => {
+                                        const bladeWidthCm = parseFloat(currentSettings.bladeWidth) / 10;
+                                        const bladeElements: React.ReactNode[] = [];
+
+                                        // Find unique Y positions (rows)
+                                        const rows = new Map<number, { minX: number, maxX: number, h: number }>();
+                                        result.placedItems.forEach(item => {
+                                            const key = Math.round(item.y * 10) / 10; // Round to avoid floating point issues
+                                            if (!rows.has(key)) {
+                                                rows.set(key, { minX: item.x, maxX: item.x + item.w, h: item.h });
+                                            } else {
+                                                const row = rows.get(key)!;
+                                                row.minX = Math.min(row.minX, item.x);
+                                                row.maxX = Math.max(row.maxX, item.x + item.w);
+                                            }
+                                        });
+
+                                        // Draw vertical blade gaps (between rows)
+                                        const sortedRows = Array.from(rows.entries()).sort((a, b) => a[0] - b[0]);
+                                        sortedRows.forEach((row, idx) => {
+                                            const [y, data] = row;
+                                            const nextRow = sortedRows[idx + 1];
+                                            if (nextRow) {
+                                                const bladeY = y + data.h;
+                                                bladeElements.push(
+                                                    <div
+                                                        key={`vblade-${idx}`}
+                                                        className="absolute pointer-events-none"
+                                                        style={{
+                                                            left: 0,
+                                                            top: `${bladeY * scale}px`,
+                                                            width: `${result.rollWidth * scale}px`,
+                                                            height: `${bladeWidthCm * scale}px`,
+                                                            backgroundColor: 'rgba(239, 68, 68, 0.2)', // red-500 with opacity
+                                                            borderTop: '1px dashed rgba(239, 68, 68, 0.5)',
+                                                            borderBottom: '1px dashed rgba(239, 68, 68, 0.5)'
+                                                        }}
+                                                        title={`Sangria Vertical: ${bladeWidthCm.toFixed(1)}cm`}
+                                                    />
+                                                );
+                                            }
+                                        });
+
+                                        // Draw horizontal blade gaps (between  items in same row)
+                                        result.placedItems.forEach((item, idx) => {
+                                            // Find items to the right in the same row
+                                            const itemsInSameRow = result.placedItems.filter(other =>
+                                                Math.abs(other.y - item.y) < 1 && other.x > item.x
+                                            );
+
+                                            if (itemsInSameRow.length > 0) {
+                                                // Find the nearest item to the right
+                                                const nearest = itemsInSameRow.reduce((prev, curr) =>
+                                                    curr.x < prev.x ? curr : prev
+                                                );
+
+                                                const bladeX = item.x + item.w;
+                                                const bladeWidth = nearest.x - bladeX;
+
+                                                if (bladeWidth > 0.1) { // Only draw if there's actual spacing
+                                                    bladeElements.push(
+                                                        <div
+                                                            key={`hblade-${idx}`}
+                                                            className="absolute pointer-events-none"
+                                                            style={{
+                                                                left: `${bladeX * scale}px`,
+                                                                top: `${item.y * scale}px`,
+                                                                width: `${bladeWidth * scale}px`,
+                                                                height: `${item.h * scale}px`,
+                                                                backgroundColor: 'rgba(239, 68, 68, 0.2)', // red-500 with opacity
+                                                                borderLeft: '1px dashed rgba(239, 68, 68, 0.5)',
+                                                                borderRight: '1px dashed rgba(239, 68, 68, 0.5)'
+                                                            }}
+                                                            title={`Sangria Horizontal: ${bladeWidth.toFixed(1)}cm`}
+                                                        />
+                                                    );
+                                                }
+                                            }
+                                        });
+
+                                        return bladeElements;
+                                    })()}
+
                                     {/* Items */}
                                     {result.placedItems.map((item, index) => (
                                         <div
