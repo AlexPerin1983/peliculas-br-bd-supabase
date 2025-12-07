@@ -678,22 +678,12 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
 
                                         // Draw vertical blade gaps (between rows)
                                         const sortedRows = Array.from(rows.entries()).sort((a, b) => a[0] - b[0]);
-                                        console.log('🔴 Sangria Debug - Linhas encontradas:', sortedRows.length);
-                                        console.log('🔴 BladeWidthCm:', bladeWidthCm);
-                                        console.log('🔴 Scale:', scale);
 
                                         for (let idx = 0; idx < sortedRows.length - 1; idx++) {
                                             const [y1, data1] = sortedRows[idx];
                                             const [y2, data2] = sortedRows[idx + 1];
                                             const bladeY = y1 + data1.h;
                                             const gap = y2 - bladeY;
-
-                                            console.log(`🔴 Linha ${idx} → ${idx + 1}:`);
-                                            console.log(`   Y1=${y1}, h=${data1.h}, termina em=${bladeY}`);
-                                            console.log(`   Y2=${y2}`);
-                                            console.log(`   GAP=${gap}cm`);
-                                            console.log(`   Desenhando em Y=${bladeY}px (scaled: ${bladeY * scale}px)`);
-                                            console.log(`   Altura=${gap}cm (scaled: ${gap * scale}px)`);
 
                                             if (gap > 0.1) {
                                                 bladeElements.push(
@@ -745,8 +735,6 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
 
                                                 const bladeX = item.x + item.w;
                                                 const bladeWidth = nearest.x - bladeX;
-
-                                                console.log(`🔵 Gap horizontal: Peça ${idx + 1} → x=${bladeX}, width=${bladeWidth}cm`);
 
                                                 if (bladeWidth > 0.01) { // Only draw if there's actual spacing (lowered threshold)
                                                     bladeElements.push(
