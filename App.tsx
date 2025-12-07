@@ -1972,15 +1972,16 @@ Se nÃ£o conseguir extrair, retorne: []`;
                 return;
             }
 
-            // Adiciona as medidas extra�das
+            // Adiciona as medidas extraídas
             const newMeasurements = extractedMeasurements.map((m: any) => ({
                 ...createEmptyMeasurement(),
-                local: m.local || '',
+                ambiente: m.local || '', // Mapeia 'local' do JSON para 'ambiente' do objeto Measurement
                 largura: m.largura || '',
                 altura: m.altura || '',
                 quantidade: m.quantidade || 1,
                 isNew: false
             }));
+
 
             handleMeasurementsChange([...measurements, ...newMeasurements]);
             setIsAIMeasurementModalOpen(false);
