@@ -1974,8 +1974,9 @@ Se não conseguir extrair, retorne: []`;
             }
 
             // Adiciona as medidas extraídas
-            const newMeasurements = extractedMeasurements.map((m: any) => ({
+            const newMeasurements = extractedMeasurements.map((m: any, index: number) => ({
                 ...createEmptyMeasurement(),
+                id: Date.now() + index, // Garante ID único
                 ambiente: m.local || '', // Mapeia 'local' do JSON para 'ambiente' do objeto Measurement
                 largura: m.largura || '',
                 altura: m.altura || '',
