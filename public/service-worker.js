@@ -1,6 +1,6 @@
 // Simple Service Worker without Workbox CDN
 // PARA FORÇAR UMA NOVA VERSÃO: Altere o número da versão abaixo (ex: v71 -> v72)
-const CACHE_NAME = 'app-cache-v78';
+const CACHE_NAME = 'app-cache-v79';
 const urlsToCache = [
     '/',
     '/offline.html'
@@ -8,7 +8,7 @@ const urlsToCache = [
 
 // Força o Service Worker a assumir o controle imediatamente após a instalação
 self.addEventListener('install', (event) => {
-    // console.log('[SW] Installing version 71...');
+    // console.log('[SW] Installing version 79...');
     event.waitUntil(
         caches.open(CACHE_NAME).then((cache) => {
             // console.log('[SW] Caching app shell');
@@ -22,7 +22,7 @@ self.addEventListener('install', (event) => {
 
 // Ativa imediatamente quando houver uma nova versão
 self.addEventListener('activate', (event) => {
-    // console.log('[SW] Activating version 71...');
+    // console.log('[SW] Activating version 79...');
     event.waitUntil(
         caches.keys().then((cacheNames) => {
             return Promise.all(
@@ -100,4 +100,4 @@ self.addEventListener('message', (event) => {
     }
 });
 
-// console.log('[SW] Service Worker v71 loaded');
+// console.log('[SW] Service Worker v79 loaded');
