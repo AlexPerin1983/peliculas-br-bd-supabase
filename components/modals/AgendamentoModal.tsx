@@ -1,6 +1,5 @@
 import React, { useState, useEffect, FormEvent } from 'react';
-import { Agendamento, Client, UserInfo, SavedPDF } from '../../types';
-import { SchedulingInfo } from '../../App';
+import { Agendamento, Client, UserInfo, SavedPDF, SchedulingInfo } from '../../types';
 import Modal from '../ui/Modal';
 import Input from '../ui/Input';
 import SearchableSelect from '../ui/SearchableSelect';

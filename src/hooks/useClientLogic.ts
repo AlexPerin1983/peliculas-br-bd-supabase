@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { Client, Measurement, UserInfo, Film, PaymentMethods, SavedPDF, Agendamento, ProposalOption, SchedulingInfo, ExtractedClientData } from '../../types';
+import { Client, Measurement, UserInfo, Film, PaymentMethods, SavedPDF, Agendamento, ProposalOption, SchedulingInfo, ExtractedClientData, UIMeasurement } from '../../types';
 import * as db from '../../services/db';
 import { generatePDF, generateCombinedPDF } from '../../services/pdfGenerator';
 import { useAIProcessing } from './useAIProcessing';
@@ -16,8 +16,6 @@ interface UseClientLogicProps {
     loadAllPdfs: () => Promise<void>;
     hasLoadedAgendamentos: boolean;
     loadAgendamentos: () => Promise<void>;
-    numpadConfig?: { isOpen: boolean }; // Optional if managed internally
-    handleNumpadClose?: () => void; // Optional if managed internally
 }
 
 export const useClientLogic = ({
@@ -62,13 +60,13 @@ export const useClientLogic = ({
     // Proposal Options & Measurements
     const [proposalOptions, setProposalOptions] = useState<ProposalOption[]>([]);
     const [activeOptionId, setActiveOptionId] = useState<number | null>(null);
-    const [editingMeasurement, setEditingMeasurement] = useState<(Measurement & { isNew?: boolean }) | null>(null);
+    const [editingMeasurement, setEditingMeasurement] = useState<UIMeasurement | null>(null);
     const [isClearAllModalOpen, setIsClearAllModalOpen] = useState(false);
-    const [editingMeasurementForDiscount, setEditingMeasurementForDiscount] = useState<(Measurement & { isNew?: boolean }) | null>(null);
+    const [editingMeasurementForDiscount, setEditingMeasurementForDiscount] = useState<UIMeasurement | null>(null);
     const [isAIMeasurementModalOpen, setIsAIMeasurementModalOpen] = useState(false);
     const [isDuplicateAllModalOpen, setIsDuplicateAllModalOpen] = useState(false);
     const [measurementToDeleteId, setMeasurementToDeleteId] = useState<number | null>(null);
-    const [deletedMeasurement, setDeletedMeasurement] = useState<(Measurement & { isNew?: boolean }) | null>(null);
+    const [deletedMeasurement, setDeletedMeasurement] = useState<UIMeasurement | null>(null);
     const [deletedMeasurementIndex, setDeletedMeasurementIndex] = useState<number | null>(null);
     const [showUndoToast, setShowUndoToast] = useState(false);
 
@@ -388,25 +386,28 @@ export const useClientLogic = ({
         }
     }, [films, loadFilms]);
 
-    const handleApplyFilmToAll = useCallback((filmName: string) => {
-        setFilmToApplyToAll(filmName);
-        setIsApplyFilmToAllModalOpen(true);
-    }, []);
-
-    const handleConfirmApplyFilmToAll = useCallback(() => {
-        if (filmToApplyToAll && activeOptionId) {
+    const handleApplyFilmToAll = useCallback((filmName: string | null) => {
+        if (filmName && activeOptionId) {
             setProposalOptions(prev => prev.map(opt =>
                 opt.id === activeOptionId ? {
                     ...opt,
-                    measurements: opt.measurements.map(m => ({ ...m, pelicula: filmToApplyToAll }))
+                    measurements: opt.measurements.map(m => ({ ...m, pelicula: filmName }))
                 } : opt
             ));
             setIsDirty(true);
             setIsApplyFilmToAllModalOpen(false);
             setFilmToApplyToAll(null);
-            setIsFilmSelectionModalOpen(false);
+        } else {
+            // If null is passed (e.g. just opening the modal or clearing), just set state
+            // But wait, if we are opening the modal, we usually pass nothing or handle it via setIsApplyFilmToAllModalOpen(true) elsewhere.
+            // The previous logic was: setFilmToApplyToAll(filmName); setIsApplyFilmToAllModalOpen(true);
+            // If filmName is provided, it means we selected one.
+            // If we just want to open the modal, we might call it with null?
+            // Let's check how it's called when opening.
+            // In App.tsx/MeasurementList, onOpenApplyFilmToAllModal calls setIsApplyFilmToAllModalOpen(true).
+            // So handleApplyFilmToAll is ONLY called when a film is selected from the modal.
         }
-    }, [filmToApplyToAll, activeOptionId]);
+    }, [activeOptionId]);
 
     // Proposal Options
     const loadProposalOptions = useCallback(async (clientId: number) => {
@@ -428,19 +429,16 @@ export const useClientLogic = ({
     }, []);
 
     const handleAddProposalOption = useCallback(() => {
-        setProposalOptions(prev => {
-            const newOption: ProposalOption = {
-                id: Date.now(),
-                name: `Opção ${prev.length + 1}`,
-                measurements: [],
-                generalDiscount: { value: '', type: 'percentage' }
-            };
-            const newOptions = [...prev, newOption];
-            setActiveOptionId(newOption.id);
-            return newOptions;
-        });
+        const newOption: ProposalOption = {
+            id: Date.now(),
+            name: `Opção ${proposalOptions.length + 1}`,
+            measurements: [],
+            generalDiscount: { value: '', type: 'percentage' }
+        };
+        setProposalOptions(prev => [...prev, newOption]);
+        setActiveOptionId(newOption.id);
         setIsDirty(true);
-    }, []);
+    }, [proposalOptions.length]);
 
     const handleRenameProposalOption = useCallback((id: number, newName: string) => {
         setProposalOptions(prev => prev.map(opt => opt.id === id ? { ...opt, name: newName } : opt));
@@ -448,26 +446,26 @@ export const useClientLogic = ({
     }, []);
 
     const handleDeleteProposalOption = useCallback((id: number) => {
-        setProposalOptions(prev => {
-            const newOptions = prev.filter(opt => opt.id !== id);
-            if (newOptions.length === 0) {
-                // Ensure at least one option exists
-                const defaultOption: ProposalOption = {
-                    id: Date.now(),
-                    name: 'Opção 1',
-                    measurements: [],
-                    generalDiscount: { value: '', type: 'percentage' }
-                };
-                setActiveOptionId(defaultOption.id);
-                return [defaultOption];
-            }
+        const newOptions = proposalOptions.filter(opt => opt.id !== id);
+
+        if (newOptions.length === 0) {
+            // Ensure at least one option exists
+            const defaultOption: ProposalOption = {
+                id: Date.now(),
+                name: 'Opção 1',
+                measurements: [],
+                generalDiscount: { value: '', type: 'percentage' }
+            };
+            setProposalOptions([defaultOption]);
+            setActiveOptionId(defaultOption.id);
+        } else {
+            setProposalOptions(newOptions);
             if (activeOptionId === id) {
                 setActiveOptionId(newOptions[0].id);
             }
-            return newOptions;
-        });
+        }
         setIsDirty(true);
-    }, [activeOptionId]);
+    }, [proposalOptions, activeOptionId]);
 
     const handleSwipeDirectionChange = useCallback((direction: 'left' | 'right' | null) => {
         // Optional: handle visual feedback
@@ -482,7 +480,9 @@ export const useClientLogic = ({
             altura: '',
             quantidade: 1,
             ambiente: '',
+            tipoAplicacao: '',
             pelicula: '',
+            active: true,
             discount: { value: '0', type: 'percentage' }
         };
 
@@ -695,7 +695,12 @@ export const useClientLogic = ({
                 clienteId: selectedClient.id!,
                 clientName: selectedClient.nome,
                 date: new Date().toISOString(),
-                blob: pdfBlob,
+                pdfBlob: pdfBlob,
+                nomeArquivo: `Orcamento_${selectedClient.nome.replace(/\s+/g, '_')}_${new Date().getTime()}.pdf`,
+                totalPreco: totals.finalTotal,
+                totalM2: totals.totalM2,
+                subtotal: totals.subtotal,
+                generalDiscount: activeOption.generalDiscount,
                 proposalOptionId: activeOption.id
             });
 
@@ -1012,7 +1017,7 @@ export const useClientLogic = ({
         handleEditFilmFromSelection,
         handleToggleFilmPin,
         handleApplyFilmToAll,
-        handleConfirmApplyFilmToAll,
+
         handleAddProposalOption,
         handleRenameProposalOption,
         handleDeleteProposalOption,

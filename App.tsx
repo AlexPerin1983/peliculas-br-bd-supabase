@@ -43,10 +43,11 @@ const UserSettingsView = lazy(() => import('./components/views/UserSettingsView'
 const PdfHistoryView = lazy(() => import('./components/views/PdfHistoryView'));
 const FilmListView = lazy(() => import('./components/views/FilmListView'));
 const AgendaView = lazy(() => import('./components/views/AgendaView'));
+const SalesPage = lazy(() => import('./src/components/SalesPage'));
 
 
 type UIMeasurement = Measurement & { isNew?: boolean };
-type ActiveTab = 'client' | 'films' | 'settings' | 'history' | 'agenda';
+type ActiveTab = 'client' | 'films' | 'settings' | 'history' | 'agenda' | 'sales';
 
 type NumpadConfig = {
     isOpen: boolean;
@@ -159,7 +160,7 @@ const App: React.FC = () => {
 
         // Handle tab parameter from shortcuts
         const tabParam = urlParams.get('tab');
-        if (tabParam && ['client', 'films', 'settings', 'history', 'agenda'].includes(tabParam)) {
+        if (tabParam && ['client', 'films', 'settings', 'history', 'agenda', 'sales'].includes(tabParam)) {
             setActiveTab(tabParam as ActiveTab);
         }
 
@@ -1634,18 +1635,14 @@ const App: React.FC = () => {
         setEditingMeasurementIdForFilm(null);
     }, [editingMeasurementIdForFilm, measurements, handleMeasurementsChange, editingMeasurement]);
 
-    const handleApplyFilmToAll = useCallback((filmName: string) => {
-        setIsApplyFilmToAllModalOpen(false);
-        setFilmToApplyToAll(filmName);
-    }, []);
-
-    const handleConfirmApplyFilmToAll = useCallback(() => {
-        if (!filmToApplyToAll) return;
-
-        const updatedMeasurements = measurements.map(m => ({ ...m, pelicula: filmToApplyToAll }));
-        handleMeasurementsChange(updatedMeasurements);
-        setFilmToApplyToAll(null);
-    }, [filmToApplyToAll, measurements, handleMeasurementsChange]);
+    const handleApplyFilmToAll = useCallback((filmName: string | null) => {
+        if (filmName) {
+            const updatedMeasurements = measurements.map(m => ({ ...m, pelicula: filmName }));
+            handleMeasurementsChange(updatedMeasurements);
+            setFilmToApplyToAll(null);
+            setIsApplyFilmToAllModalOpen(false);
+        }
+    }, [measurements, handleMeasurementsChange]);
 
 
 
@@ -2279,7 +2276,7 @@ Se não conseguir extrair, retorne: []`;
         handleConfirmDeleteFilm,
         filmToApplyToAll,
         setFilmToApplyToAll,
-        handleConfirmApplyFilmToAll,
+
         isDeleteClientModalOpen,
         setIsDeleteClientModalOpen,
         handleConfirmDeleteClient,
@@ -2333,6 +2330,14 @@ Se não conseguir extrair, retorne: []`;
     };
 
 
+
+    if (activeTab === 'sales') {
+        return (
+            <Suspense fallback={<LoadingSpinner />}>
+                <SalesPage />
+            </Suspense>
+        );
+    }
 
     return (
         <div className="h-full font-roboto flex flex-col">

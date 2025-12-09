@@ -167,6 +167,7 @@ interface ModalsContainerProps {
     setIsApplyFilmToAllModalOpen: (value: boolean) => void;
     handleConfirmApplyFilmToAll: () => void;
     filmToApplyToAll: string | null;
+    handleApplyFilmToAll: (filmName: string | null) => void;
 
     // Duplicate All Modal
     isDuplicateAllModalOpen: boolean;
@@ -347,15 +348,17 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
                 />
             )}
 
-            {/* Apply Film to All Modal */}
-            {props.isApplyFilmToAllModalOpen && props.filmToApplyToAll && (
-                <ConfirmationModal
+            {/* Apply Film to All Modal - Selector */}
+            {props.isApplyFilmToAllModalOpen && (
+                <FilmSelectionModal
                     isOpen={props.isApplyFilmToAllModalOpen}
                     onClose={() => props.setIsApplyFilmToAllModalOpen(false)}
-                    onConfirm={props.handleConfirmApplyFilmToAll}
-                    title="Aplicar Película a Todas as Medidas"
-                    message={`Deseja aplicar a película "${props.filmToApplyToAll}" a todas as medidas desta opção de proposta?`}
-                    confirmButtonText="Sim, Aplicar a Todas"
+                    films={props.films}
+                    onSelect={(filmName) => props.handleApplyFilmToAll(filmName)}
+                    onAddNewFilm={props.handleAddNewFilm}
+                    onEditFilm={props.handleEditFilm}
+                    onDeleteFilm={props.handleRequestDeleteFilm}
+                    onTogglePin={props.handleToggleFilmPin}
                 />
             )}
 
