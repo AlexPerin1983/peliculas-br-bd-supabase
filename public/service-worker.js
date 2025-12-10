@@ -1,6 +1,6 @@
 // Simple Service Worker without Workbox CDN
 // PARA FORÇAR UMA NOVA VERSÃO: Altere o número da versão abaixo (ex: v71 -> v72)
-const CACHE_NAME = 'app-cache-v80';
+const CACHE_NAME = 'app-cache-v81';
 const urlsToCache = [
     '/',
     '/offline.html'
@@ -71,23 +71,36 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // Cache First for assets (CSS, JS, images)
+    // Cache First for assets (CSS, JS, images) with better error handling
     event.respondWith(
         caches.match(request).then((response) => {
             if (response) {
                 return response;
             }
-            return fetch(request).then((response) => {
-                // Don't cache if not a success response
-                if (!response || response.status !== 200 || response.type === 'error') {
+            return fetch(request)
+                .then((response) => {
+                    // Don't cache if not a success response
+                    if (!response || response.status !== 200 || response.type === 'error') {
+                        return response;
+                    }
+                    const responseToCache = response.clone();
+                    caches.open(CACHE_NAME).then((cache) => {
+                        cache.put(request, responseToCache);
+                    });
                     return response;
-                }
-                const responseToCache = response.clone();
-                caches.open(CACHE_NAME).then((cache) => {
-                    cache.put(request, responseToCache);
+                })
+                .catch(() => {
+                    // If fetch fails and not in cache, return offline page for HTML requests
+                    // or empty response for other resources to prevent total failure
+                    if (request.destination === 'script' || request.destination === 'style') {
+                        // Return empty response for JS/CSS to prevent total failure
+                        return new Response('', {
+                            status: 200,
+                            headers: { 'Content-Type': request.destination === 'script' ? 'text/javascript' : 'text/css' }
+                        });
+                    }
+                    return caches.match('/offline.html');
                 });
-                return response;
-            });
         })
     );
 });
