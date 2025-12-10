@@ -76,6 +76,7 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
     const listContainerRef = useRef<HTMLDivElement>(null);
     const actionsMenuRef = useRef<HTMLDivElement>(null);
     const firstNewMeasurementRef = useRef<number | null>(null);
+    const optimizationPanelRef = useRef<HTMLDivElement>(null);
 
     // Efeito para focar no primeiro input da nova medida (largura)
     useEffect(() => {
@@ -513,9 +514,17 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
 
             {/* Cutting Optimization Panel - Accordion */}
             {measurements.length > 0 && (
-                <div className="mb-8">
+                <div className="mb-8" ref={optimizationPanelRef}>
                     <button
-                        onClick={() => setIsOptimizationOpen(!isOptimizationOpen)}
+                        onClick={() => {
+                            const newState = !isOptimizationOpen;
+                            setIsOptimizationOpen(newState);
+                            if (newState) {
+                                setTimeout(() => {
+                                    optimizationPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                }, 100);
+                            }
+                        }}
                         className="w-full flex items-center justify-between p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-sm"
                     >
                         <div className="flex items-center gap-3">

@@ -59,7 +59,6 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
         lockedItemsRef.current = lockedItems;
     }, [lockedItems]);
     const [useDeepSearch, setUseDeepSearch] = useState<boolean>(false);
-    const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
     const [history, setHistory] = useState<{
         id: string;
         timestamp: number;
@@ -359,7 +358,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                     )}
                 </div>
 
-                {/* Mobile Header (Merged Tabs + Config Icon) */}
+                {/* Mobile Header - Film Tabs */}
                 <div className="sm:hidden flex items-center justify-between pl-3 pr-2 bg-slate-50 dark:bg-slate-900">
                     {/* Tabs */}
                     <div className="flex overflow-x-auto gap-4 no-scrollbar flex-1 mr-2 mask-linear-fade">
@@ -378,116 +377,132 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                             <span className="py-3 text-sm font-medium text-slate-500">Padrão</span>
                         )}
                     </div>
-
-                    {/* Config Button (Icon Only) */}
-                    <button
-                        onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-                        className={`p-2 rounded-lg transition-colors flex-shrink-0 my-2 ${isSettingsOpen
-                            ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400'
-                            : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-                            }`}
-                        aria-label="Configurar"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-                            <path fillRule="evenodd" d="M3 6a3 3 0 013-3h2.25a3 3 0 013 3v2.25a3 3 0 01-3 3H6a3 3 0 01-3-3V6zm9.75 0a3 3 0 013-3H18a3 3 0 013 3v2.25a3 3 0 01-3 3h-2.25a3 3 0 01-3-3V6zM3 15.75a3 3 0 013-3h2.25a3 3 0 013 3V18a3 3 0 01-3 3H6a3 3 0 01-3-3v-2.25zm9.75 0a3 3 0 013-3H18a3 3 0 013 3V18a3 3 0 01-3 3h-2.25a3 3 0 01-3-3v-2.25z" clipRule="evenodd" />
-                        </svg>
-                    </button>
                 </div>
             </div>
 
             <div className="p-2 sm:p-6">
-                {/* Inputs - Collapsible on mobile */}
-                <div className={`${isSettingsOpen ? 'block' : 'hidden'} sm:block mb-3 sm:mb-6`}>
-                    <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 sm:gap-4 items-end">
-                        <div className="col-span-1">
-                            <label className="block text-[10px] sm:text-xs font-medium text-slate-500 dark:text-slate-400 mb-0.5 sm:mb-1">
-                                <span className="sm:hidden">Bobina (cm)</span>
-                                <span className="hidden sm:inline">Largura Bobina (cm)</span>
-                            </label>
-                            <input
-                                type="number"
-                                inputMode="decimal"
-                                value={currentSettings.rollWidth}
-                                onChange={e => updateCurrentSettings('rollWidth', e.target.value)}
-                                placeholder="152"
-                                className="border border-slate-300 dark:border-slate-600 p-2 sm:p-2 rounded-lg focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 outline-none w-full sm:w-32 text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
-                            />
-                        </div>
-
-                        <div className="col-span-1">
-                            <label className="block text-[10px] sm:text-xs font-medium text-slate-500 dark:text-slate-400 mb-0.5 sm:mb-1">
-                                <span className="sm:hidden">Sangria (mm)</span>
-                                <span className="hidden sm:inline">Espaçamento (Corte)</span>
-                            </label>
-                            <div className="relative">
-                                <input
-                                    type="number"
-                                    inputMode="decimal"
-                                    value={currentSettings.bladeWidth}
-                                    onChange={e => updateCurrentSettings('bladeWidth', e.target.value)}
-                                    placeholder="0"
-                                    className="border border-slate-300 dark:border-slate-600 p-2 sm:p-2 rounded-lg focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 outline-none w-full sm:w-32 pr-8 text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
-                                />
-                                <span className="absolute right-2 top-2 text-[10px] sm:text-xs text-slate-400 dark:text-slate-500">mm</span>
+                {/* Settings - Always visible */}
+                <div className={`block mb-3 sm:mb-6`}>
+                    {/* Mobile: Premium compact layout */}
+                    <div className="sm:hidden bg-slate-800/50 rounded-xl border border-slate-700/50 p-3">
+                        {/* Row 1: Inputs with icons */}
+                        <div className="flex gap-3 mb-3">
+                            {/* Bobina Field */}
+                            <div className="flex-1">
+                                <div className="flex items-center gap-1 mb-1">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3 text-blue-400">
+                                        <path d="M3.75 3a.75.75 0 00-.75.75v.5c0 .414.336.75.75.75H4c6.075 0 11 4.925 11 11v.25c0 .414.336.75.75.75h.5a.75.75 0 00.75-.75V16C17 8.82 11.18 3 4 3h-.25z" />
+                                        <path d="M3.75 9a.75.75 0 00-.75.75v.5c0 .414.336.75.75.75H4a5 5 0 015 5v.25c0 .414.336.75.75.75h.5a.75.75 0 00.75-.75V15c0-3.866-3.134-7-7-7h-.25z" />
+                                        <path d="M7 15a2 2 0 11-4 0 2 2 0 014 0z" />
+                                    </svg>
+                                    <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Bobina</label>
+                                </div>
+                                <div className="relative">
+                                    <input
+                                        type="number"
+                                        inputMode="decimal"
+                                        value={currentSettings.rollWidth}
+                                        onChange={e => updateCurrentSettings('rollWidth', e.target.value)}
+                                        placeholder="152"
+                                        className="border border-slate-600/50 bg-slate-900/80 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none w-full text-sm text-white font-medium pr-9"
+                                    />
+                                    <span className="absolute right-2.5 top-2 text-[10px] text-slate-500 font-medium">cm</span>
+                                </div>
+                            </div>
+                            {/* Sangria Field */}
+                            <div className="flex-1">
+                                <div className="flex items-center gap-1 mb-1">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3 text-amber-400">
+                                        <path fillRule="evenodd" d="M5.5 3A2.5 2.5 0 003 5.5v2.879a2.5 2.5 0 00.732 1.767l6.5 6.5a2.5 2.5 0 003.536 0l2.878-2.878a2.5 2.5 0 000-3.536l-6.5-6.5A2.5 2.5 0 008.38 3H5.5zM6 7a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                                    </svg>
+                                    <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Sangria</label>
+                                </div>
+                                <div className="relative">
+                                    <input
+                                        type="number"
+                                        inputMode="decimal"
+                                        value={currentSettings.bladeWidth}
+                                        onChange={e => updateCurrentSettings('bladeWidth', e.target.value)}
+                                        placeholder="0"
+                                        className="border border-slate-600/50 bg-slate-900/80 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none w-full text-sm text-white font-medium pr-10"
+                                    />
+                                    <span className="absolute right-2.5 top-2 text-[10px] text-slate-500 font-medium">mm</span>
+                                </div>
                             </div>
                         </div>
+                        {/* Divider */}
+                        <div className="h-px bg-gradient-to-r from-transparent via-slate-600/50 to-transparent mb-3"></div>
+                        {/* Row 2: Toggles and Button */}
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                                {/* Toggle Veio */}
+                                <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                                    <div className={`relative w-8 h-[18px] rounded-full transition-all duration-200 ${currentSettings.respectGrain ? 'bg-blue-600 shadow-blue-500/30 shadow-md' : 'bg-slate-600'}`}>
+                                        <div className={`absolute top-0.5 left-0.5 bg-white w-3.5 h-3.5 rounded-full shadow transform transition-transform duration-200 ${currentSettings.respectGrain ? 'translate-x-3.5' : 'translate-x-0'}`} />
+                                    </div>
+                                    <input type="checkbox" checked={currentSettings.respectGrain} onChange={e => updateCurrentSettings('respectGrain', e.target.checked)} className="hidden" />
+                                    <span className={`text-[11px] font-medium transition-colors ${currentSettings.respectGrain ? 'text-blue-400' : 'text-slate-400'}`}>Veio</span>
+                                </label>
+                                {/* Toggle Pro */}
+                                <label className="flex items-center gap-1.5 cursor-pointer select-none" title="Otimização Profunda">
+                                    <div className={`relative w-8 h-[18px] rounded-full transition-all duration-200 ${useDeepSearch ? 'bg-purple-600 shadow-purple-500/30 shadow-md' : 'bg-slate-600'}`}>
+                                        <div className={`absolute top-0.5 left-0.5 bg-white w-3.5 h-3.5 rounded-full shadow transform transition-transform duration-200 ${useDeepSearch ? 'translate-x-3.5' : 'translate-x-0'}`} />
+                                    </div>
+                                    <input type="checkbox" checked={useDeepSearch} onChange={e => setUseDeepSearch(e.target.checked)} className="hidden" />
+                                    <span className={`text-[11px] font-medium flex items-center gap-0.5 transition-colors ${useDeepSearch ? 'text-purple-400' : 'text-slate-400'}`}>
+                                        Pro<span className="text-[8px] bg-purple-500/20 text-purple-400 px-1 rounded font-bold">β</span>
+                                    </span>
+                                </label>
+                            </div>
+                            {/* Button */}
+                            <button
+                                onClick={() => handleOptimize(true)}
+                                disabled={!result || isOptimizing}
+                                className={`bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 active:from-emerald-700 active:to-emerald-600 text-white px-4 py-2 rounded-lg font-semibold transition-all text-xs flex items-center gap-1.5 shadow-lg shadow-emerald-500/20 ${(!result || isOptimizing) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            >
+                                {isOptimizing ? (
+                                    <svg className="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                ) : (
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-11.25a.75.75 0 00-1.5 0v2.5h-2.5a.75.75 0 000 1.5h2.5v2.5a.75.75 0 001.5 0v-2.5h2.5a.75.75 0 000-1.5h-2.5v-2.5z" clipRule="evenodd" /></svg>
+                                )}
+                                {isOptimizing ? 'Salvando' : 'Salvar'}
+                            </button>
+                        </div>
+                    </div>
 
-                        <div className="col-span-1 flex items-center justify-start h-10 sm:h-10">
-                            <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                                <div className={`w-8 h-5 sm:w-10 sm:h-6 rounded-full p-0.5 sm:p-1 transition-colors ${currentSettings.respectGrain ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-600'}`}>
-                                    <div className={`bg-white w-4 h-4 sm:w-4 sm:h-4 rounded-full shadow-sm transform transition-transform ${currentSettings.respectGrain ? 'translate-x-3 sm:translate-x-4' : 'translate-x-0'}`} />
+                    {/* Desktop: Original layout */}
+                    <div className="hidden sm:flex sm:flex-wrap gap-4 items-end">
+                        <div>
+                            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Largura Bobina (cm)</label>
+                            <input type="number" inputMode="decimal" value={currentSettings.rollWidth} onChange={e => updateCurrentSettings('rollWidth', e.target.value)} placeholder="152" className="border border-slate-300 dark:border-slate-600 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 outline-none w-32 text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Espaçamento (Corte)</label>
+                            <div className="relative">
+                                <input type="number" inputMode="decimal" value={currentSettings.bladeWidth} onChange={e => updateCurrentSettings('bladeWidth', e.target.value)} placeholder="0" className="border border-slate-300 dark:border-slate-600 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 outline-none w-32 pr-8 text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100" />
+                                <span className="absolute right-2 top-2 text-xs text-slate-400 dark:text-slate-500">mm</span>
+                            </div>
+                        </div>
+                        <div className="flex items-center h-10">
+                            <label className="flex items-center gap-2 cursor-pointer select-none">
+                                <div className={`w-10 h-6 rounded-full p-1 transition-colors ${currentSettings.respectGrain ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-600'}`}>
+                                    <div className={`bg-white w-4 h-4 rounded-full shadow-sm transform transition-transform ${currentSettings.respectGrain ? 'translate-x-4' : 'translate-x-0'}`} />
                                 </div>
-                                <input
-                                    type="checkbox"
-                                    checked={currentSettings.respectGrain}
-                                    onChange={e => updateCurrentSettings('respectGrain', e.target.checked)}
-                                    className="hidden"
-                                />
-                                <span className="text-[10px] sm:text-sm text-slate-700 dark:text-slate-300 font-medium">Veio</span>
+                                <input type="checkbox" checked={currentSettings.respectGrain} onChange={e => updateCurrentSettings('respectGrain', e.target.checked)} className="hidden" />
+                                <span className="text-sm text-slate-700 dark:text-slate-300 font-medium">Resp. Veio</span>
                             </label>
                         </div>
-
-                        <div className="col-span-1 flex items-center justify-start h-10 sm:h-10">
-                            <label className="flex items-center gap-1.5 cursor-pointer select-none" title="Tenta milhares de combinações para encontrar o melhor encaixe (mais lento)">
-                                <div className={`w-8 h-5 sm:w-10 sm:h-6 rounded-full p-0.5 sm:p-1 transition-colors ${useDeepSearch ? 'bg-purple-600' : 'bg-slate-300 dark:bg-slate-600'}`}>
-                                    <div className={`bg-white w-4 h-4 sm:w-4 sm:h-4 rounded-full shadow-sm transform transition-transform ${useDeepSearch ? 'translate-x-3 sm:translate-x-4' : 'translate-x-0'}`} />
+                        <div className="flex items-center h-10">
+                            <label className="flex items-center gap-2 cursor-pointer select-none" title="Otimização Profunda">
+                                <div className={`w-10 h-6 rounded-full p-1 transition-colors ${useDeepSearch ? 'bg-purple-600' : 'bg-slate-300 dark:bg-slate-600'}`}>
+                                    <div className={`bg-white w-4 h-4 rounded-full shadow-sm transform transition-transform ${useDeepSearch ? 'translate-x-4' : 'translate-x-0'}`} />
                                 </div>
-                                <input
-                                    type="checkbox"
-                                    checked={useDeepSearch}
-                                    onChange={e => setUseDeepSearch(e.target.checked)}
-                                    className="hidden"
-                                />
-                                <span className="text-[10px] sm:text-sm text-slate-700 dark:text-slate-300 font-medium flex items-center gap-1">
-                                    <span className="sm:hidden">Profunda</span>
-                                    <span className="hidden sm:inline">Otimização Profunda</span>
-                                    <span className="text-[8px] sm:text-[10px] text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 px-1 py-0.5 rounded-full border border-purple-100 dark:border-purple-800">β</span>
-                                </span>
+                                <input type="checkbox" checked={useDeepSearch} onChange={e => setUseDeepSearch(e.target.checked)} className="hidden" />
+                                <span className="text-sm text-slate-700 dark:text-slate-300 font-medium flex items-center gap-1">Otimização Profunda<span className="text-[10px] text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 px-1 py-0.5 rounded-full border border-purple-100 dark:border-purple-800">β</span></span>
                             </label>
                         </div>
-
-                        <button
-                            onClick={() => handleOptimize(true)}
-                            disabled={!result || isOptimizing}
-                            className={`col-span-2 sm:col-span-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 sm:py-2 rounded-lg font-medium transition-colors sm:ml-auto text-sm min-h-[40px] sm:min-h-0 flex items-center justify-center gap-2 ${(!result || isOptimizing) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        >
-                            {isOptimizing ? (
-                                <>
-                                    <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                    </svg>
-                                    <span>Otimizando...</span>
-                                </>
-                            ) : (
-                                <>
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-11.25a.75.75 0 00-1.5 0v2.5h-2.5a.75.75 0 000 1.5h2.5v2.5a.75.75 0 001.5 0v-2.5h2.5a.75.75 0 000-1.5h-2.5v-2.5z" clipRule="evenodd" />
-                                    </svg>
-                                    <span className="sm:hidden">Salvar Versão</span>
-                                    <span className="hidden sm:inline">Gerar Plano de Corte</span>
-                                </>
-                            )}
+                        <button onClick={() => handleOptimize(true)} disabled={!result || isOptimizing} className={`bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors ml-auto text-sm flex items-center gap-2 ${(!result || isOptimizing) ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                            {isOptimizing ? (<><svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><span>Otimizando...</span></>) : (<><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-11.25a.75.75 0 00-1.5 0v2.5h-2.5a.75.75 0 000 1.5h2.5v2.5a.75.75 0 001.5 0v-2.5h2.5a.75.75 0 000-1.5h-2.5v-2.5z" clipRule="evenodd" /></svg><span>Gerar Plano de Corte</span></>)}
                         </button>
                     </div>
                 </div>

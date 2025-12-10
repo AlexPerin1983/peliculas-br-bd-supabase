@@ -616,53 +616,103 @@ const renderPdfContent = async (
             return (total * porcentagem) / 100;
         };
 
-        // Se for combinado, usamos o total da primeira opção para calcular as parcelas,
-        // pois o cliente deve escolher apenas uma opção. Se for uma única proposta, usa o total dela.
-        const finalTotalForPayment = isCombined ? optionsData[0].totals.finalTotal : optionsData[0].totals.finalTotal;
+        // Função para gerar linhas de pagamento para um valor
+        const generatePaymentForTotal = (total: number): string[] => {
+            const lines: string[] = [];
+            userInfo.payment_methods?.filter(m => m.ativo).forEach(method => {
+                switch (method.tipo) {
+                    case 'pix':
+                        lines.push(`  • Pix: R$ ${formatNumberBR(total)}`);
+                        break;
+                    case 'boleto':
+                        lines.push(`  • Boleto Bancário: R$ ${formatNumberBR(total)}`);
+                        break;
+                    case 'parcelado_sem_juros':
+                        const vps = calculateParceladoSemJuros(total, method.parcelas_max);
+                        lines.push(`  • Parcelado s/ Juros: ${method.parcelas_max || 0}x de R$ ${formatNumberBR(vps)}`);
+                        break;
+                    case 'parcelado_com_juros':
+                        const vpc = calculateParceladoComJuros(total, method.parcelas_max, method.juros);
+                        lines.push(`  • Parcelado c/ Juros: ${method.parcelas_max || 0}x de R$ ${formatNumberBR(vpc)} (Taxa de ${method.juros || 0}%)`);
+                        break;
+                    case 'adiantamento':
+                        const va = calculateAdiantamento(total, method.porcentagem);
+                        lines.push(`  • Adiantamento (${method.porcentagem}%): R$ ${formatNumberBR(va)}`);
+                        break;
+                }
+            });
+            return lines;
+        };
 
         const paymentLines: string[] = [];
-        userInfo.payment_methods?.filter(m => m.ativo).forEach(method => {
-            switch (method.tipo) {
-                case 'pix':
-                    paymentLines.push(`• Pix: R$ ${formatNumberBR(finalTotalForPayment)}`);
-                    if (method.chave_pix) {
-                        let tipoChaveDisplay = '';
-                        switch (method.tipo_chave_pix) {
-                            case 'cpf': tipoChaveDisplay = 'CPF'; break;
-                            case 'cnpj': tipoChaveDisplay = 'CNPJ'; break;
-                            case 'telefone': tipoChaveDisplay = 'Telefone'; break;
-                            case 'email': tipoChaveDisplay = 'Email'; break;
-                            case 'aleatoria': tipoChaveDisplay = 'Chave Aleatória'; break;
-                            default: break;
-                        }
-                        paymentLines.push(`  Chave: ${method.chave_pix}${tipoChaveDisplay ? ` (${tipoChaveDisplay})` : ''}`);
-                    }
-                    if (method.nome_responsavel_pix) {
-                        paymentLines.push(`  Nome: ${method.nome_responsavel_pix}`);
-                    }
-                    break;
-                case 'boleto':
-                    paymentLines.push(`• Boleto Bancário: R$ ${formatNumberBR(finalTotalForPayment)}`);
-                    break;
-                case 'parcelado_sem_juros':
-                    const valorParcelaSemJuros = calculateParceladoSemJuros(finalTotalForPayment, method.parcelas_max);
-                    paymentLines.push(`• Parcelado s/ Juros: ${method.parcelas_max || 0}x de R$ ${formatNumberBR(valorParcelaSemJuros)}`);
-                    break;
-                case 'parcelado_com_juros':
-                    const valorParcelaComJuros = calculateParceladoComJuros(finalTotalForPayment, method.parcelas_max, method.juros);
-                    paymentLines.push(`• Parcelado c/ Juros: ${method.parcelas_max || 0}x de R$ ${formatNumberBR(valorParcelaComJuros)} (Taxa de ${method.juros || 0}%)`);
-                    break;
-                case 'adiantamento':
-                    const valorAdiantamento = calculateAdiantamento(finalTotalForPayment, method.porcentagem);
-                    paymentLines.push(`• Adiantamento (${method.porcentagem}%): R$ ${formatNumberBR(valorAdiantamento)}`);
-                    break;
-                case 'observacao':
-                    if (method.texto) {
-                        paymentLines.push(`• Observação: ${method.texto}`);
-                    }
-                    break;
+        
+        if (isCombined && optionsData.length > 1) {
+            // PDF Combinado: mostrar formas de pagamento para cada opção
+            optionsData.forEach((opt, idx) => {
+                if (idx > 0) paymentLines.push('');
+                paymentLines.push(`Opção: ${opt.proposalOptionName}`);
+                paymentLines.push(`Valor Total: R$ ${formatNumberBR(opt.totals.finalTotal)}`);
+                paymentLines.push(...generatePaymentForTotal(opt.totals.finalTotal));
+            });
+            // Chave Pix uma vez no final
+            const pix = userInfo.payment_methods?.find(m => m.ativo && m.tipo === 'pix');
+            if (pix) {
+                paymentLines.push('');
+                if (pix.chave_pix) {
+                    let tipo = '';
+                    if (pix.tipo_chave_pix === 'cpf') tipo = 'CPF';
+                    else if (pix.tipo_chave_pix === 'cnpj') tipo = 'CNPJ';
+                    else if (pix.tipo_chave_pix === 'telefone') tipo = 'Telefone';
+                    else if (pix.tipo_chave_pix === 'email') tipo = 'Email';
+                    else if (pix.tipo_chave_pix === 'aleatoria') tipo = 'Chave Aleatória';
+                    paymentLines.push(`Chave Pix: ${pix.chave_pix}${tipo ? ` (${tipo})` : ''}`);
+                }
+                if (pix.nome_responsavel_pix) paymentLines.push(`Nome: ${pix.nome_responsavel_pix}`);
             }
-        });
+            const obs = userInfo.payment_methods?.find(m => m.ativo && m.tipo === 'observacao');
+            if (obs?.texto) paymentLines.push(`• Observação: ${obs.texto}`);
+        } else {
+            // PDF único
+            const finalTotalForPayment = optionsData[0].totals.finalTotal;
+            userInfo.payment_methods?.filter(m => m.ativo).forEach(method => {
+                switch (method.tipo) {
+                    case 'pix':
+                        paymentLines.push(`• Pix: R$ ${formatNumberBR(finalTotalForPayment)}`);
+                        if (method.chave_pix) {
+                            let tipoChaveDisplay = '';
+                            switch (method.tipo_chave_pix) {
+                                case 'cpf': tipoChaveDisplay = 'CPF'; break;
+                                case 'cnpj': tipoChaveDisplay = 'CNPJ'; break;
+                                case 'telefone': tipoChaveDisplay = 'Telefone'; break;
+                                case 'email': tipoChaveDisplay = 'Email'; break;
+                                case 'aleatoria': tipoChaveDisplay = 'Chave Aleatória'; break;
+                                default: break;
+                            }
+                            paymentLines.push(`  Chave: ${method.chave_pix}${tipoChaveDisplay ? ` (${tipoChaveDisplay})` : ''}`);
+                        }
+                        if (method.nome_responsavel_pix) paymentLines.push(`  Nome: ${method.nome_responsavel_pix}`);
+                        break;
+                    case 'boleto':
+                        paymentLines.push(`• Boleto Bancário: R$ ${formatNumberBR(finalTotalForPayment)}`);
+                        break;
+                    case 'parcelado_sem_juros':
+                        const valorParcelaSemJuros = calculateParceladoSemJuros(finalTotalForPayment, method.parcelas_max);
+                        paymentLines.push(`• Parcelado s/ Juros: ${method.parcelas_max || 0}x de R$ ${formatNumberBR(valorParcelaSemJuros)}`);
+                        break;
+                    case 'parcelado_com_juros':
+                        const valorParcelaComJuros = calculateParceladoComJuros(finalTotalForPayment, method.parcelas_max, method.juros);
+                        paymentLines.push(`• Parcelado c/ Juros: ${method.parcelas_max || 0}x de R$ ${formatNumberBR(valorParcelaComJuros)} (Taxa de ${method.juros || 0}%)`);
+                        break;
+                    case 'adiantamento':
+                        const valorAdiantamento = calculateAdiantamento(finalTotalForPayment, method.porcentagem);
+                        paymentLines.push(`• Adiantamento (${method.porcentagem}%): R$ ${formatNumberBR(valorAdiantamento)}`);
+                        break;
+                    case 'observacao':
+                        if (method.texto) paymentLines.push(`• Observação: ${method.texto}`);
+                        break;
+                }
+            });
+        }
 
         const validityDays = userInfo.proposalValidityDays || 60;
         const conditions: string[] = [];
