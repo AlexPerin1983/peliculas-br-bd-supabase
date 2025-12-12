@@ -24,20 +24,28 @@ serve(async (req) => {
         }
 
         const payload = await req.json()
+        console.log("Payload recebido:", JSON.stringify(payload)) // DEBUG
+        console.log("Evento recebido:", payload.event) // DEBUG
 
         if (payload.event && payload.event !== 'billing.paid') {
+            console.log("Evento ignorado (não é billing.paid):", payload.event) // DEBUG
             return new Response(JSON.stringify({ message: `Evento ignorado: ${payload.event}` }), { status: 200, headers })
         }
 
         let email = null;
-        if (payload.data?.billing?.customer?.metadata?.email) {
-            email = payload.data.billing.customer.metadata.email;
+
+        // Estrutura baseada nos logs reais do AbacatePay
+        if (payload.data?.customer?.email) {
+            email = payload.data.customer.email;
         } else if (payload.data?.billing?.customer?.email) {
             email = payload.data.billing.customer.email;
         } else {
+            // Fallback genérico
             const customerData = payload.data?.customer || payload.customer || payload.data || {}
             email = customerData.metadata?.email || customerData.email || payload.email
         }
+
+        console.log("Email extraído:", email) // DEBUG
 
         if (!email) {
             return new Response(JSON.stringify({ error: 'Email NÃO encontrado no JSON recebido.' }), { status: 400, headers })
