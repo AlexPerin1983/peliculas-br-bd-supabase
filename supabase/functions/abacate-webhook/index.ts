@@ -27,30 +27,6 @@ serve(async (req) => {
         console.log("Payload recebido:", JSON.stringify(payload)) // DEBUG
         console.log("Evento recebido:", payload.event) // DEBUG
 
-        if (payload.event && payload.event !== 'billing.paid') {
-            console.log("Evento ignorado (não é billing.paid):", payload.event) // DEBUG
-            return new Response(JSON.stringify({ message: `Evento ignorado: ${payload.event}` }), { status: 200, headers })
-        }
-
-        let email = null;
-
-        // Estrutura baseada nos logs reais do AbacatePay
-        if (payload.data?.customer?.email) {
-            email = payload.data.customer.email;
-        } else if (payload.data?.billing?.customer?.email) {
-            email = payload.data.billing.customer.email;
-        } else {
-            // Fallback genérico
-            const customerData = payload.data?.customer || payload.customer || payload.data || {}
-            email = customerData.metadata?.email || customerData.email || payload.email
-        }
-
-        console.log("Email extraído:", email) // DEBUG
-
-        if (!email) {
-            return new Response(JSON.stringify({ error: 'Email NÃO encontrado no JSON recebido.' }), { status: 400, headers })
-        }
-
         const supabaseAdmin = createClient(
             Deno.env.get('SUPABASE_URL') ?? '',
             Deno.env.get('SERVICE_ROLE_KEY') ?? ''
@@ -60,7 +36,7 @@ serve(async (req) => {
         console.log(`Tentando aprovar via RPC: ${normalizedEmail}`)
 
         // CHAMADA RPC (Função de Banco) - INFALÍVEL
-        const { error: rpcError } = await supabaseAdmin.rpc('approve_user_by_email', {
+        const { data: rpcData, error: rpcError } = await supabaseAdmin.rpc('approve_user_by_email', {
             user_email: normalizedEmail
         })
 
@@ -69,7 +45,14 @@ serve(async (req) => {
             return new Response(JSON.stringify({ error: 'Erro ao executar RPC de aprovação', detalhe: rpcError }), { status: 500, headers })
         }
 
-        return new Response(JSON.stringify({ message: `SUCESSO: RPC executado para ${normalizedEmail}` }), { status: 200, headers })
+        console.log("Resultado do RPC (Usuário Atualizado):", JSON.stringify(rpcData))
+
+        if (!rpcData) {
+            console.error('ALERTA: RPC executou mas NÃO retornou dados. Nenhum usuário encontrado?')
+            return new Response(JSON.stringify({ message: `RPC executado, mas nenhum usuário foi atualizado. Verifique se o email ${normalizedEmail} existe no banco.` }), { status: 200, headers })
+        }
+
+        return new Response(JSON.stringify({ message: `SUCESSO: Usuário ${normalizedEmail} aprovado!`, data: rpcData }), { status: 200, headers })
 
     } catch (error) {
         return new Response(JSON.stringify({ error: error.message }), { status: 400, headers })
