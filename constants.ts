@@ -16,4 +16,4 @@ export const TIPOS_APLICACAO: string[] = [
 ];
 
 // Link de pagamento do AbacatePay (Altere aqui para trocar o produto)
-export const PAYMENT_LINK = "https://abacatepay.com/pay/bill_qfdHPCK3zwNzePaE5bRbPL3Q";
+export const PAYMENT_LINK = "https://www.abacatepay.com/pay/bill_DFCsg0rE3DGytcgKdUwURrEt";
