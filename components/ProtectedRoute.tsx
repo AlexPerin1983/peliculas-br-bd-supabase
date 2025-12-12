@@ -34,15 +34,15 @@ export const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ childr
                         </p>
 
                         <a
-                            href={PAYMENT_LINK}
+                            href="https://www.abacatepay.com/pay/bill_dzGqwnwrBqXbRzWFy2Tuy5aC"
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-block w-full py-3 px-4 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg transition-colors shadow-lg shadow-green-600/20 mb-4"
+                            className="block w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition-colors shadow-lg shadow-green-600/20 mb-4"
                         >
                             Liberar Acesso Agora
                         </a>
 
-                        <p className="text-xs text-slate-500">
+                        <p className="text-xs text-slate-500 mb-6">
                             Após o pagamento, seu acesso será liberado automaticamente em instantes.
                         </p>
                     </div>
