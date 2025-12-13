@@ -21,6 +21,28 @@
   <!-- Description for SEO and PWA -->
   <meta name="description" content="Calculadora profissional de orçamento para instalação de películas de vidro">
 
+  <!-- Meta Pixel Code (filmspro) -->
+  <script>
+    !function (f, b, e, v, n, t, s) {
+      if (f.fbq) return; n = f.fbq = function () {
+        n.callMethod ?
+        n.callMethod.apply(n, arguments) : n.queue.push(arguments)
+      };
+      if (!f._fbq) f._fbq = n; n.push = n; n.loaded = !0; n.version = '2.0';
+      n.queue = []; t = b.createElement(e); t.async = !0;
+      t.src = v; s = b.getElementsByTagName(e)[0];
+      s.parentNode.insertBefore(t, s)
+    }(window, document, 'script',
+      'https://connect.facebook.net/en_US/fbevents.js');
+    fbq('init', '753976757256689');
+    fbq('track', 'PageView');
+  </script>
+  <noscript>
+    <img height="1" width="1" style="display:none"
+      src="https://www.facebook.com/tr?id=753976757256689&ev=PageView&noscript=1" />
+  </noscript>
+  <!-- End Meta Pixel Code -->
+
   <!-- Fonts -->
   <link
     href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Montserrat:wght@700&display=swap"
@@ -47,7 +69,6 @@
       navigator.serviceWorker.addEventListener('controllerchange', () => {
         if (refreshing) return;
         refreshing = true;
-        // console.log('🔄 Controlador do Service Worker mudou, recarregando...');
         window.location.reload();
       });
 
@@ -56,11 +77,8 @@
           scope: '/'
         })
           .then(registration => {
-            // console.log('✅ Service Worker registrado:', registration.scope);
-
             // Check for updates every 60 seconds
             setInterval(() => {
-              // console.log('🔍 Verificando atualizações...');
               registration.update();
             }, 60000);
 
@@ -69,15 +87,11 @@
 
             registration.addEventListener('updatefound', () => {
               const newWorker = registration.installing;
-              // console.log('🔄 Nova versão do Service Worker encontrada!');
 
               if (newWorker) {
                 newWorker.addEventListener('statechange', () => {
-                  // console.log('📊 Estado do novo SW:', newWorker.state);
-
                   // When the new service worker is installed and waiting
                   if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                    // console.log('⏳ Novo Service Worker instalado, enviando SKIP_WAITING...');
                     // Send skip waiting message
                     newWorker.postMessage({ type: 'SKIP_WAITING' });
 
@@ -86,17 +100,12 @@
                       window.showUpdateNotification();
                     }
                   }
-
-                  if (newWorker.state === 'activated') {
-                    // console.log('✅ Novo Service Worker ativado!');
-                  }
                 });
               }
             });
 
             // Check if there's a waiting service worker
             if (registration.waiting) {
-              // console.log('⚠️ Service Worker em espera detectado, forçando ativação...');
               registration.waiting.postMessage({ type: 'SKIP_WAITING' });
             }
           })

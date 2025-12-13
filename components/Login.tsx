@@ -1,7 +1,15 @@
 import React, { useState } from 'react';
 import { supabase } from '../services/supabaseClient';
 
+// Declaração do Meta Pixel para TypeScript
+declare global {
+    interface Window {
+        fbq: (...args: any[]) => void;
+    }
+}
+
 export const Login: React.FC = () => {
+    const [view, setView] = useState<'vsl' | 'auth'>('vsl');
     const [loading, setLoading] = useState(false);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -31,9 +39,15 @@ export const Login: React.FC = () => {
                 });
                 if (error) throw error;
 
-                // Se a confirmação de email estiver desativada, data.session existirá e o login será automático.
                 if (!data.session) {
                     setMessage({ type: 'success', text: 'Cadastro realizado! Verifique seu email para confirmar.' });
+                }
+                // Meta Pixel: Evento de registro completado
+                if (typeof window.fbq === 'function') {
+                    window.fbq('track', 'CompleteRegistration', {
+                        content_name: 'Películas Brasil',
+                        status: 'success'
+                    });
                 }
             } else {
                 const { error } = await supabase.auth.signInWithPassword({
@@ -49,12 +63,81 @@ export const Login: React.FC = () => {
         }
     };
 
+    if (view === 'vsl') {
+        return (
+            <div className="h-[100dvh] bg-slate-900 flex flex-col items-center justify-between py-6 px-4 overflow-hidden">
 
+                {/* 1. Headline (Compact) */}
+                <div className="text-center space-y-2 shrink-0 z-10">
+                    <h1 className="text-2xl md:text-3xl font-extrabold text-white leading-tight">
+                        Pare de Jogar <span className="text-green-500">Dinheiro Fora</span>
+                    </h1>
+                    <p className="text-slate-400 text-sm md:text-base">
+                        Descubra como otimizar seus cortes e lucrar mais.
+                    </p>
+                </div>
+
+                {/* 2. Video (Takes available space, maintains aspect ratio) */}
+                <div className="flex-1 w-full flex items-center justify-center min-h-0 my-4">
+                    <div className="relative h-full max-h-full aspect-[9/16] bg-black rounded-2xl overflow-hidden shadow-2xl border border-slate-700">
+                        <iframe
+                            className="absolute top-0 left-0 w-full h-full"
+                            src="https://www.youtube.com/embed/snuL-vtFJJk?rel=0&modestbranding=1&playsinline=1&controls=1"
+                            title="Vídeo de Vendas"
+                            frameBorder="0"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                        ></iframe>
+                    </div>
+                </div>
+
+                {/* 3. CTA & Footer (Always visible) */}
+                <div className="w-full max-w-md space-y-3 shrink-0 z-10">
+                    <button
+                        onClick={() => {
+                            // Meta Pixel: Evento Lead quando clica no CTA
+                            if (typeof window.fbq === 'function') {
+                                window.fbq('track', 'Lead', {
+                                    content_name: 'CTA - Quero Economizar Agora',
+                                    content_category: 'VSL Page'
+                                });
+                            }
+                            setIsSignUp(true);
+                            setView('auth');
+                        }}
+                        className="w-full py-3.5 px-6 bg-green-600 hover:bg-green-500 text-white text-lg font-bold rounded-xl shadow-lg shadow-green-600/20 transform transition-all hover:scale-105 active:scale-95 animate-pulse"
+                    >
+                        QUERO ECONOMIZAR AGORA
+                    </button>
+
+                    <div className="text-center">
+                        <button
+                            onClick={() => {
+                                setIsSignUp(false);
+                                setView('auth');
+                            }}
+                            className="text-slate-500 hover:text-white text-xs font-medium transition-colors"
+                        >
+                            Já sou aluno? <span className="underline">Fazer Login</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-slate-900 px-4">
-            <div className="max-w-md w-full bg-slate-800 rounded-xl shadow-2xl p-8 border border-slate-700">
-                <div className="text-center mb-8">
+            <div className="max-w-md w-full bg-slate-800 rounded-xl shadow-2xl p-8 border border-slate-700 relative">
+                {/* Back Button */}
+                <button
+                    onClick={() => setView('vsl')}
+                    className="absolute top-4 left-4 text-slate-400 hover:text-white transition-colors"
+                >
+                    <i className="fas fa-arrow-left mr-2"></i> Voltar
+                </button>
+
+                <div className="text-center mb-8 mt-4">
                     <h2 className="text-3xl font-bold text-white mb-2">
                         {showForgotPassword ? 'Redefinir Senha' : (isSignUp ? 'Criar Conta' : 'Bem-vindo')}
                     </h2>
@@ -154,8 +237,6 @@ export const Login: React.FC = () => {
                         )}
                     </button>
                 </form>
-
-
 
                 <div className="mt-6 text-center">
                     <button
