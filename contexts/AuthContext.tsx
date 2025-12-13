@@ -3,6 +3,13 @@ import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../services/supabaseClient';
 import { Profile } from '../types';
 
+// Declaração do Meta Pixel para TypeScript
+declare global {
+    interface Window {
+        fbq: (...args: any[]) => void;
+    }
+}
+
 interface AuthContextType {
     session: Session | null;
     user: User | null;
@@ -20,6 +27,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [user, setUser] = useState<User | null>(null);
     const [profile, setProfile] = useState<Profile | null>(null);
     const [loading, setLoading] = useState(true);
+
+    // Meta Pixel: Dispara evento Purchase quando usuário é aprovado
+    useEffect(() => {
+        const isApproved = profile?.approved ?? false;
+        const alreadyTracked = localStorage.getItem('meta_purchase_tracked');
+
+        if (isApproved && !alreadyTracked) {
+            if (typeof window.fbq === 'function') {
+                window.fbq('track', 'Purchase', {
+                    value: 39.00,
+                    currency: 'BRL',
+                    content_name: 'FilmsPro - Acesso Vitalício'
+                });
+            }
+            localStorage.setItem('meta_purchase_tracked', 'true');
+        }
+    }, [profile?.approved]);
 
     useEffect(() => {
         // Check active sessions and subscribe to auth changes
