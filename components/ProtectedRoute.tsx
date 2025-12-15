@@ -104,7 +104,7 @@ export const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ childr
                             {/* Header com desconto */}
                             <div className="bg-gradient-to-r from-green-600 to-emerald-600 p-3 sm:p-4 text-center">
                                 <p className="text-green-100 text-xs sm:text-sm font-medium">🎉 Você está a 1 passo do acesso!</p>
-                                <p className="text-white text-lg sm:text-xl font-bold">DESCONTO EXCLUSIVO DE 87%</p>
+                                <p className="text-white text-lg sm:text-xl font-bold">Condição de Lançamento por tempo Limitado</p>
                             </div>
 
                             <div className="p-4 sm:p-6 text-center">
