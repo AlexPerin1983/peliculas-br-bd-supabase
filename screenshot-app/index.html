@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Captura de Tela Automática</title>
+    <meta name="description" content="Aplicativo para captura automática de tela a cada 10 segundos">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect width="32" height="32" rx="8" fill="url(#gradient)" />
+                        <path d="M10 12L16 18L22 12" stroke="white" stroke-width="2" stroke-linecap="round" />
+                        <rect x="9" y="19" width="14" height="2" rx="1" fill="white" />
+                        <defs>
+                            <linearGradient id="gradient" x1="0" y1="0" x2="32" y2="32">
+                                <stop offset="0%" stop-color="#6366f1" />
+                                <stop offset="100%" stop-color="#8b5cf6" />
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                    <h1>Screenshot Auto</h1>
+                </div>
+                <div class="status-badge" id="statusBadge">
+                    <span class="status-dot"></span>
+                    <span>Pronto</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Control Panel -->
+            <section class="control-panel">
+                <div class="panel-header">
+                    <h2>Configuração de Captura</h2>
+                    <p>Configure a URL e inicie a captura automática</p>
+                </div>
+
+                <div class="input-group">
+                    <label for="urlInput">URL do Aplicativo</label>
+                    <div class="input-wrapper">
+                        <svg class="input-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
+                            <path
+                                d="M10 18C14.4183 18 18 14.4183 18 10C18 5.58172 14.4183 2 10 2C5.58172 2 2 5.58172 2 10C2 14.4183 5.58172 18 10 18Z"
+                                stroke="currentColor" stroke-width="2" />
+                            <path d="M2 10H18M10 2C12 4 13 7 13 10C13 13 12 16 10 18C8 16 7 13 7 10C7 7 8 4 10 2Z"
+                                stroke="currentColor" stroke-width="2" />
+                        </svg>
+                        <input type="url" id="urlInput" placeholder="https://exemplo.com" value="https://example.com">
+                    </div>
+                </div>
+
+                <div class="settings-row">
+                    <div class="setting-item">
+                        <label for="intervalInput">Intervalo (segundos)</label>
+                        <input type="number" id="intervalInput" value="10" min="1" max="300">
+                    </div>
+                    <div class="setting-item">
+                        <label>Capturas: <span id="captureCount">0</span></label>
+                    </div>
+                </div>
+
+                <div class="button-group">
+                    <button id="startBtn" class="btn btn-primary">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                            <path d="M6 4L15 10L6 16V4Z" fill="currentColor" />
+                        </svg>
+                        Iniciar Captura
+                    </button>
+                    <button id="pauseBtn" class="btn btn-secondary" disabled>
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                            <rect x="6" y="4" width="3" height="12" fill="currentColor" />
+                            <rect x="11" y="4" width="3" height="12" fill="currentColor" />
+                        </svg>
+                        Pausar
+                    </button>
+                    <button id="stopBtn" class="btn btn-danger" disabled>
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                            <rect x="5" y="5" width="10" height="10" fill="currentColor" />
+                        </svg>
+                        Parar
+                    </button>
+                    <button id="clearBtn" class="btn btn-outline">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                            <path
+                                d="M5 7H15M8 10V14M12 10V14M6 7V16C6 16.5523 6.44772 17 7 17H13C13.5523 17 14 16.5523 14 16V7M8 7V4C8 3.44772 8.44772 3 9 3H11C11.5523 3 12 3.44772 12 4V7"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                        </svg>
+                        Limpar Tudo
+                    </button>
+                </div>
+            </section>
+
+            <!-- Screenshots Gallery -->
+            <section class="gallery-section">
+                <div class="gallery-header">
+                    <h2>Capturas de Tela</h2>
+                    <button id="downloadAllBtn" class="btn btn-outline btn-sm" disabled>
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                            <path d="M8 11L4 7H6V3H10V7H12L8 11Z" fill="currentColor" />
+                            <path d="M2 13H14" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                        </svg>
+                        Baixar Todas
+                    </button>
+                </div>
+
+                <div id="gallery" class="gallery">
+                    <div class="empty-state">
+                        <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
+                            <rect x="8" y="12" width="48" height="36" rx="4" stroke="currentColor" stroke-width="2" />
+                            <circle cx="32" cy="30" r="8" stroke="currentColor" stroke-width="2" />
+                            <path d="M8 40L20 28L32 40L44 28L56 40" stroke="currentColor" stroke-width="2"
+                                stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                        <p>Nenhuma captura ainda</p>
+                        <span>As capturas aparecerão aqui automaticamente</span>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Preview Window Indicator -->
+        <div id="previewIndicator" class="preview-indicator hidden">
+            <div class="indicator-content">
+                <div class="pulse-ring"></div>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="10" stroke="white" stroke-width="2" />
+                    <path d="M12 8V12L15 15" stroke="white" stroke-width="2" stroke-linecap="round" />
+                </svg>
+                <span>Capturando...</span>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
