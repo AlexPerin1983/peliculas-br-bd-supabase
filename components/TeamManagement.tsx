@@ -8,30 +8,55 @@ interface TeamManagementProps {
 }
 
 const TeamManagement: React.FC<TeamManagementProps> = ({ onMemberCountChange }) => {
-    const { organizationId, isOwner, user } = useAuth();
+    const { organizationId, isOwner, user, profile } = useAuth();
     const [members, setMembers] = useState<OrganizationMember[]>([]);
     const [loading, setLoading] = useState(true);
     const [inviteEmail, setInviteEmail] = useState('');
     const [inviting, setInviting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
-    const [localIsOwner, setLocalIsOwner] = useState(false);
+    const [canManageTeam, setCanManageTeam] = useState(false);
 
     useEffect(() => {
         if (organizationId) {
             fetchMembers();
+            checkIfOwner();
         }
-    }, [organizationId]);
+    }, [organizationId, user]);
 
-    // Verificar se o usuário atual é owner baseado nos membros carregados
-    useEffect(() => {
-        if (user && members.length > 0) {
-            const currentMember = members.find(m => m.user_id === user.id);
-            setLocalIsOwner(currentMember?.role === 'owner');
+    // Verificar diretamente no banco se o usuário é owner
+    const checkIfOwner = async () => {
+        if (!user || !organizationId) {
+            setCanManageTeam(false);
+            return;
         }
-    }, [members, user]);
 
-    const canManageTeam = isOwner || localIsOwner;
+        try {
+            const { data, error } = await supabase
+                .from('organization_members')
+                .select('role')
+                .eq('organization_id', organizationId)
+                .eq('user_id', user.id)
+                .single();
+
+            if (!error && data?.role === 'owner') {
+                setCanManageTeam(true);
+            } else {
+                // Fallback: verificar se é o owner da organização
+                const { data: orgData } = await supabase
+                    .from('organizations')
+                    .select('owner_id')
+                    .eq('id', organizationId)
+                    .single();
+
+                setCanManageTeam(orgData?.owner_id === user.id);
+            }
+        } catch (err) {
+            console.error('Error checking owner:', err);
+            setCanManageTeam(false);
+        }
+    };
+
 
     const fetchMembers = async () => {
         if (!organizationId) return;
