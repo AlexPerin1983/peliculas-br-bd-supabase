@@ -8,19 +8,30 @@ interface TeamManagementProps {
 }
 
 const TeamManagement: React.FC<TeamManagementProps> = ({ onMemberCountChange }) => {
-    const { organizationId, isOwner } = useAuth();
+    const { organizationId, isOwner, user } = useAuth();
     const [members, setMembers] = useState<OrganizationMember[]>([]);
     const [loading, setLoading] = useState(true);
     const [inviteEmail, setInviteEmail] = useState('');
     const [inviting, setInviting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
+    const [localIsOwner, setLocalIsOwner] = useState(false);
 
     useEffect(() => {
         if (organizationId) {
             fetchMembers();
         }
     }, [organizationId]);
+
+    // Verificar se o usuário atual é owner baseado nos membros carregados
+    useEffect(() => {
+        if (user && members.length > 0) {
+            const currentMember = members.find(m => m.user_id === user.id);
+            setLocalIsOwner(currentMember?.role === 'owner');
+        }
+    }, [members, user]);
+
+    const canManageTeam = isOwner || localIsOwner;
 
     const fetchMembers = async () => {
         if (!organizationId) return;
@@ -41,6 +52,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ onMemberCountChange }) 
             setLoading(false);
         }
     };
+
 
     const handleInvite = async () => {
         if (!inviteEmail.trim() || !organizationId) return;
@@ -213,7 +225,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ onMemberCountChange }) 
                                 </div>
                             </div>
 
-                            {member.role !== 'owner' && (
+                            {member.role !== 'owner' && canManageTeam && (
                                 <div className="flex items-center gap-2 shrink-0">
                                     <button
                                         onClick={() => handleToggleStatus(member)}
@@ -237,38 +249,43 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ onMemberCountChange }) 
                 )}
             </div>
 
-            {/* Formulário de convite */}
-            <div className="flex items-center gap-2 pt-2">
-                <div className="flex-1">
-                    <input
-                        type="email"
-                        value={inviteEmail}
-                        onChange={(e) => setInviteEmail(e.target.value)}
-                        placeholder="Email do colaborador"
-                        className="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:ring-2 focus:ring-slate-500 focus:border-transparent outline-none transition-all"
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                                e.preventDefault();
-                                handleInvite();
-                            }
-                        }}
-                    />
-                </div>
-                <button
-                    type="button"
-                    onClick={handleInvite}
-                    disabled={inviting || !inviteEmail.trim()}
-                    className="px-4 py-2.5 bg-slate-800 dark:bg-slate-700 text-white font-semibold rounded-lg hover:bg-slate-700 dark:hover:bg-slate-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                    {inviting ? 'Enviando...' : 'Convidar'}
-                </button>
-            </div>
+            {/* Formulário de convite - só aparece para o dono */}
+            {canManageTeam && (
+                <>
+                    <div className="flex items-center gap-2 pt-2">
+                        <div className="flex-1">
+                            <input
+                                type="email"
+                                value={inviteEmail}
+                                onChange={(e) => setInviteEmail(e.target.value)}
+                                placeholder="Email do colaborador"
+                                className="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:ring-2 focus:ring-slate-500 focus:border-transparent outline-none transition-all"
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        handleInvite();
+                                    }
+                                }}
+                            />
+                        </div>
+                        <button
+                            type="button"
+                            onClick={handleInvite}
+                            disabled={inviting || !inviteEmail.trim()}
+                            className="px-4 py-2.5 bg-slate-800 dark:bg-slate-700 text-white font-semibold rounded-lg hover:bg-slate-700 dark:hover:bg-slate-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {inviting ? 'Enviando...' : 'Convidar'}
+                        </button>
+                    </div>
 
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-                O colaborador receberá acesso ao fazer cadastro com o email convidado.
-            </p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                        O colaborador receberá acesso ao fazer cadastro com o email convidado.
+                    </p>
+                </>
+            )}
         </div>
     );
 };
 
 export default TeamManagement;
+
