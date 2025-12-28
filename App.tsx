@@ -65,7 +65,7 @@ type NumpadConfig = {
 
 
 const App: React.FC = () => {
-    const { isAdmin } = useAuth();
+    const { isAdmin, user: authUser } = useAuth();
     const { showError } = useError();
     const { deferredPrompt, promptInstall, isInstalled } = usePwaInstallPrompt();
     const { newVersionAvailable, handleUpdate } = usePwaUpdate();
@@ -355,10 +355,21 @@ const App: React.FC = () => {
         setAgendamentos(data);
     }, []);
 
+
     useEffect(() => {
         const init = async () => {
+            // Só carrega dados se houver usuário autenticado
+            if (!authUser) {
+                console.log('[App init] Sem usuário autenticado, pulando carregamento');
+                setIsLoading(false);
+                return;
+            }
+
+            console.log('[App init] Usuário autenticado, carregando dados...', authUser.id);
             setIsLoading(true);
+
             const loadedUserInfo = await db.getUserInfo();
+            console.log('[App init] UserInfo carregado:', loadedUserInfo?.empresa);
             setUserInfo(loadedUserInfo);
 
             await loadClients();
@@ -382,7 +393,7 @@ const App: React.FC = () => {
             setIsLoading(false);
         };
         init();
-    }, []);
+    }, [authUser?.id]); // Recarrega quando o usuário muda
 
     useEffect(() => {
         if (selectedClientId !== null && userInfo && userInfo.lastSelectedClientId !== selectedClientId) {

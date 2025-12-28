@@ -66,12 +66,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
             if (error && error.code === 'PGRST116') {
                 // Profile doesn't exist, create it
-                const newProfile: Profile = {
+                // Note: Não definimos approved ou organization_id aqui
+                // O trigger handle_profile_changes define esses valores
+                // (approved=true e organization_id correto para colaboradores com convite)
+                const newProfile = {
                     id: userId,
                     email: email,
-                    role: 'user',
-                    approved: false,
-                    created_at: new Date().toISOString()
+                    role: 'user'
+                    // approved e organization_id são definidos pelo trigger
                 };
                 const { data: createdProfile, error: createError } = await supabase
                     .from('profiles')
@@ -82,6 +84,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 if (createError) {
                     console.error('Error creating profile:', createError);
                 } else {
+                    // Usar o profile retornado do banco (já processado pelo trigger)
                     setProfile(createdProfile);
                     // Check member status for new profile
                     await fetchMemberStatus(createdProfile);

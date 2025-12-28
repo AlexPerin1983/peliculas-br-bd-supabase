@@ -25,10 +25,10 @@ export const getAllBobinas = async (): Promise<Bobina[]> => {
     const userId = await getCurrentUserId();
     if (!userId) return [];
 
+    // RLS controla acesso por organização
     const { data, error } = await supabase
         .from('bobinas')
         .select('*')
-        .eq('user_id', userId)
         .order('data_cadastro', { ascending: false });
 
     if (error) {
@@ -43,10 +43,10 @@ export const getBobinasByFilm = async (filmId: string): Promise<Bobina[]> => {
     const userId = await getCurrentUserId();
     if (!userId) return [];
 
+    // RLS controla acesso por organização
     const { data, error } = await supabase
         .from('bobinas')
         .select('*')
-        .eq('user_id', userId)
         .eq('film_id', filmId)
         .eq('status', 'ativa')
         .order('data_cadastro', { ascending: false });
@@ -65,10 +65,10 @@ export const getBobinaByQR = async (codigoQr: string): Promise<Bobina | null> =>
     console.log('getBobinaByQR - userId:', userId);
     if (!userId) return null;
 
+    // RLS controla acesso por organização
     const { data, error } = await supabase
         .from('bobinas')
         .select('*')
-        .eq('user_id', userId)
         .eq('codigo_qr', codigoQr)
         .single();
 
@@ -85,10 +85,10 @@ export const getBobinaById = async (id: number): Promise<Bobina | null> => {
     const userId = await getCurrentUserId();
     if (!userId) return null;
 
+    // RLS controla acesso por organização
     const { data, error } = await supabase
         .from('bobinas')
         .select('*')
-        .eq('user_id', userId)
         .eq('id', id)
         .single();
 
@@ -177,10 +177,10 @@ export const getAllRetalhos = async (): Promise<Retalho[]> => {
     const userId = await getCurrentUserId();
     if (!userId) return [];
 
+    // RLS controla acesso por organização
     const { data, error } = await supabase
         .from('retalhos')
         .select('*')
-        .eq('user_id', userId)
         .order('data_cadastro', { ascending: false });
 
     if (error) {
@@ -195,10 +195,10 @@ export const getRetalhosByFilm = async (filmId: string): Promise<Retalho[]> => {
     const userId = await getCurrentUserId();
     if (!userId) return [];
 
+    // RLS controla acesso por organização
     const { data, error } = await supabase
         .from('retalhos')
         .select('*')
-        .eq('user_id', userId)
         .eq('film_id', filmId)
         .eq('status', 'disponivel')
         .order('area_m2', { ascending: false });
@@ -216,10 +216,10 @@ export const getRetalhosByBobina = async (bobinaId: number): Promise<Retalho[]> 
     console.log('getRetalhosByBobina - userId:', userId, 'bobinaId:', bobinaId);
     if (!userId) return [];
 
+    // RLS controla acesso por organização
     const { data, error } = await supabase
         .from('retalhos')
         .select('*')
-        .eq('user_id', userId)
         .eq('bobina_id', bobinaId)
         .order('data_cadastro', { ascending: false });
 
@@ -236,10 +236,10 @@ export const getRetalhoByQR = async (codigoQr: string): Promise<Retalho | null> 
     const userId = await getCurrentUserId();
     if (!userId) return null;
 
+    // RLS controla acesso por organização
     const { data, error } = await supabase
         .from('retalhos')
         .select('*')
-        .eq('user_id', userId)
         .eq('codigo_qr', codigoQr)
         .single();
 
@@ -322,10 +322,10 @@ export const getAllConsumos = async (): Promise<Consumo[]> => {
     const userId = await getCurrentUserId();
     if (!userId) return [];
 
+    // RLS controla acesso por organização
     const { data, error } = await supabase
         .from('consumos')
         .select('*')
-        .eq('user_id', userId)
         .order('data_consumo', { ascending: false });
 
     if (error) {
@@ -341,10 +341,10 @@ export const getConsumosByBobina = async (bobinaId: number): Promise<Consumo[]> 
     console.log('getConsumosByBobina - userId:', userId, 'bobinaId:', bobinaId);
     if (!userId) return [];
 
+    // RLS controla acesso por organização
     const { data, error } = await supabase
         .from('consumos')
         .select('*')
-        .eq('user_id', userId)
         .eq('bobina_id', bobinaId)
         .order('data_consumo', { ascending: false });
 
@@ -440,27 +440,27 @@ export const getEstoqueStats = async (): Promise<EstoqueStats> => {
     }
 
     // Buscar bobinas ativas
+    // RLS controla acesso por organização
     const { data: bobinas } = await supabase
         .from('bobinas')
         .select('comprimento_restante_m')
-        .eq('user_id', userId)
         .eq('status', 'ativa');
 
     // Buscar retalhos disponíveis
+    // RLS controla acesso por organização
     const { data: retalhos } = await supabase
         .from('retalhos')
         .select('area_m2')
-        .eq('user_id', userId)
         .eq('status', 'disponivel');
 
     // Buscar consumos dos últimos 30 dias
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
+    // RLS controla acesso por organização
     const { data: consumos } = await supabase
         .from('consumos')
         .select('metros_consumidos')
-        .eq('user_id', userId)
         .gte('data_consumo', thirtyDaysAgo.toISOString());
 
     const totalMetros = (bobinas || []).reduce((sum, b) => sum + (b.comprimento_restante_m || 0), 0);

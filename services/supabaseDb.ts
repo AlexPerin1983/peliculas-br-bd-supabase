@@ -18,10 +18,10 @@ export const getAllClients = async (): Promise<Client[]> => {
     const userId = await getCurrentUserId();
     if (!userId) return [];
 
+    // RLS controla acesso por organização - não filtrar por user_id
     const { data, error } = await supabase
         .from('clients')
         .select('*')
-        .eq('user_id', userId)
         .order('pinned', { ascending: false, nullsFirst: false })
         .order('nome', { ascending: true });
 
@@ -136,11 +136,11 @@ export const getProposalOptions = async (clientId: number): Promise<ProposalOpti
     const userId = await getCurrentUserId();
     if (!userId) return [];
 
+    // RLS controla acesso por organização
     const { data, error } = await supabase
         .from('proposal_options')
         .select('*')
-        .eq('client_id', clientId)
-        .eq('user_id', userId);
+        .eq('client_id', clientId);
 
     if (error) {
         console.error('Error fetching proposal options:', error);
@@ -159,17 +159,27 @@ export const saveProposalOptions = async (clientId: number, options: ProposalOpt
     const userId = await getCurrentUserId();
     if (!userId) throw new Error('User not authenticated');
 
-    // Delete existing options for this client
+    // Buscar organization_id do usuário para manter consistência
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('organization_id')
+        .eq('id', userId)
+        .single();
+
+    const orgId = profile?.organization_id;
+
+    // Delete existing options for this client (RLS controla acesso por organização)
+    // Não filtramos por user_id para permitir colaboradores editar dados do owner
     await supabase
         .from('proposal_options')
         .delete()
-        .eq('client_id', clientId)
-        .eq('user_id', userId);
+        .eq('client_id', clientId);
 
     // Insert new options
     if (options.length > 0) {
         const optionsData = options.map(opt => ({
-            user_id: userId,
+            user_id: userId,  // Quem está salvando
+            organization_id: orgId,  // Organização para RLS
             client_id: clientId,
             name: opt.name,
             measurements: opt.measurements,
@@ -183,12 +193,11 @@ export const saveProposalOptions = async (clientId: number, options: ProposalOpt
         if (error) throw error;
     }
 
-    // Update client's lastUpdated timestamp
+    // Update client's lastUpdated timestamp (sem filtro de user_id)
     await supabase
         .from('clients')
         .update({ last_updated: new Date().toISOString() })
-        .eq('id', clientId)
-        .eq('user_id', userId);
+        .eq('id', clientId);
 };
 
 export const deleteProposalOptions = async (clientId: number): Promise<void> => {
@@ -212,10 +221,42 @@ export const getUserInfo = async (): Promise<UserInfo> => {
     const userId = await getCurrentUserId();
     if (!userId) return mockUserInfo;
 
+    // Primeiro, buscar o organization_id do usuário atual  
+    const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('organization_id')
+        .eq('id', userId)
+        .single();
+
+    console.log('[getUserInfo] userId:', userId);
+    console.log('[getUserInfo] profile:', profile, 'error:', profileError);
+
+    let targetUserId = userId;
+
+    // Se tem organização, buscar o user_info do owner da organização
+    if (profile?.organization_id) {
+        console.log('[getUserInfo] organization_id encontrado:', profile.organization_id);
+        const { data: org, error: orgError } = await supabase
+            .from('organizations')
+            .select('owner_id')
+            .eq('id', profile.organization_id)
+            .single();
+
+        console.log('[getUserInfo] org:', org, 'error:', orgError);
+
+        if (org?.owner_id) {
+            targetUserId = org.owner_id;
+            console.log('[getUserInfo] Usando owner_id:', targetUserId);
+        }
+    } else {
+        console.log('[getUserInfo] SEM organization_id, usando userId próprio');
+    }
+
+    // Buscar user_info do owner (ou do próprio usuário se for owner)
     const { data, error } = await supabase
         .from('user_info')
         .select('*')
-        .eq('user_id', userId)
+        .eq('user_id', targetUserId)
         .single();
 
     if (error || !data) {
@@ -290,10 +331,10 @@ export const getAllCustomFilms = async (): Promise<Film[]> => {
     const userId = await getCurrentUserId();
     if (!userId) return [];
 
+    // RLS controla acesso por organização
     const { data, error } = await supabase
         .from('films')
         .select('*')
-        .eq('user_id', userId)
         .order('pinned', { ascending: false, nullsFirst: false })
         .order('nome', { ascending: true });
 
@@ -449,10 +490,10 @@ export const getAllPDFs = async (): Promise<SavedPDF[]> => {
     const userId = await getCurrentUserId();
     if (!userId) return [];
 
+    // RLS controla acesso por organização
     const { data, error } = await supabase
         .from('saved_pdfs')
         .select('*')
-        .eq('user_id', userId)
         .order('date', { ascending: false });
 
     if (error) {
@@ -468,10 +509,10 @@ export const getPDFsForClient = async (clientId: number): Promise<SavedPDF[]> =>
     const userId = await getCurrentUserId();
     if (!userId) return [];
 
+    // RLS controla acesso por organização
     const { data, error } = await supabase
         .from('saved_pdfs')
         .select('*')
-        .eq('user_id', userId)
         .eq('client_id', clientId)
         .order('date', { ascending: false });
 
@@ -559,10 +600,10 @@ export const getAllAgendamentos = async (): Promise<Agendamento[]> => {
     const userId = await getCurrentUserId();
     if (!userId) return [];
 
+    // RLS controla acesso por organização
     const { data, error } = await supabase
         .from('agendamentos')
         .select('*')
-        .eq('user_id', userId)
         .order('start_time', { ascending: true });
 
     if (error) {
@@ -635,10 +676,10 @@ export const getAgendamentoByPdfId = async (pdfId: number): Promise<Agendamento 
     const userId = await getCurrentUserId();
     if (!userId) return undefined;
 
+    // RLS controla acesso por organização
     const { data, error } = await supabase
         .from('agendamentos')
         .select('*')
-        .eq('user_id', userId)
         .eq('pdf_id', pdfId)
         .single();
 
