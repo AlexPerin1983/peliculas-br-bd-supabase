@@ -773,51 +773,64 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
                                 </div>
                             ) : (
                                 filteredRetalhos.map(retalho => (
-                                    <div key={retalho.id} className="estoque-card retalho">
-                                        <div className="estoque-card-header">
-                                            <h3>{retalho.filmId}</h3>
-                                            <span
-                                                className="status-badge"
-                                                style={{ backgroundColor: getStatusColor(retalho.status) }}
-                                            >
-                                                {getStatusLabel(retalho.status)}
-                                            </span>
+                                    <div key={retalho.id} className="estoque-card">
+                                        {/* Header: Linha única com nome, status e QR */}
+                                        <div className="card-header-row">
+                                            <h3 className="card-title">{retalho.filmId}</h3>
+                                            <div className="card-header-right">
+                                                <span
+                                                    className="status-pill"
+                                                    style={{ backgroundColor: getStatusColor(retalho.status) }}
+                                                >
+                                                    {getStatusLabel(retalho.status)}
+                                                </span>
+                                                <button
+                                                    className="qr-icon-btn"
+                                                    onClick={() => handleShowQR('retalho', retalho)}
+                                                    title="QR Code"
+                                                >
+                                                    <QrCodeIcon />
+                                                </button>
+                                            </div>
                                         </div>
-                                        <div className="estoque-card-body">
-                                            <div className="info-grid">
-                                                <div className="info-item">
-                                                    <span className="label">Largura:</span>
-                                                    <span className="value">{retalho.larguraCm} cm</span>
+
+                                        {/* Localização como linha separada se existir */}
+                                        {retalho.localizacao && (
+                                            <div className="card-location-row">
+                                                📍 {retalho.localizacao}
+                                            </div>
+                                        )}
+
+                                        {/* Corpo: Métrica principal */}
+                                        <div className="card-body">
+                                            <div className="main-metric">
+                                                <div className="metric-value-group">
+                                                    <span className="metric-value">{retalho.areaM2?.toFixed(2) || ((retalho.larguraCm * retalho.comprimentoCm) / 10000).toFixed(2)}</span>
+                                                    <span className="metric-unit">m²</span>
                                                 </div>
-                                                <div className="info-item">
-                                                    <span className="label">Comprimento:</span>
-                                                    <span className="value">{retalho.comprimentoCm} cm</span>
+                                                <span className="metric-label">área total do retalho</span>
+                                            </div>
+
+                                            {/* Chips de informações secundárias */}
+                                            <div className="info-chips">
+                                                <div className="info-chip">
+                                                    <span className="chip-value">{retalho.larguraCm}</span>
+                                                    <span className="chip-label">cm largura</span>
                                                 </div>
-                                                <div className="info-item highlight">
-                                                    <span className="label">Área:</span>
-                                                    <span className="value">{retalho.areaM2?.toFixed(2) || ((retalho.larguraCm * retalho.comprimentoCm) / 10000).toFixed(2)} m²</span>
+                                                <div className="info-chip">
+                                                    <span className="chip-value">{retalho.comprimentoCm}</span>
+                                                    <span className="chip-label">cm comprimento</span>
                                                 </div>
                                             </div>
-                                            {retalho.localizacao && (
-                                                <div className="info-extra">
-                                                    <span>Local: {retalho.localizacao}</span>
-                                                </div>
-                                            )}
                                         </div>
-                                        <div className="estoque-card-footer">
+
+                                        {/* Footer: Um botão primário */}
+                                        <div className="card-footer">
                                             <button
-                                                className="action-btn qr"
-                                                onClick={() => handleShowQR('retalho', retalho)}
-                                            >
-                                                <QrCodeIcon />
-                                                <span>QR Code</span>
-                                            </button>
-                                            <button
-                                                className="action-btn settings"
+                                                className="primary-action-btn"
                                                 onClick={() => handleChangeStatus('retalho', retalho)}
                                             >
-                                                ⚙️
-                                                <span>Status</span>
+                                                ⚙️ Gerenciar
                                             </button>
                                         </div>
                                     </div>
