@@ -1,4 +1,5 @@
 ﻿import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense, useRef } from 'react';
+import './src/estoque-dark-mode.css';
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 import { Client, Measurement, UserInfo, Film, PaymentMethods, SavedPDF, Agendamento, ProposalOption, SchedulingInfo, ExtractedClientData } from './types';
 import * as db from './services/db';

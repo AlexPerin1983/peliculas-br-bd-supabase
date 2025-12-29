@@ -1,0 +1,117 @@
+/* Dark Mode e Ajustes Mobile para Estoque */
+
+/* Dark Mode para Management Toolbar */
+.dark .management-toolbar {
+    background: #1e293b !important;
+    border-color: #475569 !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Mobile: Remover margens laterais para alinhar com outros componentes */
+@media (max-width: 767px) {
+    .management-toolbar {
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        padding: 0.75rem !important;
+    }
+}
+
+/* Dark Mode para Search Container */
+.dark .search-container svg {
+    color: #64748b !important;
+}
+
+.dark .search-container input {
+    background: #0f172a !important;
+    border-color: #475569 !important;
+    color: #e2e8f0 !important;
+}
+
+.dark .search-container input::placeholder {
+    color: #64748b !important;
+}
+
+.dark .search-container input:focus {
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3) !important;
+}
+
+/* Dark Mode para Status Filter */
+.dark .status-filter {
+    background-color: #0f172a !important;
+    border-color: #475569 !important;
+    color: #e2e8f0 !important;
+}
+
+/* Dark Mode para View Toggle */
+.dark .view-toggle {
+    background: #0f172a !important;
+    border-color: #475569 !important;
+}
+
+.dark .toggle-btn:hover {
+    color: #cbd5e1 !important;
+}
+
+.dark .toggle-btn.active {
+    background: #1e293b !important;
+    color: #60a5fa !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Dark Mode para Table Container */
+.dark .estoque-table-container {
+    background: #1e293b !important;
+    border-color: #475569 !important;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* Dark Mode para Table Headers */
+.dark .estoque-table th {
+    background: #0f172a !important;
+    color: #94a3b8 !important;
+    border-color: #475569 !important;
+}
+
+/* Dark Mode para Table Cells */
+.dark .estoque-table td {
+    border-color: #334155 !important;
+    color: #e2e8f0 !important;
+}
+
+/* Dark Mode para Table Rows Hover */
+.dark .estoque-table tr:hover td {
+    background-color: #334155 !important;
+}
+
+/* Dark Mode para Table Film Info */
+.dark .table-film-info .film-id {
+    color: #e2e8f0 !important;
+}
+
+.dark .table-film-info .film-loc {
+    color: #94a3b8 !important;
+}
+
+/* Dark Mode para Table Progress */
+.dark .table-progress-bar {
+    background: #334155 !important;
+}
+
+.dark .table-progress span {
+    color: #cbd5e1 !important;
+}
+
+/* Dark Mode para Empty State */
+.dark .empty-state {
+    background: #1e293b !important;
+    border-color: #475569 !important;
+    color: #64748b !important;
+}
+
+.dark .empty-state p {
+    color: #94a3b8 !important;
+}
+
+.dark .empty-state .empty-hint {
+    color: #64748b !important;
+}

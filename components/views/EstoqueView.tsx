@@ -12,9 +12,13 @@ import {
     saveConsumo,
     EstoqueStats
 } from '../../services/estoqueDb';
-import { getAllCustomFilms } from '../../services/db';
+import { getAllCustomFilms, saveCustomFilm } from '../../services/db';
 import QRCode from 'qrcode';
 import QRScannerModal from '../modals/QRScannerModal';
+import { StatusDrawer } from '../ui/StatusDrawer';
+import { StatusFilterDropdown } from '../ui/StatusFilterDropdown';
+import FilmSelectionModal from '../modals/FilmSelectionModal';
+import FilmModal from '../modals/FilmModal';
 
 // Ícones
 const PackageIcon = () => (
@@ -86,16 +90,21 @@ interface EstoqueViewProps {
     initialAction?: { action: 'scan', code: string } | null;
 }
 
-const EstoqueView: React.FC<EstoqueViewProps> = ({ films, initialAction }) => {
+const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialAction }) => {
     const [activeTab, setActiveTab] = useState<'bobinas' | 'retalhos'>('bobinas');
     const [bobinas, setBobinas] = useState<Bobina[]>([]);
     const [retalhos, setRetalhos] = useState<Retalho[]>([]);
     const [stats, setStats] = useState<EstoqueStats | null>(null);
     const [loading, setLoading] = useState(true);
+    const [films, setFilms] = useState<Film[]>(initialFilms);
     const [showAddModal, setShowAddModal] = useState(false);
     const [showQRModal, setShowQRModal] = useState<{ type: 'bobina' | 'retalho', item: Bobina | Retalho } | null>(null);
     const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
     const [showScannerModal, setShowScannerModal] = useState(false);
+    const [showFilmSelectionModal, setShowFilmSelectionModal] = useState(false);
+    const [showFilmModal, setShowFilmModal] = useState(false);
+    const [editingFilm, setEditingFilm] = useState<Film | null>(null);
+    const [filmNameToAdd, setFilmNameToAdd] = useState<string>('');
 
     // Form states
     const [formFilmId, setFormFilmId] = useState('');
@@ -144,17 +153,24 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films, initialAction }) => {
         return matchesSearch && matchesStatus;
     });
 
+    // Sincronizar films com props quando mudarem
+    useEffect(() => {
+        setFilms(initialFilms);
+    }, [initialFilms]);
+
     const loadData = useCallback(async () => {
         try {
             setLoading(true);
-            const [bobinasData, retalhosData, statsData] = await Promise.all([
+            const [bobinasData, retalhosData, statsData, filmsData] = await Promise.all([
                 getAllBobinas(),
                 getAllRetalhos(),
-                getEstoqueStats()
+                getEstoqueStats(),
+                getAllCustomFilms()
             ]);
             setBobinas(bobinasData);
             setRetalhos(retalhosData);
             setStats(statsData);
+            setFilms(filmsData);
         } catch (error) {
             console.error('Erro ao carregar dados do estoque:', error);
         } finally {
@@ -519,27 +535,24 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films, initialAction }) => {
                 </div>
 
                 <div className="filters-container">
-                    <select
+                    <StatusFilterDropdown
                         value={statusFilter}
-                        onChange={(e) => setStatusFilter(e.target.value)}
-                        className="status-filter"
-                    >
-                        <option value="todos">Todos os Status</option>
-                        {activeTab === 'bobinas' ? (
-                            <>
-                                <option value="ativa">Ativa</option>
-                                <option value="finalizada">Finalizada</option>
-                                <option value="descartada">Descartada</option>
-                            </>
-                        ) : (
-                            <>
-                                <option value="disponivel">Disponível</option>
-                                <option value="reservado">Reservado</option>
-                                <option value="usado">Usado</option>
-                                <option value="descartado">Descartado</option>
-                            </>
-                        )}
-                    </select>
+                        onChange={setStatusFilter}
+                        options={
+                            activeTab === 'bobinas' ? [
+                                { value: 'todos', label: 'Status', emoji: '📦' },
+                                { value: 'ativa', label: 'Ativa', emoji: '🟢' },
+                                { value: 'finalizada', label: 'Finalizada', emoji: '🔵' },
+                                { value: 'descartada', label: 'Descartada', emoji: '🔴' }
+                            ] : [
+                                { value: 'todos', label: 'Status', emoji: '✂️' },
+                                { value: 'disponivel', label: 'Disponível', emoji: '🟢' },
+                                { value: 'reservado', label: 'Reservado', emoji: '🟡' },
+                                { value: 'usado', label: 'Usado', emoji: '🟠' },
+                                { value: 'descartado', label: 'Descartado', emoji: '🔴' }
+                            ]
+                        }
+                    />
 
                     <div className="view-toggle">
                         <button
@@ -587,90 +600,91 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films, initialAction }) => {
                                     const remaining = bobina.comprimentoRestanteM / bobina.comprimentoTotalM;
                                     return (
                                         <div key={bobina.id} className="estoque-card">
-                                            {/* Header compacto */}
-                                            <div className="estoque-card-header">
-                                                <div className="card-title-section">
-                                                    <h3>{bobina.filmId}</h3>
-                                                    {bobina.localizacao && <span className="card-location">📍 {bobina.localizacao}</span>}
+                                            {/* Header: Linha única com nome, status e QR */}
+                                            <div className="card-header-row">
+                                                <h3 className="card-title">{bobina.filmId}</h3>
+                                                <div className="card-header-right">
+                                                    <span
+                                                        className="status-pill"
+                                                        style={{ backgroundColor: getStatusColor(bobina.status) }}
+                                                    >
+                                                        {getStatusLabel(bobina.status)}
+                                                    </span>
+                                                    <button
+                                                        className="qr-icon-btn"
+                                                        onClick={() => handleShowQR('bobina', bobina)}
+                                                        title="QR Code"
+                                                    >
+                                                        <QrCodeIcon />
+                                                    </button>
                                                 </div>
-                                                <span
-                                                    className="status-badge"
-                                                    style={{ backgroundColor: getStatusColor(bobina.status) }}
-                                                >
-                                                    {getStatusLabel(bobina.status)}
-                                                </span>
                                             </div>
 
-                                            <div className="estoque-card-body">
-                                                {/* Métrica Principal Destacada */}
-                                                <div className="hero-metric">
-                                                    <div className="hero-metric-main">
-                                                        <span className="hero-value">{bobina.comprimentoRestanteM.toFixed(1)}</span>
-                                                        <span className="hero-unit">m</span>
+                                            {/* Localizacao como linha separada se existir */}
+                                            {bobina.localizacao && (
+                                                <div className="card-location-row">
+                                                    📍 {bobina.localizacao}
+                                                </div>
+                                            )}
+
+                                            {/* Corpo: Métrica principal */}
+                                            <div className="card-body">
+                                                <div className="main-metric">
+                                                    <div className="metric-value-group">
+                                                        <span className="metric-value">{bobina.comprimentoRestanteM.toFixed(1)}</span>
+                                                        <span className="metric-unit">m</span>
                                                     </div>
-                                                    <span className="hero-label">restantes de {bobina.comprimentoTotalM}m</span>
+                                                    <span className="metric-label">restantes de {bobina.comprimentoTotalM}m</span>
                                                 </div>
 
-                                                {/* Progress Bar Grande */}
-                                                <div className="progress-container">
-                                                    <div className="progress-bar-large">
+                                                {/* Barra de progresso fina sem texto interno */}
+                                                <div className="progress-section">
+                                                    <div className="progress-bar-thin">
                                                         <div
-                                                            className="progress-fill-large"
+                                                            className="progress-fill"
                                                             style={{
-                                                                width: `${remaining * 100}%`,
-                                                                background: remaining > 0.5
-                                                                    ? 'linear-gradient(90deg, #22c55e, #4ade80)'
-                                                                    : remaining > 0.2
-                                                                        ? 'linear-gradient(90deg, #f59e0b, #fbbf24)'
-                                                                        : 'linear-gradient(90deg, #ef4444, #f87171)'
+                                                                width: `${(bobina.comprimentoRestanteM / bobina.comprimentoTotalM) * 100}%`,
+                                                                background: (bobina.comprimentoRestanteM / bobina.comprimentoTotalM) > 0.5
+                                                                    ? '#22c55e'
+                                                                    : (bobina.comprimentoRestanteM / bobina.comprimentoTotalM) > 0.2
+                                                                        ? '#f59e0b'
+                                                                        : '#ef4444'
                                                             }}
                                                         />
                                                     </div>
-                                                    <span className="progress-percent">{usagePercent.toFixed(0)}% usado</span>
+                                                    <span className="usage-text">
+                                                        {((1 - bobina.comprimentoRestanteM / bobina.comprimentoTotalM) * 100).toFixed(0)}% usado
+                                                    </span>
                                                 </div>
 
-                                                {/* Métricas Secundárias */}
-                                                <div className="secondary-metrics">
-                                                    <div className="metric-chip">
-                                                        <span className="metric-chip-value">{bobina.larguraCm}</span>
-                                                        <span className="metric-chip-label">cm largura</span>
+                                                {/* Chips de informações secundárias */}
+                                                <div className="info-chips">
+                                                    <div className="info-chip">
+                                                        <span className="chip-value">{bobina.larguraCm}</span>
+                                                        <span className="chip-label">cm largura</span>
                                                     </div>
                                                     {bobina.fornecedor && (
-                                                        <div className="metric-chip">
-                                                            <span className="metric-chip-value">{bobina.fornecedor}</span>
-                                                            <span className="metric-chip-label">fornecedor</span>
+                                                        <div className="info-chip">
+                                                            <span className="chip-value">{bobina.fornecedor}</span>
+                                                            <span className="chip-label">fornecedor</span>
                                                         </div>
                                                     )}
                                                     {bobina.lote && (
-                                                        <div className="metric-chip">
-                                                            <span className="metric-chip-value">{bobina.lote}</span>
-                                                            <span className="metric-chip-label">lote</span>
+                                                        <div className="info-chip">
+                                                            <span className="chip-value">{bobina.lote}</span>
+                                                            <span className="chip-label">lote</span>
                                                         </div>
                                                     )}
                                                 </div>
                                             </div>
 
-                                            {/* Footer com Ações */}
-                                            <div className="estoque-card-footer">
+                                            {/* Footer: Um botão primário */}
+                                            <div className="card-footer">
                                                 <button
-                                                    className="action-btn qr"
-                                                    onClick={() => handleShowQR('bobina', bobina)}
-                                                >
-                                                    <QrCodeIcon />
-                                                    <span>QR Code</span>
-                                                </button>
-                                                <button
-                                                    className="action-btn settings"
+                                                    className="primary-action-btn"
                                                     onClick={() => handleChangeStatus('bobina', bobina)}
                                                 >
-                                                    ⚙️
-                                                    <span>Status</span>
-                                                </button>
-                                                <button
-                                                    className="action-btn delete"
-                                                    onClick={() => handleDelete('bobina', bobina.id!)}
-                                                >
-                                                    <TrashIcon />
+                                                    ⚙️ Gerenciar
                                                 </button>
                                             </div>
                                         </div>
@@ -805,12 +819,6 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films, initialAction }) => {
                                                 ⚙️
                                                 <span>Status</span>
                                             </button>
-                                            <button
-                                                className="action-btn delete"
-                                                onClick={() => handleDelete('retalho', retalho.id!)}
-                                            >
-                                                <TrashIcon />
-                                            </button>
                                         </div>
                                     </div>
                                 ))
@@ -871,95 +879,142 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films, initialAction }) => {
                 </>
             )}
 
-            {/* Modal Adicionar */}
+            {/* Modal Adicionar - Padrão Visual Consistente */}
             {showAddModal && (
-                <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
-                    <div className="modal-content" onClick={e => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h2>Adicionar {activeTab === 'bobinas' ? 'Bobina' : 'Retalho'}</h2>
-                            <button className="close-btn" onClick={() => setShowAddModal(false)}>×</button>
-                        </div>
-                        <div className="modal-body">
-                            <div className="form-group">
-                                <label>Película *</label>
-                                <select
-                                    value={formFilmId}
-                                    onChange={e => setFormFilmId(e.target.value)}
-                                    required
+                <div
+                    className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4"
+                    onClick={() => setShowAddModal(false)}
+                >
+                    <div
+                        className="bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        {/* Header Fixo */}
+                        <div className="flex-shrink-0 p-4 border-b border-slate-700">
+                            <div className="flex items-center justify-between">
+                                <h2 className="text-xl font-bold text-slate-100">
+                                    {activeTab === 'bobinas' ? 'Nova Bobina' : 'Novo Retalho'}
+                                </h2>
+                                <button
+                                    onClick={() => setShowAddModal(false)}
+                                    className="text-slate-400 hover:text-slate-200 transition-colors p-2 rounded-lg hover:bg-slate-700"
                                 >
-                                    <option value="">Selecione uma película</option>
-                                    {films.map(film => (
-                                        <option key={film.nome} value={film.nome}>{film.nome}</option>
-                                    ))}
-                                </select>
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <path d="M18 6L6 18M6 6l12 12" />
+                                    </svg>
+                                </button>
                             </div>
-                            <div className="form-row">
-                                <div className="form-group">
-                                    <label>Largura (cm) *</label>
+                        </div>
+
+                        {/* Body Scrollável */}
+                        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                            {/* Película */}
+                            <div>
+                                <label className="block text-sm font-medium text-slate-300 mb-2">
+                                    Película *
+                                </label>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowFilmSelectionModal(true)}
+                                    className="w-full p-3 bg-slate-700 border border-slate-600 rounded-lg text-left hover:bg-slate-600 hover:border-slate-500 transition-all flex items-center justify-between"
+                                >
+                                    <span className={formFilmId ? 'text-slate-100' : 'text-slate-400'}>
+                                        {formFilmId || 'Selecione uma película'}
+                                    </span>
+                                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className="text-slate-400">
+                                        <path d="M5 7.5L10 12.5L15 7.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                    </svg>
+                                </button>
+                            </div>
+
+                            {/* Largura e Comprimento */}
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-300 mb-2">
+                                        Largura (cm) *
+                                    </label>
                                     <input
                                         type="number"
                                         value={formLargura}
                                         onChange={e => setFormLargura(e.target.value)}
                                         placeholder="Ex: 152"
+                                        className="w-full p-3 bg-slate-700 border border-slate-600 rounded-lg text-slate-100 placeholder-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                                         required
                                     />
                                 </div>
-                                <div className="form-group">
-                                    <label>{activeTab === 'bobinas' ? 'Comprimento (m) *' : 'Comprimento (cm) *'}</label>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-300 mb-2">
+                                        {activeTab === 'bobinas' ? 'Comprimento (m) *' : 'Comprimento (cm) *'}
+                                    </label>
                                     <input
                                         type="number"
                                         value={formComprimento}
                                         onChange={e => setFormComprimento(e.target.value)}
                                         placeholder={activeTab === 'bobinas' ? 'Ex: 30' : 'Ex: 150'}
+                                        className="w-full p-3 bg-slate-700 border border-slate-600 rounded-lg text-slate-100 placeholder-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                                         required
                                     />
                                 </div>
                             </div>
 
+                            {/* Campos específicos de Bobina */}
                             {activeTab === 'bobinas' ? (
                                 <>
-                                    <div className="form-row">
-                                        <div className="form-group">
-                                            <label>Fornecedor</label>
+                                    {/* Fornecedor e Lote */}
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-300 mb-2">
+                                                Fornecedor
+                                            </label>
                                             <input
                                                 type="text"
                                                 value={formFornecedor}
                                                 onChange={e => setFormFornecedor(e.target.value)}
                                                 placeholder="Ex: 3M, Solar Gard"
+                                                className="w-full p-3 bg-slate-700 border border-slate-600 rounded-lg text-slate-100 placeholder-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                                             />
                                         </div>
-                                        <div className="form-group">
-                                            <label>Lote</label>
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-300 mb-2">
+                                                Lote
+                                            </label>
                                             <input
                                                 type="text"
                                                 value={formLote}
                                                 onChange={e => setFormLote(e.target.value)}
                                                 placeholder="Ex: ABC123"
+                                                className="w-full p-3 bg-slate-700 border border-slate-600 rounded-lg text-slate-100 placeholder-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                                             />
                                         </div>
                                     </div>
-                                    <div className="form-group">
-                                        <label>Custo Total (R$)</label>
+
+                                    {/* Custo Total */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-300 mb-2">
+                                            Custo Total (R$)
+                                        </label>
                                         <input
                                             type="number"
                                             value={formCusto}
                                             onChange={e => setFormCusto(e.target.value)}
                                             placeholder="Ex: 1500.00"
                                             step="0.01"
+                                            className="w-full p-3 bg-slate-700 border border-slate-600 rounded-lg text-slate-100 placeholder-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                                         />
                                     </div>
                                 </>
                             ) : (
                                 <>
-                                    {/* Associar a uma bobina */}
-                                    <div className="form-group">
-                                        <label>Origem do Retalho</label>
+                                    {/* Origem do Retalho */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-300 mb-2">
+                                            Origem do Retalho
+                                        </label>
                                         <select
                                             value={formBobinaId}
                                             onChange={e => {
                                                 const val = e.target.value ? parseInt(e.target.value) : '';
                                                 setFormBobinaId(val);
-                                                // Auto-preencher película quando seleciona bobina
                                                 if (val) {
                                                     const bobina = bobinas.find(b => b.id === val);
                                                     if (bobina) {
@@ -968,6 +1023,7 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films, initialAction }) => {
                                                     }
                                                 }
                                             }}
+                                            className="w-full p-3 bg-slate-700 border border-slate-600 rounded-lg text-slate-100 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                                         >
                                             <option value="">Retalho avulso (sem bobina)</option>
                                             {bobinas.filter(b => b.status === 'ativa').map(bobina => (
@@ -978,56 +1034,72 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films, initialAction }) => {
                                         </select>
                                     </div>
 
-                                    {/* Checkbox para deduzir da bobina */}
+                                    {/* Checkbox Deduzir da Bobina */}
                                     {formBobinaId && (
-                                        <div className="form-group checkbox-group">
-                                            <label className="checkbox-label">
+                                        <div className="bg-slate-700/50 rounded-lg p-3 border border-slate-600">
+                                            <label className="flex items-start gap-3 cursor-pointer">
                                                 <input
                                                     type="checkbox"
                                                     checked={formDeduzirDaBobina}
                                                     onChange={e => setFormDeduzirDaBobina(e.target.checked)}
+                                                    className="mt-1 w-4 h-4 rounded border-slate-500 text-blue-500 focus:ring-2 focus:ring-blue-500/20"
                                                 />
-                                                <span>Deduzir do estoque da bobina</span>
+                                                <div className="flex-1">
+                                                    <span className="text-slate-200 font-medium">
+                                                        Deduzir do estoque da bobina
+                                                    </span>
+                                                    <p className="text-xs text-slate-400 mt-1">
+                                                        Ao marcar, o comprimento do retalho será descontado da bobina automaticamente
+                                                    </p>
+                                                </div>
                                             </label>
-                                            <span className="checkbox-hint">
-                                                Ao marcar, o comprimento do retalho será descontado da bobina automaticamente
-                                            </span>
                                         </div>
                                     )}
-
-
                                 </>
                             )}
 
-                            <div className="form-group">
-                                <label>Localização</label>
+                            {/* Localização */}
+                            <div>
+                                <label className="block text-sm font-medium text-slate-300 mb-2">
+                                    Localização
+                                </label>
                                 <input
                                     type="text"
                                     value={formLocalizacao}
                                     onChange={e => setFormLocalizacao(e.target.value)}
                                     placeholder="Ex: Prateleira A, Gaveta 3"
+                                    className="w-full p-3 bg-slate-700 border border-slate-600 rounded-lg text-slate-100 placeholder-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                                 />
                             </div>
 
-                            <div className="form-group">
-                                <label>Observação</label>
+                            {/* Observação */}
+                            <div>
+                                <label className="block text-sm font-medium text-slate-300 mb-2">
+                                    Observação
+                                </label>
                                 <textarea
                                     value={formObservacao}
                                     onChange={e => setFormObservacao(e.target.value)}
                                     placeholder="Observações adicionais..."
                                     rows={3}
+                                    className="w-full p-3 bg-slate-700 border border-slate-600 rounded-lg text-slate-100 placeholder-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all resize-none"
                                 />
                             </div>
                         </div>
-                        <div className="modal-footer">
-                            <button className="btn-secondary" onClick={() => setShowAddModal(false)}>
+
+                        {/* Footer Fixo com Botões */}
+                        <div className="flex-shrink-0 p-4 border-t border-slate-700 flex gap-3">
+                            <button
+                                onClick={() => setShowAddModal(false)}
+                                className="flex-1 px-4 py-3 bg-slate-700 text-slate-200 font-semibold rounded-lg hover:bg-slate-600 transition-colors"
+                            >
                                 Cancelar
                             </button>
                             <button
-                                className="btn-primary"
                                 onClick={activeTab === 'bobinas' ? handleAddBobina : handleAddRetalho}
+                                className="flex-1 px-4 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors"
                             >
-                                Salvar {activeTab === 'bobinas' ? 'Bobina' : 'Retalho'}
+                                {activeTab === 'bobinas' ? 'Adicionar Bobina' : 'Adicionar Retalho'}
                             </button>
                         </div>
                     </div>
@@ -1077,68 +1149,86 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films, initialAction }) => {
                 onDataUpdated={loadData}
             />
 
-            {/* Modal Alterar Status - Redesenhado */}
+            {/* Film Selection Modal - Reutilizado do seletor de medidas */}
+            <FilmSelectionModal
+                isOpen={showFilmSelectionModal}
+                onClose={() => setShowFilmSelectionModal(false)}
+                films={films}
+                onSelect={(filmName) => {
+                    setFormFilmId(filmName);
+                    setShowFilmSelectionModal(false);
+                }}
+                onAddNewFilm={(filmName) => {
+                    setFilmNameToAdd(filmName);
+                    setEditingFilm(null);
+                    setShowFilmModal(true);
+                }}
+                onEditFilm={(film) => {
+                    setEditingFilm(film);
+                    setShowFilmModal(true);
+                }}
+                onDeleteFilm={(filmName) => {
+                    // Handler de deletar seria implementado aqui se necessário
+                    console.log('Deletar película:', filmName);
+                }}
+                onTogglePin={(filmName) => {
+                    // Handler de fixar seria implementado aqui se necessário
+                    console.log('Toggle pin:', filmName);
+                }}
+            />
+
+            {/* Film Modal - Para adicionar/editar películas */}
+            {showFilmModal && (
+                <FilmModal
+                    isOpen={showFilmModal}
+                    onClose={() => {
+                        setShowFilmModal(false);
+                        setEditingFilm(null);
+                        setFilmNameToAdd('');
+                    }}
+                    onSave={async (film) => {
+                        try {
+                            // Salvar a película no banco de dados
+                            await saveCustomFilm(film);
+                            // Selecionar automaticamente a película recém-criada no formulário
+                            setFormFilmId(film.nome);
+                            // Recarregar dados para atualizar a lista de films
+                            await loadData();
+                            // Fechar modais
+                            setShowFilmModal(false);
+                            setEditingFilm(null);
+                            setFilmNameToAdd('');
+                        } catch (error) {
+                            console.error('Erro ao salvar película:', error);
+                        }
+                    }}
+                    onDelete={async (filmName) => {
+                        // Handler de deletar se necessário
+                        setShowFilmModal(false);
+                        setEditingFilm(null);
+                        await loadData();
+                    }}
+                    film={editingFilm}
+                    initialName={filmNameToAdd}
+                    films={films}
+                />
+            )}
+
+
+            {/* Status Drawer - Estilo iOS */}
             {showStatusModal && (
-                <div className="modal-overlay" onClick={() => setShowStatusModal(null)}>
-                    <div className="modal-content status-modal-v2" onClick={e => e.stopPropagation()}>
-                        {/* Header com ícone */}
-                        <div className="status-modal-header">
-                            <div className="status-modal-icon">
-                                ⚙️
-                            </div>
-                            <h2>Alterar Status</h2>
-                            <button className="close-btn-v2" onClick={() => setShowStatusModal(null)}>
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                    <line x1="18" y1="6" x2="6" y2="18" />
-                                    <line x1="6" y1="6" x2="18" y2="18" />
-                                </svg>
-                            </button>
-                        </div>
-
-                        {/* Info do item */}
-                        <div className="status-modal-item">
-                            <span className="status-modal-item-name">{showStatusModal.item.filmId}</span>
-                            <span
-                                className="status-modal-current-badge"
-                                style={{ backgroundColor: getStatusColor(showStatusModal.item.status) }}
-                            >
-                                {getStatusLabel(showStatusModal.item.status)}
-                            </span>
-                        </div>
-
-                        {/* Opções de status */}
-                        <div className="status-options-grid">
-                            {getStatusOptions(showStatusModal.type).map(option => {
-                                const isActive = showStatusModal.item.status === option.value;
-                                return (
-                                    <button
-                                        key={option.value}
-                                        className={`status-option-card ${isActive ? 'active' : ''}`}
-                                        onClick={() => handleConfirmStatusChange(option.value)}
-                                        disabled={isActive}
-                                        style={{
-                                            '--status-color': option.color,
-                                            '--status-color-light': `${option.color}20`
-                                        } as React.CSSProperties}
-                                    >
-                                        <div className="status-option-indicator" style={{ background: option.color }} />
-                                        <span className="status-option-label">{option.label}</span>
-                                        {isActive && (
-                                            <span className="status-option-check">✓</span>
-                                        )}
-                                    </button>
-                                );
-                            })}
-                        </div>
-
-                        {/* Footer */}
-                        <div className="status-modal-footer">
-                            <button className="btn-cancel-v2" onClick={() => setShowStatusModal(null)}>
-                                Cancelar
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                <StatusDrawer
+                    isOpen={true}
+                    onClose={() => setShowStatusModal(null)}
+                    type={showStatusModal.type}
+                    item={showStatusModal.item}
+                    currentStatus={showStatusModal.item.status}
+                    statusOptions={getStatusOptions(showStatusModal.type)}
+                    onStatusChange={handleConfirmStatusChange}
+                    onDelete={handleDelete}
+                    getStatusLabel={getStatusLabel}
+                    getStatusColor={getStatusColor}
+                />
             )}
 
             {/* Modal Confirmação de Exclusão */}
@@ -1418,6 +1508,206 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films, initialAction }) => {
                     box-shadow: 0 4px 20px rgba(0,0,0,0.12);
                     border-color: rgba(59, 130, 246, 0.2);
                 }
+
+                /* === Novo Design: Header em Linha Única === */
+                .card-header-row {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    padding: 1rem 1.25rem;
+                    border-bottom: 1px solid var(--border-color);
+                    gap: 0.75rem;
+                }
+
+                .card-title {
+                    margin: 0;
+                    font-size: 1.05rem;
+                    font-weight: 700;
+                    color: var(--text-primary);
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    flex: 1;
+                    min-width: 0;
+                }
+
+                .card-header-right {
+                    display: flex;
+                    align-items: center;
+                    gap: 0.5rem;
+                    flex-shrink: 0;
+                }
+
+                .status-pill {
+                    padding: 0.25rem 0.75rem;
+                    border-radius: 20px;
+                    font-size: 0.7rem;
+                    font-weight: 600;
+                    color: white;
+                    white-space: nowrap;
+                    text-transform: uppercase;
+                    letter-spacing: 0.3px;
+                }
+
+                .qr-icon-btn {
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    width: 32px;
+                    height: 32px;
+                    border-radius: 8px;
+                    border: none;
+                    background: rgba(59, 130, 246, 0.1);
+                    color: #3b82f6;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                }
+
+                .qr-icon-btn:hover {
+                    background: rgba(59, 130, 246, 0.2);
+                    transform: scale(1.05);
+                }
+
+                .qr-icon-btn svg {
+                    width: 16px;
+                    height: 16px;
+                }
+
+                /* Localização como linha separada */
+                .card-location-row {
+                    padding: 0.5rem 1.25rem;
+                    font-size: 0.85rem;
+                    color: var(--text-secondary);
+                    background: rgba(59, 130, 246, 0.03);
+                    border-bottom: 1px solid var(--border-color);
+                }
+
+                /* === Corpo do Card === */
+                .card-body {
+                    padding: 1.25rem;
+                }
+
+                /* Métrica Principal */
+                .main-metric {
+                    text-align: center;
+                    margin-bottom: 1rem;
+                }
+
+                .metric-value-group {
+                    display: flex;
+                    align-items: baseline;
+                    justify-content: center;
+                    gap: 0.25rem;
+                    margin-bottom: 0.25rem;
+                }
+
+                .metric-value {
+                    font-size: 2.25rem;
+                    font-weight: 700;
+                    color: var(--text-primary);
+                    line-height: 1;
+                }
+
+                .metric-unit {
+                    font-size: 1.25rem;
+                    font-weight: 500;
+                    color: var(--text-secondary);
+                }
+
+                .metric-label {
+                    font-size: 0.85rem;
+                    color: var(--text-secondary);
+                    font-weight: 400;
+                }
+
+                /* Barra de Progresso Fina */
+                .progress-section {
+                    margin-bottom: 1rem;
+                }
+
+                .progress-bar-thin {
+                    height: 6px;
+                    background: rgba(148, 163, 184, 0.15);
+                    border-radius: 10px;
+                    overflow: hidden;
+                    margin-bottom: 0.5rem;
+                }
+
+                .progress-fill {
+                    height: 100%;
+                    border-radius: 10px;
+                    transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+                }
+
+                .usage-text {
+                    display: block;
+                    text-align: center;
+                    font-size: 0.75rem;
+                    color: var(--text-secondary);
+                    font-weight: 500;
+                }
+
+                /* Chips de Informações */
+                .info-chips {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 0.5rem;
+                    justify-content: center;
+                }
+
+                .info-chip {
+                    display: flex;
+                    align-items: center;
+                    gap: 0.375rem;
+                    background: rgba(59, 130, 246, 0.08);
+                    padding: 0.375rem 0.75rem;
+                    border-radius: 20px;
+                    border: 1px solid rgba(59, 130, 246, 0.15);
+                }
+
+                .chip-value {
+                    font-size: 0.8rem;
+                    font-weight: 700;
+                    color: var(--text-primary);
+                }
+
+                .chip-label {
+                    font-size: 0.7rem;
+                    color: var(--text-secondary);
+                    font-weight: 400;
+                }
+
+                /* === Footer com Botão Primário === */
+                .card-footer {
+                    padding: 1rem 1.25rem;
+                    border-top: 1px solid var(--border-color);
+                    background: rgba(148, 163, 184, 0.03);
+                }
+
+                .primary-action-btn {
+                    width: 100%;
+                    padding: 0.75rem 1rem;
+                    border-radius: 10px;
+                    font-size: 0.9rem;
+                    font-weight: 600;
+                    border: none;
+                    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+                    color: white;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.25);
+                }
+
+                .primary-action-btn:hover {
+                    transform: translateY(-1px);
+                    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.35);
+                }
+
+                .primary-action-btn:active {
+                    transform: translateY(0);
+                }
+
+                /* === Estilos Antigos Mantidos para Compatibilidade === */
 
                 .estoque-card-header {
                     display: flex;
@@ -2030,150 +2320,6 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films, initialAction }) => {
                     animation: fadeInUp 0.3s ease-out;
                 }
 
-                .status-modal-header {
-                    padding: 1.5rem 1.5rem 0.5rem;
-                    display: flex;
-                    align-items: center;
-                    gap: 1rem;
-                    position: relative;
-                }
-
-                .status-modal-icon {
-                    width: 48px;
-                    height: 48px;
-                    border-radius: 16px;
-                    background: rgba(148, 163, 184, 0.1);
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    font-size: 1.5rem;
-                }
-
-                .status-modal-header h2 {
-                    margin: 0;
-                    font-size: 1.25rem;
-                    font-weight: 700;
-                    color: var(--text-primary);
-                }
-
-                .close-btn-v2 {
-                    position: absolute;
-                    top: 1.5rem;
-                    right: 1.5rem;
-                    background: transparent;
-                    border: none;
-                    color: var(--text-secondary);
-                    cursor: pointer;
-                    padding: 0.5rem;
-                    border-radius: 50%;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    transition: all 0.2s;
-                }
-
-                .close-btn-v2:hover {
-                    background: rgba(148, 163, 184, 0.1);
-                    color: var(--text-primary);
-                }
-
-                .status-modal-item {
-                    padding: 0 1.5rem 1.5rem;
-                    display: flex;
-                    flex-direction: column;
-                    gap: 0.5rem;
-                    border-bottom: 1px solid rgba(148, 163, 184, 0.1);
-                }
-
-                .status-modal-item-name {
-                    font-size: 1.1rem;
-                    font-weight: 600;
-                    color: var(--text-primary);
-                }
-
-                .status-modal-current-badge {
-                    align-self: flex-start;
-                    padding: 0.25rem 0.75rem;
-                    border-radius: 20px;
-                    font-size: 0.75rem;
-                    font-weight: 700;
-                    color: white;
-                    text-transform: uppercase;
-                    letter-spacing: 0.5px;
-                }
-
-                .status-options-grid {
-                    padding: 1.5rem;
-                    display: grid;
-                    gap: 0.75rem;
-                }
-
-                .status-option-card {
-                    display: flex;
-                    align-items: center;
-                    gap: 1rem;
-                    padding: 1rem;
-                    background: var(--bg-secondary);
-                    border: 2px solid transparent;
-                    border-radius: 16px;
-                    cursor: pointer;
-                    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-                    position: relative;
-                    overflow: hidden;
-                }
-
-                .status-option-card:hover:not(:disabled) {
-                    background: rgba(148, 163, 184, 0.1);
-                    transform: translateY(-2px);
-                }
-
-                .status-option-card.active {
-                    background: var(--status-color-light);
-                    border-color: var(--status-color);
-                }
-
-                .status-option-indicator {
-                    width: 12px;
-                    height: 12px;
-                    border-radius: 50%;
-                    box-shadow: 0 0 0 4px rgba(255,255,255,0.1);
-                }
-
-                .status-option-label {
-                    flex: 1;
-                    text-align: left;
-                    font-weight: 600;
-                    color: var(--text-primary);
-                    font-size: 1rem;
-                }
-
-                .status-option-check {
-                    color: var(--status-color);
-                    font-weight: 800;
-                    font-size: 1.25rem;
-                }
-
-                .status-modal-footer {
-                    padding: 0 1.5rem 1.5rem;
-                }
-
-                .btn-cancel-v2 {
-                    width: 100%;
-                    padding: 1rem;
-                    background: transparent;
-                    border: none;
-                    color: var(--text-secondary);
-                    font-weight: 600;
-                    cursor: pointer;
-                    border-radius: 12px;
-                    transition: all 0.2s;
-                }
-
-                .btn-cancel-v2:hover {
-                    background: rgba(148, 163, 184, 0.1);
-                    color: var(--text-primary);
-                }
-
                 @media (max-width: 600px) {
                     .form-row {
                         grid-template-columns: 1fr;
@@ -2314,6 +2460,93 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films, initialAction }) => {
                     
                     .info-item .value {
                         font-size: 1rem;
+                    }
+
+                    /* === AJUSTES MOBILE PARA NOVO CARD === */
+                    
+                    /* Header mais compacto */
+                    .card-header-row {
+                        padding: 0.75rem 1rem;
+                        gap: 0.5rem;
+                    }
+
+                    .card-title {
+                        font-size: 0.95rem;
+                    }
+
+                    .status-pill {
+                        padding: 0.2rem 0.6rem;
+                        font-size: 0.6rem;
+                    }
+
+                    .qr-icon-btn {
+                        width: 28px;
+                        height: 28px;
+                    }
+
+                    .qr-icon-btn svg {
+                        width: 14px;
+                        height: 14px;
+                    }
+
+                    /* Localização mais compacta */
+                    .card-location-row {
+                        padding: 0.4rem 1rem;
+                        font-size: 0.75rem;
+                    }
+
+                    /* Corpo mais compacto */
+                    .card-body {
+                        padding: 1rem;
+                    }
+
+                    /* Métrica principal menor */
+                    .metric-value {
+                        font-size: 1.75rem;
+                    }
+
+                    .metric-unit {
+                        font-size: 1rem;
+                    }
+
+                    .metric-label {
+                        font-size: 0.75rem;
+                    }
+
+                    /* Barra de progresso e texto */
+                    .progress-bar-thin {
+                        height: 5px;
+                    }
+
+                    .usage-text {
+                        font-size: 0.7rem;
+                    }
+
+                    /* Chips menores */
+                    .info-chips {
+                        gap: 0.375rem;
+                    }
+
+                    .info-chip {
+                        padding: 0.3rem 0.6rem;
+                    }
+
+                    .chip-value {
+                        font-size: 0.72rem;
+                    }
+
+                    .chip-label {
+                        font-size: 0.65rem;
+                    }
+
+                    /* Footer e botão primário */
+                    .card-footer {
+                        padding: 0.75rem 1rem;
+                    }
+
+                    .primary-action-btn {
+                        padding: 0.625rem 0.875rem;
+                        font-size: 0.85rem;
                     }
                 }
             `}</style>
