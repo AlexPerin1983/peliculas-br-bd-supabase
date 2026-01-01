@@ -29,6 +29,7 @@ import AIFilmModal from './components/modals/AIFilmModal';
 import ApiKeyModal from './components/modals/ApiKeyModal';
 import ProposalOptionsCarousel from './components/ProposalOptionsCarousel';
 import ImageGalleryModal from './components/modals/ImageGalleryModal';
+import LocationImportModal from './components/modals/LocationImportModal';
 import UpdateNotification from './components/UpdateNotification';
 import { ModalsContainer } from './components/ModalsContainer';
 import { usePwaInstallPrompt } from './src/hooks/usePwaInstallPrompt';
@@ -146,6 +147,7 @@ const App: React.FC = () => {
     const [apiKeyModalProvider, setApiKeyModalProvider] = useState<'gemini' | 'openai'>('gemini');
     const [isGeneralDiscountModalOpen, setIsGeneralDiscountModalOpen] = useState(false);
     const [isDuplicateAllModalOpen, setIsDuplicateAllModalOpen] = useState(false);
+    const [isLocationImportModalOpen, setIsLocationImportModalOpen] = useState(false);
     const [measurementToDeleteId, setMeasurementToDeleteId] = useState<number | null>(null);
     const [isDeleteProposalOptionModalOpen, setIsDeleteProposalOptionModalOpen] = useState(false);
     const [proposalOptionToDeleteId, setProposalOptionToDeleteId] = useState<number | null>(null);
@@ -2392,16 +2394,29 @@ Se não conseguir extrair, retorne: []`;
                         <i className="fas fa-ruler-combined text-4xl text-slate-400 dark:text-slate-500"></i>
                     </div>
                     <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-2">Nenhuma Medida Ainda</h3>
-                    <p className="text-slate-600 dark:text-slate-400 max-w-xs mx-auto leading-relaxed mb-8 text-sm">
-                        Adicione as dimens�es das janelas para come�ar o or�amento.
+                    <p className="text-slate-600 dark:text-slate-400 max-w-xs mx-auto leading-relaxed mb-6 text-sm">
+                        Adicione as dimensões das janelas ou busque medidas de um local conhecido.
                     </p>
-                    <button
-                        onClick={addMeasurement}
-                        className="px-8 py-3.5 bg-slate-800 dark:bg-slate-700 text-white font-semibold rounded-xl hover:bg-slate-700 dark:hover:bg-slate-600 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-[1.02] flex items-center gap-3"
-                    >
-                        <i className="fas fa-plus text-lg"></i>
-                        <span>Adicionar Medida</span>
-                    </button>
+                    <div className="flex flex-col gap-3 w-full max-w-xs">
+                        <button
+                            onClick={addMeasurement}
+                            className="w-full px-6 py-3.5 bg-slate-800 dark:bg-slate-700 text-white font-semibold rounded-xl hover:bg-slate-700 dark:hover:bg-slate-600 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-[1.02] flex items-center justify-center gap-3"
+                        >
+                            <i className="fas fa-plus text-lg"></i>
+                            <span>Adicionar Medida</span>
+                        </button>
+                        <button
+                            onClick={() => setIsLocationImportModalOpen(true)}
+                            className="w-full px-6 py-3.5 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-[1.02] flex items-center justify-center gap-3"
+                        >
+                            <i className="fas fa-building text-lg"></i>
+                            <span>Buscar por Localização</span>
+                        </button>
+                    </div>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-4 max-w-xs">
+                        <i className="fas fa-info-circle mr-1"></i>
+                        Busque por condomínio ou empresa para importar medidas já cadastradas
+                    </p>
                 </div>
             );
         }
@@ -2547,6 +2562,7 @@ Se não conseguir extrair, retorne: []`;
         handleCloseDiscountModal,
         handleSaveDiscount,
         editingMeasurementBasePrice,
+        onOpenLocationImport: () => setIsLocationImportModalOpen(true),
     };
 
 
@@ -2682,6 +2698,16 @@ Se não conseguir extrair, retorne: []`;
                     activeField={numpadConfig.field}
                 />
             </ProtectedRoute>
+
+            <LocationImportModal
+                isOpen={isLocationImportModalOpen}
+                onClose={() => setIsLocationImportModalOpen(false)}
+                onImportMeasurements={(importedMeasurements) => {
+                    handleMeasurementsChange([...measurements, ...importedMeasurements]);
+                    setIsLocationImportModalOpen(false);
+                }}
+                currentFilm={films[0]?.nome}
+            />
 
             {newVersionAvailable && (
                 <UpdateNotification onUpdate={handleUpdate} />

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { Drawer } from 'vaul';
 import { Client } from '../types';
 import Tooltip from './ui/Tooltip';
@@ -15,15 +15,14 @@ interface ClientBarProps {
 
 const formatAddress = (client: Client): string => {
     const parts = [
-        client.logradouro,
+        client.rua,
         client.numero,
         client.bairro,
         client.cidade,
-        client.uf,
-    ];
-    return parts.filter(Boolean).join(', ');
-    return parts.filter(Boolean).join(', ');
-}
+        client.uf
+    ].filter(Boolean);
+    return parts.join(', ');
+};
 
 const getInitials = (name: string) => {
     return name
@@ -44,70 +43,40 @@ const ClientBar: React.FC<ClientBarProps> = ({
     onSwipeRight,
 }) => {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
-    const menuRef = useRef<HTMLDivElement>(null);
-    const touchStartX = useRef(0);
-    const touchStartY = useRef(0);
-    const touchStartTime = useRef(0);
-    const isSwiping = useRef(false);
-    const SWIPE_THRESHOLD = 50;
-    const TIME_THRESHOLD = 500;
+    const touchStartX = useRef<number | null>(null);
+    const touchEndX = useRef<number | null>(null);
 
     const handleTouchStart = (e: React.TouchEvent) => {
-        // Ignora se o menu de opções estiver aberto
-        if (isMenuOpen) return;
-
-        // Ignora se o toque começar em um botão ou link
-        const target = e.target as HTMLElement;
-        if (target.closest('button') || target.closest('a')) return;
-
-        isSwiping.current = true;
-        touchStartX.current = e.touches[0].clientX;
-        touchStartY.current = e.touches[0].clientY; // Inicializado touchStartY
-        touchStartTime.current = Date.now();
+        touchStartX.current = e.targetTouches[0].clientX;
     };
 
     const handleTouchMove = (e: React.TouchEvent) => {
-        if (!isSwiping.current) return;
-        // Não previne o default aqui para permitir o scroll vertical
+        touchEndX.current = e.targetTouches[0].clientX;
     };
 
-    const handleTouchEnd = (e: React.TouchEvent) => {
-        if (!isSwiping.current) return;
-        isSwiping.current = false;
+    const handleTouchEnd = () => {
+        if (!touchStartX.current || !touchEndX.current) return;
+        const distance = touchStartX.current - touchEndX.current;
+        const isLeftSwipe = distance > 50;
+        const isRightSwipe = distance < -50;
 
-        const deltaX = e.changedTouches[0].clientX - touchStartX.current;
-        const deltaY = e.changedTouches[0].clientY - touchStartY.current; // Usando touchStartY
-        const deltaTime = Date.now() - touchStartTime.current;
-
-        // Verifica se o movimento foi predominantemente horizontal (para evitar conflito com scroll vertical)
-        if (Math.abs(deltaY) > Math.abs(deltaX)) return; // Se for mais vertical, ignora
-
-        if (deltaTime < TIME_THRESHOLD && Math.abs(deltaX) > SWIPE_THRESHOLD) {
-            if (deltaX > 0) {
-                // Swipe Right (Cliente Anterior)
-                onSwipeRight();
-            } else {
-                // Swipe Left (Próximo Cliente)
+        if (isLeftSwipe || isRightSwipe) {
+            if (isLeftSwipe) {
                 onSwipeLeft();
+            } else {
+                onSwipeRight();
             }
         }
     };
 
     const handleOpenWhatsApp = () => {
         if (!selectedClient || !selectedClient.telefone) return;
-
-        // Remove todos os caracteres não numéricos, exceto o '+' se for o primeiro caractere
         let phoneNumber = selectedClient.telefone.replace(/\D/g, '');
-
-        // Se o número não começar com 55 (código do Brasil), adicionamos
         if (!phoneNumber.startsWith('55')) {
-            // Assumimos que o número já tem o DDD, então adicionamos '55'
             phoneNumber = '55' + phoneNumber;
         }
-
         const message = `Olá ${selectedClient.nome}, estou entrando em contato sobre o orçamento de películas.`;
         const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
-
         window.open(whatsappUrl, '_blank');
     };
 
@@ -167,7 +136,7 @@ const ClientBar: React.FC<ClientBarProps> = ({
             `}
         >
             <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 
-                ${isDestructive ? 'bg-red-50 dark:bg-red-900/20' : isWhatsApp ? 'bg-green-50 dark:bg-green-900/20' : 'bg-slate-100 dark:bg-slate-700'}
+                ${isDestructive ? 'bg-red-50 dark:bg-red-900/20' : isWhatsApp ? 'bg-green-50 dark:bg-green-900/20' : 'bg-slate-100 dark:bg-slate-100'}
             `}>
                 <i className={`${icon} text-lg`}></i>
             </div>
@@ -191,24 +160,19 @@ const ClientBar: React.FC<ClientBarProps> = ({
             >
                 {selectedClient ? (
                     <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-4 animate-fade-in-scale relative overflow-hidden">
-                        {/* Card Content - Opens Action Menu */}
                         <div
                             onClick={() => setIsMenuOpen(true)}
                             className="flex items-start gap-4 cursor-pointer active:opacity-70 transition-opacity"
                         >
-                            {/* Avatar */}
                             <div className="w-14 h-14 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center flex-shrink-0 border border-slate-200 dark:border-slate-600">
                                 <span className="text-xl font-bold text-slate-600 dark:text-slate-300">
                                     {getInitials(selectedClient.nome)}
                                 </span>
                             </div>
-
-                            {/* Client Info */}
                             <div className="flex-1 min-w-0 pt-0.5 pr-8">
                                 <h2 className="text-lg font-bold text-slate-800 dark:text-white leading-tight truncate mb-1">
                                     {selectedClient.nome}
                                 </h2>
-
                                 <div className="flex flex-col gap-1">
                                     {selectedClient.telefone && (
                                         <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
@@ -225,8 +189,6 @@ const ClientBar: React.FC<ClientBarProps> = ({
                                 </div>
                             </div>
                         </div>
-
-                        {/* Change Client Button - Absolute Positioned */}
                         <div className="absolute top-4 right-4">
                             <button
                                 onClick={(e) => {
@@ -255,6 +217,7 @@ const ClientBar: React.FC<ClientBarProps> = ({
                     </div>
                 )}
             </div>
+
             {/* Desktop Layout */}
             <div className="hidden sm:flex items-center justify-between bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-4">
                 <div
@@ -312,6 +275,13 @@ const ClientBar: React.FC<ClientBarProps> = ({
                         />
                     )}
                     <ActionButton
+                        onClick={handleOpenMaps}
+                        icon="fas fa-map-marker-alt"
+                        tooltip="Ver no Mapa"
+                        className="text-blue-600 hover:bg-blue-100"
+                        disabled={!fullAddress}
+                    />
+                    <ActionButton
                         onClick={onAddClient}
                         icon="fas fa-plus"
                         tooltip="Adicionar Novo Cliente"
@@ -330,24 +300,19 @@ const ClientBar: React.FC<ClientBarProps> = ({
                         disabled={!selectedClient}
                     />
                 </div>
-            </div >
+            </div>
 
-
-            {/* Mobile Bottom Sheet - Using Vaul for smooth native gestures */}
+            {/* Mobile Bottom Sheet */}
             <Drawer.Root open={isMenuOpen} onOpenChange={setIsMenuOpen}>
                 <Drawer.Portal>
                     <Drawer.Overlay className="sm:hidden fixed inset-0 bg-black/40 backdrop-blur-sm z-[9999]" />
                     <Drawer.Content className="sm:hidden fixed bottom-0 left-0 right-0 z-[9999] flex flex-col bg-white dark:bg-slate-800 rounded-t-2xl shadow-2xl max-h-[85vh] outline-none">
-                        {/* Drag Handle */}
                         <div className="flex justify-center pt-3 pb-2 flex-shrink-0">
                             <div className="w-12 h-1.5 bg-slate-300 dark:bg-slate-600 rounded-full"></div>
                         </div>
-
-                        {/* Scrollable Content */}
                         <div className="px-4 pb-4 pt-2 overflow-y-auto overscroll-contain">
                             <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-1 px-2">Ações do Cliente</h3>
                             <p className="text-sm text-slate-500 dark:text-slate-400 px-2 mb-4">O que deseja fazer com {selectedClient?.nome}?</p>
-
                             <div className="space-y-1">
                                 <MenuItem
                                     onClick={handleOpenWhatsApp}
@@ -393,7 +358,6 @@ const ClientBar: React.FC<ClientBarProps> = ({
                                     isDestructive
                                 />
                             </div>
-
                             <button
                                 onClick={() => setIsMenuOpen(false)}
                                 className="w-full mt-6 py-3.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold rounded-xl"
@@ -407,24 +371,11 @@ const ClientBar: React.FC<ClientBarProps> = ({
 
             <style jsx>{`
                 @keyframes fade-in-scale {
-                    from {
-                        opacity: 0;
-                        transform: scale(0.98);
-                    }
-                    to {
-                        opacity: 1;
-                        transform: scale(1);
-                    }
+                    from { opacity: 0; transform: scale(0.98); }
+                    to { opacity: 1; transform: scale(1); }
                 }
                 .animate-fade-in-scale {
                     animation: fade-in-scale 0.3s ease-out forwards;
-                }
-                @keyframes slide-up {
-                    from { transform: translateY(100%); }
-                    to { transform: translateY(0); }
-                }
-                .animate-slide-up {
-                    animation: slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
                 }
                 @keyframes fade-in {
                     from { opacity: 0; }
@@ -434,7 +385,7 @@ const ClientBar: React.FC<ClientBarProps> = ({
                     animation: fade-in 0.2s ease-out forwards;
                 }
             `}</style>
-        </div >
+        </div>
     );
 };
 

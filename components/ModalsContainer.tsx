@@ -113,6 +113,7 @@ interface ModalsContainerProps {
     handleDeleteMeasurementFromEditModal: () => void;
     handleDuplicateMeasurement: () => void;
     handleOpenFilmSelectionModal: (measurementId: number) => void;
+    onOpenLocationImport: () => void;
     numpadConfig: any;
     generalDiscount: { value: number; type: 'percentage' | 'value' };
 
@@ -307,6 +308,8 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
                     onOpenFilmSelectionModal={props.handleOpenFilmSelectionModal}
                     numpadConfig={props.numpadConfig}
                     onOpenNumpad={props.handleOpenNumpad}
+                    userInfo={props.userInfo}
+                    onOpenLocationImport={props.onOpenLocationImport}
                 />
             )}
 

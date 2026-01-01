@@ -32,6 +32,8 @@ export interface Measurement {
     };
     observation?: string;
     locked?: boolean;
+    locationId?: number;
+    locationName?: string;
 }
 
 export interface UIMeasurement extends Measurement {
@@ -255,3 +257,41 @@ export interface Consumo {
 export type BobinaStatus = 'ativa' | 'finalizada' | 'descartada';
 export type RetalhoStatus = 'disponivel' | 'reservado' | 'usado' | 'descartado';
 export type ConsumoTipo = 'corte' | 'perda' | 'amostra' | 'descarte';
+
+// ============================================
+// TIPOS PARA LOCAIS E MEDIDAS PADRÃO
+// ============================================
+
+export interface LocationMeasurement {
+    id?: number;
+    location_id: number;
+    name: string;
+    largura: string;
+    altura: string;
+    quantidade: number;
+    ambiente: string;
+    tipo_aplicacao: string;
+    observacao?: string;
+    created_at?: string;
+    created_by_user_id?: string;
+    created_by_company_name?: string;
+}
+
+export interface Location {
+    id?: number;
+    name: string;
+    cep?: string;
+    logradouro?: string;
+    numero?: string;
+    complemento?: string;
+    bairro?: string;
+    cidade?: string;
+    uf?: string;
+    type: 'condominium' | 'company' | 'other';
+    user_id?: string;
+    created_at?: string;
+    created_by_company_name?: string;
+    observacao?: string; // Observações públicas para outros aplicadores
+    measurements?: LocationMeasurement[];
+}
+
