@@ -1,5 +1,5 @@
 // PARA FORÇAR UMA NOVA VERSÃO: Altere o número da versão abaixo (ex: 71 -> 72)
-// console.log('App Version: 80 - Serviço QR Code');
+// console.log('App Version: 81 - Sistema de Assinaturas');
 
 import React, { lazy, Suspense } from 'react';
 import ReactDOM from 'react-dom/client';
@@ -8,6 +8,7 @@ import App from './App';
 import { ErrorProvider } from './src/contexts/ErrorContext';
 import { ThemeProvider } from './src/contexts/ThemeContext';
 import { AuthProvider } from './contexts/AuthContext';
+import { SubscriptionProvider } from './contexts/SubscriptionContext';
 
 // Lazy load das páginas públicas
 const EstoquePublicoView = lazy(() => import('./components/views/EstoquePublicoView'));
@@ -74,13 +75,15 @@ if (isServicoPublico) {
     </React.StrictMode>
   );
 } else {
-  // Renderizar app normal (com autenticação)
+  // Renderizar app normal (com autenticação e controle de assinatura)
   root.render(
     <React.StrictMode>
       <ErrorProvider>
         <ThemeProvider>
           <AuthProvider>
-            <App />
+            <SubscriptionProvider>
+              <App />
+            </SubscriptionProvider>
           </AuthProvider>
         </ThemeProvider>
       </ErrorProvider>

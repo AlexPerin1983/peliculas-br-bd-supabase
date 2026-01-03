@@ -147,12 +147,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setIsOwner(false);
     };
 
+    // Emails que são sempre admin
+    const ADMIN_EMAILS = ['windowfilm.br@gmail.com', 'windowfilm.app@gmail.com'];
+    const isAdminByEmail = user?.email && ADMIN_EMAILS.includes(user.email.toLowerCase());
+
     const value = {
         session,
         user,
         profile,
         loading,
-        isAdmin: profile?.role === 'admin',
+        isAdmin: isAdminByEmail || profile?.role === 'admin',
         isApproved: profile?.approved ?? false,
         isBlocked: memberStatus === 'blocked',
         isOwner,

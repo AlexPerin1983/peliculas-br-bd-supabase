@@ -43,6 +43,7 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import { AdminUsers } from './components/AdminUsers';
 import { useAuth } from './contexts/AuthContext';
 import { UserAccount } from './components/UserAccount';
+import { FeatureGate } from './components/subscription/SubscriptionComponents';
 
 
 
@@ -2338,9 +2339,11 @@ Se não conseguir extrair, retorne: []`;
 
         if (activeTab === 'estoque') {
             return (
-                <Suspense fallback={<LoadingSpinner />}>
-                    <EstoqueView films={films} initialAction={initialEstoqueAction} />
-                </Suspense>
+                <FeatureGate moduleId="estoque">
+                    <Suspense fallback={<LoadingSpinner />}>
+                        <EstoqueView films={films} initialAction={initialEstoqueAction} />
+                    </Suspense>
+                </FeatureGate>
             );
         }
 
