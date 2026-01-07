@@ -1,9 +1,8 @@
-﻿import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+﻿import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { MobileActionsDrawer } from './MobileActionsDrawer';
 import { Measurement, Film, UIMeasurement } from '../types';
 import MeasurementGroup from './MeasurementGroup';
 import ConfirmationModal from './modals/ConfirmationModal';
-import CuttingOptimizationPanel from './CuttingOptimizationPanel';
 
 type NumpadConfig = {
     isOpen: boolean;
@@ -11,7 +10,6 @@ type NumpadConfig = {
     field: 'largura' | 'altura' | 'quantidade' | null;
     currentValue: string;
 };
-
 
 interface MeasurementListProps {
     measurements: UIMeasurement[];
@@ -26,11 +24,11 @@ interface MeasurementListProps {
     activeMeasurementId: number | null;
     onOpenEditModal: (measurement: UIMeasurement) => void;
     onOpenDiscountModal: (measurement: UIMeasurement) => void;
-    onDeleteMeasurement: (measurementId: number) => void; // Prop que aciona o modal no App.tsx
+    onDeleteMeasurement: (measurementId: number) => void;
     swipeDirection?: 'left' | 'right' | null;
     swipeDistance?: number;
     totalM2: number;
-    totalQuantity: number; // NOVA PROP
+    totalQuantity: number;
     clientId?: number;
     optionId?: number;
     onDeleteMeasurementImmediate: (id: number) => void;
@@ -40,8 +38,6 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
     measurements,
     films,
     onMeasurementsChange,
-    onOpenFilmModal,
-    onOpenFilmSelectionModal,
     onOpenClearAllModal,
     onOpenApplyFilmToAllModal,
     numpadConfig,
@@ -49,18 +45,16 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
     activeMeasurementId,
     onOpenEditModal,
     onOpenDiscountModal,
-    onDeleteMeasurement, // Usando a prop
+    onDeleteMeasurement,
     onDeleteMeasurementImmediate,
     swipeDirection = null,
     swipeDistance = 0,
     totalM2,
-    totalQuantity, // Usando a nova prop
-    clientId,
-    optionId
+    totalQuantity,
+    onOpenFilmSelectionModal
 }) => {
     const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
     const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
-    const [isOptimizationOpen, setIsOptimizationOpen] = useState<boolean>(false);
     const [isSelectionMode, setIsSelectionMode] = useState(false);
     const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
     const [isDeleteSelectedModalOpen, setIsDeleteSelectedModalOpen] = useState(false);
@@ -69,16 +63,12 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
     const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-
-
     const scrollVelocityRef = useRef(0);
     const animationFrameRef = useRef<number | null>(null);
     const listContainerRef = useRef<HTMLDivElement>(null);
     const actionsMenuRef = useRef<HTMLDivElement>(null);
     const firstNewMeasurementRef = useRef<number | null>(null);
-    const optimizationPanelRef = useRef<HTMLDivElement>(null);
 
-    // Efeito para focar no primeiro input da nova medida (largura)
     useEffect(() => {
         if (measurements.length > 0) {
             const firstNew = measurements.find(m => m.isNew);
@@ -92,10 +82,7 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
         if (firstNewMeasurementRef.current !== null) {
             const element = listContainerRef.current?.querySelector(`[data-measurement-id='${firstNewMeasurementRef.current}'][inputmode='decimal']`);
             if (element) {
-                // Abre o numpad diretamente no campo de largura
                 onOpenNumpad(firstNewMeasurementRef.current, 'largura', '');
-
-                // Limpa a flag isNew após focar
                 onMeasurementsChange(measurements.map(m => m.id === firstNewMeasurementRef.current ? { ...m, isNew: false } : m));
                 firstNewMeasurementRef.current = null;
             }
@@ -185,7 +172,6 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
             if (isShiftKey && lastSelectedIndex !== null && lastSelectedIndex !== index) {
                 const start = Math.min(lastSelectedIndex, index);
                 const end = Math.max(lastSelectedIndex, index);
-
                 const shouldSelectRange = !prevSelectedIds.has(id);
 
                 for (let i = start; i <= end; i++) {
@@ -230,7 +216,6 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
 
     const handleDragEnd = () => {
         if (isSelectionMode) return;
-
         scrollVelocityRef.current = 0;
         if (animationFrameRef.current) {
             cancelAnimationFrame(animationFrameRef.current);
@@ -252,11 +237,6 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
         onMeasurementsChange(newMeasurements);
     };
 
-    // Função que o MeasurementGroup chama para iniciar a exclusão
-    const requestDeleteMeasurement = (id: number) => {
-        onDeleteMeasurement(id); // Chama a função do App.tsx que abre o modal
-    };
-
     const duplicateMeasurement = (id: number) => {
         const measurementToDuplicate = measurements.find(m => m.id === id);
         if (measurementToDuplicate) {
@@ -270,9 +250,7 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
             const newMeasurements = [...measurements];
             newMeasurements.splice(index + 1, 0, newMeasurement);
 
-            // Garante que apenas a nova medida seja marcada como nova
             const finalMeasurements = newMeasurements.map(m => m.id === newMeasurement.id ? { ...m, isNew: true } : { ...m, isNew: false });
-
             onMeasurementsChange(finalMeasurements);
         }
     };
@@ -306,17 +284,10 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
         return swipeDirection === 'left' ? 'animate-carousel-left' : 'animate-carousel-right';
     };
 
-
-
     const getAnimationStyle = () => {
         if (!swipeDirection || swipeDistance === 0) return {};
-
-        // Base duration + additional time per step
         const duration = 200 + (swipeDistance * 200);
-
-        return {
-            animationDuration: `${duration}ms`
-        };
+        return { animationDuration: `${duration}ms` };
     };
 
     return (
@@ -361,17 +332,14 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
                             </span>
                         </div>
                         <div className="relative" ref={actionsMenuRef}>
-                            {/* Desktop Button */}
                             <button
                                 onClick={() => setIsActionsMenuOpen(prev => !prev)}
                                 className="hidden sm:flex text-sm font-semibold text-slate-700 dark:text-slate-200 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 rounded-lg px-4 py-2 transition-colors duration-200 items-center gap-2"
-                                aria-expanded={isActionsMenuOpen}
                             >
                                 Ações
                                 <i className={`fas fa-chevron-down text-xs transition-transform duration-200 ${isActionsMenuOpen ? 'rotate-180' : ''}`}></i>
                             </button>
 
-                            {/* Mobile Button */}
                             <button
                                 onClick={() => setIsMobileMenuOpen(true)}
                                 className="flex sm:hidden text-sm font-semibold text-slate-700 dark:text-slate-200 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 rounded-lg px-4 py-2 transition-colors duration-200 items-center gap-2"
@@ -380,7 +348,6 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
                                 <i className="fas fa-chevron-up text-xs"></i>
                             </button>
 
-                            {/* Desktop Dropdown Menu */}
                             {isActionsMenuOpen && (
                                 <div className="hidden sm:block absolute right-0 mt-2 w-56 origin-top-right bg-white dark:bg-slate-800 rounded-md shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-20 p-1">
                                     <ul className="space-y-1">
@@ -405,7 +372,6 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
                                 </div>
                             )}
 
-                            {/* Mobile Drawer */}
                             <MobileActionsDrawer
                                 open={isMobileMenuOpen}
                                 onOpenChange={setIsMobileMenuOpen}
@@ -485,7 +451,7 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
                             measurement={measurement}
                             films={films}
                             onUpdate={(updated) => updateMeasurement(measurement.id, updated)}
-                            onDelete={() => requestDeleteMeasurement(measurement.id)}
+                            onDelete={() => onDeleteMeasurement(measurement.id)}
                             onDeleteImmediate={() => onDeleteMeasurementImmediate(measurement.id)}
                             onDuplicate={() => duplicateMeasurement(measurement.id)}
                             onOpenFilmSelectionModal={onOpenFilmSelectionModal}
@@ -508,63 +474,8 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
                     </React.Fragment>
                 ))}
                 {dragOverIdx === measurements.length && <div className="h-1.5 bg-blue-500 rounded-full my-1 transition-all" />}
-                {/* Empty droppable area at the end of the list */}
                 <div onDragEnter={() => handleDragEnter(measurements.length)} className="h-10" />
             </div>
-
-            {/* Cutting Optimization Panel - Accordion */}
-            {measurements.length > 0 && (
-                <div className="mb-8" ref={optimizationPanelRef}>
-                    <button
-                        onClick={() => {
-                            const newState = !isOptimizationOpen;
-                            setIsOptimizationOpen(newState);
-                            if (newState) {
-                                setTimeout(() => {
-                                    optimizationPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                                }, 100);
-                            }
-                        }}
-                        className="w-full flex items-center justify-between p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-sm"
-                    >
-                        <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 bg-blue-50 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-blue-600 dark:text-blue-400">
-                                    <path d="M21.731 2.269a2.625 2.625 0 00-3.712 0l-1.157 1.157 3.712 3.712 1.157-1.157a2.625 2.625 0 000-3.712zM19.513 8.199l-3.712-3.712-8.4 8.4a5.25 5.25 0 00-1.32 2.214l-.8 2.685a.75.75 0 00.933.933l2.685-.8a5.25 5.25 0 002.214-1.32l8.4-8.4z" />
-                                    <path d="M5.25 5.25a3 3 0 00-3 3v10.5a3 3 0 003 3h10.5a3 3 0 003-3V13.5a.75.75 0 00-1.5 0v5.25a1.5 1.5 0 01-1.5 1.5H5.25a1.5 1.5 0 01-1.5-1.5V8.25a1.5 1.5 0 011.5-1.5h5.25a.75.75 0 000-1.5H5.25z" />
-                                </svg>
-                            </div>
-                            <div className="text-left">
-                                <div className="flex items-center gap-2">
-                                    <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">Otimizador de Corte</h3>
-                                    <span className="px-1.5 py-0.5 text-[9px] font-semibold tracking-wide bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded border border-green-200 dark:border-green-800">BETA v2</span>
-                                </div>
-                                <p className="text-[10px] text-slate-500 dark:text-slate-400">Gere o plano de corte otimizado</p>
-                            </div>
-                        </div>
-                        <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            viewBox="0 0 24 24"
-                            fill="currentColor"
-                            className={`w-4 h-4 text-slate-400 dark:text-slate-500 transition-transform ${isOptimizationOpen ? 'rotate-180' : ''}`}
-                        >
-                            <path fillRule="evenodd" d="M12.53 16.28a.75.75 0 01-1.06 0l-7.5-7.5a.75.75 0 011.06-1.06L12 14.69l6.97-6.97a.75.75 0 111.06 1.06l-7.5 7.5z" clipRule="evenodd" />
-                        </svg>
-                    </button>
-
-                    <div
-                        className={`overflow-hidden transition-all duration-300 ease-in-out ${isOptimizationOpen ? 'max-h-[5000px] opacity-100' : 'max-h-0 opacity-0'
-                            }`}
-                    >
-                        <CuttingOptimizationPanel
-                            measurements={measurements}
-                            clientId={clientId}
-                            optionId={optionId}
-                            films={films}
-                        />
-                    </div>
-                </div>
-            )}
 
             {isDeleteSelectedModalOpen && (
                 <ConfirmationModal
@@ -580,65 +491,23 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
 
             <style jsx>{`
 @keyframes carousel-left {
-    0% {
-        opacity: 1;
-        transform: translateX(0) scale(1);
-    }
-    25% {
-        opacity: 0.5;
-        transform: translateX(-50px) scale(0.95);
-    }
-    50% {
-        opacity: 0;
-        transform: translateX(-100px) scale(0.9);
-    }
-    100% {
-        opacity: 1;
-        transform: translateX(0) scale(1);
-    }
+    0% { opacity: 1; transform: translateX(0) scale(1); }
+    25% { opacity: 0.5; transform: translateX(-50px) scale(0.95); }
+    50% { opacity: 0; transform: translateX(-100px) scale(0.9); }
+    100% { opacity: 1; transform: translateX(0) scale(1); }
 }
-
 @keyframes carousel-right {
-    0% {
-        opacity: 1;
-        transform: translateX(0) scale(1);
-    }
-    25% {
-        opacity: 0.5;
-        transform: translateX(50px) scale(0.95);
-    }
-    50% {
-        opacity: 0;
-        transform: translateX(100px) scale(0.9);
-    }
-    100% {
-        opacity: 1;
-        transform: translateX(0) scale(1);
-    }
+    0% { opacity: 1; transform: translateX(0) scale(1); }
+    25% { opacity: 0.5; transform: translateX(50px) scale(0.95); }
+    50% { opacity: 0; transform: translateX(100px) scale(0.9); }
+    100% { opacity: 1; transform: translateX(0) scale(1); }
 }
-                
-.animate-carousel-left {
-    animation: carousel-left 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-}
-                
-.animate-carousel-right {
-    animation: carousel-right 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-@keyframes slide-up {
-    from { transform: translateY(100%); }
-    to { transform: translateY(0); }
-}
-.animate-slide-up {
-    animation: slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-@keyframes fade-in {
-    from { opacity: 0; }
-    to { opacity: 1; }
-}
-.animate-fade-in {
-    animation: fade-in 0.2s ease-out forwards;
-}
+.animate-carousel-left { animation: carousel-left 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
+.animate-carousel-right { animation: carousel-right 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
+@keyframes slide-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.animate-slide-up { animation: slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+.animate-fade-in { animation: fade-in 0.2s ease-out forwards; }
 `}</style>
         </>
     );
