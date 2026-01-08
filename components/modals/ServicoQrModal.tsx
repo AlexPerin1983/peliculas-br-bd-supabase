@@ -527,20 +527,19 @@ const ServicoQrModal: React.FC<ServicoQrModalProps> = ({
                                     if (!element) return;
 
                                     try {
-                                        // Dinamicamente importar html2canvas
-                                        const html2canvas = (await import('html2canvas')).default;
+                                        // Dinamicamente importar html-to-image
+                                        const { toPng } = await import('html-to-image');
 
-                                        const canvas = await html2canvas(element, {
+                                        const dataUrl = await toPng(element, {
                                             backgroundColor: '#ffffff',
-                                            scale: 2,
-                                            useCORS: true,
-                                            logging: false
+                                            pixelRatio: 2,
+                                            cacheBust: true,
                                         });
 
                                         // Criar link de download
                                         const link = document.createElement('a');
                                         link.download = `etiqueta-${savedServico?.cliente_nome?.replace(/\s+/g, '-') || 'servico'}.png`;
-                                        link.href = canvas.toDataURL('image/png');
+                                        link.href = dataUrl;
                                         link.click();
                                     } catch (err) {
                                         console.error('Erro ao gerar imagem:', err);
