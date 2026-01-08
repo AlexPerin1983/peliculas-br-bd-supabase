@@ -523,27 +523,126 @@ const ServicoQrModal: React.FC<ServicoQrModalProps> = ({
                             <button
                                 type="button"
                                 onClick={async () => {
-                                    const element = printRef.current;
-                                    if (!element) return;
-
                                     try {
-                                        // Dinamicamente importar html-to-image
+                                        setIsLoading(true);
                                         const { toPng } = await import('html-to-image');
 
-                                        const dataUrl = await toPng(element, {
+                                        // 1. Criar container invisível
+                                        const container = document.createElement('div');
+                                        container.style.position = 'fixed';
+                                        container.style.top = '-10000px';
+                                        container.style.left = '-10000px';
+                                        document.body.appendChild(container);
+
+                                        // 2. Construir a etiqueta "na mão" com estilos inline para garantir que saia perfeita
+                                        // Isso evita problemas com Tailwind, Dark Mode e CORS de fontes
+                                        const card = document.createElement('div');
+                                        card.style.width = '320px';
+                                        card.style.padding = '30px 20px';
+                                        card.style.backgroundColor = '#ffffff';
+                                        card.style.color = '#000000';
+                                        card.style.fontFamily = 'sans-serif';
+                                        card.style.textAlign = 'center';
+                                        card.style.display = 'flex';
+                                        card.style.flexDirection = 'column';
+                                        card.style.alignItems = 'center';
+                                        card.style.border = '1px solid #e2e8f0';
+                                        card.style.borderRadius = '12px';
+
+                                        // Título da Empresa
+                                        const empresa = document.createElement('h2');
+                                        empresa.textContent = savedServico?.empresa_nome || 'Empresa';
+                                        empresa.style.fontSize = '18px';
+                                        empresa.style.fontWeight = 'bold';
+                                        empresa.style.margin = '0 0 5px 0';
+                                        empresa.style.color = '#1e293b';
+                                        card.appendChild(empresa);
+
+                                        // Subtítulo
+                                        const sub = document.createElement('p');
+                                        sub.textContent = 'Aplicação de Película';
+                                        sub.style.fontSize = '12px';
+                                        sub.style.color = '#64748b';
+                                        sub.style.margin = '0 0 20px 0';
+                                        card.appendChild(sub);
+
+                                        // QR Code (Clonar o SVG gerado na tela para não precisar gerar de novo)
+                                        const qrOriginal = printRef.current?.querySelector('svg');
+                                        if (qrOriginal) {
+                                            const qrClone = qrOriginal.cloneNode(true) as SVGElement;
+                                            qrClone.style.width = '160px';
+                                            qrClone.style.height = '160px';
+                                            qrClone.style.margin = '0 auto 20px auto';
+                                            qrClone.style.display = 'block';
+                                            card.appendChild(qrClone);
+                                        }
+
+                                        // Nome do Cliente
+                                        const cliente = document.createElement('h3');
+                                        cliente.textContent = savedServico?.cliente_nome || 'Cliente';
+                                        cliente.style.fontSize = '16px';
+                                        cliente.style.fontWeight = '600';
+                                        cliente.style.margin = '0 0 5px 0';
+                                        cliente.style.color = '#334155';
+                                        card.appendChild(cliente);
+
+                                        // Filme
+                                        const filme = document.createElement('p');
+                                        filme.textContent = `Película: ${savedServico?.filme_aplicado || '-'}`;
+                                        filme.style.fontSize = '13px';
+                                        filme.style.color = '#64748b';
+                                        filme.style.margin = '0 0 15px 0';
+                                        card.appendChild(filme);
+
+                                        // Telefone (se houver)
+                                        if (savedServico?.empresa_telefone) {
+                                            const tel = document.createElement('p');
+                                            tel.textContent = `📞 ${savedServico.empresa_telefone}`;
+                                            tel.style.fontSize = '11px';
+                                            tel.style.color = '#64748b';
+                                            tel.style.borderTop = '1px solid #e2e8f0';
+                                            tel.style.paddingTop = '10px';
+                                            tel.style.marginTop = '10px';
+                                            tel.style.width = '100%';
+                                            card.appendChild(tel);
+                                        }
+
+                                        // Footer
+                                        const footer = document.createElement('p');
+                                        footer.textContent = 'Escaneie para ver detalhes';
+                                        footer.style.fontSize = '10px';
+                                        footer.style.color = '#94a3b8';
+                                        footer.style.fontStyle = 'italic';
+                                        footer.style.marginTop = '5px';
+                                        card.appendChild(footer);
+
+                                        container.appendChild(card);
+
+                                        // Pequeno delay para renderização
+                                        await new Promise(resolve => setTimeout(resolve, 100));
+
+                                        // 3. Gerar Imagem
+                                        const dataUrl = await toPng(card, {
                                             backgroundColor: '#ffffff',
-                                            pixelRatio: 2,
+                                            pixelRatio: 2, // Qualidade boa, mas não exagerada
                                             cacheBust: true,
+                                            // Ignorar folhas de estilo externas para evitar erros de CORS
+                                            filter: (node) => node.tagName !== 'LINK',
                                         });
 
-                                        // Criar link de download
+                                        // 4. Limpar e Download
+                                        document.body.removeChild(container);
+
                                         const link = document.createElement('a');
                                         link.download = `etiqueta-${savedServico?.cliente_nome?.replace(/\s+/g, '-') || 'servico'}.png`;
                                         link.href = dataUrl;
                                         link.click();
+
                                     } catch (err) {
                                         console.error('Erro ao gerar imagem:', err);
                                         setError('Erro ao gerar imagem. Tente novamente.');
+                                    } finally {
+                                        setIsLoading(false);
                                     }
                                 }}
                                 className="flex-1 p-3 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg transition duration-300 shadow-md flex items-center justify-center gap-2"
