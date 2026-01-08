@@ -511,20 +511,55 @@ const ServicoQrModal: React.FC<ServicoQrModalProps> = ({
                     {/* Footer - Botões */}
                     <div className="flex-shrink-0 p-4 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 sticky bottom-0">
                         <div className="max-w-3xl mx-auto flex gap-3">
+                            {/* Botão Fechar - apenas desktop */}
                             <button
                                 type="button"
                                 onClick={onClose}
-                                className="flex-1 p-3 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 transition duration-300"
+                                className="hidden md:flex flex-1 p-3 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 transition duration-300 items-center justify-center"
                             >
                                 Fechar
                             </button>
+                            {/* Botão Salvar como Imagem */}
+                            <button
+                                type="button"
+                                onClick={async () => {
+                                    const element = printRef.current;
+                                    if (!element) return;
+
+                                    try {
+                                        // Dinamicamente importar html2canvas
+                                        const html2canvas = (await import('html2canvas')).default;
+
+                                        const canvas = await html2canvas(element, {
+                                            backgroundColor: '#ffffff',
+                                            scale: 2,
+                                            useCORS: true,
+                                            logging: false
+                                        });
+
+                                        // Criar link de download
+                                        const link = document.createElement('a');
+                                        link.download = `etiqueta-${savedServico?.cliente_nome?.replace(/\s+/g, '-') || 'servico'}.png`;
+                                        link.href = canvas.toDataURL('image/png');
+                                        link.click();
+                                    } catch (err) {
+                                        console.error('Erro ao gerar imagem:', err);
+                                        setError('Erro ao gerar imagem. Tente novamente.');
+                                    }
+                                }}
+                                className="flex-1 p-3 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg transition duration-300 shadow-md flex items-center justify-center gap-2"
+                            >
+                                <i className="fas fa-image"></i>
+                                <span className="hidden sm:inline">Salvar</span> Imagem
+                            </button>
+                            {/* Botão Imprimir */}
                             <button
                                 type="button"
                                 onClick={handlePrint}
                                 className="flex-1 p-3 bg-slate-800 dark:bg-blue-600 text-white font-semibold rounded-lg hover:bg-slate-700 dark:hover:bg-blue-500 transition duration-300 shadow-md flex items-center justify-center gap-2"
                             >
                                 <i className="fas fa-print"></i>
-                                Imprimir Etiqueta
+                                <span className="hidden sm:inline">Imprimir</span> Etiqueta
                             </button>
                         </div>
                     </div>

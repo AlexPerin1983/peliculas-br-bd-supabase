@@ -28,6 +28,7 @@ import AIClientModal from './components/modals/AIClientModal';
 import AIFilmModal from './components/modals/AIFilmModal';
 import ApiKeyModal from './components/modals/ApiKeyModal';
 import ProposalOptionsCarousel from './components/ProposalOptionsCarousel';
+import CuttingOptimizationPanel from './components/CuttingOptimizationPanel';
 import ImageGalleryModal from './components/modals/ImageGalleryModal';
 import LocationImportModal from './components/modals/LocationImportModal';
 import ServicoQrModal from './components/modals/ServicoQrModal';
@@ -2652,6 +2653,18 @@ Se não conseguir extrair, retorne: []`;
 
                                             <div id="contentContainer" className="w-full min-h-[300px]">
                                                 {renderContent()}
+
+                                                {/* Otimizador de Corte - Dentro do grupo de medidas */}
+                                                {measurements.length > 0 && selectedClientId && (
+                                                    <div className="mt-4 mb-4 sm:mb-0">
+                                                        <CuttingOptimizationPanel
+                                                            measurements={measurements}
+                                                            clientId={selectedClientId ?? undefined}
+                                                            optionId={activeOptionId ?? undefined}
+                                                            films={films}
+                                                        />
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     ) : (
