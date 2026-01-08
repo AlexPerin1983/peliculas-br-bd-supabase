@@ -128,6 +128,7 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>('todos');
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+    const [isGenerating, setIsGenerating] = useState(false);
 
     // Lógica de Filtragem
     const filteredBobinas = bobinas.filter(b => {
@@ -238,16 +239,178 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
                 </head>
                 <body>
                     <div class="qr-container">
-                        <img src="${qrCodeDataUrl}" alt="QR Code" />
+                        <img src="${qrCodeDataUrl}" alt="QR Code" width="200" />
                         <div class="code">${item.codigoQr}</div>
                         <div class="info">${type}: ${item.filmId}</div>
                         <div class="info">${item.larguraCm}cm x ${'comprimentoTotalM' in item ? item.comprimentoTotalM + 'm' : (item as Retalho).comprimentoCm + 'cm'}</div>
                     </div>
-                    <script>window.print(); window.close();</script>
+                    <script>
+                        window.onload = function() {
+                            window.print();
+                            window.close();
+                        }
+                    </script>
                 </body>
                 </html>
             `);
             printWindow.document.close();
+        }
+    };
+
+    const generateCleanLabelElement = (item: Bobina | Retalho, type: 'bobina' | 'retalho', qrUrl: string) => {
+        const card = document.createElement('div');
+        card.style.width = '320px';
+        card.style.padding = '30px 20px';
+        card.style.backgroundColor = '#ffffff';
+        card.style.color = '#000000';
+        card.style.fontFamily = 'sans-serif';
+        card.style.textAlign = 'center';
+        card.style.display = 'flex';
+        card.style.flexDirection = 'column';
+        card.style.alignItems = 'center';
+        card.style.border = '1px solid #e2e8f0';
+        card.style.borderRadius = '12px';
+
+        // Título
+        const titulo = document.createElement('h2');
+        titulo.textContent = type === 'bobina' ? 'Bobina' : 'Retalho';
+        titulo.style.fontSize = '18px';
+        titulo.style.fontWeight = 'bold';
+        titulo.style.margin = '0 0 5px 0';
+        titulo.style.color = '#1e293b';
+        card.appendChild(titulo);
+
+        // Filme
+        const filme = document.createElement('p');
+        filme.textContent = item.filmId;
+        filme.style.fontSize = '16px';
+        filme.style.fontWeight = '600';
+        filme.style.color = '#334155';
+        filme.style.margin = '0 0 20px 0';
+        card.appendChild(filme);
+
+        // QR Code Image
+        const qrImg = document.createElement('img');
+        qrImg.src = qrUrl;
+        qrImg.style.width = '160px';
+        qrImg.style.height = '160px';
+        qrImg.style.margin = '0 auto 15px auto';
+        qrImg.style.display = 'block';
+        card.appendChild(qrImg);
+
+        // Código
+        const codigo = document.createElement('p');
+        codigo.textContent = item.codigoQr;
+        codigo.style.fontSize = '14px';
+        codigo.style.fontFamily = 'monospace';
+        codigo.style.color = '#64748b';
+        codigo.style.margin = '0 0 5px 0';
+        card.appendChild(codigo);
+
+        // Dimensões
+        const dimensoes = document.createElement('p');
+        const medidas = 'comprimentoTotalM' in item
+            ? `${item.larguraCm}cm x ${item.comprimentoTotalM}m`
+            : `${item.larguraCm}cm x ${(item as Retalho).comprimentoCm}cm`;
+        dimensoes.textContent = medidas;
+        dimensoes.style.fontSize = '14px';
+        dimensoes.style.color = '#64748b';
+        dimensoes.style.margin = '0';
+        card.appendChild(dimensoes);
+
+        return card;
+    };
+
+    const handleSaveImage = async () => {
+        if (!showQRModal || !qrCodeDataUrl) return;
+
+        try {
+            setIsGenerating(true);
+            const { toPng } = await import('html-to-image');
+
+            // Container invisível
+            const container = document.createElement('div');
+            container.style.position = 'fixed';
+            container.style.top = '-10000px';
+            container.style.left = '-10000px';
+            document.body.appendChild(container);
+
+            const card = generateCleanLabelElement(showQRModal.item, showQRModal.type, qrCodeDataUrl);
+            container.appendChild(card);
+
+            // Delay para renderização
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            const dataUrl = await toPng(card, {
+                backgroundColor: '#ffffff',
+                pixelRatio: 2,
+                cacheBust: true,
+            });
+
+            document.body.removeChild(container);
+
+            const link = document.createElement('a');
+            link.download = `qr-${showQRModal.type}-${showQRModal.item.codigoQr}.png`;
+            link.href = dataUrl;
+            link.click();
+
+        } catch (err) {
+            console.error('Erro ao gerar imagem:', err);
+            alert('Erro ao gerar imagem. Tente novamente.');
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+
+    const handleSavePDF = async () => {
+        if (!showQRModal || !qrCodeDataUrl) return;
+
+        try {
+            setIsGenerating(true);
+            const { toPng } = await import('html-to-image');
+            const { jsPDF } = await import('jspdf');
+
+            // Container invisível
+            const container = document.createElement('div');
+            container.style.position = 'fixed';
+            container.style.top = '-10000px';
+            container.style.left = '-10000px';
+            document.body.appendChild(container);
+
+            const card = generateCleanLabelElement(showQRModal.item, showQRModal.type, qrCodeDataUrl);
+            container.appendChild(card);
+
+            // Delay para renderização
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            const imgData = await toPng(card, {
+                backgroundColor: '#ffffff',
+                pixelRatio: 2,
+                cacheBust: true,
+            });
+
+            document.body.removeChild(container);
+
+            // Criar PDF (A6 é um bom tamanho para etiquetas, ou customizado)
+            // Vamos usar um tamanho customizado próximo ao da imagem (80mm x 100mm aprox)
+            const pdf = new jsPDF({
+                orientation: 'portrait',
+                unit: 'mm',
+                format: [80, 100]
+            });
+
+            const imgProps = pdf.getImageProperties(imgData);
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+
+            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+            pdf.save(`qr-${showQRModal.type}-${showQRModal.item.codigoQr}.pdf`);
+
+        } catch (err) {
+            console.error('Erro ao gerar PDF:', err);
+            alert('Erro ao gerar PDF. Tente novamente.');
+        } finally {
+            setIsGenerating(false);
         }
     };
 
@@ -1143,13 +1306,33 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
                                 </p>
                             </div>
                         </div>
-                        <div className="modal-footer">
-                            <button className="btn-secondary" onClick={() => setShowQRModal(null)}>
-                                Fechar
-                            </button>
-                            <button className="btn-primary" onClick={handlePrintQR}>
-                                Imprimir QR Code
-                            </button>
+                        <div className="modal-footer" style={{ flexDirection: 'column', gap: '10px' }}>
+                            <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
+                                <button
+                                    className="btn-primary"
+                                    onClick={handleSaveImage}
+                                    disabled={isGenerating}
+                                    style={{ flex: 1, backgroundColor: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px' }}
+                                >
+                                    {isGenerating ? '...' : '💾 PNG'}
+                                </button>
+                                <button
+                                    className="btn-primary"
+                                    onClick={handleSavePDF}
+                                    disabled={isGenerating}
+                                    style={{ flex: 1, backgroundColor: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px' }}
+                                >
+                                    {isGenerating ? '...' : '📄 PDF'}
+                                </button>
+                            </div>
+                            <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
+                                <button className="btn-secondary" onClick={() => setShowQRModal(null)} style={{ flex: 1 }}>
+                                    Fechar
+                                </button>
+                                <button className="btn-primary" onClick={handlePrintQR} style={{ flex: 1 }}>
+                                    🖨️ Imprimir
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
