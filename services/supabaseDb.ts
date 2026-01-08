@@ -282,7 +282,8 @@ export const getUserInfo = async (): Promise<UserInfo> => {
         workingHours: data.working_hours,
         employees: data.employees,
         aiConfig: data.ai_config || mockUserInfo.aiConfig,
-        lastSelectedClientId: data.last_selected_client_id
+        lastSelectedClientId: data.last_selected_client_id,
+        socialLinks: data.social_links
     };
 
     return { ...mockUserInfo, ...userInfo };
@@ -310,7 +311,8 @@ export const saveUserInfo = async (userInfo: UserInfo): Promise<UserInfo> => {
         working_hours: userInfo.workingHours,
         employees: userInfo.employees,
         ai_config: userInfo.aiConfig,
-        last_selected_client_id: userInfo.lastSelectedClientId
+        last_selected_client_id: userInfo.lastSelectedClientId,
+        social_links: userInfo.socialLinks
     };
 
     const { data, error } = await supabase

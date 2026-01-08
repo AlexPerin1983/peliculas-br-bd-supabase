@@ -118,6 +118,13 @@ export interface UserInfo {
         apiKey: string;
     };
     lastSelectedClientId?: number | null; // Novo campo
+    socialLinks?: {
+        facebook?: string;
+        instagram?: string;
+        tiktok?: string;
+        youtube?: string;
+        googleReviews?: string;
+    };
 }
 
 export interface Agendamento {
