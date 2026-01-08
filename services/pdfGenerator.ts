@@ -307,28 +307,66 @@ const renderPdfContent = async (
 
             yPos += 7;
             doc.setFont("helvetica", 'normal');
-            safeText(client.nome, margin, yPos);
-            safeText(userInfo.nome, pageWidth / 2 + 10, yPos);
-            yPos += 5;
-            safeText(client.telefone || '', margin, yPos);
-            safeText(userInfo.empresa, pageWidth / 2 + 10, yPos);
-            yPos += 5;
+            doc.setFontSize(9);
 
-            // --- CORREÇÃO DE QUEBRA DE LINHA DO ENDEREÇO DO CLIENTE ---
-            const clientAddress = formatAddressForPdf(client);
-            const maxClientAddressWidth = (pageWidth / 2) - margin - 10; // Largura máxima para o endereço do cliente
+            // --- SEÇÃO DO CLIENTE REESTRUTURADA ---
+            let clientYPos = yPos;
+            const clientInfoLineHeight = 4.5;
+            const maxClientInfoWidth = (pageWidth / 2) - margin - 10;
 
-            const clientAddressLines = doc.splitTextToSize(clientAddress, maxClientAddressWidth);
+            // Nome do cliente (sempre exibido)
+            safeText(client.nome, margin, clientYPos);
+            clientYPos += clientInfoLineHeight;
 
-            let currentClientY = yPos;
-            for (const line of clientAddressLines) {
-                safeText(line, margin, currentClientY);
-                currentClientY += 5; // Incrementa a posição Y para cada linha
+            // CPF/CNPJ (se existir)
+            if (client.cpfCnpj) {
+                doc.setFontSize(8);
+                doc.setTextColor(80, 80, 80);
+                safeText(`CNPJ/CPF: ${client.cpfCnpj}`, margin, clientYPos);
+                clientYPos += clientInfoLineHeight;
             }
 
-            // Garante que o endereço da empresa comece na mesma linha vertical do nome da empresa
-            safeText(userInfo.endereco, pageWidth / 2 + 10, yPos + 5);
-            // --- FIM DA CORREÇÃO ---
+            // Telefone (se existir)
+            if (client.telefone) {
+                doc.setFontSize(8);
+                doc.setTextColor(80, 80, 80);
+                safeText(`Tel: ${client.telefone}`, margin, clientYPos);
+                clientYPos += clientInfoLineHeight;
+            }
+
+            // Email (se existir)
+            if (client.email) {
+                doc.setFontSize(8);
+                doc.setTextColor(80, 80, 80);
+                safeText(`Email: ${client.email}`, margin, clientYPos);
+                clientYPos += clientInfoLineHeight;
+            }
+
+            // Endereço (formatado, com quebra de linha se necessário)
+            const clientAddress = formatAddressForPdf(client);
+            if (clientAddress) {
+                doc.setFontSize(8);
+                doc.setTextColor(80, 80, 80);
+                const clientAddressLines = doc.splitTextToSize(clientAddress, maxClientInfoWidth);
+                for (const line of clientAddressLines) {
+                    safeText(line, margin, clientYPos);
+                    clientYPos += clientInfoLineHeight;
+                }
+            }
+            // --- FIM DA SEÇÃO DO CLIENTE ---
+
+            // Informações do usuário/empresa (lado direito)
+            doc.setFontSize(9);
+            doc.setTextColor(...textDark);
+            safeText(userInfo.nome, pageWidth / 2 + 10, yPos);
+            safeText(userInfo.empresa, pageWidth / 2 + 10, yPos + clientInfoLineHeight);
+
+            // Endereço da empresa
+            if (userInfo.endereco) {
+                doc.setFontSize(8);
+                doc.setTextColor(80, 80, 80);
+                safeText(userInfo.endereco, pageWidth / 2 + 10, yPos + (clientInfoLineHeight * 2));
+            }
 
             // Add first content page
             await addNewPage();
@@ -645,7 +683,7 @@ const renderPdfContent = async (
         };
 
         const paymentLines: string[] = [];
-        
+
         if (isCombined && optionsData.length > 1) {
             // PDF Combinado: mostrar formas de pagamento para cada opção
             optionsData.forEach((opt, idx) => {
