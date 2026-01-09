@@ -4,7 +4,9 @@ import { validateInviteCode, incrementInviteUsage } from '../services/inviteServ
 import { supabase } from '../services/supabaseClient';
 
 const InviteRegister: React.FC = () => {
-    const { code } = useParams<{ code: string }>();
+    const params = useParams<{ code: string }>();
+    // Extrair código da URL manualmente se useParams falhar (já que não temos Route definida no index.tsx)
+    const code = params.code || window.location.pathname.split('/convite/')[1]?.split('/')[0];
     const navigate = useNavigate();
 
     const [loading, setLoading] = useState(true);
