@@ -22,7 +22,7 @@ interface EditMeasurementModalProps {
     onClose: () => void;
     measurement: UIMeasurement;
     films: Film[];
-    onUpdate: (updatedMeasurement: Partial<Measurement>) => void;
+    onUpdate: (updatedMeasurement: Partial<Measurement>) => Promise<void>;
     onDelete: () => void;
     onDuplicate: () => void;
     onOpenFilmModal: (film: Film | null) => void;
@@ -53,6 +53,8 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
     const [localMeasurement, setLocalMeasurement] = useState<UIMeasurement>(measurement);
     const [shouldShare, setShouldShare] = useState(false);
     const [isSavingToGlobal, setIsSavingToGlobal] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+    const [error, setError] = useState<string | null>(null);
     const [isLocationFormOpen, setIsLocationFormOpen] = useState(false);
     // Estado para validação visual - campos com erro ficam em vermelho
     const [fieldErrors, setFieldErrors] = useState<{ largura: boolean; altura: boolean }>({ largura: false, altura: false });
@@ -62,6 +64,8 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
             setLocalMeasurement(measurement);
             // Limpar erros ao abrir modal
             setFieldErrors({ largura: false, altura: false });
+            setIsSaving(false);
+            setError(null);
         }
     }, [measurement, isOpen]);
 
@@ -161,8 +165,16 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
                 setIsSavingToGlobal(false);
             }
         }
-        onUpdate(localMeasurement);
-        onClose();
+
+        setIsSaving(true);
+        setError(null);
+        try {
+            await onUpdate(localMeasurement);
+            onClose();
+        } catch (err: any) {
+            setError(err.message || 'Erro ao salvar alterações. Tente novamente.');
+            setIsSaving(false);
+        }
     };
 
     // Cálculos
@@ -234,7 +246,7 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
             </header>
 
             <main className="flex-grow overflow-y-auto p-4 bg-slate-50 dark:bg-slate-900">
-                <div className="max-w-xl mx-auto space-y-4 pb-24">
+                <fieldset disabled={isSaving} className="max-w-xl mx-auto space-y-4 pb-24">
 
                     {/* Seção 1: Medidas */}
                     <Accordion title="Medidas e Quantidade" defaultOpen={true}>
@@ -432,7 +444,12 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
                         </div>
                     </Accordion>
 
-                </div>
+                </fieldset>
+                {error && (
+                    <div className="max-w-xl mx-auto mt-4 p-3 bg-red-50 border border-red-200 text-red-800 text-sm rounded-md" role="alert">
+                        {error}
+                    </div>
+                )}
             </main>
 
             {!isLocationFormOpen && (
@@ -441,11 +458,11 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
                         <button onClick={handleDeleteClick} className="px-4 py-2.5 text-sm font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors flex-1 text-center">Excluir</button>
                         <button
                             onClick={handleSave}
-                            disabled={isSavingToGlobal}
-                            className="px-4 py-2.5 text-sm font-semibold text-white bg-slate-800 dark:bg-slate-700 hover:bg-slate-700 dark:hover:bg-slate-600 rounded-lg transition-colors flex-1 text-center disabled:opacity-50"
+                            disabled={isSaving || isSavingToGlobal}
+                            className="px-4 py-2.5 text-sm font-semibold text-white bg-slate-800 dark:bg-slate-700 hover:bg-slate-700 dark:hover:bg-slate-600 rounded-lg transition-colors flex-1 text-center disabled:opacity-70 disabled:cursor-wait flex items-center justify-center gap-2"
                         >
-                            {isSavingToGlobal ? (
-                                <><i className="fas fa-spinner fa-spin mr-2"></i> Salvando...</>
+                            {isSaving || isSavingToGlobal ? (
+                                <><i className="fas fa-spinner fa-spin"></i> Salvando...</>
                             ) : 'Salvar Alterações'}
                         </button>
                     </div>

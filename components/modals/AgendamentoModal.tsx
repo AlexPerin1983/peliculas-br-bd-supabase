@@ -8,7 +8,7 @@ import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 interface AgendamentoModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSave: (agendamento: Omit<Agendamento, 'id'> | Agendamento) => void;
+    onSave: (agendamento: Omit<Agendamento, 'id'> | Agendamento) => Promise<void>;
     onDelete: (agendamento: Agendamento) => void;
     schedulingInfo: SchedulingInfo;
     clients: Client[];
@@ -60,12 +60,14 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
     const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
     const [validationError, setValidationError] = useState<string | null>(null);
     const [isSuggesting, setIsSuggesting] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
     const [aiSuggestions, setAiSuggestions] = useState<AISuggestion[] | null>(null);
 
     useEffect(() => {
         if (isOpen) {
             setValidationError(null);
             setAiSuggestions(null);
+            setIsSaving(false);
             const initialClientId = agendamento?.clienteId || pdf?.clienteId || null;
             setSelectedClientId(initialClientId);
 
@@ -93,10 +95,6 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
             }
         }
     }, [isOpen, agendamento, pdf, isEditing]);
-
-    const handleClientMagicClick = (clientName: string) => {
-        alert(`Recurso de IA para o cliente "${clientName}" ainda não implementado.`);
-    };
 
     const handleAISuggestion = async () => {
         setIsSuggesting(true);
@@ -199,9 +197,9 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
         setAiSuggestions(null);
     };
 
-
-    const handleSubmit = (e: FormEvent) => {
+    const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
+        if (isSaving) return;
         setValidationError(null);
 
         if (!selectedClientId) {
@@ -275,7 +273,13 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
             (agendamentoPayload as Agendamento).id = agendamento!.id;
         }
 
-        onSave(agendamentoPayload);
+        setIsSaving(true);
+        try {
+            await onSave(agendamentoPayload);
+        } catch (err: any) {
+            setValidationError(err.message || 'Erro ao salvar agendamento. Tente novamente.');
+            setIsSaving(false);
+        }
     };
 
     const handleDelete = () => {
@@ -367,9 +371,17 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
             <button
                 type="submit"
                 form="agendamentoForm"
-                className="font-semibold text-white bg-slate-800 dark:bg-slate-700 px-5 py-2.5 rounded-lg shadow-sm hover:bg-slate-700 dark:hover:bg-slate-600"
+                disabled={isSaving || isSuggesting}
+                className="font-semibold text-white bg-slate-800 dark:bg-slate-700 px-5 py-2.5 rounded-lg shadow-sm hover:bg-slate-700 dark:hover:bg-slate-600 disabled:opacity-70 disabled:cursor-wait flex items-center gap-2"
             >
-                {isEditing ? 'Salvar' : 'Agendar'}
+                {isSaving ? (
+                    <>
+                        <i className="fas fa-spinner fa-spin"></i>
+                        <span>Salvando...</span>
+                    </>
+                ) : (
+                    isEditing ? 'Salvar' : 'Agendar'
+                )}
             </button>
         </>
     );
@@ -380,114 +392,115 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
     return (
         <Modal isOpen={isOpen} onClose={onClose} title={modalTitle} footer={footerContent}>
             <form id="agendamentoForm" onSubmit={handleSubmit} className="space-y-5">
-                <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Cliente</label>
-                    <SearchableSelect
-                        options={clients}
-                        value={selectedClientId}
-                        onChange={(id) => setSelectedClientId(id as number | null)}
-                        displayField="nome"
-                        valueField="id"
-                        placeholder="Selecione ou digite um nome"
-                        disabled={isClientLocked}
-                        autoFocus={!isClientLocked}
-
-                        renderNoResults={(searchTerm) => (
-                            <li className="p-3 text-center">
-                                <p className="text-sm text-slate-500 mb-3">
-                                    Nenhum cliente encontrado.
-                                </p>
-                                <button
-                                    type="button"
-                                    onClick={() => onAddNewClient(searchTerm)}
-                                    className="px-4 py-2 bg-slate-200 text-slate-700 font-semibold rounded-lg hover:bg-slate-300 transition text-sm flex items-center justify-center gap-2 mx-auto"
-                                >
-                                    <i className="fas fa-plus"></i>
-                                    Adicionar "{searchTerm}"
-                                </button>
-                            </li>
-                        )}
-                    />
-                </div>
-
-                {pdf && (
-                    <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-600 space-y-2">
-                        <div className="flex justify-between items-center">
-                            <h4 className="text-sm font-semibold text-slate-600 dark:text-slate-400">Orçamento Associado</h4>
-                            <StatusBadge status={pdf.status} />
-                        </div>
-                        <div className="flex justify-between items-center text-sm">
-                            <span className="text-slate-500 dark:text-slate-400">{new Date(pdf.date).toLocaleDateString('pt-BR')}</span>
-                            <span className="font-semibold text-slate-700 dark:text-slate-300">{formatCurrency(pdf.totalPreco)}</span>
-                        </div>
-                    </div>
-                )}
-
-                <div>
-                    <div className="flex justify-between items-center mb-1">
-                        <label htmlFor="date" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Data</label>
-                        <button
-                            type="button"
-                            onClick={handleAISuggestion}
-                            disabled={isSuggesting || !date || !selectedClientId}
-                            className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            {isSuggesting ? (
-                                <i className="fas fa-spinner fa-spin"></i>
-                            ) : (
-                                <i className="fas fa-magic-sparkles"></i>
+                <fieldset disabled={isSaving} className="space-y-5">
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Cliente</label>
+                        <SearchableSelect
+                            options={clients}
+                            value={selectedClientId}
+                            onChange={(id) => setSelectedClientId(id as number | null)}
+                            displayField="nome"
+                            valueField="id"
+                            placeholder="Selecione ou digite um nome"
+                            disabled={isClientLocked}
+                            autoFocus={!isClientLocked}
+                            renderNoResults={(searchTerm) => (
+                                <li className="p-3 text-center">
+                                    <p className="text-sm text-slate-500 mb-3">
+                                        Nenhum cliente encontrado.
+                                    </p>
+                                    <button
+                                        type="button"
+                                        onClick={() => onAddNewClient(searchTerm)}
+                                        className="px-4 py-2 bg-slate-200 text-slate-700 font-semibold rounded-lg hover:bg-slate-300 transition text-sm flex items-center justify-center gap-2 mx-auto"
+                                    >
+                                        <i className="fas fa-plus"></i>
+                                        Adicionar "{searchTerm}"
+                                    </button>
+                                </li>
                             )}
-                            Sugerir com IA
-                        </button>
+                        />
                     </div>
-                    <Input
-                        id="date"
-                        label=""
-                        type="date"
-                        value={date}
-                        onChange={(e) => setDate((e.target as HTMLInputElement).value)}
-                        required
-                        className={inputClassName}
-                    />
-                </div>
 
-                {aiSuggestions && aiSuggestions.length > 0 && (
-                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg space-y-2">
-                        <h4 className="text-sm font-semibold text-blue-800">Sugestões da IA:</h4>
-                        {aiSuggestions.map((sug, index) => (
+                    {pdf && (
+                        <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-600 space-y-2">
+                            <div className="flex justify-between items-center">
+                                <h4 className="text-sm font-semibold text-slate-600 dark:text-slate-400">Orçamento Associado</h4>
+                                <StatusBadge status={pdf.status} />
+                            </div>
+                            <div className="flex justify-between items-center text-sm">
+                                <span className="text-slate-500 dark:text-slate-400">{new Date(pdf.date).toLocaleDateString('pt-BR')}</span>
+                                <span className="font-semibold text-slate-700 dark:text-slate-300">{formatCurrency(pdf.totalPreco)}</span>
+                            </div>
+                        </div>
+                    )}
+
+                    <div>
+                        <div className="flex justify-between items-center mb-1">
+                            <label htmlFor="date" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Data</label>
                             <button
-                                key={index}
                                 type="button"
-                                onClick={() => handleApplySuggestion(sug)}
-                                className="w-full text-left p-2 bg-white rounded-md border border-blue-200 hover:bg-blue-100 transition-colors"
+                                onClick={handleAISuggestion}
+                                disabled={isSuggesting || !date || !selectedClientId}
+                                className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                <p className="font-semibold text-slate-800">{sug.startTime} - {sug.endTime}</p>
-                                <p className="text-xs text-slate-600">{sug.reason}</p>
+                                {isSuggesting ? (
+                                    <i className="fas fa-spinner fa-spin"></i>
+                                ) : (
+                                    <i className="fas fa-magic-sparkles"></i>
+                                )}
+                                Sugerir com IA
                             </button>
-                        ))}
+                        </div>
+                        <Input
+                            id="date"
+                            label=""
+                            type="date"
+                            value={date}
+                            onChange={(e) => setDate((e.target as HTMLInputElement).value)}
+                            required
+                            className={inputClassName}
+                        />
                     </div>
-                )}
 
-                <div className="grid grid-cols-2 gap-4">
-                    <Input id="startTime" label="Início" type="time" value={startTime} onChange={(e) => setStartTime((e.target as HTMLInputElement).value)} required className={inputClassName} />
-                    <Input id="endTime" label="Término" type="time" value={endTime} onChange={(e) => setEndTime((e.target as HTMLInputElement).value)} required className={inputClassName} />
-                </div>
+                    {aiSuggestions && aiSuggestions.length > 0 && (
+                        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg space-y-2">
+                            <h4 className="text-sm font-semibold text-blue-800">Sugestões da IA:</h4>
+                            {aiSuggestions.map((sug, index) => (
+                                <button
+                                    key={index}
+                                    type="button"
+                                    onClick={() => handleApplySuggestion(sug)}
+                                    className="w-full text-left p-2 bg-white rounded-md border border-blue-200 hover:bg-blue-100 transition-colors"
+                                >
+                                    <p className="font-semibold text-slate-800">{sug.startTime} - {sug.endTime}</p>
+                                    <p className="text-xs text-slate-600">{sug.reason}</p>
+                                </button>
+                            ))}
+                        </div>
+                    )}
 
-                <Input
-                    as="textarea"
-                    id="notes"
-                    label="Observações"
-                    value={notes}
-                    onChange={(e) => setNotes((e.target as HTMLTextAreaElement).value)}
-                    placeholder="Observação do serviço"
-                    className={textareaClassName}
-                />
-
-                {validationError && (
-                    <div className="p-3 bg-red-50 border border-red-200 text-red-800 text-sm rounded-md" role="alert">
-                        {validationError}
+                    <div className="grid grid-cols-2 gap-4">
+                        <Input id="startTime" label="Início" type="time" value={startTime} onChange={(e) => setStartTime((e.target as HTMLInputElement).value)} required className={inputClassName} />
+                        <Input id="endTime" label="Término" type="time" value={endTime} onChange={(e) => setEndTime((e.target as HTMLInputElement).value)} required className={inputClassName} />
                     </div>
-                )}
+
+                    <Input
+                        as="textarea"
+                        id="notes"
+                        label="Observações"
+                        value={notes}
+                        onChange={(e) => setNotes((e.target as HTMLTextAreaElement).value)}
+                        placeholder="Observação do serviço"
+                        className={textareaClassName}
+                    />
+
+                    {validationError && (
+                        <div className="p-3 bg-red-50 border border-red-200 text-red-800 text-sm rounded-md" role="alert">
+                            {validationError}
+                        </div>
+                    )}
+                </fieldset>
             </form>
         </Modal>
     );

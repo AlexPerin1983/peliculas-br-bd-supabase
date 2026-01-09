@@ -74,11 +74,11 @@ export const saveClient = async (client: Omit<Client, 'id'> | Client): Promise<C
 
     if ('id' in client && client.id) {
         // Update existing client
+        // RLS controla acesso por organização - não filtrar por user_id
         const { data, error } = await supabase
             .from('clients')
             .update(clientData)
             .eq('id', client.id)
-            .eq('user_id', userId)
             .select()
             .single();
 
@@ -101,11 +101,11 @@ export const deleteClient = async (id: number): Promise<void> => {
     const userId = await getCurrentUserId();
     if (!userId) throw new Error('User not authenticated');
 
+    // RLS controla acesso por organização - não filtrar por user_id
     const { error } = await supabase
         .from('clients')
         .delete()
-        .eq('id', id)
-        .eq('user_id', userId);
+        .eq('id', id);
 
     if (error) throw error;
 };
@@ -204,11 +204,11 @@ export const deleteProposalOptions = async (clientId: number): Promise<void> => 
     const userId = await getCurrentUserId();
     if (!userId) throw new Error('User not authenticated');
 
+    // RLS controla acesso por organização - não filtrar por user_id
     const { error } = await supabase
         .from('proposal_options')
         .delete()
-        .eq('client_id', clientId)
-        .eq('user_id', userId);
+        .eq('client_id', clientId);
 
     if (error) throw error;
 };
@@ -401,11 +401,11 @@ export const deleteCustomFilm = async (filmName: string): Promise<void> => {
     const userId = await getCurrentUserId();
     if (!userId) throw new Error('User not authenticated');
 
+    // RLS controla acesso por organização - não filtrar por user_id
     const { error } = await supabase
         .from('films')
         .delete()
-        .eq('nome', filmName)
-        .eq('user_id', userId);
+        .eq('nome', filmName);
 
     if (error) throw error;
 };
@@ -531,12 +531,12 @@ export const deletePDF = async (id: number): Promise<void> => {
     const userId = await getCurrentUserId();
     if (!userId) throw new Error('User not authenticated');
 
+    // RLS controla acesso por organização - não filtrar por user_id
     // First get the PDF to check for agendamento
     const { data: pdf } = await supabase
         .from('saved_pdfs')
         .select('agendamento_id')
         .eq('id', id)
-        .eq('user_id', userId)
         .single();
 
     if (pdf?.agendamento_id) {
@@ -546,8 +546,7 @@ export const deletePDF = async (id: number): Promise<void> => {
     const { error } = await supabase
         .from('saved_pdfs')
         .delete()
-        .eq('id', id)
-        .eq('user_id', userId);
+        .eq('id', id);
 
     if (error) throw error;
 };
@@ -639,11 +638,11 @@ export const saveAgendamento = async (agendamento: Agendamento | Omit<Agendament
     };
 
     if ('id' in agendamento && agendamento.id) {
+        // RLS controla acesso por organização - não filtrar por user_id
         const { data, error } = await supabase
             .from('agendamentos')
             .update(agendamentoData)
             .eq('id', agendamento.id)
-            .eq('user_id', userId)
             .select()
             .single();
 
@@ -665,11 +664,11 @@ export const deleteAgendamento = async (id: number): Promise<void> => {
     const userId = await getCurrentUserId();
     if (!userId) throw new Error('User not authenticated');
 
+    // RLS controla acesso por organização - não filtrar por user_id
     const { error } = await supabase
         .from('agendamentos')
         .delete()
-        .eq('id', id)
-        .eq('user_id', userId);
+        .eq('id', id);
 
     if (error) throw error;
 };

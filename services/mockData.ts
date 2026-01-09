@@ -35,6 +35,13 @@ export const mockUserInfo: UserInfo = {
         provider: 'gemini',
         apiKey: '', // User needs to fill this in
     },
+    socialLinks: {
+        facebook: '',
+        instagram: '',
+        tiktok: '',
+        youtube: '',
+        googleReviews: ''
+    }
 };
 
 export const mockClients: Omit<Client, 'id'>[] = [];

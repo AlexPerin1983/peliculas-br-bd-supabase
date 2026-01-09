@@ -2801,6 +2801,10 @@ Se não conseguir extrair, retorne: []`;
                 onClose={() => setIsServicoQrModalOpen(false)}
                 userInfo={userInfo}
                 films={films}
+                clients={clients}
+                isClientsLoading={isLoading}
+                onTogglePin={handleToggleClientPin}
+                onAddNewClient={handleAddNewClientFromSelection}
             />
 
             {/* Modal de Upgrade - QR Code Serviços */}

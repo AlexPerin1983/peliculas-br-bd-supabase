@@ -16,8 +16,11 @@ export const Login: React.FC = () => {
         setLoading(true);
         setMessage(null);
 
+        console.log('[Login] Iniciando autenticação...');
+
         try {
             if (showForgotPassword) {
+                console.log('[Login] Modo: Esqueci senha');
                 const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
                     redirectTo: window.location.origin,
                 });
@@ -25,6 +28,7 @@ export const Login: React.FC = () => {
                 setMessage({ type: 'success', text: 'Email de redefinição enviado! Verifique sua caixa de entrada.' });
                 setShowForgotPassword(false);
             } else if (isSignUp) {
+                console.log('[Login] Modo: Cadastro');
                 const { data, error } = await supabase.auth.signUp({
                     email,
                     password,
@@ -35,15 +39,27 @@ export const Login: React.FC = () => {
                     setMessage({ type: 'success', text: 'Cadastro realizado! Verifique seu email para confirmar.' });
                 }
             } else {
-                const { error } = await supabase.auth.signInWithPassword({
+                console.log('[Login] Modo: Login com email:', email);
+                const { data, error } = await supabase.auth.signInWithPassword({
                     email,
                     password,
                 });
+                console.log('[Login] Resposta do login:', { data, error });
                 if (error) throw error;
             }
+            console.log('[Login] Autenticação concluída com sucesso');
         } catch (error: any) {
-            setMessage({ type: 'error', text: error.message || 'Erro ao autenticar' });
+            console.error('[Login] Erro detalhado:', error);
+            if (error.message === 'Failed to fetch') {
+                setMessage({
+                    type: 'error',
+                    text: 'Erro de conexão: Não foi possível alcançar o servidor. Verifique sua internet ou desative bloqueadores de anúncio.'
+                });
+            } else {
+                setMessage({ type: 'error', text: error.message || 'Erro ao autenticar' });
+            }
         } finally {
+            console.log('[Login] Finally - setLoading(false)');
             setLoading(false);
         }
     };

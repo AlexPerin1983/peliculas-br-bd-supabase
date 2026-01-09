@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { UserInfo, Film } from '../../types';
+import { UserInfo, Film, Client } from '../../types';
 import {
     ServicoPrestado,
     gerarCodigoServico,
@@ -9,12 +9,17 @@ import {
     gerarUrlServico
 } from '../../services/servicosService';
 import { QRCodeSVG } from 'qrcode.react';
+import ClientSelectionModal from './ClientSelectionModal';
 
 interface ServicoQrModalProps {
     isOpen: boolean;
     onClose: () => void;
     userInfo: UserInfo | null;
     films: Film[];
+    clients: Client[];
+    isClientsLoading?: boolean;
+    onTogglePin?: (id: number) => void;
+    onAddNewClient?: (clientName: string) => void;
     onSuccess?: (servico: ServicoPrestado) => void;
 }
 
@@ -23,12 +28,17 @@ const ServicoQrModal: React.FC<ServicoQrModalProps> = ({
     onClose,
     userInfo,
     films,
+    clients,
+    isClientsLoading = false,
+    onTogglePin,
+    onAddNewClient,
     onSuccess
 }) => {
     const [step, setStep] = useState<'form' | 'preview'>('form');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [savedServico, setSavedServico] = useState<ServicoPrestado | null>(null);
+    const [isClientModalOpen, setIsClientModalOpen] = useState(false);
 
     // Form state
     const [clienteNome, setClienteNome] = useState('');
@@ -43,6 +53,31 @@ const ServicoQrModal: React.FC<ServicoQrModalProps> = ({
 
     const printRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
+
+    // Handler para quando um cliente é selecionado do modal
+    const handleClientSelect = (clientId: number | null) => {
+        if (clientId === null) return;
+
+        const selectedClient = clients.find(c => c.id === clientId);
+        if (selectedClient) {
+            // Preencher os campos do formulário com os dados do cliente
+            setClienteNome(selectedClient.nome || '');
+
+            // Montar endereço completo a partir dos campos do cliente
+            const enderecoCompleto = [
+                selectedClient.logradouro,
+                selectedClient.numero,
+                selectedClient.complemento,
+                selectedClient.bairro
+            ].filter(Boolean).join(', ');
+
+            setEndereco(enderecoCompleto || '');
+            setCidade(selectedClient.cidade || '');
+            setUf(selectedClient.uf || '');
+        }
+
+        setIsClientModalOpen(false);
+    };
 
     useEffect(() => {
         if (isOpen) {
@@ -248,169 +283,185 @@ const ServicoQrModal: React.FC<ServicoQrModalProps> = ({
                     {/* Content - Formulário */}
                     <div className="flex-grow overflow-y-auto p-4">
                         <form id="servicoForm" onSubmit={handleSubmit} className="max-w-3xl mx-auto space-y-6">
-                            {error && (
-                                <div className="bg-red-100 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 p-3 rounded-lg text-sm flex items-center gap-2">
-                                    <i className="fas fa-exclamation-circle"></i>
-                                    {error}
-                                </div>
-                            )}
-
-                            {/* Seção: Local do Serviço */}
-                            <div className="space-y-4">
-                                <h3 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                                    <i className="fas fa-map-marker-alt"></i>
-                                    Local do Serviço
-                                </h3>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                                        Nome do Local / Cliente *
-                                    </label>
-                                    <input
-                                        ref={inputRef}
-                                        type="text"
-                                        value={clienteNome}
-                                        onChange={e => setClienteNome(e.target.value)}
-                                        placeholder="Ex: Condomínio Solar, Empresa XYZ..."
-                                        className="w-full p-3 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                        style={{ touchAction: 'manipulation' }}
-                                        required
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                                        Tipo de Local
-                                    </label>
-                                    <select
-                                        value={tipoLocal}
-                                        onChange={e => setTipoLocal(e.target.value as any)}
-                                        className="w-full p-3 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                        style={{ touchAction: 'manipulation' }}
-                                    >
-                                        <option value="residencial">🏠 Residência</option>
-                                        <option value="comercial">🏢 Comercial</option>
-                                        <option value="condominio">🏘️ Condomínio</option>
-                                        <option value="empresa">🏭 Empresa</option>
-                                        <option value="outros">📍 Outros</option>
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                                        Endereço
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={endereco}
-                                        onChange={e => setEndereco(e.target.value)}
-                                        placeholder="Rua, número"
-                                        className="w-full p-3 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                        style={{ touchAction: 'manipulation' }}
-                                    />
-                                </div>
-
-                                <div className="grid grid-cols-3 gap-3">
-                                    <div className="col-span-2">
-                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                                            Cidade
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={cidade}
-                                            onChange={e => setCidade(e.target.value)}
-                                            placeholder="Cidade"
-                                            className="w-full p-3 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                            style={{ touchAction: 'manipulation' }}
-                                        />
+                            <fieldset disabled={isLoading} className="space-y-6">
+                                {error && (
+                                    <div className="bg-red-100 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 p-3 rounded-lg text-sm flex items-center gap-2">
+                                        <i className="fas fa-exclamation-circle"></i>
+                                        {error}
                                     </div>
+                                )}
+
+                                {/* Seção: Local do Serviço */}
+                                <div className="space-y-4">
+                                    <h3 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                                        <i className="fas fa-map-marker-alt"></i>
+                                        Local do Serviço
+                                    </h3>
+
                                     <div>
                                         <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                                            UF
+                                            Nome do Local / Cliente *
                                         </label>
-                                        <input
-                                            type="text"
-                                            value={uf}
-                                            onChange={e => setUf(e.target.value)}
-                                            placeholder="SP"
-                                            maxLength={2}
-                                            className="w-full p-3 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-center uppercase"
-                                            style={{ touchAction: 'manipulation' }}
-                                        />
+                                        <div className="flex gap-2">
+                                            <input
+                                                ref={inputRef}
+                                                type="text"
+                                                value={clienteNome}
+                                                onChange={e => setClienteNome(e.target.value)}
+                                                placeholder="Ex: Condomínio Solar, Empresa XYZ..."
+                                                className="flex-1 p-3 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                style={{ touchAction: 'manipulation' }}
+                                                required
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsClientModalOpen(true)}
+                                                className="px-4 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors flex items-center gap-2 shadow-md"
+                                                title="Selecionar cliente existente"
+                                            >
+                                                <i className="fas fa-address-book"></i>
+                                                <span className="hidden sm:inline">Buscar</span>
+                                            </button>
+                                        </div>
+                                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                                            Clique em "Buscar" para selecionar um cliente já cadastrado
+                                        </p>
                                     </div>
-                                </div>
-                            </div>
 
-                            {/* Seção: Serviço Realizado */}
-                            <div className="space-y-4">
-                                <h3 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                                    <i className="fas fa-film"></i>
-                                    Serviço Realizado
-                                </h3>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                                        Película Aplicada *
-                                    </label>
-                                    <select
-                                        value={filmeAplicado}
-                                        onChange={e => setFilmeAplicado(e.target.value)}
-                                        required
-                                        className="w-full p-3 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                        style={{ touchAction: 'manipulation' }}
-                                    >
-                                        <option value="">Selecione...</option>
-                                        {films.map(film => (
-                                            <option key={film.nome} value={film.nome}>
-                                                {film.nome}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-3">
                                     <div>
                                         <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                                            Área Aplicada (m²)
+                                            Tipo de Local
                                         </label>
-                                        <input
-                                            type="text"
-                                            inputMode="decimal"
-                                            value={metrosAplicados}
-                                            onChange={e => setMetrosAplicados(e.target.value)}
-                                            placeholder="12,50"
-                                            className="w-full p-3 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                            style={{ touchAction: 'manipulation' }}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                                            Data do Serviço
-                                        </label>
-                                        <input
-                                            type="date"
-                                            value={dataServico}
-                                            onChange={e => setDataServico(e.target.value)}
+                                        <select
+                                            value={tipoLocal}
+                                            onChange={e => setTipoLocal(e.target.value as any)}
                                             className="w-full p-3 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                             style={{ touchAction: 'manipulation' }}
+                                        >
+                                            <option value="residencial">🏠 Residência</option>
+                                            <option value="comercial">🏢 Comercial</option>
+                                            <option value="condominio">🏘️ Condomínio</option>
+                                            <option value="empresa">🏭 Empresa</option>
+                                            <option value="outros">📍 Outros</option>
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                                            Endereço
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={endereco}
+                                            onChange={e => setEndereco(e.target.value)}
+                                            placeholder="Rua, número"
+                                            className="w-full p-3 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                            style={{ touchAction: 'manipulation' }}
                                         />
+                                    </div>
+
+                                    <div className="grid grid-cols-3 gap-3">
+                                        <div className="col-span-2">
+                                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                                                Cidade
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={cidade}
+                                                onChange={e => setCidade(e.target.value)}
+                                                placeholder="Cidade"
+                                                className="w-full p-3 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                style={{ touchAction: 'manipulation' }}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                                                UF
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={uf}
+                                                onChange={e => setUf(e.target.value)}
+                                                placeholder="SP"
+                                                maxLength={2}
+                                                className="w-full p-3 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-center uppercase"
+                                                style={{ touchAction: 'manipulation' }}
+                                            />
+                                        </div>
                                     </div>
                                 </div>
 
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                                        Observações
-                                    </label>
-                                    <textarea
-                                        value={observacoes}
-                                        onChange={e => setObservacoes(e.target.value)}
-                                        placeholder="Informações adicionais sobre o serviço..."
-                                        rows={3}
-                                        className="w-full p-3 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
-                                        style={{ touchAction: 'manipulation' }}
-                                    />
+                                {/* Seção: Serviço Realizado */}
+                                <div className="space-y-4">
+                                    <h3 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                                        <i className="fas fa-film"></i>
+                                        Serviço Realizado
+                                    </h3>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                                            Película Aplicada *
+                                        </label>
+                                        <select
+                                            value={filmeAplicado}
+                                            onChange={e => setFilmeAplicado(e.target.value)}
+                                            required
+                                            className="w-full p-3 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                            style={{ touchAction: 'manipulation' }}
+                                        >
+                                            <option value="">Selecione...</option>
+                                            {films.map(film => (
+                                                <option key={film.nome} value={film.nome}>
+                                                    {film.nome}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                                                Área Aplicada (m²)
+                                            </label>
+                                            <input
+                                                type="text"
+                                                inputMode="decimal"
+                                                value={metrosAplicados}
+                                                onChange={e => setMetrosAplicados(e.target.value)}
+                                                placeholder="12,50"
+                                                className="w-full p-3 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                style={{ touchAction: 'manipulation' }}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                                                Data do Serviço
+                                            </label>
+                                            <input
+                                                type="date"
+                                                value={dataServico}
+                                                onChange={e => setDataServico(e.target.value)}
+                                                className="w-full p-3 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                style={{ touchAction: 'manipulation' }}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                                            Observações
+                                        </label>
+                                        <textarea
+                                            value={observacoes}
+                                            onChange={e => setObservacoes(e.target.value)}
+                                            placeholder="Informações adicionais sobre o serviço..."
+                                            rows={3}
+                                            className="w-full p-3 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+                                            style={{ touchAction: 'manipulation' }}
+                                        />
+                                    </div>
                                 </div>
-                            </div>
+                            </fieldset>
                         </form>
                     </div>
 
@@ -673,6 +724,17 @@ const ServicoQrModal: React.FC<ServicoQrModalProps> = ({
                     animation: fade-in 0.2s ease-out forwards;
                 }
             `}</style>
+
+            {/* Modal de Seleção de Cliente */}
+            <ClientSelectionModal
+                isOpen={isClientModalOpen}
+                onClose={() => setIsClientModalOpen(false)}
+                clients={clients}
+                onClientSelect={handleClientSelect}
+                isLoading={isClientsLoading}
+                onAddNewClient={onAddNewClient || (() => { })}
+                onTogglePin={onTogglePin || (() => { })}
+            />
         </div>
     );
 };

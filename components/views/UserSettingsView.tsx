@@ -533,21 +533,27 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({ userInfo, onSave, o
 
             <div className="pb-24"></div>
 
-            <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 p-4 z-50 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
+            <div className="fixed bottom-0 left-0 right-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-t border-slate-200 dark:border-slate-700 p-4 z-50 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
                 <div className="container mx-auto max-w-2xl flex justify-end items-center gap-4">
-                    <div className={`text-green-600 dark:text-green-400 font-medium text-sm flex items-center gap-2 transition-opacity duration-300 ${showSuccess ? 'opacity-100' : 'opacity-0'}`}>
-                        <i className="fas fa-check-circle"></i>
-                        <span>Salvo!</span>
+                    <div className={`text-green-600 dark:text-green-400 font-bold text-sm flex items-center gap-2 transition-all duration-300 ${showSuccess ? 'opacity-100 translate-y-0 animate-pop-in' : 'opacity-0 translate-y-2 pointer-events-none'}`}>
+                        <i className="fas fa-check-circle text-lg"></i>
+                        <span>Alterações salvas com sucesso!</span>
                     </div>
                     <button
                         type="submit"
                         disabled={isSaving}
-                        className="px-6 py-2.5 bg-slate-900 dark:bg-slate-700 text-white font-semibold rounded-lg hover:bg-slate-800 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 disabled:bg-slate-500 disabled:cursor-wait min-w-[170px] text-center shadow-lg"
+                        className={`px-8 py-3 bg-slate-900 dark:bg-slate-700 text-white font-bold rounded-xl hover:bg-slate-800 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 disabled:bg-slate-500 disabled:cursor-wait min-w-[200px] text-center shadow-xl transition-all active:scale-95 flex items-center justify-center gap-3 ${isSaving ? 'animate-pulse-subtle' : ''}`}
                     >
                         {isSaving ? (
-                            <div className="loader-sm mx-auto"></div>
+                            <>
+                                <div className="loader-sm"></div>
+                                <span>Salvando...</span>
+                            </>
                         ) : (
-                            'Salvar Alterações'
+                            <>
+                                <i className="fas fa-save"></i>
+                                <span>Salvar Alterações</span>
+                            </>
                         )}
                     </button>
                 </div>
