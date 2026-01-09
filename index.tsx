@@ -3,6 +3,7 @@
 
 import React, { lazy, Suspense } from 'react';
 import ReactDOM from 'react-dom/client';
+import { BrowserRouter } from 'react-router-dom';
 import './src/index.css';
 import App from './App';
 import { ErrorProvider } from './src/contexts/ErrorContext';
@@ -84,7 +85,9 @@ if (isServicoPublico) {
     <React.StrictMode>
       <ThemeProvider>
         <Suspense fallback={PublicLoadingFallback}>
-          <InviteRegister />
+          <BrowserRouter>
+            <InviteRegister />
+          </BrowserRouter>
         </Suspense>
       </ThemeProvider>
     </React.StrictMode>
