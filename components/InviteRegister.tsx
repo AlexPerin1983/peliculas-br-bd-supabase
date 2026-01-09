@@ -78,7 +78,7 @@ const InviteRegister: React.FC = () => {
                 options: {
                     data: {
                         name: name.trim(),
-                        invite_code: code?.toUpperCase()  // Passa código para o trigger processar
+                        // NÃO enviamos mais o invite_code aqui para evitar erro no trigger
                     },
                     emailRedirectTo: `${window.location.origin}/login`
                 }
@@ -88,15 +88,15 @@ const InviteRegister: React.FC = () => {
                 throw authError;
             }
 
-            // Incrementar contador de usos do convite
+            // Salvar código para processar após login/confirmação
             if (code) {
-                await incrementInviteUsage(code);
+                localStorage.setItem('pendingInviteCode', code);
             }
 
             // Sucesso - redirecionar para login
             navigate('/login', {
                 state: {
-                    message: 'Cadastro realizado com sucesso! Verifique seu email e faça login para continuar.',
+                    message: 'Cadastro realizado com sucesso! Verifique seu email e faça login para ativar o convite.',
                     email: email.trim()
                 }
             });
