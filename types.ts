@@ -125,6 +125,8 @@ export interface UserInfo {
         youtube?: string;
         googleReviews?: string;
     };
+    organizationId?: string;
+    isOwner?: boolean;
 }
 
 export interface Agendamento {

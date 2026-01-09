@@ -13,6 +13,7 @@ import { SubscriptionProvider } from './contexts/SubscriptionContext';
 // Lazy load das páginas públicas
 const EstoquePublicoView = lazy(() => import('./components/views/EstoquePublicoView'));
 const ServicoPublicoView = lazy(() => import('./components/views/ServicoPublicoView'));
+const InviteRegister = lazy(() => import('./components/InviteRegister'));
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -35,6 +36,9 @@ const isEstoquePublico = isPublicEstoque && (
 // Consulta pública de serviço prestado (ex: ?servico=SVC-XXX ou ?s=XXX)
 const isPublicServico = urlParams.has('servico') || urlParams.has('s');
 const isServicoPublico = isPublicServico && !isEstoquePublico;
+
+// Página de cadastro via convite (ex: /convite/ABCD1234)
+const isInvitePage = pathname.startsWith('/convite/') || pathname.includes('/convite/');
 
 const root = ReactDOM.createRoot(rootElement);
 
@@ -70,6 +74,17 @@ if (isServicoPublico) {
       <ThemeProvider>
         <Suspense fallback={PublicLoadingFallback}>
           <EstoquePublicoView />
+        </Suspense>
+      </ThemeProvider>
+    </React.StrictMode>
+  );
+} else if (isInvitePage) {
+  // Renderizar página de cadastro via convite (sem necessidade de login)
+  root.render(
+    <React.StrictMode>
+      <ThemeProvider>
+        <Suspense fallback={PublicLoadingFallback}>
+          <InviteRegister />
         </Suspense>
       </ThemeProvider>
     </React.StrictMode>

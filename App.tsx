@@ -71,7 +71,7 @@ type NumpadConfig = {
 
 
 const App: React.FC = () => {
-    const { isAdmin, user: authUser } = useAuth();
+    const { isAdmin, user: authUser, organizationId, isOwner } = useAuth();
     const { showError } = useError();
     const { deferredPrompt, promptInstall, isInstalled } = usePwaInstallPrompt();
     const { newVersionAvailable, handleUpdate } = usePwaUpdate();
@@ -2277,7 +2277,11 @@ Se não conseguir extrair, retorne: []`;
                 return (
                     <Suspense fallback={<LoadingSpinner />}>
                         <UserSettingsView
-                            userInfo={userInfo}
+                            userInfo={{
+                                ...userInfo,
+                                organizationId: organizationId || undefined,
+                                isOwner: isOwner
+                            }}
                             onSave={handleSaveUserInfo}
                             onOpenPaymentMethods={() => setIsPaymentModalOpen(true)}
                             onOpenApiKeyModal={handleOpenApiKeyModal}
