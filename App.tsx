@@ -98,6 +98,35 @@ const App: React.FC = () => {
     // Modal States
     const [isClientModalOpen, setIsClientModalOpen] = useState(false);
     const [isClientSelectionModalOpen, setIsClientSelectionModalOpen] = useState(false);
+
+    // Processar convite pendente após login
+    useEffect(() => {
+        const checkPendingInvite = async () => {
+            const pendingCode = localStorage.getItem('pendingInviteCode');
+            if (authUser && pendingCode) {
+                try {
+                    console.log('Processando convite pendente:', pendingCode);
+                    const { data, error } = await supabase.rpc('redeem_invite', { code: pendingCode });
+
+                    if (error) throw error;
+
+                    if (data && data.success) {
+                        alert('Convite aceito com sucesso! Você agora faz parte da organização.');
+                        localStorage.removeItem('pendingInviteCode');
+                        window.location.reload(); // Recarregar para atualizar permissões
+                    } else {
+                        console.error('Erro ao processar convite:', data?.error);
+                        localStorage.removeItem('pendingInviteCode');
+                    }
+                } catch (err) {
+                    console.error('Erro ao resgatar convite:', err);
+                    localStorage.removeItem('pendingInviteCode');
+                }
+            }
+        };
+
+        checkPendingInvite();
+    }, [authUser]);
     const [clientModalMode, setClientModalMode] = useState<'add' | 'edit'>('add');
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
     const [isFilmModalOpen, setIsFilmModalOpen] = useState(false);
