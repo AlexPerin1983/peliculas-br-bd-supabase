@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabaseClient';
 
 export const Login: React.FC = () => {
@@ -10,6 +10,24 @@ export const Login: React.FC = () => {
     const [showPassword, setShowPassword] = useState(false);
     const [showForgotPassword, setShowForgotPassword] = useState(false);
     const [resetEmail, setResetEmail] = useState('');
+
+    // Verificar se há mensagem do registro via convite
+    useEffect(() => {
+        const loginMessage = sessionStorage.getItem('loginMessage');
+        const loginEmail = sessionStorage.getItem('loginEmail');
+
+        if (loginMessage) {
+            console.log('[Login] Mensagem recebida do registro:', loginMessage);
+            setMessage({ type: 'success', text: loginMessage });
+            sessionStorage.removeItem('loginMessage');
+        }
+
+        if (loginEmail) {
+            console.log('[Login] Email recebido do registro:', loginEmail);
+            setEmail(loginEmail);
+            sessionStorage.removeItem('loginEmail');
+        }
+    }, []);
 
     const handleAuth = async (e: React.FormEvent) => {
         e.preventDefault();

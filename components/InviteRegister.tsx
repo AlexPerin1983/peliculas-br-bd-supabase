@@ -1,13 +1,63 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { validateInviteCode, incrementInviteUsage } from '../services/inviteService';
 import { supabase } from '../services/supabaseClient';
 
+// Função auxiliar para extrair código de convite da URL
+const extractInviteCode = (): string | undefined => {
+    const pathname = window.location.pathname;
+    const search = window.location.search;
+
+    console.log('[InviteRegister] Extraindo código da URL:', pathname, search);
+
+    // Tentar extrair de /convite/CODIGO
+    if (pathname.includes('/convite/')) {
+        const parts = pathname.split('/convite/');
+        if (parts[1]) {
+            const code = parts[1].split('/')[0].split('?')[0].trim();
+            if (code) {
+                console.log('[InviteRegister] Código extraído do pathname:', code);
+                return code;
+            }
+        }
+    }
+
+    // Tentar extrair de query param ?code=CODIGO ou ?invite=CODIGO
+    const urlParams = new URLSearchParams(search);
+    const queryCode = urlParams.get('code') || urlParams.get('invite');
+    if (queryCode) {
+        console.log('[InviteRegister] Código extraído da query string:', queryCode);
+        return queryCode;
+    }
+
+    // Tentar extrair do hash se for SPA
+    const hash = window.location.hash;
+    if (hash.includes('/convite/')) {
+        const parts = hash.split('/convite/');
+        if (parts[1]) {
+            const code = parts[1].split('/')[0].split('?')[0].trim();
+            if (code) {
+                console.log('[InviteRegister] Código extraído do hash:', code);
+                return code;
+            }
+        }
+    }
+
+    console.log('[InviteRegister] Nenhum código encontrado na URL');
+    return undefined;
+};
+
 const InviteRegister: React.FC = () => {
     const params = useParams<{ code: string }>();
-    // Extrair código da URL manualmente se useParams falhar (já que não temos Route definida no index.tsx)
-    const code = params.code || window.location.pathname.split('/convite/')[1]?.split('/')[0];
+    // Extrair código da URL - primeiro tenta useParams, depois extrai manualmente
+    // Usar useRef para manter o código original mesmo após re-renders
+    const initialCode = useRef<string | undefined>(
+        params.code || extractInviteCode()
+    );
+    const code = initialCode.current;
     const navigate = useNavigate();
+
+    console.log('[InviteRegister] Componente montado com código:', code);
 
     const [loading, setLoading] = useState(true);
     const [valid, setValid] = useState(false);
@@ -47,6 +97,15 @@ const InviteRegister: React.FC = () => {
         e.preventDefault();
         setError('');
 
+        console.log('[InviteRegister] Iniciando registro com código:', code);
+
+        // Verificar se temos código de convite
+        if (!code) {
+            console.error('[InviteRegister] Código de convite não encontrado!');
+            setError('Código de convite não fornecido. Por favor, use o link de convite novamente.');
+            return;
+        }
+
         // Validações
         if (!name.trim()) {
             setError('Por favor, informe seu nome completo.');
@@ -69,39 +128,77 @@ const InviteRegister: React.FC = () => {
         }
 
         setRegistering(true);
+        console.log('[InviteRegister] Validações OK, registrando usuário...');
 
         try {
+            // Primeiro, fazer logout de qualquer sessão existente
+            console.log('[InviteRegister] Fazendo logout de sessão anterior (se existir)...');
+            await supabase.auth.signOut();
+            localStorage.removeItem('peliculas-br-bd-v2-auth');
+
             // Registrar usuário no Supabase Auth
+            console.log('[InviteRegister] Chamando supabase.auth.signUp...');
             const { data: authData, error: authError } = await supabase.auth.signUp({
                 email: email.trim(),
                 password: password,
                 options: {
                     data: {
                         name: name.trim(),
-                        // NÃO enviamos mais o invite_code aqui para evitar erro no trigger
+                        invite_code: code, // Passar o código para associar à organização
                     },
-                    emailRedirectTo: `${window.location.origin}/login`
+                    // Não definir emailRedirectTo para evitar fluxo de confirmação
                 }
             });
 
             if (authError) {
+                console.error('[InviteRegister] Erro do Supabase Auth:', authError);
                 throw authError;
             }
+
+            console.log('[InviteRegister] Usuário criado com sucesso:', authData?.user?.id);
+            console.log('[InviteRegister] Sessão retornada:', authData?.session ? 'SIM' : 'NÃO');
 
             // Salvar código para processar após login/confirmação
             if (code) {
                 localStorage.setItem('pendingInviteCode', code);
+                console.log('[InviteRegister] Código pendente salvo no localStorage:', code);
             }
 
-            // Sucesso - redirecionar para login
-            navigate('/login', {
-                state: {
-                    message: 'Cadastro realizado com sucesso! Verifique seu email e faça login para ativar o convite.',
-                    email: email.trim()
+            // Verificar se o Supabase retornou uma sessão (não precisa de confirmação de email)
+            if (authData?.session) {
+                // Usuário já está logado! Tentar fazer login automático
+                console.log('[InviteRegister] Sessão ativa! Fazendo login automático...');
+
+                // Aguardar um momento para garantir que a sessão foi salva
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                // Redirecionar direto para o app
+                sessionStorage.setItem('loginMessage', 'Conta criada com sucesso! Bem-vindo ao sistema.');
+                window.location.href = '/';
+            } else {
+                // Precisa confirmar email ou fazer login manual
+                // Tentar fazer login automático com as credenciais
+                console.log('[InviteRegister] Tentando fazer login automático...');
+
+                const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
+                    email: email.trim(),
+                    password: password
+                });
+
+                if (loginError) {
+                    console.log('[InviteRegister] Login automático falhou:', loginError.message);
+                    // Se falhou, redirecionar para login normal
+                    sessionStorage.setItem('loginMessage', 'Conta criada com sucesso! Faça login para continuar.');
+                    sessionStorage.setItem('loginEmail', email.trim());
+                    window.location.href = '/login';
+                } else {
+                    console.log('[InviteRegister] Login automático bem-sucedido!');
+                    sessionStorage.setItem('loginMessage', 'Conta criada com sucesso! Bem-vindo ao sistema.');
+                    window.location.href = '/';
                 }
-            });
+            }
         } catch (err: any) {
-            console.error('Erro ao cadastrar:', err);
+            console.error('[InviteRegister] Erro ao cadastrar:', err);
 
             // Tratar mensagens de erro específicas
             if (err.message?.includes('already registered')) {

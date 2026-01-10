@@ -1,5 +1,6 @@
 import React from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import SyncStatusIndicator from './SyncStatusIndicator';
 
 type ActiveTab = 'client' | 'films' | 'settings' | 'history' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque';
 
@@ -31,7 +32,13 @@ const Header: React.FC<HeaderProps> = ({
     };
 
     return (
-        <div>
+        <div className="space-y-2">
+            {/* Indicador de Sincronização */}
+            <div className="flex justify-end">
+                <SyncStatusIndicator />
+            </div>
+
+            {/* Tabs de navegação */}
             <div className="flex justify-center">
                 <div className="flex space-x-1 p-0.5 bg-slate-100 dark:bg-slate-700 rounded-xl w-full overflow-x-auto">
                     <TabButton tabId="client" icon="fas fa-user-friends">Cliente</TabButton>

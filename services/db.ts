@@ -1,7 +1,8 @@
-// Database Service - Agora usando Supabase
-// Este arquivo redireciona todas as chamadas para o serviço Supabase
+// Database Service - Usando estratégia Offline-First
+// Este arquivo redireciona todas as chamadas para o serviço OfflineFirst
+// Que salva localmente primeiro e sincroniza com Supabase quando possível
 
-// Re-exporta todas as funções do supabaseDb
+// Re-exporta todas as funções do offlineFirstDb
 export {
     // Client functions
     getAllClients,
@@ -42,4 +43,4 @@ export {
 
     // Migration function
     migratePDFsWithProposalOptionId
-} from './supabaseDb';
+} from './offlineFirstDb';

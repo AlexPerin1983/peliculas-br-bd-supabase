@@ -3,6 +3,7 @@ import './src/estoque-dark-mode.css';
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 import { Client, Measurement, UserInfo, Film, PaymentMethods, SavedPDF, Agendamento, ProposalOption, SchedulingInfo, ExtractedClientData } from './types';
 import * as db from './services/db';
+import { supabase } from './services/supabaseClient';
 import { generatePDF, generateCombinedPDF } from './services/pdfGenerator';
 import Header from './components/Header';
 import ClientBar from './components/ClientBar';
@@ -46,6 +47,8 @@ import { useAuth } from './contexts/AuthContext';
 import { UserAccount } from './components/UserAccount';
 import { FeatureGate, UpgradePrompt } from './components/subscription/SubscriptionComponents';
 import { useSubscription } from './contexts/SubscriptionContext';
+import SyncStatusIndicator from './components/SyncStatusIndicator';
+import { initSyncService } from './services/syncService';
 
 
 
@@ -400,6 +403,9 @@ const App: React.FC = () => {
 
     useEffect(() => {
         const init = async () => {
+            // Inicializar serviço de sincronização offline
+            initSyncService();
+
             // Só carrega dados se houver usuário autenticado
             if (!authUser) {
                 console.log('[App init] Sem usuário autenticado, pulando carregamento');
