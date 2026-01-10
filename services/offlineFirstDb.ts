@@ -16,13 +16,29 @@ import { isOnlineNow, syncAllPending } from './syncService';
 // =====================================================
 
 export async function getAllClients(): Promise<Client[]> {
+    console.log('[OfflineFirst] getAllClients - isOnline:', isOnlineNow());
+
     try {
         if (isOnlineNow()) {
-            // Online: buscar do Supabase e atualizar cache local
-            const clients = await supabaseDb.getAllClients();
+            // Online: primeiro sincronizar pendentes, depois buscar do Supabase
 
-            // Atualizar cache local
-            for (const client of clients) {
+            // 1. Buscar clientes locais pendentes (não sincronizados)
+            const localClients = await offlineDb.getAllClientsLocal();
+            const pendingClients = localClients.filter(c => c._syncStatus === 'pending');
+            console.log('[OfflineFirst] Clientes pendentes para sincronizar:', pendingClients.length);
+
+            // 2. Sincronizar pendentes em background (não bloquear a UI)
+            if (pendingClients.length > 0) {
+                console.log('[OfflineFirst] Iniciando sincronização de pendentes...');
+                syncAllPending().catch(err => console.error('[OfflineFirst] Erro na sincronização:', err));
+            }
+
+            // 3. Buscar do Supabase
+            const supabaseClients = await supabaseDb.getAllClients();
+            console.log('[OfflineFirst] Clientes do Supabase:', supabaseClients.length);
+
+            // 4. Atualizar cache local com dados do Supabase
+            for (const client of supabaseClients) {
                 await offlineDb.offlineDb.clients.put({
                     ...client,
                     _localId: `remote_${client.id}`,
@@ -32,24 +48,76 @@ export async function getAllClients(): Promise<Client[]> {
                 });
             }
 
-            return clients;
+            // 5. Mesclar: Supabase + pendentes locais (que ainda não foram sincronizados)
+            const supabaseIds = new Set(supabaseClients.map(c => c.id));
+            const pendingNotInSupabase = pendingClients
+                .filter(c => !c._remoteId || !supabaseIds.has(c._remoteId as number))
+                .map(localClient => {
+                    const { _localId, _syncStatus, _lastModified, _syncedAt, _remoteId, ...client } = localClient;
+                    // Garantir ID consistente
+                    let clientId = _remoteId as number || client.id;
+                    if (!clientId && _localId) {
+                        const parts = _localId.split('_');
+                        clientId = parseInt(parts[1]) || Date.now();
+                    }
+                    return { ...client, id: clientId };
+                });
+
+            console.log('[OfflineFirst] Pendentes não no Supabase:', pendingNotInSupabase.length);
+
+            // Retornar todos (Supabase + pendentes não sincronizados)
+            const allClients = [...supabaseClients, ...pendingNotInSupabase];
+            console.log('[OfflineFirst] Total de clientes retornados:', allClients.length);
+
+            return allClients;
         } else {
             // Offline: buscar do cache local
+            console.log('[OfflineFirst] Buscando clientes do cache local...');
             const localClients = await offlineDb.getAllClientsLocal();
-            return localClients.map(({ _localId, _syncStatus, _lastModified, _syncedAt, _remoteId, ...client }) => client);
+            console.log('[OfflineFirst] Clientes locais encontrados:', localClients.length);
+
+            // Mapear clientes locais para o formato correto, garantindo ID consistente
+            const result = localClients.map(localClient => {
+                const { _localId, _syncStatus, _lastModified, _syncedAt, _remoteId, ...client } = localClient;
+
+                // Garantir ID consistente: usa _remoteId se existe, senão extrai do _localId
+                let clientId = _remoteId as number || client.id;
+                if (!clientId && _localId) {
+                    const parts = _localId.split('_');
+                    clientId = parseInt(parts[1]) || Date.now();
+                }
+
+                return { ...client, id: clientId };
+            });
+
+            return result;
         }
     } catch (error) {
         console.error('[OfflineFirst] Erro ao buscar clientes, usando cache local:', error);
         const localClients = await offlineDb.getAllClientsLocal();
-        return localClients.map(({ _localId, _syncStatus, _lastModified, _syncedAt, _remoteId, ...client }) => client);
+        console.log('[OfflineFirst] Fallback - Clientes locais:', localClients.length);
+
+        // Mapear com ID consistente
+        return localClients.map(localClient => {
+            const { _localId, _syncStatus, _lastModified, _syncedAt, _remoteId, ...client } = localClient;
+            let clientId = _remoteId as number || client.id;
+            if (!clientId && _localId) {
+                const parts = _localId.split('_');
+                clientId = parseInt(parts[1]) || Date.now();
+            }
+            return { ...client, id: clientId };
+        });
     }
 }
 
 export async function saveClient(client: Omit<Client, 'id'> | Client): Promise<Client> {
+    console.log('[OfflineFirst] saveClient - isOnline:', isOnlineNow(), 'client:', client);
+
     // Se estiver online, salvar diretamente no Supabase para resposta imediata e consistente
     if (isOnlineNow()) {
         try {
             const savedClient = await supabaseDb.saveClient(client);
+            console.log('[OfflineFirst] Cliente salvo no Supabase:', savedClient);
             // Atualizar cache local
             await offlineDb.offlineDb.clients.put({
                 ...savedClient,
@@ -66,12 +134,16 @@ export async function saveClient(client: Omit<Client, 'id'> | Client): Promise<C
     }
 
     // Offline ou fallback: salvar localmente primeiro
+    console.log('[OfflineFirst] Salvando cliente localmente...');
     const localClient = await offlineDb.saveClientLocal(client as Client);
+    console.log('[OfflineFirst] Cliente salvo localmente:', localClient);
 
     // Gerar ID temporário baseado no _localId para consistência
     // Extrai o timestamp do _localId (formato: local_TIMESTAMP_RANDOM)
     const localIdParts = localClient._localId?.split('_') || [];
     const tempId = localClient._remoteId as number || localClient.id || parseInt(localIdParts[1]) || Date.now();
+
+    console.log('[OfflineFirst] ID temporário gerado:', tempId);
 
     return {
         ...client,

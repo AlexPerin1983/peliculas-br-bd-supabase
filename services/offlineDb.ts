@@ -63,9 +63,14 @@ export const generateLocalId = (): string => {
 export async function getAllClientsLocal(): Promise<LocalClient[]> {
     // Retorna todos os clientes que não estão marcados como erro
     // Isso inclui: synced (sincronizados) e pending (aguardando sincronização)
-    return await offlineDb.clients
-        .filter(c => c._syncStatus === 'synced' || c._syncStatus === 'pending')
-        .toArray();
+    const allClients = await offlineDb.clients.toArray();
+    console.log('[OfflineDb] Total de clientes no IndexedDB:', allClients.length);
+    console.log('[OfflineDb] Status dos clientes:', allClients.map(c => ({ nome: c.nome, status: c._syncStatus, localId: c._localId })));
+
+    const filtered = allClients.filter(c => c._syncStatus === 'synced' || c._syncStatus === 'pending');
+    console.log('[OfflineDb] Clientes após filtro (synced/pending):', filtered.length);
+
+    return filtered;
 }
 
 export async function saveClientLocal(client: Omit<Client, 'id'> | Client): Promise<LocalClient> {
