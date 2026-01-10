@@ -68,9 +68,14 @@ export async function saveClient(client: Omit<Client, 'id'> | Client): Promise<C
     // Offline ou fallback: salvar localmente primeiro
     const localClient = await offlineDb.saveClientLocal(client as Client);
 
+    // Gerar ID temporário baseado no _localId para consistência
+    // Extrai o timestamp do _localId (formato: local_TIMESTAMP_RANDOM)
+    const localIdParts = localClient._localId?.split('_') || [];
+    const tempId = localClient._remoteId as number || localClient.id || parseInt(localIdParts[1]) || Date.now();
+
     return {
         ...client,
-        id: localClient._remoteId as number || localClient.id || Date.now()
+        id: tempId
     };
 }
 
