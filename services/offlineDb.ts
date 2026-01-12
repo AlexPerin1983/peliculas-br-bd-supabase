@@ -75,22 +75,52 @@ export async function getAllClientsLocal(): Promise<LocalClient[]> {
 
 export async function saveClientLocal(client: Omit<Client, 'id'> | Client): Promise<LocalClient> {
     const now = Date.now();
-    const localId = (client as LocalClient)._localId || generateLocalId();
+
+    // Cast para acessar propriedade id que pode existir
+    const clientWithId = client as Client;
+    const clientId = clientWithId.id;
+
+    // IMPORTANTE: Buscar cliente existente pelo ID para evitar duplicação
+    // Isso é necessário quando um cliente existente é atualizado (ex: ao fixar)
+    let existingClient: LocalClient | undefined;
+
+    if (clientId) {
+        // Buscar pelo ID remoto
+        existingClient = await offlineDb.clients
+            .filter(c => c.id === clientId || c._remoteId === clientId)
+            .first();
+    }
+
+    // Usar o _localId existente se encontrado, senão verificar se veio no cliente, senão gerar novo
+    const localId = existingClient?._localId || (client as LocalClient)._localId || generateLocalId();
+
+    console.log('[OfflineDb] saveClient - existente:', existingClient?._localId, 'usando localId:', localId);
 
     const localClient: LocalClient = {
         ...client,
         _localId: localId,
         _syncStatus: 'pending',
         _lastModified: now,
-        _remoteId: client.id
+        _remoteId: clientId
     };
+
+    // Se existe um cliente com _localId diferente (formato remote_), deletar o antigo para evitar duplicata
+    if (clientId && !existingClient) {
+        const remoteFormatClient = await offlineDb.clients
+            .filter(c => c._localId === `remote_${clientId}`)
+            .first();
+        if (remoteFormatClient) {
+            console.log('[OfflineDb] Removendo cliente com formato remote_ para evitar duplicata');
+            await offlineDb.clients.delete(remoteFormatClient._localId!);
+        }
+    }
 
     await offlineDb.clients.put(localClient);
 
     // Adicionar à fila de sincronização
     await offlineDb.syncQueue.add({
         table: 'clients',
-        action: client.id ? 'update' : 'create',
+        action: clientId ? 'update' : 'create',
         data: localClient,
         timestamp: now
     });
@@ -125,16 +155,30 @@ export async function deleteClientLocal(clientId: number | string): Promise<void
 // =====================================================
 
 export async function getAllFilmsLocal(): Promise<LocalFilm[]> {
-    return await offlineDb.films.toArray();
+    // Retorna todos os filmes que não estão marcados como erro
+    // Isso inclui: synced (sincronizados) e pending (aguardando sincronização)
+    const allFilms = await offlineDb.films.toArray();
+    console.log('[OfflineDb] Total de filmes no IndexedDB:', allFilms.length);
+    console.log('[OfflineDb] Status dos filmes:', allFilms.map(f => ({ nome: f.nome, status: f._syncStatus, localId: f._localId })));
+
+    const filtered = allFilms.filter(f => f._syncStatus === 'synced' || f._syncStatus === 'pending');
+    console.log('[OfflineDb] Filmes após filtro (synced/pending):', filtered.length);
+
+    return filtered;
 }
 
 export async function saveFilmLocal(film: Film): Promise<LocalFilm> {
     const now = Date.now();
+
+    // Buscar filme existente pelo nome
     const existingFilm = await offlineDb.films
         .filter(f => f.nome === film.nome)
         .first();
 
+    // Usar o _localId existente se encontrado, senão gerar novo
     const localId = existingFilm?._localId || generateLocalId();
+
+    console.log('[OfflineDb] saveFilm - existente:', existingFilm?._localId, 'usando localId:', localId);
 
     const localFilm: LocalFilm = {
         ...film,
@@ -142,6 +186,17 @@ export async function saveFilmLocal(film: Film): Promise<LocalFilm> {
         _syncStatus: 'pending',
         _lastModified: now
     };
+
+    // Se não encontrou filme existente, verificar se existe com formato remote_ e remover para evitar duplicata
+    if (!existingFilm) {
+        const remoteFormatFilm = await offlineDb.films
+            .filter(f => f._localId === `remote_${film.nome}`)
+            .first();
+        if (remoteFormatFilm) {
+            console.log('[OfflineDb] Removendo filme com formato remote_ para evitar duplicata');
+            await offlineDb.films.delete(remoteFormatFilm._localId!);
+        }
+    }
 
     await offlineDb.films.put(localFilm);
 

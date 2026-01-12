@@ -49,9 +49,21 @@ export async function getAllClients(): Promise<Client[]> {
             }
 
             // 5. Mesclar: Supabase + pendentes locais (que ainda não foram sincronizados)
+            // IMPORTANTE: Evitar duplicação verificando pelo ID do cliente E pelo _remoteId
             const supabaseIds = new Set(supabaseClients.map(c => c.id));
             const pendingNotInSupabase = pendingClients
-                .filter(c => !c._remoteId || !supabaseIds.has(c._remoteId as number))
+                .filter(c => {
+                    // Se tem _remoteId e já está no Supabase, não incluir (evita duplicata)
+                    if (c._remoteId && supabaseIds.has(c._remoteId as number)) {
+                        return false;
+                    }
+                    // Se tem id do cliente e já está no Supabase, não incluir (evita duplicata de updates)
+                    if (c.id && supabaseIds.has(c.id)) {
+                        return false;
+                    }
+                    // Se não tem nenhum dos dois, é um cliente novo não sincronizado
+                    return true;
+                })
                 .map(localClient => {
                     const { _localId, _syncStatus, _lastModified, _syncedAt, _remoteId, ...client } = localClient;
                     // Garantir ID consistente
@@ -164,12 +176,27 @@ export async function deleteClient(clientId: number): Promise<void> {
 // =====================================================
 
 export async function getAllCustomFilms(): Promise<Film[]> {
+    console.log('[OfflineFirst] getAllCustomFilms - isOnline:', isOnlineNow());
+
     try {
         if (isOnlineNow()) {
-            const films = await supabaseDb.getAllCustomFilms();
+            // 1. Buscar filmes locais pendentes (não sincronizados)
+            const localFilms = await offlineDb.getAllFilmsLocal();
+            const pendingFilms = localFilms.filter(f => f._syncStatus === 'pending');
+            console.log('[OfflineFirst] Filmes pendentes para sincronizar:', pendingFilms.length);
 
-            // Atualizar cache local
-            for (const film of films) {
+            // 2. Sincronizar pendentes em background (não bloquear a UI)
+            if (pendingFilms.length > 0) {
+                console.log('[OfflineFirst] Iniciando sincronização de filmes pendentes...');
+                syncAllPending().catch(err => console.error('[OfflineFirst] Erro na sincronização de filmes:', err));
+            }
+
+            // 3. Buscar do Supabase
+            const supabaseFilms = await supabaseDb.getAllCustomFilms();
+            console.log('[OfflineFirst] Filmes do Supabase:', supabaseFilms.length);
+
+            // 4. Atualizar cache local com dados do Supabase
+            for (const film of supabaseFilms) {
                 await offlineDb.offlineDb.films.put({
                     ...film,
                     _localId: `remote_${film.nome}`,
@@ -178,9 +205,34 @@ export async function getAllCustomFilms(): Promise<Film[]> {
                 });
             }
 
-            return films;
+            // 5. Mesclar: Supabase + pendentes locais
+            // IMPORTANTE: Filmes pendentes PREVALECEM sobre os do Supabase
+            // Isso garante que edições apareçam imediatamente na UI
+            const pendingFilmNames = new Set(pendingFilms.map(f => f.nome));
+
+            // Filmes do Supabase que NÃO foram editados localmente
+            const supabaseFilmsNotEdited = supabaseFilms.filter(f => !pendingFilmNames.has(f.nome));
+
+            // Converter filmes pendentes para o formato correto
+            const pendingFilmsFormatted = pendingFilms.map(localFilm => {
+                const { _localId, _syncStatus, _lastModified, _syncedAt, _remoteId, ...film } = localFilm;
+                return film;
+            });
+
+            console.log('[OfflineFirst] Filmes do Supabase não editados:', supabaseFilmsNotEdited.length);
+            console.log('[OfflineFirst] Filmes pendentes locais:', pendingFilmsFormatted.length);
+
+            // Retornar todos: pendentes locais (prevalecem) + Supabase não editados
+            const allFilms = [...pendingFilmsFormatted, ...supabaseFilmsNotEdited];
+            console.log('[OfflineFirst] Total de filmes retornados:', allFilms.length);
+
+            return allFilms;
         } else {
+            // Offline: buscar do cache local
+            console.log('[OfflineFirst] Buscando filmes do cache local...');
             const localFilms = await offlineDb.getAllFilmsLocal();
+            console.log('[OfflineFirst] Filmes locais encontrados:', localFilms.length);
+
             return localFilms.map(({ _localId, _syncStatus, _lastModified, _syncedAt, _remoteId, ...film }) => film);
         }
     } catch (error) {
