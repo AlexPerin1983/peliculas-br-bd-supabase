@@ -306,16 +306,74 @@ export async function saveProposalOptionsLocal(clientId: number, options: Propos
 // FUNÇÕES DE PDFs
 // =====================================================
 
+// Helper para converter Blob para base64
+const blobToBase64 = (blob: Blob): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
+};
+
+// Helper para converter base64 para Blob
+const base64ToBlob = (base64: string): Blob => {
+    try {
+        // Se já é um Blob ou não tem formato base64, retornar como está
+        if (!base64 || typeof base64 !== 'string' || !base64.includes(',')) {
+            console.warn('[OfflineDb] base64ToBlob: formato inválido, retornando blob vazio');
+            return new Blob([], { type: 'application/pdf' });
+        }
+
+        const parts = base64.split(',');
+        const mime = parts[0].match(/:(.*?);/)?.[1] || 'application/pdf';
+        const bstr = atob(parts[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) {
+            u8arr[n] = bstr.charCodeAt(n);
+        }
+        return new Blob([u8arr], { type: mime });
+    } catch (error) {
+        console.error('[OfflineDb] Erro ao converter base64 para Blob:', error);
+        return new Blob([], { type: 'application/pdf' });
+    }
+};
+
 export async function getAllPdfsLocal(): Promise<LocalSavedPDF[]> {
-    return await offlineDb.savedPdfs.toArray();
+    const localPdfs = await offlineDb.savedPdfs.toArray();
+
+    // Converter pdfBlob de base64 para Blob para cada PDF
+    return localPdfs.map(pdf => {
+        // Se pdfBlob é uma string (base64), converter para Blob
+        if (typeof pdf.pdfBlob === 'string') {
+            return {
+                ...pdf,
+                pdfBlob: base64ToBlob(pdf.pdfBlob as unknown as string)
+            };
+        }
+        return pdf;
+    });
 }
 
 export async function savePdfLocal(pdf: SavedPDF): Promise<LocalSavedPDF> {
     const now = Date.now();
     const localId = generateLocalId();
 
+    // Converter Blob para base64 para armazenar no IndexedDB
+    // Isso permite sincronização correta com Supabase
+    let pdfBlobBase64: string;
+    if (pdf.pdfBlob instanceof Blob) {
+        pdfBlobBase64 = await blobToBase64(pdf.pdfBlob);
+        console.log('[OfflineDb] PDF convertido para base64, tamanho:', pdfBlobBase64.length);
+    } else {
+        // Já está em base64
+        pdfBlobBase64 = pdf.pdfBlob as unknown as string;
+    }
+
     const localPdf: LocalSavedPDF = {
         ...pdf,
+        pdfBlob: pdfBlobBase64 as unknown as Blob, // Armazenar como base64 internamente
         _localId: localId,
         _syncStatus: 'pending',
         _lastModified: now,
