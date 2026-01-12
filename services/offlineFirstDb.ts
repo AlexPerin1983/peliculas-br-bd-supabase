@@ -366,11 +366,27 @@ export async function getAllPDFs(): Promise<SavedPDF[]> {
             return await supabaseDb.getAllPDFs();
         } else {
             const localPdfs = await offlineDb.getAllPdfsLocal();
-            return localPdfs.map(({ _localId, _syncStatus, _lastModified, _syncedAt, _remoteId, ...pdf }) => pdf);
+            // Garantir que cada PDF tenha um ID (necessário para seleção na UI)
+            return localPdfs.map(({ _localId, _syncStatus, _lastModified, _syncedAt, _remoteId, ...pdf }) => {
+                // Se não tem ID, gera um ID temporário negativo baseado no _localId
+                let finalId = _remoteId as number || pdf.id;
+                if (!finalId && _localId) {
+                    const timestamp = parseInt(_localId.split('_')[1] || String(Date.now()));
+                    finalId = -timestamp;
+                }
+                return { ...pdf, id: finalId };
+            });
         }
     } catch (error) {
         const localPdfs = await offlineDb.getAllPdfsLocal();
-        return localPdfs.map(({ _localId, _syncStatus, _lastModified, _syncedAt, _remoteId, ...pdf }) => pdf);
+        return localPdfs.map(({ _localId, _syncStatus, _lastModified, _syncedAt, _remoteId, ...pdf }) => {
+            let finalId = _remoteId as number || pdf.id;
+            if (!finalId && _localId) {
+                const timestamp = parseInt(_localId.split('_')[1] || String(Date.now()));
+                finalId = -timestamp;
+            }
+            return { ...pdf, id: finalId };
+        });
     }
 }
 
@@ -381,7 +397,17 @@ export async function savePDF(pdf: SavedPDF): Promise<SavedPDF> {
         syncAllPending().catch(console.error);
     }
 
-    return { ...pdf, id: localPdf._remoteId as number || pdf.id };
+    // Garantir que o PDF retornado tenha um ID (necessário para seleção na UI)
+    // Usa _remoteId, ou pdf.id original, ou gera um ID temporário baseado no timestamp do _localId
+    let finalId = localPdf._remoteId as number || pdf.id;
+    if (!finalId && localPdf._localId) {
+        // Gera um ID temporário negativo (para diferenciar de IDs reais que são positivos)
+        const timestamp = parseInt(localPdf._localId.split('_')[1] || String(Date.now()));
+        finalId = -timestamp; // ID negativo para identificar como local
+        console.log('[OfflineFirst] Gerado ID temporário para PDF:', finalId);
+    }
+
+    return { ...pdf, id: finalId };
 }
 
 export async function updatePDF(pdf: SavedPDF): Promise<void> {
