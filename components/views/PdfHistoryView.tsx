@@ -6,7 +6,7 @@ interface PdfHistoryViewProps {
     clients: Client[];
     agendamentos: Agendamento[];
     onDelete: (pdfId: number) => void;
-    onDownload: (blob: Blob, filename: string) => void;
+    onDownload: (blob: Blob | string, filename: string) => void;
     onUpdateStatus: (pdfId: number, status: SavedPDF['status']) => void;
     onSchedule: (info: { pdf: SavedPDF; agendamento?: Agendamento } | { agendamento: Agendamento; pdf?: SavedPDF }) => void;
     onGenerateCombinedPdf: (pdfs: SavedPDF[]) => void;
@@ -24,7 +24,7 @@ const PdfHistoryItem: React.FC<{
     pdf: SavedPDF;
     clientName: string;
     agendamento: Agendamento | undefined;
-    onDownload: (blob: Blob, filename: string) => void;
+    onDownload: (blob: Blob | string, filename: string) => void;
     onDelete: (id: number) => void;
     onUpdateStatus: (id: number, status: SavedPDF['status']) => void;
     onSchedule: (info: { pdf: SavedPDF; agendamento?: Agendamento } | { agendamento: Agendamento; pdf?: SavedPDF }) => void;

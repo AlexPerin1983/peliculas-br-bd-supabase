@@ -343,17 +343,26 @@ const base64ToBlob = (base64: string): Blob => {
 export async function getAllPdfsLocal(): Promise<LocalSavedPDF[]> {
     const localPdfs = await offlineDb.savedPdfs.toArray();
 
-    // Converter pdfBlob de base64 para Blob para cada PDF
-    return localPdfs.map(pdf => {
-        // Se pdfBlob é uma string (base64), converter para Blob
-        if (typeof pdf.pdfBlob === 'string') {
-            return {
-                ...pdf,
-                pdfBlob: base64ToBlob(pdf.pdfBlob as unknown as string)
-            };
-        }
-        return pdf;
-    });
+    // OTIMIZAÇÃO: Não converter base64 para Blob aqui (isso é muito custoso)
+    // O pdfBlob será convertido lazy quando o usuário clicar em baixar
+    // Por enquanto, retornamos os PDFs como estão
+    return localPdfs;
+}
+
+// Função para converter pdfBlob sob demanda (lazy loading)
+export function convertPdfBlobIfNeeded(pdf: LocalSavedPDF): Blob {
+    // Se já é um Blob, retornar diretamente
+    if (pdf.pdfBlob instanceof Blob) {
+        return pdf.pdfBlob;
+    }
+
+    // Se é uma string (base64), converter para Blob
+    if (typeof pdf.pdfBlob === 'string') {
+        return base64ToBlob(pdf.pdfBlob);
+    }
+
+    console.warn('[OfflineDb] pdfBlob em formato inesperado:', typeof pdf.pdfBlob);
+    return new Blob([], { type: 'application/pdf' });
 }
 
 export async function savePdfLocal(pdf: SavedPDF): Promise<LocalSavedPDF> {
