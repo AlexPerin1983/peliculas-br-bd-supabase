@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { sendInviteEmail } from './emailHelper';
 
 export interface OrganizationInvite {
     id: string;
@@ -30,7 +31,6 @@ function generateInviteCode(): string {
  */
 export async function createOrganizationInvite(organizationId: string): Promise<OrganizationInvite | null> {
     try {
-        console.log('[inviteService] Criando convite para organização:', organizationId);
 
         // Primeiro, desativar todos os convites anteriores desta organização
         const { error: deactivateError } = await supabase
@@ -80,7 +80,6 @@ export async function createOrganizationInvite(organizationId: string): Promise<
             throw error;
         }
 
-        console.log('[inviteService] Convite criado com sucesso:', data.invite_code);
         return data;
     } catch (error) {
         console.error('[inviteService] Erro ao criar convite:', error);
@@ -93,7 +92,6 @@ export async function createOrganizationInvite(organizationId: string): Promise<
  */
 export async function getActiveInvite(organizationId: string): Promise<OrganizationInvite | null> {
     try {
-        console.log('[inviteService] Buscando convite ativo para:', organizationId);
 
         const { data, error } = await supabase
             .from('organization_invites')
@@ -109,17 +107,13 @@ export async function getActiveInvite(organizationId: string): Promise<Organizat
             throw error;
         }
 
-        if (data) {
-            console.log('[inviteService] Convite encontrado:', data.invite_code);
-        } else {
-            console.log('[inviteService] Nenhum convite ativo encontrado');
-        }
+    }
 
         return data || null;
-    } catch (error) {
-        console.error('[inviteService] Erro ao buscar convite:', error);
-        return null;
-    }
+} catch (error) {
+    console.error('[inviteService] Erro ao buscar convite:', error);
+    return null;
+}
 }
 
 /**
@@ -132,7 +126,6 @@ export async function validateInviteCode(inviteCode: string): Promise<{
     error?: string;
 }> {
     try {
-        console.log('[inviteService] Validando código:', inviteCode);
 
         if (!inviteCode || inviteCode.length < 8) {
             return { valid: false, error: 'Código inválido' };
@@ -157,23 +150,18 @@ export async function validateInviteCode(inviteCode: string): Promise<{
         }
 
         if (!invite) {
-            console.log('[inviteService] Código não encontrado ou inativo');
             return { valid: false, error: 'Código inválido ou expirado' };
         }
 
         // Verificar expiração
         if (invite.expires_at && new Date(invite.expires_at) < new Date()) {
-            console.log('[inviteService] Código expirado');
             return { valid: false, error: 'Código expirado' };
         }
 
         // Verificar limite de usos
         if (invite.max_uses && invite.current_uses >= invite.max_uses) {
-            console.log('[inviteService] Limite de usos atingido');
             return { valid: false, error: 'Código já atingiu o limite de usos' };
         }
-
-        console.log('[inviteService] Código válido para organização:', invite.organizations?.name);
 
         return {
             valid: true,
@@ -192,7 +180,6 @@ export async function validateInviteCode(inviteCode: string): Promise<{
  */
 export async function incrementInviteUsage(inviteCode: string): Promise<void> {
     try {
-        console.log('[inviteService] Incrementando uso do código:', inviteCode);
 
         const { error } = await supabase.rpc('increment_invite_usage', {
             p_invite_code: inviteCode.toUpperCase()
@@ -200,8 +187,6 @@ export async function incrementInviteUsage(inviteCode: string): Promise<void> {
 
         if (error) {
             console.error('[inviteService] Erro ao incrementar uso:', error);
-        } else {
-            console.log('[inviteService] Uso incrementado com sucesso');
         }
     } catch (error) {
         console.error('[inviteService] Erro ao incrementar uso:', error);
@@ -215,3 +200,42 @@ export function getInviteUrl(inviteCode: string): string {
     const baseUrl = window.location.origin;
     return `${baseUrl}/convite/${inviteCode}`;
 }
+
+/**
+ * Enviar email de convite para um usuário
+ * @param email Email do destinatário
+ * @param inviteCode Código do convite
+ * @param inviterName Nome de quem está convidando
+ * @param organizationName Nome da organização
+ */
+export async function sendInviteEmailToUser(
+    email: string,
+    inviteCode: string,
+    inviterName: string,
+    organizationName: string
+): Promise<{ success: boolean; error?: string }> {
+    try {
+
+        const inviteLink = getInviteUrl(inviteCode);
+
+        const result = await sendInviteEmail(email, {
+            inviterName,
+            organizationName,
+            inviteLink,
+        });
+
+        if (result.success) {
+            return { success: true };
+        } else {
+            console.error('[inviteService] Erro ao enviar email:', result.error);
+            return { success: false, error: result.error };
+        }
+    } catch (error) {
+        console.error('[inviteService] Erro ao enviar email de convite:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Erro desconhecido',
+        };
+    }
+}
+

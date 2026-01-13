@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabaseClient';
+import { emailHelper } from '../services/emailHelper';
+
 
 export const Login: React.FC = () => {
     const [loading, setLoading] = useState(false);
@@ -43,6 +45,14 @@ export const Login: React.FC = () => {
                     redirectTo: window.location.origin,
                 });
                 if (error) throw error;
+
+                // Enviar email personalizado via Resend
+                await emailHelper.sendPasswordResetEmail(resetEmail, {
+                    userName: 'Usuário',
+                    resetLink: `${window.location.origin}/reset-password`,
+                    expiresIn: '24 horas'
+                });
+
                 setMessage({ type: 'success', text: 'Email de redefinição enviado! Verifique sua caixa de entrada.' });
                 setShowForgotPassword(false);
             } else if (isSignUp) {
@@ -53,8 +63,16 @@ export const Login: React.FC = () => {
                 });
                 if (error) throw error;
 
-                if (!data.session) {
-                    setMessage({ type: 'success', text: 'Cadastro realizado! Verifique seu email para confirmar.' });
+                if (data.user) {
+                    // Enviar email de boas-vindas via Resend
+                    await emailHelper.sendWelcomeEmail(email, {
+                        userName: email.split('@')[0], // Nome provisório baseado no email
+                        organizationName: 'Filmstec'
+                    });
+
+                    if (!data.session) {
+                        setMessage({ type: 'success', text: 'Cadastro realizado! Verifique seu email para confirmar.' });
+                    }
                 }
             } else {
                 console.log('[Login] Modo: Login com email:', email);
@@ -66,6 +84,7 @@ export const Login: React.FC = () => {
                 if (error) throw error;
             }
             console.log('[Login] Autenticação concluída com sucesso');
+
         } catch (error: any) {
             console.error('[Login] Erro detalhado:', error);
             if (error.message === 'Failed to fetch') {

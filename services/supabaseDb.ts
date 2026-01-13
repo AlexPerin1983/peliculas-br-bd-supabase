@@ -228,29 +228,21 @@ export const getUserInfo = async (): Promise<UserInfo> => {
         .eq('id', userId)
         .single();
 
-    console.log('[getUserInfo] userId:', userId);
-    console.log('[getUserInfo] profile:', profile, 'error:', profileError);
-
     let targetUserId = userId;
 
     // Se tem organização, buscar o user_info do owner da organização
     if (profile?.organization_id) {
-        console.log('[getUserInfo] organization_id encontrado:', profile.organization_id);
-        const { data: org, error: orgError } = await supabase
+        const { data: org } = await supabase
             .from('organizations')
             .select('owner_id')
             .eq('id', profile.organization_id)
             .single();
 
-        console.log('[getUserInfo] org:', org, 'error:', orgError);
-
         if (org?.owner_id) {
             targetUserId = org.owner_id;
-            console.log('[getUserInfo] Usando owner_id:', targetUserId);
         }
-    } else {
-        console.log('[getUserInfo] SEM organization_id, usando userId próprio');
     }
+
 
     // Buscar user_info do owner (ou do próprio usuário se for owner)
     const { data, error } = await supabase

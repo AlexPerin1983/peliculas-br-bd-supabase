@@ -211,18 +211,6 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({
 
     return (
         <form id="userForm" onSubmit={handleSubmit} className="space-y-6 p-1">
-            {/* Cabeçalho de Instalação PWA */}
-            {!isPwaInstalled && (
-                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 flex items-center justify-between gap-4">
-                    <div className="flex-1">
-                        <p className="text-sm text-blue-800 dark:text-blue-300 font-medium">Instale o app para usar offline!</p>
-                    </div>
-                    <button type="button" onClick={onPromptPwaInstall} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-lg transition-colors shadow-sm">
-                        Instalar
-                    </button>
-                </div>
-            )}
-
             <div className="space-y-4">
                 <Input id="cpfCnpj" label="CPF/CNPJ" type="text" value={formData.cpfCnpj} onChange={handleChange} required inputMode="numeric" />
                 <Input id="site" label="Site" type="text" value={formData.site || ''} onChange={handleChange} placeholder="www.suaempresa.com.br" />

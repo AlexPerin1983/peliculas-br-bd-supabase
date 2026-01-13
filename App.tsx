@@ -725,29 +725,56 @@ const App: React.FC = () => {
         setIsDeleteClientModalOpen(true);
     }, [selectedClientId, numpadConfig.isOpen, handleNumpadClose]);
 
-    const handleConfirmDeleteClient = useCallback(async () => {
+    const handleConfirmDeleteClient = useCallback(() => {
         if (!selectedClientId) return;
 
-        await db.deleteClient(selectedClientId);
-        await db.deleteProposalOptions(selectedClientId);
+        const idToDelete = selectedClientId;
 
-        const pdfsForClient = await db.getPDFsForClient(selectedClientId);
-        for (const pdf of pdfsForClient) {
-            if (pdf.id) {
-                await db.deletePDF(pdf.id);
-            }
-        }
-
-        await loadClients();
-
-        if (hasLoadedHistory) {
-            await loadAllPdfs();
-        }
-        if (hasLoadedAgendamentos) {
-            await loadAgendamentos();
-        }
-
+        // 1. Fechar o modal imediatamente para resposta instantânea
         setIsDeleteClientModalOpen(false);
+
+        // 2. Atualização Otimista: Remover da lista de clientes na UI imediatamente
+        setClients(prev => {
+            const updatedClients = prev.filter(c => c.id !== idToDelete);
+
+            // 3. Selecionar o próximo cliente disponível ou null
+            if (selectedClientId === idToDelete) {
+                if (updatedClients.length > 0) {
+                    setSelectedClientId(updatedClients[0].id!);
+                } else {
+                    setSelectedClientId(null);
+                }
+            }
+
+            return updatedClients;
+        });
+
+        // 4. Processar exclusões no banco de dados em background
+        setTimeout(async () => {
+            try {
+                // Deletar cliente e suas dependências
+                await db.deleteClient(idToDelete);
+                await db.deleteProposalOptions(idToDelete);
+
+                const pdfsForClient = await db.getPDFsForClient(idToDelete);
+                for (const pdf of pdfsForClient) {
+                    if (pdf.id) {
+                        await db.deletePDF(pdf.id);
+                    }
+                }
+
+                // Atualizar outros estados se necessário (em background)
+                if (hasLoadedHistory) {
+                    loadAllPdfs();
+                }
+                if (hasLoadedAgendamentos) {
+                    loadAgendamentos();
+                }
+            } catch (error) {
+                console.error('Erro ao deletar cliente no background:', error);
+                loadClients();
+            }
+        }, 50);
     }, [selectedClientId, hasLoadedHistory, loadAllPdfs, hasLoadedAgendamentos, loadAgendamentos, loadClients]);
 
     const handleSaveUserInfo = useCallback(async (info: UserInfo) => {

@@ -64,12 +64,7 @@ export async function getAllClientsLocal(): Promise<LocalClient[]> {
     // Retorna todos os clientes que não estão marcados como erro
     // Isso inclui: synced (sincronizados) e pending (aguardando sincronização)
     const allClients = await offlineDb.clients.toArray();
-    console.log('[OfflineDb] Total de clientes no IndexedDB:', allClients.length);
-    console.log('[OfflineDb] Status dos clientes:', allClients.map(c => ({ nome: c.nome, status: c._syncStatus, localId: c._localId })));
-
     const filtered = allClients.filter(c => c._syncStatus === 'synced' || c._syncStatus === 'pending');
-    console.log('[OfflineDb] Clientes após filtro (synced/pending):', filtered.length);
-
     return filtered;
 }
 
@@ -94,8 +89,6 @@ export async function saveClientLocal(client: Omit<Client, 'id'> | Client): Prom
     // Usar o _localId existente se encontrado, senão verificar se veio no cliente, senão gerar novo
     const localId = existingClient?._localId || (client as LocalClient)._localId || generateLocalId();
 
-    console.log('[OfflineDb] saveClient - existente:', existingClient?._localId, 'usando localId:', localId);
-
     const localClient: LocalClient = {
         ...client,
         _localId: localId,
@@ -110,7 +103,6 @@ export async function saveClientLocal(client: Omit<Client, 'id'> | Client): Prom
             .filter(c => c._localId === `remote_${clientId}`)
             .first();
         if (remoteFormatClient) {
-            console.log('[OfflineDb] Removendo cliente com formato remote_ para evitar duplicata');
             await offlineDb.clients.delete(remoteFormatClient._localId!);
         }
     }
@@ -158,12 +150,7 @@ export async function getAllFilmsLocal(): Promise<LocalFilm[]> {
     // Retorna todos os filmes que não estão marcados como erro
     // Isso inclui: synced (sincronizados) e pending (aguardando sincronização)
     const allFilms = await offlineDb.films.toArray();
-    console.log('[OfflineDb] Total de filmes no IndexedDB:', allFilms.length);
-    console.log('[OfflineDb] Status dos filmes:', allFilms.map(f => ({ nome: f.nome, status: f._syncStatus, localId: f._localId })));
-
     const filtered = allFilms.filter(f => f._syncStatus === 'synced' || f._syncStatus === 'pending');
-    console.log('[OfflineDb] Filmes após filtro (synced/pending):', filtered.length);
-
     return filtered;
 }
 
@@ -178,8 +165,6 @@ export async function saveFilmLocal(film: Film): Promise<LocalFilm> {
     // Usar o _localId existente se encontrado, senão gerar novo
     const localId = existingFilm?._localId || generateLocalId();
 
-    console.log('[OfflineDb] saveFilm - existente:', existingFilm?._localId, 'usando localId:', localId);
-
     const localFilm: LocalFilm = {
         ...film,
         _localId: localId,
@@ -193,7 +178,6 @@ export async function saveFilmLocal(film: Film): Promise<LocalFilm> {
             .filter(f => f._localId === `remote_${film.nome}`)
             .first();
         if (remoteFormatFilm) {
-            console.log('[OfflineDb] Removendo filme com formato remote_ para evitar duplicata');
             await offlineDb.films.delete(remoteFormatFilm._localId!);
         }
     }
@@ -374,7 +358,6 @@ export async function savePdfLocal(pdf: SavedPDF): Promise<LocalSavedPDF> {
     let pdfBlobBase64: string;
     if (pdf.pdfBlob instanceof Blob) {
         pdfBlobBase64 = await blobToBase64(pdf.pdfBlob);
-        console.log('[OfflineDb] PDF convertido para base64, tamanho:', pdfBlobBase64.length);
     } else {
         // Já está em base64
         pdfBlobBase64 = pdf.pdfBlob as unknown as string;

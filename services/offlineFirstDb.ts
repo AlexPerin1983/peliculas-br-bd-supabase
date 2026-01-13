@@ -16,8 +16,6 @@ import { isOnlineNow, syncAllPending } from './syncService';
 // =====================================================
 
 export async function getAllClients(): Promise<Client[]> {
-    console.log('[OfflineFirst] getAllClients - isOnline:', isOnlineNow());
-
     try {
         if (isOnlineNow()) {
             // Online: primeiro sincronizar pendentes, depois buscar do Supabase
@@ -25,17 +23,14 @@ export async function getAllClients(): Promise<Client[]> {
             // 1. Buscar clientes locais pendentes (não sincronizados)
             const localClients = await offlineDb.getAllClientsLocal();
             const pendingClients = localClients.filter(c => c._syncStatus === 'pending');
-            console.log('[OfflineFirst] Clientes pendentes para sincronizar:', pendingClients.length);
 
             // 2. Sincronizar pendentes em background (não bloquear a UI)
             if (pendingClients.length > 0) {
-                console.log('[OfflineFirst] Iniciando sincronização de pendentes...');
                 syncAllPending().catch(err => console.error('[OfflineFirst] Erro na sincronização:', err));
             }
 
             // 3. Buscar do Supabase
             const supabaseClients = await supabaseDb.getAllClients();
-            console.log('[OfflineFirst] Clientes do Supabase:', supabaseClients.length);
 
             // 4. Atualizar cache local com dados do Supabase
             for (const client of supabaseClients) {
@@ -75,18 +70,13 @@ export async function getAllClients(): Promise<Client[]> {
                     return { ...client, id: clientId };
                 });
 
-            console.log('[OfflineFirst] Pendentes não no Supabase:', pendingNotInSupabase.length);
-
             // Retornar todos (Supabase + pendentes não sincronizados)
             const allClients = [...supabaseClients, ...pendingNotInSupabase];
-            console.log('[OfflineFirst] Total de clientes retornados:', allClients.length);
 
             return allClients;
         } else {
             // Offline: buscar do cache local
-            console.log('[OfflineFirst] Buscando clientes do cache local...');
             const localClients = await offlineDb.getAllClientsLocal();
-            console.log('[OfflineFirst] Clientes locais encontrados:', localClients.length);
 
             // Mapear clientes locais para o formato correto, garantindo ID consistente
             const result = localClients.map(localClient => {
@@ -107,7 +97,6 @@ export async function getAllClients(): Promise<Client[]> {
     } catch (error) {
         console.error('[OfflineFirst] Erro ao buscar clientes, usando cache local:', error);
         const localClients = await offlineDb.getAllClientsLocal();
-        console.log('[OfflineFirst] Fallback - Clientes locais:', localClients.length);
 
         // Mapear com ID consistente
         return localClients.map(localClient => {
@@ -123,13 +112,10 @@ export async function getAllClients(): Promise<Client[]> {
 }
 
 export async function saveClient(client: Omit<Client, 'id'> | Client): Promise<Client> {
-    console.log('[OfflineFirst] saveClient - isOnline:', isOnlineNow(), 'client:', client);
-
     // Se estiver online, salvar diretamente no Supabase para resposta imediata e consistente
     if (isOnlineNow()) {
         try {
             const savedClient = await supabaseDb.saveClient(client);
-            console.log('[OfflineFirst] Cliente salvo no Supabase:', savedClient);
             // Atualizar cache local
             await offlineDb.offlineDb.clients.put({
                 ...savedClient,
@@ -146,16 +132,12 @@ export async function saveClient(client: Omit<Client, 'id'> | Client): Promise<C
     }
 
     // Offline ou fallback: salvar localmente primeiro
-    console.log('[OfflineFirst] Salvando cliente localmente...');
     const localClient = await offlineDb.saveClientLocal(client as Client);
-    console.log('[OfflineFirst] Cliente salvo localmente:', localClient);
 
     // Gerar ID temporário baseado no _localId para consistência
     // Extrai o timestamp do _localId (formato: local_TIMESTAMP_RANDOM)
     const localIdParts = localClient._localId?.split('_') || [];
     const tempId = localClient._remoteId as number || localClient.id || parseInt(localIdParts[1]) || Date.now();
-
-    console.log('[OfflineFirst] ID temporário gerado:', tempId);
 
     return {
         ...client,
@@ -176,24 +158,19 @@ export async function deleteClient(clientId: number): Promise<void> {
 // =====================================================
 
 export async function getAllCustomFilms(): Promise<Film[]> {
-    console.log('[OfflineFirst] getAllCustomFilms - isOnline:', isOnlineNow());
-
     try {
         if (isOnlineNow()) {
             // 1. Buscar filmes locais pendentes (não sincronizados)
             const localFilms = await offlineDb.getAllFilmsLocal();
             const pendingFilms = localFilms.filter(f => f._syncStatus === 'pending');
-            console.log('[OfflineFirst] Filmes pendentes para sincronizar:', pendingFilms.length);
 
             // 2. Sincronizar pendentes em background (não bloquear a UI)
             if (pendingFilms.length > 0) {
-                console.log('[OfflineFirst] Iniciando sincronização de filmes pendentes...');
                 syncAllPending().catch(err => console.error('[OfflineFirst] Erro na sincronização de filmes:', err));
             }
 
             // 3. Buscar do Supabase
             const supabaseFilms = await supabaseDb.getAllCustomFilms();
-            console.log('[OfflineFirst] Filmes do Supabase:', supabaseFilms.length);
 
             // 4. Atualizar cache local com dados do Supabase
             for (const film of supabaseFilms) {
@@ -219,19 +196,13 @@ export async function getAllCustomFilms(): Promise<Film[]> {
                 return film;
             });
 
-            console.log('[OfflineFirst] Filmes do Supabase não editados:', supabaseFilmsNotEdited.length);
-            console.log('[OfflineFirst] Filmes pendentes locais:', pendingFilmsFormatted.length);
-
             // Retornar todos: pendentes locais (prevalecem) + Supabase não editados
             const allFilms = [...pendingFilmsFormatted, ...supabaseFilmsNotEdited];
-            console.log('[OfflineFirst] Total de filmes retornados:', allFilms.length);
 
             return allFilms;
         } else {
             // Offline: buscar do cache local
-            console.log('[OfflineFirst] Buscando filmes do cache local...');
             const localFilms = await offlineDb.getAllFilmsLocal();
-            console.log('[OfflineFirst] Filmes locais encontrados:', localFilms.length);
 
             return localFilms.map(({ _localId, _syncStatus, _lastModified, _syncedAt, _remoteId, ...film }) => film);
         }
@@ -404,7 +375,6 @@ export async function savePDF(pdf: SavedPDF): Promise<SavedPDF> {
         // Gera um ID temporário negativo (para diferenciar de IDs reais que são positivos)
         const timestamp = parseInt(localPdf._localId.split('_')[1] || String(Date.now()));
         finalId = -timestamp; // ID negativo para identificar como local
-        console.log('[OfflineFirst] Gerado ID temporário para PDF:', finalId);
     }
 
     return { ...pdf, id: finalId };

@@ -46,12 +46,9 @@ export function initSyncService(): void {
 
     // Verificar pendentes ao iniciar
     updatePendingCount();
-
-    console.log('[SyncService] Iniciado. Online:', navigator.onLine);
 }
 
 function handleOnline(): void {
-    console.log('[SyncService] Conexão restaurada!');
     isOnline = true;
     currentStatus.isOnline = true;
     notifyListeners();
@@ -61,7 +58,6 @@ function handleOnline(): void {
 }
 
 function handleOffline(): void {
-    console.log('[SyncService] Sem conexão.');
     isOnline = false;
     currentStatus.isOnline = false;
     notifyListeners();
@@ -73,7 +69,6 @@ function handleOffline(): void {
 
 export async function syncAllPending(): Promise<void> {
     if (!isOnline || syncInProgress) {
-        console.log('[SyncService] Sync ignorado. Online:', isOnline, 'Em progresso:', syncInProgress);
         return;
     }
 
@@ -86,34 +81,22 @@ export async function syncAllPending(): Promise<void> {
         // Processar fila de sincronização
         const queue = await offlineDb.syncQueue.orderBy('timestamp').toArray();
 
-        console.log('[SyncService] Processando', queue.length, 'itens pendentes');
-
         for (const item of queue) {
             try {
                 await processQueueItem(item);
                 // Remover da fila após sucesso
                 await offlineDb.syncQueue.delete(item.id!);
             } catch (error: any) {
-                console.error('[SyncService] Erro ao sincronizar item:', {
-                    table: item.table,
-                    action: item.action,
-                    error: error?.message || error,
-                    details: error?.details || error?.hint || 'Sem detalhes adicionais'
-                });
                 currentStatus.error = `${item.table}: ${error?.message || error}`;
 
                 // IMPORTANTE: Remover itens problemáticos da fila para não bloquear
                 // a sincronização de novos itens
-                console.warn('[SyncService] Removendo item problemático da fila para evitar bloqueio');
                 await offlineDb.syncQueue.delete(item.id!);
             }
         }
 
         currentStatus.lastSyncAt = Date.now();
         await updatePendingCount();
-
-        console.log('[SyncService] Sincronização completa!');
-
     } catch (error: any) {
         console.error('[SyncService] Erro geral na sincronização:', error);
         currentStatus.error = error.message;
