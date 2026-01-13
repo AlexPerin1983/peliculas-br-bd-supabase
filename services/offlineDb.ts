@@ -349,6 +349,22 @@ export function convertPdfBlobIfNeeded(pdf: LocalSavedPDF): Blob {
     return new Blob([], { type: 'application/pdf' });
 }
 
+export async function getPdfLocal(pdfId: number | string): Promise<LocalSavedPDF | null> {
+    // Buscar pelo ID remoto ou local
+    const pdf = await offlineDb.savedPdfs
+        .filter(p => p.id === pdfId || p._remoteId === pdfId || p._localId === pdfId)
+        .first();
+
+    if (pdf) {
+        // Garantir que o blob seja convertido se necessário
+        const blob = convertPdfBlobIfNeeded(pdf);
+        return { ...pdf, pdfBlob: blob };
+    }
+
+    return null;
+}
+
+
 export async function savePdfLocal(pdf: SavedPDF): Promise<LocalSavedPDF> {
     const now = Date.now();
     const localId = generateLocalId();

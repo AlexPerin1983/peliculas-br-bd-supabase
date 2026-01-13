@@ -3,6 +3,7 @@ import './src/estoque-dark-mode.css';
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 import { Client, Measurement, UserInfo, Film, PaymentMethods, SavedPDF, Agendamento, ProposalOption, SchedulingInfo, ExtractedClientData } from './types';
 import * as db from './services/db';
+import * as estoqueDb from './services/estoqueDb';
 import { supabase } from './services/supabaseClient';
 import { generatePDF, generateCombinedPDF } from './services/pdfGenerator';
 import Header from './components/Header';
@@ -52,11 +53,11 @@ import { initSyncService } from './services/syncService';
 
 
 
-const UserSettingsView = lazy(() => import('./components/views/UserSettingsView'));
-const PdfHistoryView = lazy(() => import('./components/views/PdfHistoryView'));
-const FilmListView = lazy(() => import('./components/views/FilmListView'));
-const AgendaView = lazy(() => import('./components/views/AgendaView'));
-import EstoqueView from './components/views/EstoqueView';
+import UserSettingsView from './components/views/UserSettingsView';
+import PdfHistoryView from './components/views/PdfHistoryView';
+import FilmListView from './components/views/FilmListView';
+import AgendaView from './components/views/AgendaView';
+import EstoqueView, { EstoqueSkeleton } from './components/views/EstoqueView';
 
 
 type UIMeasurement = Measurement & { isNew?: boolean };
@@ -416,12 +417,20 @@ const App: React.FC = () => {
             console.log('[App init] Usuário autenticado, carregando dados...', authUser.id);
             setIsLoading(true);
 
-            // Carregar dados essenciais em paralelo
+            // Carregar todos os dados em paralelo para trocas de abas instantâneas
             const [loadedUserInfo] = await Promise.all([
                 db.getUserInfo(),
                 loadClients(),
-                loadFilms()
+                loadFilms(),
+                loadAllPdfs(),
+                loadAgendamentos(),
+                estoqueDb.getAllBobinas(),
+                estoqueDb.getAllRetalhos(),
+                estoqueDb.getEstoqueStats()
             ]);
+
+            setHasLoadedHistory(true);
+            setHasLoadedAgendamentos(true);
 
             console.log('[App init] Dados essenciais carregados');
             setUserInfo(loadedUserInfo);
@@ -2382,37 +2391,61 @@ Se não conseguir extrair, retorne: []`;
             {/* Client Bar Skeleton */}
             <div className="bg-slate-100 dark:bg-slate-900 p-3 rounded-xl flex items-center justify-between">
                 <div className="flex items-center gap-3 flex-1">
-                    <Skeleton variant="circular" width={40} height={40} />
+                    <Skeleton variant="circular" width={44} height={44} />
                     <div className="flex-1 space-y-2">
-                        <Skeleton variant="text" height={20} width="60%" />
-                        <Skeleton variant="text" height={12} width="40%" />
+                        <Skeleton variant="text" height={20} width="50%" />
+                        <Skeleton variant="text" height={12} width="30%" />
                     </div>
                 </div>
-                <Skeleton variant="rounded" width={32} height={32} />
+                <Skeleton variant="rounded" width={32} height={32} className="rounded-lg" />
             </div>
 
             {/* Carousel Skeleton */}
             <div className="flex gap-2 overflow-hidden py-2">
-                {[1, 2, 3].map(i => (
-                    <Skeleton key={i} variant="rounded" width={100} height={36} className="flex-shrink-0" />
+                {[1, 2, 3, 4].map(i => (
+                    <Skeleton key={i} variant="rounded" width={110} height={38} className="flex-shrink-0 rounded-full" />
                 ))}
             </div>
 
             {/* Measurement List Skeleton */}
             <div className="space-y-4">
                 {[1, 2, 3].map(i => (
-                    <div key={i} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 space-y-3">
-                        <div className="flex justify-between">
-                            <Skeleton variant="text" height={24} width="40%" />
-                            <Skeleton variant="rounded" width={60} height={24} />
+                    <div key={i} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 space-y-4 shadow-sm">
+                        <div className="flex justify-between items-center">
+                            <Skeleton variant="text" height={24} width="35%" />
+                            <div className="flex gap-2">
+                                <Skeleton variant="rounded" width={60} height={24} className="rounded-full" />
+                                <Skeleton variant="circular" width={24} height={24} />
+                            </div>
                         </div>
-                        <div className="grid grid-cols-3 gap-4">
-                            <Skeleton variant="rounded" height={40} />
-                            <Skeleton variant="rounded" height={40} />
-                            <Skeleton variant="rounded" height={40} />
+                        <div className="grid grid-cols-3 gap-3">
+                            <div className="space-y-1">
+                                <Skeleton variant="text" height={12} width="40%" />
+                                <Skeleton variant="rounded" height={42} className="rounded-lg" />
+                            </div>
+                            <div className="space-y-1">
+                                <Skeleton variant="text" height={12} width="40%" />
+                                <Skeleton variant="rounded" height={42} className="rounded-lg" />
+                            </div>
+                            <div className="space-y-1">
+                                <Skeleton variant="text" height={12} width="40%" />
+                                <Skeleton variant="rounded" height={42} className="rounded-lg" />
+                            </div>
+                        </div>
+                        <div className="flex justify-between items-center pt-2">
+                            <Skeleton variant="text" height={16} width="40%" />
+                            <Skeleton variant="text" height={16} width="20%" />
                         </div>
                     </div>
                 ))}
+            </div>
+
+            {/* Actions Bar Skeleton (Bottom) */}
+            <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-t border-slate-200 dark:border-slate-700 sm:relative sm:bg-transparent sm:border-none sm:p-0 sm:mt-6">
+                <div className="max-w-2xl mx-auto flex gap-3">
+                    <Skeleton variant="rounded" height={52} width="100%" className="rounded-xl" />
+                    <Skeleton variant="rounded" height={52} width="100%" className="rounded-xl" />
+                </div>
             </div>
         </div>
     );
@@ -2420,27 +2453,25 @@ Se não conseguir extrair, retorne: []`;
     const renderContent = () => {
         if (isLoading) {
             if (activeTab === 'client') return <ClientViewSkeleton />;
-            if (activeTab === 'estoque') return <CardSkeleton />; // Fallback para estoque se estiver carregando
+            if (activeTab === 'estoque') return <EstoqueSkeleton />;
             return <LoadingSpinner />;
         }
 
         if (activeTab === 'settings') {
             if (userInfo) {
                 return (
-                    <Suspense fallback={<LoadingSpinner />}>
-                        <UserSettingsView
-                            userInfo={{
-                                ...userInfo,
-                                organizationId: organizationId || undefined,
-                                isOwner: isOwner
-                            }}
-                            onSave={handleSaveUserInfo}
-                            onOpenPaymentMethods={() => setIsPaymentModalOpen(true)}
-                            onOpenApiKeyModal={handleOpenApiKeyModal}
-                            isPwaInstalled={isInstalled}
-                            onPromptPwaInstall={handlePromptPwaInstall}
-                        />
-                    </Suspense>
+                    <UserSettingsView
+                        userInfo={{
+                            ...userInfo,
+                            organizationId: organizationId || undefined,
+                            isOwner: isOwner
+                        }}
+                        onSave={handleSaveUserInfo}
+                        onOpenPaymentMethods={() => setIsPaymentModalOpen(true)}
+                        onOpenApiKeyModal={handleOpenApiKeyModal}
+                        isPwaInstalled={isInstalled}
+                        onPromptPwaInstall={handlePromptPwaInstall}
+                    />
                 );
             }
             return null;
@@ -2455,60 +2486,46 @@ Se não conseguir extrair, retorne: []`;
         }
 
         if (activeTab === 'history') {
-            if (!hasLoadedHistory) {
-                loadAllPdfs();
-                setHasLoadedHistory(true);
-            }
             return (
-                <Suspense fallback={<CardSkeleton />}>
-                    <PdfHistoryView
-                        pdfs={allSavedPdfs}
-                        clients={clients}
-                        agendamentos={agendamentos}
-                        onDelete={handleRequestDeletePdf}
-                        onDownload={handleDownloadPdf}
-                        onUpdateStatus={handleUpdatePdfStatus}
-                        onSchedule={handleOpenAgendamentoModal}
-                        onGenerateCombinedPdf={handleGenerateCombinedPdf}
-                        onNavigateToOption={handleNavigateToOption}
-                    />
-                </Suspense>
+                <PdfHistoryView
+                    pdfs={allSavedPdfs}
+                    clients={clients}
+                    agendamentos={agendamentos}
+                    onDelete={handleRequestDeletePdf}
+                    onDownload={handleDownloadPdf}
+                    onUpdateStatus={handleUpdatePdfStatus}
+                    onSchedule={handleOpenAgendamentoModal}
+                    onGenerateCombinedPdf={handleGenerateCombinedPdf}
+                    onNavigateToOption={handleNavigateToOption}
+                />
             );
         }
 
         if (activeTab === 'agenda') {
-            if (!hasLoadedAgendamentos) {
-                loadAgendamentos();
-                setHasLoadedAgendamentos(true);
-            }
             return (
-                <Suspense fallback={<CardSkeleton />}>
-                    <AgendaView
-                        agendamentos={agendamentos}
-                        pdfs={allSavedPdfs}
-                        clients={clients}
-                        onEditAgendamento={(agendamento) => {
-                            const pdf = allSavedPdfs.find(p => p.id === agendamento.pdfId);
-                            setSchedulingInfo({ agendamento, pdf });
-                        }}
-                        onCreateNewAgendamento={handleCreateNewAgendamento}
-                    />
-                </Suspense>
+                <AgendaView
+                    agendamentos={agendamentos}
+                    pdfs={allSavedPdfs}
+                    clients={clients}
+                    onEditAgendamento={(agendamento) => {
+                        const pdf = allSavedPdfs.find(p => p.id === agendamento.pdfId);
+                        setSchedulingInfo({ agendamento, pdf });
+                    }}
+                    onCreateNewAgendamento={handleCreateNewAgendamento}
+                />
             );
         }
 
 
         if (activeTab === 'films') {
             return (
-                <Suspense fallback={<CardSkeleton />}>
-                    <FilmListView
-                        films={films}
-                        onAdd={() => handleOpenFilmModal(null)}
-                        onEdit={handleOpenFilmModal}
-                        onDelete={handleRequestDeleteFilm}
-                        onOpenGallery={handleOpenGallery}
-                    />
-                </Suspense>
+                <FilmListView
+                    films={films}
+                    onAdd={() => handleOpenFilmModal(null)}
+                    onEdit={handleOpenFilmModal}
+                    onDelete={handleRequestDeleteFilm}
+                    onOpenGallery={handleOpenGallery}
+                />
             );
         }
 
@@ -2799,13 +2816,12 @@ Se não conseguir extrair, retorne: []`;
                                                     activeOptionId={activeOptionId}
                                                     onSelectOption={setActiveOptionId}
                                                     onRenameOption={handleRenameProposalOption}
-                                                    onDeleteOption={handleRequestDeleteProposalOption}
                                                     onAddOption={handleAddProposalOption}
                                                     onSwipeDirectionChange={handleSwipeDirectionChange}
                                                 />
                                             )}
 
-                                            <div id="contentContainer" className="w-full min-h-[300px]">
+                                            <div id="contentContainer" className="w-full min-h-[300px] animate-fade-in">
                                                 {renderContent()}
 
                                                 {/* Otimizador de Corte - Dentro do grupo de medidas */}
@@ -2822,19 +2838,19 @@ Se não conseguir extrair, retorne: []`;
                                             </div>
                                         </div>
                                     ) : (
-                                        <div id="contentContainer" className="w-full min-h-[300px]">
+                                        <div id="contentContainer" className="w-full min-h-[300px] animate-fade-in">
                                             {renderContent()}
                                         </div>
                                     )}
                                 </>
                             ) : ['history', 'agenda'].includes(activeTab) ? (
                                 <div className="bg-blue-50 dark:bg-slate-900 -m-4 sm:-m-6 p-4 sm:p-6 rounded-2xl">
-                                    <div id="contentContainer" className="w-full min-h-[300px]">
+                                    <div id="contentContainer" className="w-full min-h-[300px] animate-fade-in">
                                         {renderContent()}
                                     </div>
                                 </div>
                             ) : (
-                                <div id="contentContainer" className="w-full min-h-[300px]">
+                                <div id="contentContainer" className="w-full min-h-[300px] animate-fade-in">
                                     {renderContent()}
                                 </div>
                             )}
@@ -2926,82 +2942,82 @@ Se não conseguir extrair, retorne: []`;
                         )}
                     </button>
                 )}
-            </ProtectedRoute>
 
-            <LocationImportModal
-                isOpen={isLocationImportModalOpen}
-                onClose={() => setIsLocationImportModalOpen(false)}
-                onImportMeasurements={(importedMeasurements) => {
-                    handleMeasurementsChange([...measurements, ...importedMeasurements]);
-                    setIsLocationImportModalOpen(false);
-                }}
-                currentFilm={films[0]?.nome}
-            />
-
-            {newVersionAvailable && (
-                <UpdateNotification onUpdate={handleUpdate} />
-            )}
-            {showUndoToast && deletedMeasurement && (
-                <Toast
-                    message="Medida excluída"
-                    onUndo={handleUndoDelete}
-                    onDismiss={handleDismissUndo}
-                    duration={5000}
+                <LocationImportModal
+                    isOpen={isLocationImportModalOpen}
+                    onClose={() => setIsLocationImportModalOpen(false)}
+                    onImportMeasurements={(importedMeasurements) => {
+                        handleMeasurementsChange([...measurements, ...importedMeasurements]);
+                        setIsLocationImportModalOpen(false);
+                    }}
+                    currentFilm={films[0]?.nome}
                 />
-            )}
 
-            <ServicoQrModal
-                isOpen={isServicoQrModalOpen}
-                onClose={() => setIsServicoQrModalOpen(false)}
-                userInfo={userInfo}
-                films={films}
-                clients={clients}
-                isClientsLoading={isLoading}
-                onTogglePin={handleToggleClientPin}
-                onAddNewClient={handleAddNewClientFromSelection}
-            />
+                {newVersionAvailable && (
+                    <UpdateNotification onUpdate={handleUpdate} />
+                )}
+                {showUndoToast && deletedMeasurement && (
+                    <Toast
+                        message="Medida excluída"
+                        onUndo={handleUndoDelete}
+                        onDismiss={handleDismissUndo}
+                        duration={5000}
+                    />
+                )}
 
-            {/* Modal de Upgrade - QR Code Serviços */}
-            {showQrUpgradeModal && (
-                <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-                    <div className="bg-gray-900 border border-gray-700 rounded-2xl max-w-md w-full p-6 shadow-2xl">
-                        <UpgradePrompt
-                            module={modules.find(m => m.id === 'qr_servicos')}
-                            onUpgradeClick={() => {
-                                setShowQrUpgradeModal(false);
-                                setActiveTab('account');
-                            }}
-                        />
-                        <button
-                            onClick={() => setShowQrUpgradeModal(false)}
-                            className="w-full mt-4 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
-                        >
-                            Fechar
-                        </button>
+                <ServicoQrModal
+                    isOpen={isServicoQrModalOpen}
+                    onClose={() => setIsServicoQrModalOpen(false)}
+                    userInfo={userInfo}
+                    films={films}
+                    clients={clients}
+                    isClientsLoading={isLoading}
+                    onTogglePin={handleToggleClientPin}
+                    onAddNewClient={handleAddNewClientFromSelection}
+                />
+
+                {/* Modal de Upgrade - QR Code Serviços */}
+                {showQrUpgradeModal && (
+                    <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+                        <div className="bg-gray-900 border border-gray-700 rounded-2xl max-w-md w-full p-6 shadow-2xl">
+                            <UpgradePrompt
+                                module={modules.find(m => m.id === 'qr_servicos')}
+                                onUpgradeClick={() => {
+                                    setShowQrUpgradeModal(false);
+                                    setActiveTab('account');
+                                }}
+                            />
+                            <button
+                                onClick={() => setShowQrUpgradeModal(false)}
+                                className="w-full mt-4 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+                            >
+                                Fechar
+                            </button>
+                        </div>
                     </div>
-                </div>
-            )}
+                )}
 
-            {/* Modal de Upgrade - IA/OCR */}
-            {showIaUpgradeModal && (
-                <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-                    <div className="bg-gray-900 border border-gray-700 rounded-2xl max-w-md w-full p-6 shadow-2xl">
-                        <UpgradePrompt
-                            module={modules.find(m => m.id === 'ia_ocr')}
-                            onUpgradeClick={() => {
-                                setShowIaUpgradeModal(false);
-                                setActiveTab('account');
-                            }}
-                        />
-                        <button
-                            onClick={() => setShowIaUpgradeModal(false)}
-                            className="w-full mt-4 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
-                        >
-                            Fechar
-                        </button>
+                {/* Modal de Upgrade - IA/OCR */}
+                {showIaUpgradeModal && (
+                    <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+                        <div className="bg-gray-900 border border-gray-700 rounded-2xl max-w-md w-full p-6 shadow-2xl">
+                            <UpgradePrompt
+                                module={modules.find(m => m.id === 'ia_ocr')}
+                                onUpgradeClick={() => {
+                                    setShowIaUpgradeModal(false);
+                                    setActiveTab('account');
+                                }}
+                            />
+                            <button
+                                onClick={() => setShowIaUpgradeModal(false)}
+                                className="w-full mt-4 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+                            >
+                                Fechar
+                            </button>
+                        </div>
                     </div>
-                </div>
-            )}
+                )}
+            </ProtectedRoute>
         </div>
     );
 };

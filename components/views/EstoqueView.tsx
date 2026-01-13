@@ -86,6 +86,103 @@ const TrashIcon = () => (
     </svg>
 );
 
+export const EstoqueSkeleton = () => (
+    <div className="estoque-view space-y-6 animate-pulse p-4">
+        {/* Stats Bar Skeleton - 3 Cards horizontais */}
+        <div className="stats-bar grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {[1, 2, 3].map(i => (
+                <div key={i} className="stat-pill bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-4 rounded-2xl flex items-center gap-4">
+                    <Skeleton variant="circular" width={48} height={48} className="flex-shrink-0" />
+                    <div className="stat-pill-content space-y-2 flex-grow">
+                        <Skeleton variant="text" height={24} width="30%" />
+                        <Skeleton variant="text" height={14} width="60%" />
+                    </div>
+                </div>
+            ))}
+        </div>
+
+        {/* Header Skeleton (Tabs Centradas + Botão) */}
+        <div className="estoque-header flex flex-col items-center gap-4">
+            <div className="segmented-tabs bg-slate-100 dark:bg-slate-900 p-1.5 rounded-2xl flex gap-1 w-full max-w-xs">
+                <Skeleton variant="rounded" height={44} width="50%" className="rounded-xl" />
+                <Skeleton variant="rounded" height={44} width="50%" className="rounded-xl" />
+            </div>
+            <Skeleton variant="rounded" height={52} width="100%" className="rounded-2xl bg-blue-500/20" />
+        </div>
+
+        {/* Toolbar Skeleton (Busca + Filtros) */}
+        <div className="management-toolbar space-y-4">
+            <Skeleton variant="rounded" height={52} width="100%" className="rounded-2xl" />
+            <div className="flex gap-3">
+                <Skeleton variant="rounded" height={52} width="100%" className="rounded-2xl" />
+                <div className="flex gap-2">
+                    <Skeleton variant="rounded" height={52} width={52} className="rounded-2xl" />
+                    <Skeleton variant="rounded" height={52} width={52} className="rounded-2xl" />
+                </div>
+            </div>
+        </div>
+
+        {/* List Skeleton (Cards de Bobina) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[1, 2, 3].map(i => (
+                <div key={i} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl p-5 space-y-5 shadow-sm">
+                    {/* Card Header: Título e Badge */}
+                    <div className="flex justify-between items-start">
+                        <div className="space-y-2 flex-grow">
+                            <Skeleton variant="text" height={28} width="60%" />
+                            <div className="flex items-center gap-2">
+                                <Skeleton variant="circular" width={14} height={14} />
+                                <Skeleton variant="text" height={16} width="40%" />
+                            </div>
+                        </div>
+                        <div className="flex gap-2">
+                            <Skeleton variant="rounded" height={24} width={50} className="rounded-full" />
+                            <Skeleton variant="circular" width={32} height={32} />
+                        </div>
+                    </div>
+
+                    {/* Main Metric: Valor Central Grande */}
+                    <div className="py-6 flex flex-col items-center space-y-2 border-b border-slate-100 dark:border-slate-700/50">
+                        <div className="flex items-baseline gap-1">
+                            <Skeleton variant="text" height={56} width={80} />
+                            <Skeleton variant="text" height={24} width={20} />
+                        </div>
+                        <Skeleton variant="text" height={16} width="50%" />
+                    </div>
+
+                    {/* Progress Bar e Chips */}
+                    <div className="space-y-5">
+                        <div className="space-y-2">
+                            <Skeleton variant="rounded" height={10} width="100%" className="rounded-full" />
+                            <div className="flex justify-center">
+                                <Skeleton variant="text" height={14} width="25%" />
+                            </div>
+                        </div>
+
+                        <div className="flex flex-wrap justify-center gap-2">
+                            <Skeleton variant="rounded" height={32} width={90} className="rounded-full" />
+                            <Skeleton variant="rounded" height={32} width={100} className="rounded-full" />
+                            <Skeleton variant="rounded" height={32} width={80} className="rounded-full" />
+                        </div>
+                    </div>
+
+                    {/* Footer Button */}
+                    <div className="pt-2">
+                        <Skeleton variant="rounded" height={48} width="100%" className="rounded-xl" />
+                    </div>
+                </div>
+            ))}
+        </div>
+    </div>
+);
+
+// Cache para persistir dados entre trocas de abas e evitar skeleton repetitivo
+let estoqueCache: {
+    bobinas: Bobina[];
+    retalhos: Retalho[];
+    stats: EstoqueStats | null;
+} | null = null;
+
 interface EstoqueViewProps {
     films: Film[];
     initialAction?: { action: 'scan', code: string } | null;
@@ -93,10 +190,10 @@ interface EstoqueViewProps {
 
 const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialAction }) => {
     const [activeTab, setActiveTab] = useState<'bobinas' | 'retalhos'>('bobinas');
-    const [bobinas, setBobinas] = useState<Bobina[]>([]);
-    const [retalhos, setRetalhos] = useState<Retalho[]>([]);
-    const [stats, setStats] = useState<EstoqueStats | null>(null);
-    const [loading, setLoading] = useState(true);
+    const [bobinas, setBobinas] = useState<Bobina[]>(estoqueCache?.bobinas || []);
+    const [retalhos, setRetalhos] = useState<Retalho[]>(estoqueCache?.retalhos || []);
+    const [stats, setStats] = useState<EstoqueStats | null>(estoqueCache?.stats || null);
+    const [loading, setLoading] = useState(!estoqueCache);
     const [films, setFilms] = useState<Film[]>(initialFilms);
     const [showAddModal, setShowAddModal] = useState(false);
     const [showQRModal, setShowQRModal] = useState<{ type: 'bobina' | 'retalho', item: Bobina | Retalho } | null>(null);
@@ -178,6 +275,13 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
             setRetalhos(retalhosData);
             setStats(statsData);
             if (shouldFetchFilms) setFilms(filmsData);
+
+            // Atualizar cache
+            estoqueCache = {
+                bobinas: bobinasData,
+                retalhos: retalhosData,
+                stats: statsData
+            };
         } catch (error) {
             console.error('Erro ao carregar dados do estoque:', error);
         } finally {
@@ -601,66 +705,6 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
         };
         return labels[status] || status;
     };
-
-    const EstoqueSkeleton = () => (
-        <div className="estoque-view space-y-6">
-            {/* Stats Bar Skeleton */}
-            <div className="stats-bar">
-                {[1, 2, 3, 4].map(i => (
-                    <div key={i} className="stat-pill bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                        <Skeleton variant="circular" width={40} height={40} className="flex-shrink-0" />
-                        <div className="stat-pill-content space-y-2 flex-grow">
-                            <Skeleton variant="text" height={20} width="40%" />
-                            <Skeleton variant="text" height={12} width="60%" />
-                        </div>
-                    </div>
-                ))}
-            </div>
-
-            {/* Header Skeleton */}
-            <div className="estoque-header">
-                <Skeleton variant="rounded" height={48} width={240} />
-                <Skeleton variant="rounded" height={48} width={160} />
-            </div>
-
-            {/* Toolbar Skeleton */}
-            <div className="management-toolbar">
-                <div className="flex-grow">
-                    <Skeleton variant="rounded" height={48} width="100%" />
-                </div>
-                <div className="flex gap-2">
-                    <Skeleton variant="rounded" height={48} width={120} />
-                    <Skeleton variant="rounded" height={48} width={80} />
-                </div>
-            </div>
-
-            {/* List Skeleton */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {[1, 2, 3, 4, 5, 6].map(i => (
-                    <div key={i} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 space-y-4 shadow-sm">
-                        <div className="flex justify-between items-center">
-                            <Skeleton variant="text" height={24} width="50%" />
-                            <div className="flex gap-2">
-                                <Skeleton variant="rounded" height={24} width={60} />
-                                <Skeleton variant="circular" width={24} height={24} />
-                            </div>
-                        </div>
-                        <div className="space-y-2">
-                            <Skeleton variant="text" height={16} width="100%" />
-                            <Skeleton variant="text" height={16} width="80%" />
-                        </div>
-                        <div className="pt-4 border-t border-slate-100 dark:border-slate-700 flex justify-between items-end">
-                            <div className="space-y-2">
-                                <Skeleton variant="text" height={32} width={80} />
-                                <Skeleton variant="text" height={12} width={100} />
-                            </div>
-                            <Skeleton variant="text" height={24} width={60} />
-                        </div>
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
 
     if (loading) {
         return <EstoqueSkeleton />;
