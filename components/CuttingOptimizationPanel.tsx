@@ -1,4 +1,5 @@
 ﻿import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { Measurement, Film } from '../types';
 import { CuttingOptimizer, OptimizationResult, Rect } from '../utils/CuttingOptimizer';
 import ConfirmationModal from './modals/ConfirmationModal';
@@ -1008,9 +1009,9 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                     </div>
                 </Modal>
 
-                {/* Fullscreen Modal */}
-                {isFullscreen && result && (
-                    <div className="fixed inset-0 z-[9999] bg-slate-950 flex flex-col">
+                {/* Fullscreen Modal - Rendered via Portal */}
+                {isFullscreen && result && createPortal(
+                    <div className="fixed inset-0 bg-slate-950 flex flex-col" style={{ zIndex: 99999 }}>
                         {/* Barra de controles minimalista */}
                         <div className="flex items-center justify-between px-3 py-2 bg-slate-900/80 backdrop-blur-sm">
                             {/* Zoom Controls */}
@@ -1161,7 +1162,8 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                 </div>
                             </div>
                         </div>
-                    </div>
+                    </div>,
+                    document.body
                 )}
             </div>
         </div >
