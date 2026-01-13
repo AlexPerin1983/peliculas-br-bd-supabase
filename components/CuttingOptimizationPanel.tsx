@@ -73,6 +73,8 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
     const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null);
     const [warningMessage, setWarningMessage] = useState<string | null>(null);
     const [selectedPieceId, setSelectedPieceId] = useState<string | null>(null);
+    const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+    const [fullscreenZoom, setFullscreenZoom] = useState<number>(1);
 
     // Virtualização: rastrear posição do scroll para renderizar apenas peças visíveis
     const [scrollTop, setScrollTop] = useState(0);
@@ -623,6 +625,19 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                     </svg>
                                 </button>
                             </div>
+                            {/* Botão Expandir - Mobile */}
+                            <button
+                                onClick={() => {
+                                    setFullscreenZoom(1);
+                                    setIsFullscreen(true);
+                                }}
+                                className="sm:hidden p-1.5 rounded bg-blue-600 text-white active:bg-blue-700 ml-1"
+                                title="Expandir tela cheia"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                                    <path d="M13.28 7.78l3.22-3.22v2.69a.75.75 0 001.5 0v-4.5a.75.75 0 00-.75-.75h-4.5a.75.75 0 000 1.5h2.69l-3.22 3.22a.75.75 0 001.06 1.06zM2 17.25v-4.5a.75.75 0 011.5 0v2.69l3.22-3.22a.75.75 0 011.06 1.06L4.56 16.5h2.69a.75.75 0 010 1.5h-4.5a.75.75 0 01-.75-.75zM12.22 13.28l3.22 3.22h-2.69a.75.75 0 000 1.5h4.5a.75.75 0 00.75-.75v-4.5a.75.75 0 00-1.5 0v2.69l-3.22-3.22a.75.75 0 00-1.06 1.06zM3.5 4.56l3.22 3.22a.75.75 0 001.06-1.06L4.56 3.5h2.69a.75.75 0 000-1.5h-4.5a.75.75 0 00-.75.75v4.5a.75.75 0 001.5 0V4.56z" />
+                                </svg>
+                            </button>
                         </div>
 
                         {/* Estimated Cost - Compact */}
@@ -657,6 +672,20 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                 }}
                             />
                             <span className="text-xs font-medium text-slate-600 dark:text-slate-400 min-w-[45px] text-center">{Math.round(zoomLevel * 100)}%</span>
+                            {/* Botão Expandir - Desktop */}
+                            <button
+                                onClick={() => {
+                                    setFullscreenZoom(1);
+                                    setIsFullscreen(true);
+                                }}
+                                className="p-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-colors flex items-center gap-1.5"
+                                title="Expandir tela cheia"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                                    <path d="M13.28 7.78l3.22-3.22v2.69a.75.75 0 001.5 0v-4.5a.75.75 0 00-.75-.75h-4.5a.75.75 0 000 1.5h2.69l-3.22 3.22a.75.75 0 001.06 1.06zM2 17.25v-4.5a.75.75 0 011.5 0v2.69l3.22-3.22a.75.75 0 011.06 1.06L4.56 16.5h2.69a.75.75 0 010 1.5h-4.5a.75.75 0 01-.75-.75zM12.22 13.28l3.22 3.22h-2.69a.75.75 0 000 1.5h4.5a.75.75 0 00.75-.75v-4.5a.75.75 0 00-1.5 0v2.69l-3.22-3.22a.75.75 0 00-1.06 1.06zM3.5 4.56l3.22 3.22a.75.75 0 001.06-1.06L4.56 3.5h2.69a.75.75 0 000-1.5h-4.5a.75.75 0 00-.75.75v4.5a.75.75 0 001.5 0V4.56z" />
+                                </svg>
+                                <span className="text-xs font-medium">Expandir</span>
+                            </button>
                         </div>
 
                         {/* Drawing - Container com virtualização */}
@@ -978,6 +1007,123 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                         <span>{warningMessage}</span>
                     </div>
                 </Modal>
+
+                {/* Fullscreen Modal */}
+                {isFullscreen && result && (
+                    <div className="fixed inset-0 z-[9999] bg-slate-950 flex flex-col">
+                        {/* Header */}
+                        <div className="flex items-center justify-between p-3 bg-slate-900 border-b border-slate-800">
+                            <div className="flex items-center gap-3">
+                                <h3 className="text-white font-bold text-sm sm:text-base">Plano de Corte - {activeFilm}</h3>
+                                <div className="flex items-center gap-2 text-xs text-slate-400">
+                                    <span className="font-bold text-white">{result.totalHeight.toFixed(0)}cm</span>
+                                    <span>|</span>
+                                    <span className="font-bold text-emerald-400">{result.efficiency.toFixed(0)}%</span>
+                                    <span>|</span>
+                                    <span>{result.placedItems.length} pçs</span>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setIsFullscreen(false)}
+                                className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-white transition-colors"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+                                    <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        {/* Zoom Controls */}
+                        <div className="flex items-center justify-center gap-3 p-2 bg-slate-900/50">
+                            <button
+                                onClick={() => setFullscreenZoom(prev => Math.max(0.25, prev - 0.25))}
+                                className="p-2 rounded bg-slate-700 text-white active:bg-slate-600"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+                                    <path fillRule="evenodd" d="M4 10a.75.75 0 01.75-.75h10.5a.75.75 0 010 1.5H4.75A.75.75 0 014 10z" clipRule="evenodd" />
+                                </svg>
+                            </button>
+                            <span className="text-sm font-mono text-white min-w-[50px] text-center">{Math.round(fullscreenZoom * 100)}%</span>
+                            <button
+                                onClick={() => setFullscreenZoom(prev => Math.min(5, prev + 0.25))}
+                                className="p-2 rounded bg-slate-700 text-white active:bg-slate-600"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+                                    <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
+                                </svg>
+                            </button>
+                            <button
+                                onClick={() => setFullscreenZoom(1)}
+                                className="px-3 py-1.5 rounded bg-slate-700 text-white text-xs active:bg-slate-600"
+                            >
+                                Reset
+                            </button>
+                        </div>
+
+                        {/* Fullscreen Content */}
+                        <div className="flex-1 overflow-auto p-4 flex items-start justify-center">
+                            <div className="inline-block relative my-4">
+                                {/* Fullscreen Roll Drawing */}
+                                <div
+                                    className="relative bg-slate-900/50 shadow-inner overflow-hidden border border-slate-700 rounded"
+                                    style={{
+                                        width: `${result.rollWidth * baseScale * fullscreenZoom}px`,
+                                        height: `${result.totalHeight * baseScale * fullscreenZoom}px`,
+                                        backgroundImage: `
+                                            linear-gradient(to right, rgba(148, 163, 184, 0.1) 1px, transparent 1px),
+                                            linear-gradient(to bottom, rgba(148, 163, 184, 0.1) 1px, transparent 1px)
+                                        `,
+                                        backgroundSize: `${10 * baseScale * fullscreenZoom}px ${10 * baseScale * fullscreenZoom}px`
+                                    }}
+                                >
+                                    {/* Items */}
+                                    {result.placedItems.map((item, idx) => {
+                                        const fsScale = baseScale * fullscreenZoom;
+                                        return (
+                                            <div
+                                                key={item.id || idx}
+                                                className="absolute flex items-center justify-center text-xs font-bold border-2 transition-all"
+                                                style={{
+                                                    left: `${item.x * fsScale}px`,
+                                                    top: `${item.y * fsScale}px`,
+                                                    width: `${item.w * fsScale}px`,
+                                                    height: `${item.h * fsScale}px`,
+                                                    backgroundColor: 'rgba(14, 165, 233, 0.15)',
+                                                    borderColor: 'rgba(56, 189, 248, 0.6)',
+                                                    color: 'rgba(224, 242, 254, 0.9)'
+                                                }}
+                                            >
+                                                {/* Large Watermark ID */}
+                                                <div
+                                                    className="absolute inset-0 flex items-center justify-center font-black pointer-events-none select-none"
+                                                    style={{
+                                                        fontSize: `${Math.min(item.w, item.h) * fsScale * 0.5}px`,
+                                                        color: 'rgba(255, 255, 255, 0.15)'
+                                                    }}
+                                                >
+                                                    {idx + 1}
+                                                </div>
+                                                {/* Dimensions */}
+                                                {item.w * fsScale > 50 && item.h * fsScale > 50 && (
+                                                    <>
+                                                        <div className="absolute bottom-1 right-2 text-[11px] font-mono font-medium px-1 rounded text-sky-200 bg-slate-900/60">
+                                                            {(item.w / 100).toFixed(2)}
+                                                        </div>
+                                                        <div className="absolute left-1 top-0 h-full flex items-center">
+                                                            <span className="origin-center -rotate-90 text-[11px] font-mono font-medium px-1 rounded text-sky-200 bg-slate-900/60">
+                                                                {(item.h / 100).toFixed(2)}
+                                                            </span>
+                                                        </div>
+                                                    </>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </div >
     );
