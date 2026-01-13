@@ -438,15 +438,14 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
                 )}
             </div>
 
-            {/* Lista simples sem virtualização */}
             <div
                 onDragOver={handleDragOver}
                 ref={listContainerRef}
-                className={`${getAnimationClass()} space-y-2`}
+                className={getAnimationClass()}
                 style={getAnimationStyle()}
             >
                 {measurements.map((measurement, index) => (
-                    <div key={measurement.id}>
+                    <React.Fragment key={measurement.id}>
                         {dragOverIdx === index && <div className="h-1.5 bg-blue-500 rounded-full my-1 transition-all" />}
                         <MeasurementGroup
                             measurement={measurement}
@@ -472,11 +471,10 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
                             onSetSwipedItem={handleSetSwipedItem}
                             onOpenDiscountModal={onOpenDiscountModal}
                         />
-                        {dragOverIdx === measurements.length && index === measurements.length - 1 && (
-                            <div className="h-1.5 bg-blue-500 rounded-full my-1 transition-all" />
-                        )}
-                    </div>
+                    </React.Fragment>
                 ))}
+                {dragOverIdx === measurements.length && <div className="h-1.5 bg-blue-500 rounded-full my-1 transition-all" />}
+                <div onDragEnter={() => handleDragEnter(measurements.length)} className="h-10" />
             </div>
 
             {isDeleteSelectedModalOpen && (
@@ -490,6 +488,27 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
                     confirmButtonVariant="danger"
                 />
             )}
+
+            <style jsx>{`
+@keyframes carousel-left {
+    0% { opacity: 1; transform: translateX(0) scale(1); }
+    25% { opacity: 0.5; transform: translateX(-50px) scale(0.95); }
+    50% { opacity: 0; transform: translateX(-100px) scale(0.9); }
+    100% { opacity: 1; transform: translateX(0) scale(1); }
+}
+@keyframes carousel-right {
+    0% { opacity: 1; transform: translateX(0) scale(1); }
+    25% { opacity: 0.5; transform: translateX(50px) scale(0.95); }
+    50% { opacity: 0; transform: translateX(100px) scale(0.9); }
+    100% { opacity: 1; transform: translateX(0) scale(1); }
+}
+.animate-carousel-left { animation: carousel-left 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
+.animate-carousel-right { animation: carousel-right 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
+@keyframes slide-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.animate-slide-up { animation: slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+.animate-fade-in { animation: fade-in 0.2s ease-out forwards; }
+`}</style>
         </>
     );
 };
