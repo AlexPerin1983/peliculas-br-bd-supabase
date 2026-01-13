@@ -92,7 +92,6 @@ export async function createOrganizationInvite(organizationId: string): Promise<
  */
 export async function getActiveInvite(organizationId: string): Promise<OrganizationInvite | null> {
     try {
-
         const { data, error } = await supabase
             .from('organization_invites')
             .select('*')
@@ -100,20 +99,17 @@ export async function getActiveInvite(organizationId: string): Promise<Organizat
             .eq('is_active', true)
             .order('created_at', { ascending: false })
             .limit(1)
-            .maybeSingle(); // Usa maybeSingle em vez de single para não dar erro se não encontrar
+            .maybeSingle();
 
         if (error && error.code !== 'PGRST116') {
-            console.error('[inviteService] Erro ao buscar convite:', error);
             throw error;
         }
 
-    }
-
         return data || null;
-} catch (error) {
-    console.error('[inviteService] Erro ao buscar convite:', error);
-    return null;
-}
+    } catch (error) {
+        console.error('[inviteService] Erro ao buscar convite:', error);
+        return null;
+    }
 }
 
 /**
