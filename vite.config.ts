@@ -30,7 +30,12 @@ export default defineConfig(({ mode }) => {
     build: {
       rollupOptions: {
         output: {
-          manualChunks: undefined
+          manualChunks: {
+            'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+            'vendor-supabase': ['@supabase/supabase-js'],
+            'vendor-utils': ['dexie', 'lucide-react', 'qrcode', 'qrcode.react'],
+            'vendor-ai': ['@google/generative-ai', 'tesseract.js'],
+          }
         }
       }
     },
