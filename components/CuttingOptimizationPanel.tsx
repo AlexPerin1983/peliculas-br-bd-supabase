@@ -1011,21 +1011,38 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                 {/* Fullscreen Modal */}
                 {isFullscreen && result && (
                     <div className="fixed inset-0 z-[9999] bg-slate-950 flex flex-col">
-                        {/* Header */}
-                        <div className="flex items-center justify-between p-3 bg-slate-900 border-b border-slate-800">
-                            <div className="flex items-center gap-3">
-                                <h3 className="text-white font-bold text-sm sm:text-base">Plano de Corte - {activeFilm}</h3>
-                                <div className="flex items-center gap-2 text-xs text-slate-400">
-                                    <span className="font-bold text-white">{result.totalHeight.toFixed(0)}cm</span>
-                                    <span>|</span>
-                                    <span className="font-bold text-emerald-400">{result.efficiency.toFixed(0)}%</span>
-                                    <span>|</span>
-                                    <span>{result.placedItems.length} pçs</span>
-                                </div>
+                        {/* Barra de controles minimalista */}
+                        <div className="flex items-center justify-between px-3 py-2 bg-slate-900/80 backdrop-blur-sm">
+                            {/* Zoom Controls */}
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => setFullscreenZoom(prev => Math.max(0.25, prev - 0.25))}
+                                    className="p-2 rounded bg-slate-700 text-white active:bg-slate-600"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+                                        <path fillRule="evenodd" d="M4 10a.75.75 0 01.75-.75h10.5a.75.75 0 010 1.5H4.75A.75.75 0 014 10z" clipRule="evenodd" />
+                                    </svg>
+                                </button>
+                                <span className="text-sm font-mono text-white min-w-[50px] text-center">{Math.round(fullscreenZoom * 100)}%</span>
+                                <button
+                                    onClick={() => setFullscreenZoom(prev => Math.min(5, prev + 0.25))}
+                                    className="p-2 rounded bg-slate-700 text-white active:bg-slate-600"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+                                        <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
+                                    </svg>
+                                </button>
+                                <button
+                                    onClick={() => setFullscreenZoom(1)}
+                                    className="px-3 py-1.5 rounded bg-slate-700 text-white text-xs active:bg-slate-600"
+                                >
+                                    Reset
+                                </button>
                             </div>
+                            {/* Close Button */}
                             <button
                                 onClick={() => setIsFullscreen(false)}
-                                className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-white transition-colors"
+                                className="p-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white transition-colors"
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
                                     <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
@@ -1033,36 +1050,58 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                             </button>
                         </div>
 
-                        {/* Zoom Controls */}
-                        <div className="flex items-center justify-center gap-3 p-2 bg-slate-900/50">
-                            <button
-                                onClick={() => setFullscreenZoom(prev => Math.max(0.25, prev - 0.25))}
-                                className="p-2 rounded bg-slate-700 text-white active:bg-slate-600"
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
-                                    <path fillRule="evenodd" d="M4 10a.75.75 0 01.75-.75h10.5a.75.75 0 010 1.5H4.75A.75.75 0 014 10z" clipRule="evenodd" />
-                                </svg>
-                            </button>
-                            <span className="text-sm font-mono text-white min-w-[50px] text-center">{Math.round(fullscreenZoom * 100)}%</span>
-                            <button
-                                onClick={() => setFullscreenZoom(prev => Math.min(5, prev + 0.25))}
-                                className="p-2 rounded bg-slate-700 text-white active:bg-slate-600"
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
-                                    <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
-                                </svg>
-                            </button>
-                            <button
-                                onClick={() => setFullscreenZoom(1)}
-                                className="px-3 py-1.5 rounded bg-slate-700 text-white text-xs active:bg-slate-600"
-                            >
-                                Reset
-                            </button>
-                        </div>
-
                         {/* Fullscreen Content */}
-                        <div className="flex-1 overflow-auto p-4 flex items-start justify-center">
-                            <div className="inline-block relative my-4">
+                        <div className="flex-1 overflow-auto flex items-start justify-center p-2">
+                            <div className="inline-block relative my-4" style={{ marginLeft: '40px', marginTop: '35px' }}>
+
+                                {/* Horizontal Ruler (Top) - Fullscreen */}
+                                <div className="absolute left-0 right-0 h-[30px] border-b border-slate-700" style={{ top: '-30px' }}>
+                                    {(() => {
+                                        const fsScale = baseScale * fullscreenZoom;
+                                        const step = fullscreenZoom < 0.5 ? 20 : 10;
+                                        return Array.from({ length: Math.ceil(result.rollWidth / step) + 1 }).map((_, i) => {
+                                            const val = i * step;
+                                            if (val > result.rollWidth) return null;
+                                            return (
+                                                <div key={val} className="absolute bottom-0 flex flex-col items-center" style={{ left: `${val * fsScale}px`, transform: 'translateX(-50%)' }}>
+                                                    <span className="text-[9px] font-mono text-slate-400 mb-0.5">{val === 0 ? '0' : (val / 100).toFixed(1)}</span>
+                                                    <div className="h-2 w-px bg-slate-500"></div>
+                                                </div>
+                                            );
+                                        });
+                                    })()}
+                                    {/* Largura total marker */}
+                                    {result.rollWidth % 10 !== 0 && (
+                                        <div className="absolute flex flex-col items-center" style={{ left: `${result.rollWidth * baseScale * fullscreenZoom}px`, bottom: '8px', transform: 'translateX(-50%)' }}>
+                                            <span className="text-[9px] font-mono text-cyan-400 font-bold mb-0.5 bg-slate-900/80 px-1 rounded">{(result.rollWidth / 100).toFixed(2)}</span>
+                                            <div className="h-3 w-px bg-cyan-500"></div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Vertical Ruler (Left) - Fullscreen */}
+                                <div className="absolute top-0 bottom-0 w-[35px] border-r border-slate-700" style={{ left: '-35px' }}>
+                                    {(() => {
+                                        const fsScale = baseScale * fullscreenZoom;
+                                        const step = fullscreenZoom < 0.5 ? 20 : 10;
+                                        return Array.from({ length: Math.ceil(result.totalHeight / step) + 1 }).map((_, i) => {
+                                            const val = i * step;
+                                            if (val > result.totalHeight) return null;
+                                            return (
+                                                <div key={val} className="absolute right-0 flex items-center" style={{ top: `${val * fsScale}px`, transform: 'translateY(-50%)' }}>
+                                                    <span className="text-[9px] font-mono text-slate-400 mr-1">{val === 0 ? '0' : (val / 100).toFixed(1)}</span>
+                                                    <div className="w-2 h-px bg-slate-500"></div>
+                                                </div>
+                                            );
+                                        });
+                                    })()}
+                                    {/* Altura total marker */}
+                                    <div className="absolute right-0 flex items-center" style={{ top: `${result.totalHeight * baseScale * fullscreenZoom}px`, transform: 'translateY(-50%)' }}>
+                                        <span className="text-[9px] font-mono text-cyan-400 font-bold mr-1">{(result.totalHeight / 100).toFixed(2)}</span>
+                                        <div className="w-3 h-px bg-cyan-500"></div>
+                                    </div>
+                                </div>
+
                                 {/* Fullscreen Roll Drawing */}
                                 <div
                                     className="relative bg-slate-900/50 shadow-inner overflow-hidden border border-slate-700 rounded"
