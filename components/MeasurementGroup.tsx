@@ -66,8 +66,6 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
     onSetSwipedItem,
     isModalMode = false
 }) => {
-    const [additionalFieldsVisible, setAdditionalFieldsVisible] = useState(isModalMode);
-
     const groupRef = useRef<HTMLDivElement>(null);
 
     const [translateX, setTranslateX] = useState(0);
@@ -665,7 +663,7 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
                             </div>
                         </div>
                     </div>
-                    <div className={`additional-fields-content ${additionalFieldsVisible ? 'visible' : ''}`}>
+                    {isModalMode && (
                         <div className="space-y-3 pt-3 mt-2 border-t border-slate-200 dark:border-slate-700">
                             <DynamicSelector
                                 label="Ambiente"
@@ -682,7 +680,7 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
                                 disabled={!measurement.active}
                             />
                         </div>
-                    </div>
+                    )}
                 </div>
             </div>
         </div>
