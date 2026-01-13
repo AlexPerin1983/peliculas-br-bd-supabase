@@ -6,11 +6,11 @@ interface PdfHistoryViewProps {
     clients: Client[];
     agendamentos: Agendamento[];
     onDelete: (pdfId: number) => void;
-    onDownload: (blob: Blob | string, filename: string) => void;
+    onDownload: (pdf: SavedPDF, filename: string) => void;
     onUpdateStatus: (pdfId: number, status: SavedPDF['status']) => void;
     onSchedule: (info: { pdf: SavedPDF; agendamento?: Agendamento } | { agendamento: Agendamento; pdf?: SavedPDF }) => void;
     onGenerateCombinedPdf: (pdfs: SavedPDF[]) => void;
-    onNavigateToOption: (clientId: number, optionId: number) => void; // Nova prop para navegação
+    onNavigateToOption: (clientId: number, optionId: number) => void;
 }
 
 const formatNumberBR = (number: number) => {
@@ -24,7 +24,7 @@ const PdfHistoryItem: React.FC<{
     pdf: SavedPDF;
     clientName: string;
     agendamento: Agendamento | undefined;
-    onDownload: (blob: Blob | string, filename: string) => void;
+    onDownload: (pdf: SavedPDF, filename: string) => void;
     onDelete: (id: number) => void;
     onUpdateStatus: (id: number, status: SavedPDF['status']) => void;
     onSchedule: (info: { pdf: SavedPDF; agendamento?: Agendamento } | { agendamento: Agendamento; pdf?: SavedPDF }) => void;
@@ -32,7 +32,7 @@ const PdfHistoryItem: React.FC<{
     onSetSwipedItem: (id: number | null) => void;
     isSelected: boolean;
     onToggleSelect: (id: number) => void;
-    onNavigateToOption: (clientId: number, optionId: number) => void; // Nova prop
+    onNavigateToOption: (clientId: number, optionId: number) => void;
 }> = React.memo(({ pdf, clientName, agendamento, onDownload, onDelete, onUpdateStatus, onSchedule, swipedItemId, onSetSwipedItem, isSelected, onToggleSelect, onNavigateToOption }) => {
     const [translateX, setTranslateX] = useState(0);
     const touchStartX = useRef(0);
@@ -219,7 +219,7 @@ const PdfHistoryItem: React.FC<{
                         </div>
                         <div className="flex items-center space-x-1 text-slate-500 flex-shrink-0">
                             <button
-                                onClick={(e) => { e.stopPropagation(); onDownload(pdf.pdfBlob, pdf.nomeArquivo); }}
+                                onClick={(e) => { e.stopPropagation(); onDownload(pdf, pdf.nomeArquivo); }}
                                 className="h-9 w-9 flex items-center justify-center rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-800 dark:hover:text-white transition-colors"
                                 aria-label="Baixar PDF"
                             >

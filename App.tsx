@@ -39,7 +39,7 @@ import { usePwaInstallPrompt } from './src/hooks/usePwaInstallPrompt';
 import { usePwaUpdate } from './src/hooks/usePwaUpdate';
 
 import { useError } from './src/contexts/ErrorContext';
-import { CardSkeleton } from './components/ui/Skeleton';
+import { Skeleton, CardSkeleton } from './components/ui/Skeleton';
 import Toast from './components/ui/Toast';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { AdminUsers } from './components/AdminUsers';
@@ -56,7 +56,7 @@ const UserSettingsView = lazy(() => import('./components/views/UserSettingsView'
 const PdfHistoryView = lazy(() => import('./components/views/PdfHistoryView'));
 const FilmListView = lazy(() => import('./components/views/FilmListView'));
 const AgendaView = lazy(() => import('./components/views/AgendaView'));
-const EstoqueView = lazy(() => import('./components/views/EstoqueView'));
+import EstoqueView from './components/views/EstoqueView';
 
 
 type UIMeasurement = Measurement & { isNew?: boolean };
@@ -416,12 +416,15 @@ const App: React.FC = () => {
             console.log('[App init] Usuário autenticado, carregando dados...', authUser.id);
             setIsLoading(true);
 
-            const loadedUserInfo = await db.getUserInfo();
-            console.log('[App init] UserInfo carregado:', loadedUserInfo?.empresa);
-            setUserInfo(loadedUserInfo);
+            // Carregar dados essenciais em paralelo
+            const [loadedUserInfo] = await Promise.all([
+                db.getUserInfo(),
+                loadClients(),
+                loadFilms()
+            ]);
 
-            await loadClients();
-            await loadFilms();
+            console.log('[App init] Dados essenciais carregados');
+            setUserInfo(loadedUserInfo);
 
             // Migração automática de PDFs (roda apenas uma vez)
             const migrationKey = 'peliculas-br-bd-pdf_migration_v1';
@@ -906,6 +909,24 @@ const App: React.FC = () => {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
     }, []);
+
+    const handleDownloadPdf = useCallback(async (pdf: SavedPDF, filename: string) => {
+        let blob = pdf.pdfBlob;
+        if (!blob && pdf.id) {
+            // Se o blob não estiver presente, buscar do banco (Supabase ou Local)
+            try {
+                blob = await db.getPDFBlob(pdf.id) || undefined;
+            } catch (error) {
+                console.error('[App] Erro ao buscar blob do PDF:', error);
+            }
+        }
+
+        if (blob) {
+            downloadBlob(blob, filename);
+        } else {
+            handleShowInfo("Não foi possível baixar o PDF.");
+        }
+    }, [downloadBlob, handleShowInfo]);
 
     const totals = useMemo(() => {
         const result = measurements.reduce((acc, m) => {
@@ -2356,8 +2377,50 @@ Se não conseguir extrair, retorne: []`;
     }, []);
 
 
+    const ClientViewSkeleton = () => (
+        <div className="animate-pulse space-y-6">
+            {/* Client Bar Skeleton */}
+            <div className="bg-slate-100 dark:bg-slate-900 p-3 rounded-xl flex items-center justify-between">
+                <div className="flex items-center gap-3 flex-1">
+                    <Skeleton variant="circular" width={40} height={40} />
+                    <div className="flex-1 space-y-2">
+                        <Skeleton variant="text" height={20} width="60%" />
+                        <Skeleton variant="text" height={12} width="40%" />
+                    </div>
+                </div>
+                <Skeleton variant="rounded" width={32} height={32} />
+            </div>
+
+            {/* Carousel Skeleton */}
+            <div className="flex gap-2 overflow-hidden py-2">
+                {[1, 2, 3].map(i => (
+                    <Skeleton key={i} variant="rounded" width={100} height={36} className="flex-shrink-0" />
+                ))}
+            </div>
+
+            {/* Measurement List Skeleton */}
+            <div className="space-y-4">
+                {[1, 2, 3].map(i => (
+                    <div key={i} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 space-y-3">
+                        <div className="flex justify-between">
+                            <Skeleton variant="text" height={24} width="40%" />
+                            <Skeleton variant="rounded" width={60} height={24} />
+                        </div>
+                        <div className="grid grid-cols-3 gap-4">
+                            <Skeleton variant="rounded" height={40} />
+                            <Skeleton variant="rounded" height={40} />
+                            <Skeleton variant="rounded" height={40} />
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+
     const renderContent = () => {
         if (isLoading) {
+            if (activeTab === 'client') return <ClientViewSkeleton />;
+            if (activeTab === 'estoque') return <CardSkeleton />; // Fallback para estoque se estiver carregando
             return <LoadingSpinner />;
         }
 
@@ -2397,13 +2460,13 @@ Se não conseguir extrair, retorne: []`;
                 setHasLoadedHistory(true);
             }
             return (
-                <Suspense fallback={<LoadingSpinner />}>
+                <Suspense fallback={<CardSkeleton />}>
                     <PdfHistoryView
                         pdfs={allSavedPdfs}
                         clients={clients}
                         agendamentos={agendamentos}
                         onDelete={handleRequestDeletePdf}
-                        onDownload={downloadBlob}
+                        onDownload={handleDownloadPdf}
                         onUpdateStatus={handleUpdatePdfStatus}
                         onSchedule={handleOpenAgendamentoModal}
                         onGenerateCombinedPdf={handleGenerateCombinedPdf}
@@ -2419,7 +2482,7 @@ Se não conseguir extrair, retorne: []`;
                 setHasLoadedAgendamentos(true);
             }
             return (
-                <Suspense fallback={<LoadingSpinner />}>
+                <Suspense fallback={<CardSkeleton />}>
                     <AgendaView
                         agendamentos={agendamentos}
                         pdfs={allSavedPdfs}
@@ -2437,7 +2500,7 @@ Se não conseguir extrair, retorne: []`;
 
         if (activeTab === 'films') {
             return (
-                <Suspense fallback={<LoadingSpinner />}>
+                <Suspense fallback={<CardSkeleton />}>
                     <FilmListView
                         films={films}
                         onAdd={() => handleOpenFilmModal(null)}
@@ -2452,9 +2515,7 @@ Se não conseguir extrair, retorne: []`;
         if (activeTab === 'estoque') {
             return (
                 <FeatureGate moduleId="estoque">
-                    <Suspense fallback={<LoadingSpinner />}>
-                        <EstoqueView films={films} initialAction={initialEstoqueAction} />
-                    </Suspense>
+                    <EstoqueView films={films} initialAction={initialEstoqueAction} />
                 </FeatureGate>
             );
         }

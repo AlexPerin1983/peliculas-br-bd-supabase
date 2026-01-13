@@ -4,10 +4,23 @@ import { supabase } from './supabaseClient';
 import { Client, Measurement, UserInfo, Film, SavedPDF, Agendamento, ProposalOption } from '../types';
 import { mockUserInfo } from './mockData';
 
+// Cache para o ID do usuário para evitar chamadas repetidas ao auth.getUser()
+let cachedUserId: string | null = null;
+
 // Helper para obter o user_id atual
 const getCurrentUserId = async (): Promise<string | null> => {
+    if (cachedUserId) return cachedUserId;
+
+    // Tenta obter da sessão primeiro (mais rápido)
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user?.id) {
+        cachedUserId = session.user.id;
+        return cachedUserId;
+    }
+
     const { data: { user } } = await supabase.auth.getUser();
-    return user?.id || null;
+    cachedUserId = user?.id || null;
+    return cachedUserId;
 };
 
 // ============================================
@@ -485,9 +498,10 @@ export const getAllPDFs = async (): Promise<SavedPDF[]> => {
     if (!userId) return [];
 
     // RLS controla acesso por organização
+    // NÃO buscamos o pdf_blob aqui para performance
     const { data, error } = await supabase
         .from('saved_pdfs')
-        .select('*')
+        .select('id, client_id, client_name, date, expiration_date, total_preco, total_m2, subtotal, general_discount_amount, general_discount, nome_arquivo, measurements, status, agendamento_id, proposal_option_name, proposal_option_id')
         .order('date', { ascending: false });
 
     if (error) {
@@ -497,6 +511,21 @@ export const getAllPDFs = async (): Promise<SavedPDF[]> => {
 
     const pdfs = await Promise.all((data || []).map(row => mapRowToPDF(row)));
     return pdfs;
+};
+
+export const getPDFBlob = async (id: number): Promise<Blob | null> => {
+    const { data, error } = await supabase
+        .from('saved_pdfs')
+        .select('pdf_blob')
+        .eq('id', id)
+        .single();
+
+    if (error || !data?.pdf_blob) {
+        console.error('Error fetching PDF blob:', error);
+        return null;
+    }
+
+    return base64ToBlob(data.pdf_blob);
 };
 
 export const getPDFsForClient = async (clientId: number): Promise<SavedPDF[]> => {
@@ -576,7 +605,7 @@ const mapRowToPDF = async (row: any): Promise<SavedPDF> => ({
     subtotal: row.subtotal,
     generalDiscountAmount: row.general_discount_amount,
     generalDiscount: row.general_discount,
-    pdfBlob: base64ToBlob(row.pdf_blob),
+    pdfBlob: row.pdf_blob ? base64ToBlob(row.pdf_blob) : undefined,
     nomeArquivo: row.nome_arquivo,
     measurements: row.measurements,
     status: row.status,

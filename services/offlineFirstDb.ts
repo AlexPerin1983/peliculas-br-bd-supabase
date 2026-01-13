@@ -32,15 +32,18 @@ export async function getAllClients(): Promise<Client[]> {
             // 3. Buscar do Supabase
             const supabaseClients = await supabaseDb.getAllClients();
 
-            // 4. Atualizar cache local com dados do Supabase
-            for (const client of supabaseClients) {
-                await offlineDb.offlineDb.clients.put({
-                    ...client,
-                    _localId: `remote_${client.id}`,
-                    _syncStatus: 'synced',
-                    _lastModified: Date.now(),
-                    _remoteId: client.id
-                });
+            // 4. Atualizar cache local com dados do Supabase usando bulkPut (muito mais rápido)
+            const now = Date.now();
+            const clientsToCache = supabaseClients.map(client => ({
+                ...client,
+                _localId: `remote_${client.id}`,
+                _syncStatus: 'synced' as const,
+                _lastModified: now,
+                _remoteId: client.id
+            }));
+
+            if (clientsToCache.length > 0) {
+                await offlineDb.offlineDb.clients.bulkPut(clientsToCache);
             }
 
             // 5. Mesclar: Supabase + pendentes locais (que ainda não foram sincronizados)
@@ -172,14 +175,17 @@ export async function getAllCustomFilms(): Promise<Film[]> {
             // 3. Buscar do Supabase
             const supabaseFilms = await supabaseDb.getAllCustomFilms();
 
-            // 4. Atualizar cache local com dados do Supabase
-            for (const film of supabaseFilms) {
-                await offlineDb.offlineDb.films.put({
-                    ...film,
-                    _localId: `remote_${film.nome}`,
-                    _syncStatus: 'synced',
-                    _lastModified: Date.now()
-                });
+            // 4. Atualizar cache local com dados do Supabase usando bulkPut
+            const now = Date.now();
+            const filmsToCache = supabaseFilms.map(film => ({
+                ...film,
+                _localId: `remote_${film.nome}`,
+                _syncStatus: 'synced' as const,
+                _lastModified: now
+            }));
+
+            if (filmsToCache.length > 0) {
+                await offlineDb.offlineDb.films.bulkPut(filmsToCache);
             }
 
             // 5. Mesclar: Supabase + pendentes locais
@@ -235,27 +241,47 @@ export async function deleteCustomFilm(filmName: string): Promise<void> {
 
 export async function getUserInfo(): Promise<UserInfo | null> {
     try {
-        if (isOnlineNow()) {
-            const userInfo = await supabaseDb.getUserInfo();
+        // 1. Tentar carregar do cache local primeiro (instantâneo)
+        const localUserInfo = await offlineDb.getUserInfoLocal();
+        let result: UserInfo | null = null;
 
-            if (userInfo) {
-                await offlineDb.offlineDb.userInfo.put({
-                    ...userInfo,
-                    _localId: 'current_user',
-                    _syncStatus: 'synced',
-                    _lastModified: Date.now()
-                });
-            }
-
-            return userInfo;
-        } else {
-            const localUserInfo = await offlineDb.getUserInfoLocal();
-            if (localUserInfo) {
-                const { _localId, _syncStatus, _lastModified, _syncedAt, _remoteId, ...userInfo } = localUserInfo;
-                return userInfo;
-            }
-            return null;
+        if (localUserInfo) {
+            const { _localId, _syncStatus, _lastModified, _syncedAt, _remoteId, ...userInfo } = localUserInfo;
+            result = userInfo;
         }
+
+        // 2. Se estiver online, atualizar em background ou se não tiver local
+        if (isOnlineNow()) {
+            if (!result) {
+                // Se não tem local, precisamos esperar o Supabase
+                const userInfo = await supabaseDb.getUserInfo();
+                if (userInfo) {
+                    await offlineDb.offlineDb.userInfo.put({
+                        ...userInfo,
+                        _localId: 'current_user',
+                        _syncStatus: 'synced',
+                        _lastModified: Date.now()
+                    });
+                }
+                return userInfo;
+            } else {
+                // Se já tem local, atualiza em background para a próxima vez
+                supabaseDb.getUserInfo().then(async (userInfo) => {
+                    if (userInfo) {
+                        await offlineDb.offlineDb.userInfo.put({
+                            ...userInfo,
+                            _localId: 'current_user',
+                            _syncStatus: 'synced',
+                            _lastModified: Date.now()
+                        });
+                    }
+                }).catch(err => console.error('[OfflineFirst] Erro ao atualizar userInfo em background:', err));
+
+                return result;
+            }
+        }
+
+        return result;
     } catch (error) {
         console.error('[OfflineFirst] Erro ao buscar userInfo, usando cache local:', error);
         const localUserInfo = await offlineDb.getUserInfoLocal();
@@ -391,6 +417,21 @@ export async function updatePDF(pdf: SavedPDF): Promise<void> {
 export async function getPDFsForClient(clientId: number): Promise<SavedPDF[]> {
     const allPdfs = await getAllPDFs();
     return allPdfs.filter(pdf => pdf.clienteId === clientId);
+}
+
+export async function getPDFBlob(pdfId: number): Promise<Blob | null> {
+    try {
+        if (isOnlineNow() && pdfId > 0) {
+            return await supabaseDb.getPDFBlob(pdfId);
+        } else {
+            const localPdf = await offlineDb.getPdfLocal(pdfId);
+            return localPdf?.pdfBlob || null;
+        }
+    } catch (error) {
+        console.error('[OfflineFirst] Erro ao buscar blob do PDF:', error);
+        const localPdf = await offlineDb.getPdfLocal(pdfId);
+        return localPdf?.pdfBlob || null;
+    }
 }
 
 export async function deletePDF(pdfId: number): Promise<void> {

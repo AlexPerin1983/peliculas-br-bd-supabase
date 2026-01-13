@@ -4,10 +4,24 @@
 import { supabase } from './supabaseClient';
 import { Bobina, Retalho, Consumo } from '../types';
 
+// Cache para o ID do usuário para evitar chamadas repetidas ao auth.getUser()
+let cachedUserId: string | null = null;
+
 // Helper para obter o user_id atual
 const getCurrentUserId = async (): Promise<string | null> => {
+    if (cachedUserId) return cachedUserId;
+
+    // Tenta obter da sessão primeiro (mais rápido, sem request de rede)
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user?.id) {
+        cachedUserId = session.user.id;
+        return cachedUserId;
+    }
+
+    // Fallback para getUser (request de rede)
     const { data: { user } } = await supabase.auth.getUser();
-    return user?.id || null;
+    cachedUserId = user?.id || null;
+    return cachedUserId;
 };
 
 // Helper para gerar código QR único

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Bobina, Retalho, Film } from '../../types';
+import { Skeleton } from '../ui/Skeleton';
 import {
     getAllBobinas,
     saveBobina,
@@ -159,29 +160,34 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
         setFilms(initialFilms);
     }, [initialFilms]);
 
-    const loadData = useCallback(async () => {
+    const loadData = useCallback(async (isInitial = false) => {
         try {
-            setLoading(true);
+            if (!isInitial) setLoading(true);
+
+            // Se já temos filmes iniciais, não precisamos buscar novamente no carregamento inicial
+            const shouldFetchFilms = isInitial ? (films.length === 0) : true;
+
             const [bobinasData, retalhosData, statsData, filmsData] = await Promise.all([
                 getAllBobinas(),
                 getAllRetalhos(),
                 getEstoqueStats(),
-                getAllCustomFilms()
+                shouldFetchFilms ? getAllCustomFilms() : Promise.resolve(films)
             ]);
+
             setBobinas(bobinasData);
             setRetalhos(retalhosData);
             setStats(statsData);
-            setFilms(filmsData);
+            if (shouldFetchFilms) setFilms(filmsData);
         } catch (error) {
             console.error('Erro ao carregar dados do estoque:', error);
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [films]);
 
     useEffect(() => {
-        loadData();
-    }, [loadData]);
+        loadData(true);
+    }, []); // Executa apenas uma vez no mount
 
     // Handle deep linking action
     useEffect(() => {
@@ -596,13 +602,68 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
         return labels[status] || status;
     };
 
-    if (loading) {
-        return (
-            <div className="loading-container">
-                <div className="loading-spinner"></div>
-                <p>Carregando estoque...</p>
+    const EstoqueSkeleton = () => (
+        <div className="estoque-view space-y-6">
+            {/* Stats Bar Skeleton */}
+            <div className="stats-bar">
+                {[1, 2, 3, 4].map(i => (
+                    <div key={i} className="stat-pill bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                        <Skeleton variant="circular" width={40} height={40} className="flex-shrink-0" />
+                        <div className="stat-pill-content space-y-2 flex-grow">
+                            <Skeleton variant="text" height={20} width="40%" />
+                            <Skeleton variant="text" height={12} width="60%" />
+                        </div>
+                    </div>
+                ))}
             </div>
-        );
+
+            {/* Header Skeleton */}
+            <div className="estoque-header">
+                <Skeleton variant="rounded" height={48} width={240} />
+                <Skeleton variant="rounded" height={48} width={160} />
+            </div>
+
+            {/* Toolbar Skeleton */}
+            <div className="management-toolbar">
+                <div className="flex-grow">
+                    <Skeleton variant="rounded" height={48} width="100%" />
+                </div>
+                <div className="flex gap-2">
+                    <Skeleton variant="rounded" height={48} width={120} />
+                    <Skeleton variant="rounded" height={48} width={80} />
+                </div>
+            </div>
+
+            {/* List Skeleton */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {[1, 2, 3, 4, 5, 6].map(i => (
+                    <div key={i} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 space-y-4 shadow-sm">
+                        <div className="flex justify-between items-center">
+                            <Skeleton variant="text" height={24} width="50%" />
+                            <div className="flex gap-2">
+                                <Skeleton variant="rounded" height={24} width={60} />
+                                <Skeleton variant="circular" width={24} height={24} />
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <Skeleton variant="text" height={16} width="100%" />
+                            <Skeleton variant="text" height={16} width="80%" />
+                        </div>
+                        <div className="pt-4 border-t border-slate-100 dark:border-slate-700 flex justify-between items-end">
+                            <div className="space-y-2">
+                                <Skeleton variant="text" height={32} width={80} />
+                                <Skeleton variant="text" height={12} width={100} />
+                            </div>
+                            <Skeleton variant="text" height={24} width={60} />
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+
+    if (loading) {
+        return <EstoqueSkeleton />;
     }
 
     return (

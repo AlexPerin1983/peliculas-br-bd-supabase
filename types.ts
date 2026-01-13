@@ -153,7 +153,7 @@ export interface SavedPDF {
         value: number | string;
         type: 'percentage' | 'fixed' | 'none';
     };
-    pdfBlob: Blob;
+    pdfBlob?: Blob;
     nomeArquivo: string;
     measurements?: Measurement[];
     status?: 'pending' | 'approved' | 'revised';
