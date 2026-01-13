@@ -410,7 +410,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                 {/* Settings - Always visible */}
                 <div className={`block mb-3 sm:mb-6`}>
                     {/* Mobile: Premium compact layout */}
-                    <div className="sm:hidden bg-slate-800/50 rounded-xl border border-slate-700/50 p-3">
+                    <div className="sm:hidden bg-slate-100 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700/50 p-3">
                         {/* Row 1: Inputs with icons */}
                         <div className="flex gap-3 mb-3">
                             {/* Bobina Field */}
@@ -421,7 +421,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                         <path d="M3.75 9a.75.75 0 00-.75.75v.5c0 .414.336.75.75.75H4a5 5 0 015 5v.25c0 .414.336.75.75.75h.5a.75.75 0 00.75-.75V15c0-3.866-3.134-7-7-7h-.25z" />
                                         <path d="M7 15a2 2 0 11-4 0 2 2 0 014 0z" />
                                     </svg>
-                                    <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Bobina</label>
+                                    <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Bobina</label>
                                 </div>
                                 <div className="relative">
                                     <input
@@ -430,7 +430,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                         value={currentSettings.rollWidth}
                                         onChange={e => updateCurrentSettings('rollWidth', e.target.value)}
                                         placeholder="152"
-                                        className="border border-slate-600/50 bg-slate-900/80 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none w-full text-sm text-white font-medium pr-9"
+                                        className="border border-slate-300 dark:border-slate-600/50 bg-white dark:bg-slate-900/80 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none w-full text-sm text-slate-900 dark:text-white font-medium pr-9"
                                     />
                                     <span className="absolute right-2.5 top-2 text-[10px] text-slate-500 font-medium">cm</span>
                                 </div>
@@ -441,7 +441,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3 text-amber-400">
                                         <path fillRule="evenodd" d="M5.5 3A2.5 2.5 0 003 5.5v2.879a2.5 2.5 0 00.732 1.767l6.5 6.5a2.5 2.5 0 003.536 0l2.878-2.878a2.5 2.5 0 000-3.536l-6.5-6.5A2.5 2.5 0 008.38 3H5.5zM6 7a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
                                     </svg>
-                                    <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Sangria</label>
+                                    <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Sangria</label>
                                 </div>
                                 <div className="relative">
                                     <input
@@ -450,28 +450,28 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                         value={currentSettings.bladeWidth}
                                         onChange={e => updateCurrentSettings('bladeWidth', e.target.value)}
                                         placeholder="0"
-                                        className="border border-slate-600/50 bg-slate-900/80 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none w-full text-sm text-white font-medium pr-10"
+                                        className="border border-slate-300 dark:border-slate-600/50 bg-white dark:bg-slate-900/80 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none w-full text-sm text-slate-900 dark:text-white font-medium pr-10"
                                     />
                                     <span className="absolute right-2.5 top-2 text-[10px] text-slate-500 font-medium">mm</span>
                                 </div>
                             </div>
                         </div>
                         {/* Divider */}
-                        <div className="h-px bg-gradient-to-r from-transparent via-slate-600/50 to-transparent mb-3"></div>
+                        <div className="h-px bg-gradient-to-r from-transparent via-slate-300 dark:via-slate-600/50 to-transparent mb-3"></div>
                         {/* Row 2: Toggles and Button */}
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-4">
                                 {/* Toggle Veio */}
                                 <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                                    <div className={`relative w-8 h-[18px] rounded-full transition-all duration-200 ${currentSettings.respectGrain ? 'bg-blue-600 shadow-blue-500/30 shadow-md' : 'bg-slate-600'}`}>
+                                    <div className={`relative w-8 h-[18px] rounded-full transition-all duration-200 ${currentSettings.respectGrain ? 'bg-blue-600 shadow-blue-500/30 shadow-md' : 'bg-slate-300 dark:bg-slate-600'}`}>
                                         <div className={`absolute top-0.5 left-0.5 bg-white w-3.5 h-3.5 rounded-full shadow transform transition-transform duration-200 ${currentSettings.respectGrain ? 'translate-x-3.5' : 'translate-x-0'}`} />
                                     </div>
                                     <input type="checkbox" checked={currentSettings.respectGrain} onChange={e => updateCurrentSettings('respectGrain', e.target.checked)} className="hidden" />
-                                    <span className={`text-[11px] font-medium transition-colors ${currentSettings.respectGrain ? 'text-blue-400' : 'text-slate-400'}`}>Veio</span>
+                                    <span className={`text-[11px] font-medium transition-colors ${currentSettings.respectGrain ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}>Veio</span>
                                 </label>
                                 {/* Toggle Pro */}
                                 <label className="flex items-center gap-1.5 cursor-pointer select-none" title="Otimização Profunda">
-                                    <div className={`relative w-8 h-[18px] rounded-full transition-all duration-200 ${useDeepSearch ? 'bg-purple-600 shadow-purple-500/30 shadow-md' : 'bg-slate-600'}`}>
+                                    <div className={`relative w-8 h-[18px] rounded-full transition-all duration-200 ${useDeepSearch ? 'bg-purple-600 shadow-purple-500/30 shadow-md' : 'bg-slate-300 dark:bg-slate-600'}`}>
                                         <div className={`absolute top-0.5 left-0.5 bg-white w-3.5 h-3.5 rounded-full shadow transform transition-transform duration-200 ${useDeepSearch ? 'translate-x-3.5' : 'translate-x-0'}`} />
                                     </div>
                                     <input type="checkbox" checked={useDeepSearch} onChange={e => setUseDeepSearch(e.target.checked)} className="hidden" />
@@ -693,20 +693,20 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                         <div
                             ref={scrollContainerRef}
                             onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
-                            className="relative overflow-auto pb-8 border border-slate-800 rounded-lg bg-slate-950 min-h-[400px] max-h-[70vh] text-center shadow-2xl"
+                            className="relative overflow-auto pb-8 border border-slate-200 dark:border-slate-800 rounded-lg bg-slate-100 dark:bg-slate-950 min-h-[400px] max-h-[70vh] text-center shadow-2xl"
                         >
                             <div className="inline-block relative m-12" style={{ textAlign: 'initial' }}>
 
                                 {/* Horizontal Ruler (Top) */}
-                                <div className="absolute top-[-30px] left-0 w-full h-[30px] border-b border-slate-700">
+                                <div className="absolute top-[-30px] left-0 w-full h-[30px] border-b border-slate-300 dark:border-slate-700">
                                     {Array.from({ length: Math.ceil(result.rollWidth / 10) + 1 }).map((_, i) => {
                                         const val = i * 10;
                                         if (val > result.rollWidth) return null;
                                         const isMajor = true; // Every 10cm is major in this loop
                                         return (
                                             <div key={val} className="absolute bottom-0 flex flex-col items-center" style={{ left: `${val * scale}px`, transform: 'translateX(-50%)' }}>
-                                                <span className="text-[10px] font-mono text-slate-400 mb-1">{val === 0 ? '0' : (val / 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })}</span>
-                                                <div className="h-2 w-px bg-slate-500"></div>
+                                                <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 mb-1">{val === 0 ? '0' : (val / 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })}</span>
+                                                <div className="h-2 w-px bg-slate-400 dark:bg-slate-500"></div>
                                             </div>
                                         );
                                     })}
@@ -720,14 +720,14 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                 </div>
 
                                 {/* Vertical Ruler (Left) */}
-                                <div className="absolute left-[-35px] top-0 h-full w-[35px] border-r border-slate-700">
+                                <div className="absolute left-[-35px] top-0 h-full w-[35px] border-r border-slate-300 dark:border-slate-700">
                                     {Array.from({ length: Math.ceil(result.totalHeight / 10) + 1 }).map((_, i) => {
                                         const val = i * 10;
                                         if (val > result.totalHeight) return null;
                                         return (
                                             <div key={val} className="absolute right-0 flex items-center" style={{ top: `${val * scale}px`, transform: 'translateY(-50%)' }}>
-                                                <span className="text-[10px] font-mono text-slate-400 mr-1">{val === 0 ? '0' : (val / 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })}</span>
-                                                <div className="w-2 h-px bg-slate-500"></div>
+                                                <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 mr-1">{val === 0 ? '0' : (val / 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })}</span>
+                                                <div className="w-2 h-px bg-slate-400 dark:bg-slate-500"></div>
                                             </div>
                                         );
                                     })}
@@ -740,7 +740,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
 
                                 {/* Roll Background & Grid */}
                                 <div
-                                    className="relative bg-slate-900/50 shadow-inner overflow-hidden"
+                                    className="relative bg-white dark:bg-slate-900/50 shadow-inner overflow-hidden"
                                     style={{
                                         width: `${result.rollWidth * scale}px`,
                                         height: `${result.totalHeight * scale}px`,
@@ -1011,23 +1011,23 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
 
                 {/* Fullscreen Modal - Rendered via Portal */}
                 {isFullscreen && result && createPortal(
-                    <div className="fixed inset-0 bg-slate-950 flex flex-col" style={{ zIndex: 99999 }}>
+                    <div className="fixed inset-0 bg-slate-100 dark:bg-slate-950 flex flex-col" style={{ zIndex: 99999 }}>
                         {/* Barra de controles minimalista */}
-                        <div className="flex items-center justify-between px-3 py-2 bg-slate-900/80 backdrop-blur-sm">
+                        <div className="flex items-center justify-between px-3 py-2 bg-white/90 dark:bg-slate-900/80 backdrop-blur-sm border-b border-slate-200 dark:border-slate-800">
                             {/* Zoom Controls */}
                             <div className="flex items-center gap-2">
                                 <button
                                     onClick={() => setFullscreenZoom(prev => Math.max(0.25, prev - 0.25))}
-                                    className="p-2 rounded bg-slate-700 text-white active:bg-slate-600"
+                                    className="p-2 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-white active:bg-slate-300 dark:active:bg-slate-600"
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
                                         <path fillRule="evenodd" d="M4 10a.75.75 0 01.75-.75h10.5a.75.75 0 010 1.5H4.75A.75.75 0 014 10z" clipRule="evenodd" />
                                     </svg>
                                 </button>
-                                <span className="text-sm font-mono text-white min-w-[50px] text-center">{Math.round(fullscreenZoom * 100)}%</span>
+                                <span className="text-sm font-mono text-slate-800 dark:text-white min-w-[50px] text-center">{Math.round(fullscreenZoom * 100)}%</span>
                                 <button
                                     onClick={() => setFullscreenZoom(prev => Math.min(5, prev + 0.25))}
-                                    className="p-2 rounded bg-slate-700 text-white active:bg-slate-600"
+                                    className="p-2 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-white active:bg-slate-300 dark:active:bg-slate-600"
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
                                         <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
@@ -1035,7 +1035,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                 </button>
                                 <button
                                     onClick={() => setFullscreenZoom(1)}
-                                    className="px-3 py-1.5 rounded bg-slate-700 text-white text-xs active:bg-slate-600"
+                                    className="px-3 py-1.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-white text-xs active:bg-slate-300 dark:active:bg-slate-600"
                                 >
                                     Reset
                                 </button>
@@ -1043,7 +1043,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                             {/* Close Button */}
                             <button
                                 onClick={() => setIsFullscreen(false)}
-                                className="p-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white transition-colors"
+                                className="p-2 rounded-lg bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-white transition-colors"
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
                                     <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
@@ -1056,7 +1056,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                             <div className="inline-block relative my-4" style={{ marginLeft: '40px', marginTop: '35px' }}>
 
                                 {/* Horizontal Ruler (Top) - Fullscreen */}
-                                <div className="absolute left-0 right-0 h-[30px] border-b border-slate-700" style={{ top: '-30px' }}>
+                                <div className="absolute left-0 right-0 h-[30px] border-b border-slate-300 dark:border-slate-700" style={{ top: '-30px' }}>
                                     {(() => {
                                         const fsScale = baseScale * fullscreenZoom;
                                         const step = fullscreenZoom < 0.5 ? 20 : 10;
@@ -1065,8 +1065,8 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                             if (val > result.rollWidth) return null;
                                             return (
                                                 <div key={val} className="absolute bottom-0 flex flex-col items-center" style={{ left: `${val * fsScale}px`, transform: 'translateX(-50%)' }}>
-                                                    <span className="text-[9px] font-mono text-slate-400 mb-0.5">{val === 0 ? '0' : (val / 100).toFixed(1)}</span>
-                                                    <div className="h-2 w-px bg-slate-500"></div>
+                                                    <span className="text-[9px] font-mono text-slate-500 dark:text-slate-400 mb-0.5">{val === 0 ? '0' : (val / 100).toFixed(1)}</span>
+                                                    <div className="h-2 w-px bg-slate-400 dark:bg-slate-500"></div>
                                                 </div>
                                             );
                                         });
@@ -1081,7 +1081,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                 </div>
 
                                 {/* Vertical Ruler (Left) - Fullscreen */}
-                                <div className="absolute top-0 bottom-0 w-[35px] border-r border-slate-700" style={{ left: '-35px' }}>
+                                <div className="absolute top-0 bottom-0 w-[35px] border-r border-slate-300 dark:border-slate-700" style={{ left: '-35px' }}>
                                     {(() => {
                                         const fsScale = baseScale * fullscreenZoom;
                                         const step = fullscreenZoom < 0.5 ? 20 : 10;
@@ -1090,8 +1090,8 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                             if (val > result.totalHeight) return null;
                                             return (
                                                 <div key={val} className="absolute right-0 flex items-center" style={{ top: `${val * fsScale}px`, transform: 'translateY(-50%)' }}>
-                                                    <span className="text-[9px] font-mono text-slate-400 mr-1">{val === 0 ? '0' : (val / 100).toFixed(1)}</span>
-                                                    <div className="w-2 h-px bg-slate-500"></div>
+                                                    <span className="text-[9px] font-mono text-slate-500 dark:text-slate-400 mr-1">{val === 0 ? '0' : (val / 100).toFixed(1)}</span>
+                                                    <div className="w-2 h-px bg-slate-400 dark:bg-slate-500"></div>
                                                 </div>
                                             );
                                         });
@@ -1105,7 +1105,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
 
                                 {/* Fullscreen Roll Drawing */}
                                 <div
-                                    className="relative bg-slate-900/50 shadow-inner overflow-hidden border border-slate-700 rounded"
+                                    className="relative bg-white dark:bg-slate-900/50 shadow-inner overflow-hidden border border-slate-200 dark:border-slate-700 rounded"
                                     style={{
                                         width: `${result.rollWidth * baseScale * fullscreenZoom}px`,
                                         height: `${result.totalHeight * baseScale * fullscreenZoom}px`,

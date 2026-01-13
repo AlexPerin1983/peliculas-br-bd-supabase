@@ -1,5 +1,33 @@
 /* Dark Mode e Ajustes Mobile para Estoque */
 
+/* ========================================
+   CSS Variables para Estoque - Light Mode
+   ======================================== */
+.estoque-view {
+    --card-bg: #ffffff;
+    --text-primary: #1e293b;
+    --text-secondary: #64748b;
+    --bg-secondary: #f1f5f9;
+    --border-color: #e2e8f0;
+    --primary: #3b82f6;
+    --success: #22c55e;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+}
+
+/* Dark Mode Variables */
+.dark .estoque-view {
+    --card-bg: #1e293b;
+    --text-primary: #f1f5f9;
+    --text-secondary: #94a3b8;
+    --bg-secondary: #334155;
+    --border-color: #475569;
+    --primary: #60a5fa;
+    --success: #4ade80;
+    --warning: #fbbf24;
+    --danger: #f87171;
+}
+
 /* Dark Mode para Management Toolbar */
 .dark .management-toolbar {
     background: #1e293b !important;
