@@ -1,6 +1,6 @@
 import { Client, UserInfo, Measurement, Film, SavedPDF, ProposalOption } from '../types';
-
-// jspdf e jspdf-autotable serão importados dinamicamente apenas quando necessário
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const formatNumberBR = (number: number): string => {
     return new Intl.NumberFormat('pt-BR', {
@@ -55,12 +55,7 @@ const calculateTotalsFromSavedPDF = (pdf: SavedPDF): Totals => {
     };
 };
 
-// Função principal para gerar PDF de uma única opção (mantida)
 export const generatePDF = async (client: Client, userInfo: UserInfo, measurements: Measurement[], allFilms: Film[], generalDiscount: GeneralDiscount, totals: Totals, proposalOptionName: string): Promise<Blob> => {
-    // Importação dinâmica das bibliotecas pesadas
-    const { jsPDF } = await import('jspdf');
-    await import('jspdf-autotable');
-
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
     await renderPdfContent(doc, client, userInfo, [{ measurements, generalDiscount, totals, proposalOptionName }], allFilms, true);
@@ -68,12 +63,7 @@ export const generatePDF = async (client: Client, userInfo: UserInfo, measuremen
     return doc.output('blob');
 };
 
-// Nova função para gerar PDF combinado
 export const generateCombinedPDF = async (client: Client, userInfo: UserInfo, savedPdfs: SavedPDF[], allFilms: Film[]): Promise<Blob> => {
-    // Importação dinâmica das bibliotecas pesadas
-    const { jsPDF } = await import('jspdf');
-    await import('jspdf-autotable');
-
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
     const optionsData = savedPdfs.map(pdf => ({
@@ -473,7 +463,7 @@ const renderPdfContent = async (
                     ];
                 });
 
-                (doc as any).autoTable({
+                autoTable(doc, {
                     head,
                     body,
                     startY: yPos,

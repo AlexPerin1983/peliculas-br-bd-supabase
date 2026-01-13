@@ -5,7 +5,7 @@ import { Client, Measurement, UserInfo, Film, PaymentMethods, SavedPDF, Agendame
 import * as db from './services/db';
 import * as estoqueDb from './services/estoqueDb';
 import { supabase } from './services/supabaseClient';
-import { generatePDF, generateCombinedPDF } from './services/pdfGenerator';
+// pdfGenerator será importado dinamicamente para code splitting
 import Header from './components/Header';
 import ClientBar from './components/ClientBar';
 import MeasurementList from './components/MeasurementList';
@@ -1006,6 +1006,8 @@ const App: React.FC = () => {
 
         setPdfGenerationStatus('generating');
         try {
+            // Importação dinâmica do módulo pdfGenerator para code splitting
+            const { generatePDF } = await import('./services/pdfGenerator');
             // Passando o nome da opção de proposta para o gerador de PDF
             const pdfBlob = await generatePDF(selectedClient!, userInfo!, activeMeasurements, films, generalDiscount, totals, activeOption!.name);
             const filename = `orcamento_${selectedClient!.nome.replace(/\s+/g, '_').toLowerCase()}_${activeOption!.name.replace(/\s+/g, '_').toLowerCase()}_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.pdf`;
@@ -1079,6 +1081,8 @@ const App: React.FC = () => {
             const client = clients.find(c => c.id === selectedPdfs[0].clienteId);
             if (!client) throw new Error("Cliente não encontrado para os orçamentos selecionados.");
 
+            // Importação dinâmica do módulo pdfGenerator para code splitting
+            const { generateCombinedPDF } = await import('./services/pdfGenerator');
             const pdfBlob = await generateCombinedPDF(client, userInfo, selectedPdfs, films);
 
             const firstOptionName = selectedPdfs[0].proposalOptionName || 'Opcao';
