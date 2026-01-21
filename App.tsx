@@ -2820,6 +2820,7 @@ Se não conseguir extrair, retorne: []`;
                                                     activeOptionId={activeOptionId}
                                                     onSelectOption={setActiveOptionId}
                                                     onRenameOption={handleRenameProposalOption}
+                                                    onDeleteOption={handleRequestDeleteProposalOption}
                                                     onAddOption={handleAddProposalOption}
                                                     onSwipeDirectionChange={handleSwipeDirectionChange}
                                                 />

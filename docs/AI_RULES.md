@@ -21,10 +21,14 @@
 - Use `useMemo` and `useCallback` for performance optimization
 
 ### Data Persistence
-- ALL data operations MUST go through `services/db.ts`
-- Use IndexedDB for storing: clients, measurements, films, PDFs, user settings, appointments
-- Never manipulate IndexedDB directly - always use the provided service functions
+- ALL data operations MUST go through `services/db.ts` (which re-exports `offlineFirstDb.ts`)
+- **Primary storage**: Supabase (PostgreSQL) for persistent cloud storage
+- **Offline cache**: IndexedDB for local caching and offline support
+- The `offlineFirstDb.ts` handles the offline-first logic automatically
+- When offline, data is saved to IndexedDB and synced when back online
+- `syncService.ts` manages automatic synchronization
 - Data is auto-saved after 1.5 seconds of inactivity
+
 
 ### Styling
 - ONLY use Tailwind CSS utility classes
