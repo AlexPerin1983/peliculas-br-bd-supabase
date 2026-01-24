@@ -139,6 +139,18 @@ export interface Agendamento {
     notes?: string;
 }
 
+export interface Totals {
+    totalM2: number;
+    subtotal: number;
+    totalItemDiscount: number;
+    generalDiscountAmount: number;
+    finalTotal: number;
+    totalQuantity: number;
+    priceAfterItemDiscounts: number;
+    totalLinearMeters: number;
+    linearMeterCost: number;
+}
+
 export interface SavedPDF {
     id?: number;
     clienteId: number;
@@ -160,6 +172,8 @@ export interface SavedPDF {
     agendamentoId?: number;
     proposalOptionName?: string;
     proposalOptionId?: number; // ID da opção de proposta para navegação
+    totalLinearMeters?: number;
+    linearMeterCost?: number;
 }
 export type SchedulingInfo = {
     pdf: SavedPDF;

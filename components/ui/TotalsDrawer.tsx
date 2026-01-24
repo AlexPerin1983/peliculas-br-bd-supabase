@@ -1,13 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Drawer } from 'vaul';
 
-interface Totals {
-    totalM2: number;
-    subtotal: number;
-    totalItemDiscount: number;
-    generalDiscountAmount: number;
-    finalTotal: number;
-}
+import { Totals } from '../../types';
 
 interface TotalsDrawerProps {
     isOpen: boolean;
@@ -70,6 +64,13 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                                     <span>Subtotal ({totals.totalM2.toFixed(2)} m²)</span>
                                     <span className="font-medium text-slate-900 dark:text-white">{formatNumberBR(totals.subtotal)}</span>
                                 </div>
+
+                                {totals.totalLinearMeters > 0 && (
+                                    <div className="flex justify-between items-center text-blue-600 dark:text-blue-400">
+                                        <span>Metro Linear ({totals.totalLinearMeters.toFixed(2)} m)</span>
+                                        <span className="font-medium">{formatNumberBR(totals.linearMeterCost)}</span>
+                                    </div>
+                                )}
 
                                 {totals.totalItemDiscount > 0 && (
                                     <div className="flex justify-between items-center text-red-500 dark:text-red-400">

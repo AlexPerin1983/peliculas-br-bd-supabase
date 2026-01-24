@@ -1,7 +1,8 @@
 ﻿import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense, useRef } from 'react';
 import './src/estoque-dark-mode.css';
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
-import { Client, Measurement, UserInfo, Film, PaymentMethods, SavedPDF, Agendamento, ProposalOption, SchedulingInfo, ExtractedClientData } from './types';
+import { Client, Measurement, UserInfo, Film, PaymentMethods, SavedPDF, Agendamento, ProposalOption, SchedulingInfo, ExtractedClientData, Totals } from './types';
+import { CuttingOptimizer } from './utils/CuttingOptimizer';
 import * as db from './services/db';
 import * as estoqueDb from './services/estoqueDb';
 import { supabase } from './services/supabaseClient';
@@ -990,10 +991,51 @@ const App: React.FC = () => {
 
         const finalTotal = Math.max(0, result.priceAfterItemDiscounts - generalDiscountAmount);
 
+        const groupedByFilm: { [key: string]: Measurement[] } = {};
+        measurements.filter(m => m.active).forEach(m => {
+            if (!groupedByFilm[m.pelicula]) groupedByFilm[m.pelicula] = [];
+            groupedByFilm[m.pelicula].push(m);
+        });
+
+        let totalLinearMeters = 0;
+        let linearMeterCost = 0;
+
+        Object.entries(groupedByFilm).forEach(([filmName, filmMeasurements]) => {
+            const film = films.find(f => f.nome === filmName);
+            const rollWidth = 152; // Default roll width in cm
+
+            const optimizer = new CuttingOptimizer({
+                rollWidth,
+                bladeWidth: 0,
+                allowRotation: true
+            });
+
+            filmMeasurements.forEach(m => {
+                const qty = Math.max(1, Math.floor(m.quantidade || 1));
+                const w = parseFloat(String(m.largura).replace(',', '.')) * 100;
+                const h = parseFloat(String(m.altura).replace(',', '.')) * 100;
+                if (!isNaN(w) && !isNaN(h) && w > 0 && h > 0) {
+                    for (let i = 0; i < qty; i++) {
+                        optimizer.addItem(w, h);
+                    }
+                }
+            });
+
+            const optimizationResult = optimizer.optimize();
+            const linearMeters = optimizationResult.totalHeight / 100;
+            totalLinearMeters += linearMeters;
+
+            if (film?.precoMetroLinear) {
+                linearMeterCost += linearMeters * film.precoMetroLinear;
+            }
+        });
+
         return {
             ...result,
             generalDiscountAmount,
             finalTotal,
+            totalLinearMeters,
+            linearMeterCost
         };
     }, [measurements, films, generalDiscount]);
 
