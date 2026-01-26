@@ -1,116 +1,135 @@
-// Simple Service Worker without Workbox CDN
-// PARA FORÇAR UMA NOVA VERSÃO: Altere o número da versão abaixo (ex: v71 -> v72)
-const CACHE_NAME = 'peliculas-br-bd-cache-v1';
-const urlsToCache = [
+// Service Worker com Auto-Atualização
+// ========================================
+// VERSÃO: Mude este número para forçar atualização nos clientes
+const SW_VERSION = 'v2.0.0';
+const CACHE_NAME = `peliculas-br-bd-${SW_VERSION}`;
+
+// Lista de recursos essenciais para cache offline
+const ESSENTIAL_CACHE = [
     '/',
     '/offline.html'
 ];
 
-// Força o Service Worker a assumir o controle imediatamente após a instalação
+// Instalação - cacheia recursos essenciais
 self.addEventListener('install', (event) => {
-    // console.log('[SW] Installing version 80...');
+    console.log(`[SW ${SW_VERSION}] Instalando...`);
+
     event.waitUntil(
-        caches.open(CACHE_NAME).then((cache) => {
-            // console.log('[SW] Caching app shell');
-            return cache.addAll(urlsToCache);
-        }).then(() => {
-            // console.log('[SW] Skip waiting - force activation');
-            return self.skipWaiting();
-        })
+        caches.open(CACHE_NAME)
+            .then((cache) => {
+                console.log(`[SW ${SW_VERSION}] Cacheando recursos essenciais`);
+                return cache.addAll(ESSENTIAL_CACHE);
+            })
+            .then(() => {
+                console.log(`[SW ${SW_VERSION}] Ativando imediatamente (skipWaiting)`);
+                // CRÍTICO: Força a ativação imediata sem esperar
+                return self.skipWaiting();
+            })
     );
 });
 
-// Ativa imediatamente quando houver uma nova versão
+// Ativação - limpa caches antigos e assume controle
 self.addEventListener('activate', (event) => {
-    // console.log('[SW] Activating version 80...');
+    console.log(`[SW ${SW_VERSION}] Ativando...`);
+
     event.waitUntil(
-        caches.keys().then((cacheNames) => {
-            return Promise.all(
-                cacheNames.map((cacheName) => {
-                    if (cacheName !== CACHE_NAME) {
-                        // console.log('[SW] Deleting old cache:', cacheName);
-                        return caches.delete(cacheName);
-                    }
-                })
-            );
+        Promise.all([
+            // Limpa caches de versões antigas
+            caches.keys().then((cacheNames) => {
+                return Promise.all(
+                    cacheNames.map((cacheName) => {
+                        if (cacheName !== CACHE_NAME && cacheName.startsWith('peliculas-br-bd')) {
+                            console.log(`[SW ${SW_VERSION}] Removendo cache antigo:`, cacheName);
+                            return caches.delete(cacheName);
+                        }
+                    })
+                );
+            }),
+            // CRÍTICO: Assume controle de todas as abas/janelas imediatamente
+            self.clients.claim()
+        ]).then(() => {
+            // Notifica todas as abas/janelas que há uma nova versão
+            return self.clients.matchAll({ type: 'window' }).then((clients) => {
+                clients.forEach((client) => {
+                    client.postMessage({
+                        type: 'SW_UPDATED',
+                        version: SW_VERSION
+                    });
+                });
+            });
         })
     );
-    return self.clients.claim();
 });
 
-// Network First strategy for HTML, Cache First for assets
+// Estratégia de Fetch: Network First para tudo
+// Isso garante que sempre tente buscar a versão mais recente
 self.addEventListener('fetch', (event) => {
     const { request } = event;
     const url = new URL(request.url);
 
-    // Skip non-GET requests
+    // Ignora requisições não-GET
     if (request.method !== 'GET') return;
 
-    // Skip chrome extensions and other origins
+    // Ignora extensões do Chrome e outras origens
     if (url.origin !== location.origin) return;
 
-    // Network First for HTML/navigation
-    if (request.mode === 'navigate' || request.destination === 'document') {
-        event.respondWith(
-            fetch(request)
-                .then((response) => {
-                    // Clone and cache the response
+    // Ignora requisições de API (supabase, etc)
+    if (url.pathname.includes('/api/') || url.hostname.includes('supabase')) return;
+
+    // NETWORK FIRST para TUDO (HTML, JS, CSS, etc)
+    // Isso resolve o problema de versões antigas ficarem em cache
+    event.respondWith(
+        fetch(request)
+            .then((response) => {
+                // Se a resposta for válida, atualiza o cache
+                if (response && response.status === 200) {
                     const responseToCache = response.clone();
                     caches.open(CACHE_NAME).then((cache) => {
                         cache.put(request, responseToCache);
                     });
-                    return response;
-                })
-                .catch(() => {
-                    // Fallback to cache, then offline page
-                    return caches.match(request).then((response) => {
-                        return response || caches.match('/offline.html');
-                    });
-                })
-        );
-        return;
-    }
-
-    // Cache First for assets (CSS, JS, images) with better error handling
-    event.respondWith(
-        caches.match(request).then((response) => {
-            if (response) {
+                }
                 return response;
-            }
-            return fetch(request)
-                .then((response) => {
-                    // Don't cache if not a success response
-                    if (!response || response.status !== 200 || response.type === 'error') {
+            })
+            .catch(() => {
+                // Se offline, tenta buscar do cache
+                return caches.match(request).then((response) => {
+                    if (response) {
                         return response;
                     }
-                    const responseToCache = response.clone();
-                    caches.open(CACHE_NAME).then((cache) => {
-                        cache.put(request, responseToCache);
-                    });
-                    return response;
-                })
-                .catch(() => {
-                    // If fetch fails and not in cache, return offline page for HTML requests
-                    // or empty response for other resources to prevent total failure
-                    if (request.destination === 'script' || request.destination === 'style') {
-                        // Return empty response for JS/CSS to prevent total failure
-                        return new Response('', {
-                            status: 200,
-                            headers: { 'Content-Type': request.destination === 'script' ? 'text/javascript' : 'text/css' }
-                        });
+                    // Se for navegação e não tiver cache, mostra página offline
+                    if (request.mode === 'navigate') {
+                        return caches.match('/offline.html');
                     }
-                    return caches.match('/offline.html');
+                    // Para outros recursos, retorna resposta vazia
+                    return new Response('', { status: 503, statusText: 'Offline' });
                 });
-        })
+            })
     );
 });
 
-// Listen for skip waiting message
+// Escuta mensagens do cliente
 self.addEventListener('message', (event) => {
-    if (event.data && event.data.type === 'SKIP_WAITING') {
-        // console.log('[SW] Skip waiting message received');
-        self.skipWaiting();
+    if (event.data) {
+        switch (event.data.type) {
+            case 'SKIP_WAITING':
+                console.log(`[SW ${SW_VERSION}] Recebido SKIP_WAITING, ativando agora...`);
+                self.skipWaiting();
+                break;
+
+            case 'GET_VERSION':
+                event.ports[0].postMessage({ version: SW_VERSION });
+                break;
+
+            case 'CLEAR_ALL_CACHES':
+                console.log(`[SW ${SW_VERSION}] Limpando TODOS os caches...`);
+                caches.keys().then((names) => {
+                    Promise.all(names.map((name) => caches.delete(name)));
+                }).then(() => {
+                    event.ports[0].postMessage({ success: true });
+                });
+                break;
+        }
     }
 });
 
-// console.log('[SW] Service Worker v80 loaded');
+console.log(`[SW ${SW_VERSION}] Service Worker carregado`);

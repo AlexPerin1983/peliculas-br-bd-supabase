@@ -36,6 +36,7 @@ import ImageGalleryModal from './components/modals/ImageGalleryModal';
 import LocationImportModal from './components/modals/LocationImportModal';
 import ServicoQrModal from './components/modals/ServicoQrModal';
 import UpdateNotification from './components/UpdateNotification';
+import UpdateBanner from './components/UpdateBanner';
 import { ModalsContainer } from './components/ModalsContainer';
 import { usePwaInstallPrompt } from './src/hooks/usePwaInstallPrompt';
 import { usePwaUpdate } from './src/hooks/usePwaUpdate';
@@ -58,7 +59,7 @@ import UserSettingsView from './components/views/UserSettingsView';
 import PdfHistoryView from './components/views/PdfHistoryView';
 import FilmListView from './components/views/FilmListView';
 import AgendaView from './components/views/AgendaView';
-import EstoqueView, { EstoqueSkeleton } from './components/views/EstoqueView';
+import EstoqueView from './components/views/EstoqueView';
 
 
 type UIMeasurement = Measurement & { isNew?: boolean };
@@ -2496,6 +2497,40 @@ Se não conseguir extrair, retorne: []`;
         </div>
     );
 
+    const EstoqueSkeleton = () => (
+        <div className="animate-pulse space-y-4">
+            {/* Header Skeleton */}
+            <div className="flex items-center justify-between">
+                <Skeleton variant="text" height={28} width="30%" />
+                <Skeleton variant="rounded" height={40} width={120} className="rounded-xl" />
+            </div>
+
+            {/* Filter Tabs Skeleton */}
+            <div className="flex gap-2 overflow-hidden py-2">
+                {[1, 2, 3, 4].map(i => (
+                    <Skeleton key={i} variant="rounded" width={100} height={36} className="flex-shrink-0 rounded-full" />
+                ))}
+            </div>
+
+            {/* Stock Items Grid Skeleton */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {[1, 2, 3, 4, 5, 6].map(i => (
+                    <div key={i} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 space-y-3">
+                        <div className="flex justify-between items-start">
+                            <Skeleton variant="text" height={20} width="60%" />
+                            <Skeleton variant="circular" width={24} height={24} />
+                        </div>
+                        <Skeleton variant="rounded" height={4} width="100%" className="rounded-full" />
+                        <div className="flex justify-between items-center">
+                            <Skeleton variant="text" height={16} width="30%" />
+                            <Skeleton variant="text" height={16} width="20%" />
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+
     const renderContent = () => {
         if (isLoading) {
             if (activeTab === 'client') return <ClientViewSkeleton />;
@@ -2813,6 +2848,9 @@ Se não conseguir extrair, retorne: []`;
     return (
         <div className="h-full font-roboto flex flex-col">
             <ProtectedRoute>
+                {/* Banner de atualização automática */}
+                <UpdateBanner />
+
                 <main ref={mainRef} className="flex-grow overflow-y-auto pb-36 sm:pb-0">
                     <div className="sticky top-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm z-10 border-b border-slate-200 dark:border-slate-700">
                         <div className="container mx-auto px-2 sm:px-4 w-full max-w-2xl">
