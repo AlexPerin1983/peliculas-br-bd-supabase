@@ -16,14 +16,14 @@ export const useMeasurements = (
         tipoAplicacao: 'Desconhecido',
         pelicula: films[0]?.nome || 'Nenhuma',
         active: true,
-        discount: 0,
-        discountType: 'percentage',
+        discount: { value: '0', type: 'percentage' },
     }), [films]);
+
 
     const addMeasurement = useCallback((measurements: UIMeasurement[]) => {
         const newMeasurement: UIMeasurement = { ...createEmptyMeasurement(), isNew: true };
         const updatedMeasurements = [
-            newMeasurement, 
+            newMeasurement,
             ...measurements.map(m => ({ ...m, isNew: false }))
         ];
         onMeasurementsChange(updatedMeasurements);
@@ -32,9 +32,9 @@ export const useMeasurements = (
     const duplicateMeasurement = useCallback((measurements: UIMeasurement[], measurementId: number) => {
         const measurementToDuplicate = measurements.find(m => m.id === measurementId);
         if (measurementToDuplicate) {
-            const newMeasurement: UIMeasurement = { 
-                ...measurementToDuplicate, 
-                id: Date.now(), 
+            const newMeasurement: UIMeasurement = {
+                ...measurementToDuplicate,
+                id: Date.now(),
                 isNew: false
             };
             const index = measurements.findIndex(m => m.id === measurementId);

@@ -35,26 +35,32 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
     const [isTotalsDrawerOpen, setIsTotalsDrawerOpen] = useState(false);
 
     const ActionButton: React.FC<{ onClick: () => void, label: string, icon: string, isActive?: boolean }> = ({ onClick, label, icon, isActive = false }) => (
-        <button onClick={onClick} aria-label={label} className={`flex flex-col items-center justify-center transition-colors w-16 h-full ${isActive ? 'text-slate-900 dark:text-white' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}>
-            <i className={`${icon} text-xl h-6`}></i>
-            <span className="text-[10px] mt-1 font-medium">{label}</span>
+        <button
+            onClick={onClick}
+            aria-label={label}
+            className={`flex flex-col items-center justify-center transition-all duration-300 w-14 h-12 rounded-xl group ${isActive
+                ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+        >
+            <i className={`${icon} text-lg transition-transform duration-300 group-active:scale-90`}></i>
+            <span className="text-[9px] mt-1 font-bold uppercase tracking-wider">{label}</span>
         </button>
     );
 
     const PdfActionButton = () => {
         if (isGeneratingPdf) {
             return (
-                <div className="flex flex-col items-center justify-center w-16 h-full text-slate-500 dark:text-slate-400">
-                    <div className="loader-sm"></div>
-                    <span className="text-[10px] mt-1 font-medium">Gerando...</span>
+                <div className="flex flex-col items-center justify-center w-14 h-12 text-blue-600 dark:text-blue-400">
+                    <div className="loader-xs"></div>
+                    <span className="text-[9px] mt-1 font-bold uppercase tracking-wider">...</span>
                     <style jsx>{`
-                        .loader-sm {
-                            border: 3px solid #f3f3f3;
-                            border-top: 3px solid #3498db;
+                        .loader-xs {
+                            border: 2px solid rgba(59, 130, 246, 0.1);
+                            border-top: 2px solid currentColor;
                             border-radius: 50%;
-                            width: 20px;
-                            height: 20px;
-                            animation: spin 1s linear infinite;
+                            width: 16px;
+                            height: 16px;
+                            animation: spin 0.8s linear infinite;
                         }
                         @keyframes spin {
                             0% { transform: rotate(0deg); }
@@ -64,7 +70,7 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
                 </div>
             );
         }
-        return <ActionButton onClick={onGeneratePdf} label="Gerar PDF" icon="fas fa-file-pdf" />;
+        return <ActionButton onClick={onGeneratePdf} label="PDF" icon="fas fa-file-pdf" />;
     };
 
     const handleUpdateDiscount = (value: string, type: 'percentage' | 'fixed') => {
@@ -73,25 +79,26 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
 
     return (
         <>
-            <div className="sm:hidden fixed bottom-0 left-0 right-0 bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm shadow-[0_-8px_20px_rgba(0,0,0,0.1)] border-t border-slate-200 dark:border-slate-700 z-30">
-                <div className="container mx-auto px-2">
-                    {/* Main Action Bar */}
-                    <div className="relative">
-                        <div className="flex justify-around items-center h-16">
-                            <ActionButton onClick={onOpenAIModal} label="com IA" icon="fas fa-robot" />
-                            <ActionButton onClick={onDuplicateMeasurements} label="Duplicar" icon="fas fa-copy" />
+            <div className="sm:hidden fixed bottom-4 left-4 right-4 z-40">
+                <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.15)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-white/20 dark:border-slate-800/50 rounded-2xl px-2 py-2">
+                    <div className="flex justify-between items-center relative">
+                        <div className="flex gap-1">
+                            <ActionButton onClick={onOpenAIModal} label="IA" icon="fas fa-robot" />
+                            <ActionButton onClick={onDuplicateMeasurements} label="Cópia" icon="fas fa-copy" />
+                        </div>
 
-                            {/* Floating Action Button */}
-                            <div className="-translate-y-5">
-                                <button
-                                    onClick={onAddMeasurement}
-                                    aria-label="Adicionar Nova Medida"
-                                    className="w-14 h-14 bg-slate-900 dark:bg-slate-700 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-slate-700 dark:hover:bg-slate-600 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500"
-                                >
-                                    <i className="fas fa-plus text-xl"></i>
-                                </button>
-                            </div>
+                        {/* Floating Action Button (FAB) */}
+                        <div className="absolute left-1/2 -translate-x-1/2 -top-10">
+                            <button
+                                onClick={onAddMeasurement}
+                                aria-label="Adicionar Nova Medida"
+                                className="w-16 h-16 bg-gradient-to-br from-slate-800 to-slate-950 dark:from-slate-700 dark:to-slate-900 text-white rounded-2xl flex items-center justify-center shadow-[0_8px_20px_rgba(0,0,0,0.3)] hover:shadow-[0_12px_24px_rgba(0,0,0,0.4)] transition-all duration-300 transform hover:-translate-y-1 active:scale-95 border-4 border-white dark:border-slate-900"
+                            >
+                                <i className="fas fa-plus text-2xl"></i>
+                            </button>
+                        </div>
 
+                        <div className="flex gap-1">
                             <ActionButton
                                 onClick={() => setIsTotalsDrawerOpen(true)}
                                 label="Totais"

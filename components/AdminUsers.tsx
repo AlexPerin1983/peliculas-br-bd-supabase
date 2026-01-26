@@ -70,9 +70,10 @@ export const AdminUsers: React.FC = () => {
                         if (orgData) {
                             const { data: subData } = await supabase
                                 .from('subscriptions')
-                                .select('active_modules')
+                                .select('id, active_modules')
                                 .eq('organization_id', orgData.id)
                                 .single();
+
 
                             // Buscar detalhes dos módulos ativos
                             const { data: activationsData } = await supabase
@@ -250,10 +251,10 @@ export const AdminUsers: React.FC = () => {
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-4">
                                                 <div className={`w-10 h-10 rounded-full flex items-center justify-center ${hasFullPackage
-                                                        ? 'bg-gradient-to-br from-amber-400 to-yellow-500'
-                                                        : activeModulesCount > 0
-                                                            ? 'bg-green-500'
-                                                            : 'bg-slate-300 dark:bg-slate-600'
+                                                    ? 'bg-gradient-to-br from-amber-400 to-yellow-500'
+                                                    : activeModulesCount > 0
+                                                        ? 'bg-green-500'
+                                                        : 'bg-slate-300 dark:bg-slate-600'
                                                     }`}>
                                                     {hasFullPackage ? (
                                                         <Crown className="w-5 h-5 text-white" />
@@ -356,8 +357,8 @@ export const AdminUsers: React.FC = () => {
                                                             <div
                                                                 key={module.id}
                                                                 className={`p-3 rounded-lg border text-center transition-all ${isActive
-                                                                        ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
-                                                                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700'
+                                                                    ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+                                                                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700'
                                                                     }`}
                                                             >
                                                                 <div className="flex items-center justify-center gap-1 mb-1">

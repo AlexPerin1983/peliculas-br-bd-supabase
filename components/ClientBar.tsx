@@ -15,7 +15,7 @@ interface ClientBarProps {
 
 const formatAddress = (client: Client): string => {
     const parts = [
-        client.rua,
+        client.logradouro,
         client.numero,
         client.bairro,
         client.cidade,

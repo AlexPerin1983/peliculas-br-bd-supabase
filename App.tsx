@@ -2851,10 +2851,10 @@ Se não conseguir extrair, retorne: []`;
                 {/* Banner de atualização automática */}
                 <UpdateBanner />
 
-                <main ref={mainRef} className="flex-grow overflow-y-auto pb-36 sm:pb-0">
-                    <div className="sticky top-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm z-10 border-b border-slate-200 dark:border-slate-700">
-                        <div className="container mx-auto px-2 sm:px-4 w-full max-w-2xl">
-                            <div className="pt-2 pb-1 sm:py-3">
+                <main ref={mainRef} className="flex-grow overflow-y-auto pb-32 sm:pb-0 bg-slate-50 dark:bg-slate-950 transition-colors duration-500">
+                    <div className="sticky top-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md z-40 border-b border-slate-200/50 dark:border-slate-800/50">
+                        <div className="container mx-auto px-4 w-full max-w-2xl">
+                            <div className="py-2 sm:py-3">
                                 <Header
                                     activeTab={activeTab}
                                     onTabChange={handleTabChange}

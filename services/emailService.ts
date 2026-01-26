@@ -37,12 +37,14 @@ class EmailService {
 
   constructor() {
     // Em produção, a API key virá das variáveis de ambiente
-    this.apiKey = import.meta.env.RESEND_API_KEY || '';
+    // @ts-ignore - import.meta.env é definido pelo Vite
+    this.apiKey = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_RESEND_API_KEY) || '';
 
     if (!this.apiKey) {
-      console.warn('⚠️ RESEND_API_KEY não configurada. Emails não serão enviados.');
+      console.warn('⚠️ VITE_RESEND_API_KEY não configurada. Emails não serão enviados.');
     }
   }
+
 
   /**
    * Envia um email genérico
