@@ -5,9 +5,10 @@ interface AccordionProps {
     children: React.ReactNode;
     defaultOpen?: boolean;
     className?: string;
+    icon?: React.ReactNode;
 }
 
-const Accordion: React.FC<AccordionProps> = ({ title, children, defaultOpen = false, className = '' }) => {
+const Accordion: React.FC<AccordionProps> = ({ title, children, defaultOpen = false, className = '', icon }) => {
     const [isOpen, setIsOpen] = useState(defaultOpen);
     const contentRef = useRef<HTMLDivElement>(null);
     const [height, setHeight] = useState<string | number>(defaultOpen ? 'auto' : 0);
@@ -53,7 +54,14 @@ const Accordion: React.FC<AccordionProps> = ({ title, children, defaultOpen = fa
                 className="w-full flex items-center justify-between p-4 text-left focus:outline-none hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
                 type="button"
             >
-                <span className="font-semibold text-slate-800 dark:text-slate-200 text-base">{title}</span>
+                <div className="flex items-center gap-3">
+                    {icon && (
+                        <div className="text-slate-500 dark:text-slate-400">
+                            {icon}
+                        </div>
+                    )}
+                    <span className="font-semibold text-slate-800 dark:text-slate-200 text-base">{title}</span>
+                </div>
                 <i className={`fas fa-chevron-down text-slate-400 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`}></i>
             </button>
             <div
