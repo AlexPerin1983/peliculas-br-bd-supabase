@@ -7,6 +7,7 @@ interface ClientBarProps {
     selectedClient: Client | null;
     onSelectClientClick: () => void;
     onAddClient: () => void;
+    onAddClientAI?: () => void;
     onEditClient: () => void;
     onDeleteClient: () => void;
     onSwipeLeft: () => void;
@@ -37,6 +38,7 @@ const ClientBar: React.FC<ClientBarProps> = ({
     selectedClient,
     onSelectClientClick,
     onAddClient,
+    onAddClientAI,
     onEditClient,
     onDeleteClient,
     onSwipeLeft,
@@ -189,7 +191,19 @@ const ClientBar: React.FC<ClientBarProps> = ({
                                 </div>
                             </div>
                         </div>
-                        <div className="absolute top-4 right-4">
+                        <div className="absolute top-4 right-4 flex items-center gap-2">
+                            {onAddClientAI && (
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onAddClientAI();
+                                    }}
+                                    className="w-8 h-8 flex items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors"
+                                    aria-label="Cadastrar Cliente com IA"
+                                >
+                                    <i className="fas fa-wand-magic-sparkles text-sm"></i>
+                                </button>
+                            )}
                             <button
                                 onClick={(e) => {
                                     e.stopPropagation();

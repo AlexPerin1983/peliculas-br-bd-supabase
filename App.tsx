@@ -2898,6 +2898,7 @@ Se não conseguir extrair, retorne: []`;
                                                     selectedClient={selectedClient}
                                                     onSelectClientClick={handleOpenClientSelectionModal}
                                                     onAddClient={() => handleOpenClientModal('add')}
+                                                    onAddClientAI={handleOpenAIClientModal}
                                                     onEditClient={() => handleOpenClientModal('edit')}
                                                     onDeleteClient={handleDeleteClient}
                                                     onSwipeLeft={goToNextClient}
