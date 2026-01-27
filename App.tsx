@@ -951,6 +951,8 @@ const App: React.FC = () => {
     }, [downloadBlob, handleShowInfo]);
 
     const totals = useMemo(() => {
+        const groupedTotals: { [key: string]: any } = {};
+
         const result = measurements.reduce((acc, m) => {
             if (m.active) {
                 const largura = parseFloat(m.largura.replace(',', '.')) || 0;
@@ -970,6 +972,9 @@ const App: React.FC = () => {
 
                 const basePrice = pricePerM2 * m2;
 
+                const materialPrice = (film?.preco || 0) * m2;
+                const laborPrice = (film?.maoDeObra || 0) * m2;
+
                 let itemDiscountAmount = 0;
                 const discountObj = m.discount || { value: '0', type: 'percentage' };
                 const discountValue = parseFloat(String(discountObj.value).replace(',', '.')) || 0;
@@ -986,10 +991,30 @@ const App: React.FC = () => {
                 acc.subtotal += basePrice;
                 acc.totalItemDiscount += itemDiscountAmount;
                 acc.priceAfterItemDiscounts += finalItemPrice;
-                acc.totalQuantity += quantidade; // Adicionando a quantidade total
+                acc.totalQuantity += quantidade;
+                acc.totalMaterial += materialPrice;
+                acc.totalLabor += laborPrice;
+
+                // Agrupamento por película para o detalhamento
+                if (!groupedTotals[m.pelicula]) {
+                    groupedTotals[m.pelicula] = {
+                        filmName: m.pelicula,
+                        totalM2: 0,
+                        totalLinearMeters: 0,
+                        totalMaterial: 0,
+                        totalLabor: 0,
+                        totalLinearMeterCost: 0,
+                        unitPriceMaterial: film?.preco || 0,
+                        unitPriceLabor: film?.maoDeObra || 0,
+                        unitPriceLinearMeter: film?.precoMetroLinear || 0
+                    };
+                }
+                groupedTotals[m.pelicula].totalM2 += m2;
+                groupedTotals[m.pelicula].totalMaterial += materialPrice;
+                groupedTotals[m.pelicula].totalLabor += laborPrice;
             }
             return acc;
-        }, { totalM2: 0, subtotal: 0, totalItemDiscount: 0, priceAfterItemDiscounts: 0, totalQuantity: 0 }); // Inicializando totalQuantity
+        }, { totalM2: 0, subtotal: 0, totalItemDiscount: 0, priceAfterItemDiscounts: 0, totalQuantity: 0, totalMaterial: 0, totalLabor: 0 });
 
         let generalDiscountAmount = 0;
         const discountInputValue = parseFloat(String(generalDiscount.value).replace(',', '.')) || 0;
@@ -1014,7 +1039,7 @@ const App: React.FC = () => {
 
         Object.entries(groupedByFilm).forEach(([filmName, filmMeasurements]) => {
             const film = films.find(f => f.nome === filmName);
-            const rollWidth = 152; // Default roll width in cm
+            const rollWidth = 152; // Largura padrão da bobina em cm
 
             const optimizer = new CuttingOptimizer({
                 rollWidth,
@@ -1037,8 +1062,13 @@ const App: React.FC = () => {
             const linearMeters = optimizationResult.totalHeight / 100;
             totalLinearMeters += linearMeters;
 
-            if (film?.precoMetroLinear) {
-                linearMeterCost += linearMeters * film.precoMetroLinear;
+            if (groupedTotals[filmName]) {
+                groupedTotals[filmName].totalLinearMeters = linearMeters;
+                if (film?.precoMetroLinear) {
+                    const cost = linearMeters * film.precoMetroLinear;
+                    linearMeterCost += cost;
+                    groupedTotals[filmName].totalLinearMeterCost = cost;
+                }
             }
         });
 
@@ -1047,7 +1077,8 @@ const App: React.FC = () => {
             generalDiscountAmount,
             finalTotal,
             totalLinearMeters,
-            linearMeterCost
+            linearMeterCost,
+            groupedTotals
         };
     }, [measurements, films, generalDiscount]);
 

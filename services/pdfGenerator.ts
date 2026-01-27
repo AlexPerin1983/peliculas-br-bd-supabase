@@ -1,6 +1,12 @@
-import { Client, UserInfo, Measurement, Film, SavedPDF, ProposalOption } from '../types';
+import { Client, UserInfo, Measurement, Film, SavedPDF, ProposalOption, Totals } from '../types';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+
+// Define GeneralDiscount locally since it's not exported from types.ts
+interface GeneralDiscount {
+    value: string | number;
+    type: 'percentage' | 'fixed' | 'none';
+}
 
 const formatNumberBR = (number: number): string => {
     return new Intl.NumberFormat('pt-BR', {
@@ -8,16 +14,6 @@ const formatNumberBR = (number: number): string => {
         maximumFractionDigits: 2
     }).format(number);
 };
-
-interface Totals {
-    totalM2: number;
-    subtotal: number;
-    totalItemDiscount: number;
-    priceAfterItemDiscounts: number;
-    generalDiscountAmount: number;
-    finalTotal: number;
-}
-type GeneralDiscount = { value: string | number; type: 'percentage' | 'fixed' };
 
 const formatAddressForPdf = (client: Client): string => {
     const parts = [
@@ -52,6 +48,11 @@ const calculateTotalsFromSavedPDF = (pdf: SavedPDF): Totals => {
         priceAfterItemDiscounts,
         generalDiscountAmount,
         finalTotal,
+        totalQuantity: 0,
+        totalLinearMeters: pdf.totalLinearMeters || 0,
+        linearMeterCost: pdf.linearMeterCost || 0,
+        totalMaterial: 0,
+        totalLabor: 0,
     };
 };
 

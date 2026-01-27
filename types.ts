@@ -149,6 +149,21 @@ export interface Totals {
     priceAfterItemDiscounts: number;
     totalLinearMeters: number;
     linearMeterCost: number;
+    totalMaterial: number;
+    totalLabor: number;
+    groupedTotals?: {
+        [filmName: string]: {
+            filmName: string;
+            totalM2: number;
+            totalLinearMeters: number;
+            totalMaterial: number;
+            totalLabor: number;
+            totalLinearMeterCost: number;
+            unitPriceMaterial: number;
+            unitPriceLabor: number;
+            unitPriceLinearMeter: number;
+        };
+    };
 }
 
 export interface SavedPDF {
