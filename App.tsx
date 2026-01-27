@@ -92,8 +92,19 @@ const App: React.FC = () => {
     const [films, setFilms] = useState<Film[]>([]);
     const [allSavedPdfs, setAllSavedPdfs] = useState<SavedPDF[]>([]);
     const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
-    const [activeTab, setActiveTab] = useState<ActiveTab>('client');
+    const [activeTab, setActiveTab] = useState<ActiveTab>(() => {
+        const saved = localStorage.getItem('peliculas-br-active-tab');
+        if (saved && ['client', 'films', 'settings', 'history', 'agenda', 'sales', 'admin', 'account', 'estoque'].includes(saved)) {
+            return saved as ActiveTab;
+        }
+        return 'client';
+    });
     const [isDirty, setIsDirty] = useState(false);
+
+    // Persist active tab to localStorage
+    useEffect(() => {
+        localStorage.setItem('peliculas-br-active-tab', activeTab);
+    }, [activeTab]);
     const [hasLoadedHistory, setHasLoadedHistory] = useState(false);
     const [hasLoadedAgendamentos, setHasLoadedAgendamentos] = useState(false);
     const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
