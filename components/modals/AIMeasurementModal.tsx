@@ -22,8 +22,19 @@ const AIMeasurementModal: React.FC<AIMeasurementModalProps> = ({ isOpen, onClose
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<Blob[]>([]);
 
+    // Estados para feedback de processamento melhorado
+    const [processingStage, setProcessingStage] = useState<'idle' | 'analyzing' | 'extracting' | 'filling' | 'error'>('idle');
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
     // Limite de 3 imagens conforme solicitado
     const MAX_IMAGES = 3;
+
+    // Mensagens de status para cada etapa
+    const processingMessages: Record<string, string> = {
+        analyzing: 'Analisando dados...',
+        extracting: 'Extraindo informações...',
+        filling: 'Preenchendo campos...',
+    };
 
     const stopRecordingCleanup = () => {
         if (mediaRecorderRef.current?.stream) {
@@ -43,6 +54,8 @@ const AIMeasurementModal: React.FC<AIMeasurementModalProps> = ({ isOpen, onClose
         setAudioUrl(null);
         setIsRecording(false);
         setIsDragging(false);
+        setProcessingStage('idle');
+        setErrorMessage(null);
     };
 
     useEffect(() => {
@@ -60,6 +73,22 @@ const AIMeasurementModal: React.FC<AIMeasurementModalProps> = ({ isOpen, onClose
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen]);
+
+    // Simula progressão de etapas durante processamento
+    useEffect(() => {
+        if (isProcessing && processingStage === 'idle') {
+            setProcessingStage('analyzing');
+            const timer1 = setTimeout(() => setProcessingStage('extracting'), 1500);
+            const timer2 = setTimeout(() => setProcessingStage('filling'), 3000);
+            return () => {
+                clearTimeout(timer1);
+                clearTimeout(timer2);
+            };
+        }
+        if (!isProcessing && processingStage !== 'idle' && processingStage !== 'error') {
+            setProcessingStage('idle');
+        }
+    }, [isProcessing, processingStage]);
 
     const handleTabChange = (tab: 'text' | 'image' | 'audio') => {
         resetState();
@@ -141,8 +170,10 @@ const AIMeasurementModal: React.FC<AIMeasurementModalProps> = ({ isOpen, onClose
         setIsRecording(false);
     };
 
-    const handleSubmit = (e: FormEvent) => {
+    const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
+        if (isProcessing) return; // Evita duplo clique
+
         let processData: { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob } | null = null;
         switch (activeTab) {
             case 'text':
@@ -157,27 +188,47 @@ const AIMeasurementModal: React.FC<AIMeasurementModalProps> = ({ isOpen, onClose
         }
 
         if (processData) {
-            onProcess(processData);
+            setProcessingStage('analyzing');
+            setErrorMessage(null);
+            try {
+                await onProcess(processData);
+            } catch (err: any) {
+                setProcessingStage('error');
+                setErrorMessage(err?.message || 'Erro ao processar. Tente novamente.');
+            }
         } else {
             alert("Forneça um conteúdo para processar.");
         }
+    };
+
+    const handleRetry = () => {
+        setProcessingStage('idle');
+        setErrorMessage(null);
     };
 
     const isProcessable = (activeTab === 'text' && !!text.trim()) || (activeTab === 'image' && imageFiles.length > 0) || (activeTab === 'audio' && !!audioBlob);
 
     const footer = (
         <>
-            <button onClick={onClose} className="px-4 py-2 text-sm font-semibold rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 dark:text-slate-300 disabled:opacity-50" disabled={isProcessing}>
+            <button
+                onClick={onClose}
+                className="px-4 py-2 text-sm font-semibold rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 dark:text-slate-300 disabled:opacity-50"
+                disabled={isProcessing}
+            >
                 Cancelar
             </button>
             <button
                 type="submit"
                 form="aiForm"
-                className="px-4 py-2 bg-slate-800 dark:bg-slate-700 text-white text-sm font-semibold rounded-md hover:bg-slate-700 dark:hover:bg-slate-600 min-w-[120px] disabled:bg-slate-500 disabled:cursor-wait"
+                className="px-4 py-2 bg-slate-800 dark:bg-slate-700 text-white text-sm font-semibold rounded-md hover:bg-slate-700 dark:hover:bg-slate-600 min-w-[140px] disabled:bg-slate-500 disabled:cursor-wait flex items-center justify-center gap-2"
                 disabled={isProcessing || !isProcessable}
+                aria-busy={isProcessing}
             >
                 {isProcessing ? (
-                    <div className="loader-sm mx-auto"></div>
+                    <>
+                        <i className="fas fa-spinner fa-spin"></i>
+                        <span>Processando...</span>
+                    </>
                 ) : (
                     'Processar'
                 )}
@@ -199,7 +250,7 @@ const AIMeasurementModal: React.FC<AIMeasurementModalProps> = ({ isOpen, onClose
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Preenchimento Automático com IA" footer={footer}>
-            <form id="aiForm" onSubmit={handleSubmit} className="space-y-4">
+            <form id="aiForm" onSubmit={handleSubmit} className="space-y-4" aria-busy={isProcessing}>
                 <div className="flex space-x-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-lg">
                     <TabButton tab="text" icon="fas fa-font">Texto</TabButton>
                     <TabButton tab="image" icon="fas fa-image">Imagem</TabButton>
@@ -208,7 +259,45 @@ const AIMeasurementModal: React.FC<AIMeasurementModalProps> = ({ isOpen, onClose
                     )}
                 </div>
 
-                <div className="min-h-[250px] flex flex-col justify-center items-center">
+                <div className="relative min-h-[250px] flex flex-col justify-center items-center">
+                    {/* Overlay de processamento */}
+                    {isProcessing && (
+                        <div
+                            className="absolute inset-0 bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm flex flex-col items-center justify-center z-10 rounded-lg"
+                            aria-live="polite"
+                        >
+                            {/* Barra de progresso indeterminada */}
+                            <div className="w-full h-1 bg-slate-200 dark:bg-slate-700 overflow-hidden absolute top-0 rounded-t-lg">
+                                <div className="h-full bg-blue-500 animate-indeterminate-progress"></div>
+                            </div>
+                            <i className="fas fa-robot text-4xl text-blue-500 dark:text-blue-400 mb-4 animate-pulse"></i>
+                            <p className="text-slate-700 dark:text-slate-200 font-medium text-lg">
+                                {processingMessages[processingStage] || 'Processando...'}
+                            </p>
+                            <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
+                                Isso pode levar alguns segundos
+                            </p>
+                        </div>
+                    )}
+
+                    {/* Estado de erro */}
+                    {processingStage === 'error' && !isProcessing && (
+                        <div className="absolute inset-0 bg-white/95 dark:bg-slate-900/95 flex flex-col items-center justify-center z-10 rounded-lg p-4">
+                            <i className="fas fa-exclamation-circle text-4xl text-red-500 mb-4"></i>
+                            <p className="text-red-700 dark:text-red-300 font-medium text-center mb-4">
+                                {errorMessage || 'Erro ao processar. Tente novamente.'}
+                            </p>
+                            <button
+                                type="button"
+                                onClick={handleRetry}
+                                className="px-4 py-2 bg-slate-800 dark:bg-slate-700 text-white rounded-md hover:bg-slate-700 dark:hover:bg-slate-600 flex items-center gap-2"
+                            >
+                                <i className="fas fa-redo"></i>
+                                Tentar novamente
+                            </button>
+                        </div>
+                    )}
+
                     {activeTab === 'text' && (
                         <>
                             <p className="text-xs text-slate-500 dark:text-slate-400 mb-2 self-start">
@@ -299,18 +388,14 @@ const AIMeasurementModal: React.FC<AIMeasurementModalProps> = ({ isOpen, onClose
                     )}
                 </div>
             </form>
-            <style jsx>{`
-                .loader-sm {
-                    border: 3px solid #f3f3f3;
-                    border-top: 3px solid #fff;
-                    border-radius: 50%;
-                    width: 20px;
-                    height: 20px;
-                    animation: spin 1s linear infinite;
+            <style>{`
+                @keyframes indeterminate-progress {
+                    0% { transform: translateX(-100%); width: 50%; }
+                    50% { transform: translateX(0%); width: 50%; }
+                    100% { transform: translateX(200%); width: 50%; }
                 }
-                @keyframes spin {
-                    0% { transform: rotate(0deg); }
-                    100% { transform: rotate(360deg); }
+                .animate-indeterminate-progress {
+                    animation: indeterminate-progress 1.5s ease-in-out infinite;
                 }
             `}</style>
         </Modal>

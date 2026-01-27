@@ -22,19 +22,17 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<Blob[]>([]);
 
-    // Estados para UX de processamento
-    const [processingStage, setProcessingStage] = useState<'idle' | 'analyzing' | 'extracting' | 'filling'>('idle');
-    const [error, setError] = useState<string | null>(null);
-    const [showCancelConfirm, setShowCancelConfirm] = useState(false);
-    const processingTimerRef = useRef<NodeJS.Timeout | null>(null);
+    // Estados para feedback de processamento melhorado
+    const [processingStage, setProcessingStage] = useState<'idle' | 'analyzing' | 'extracting' | 'filling' | 'error'>('idle');
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
     const MAX_IMAGES = 1;
 
-    const PROCESSING_MESSAGES = {
-        idle: '',
-        analyzing: 'Analisando entrada...',
-        extracting: 'Extraindo dados do cliente...',
-        filling: 'Preenchendo campos...'
+    // Mensagens de status para cada etapa
+    const processingMessages: Record<string, string> = {
+        analyzing: 'Analisando dados do cliente...',
+        extracting: 'Extraindo informações...',
+        filling: 'Preenchendo campos...',
     };
 
     const stopRecordingCleanup = () => {
@@ -56,12 +54,7 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
         setIsRecording(false);
         setIsDragging(false);
         setProcessingStage('idle');
-        setError(null);
-        setShowCancelConfirm(false);
-        if (processingTimerRef.current) {
-            clearTimeout(processingTimerRef.current);
-            processingTimerRef.current = null;
-        }
+        setErrorMessage(null);
     };
 
     useEffect(() => {
@@ -69,9 +62,6 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
             stopRecordingCleanup();
             imagePreviews.forEach(url => URL.revokeObjectURL(url));
             if (audioUrl) URL.revokeObjectURL(audioUrl);
-            if (processingTimerRef.current) {
-                clearTimeout(processingTimerRef.current);
-            }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [imagePreviews, audioUrl]);
@@ -88,23 +78,15 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
     useEffect(() => {
         if (isProcessing && processingStage === 'idle') {
             setProcessingStage('analyzing');
-            setError(null);
-
-            // Avança para 'extracting' após 1.5s
-            processingTimerRef.current = setTimeout(() => {
-                setProcessingStage('extracting');
-                // Avança para 'filling' após mais 1.5s
-                processingTimerRef.current = setTimeout(() => {
-                    setProcessingStage('filling');
-                }, 1500);
-            }, 1500);
-        } else if (!isProcessing && processingStage !== 'idle') {
-            // Quando termina o processamento, reseta a etapa
+            const timer1 = setTimeout(() => setProcessingStage('extracting'), 1500);
+            const timer2 = setTimeout(() => setProcessingStage('filling'), 3000);
+            return () => {
+                clearTimeout(timer1);
+                clearTimeout(timer2);
+            };
+        }
+        if (!isProcessing && processingStage !== 'idle' && processingStage !== 'error') {
             setProcessingStage('idle');
-            if (processingTimerRef.current) {
-                clearTimeout(processingTimerRef.current);
-                processingTimerRef.current = null;
-            }
         }
     }, [isProcessing, processingStage]);
 
@@ -190,9 +172,8 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
-        if (isProcessing) return; // Prevenir duplo clique
+        if (isProcessing) return; // Evita duplo clique
 
-        setError(null);
         let processData: { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob } | null = null;
         switch (activeTab) {
             case 'text':
@@ -207,12 +188,13 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
         }
 
         if (processData) {
+            setProcessingStage('analyzing');
+            setErrorMessage(null);
             try {
                 await onProcess(processData);
-            } catch (err) {
-                const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido ao processar. Tente novamente.';
-                setError(errorMessage);
-                setProcessingStage('idle');
+            } catch (err: any) {
+                setProcessingStage('error');
+                setErrorMessage(err?.message || 'Erro ao processar. Tente novamente.');
             }
         } else {
             alert("Forneça um conteúdo para processar.");
@@ -220,21 +202,8 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
     };
 
     const handleRetry = () => {
-        setError(null);
         setProcessingStage('idle');
-    };
-
-    const handleCancelClick = () => {
-        if (isProcessing) {
-            setShowCancelConfirm(true);
-        } else {
-            onClose();
-        }
-    };
-
-    const handleConfirmCancel = () => {
-        setShowCancelConfirm(false);
-        onClose();
+        setErrorMessage(null);
     };
 
     const isProcessable = (activeTab === 'text' && !!text.trim()) || (activeTab === 'image' && imageFiles.length > 0) || (activeTab === 'audio' && !!audioBlob);
@@ -242,20 +211,22 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
     const footer = (
         <>
             <button
-                onClick={handleCancelClick}
+                onClick={onClose}
                 className="px-4 py-2 text-sm font-semibold rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 dark:text-slate-300 disabled:opacity-50"
+                disabled={isProcessing}
             >
                 Cancelar
             </button>
             <button
                 type="submit"
                 form="aiClientForm"
-                className={`px-4 py-2 bg-slate-800 dark:bg-slate-700 text-white text-sm font-semibold rounded-md hover:bg-slate-700 dark:hover:bg-slate-600 min-w-[140px] disabled:bg-slate-500 disabled:cursor-not-allowed flex items-center justify-center gap-2 ${isProcessing ? 'cursor-wait' : ''}`}
-                disabled={isProcessing || !isProcessable || !!error}
+                className="px-4 py-2 bg-slate-800 dark:bg-slate-700 text-white text-sm font-semibold rounded-md hover:bg-slate-700 dark:hover:bg-slate-600 min-w-[140px] disabled:bg-slate-500 disabled:cursor-wait flex items-center justify-center gap-2"
+                disabled={isProcessing || !isProcessable}
+                aria-busy={isProcessing}
             >
                 {isProcessing ? (
                     <>
-                        <div className="loader-sm"></div>
+                        <i className="fas fa-spinner fa-spin"></i>
                         <span>Processando...</span>
                     </>
                 ) : (
@@ -277,90 +248,9 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
         </button>
     );
 
-    // Componente de Overlay de Loading
-    const LoadingOverlay = () => (
-        <div
-            className="absolute inset-0 bg-white/90 dark:bg-slate-800/95 flex flex-col items-center justify-center z-10 rounded-lg"
-            role="status"
-            aria-live="polite"
-        >
-            <div className="loader-lg mb-4"></div>
-            <p className="text-slate-700 dark:text-slate-200 font-medium text-lg mb-1">
-                {PROCESSING_MESSAGES[processingStage] || 'Processando...'}
-            </p>
-            <p className="text-slate-500 dark:text-slate-400 text-sm">
-                Isso pode levar alguns segundos
-            </p>
-            <div className="mt-4 flex gap-1">
-                <span className={`w-2 h-2 rounded-full ${processingStage === 'analyzing' ? 'bg-blue-500' : 'bg-slate-300 dark:bg-slate-600'}`}></span>
-                <span className={`w-2 h-2 rounded-full ${processingStage === 'extracting' ? 'bg-blue-500' : 'bg-slate-300 dark:bg-slate-600'}`}></span>
-                <span className={`w-2 h-2 rounded-full ${processingStage === 'filling' ? 'bg-blue-500' : 'bg-slate-300 dark:bg-slate-600'}`}></span>
-            </div>
-        </div>
-    );
-
-    // Componente de Estado de Erro
-    const ErrorState = () => (
-        <div className="absolute inset-0 bg-white/95 dark:bg-slate-800/95 flex flex-col items-center justify-center z-10 rounded-lg p-6">
-            <div className="w-16 h-16 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mb-4">
-                <i className="fas fa-exclamation-triangle text-2xl text-red-500"></i>
-            </div>
-            <p className="text-slate-700 dark:text-slate-200 font-medium text-lg mb-2 text-center">
-                Erro ao processar
-            </p>
-            <p className="text-slate-500 dark:text-slate-400 text-sm text-center mb-4 max-w-xs">
-                {error}
-            </p>
-            <button
-                onClick={handleRetry}
-                className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-md hover:bg-blue-700 flex items-center gap-2"
-            >
-                <i className="fas fa-redo"></i>
-                Tentar novamente
-            </button>
-        </div>
-    );
-
-    // Diálogo de confirmação de cancelamento
-    const CancelConfirmDialog = () => (
-        <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-20 rounded-lg">
-            <div className="bg-white dark:bg-slate-800 rounded-lg p-6 mx-4 max-w-sm shadow-xl">
-                <h3 className="text-lg font-semibold text-slate-800 dark:text-white mb-2">
-                    Processamento em andamento
-                </h3>
-                <p className="text-slate-600 dark:text-slate-300 text-sm mb-4">
-                    A IA está processando seus dados. Se você sair agora, o resultado pode ser perdido.
-                </p>
-                <div className="flex gap-3 justify-end">
-                    <button
-                        onClick={() => setShowCancelConfirm(false)}
-                        className="px-4 py-2 text-sm font-semibold rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 dark:text-slate-300"
-                    >
-                        Continuar
-                    </button>
-                    <button
-                        onClick={handleConfirmCancel}
-                        className="px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-md hover:bg-red-700"
-                    >
-                        Sair mesmo assim
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-
     return (
-        <Modal isOpen={isOpen} onClose={handleCancelClick} title="Preencher Cliente com IA" footer={footer}>
-            <form id="aiClientForm" onSubmit={handleSubmit} className="space-y-4 relative" aria-busy={isProcessing}>
-                {/* Overlay de Loading */}
-                {isProcessing && <LoadingOverlay />}
-
-                {/* Estado de Erro */}
-                {error && !isProcessing && <ErrorState />}
-
-                {/* Diálogo de Cancelamento */}
-                {showCancelConfirm && <CancelConfirmDialog />}
-
+        <Modal isOpen={isOpen} onClose={onClose} title="Cadastrar Cliente com IA" footer={footer}>
+            <form id="aiClientForm" onSubmit={handleSubmit} className="space-y-4" aria-busy={isProcessing}>
                 <div className="flex space-x-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-lg">
                     <TabButton tab="text" icon="fas fa-font">Texto</TabButton>
                     <TabButton tab="image" icon="fas fa-image">Imagem</TabButton>
@@ -369,16 +259,54 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
                     )}
                 </div>
 
-                <div className="min-h-[250px] flex flex-col justify-center items-center">
+                <div className="relative min-h-[250px] flex flex-col justify-center items-center">
+                    {/* Overlay de processamento */}
+                    {isProcessing && (
+                        <div
+                            className="absolute inset-0 bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm flex flex-col items-center justify-center z-10 rounded-lg"
+                            aria-live="polite"
+                        >
+                            {/* Barra de progresso indeterminada */}
+                            <div className="w-full h-1 bg-slate-200 dark:bg-slate-700 overflow-hidden absolute top-0 rounded-t-lg">
+                                <div className="h-full bg-blue-500 animate-indeterminate-progress"></div>
+                            </div>
+                            <i className="fas fa-robot text-4xl text-blue-500 dark:text-blue-400 mb-4 animate-pulse"></i>
+                            <p className="text-slate-700 dark:text-slate-200 font-medium text-lg">
+                                {processingMessages[processingStage] || 'Processando...'}
+                            </p>
+                            <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
+                                Isso pode levar alguns segundos
+                            </p>
+                        </div>
+                    )}
+
+                    {/* Estado de erro */}
+                    {processingStage === 'error' && !isProcessing && (
+                        <div className="absolute inset-0 bg-white/95 dark:bg-slate-900/95 flex flex-col items-center justify-center z-10 rounded-lg p-4">
+                            <i className="fas fa-exclamation-circle text-4xl text-red-500 mb-4"></i>
+                            <p className="text-red-700 dark:text-red-300 font-medium text-center mb-4">
+                                {errorMessage || 'Erro ao processar. Tente novamente.'}
+                            </p>
+                            <button
+                                type="button"
+                                onClick={handleRetry}
+                                className="px-4 py-2 bg-slate-800 dark:bg-slate-700 text-white rounded-md hover:bg-slate-700 dark:hover:bg-slate-600 flex items-center gap-2"
+                            >
+                                <i className="fas fa-redo"></i>
+                                Tentar novamente
+                            </button>
+                        </div>
+                    )}
+
                     {activeTab === 'text' && (
                         <>
                             <p className="text-xs text-slate-500 dark:text-slate-400 mb-2 self-start">
-                                Ex: <span className="italic">O cliente é João Silva, telefone (11) 98765-4321, mora na Rua das Flores, 123, São Paulo.</span>
+                                Ex: <span className="italic">João da Silva, telefone 11 99999-8888, email joao@email.com, Rua das Flores 123, São Paulo - SP, CEP 01234-567</span>
                             </p>
                             <textarea
                                 value={text}
                                 onChange={(e) => setText(e.target.value)}
-                                placeholder="Descreva ou cole as informações do cliente aqui..."
+                                placeholder="Descreva ou cole os dados do cliente aqui..."
                                 className="w-full h-48 p-2 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:ring-slate-500 focus:border-slate-500 sm:text-sm"
                                 disabled={isProcessing}
                             />
@@ -408,23 +336,43 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
                             )}
 
                             {imageFiles.length < MAX_IMAGES && (
-                                <div
-                                    onDragEnter={(e) => handleDragEvent(e, true)}
-                                    onDragLeave={(e) => handleDragEvent(e, false)}
-                                    onDragOver={(e) => handleDragEvent(e, true)}
-                                    onDrop={handleDrop}
-                                    className={`w-full p-6 border-2 border-dashed rounded-lg transition-colors ${isDragging ? 'border-slate-500 bg-slate-100 dark:bg-slate-800' : 'border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800'} ${isProcessing ? 'cursor-not-allowed' : 'cursor-pointer'}`}
-                                >
-                                    <label htmlFor="image-upload" className={isProcessing ? 'cursor-not-allowed' : 'cursor-pointer'}>
-                                        <i className="fas fa-cloud-upload-alt text-3xl text-slate-400 mb-2"></i>
-                                        <p className="text-slate-600 dark:text-slate-400 text-sm">Arraste e solte uma imagem aqui, ou <span className="font-semibold text-slate-800 dark:text-slate-200">clique para selecionar</span>.</p>
-                                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                                            Pode ser um print de conversa ou um rascunho de dados.
-                                        </p>
-                                    </label>
-                                </div>
+                                <>
+                                    <div
+                                        onDragEnter={(e) => handleDragEvent(e, true)}
+                                        onDragLeave={(e) => handleDragEvent(e, false)}
+                                        onDragOver={(e) => handleDragEvent(e, true)}
+                                        onDrop={handleDrop}
+                                        className={`w-full p-6 border-2 border-dashed rounded-lg transition-colors ${isDragging ? 'border-slate-500 bg-slate-100 dark:bg-slate-800' : 'border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800'} ${isProcessing ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                                    >
+                                        <label htmlFor="client-image-upload" className={isProcessing ? 'cursor-not-allowed' : 'cursor-pointer'}>
+                                            <i className="fas fa-cloud-upload-alt text-3xl text-slate-400 mb-2"></i>
+                                            <p className="text-slate-600 dark:text-slate-400 text-sm">Arraste e solte uma imagem aqui, ou <span className="font-semibold text-slate-800 dark:text-slate-200">clique para selecionar</span>.</p>
+                                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                                                Pode ser uma foto de cartão de visita, documento ou anotação.
+                                            </p>
+                                        </label>
+                                    </div>
+                                    <div className="mt-3 flex gap-2 justify-center">
+                                        <label
+                                            htmlFor="client-camera-capture"
+                                            className={`px-4 py-2 bg-slate-700 dark:bg-slate-600 text-white text-sm font-semibold rounded-md hover:bg-slate-600 dark:hover:bg-slate-500 transition-colors flex items-center gap-2 ${isProcessing ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                                        >
+                                            <i className="fas fa-camera"></i>
+                                            Tirar Foto
+                                        </label>
+                                    </div>
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        capture="environment"
+                                        onChange={(e) => handleImageFiles(e.target.files)}
+                                        className="hidden"
+                                        id="client-camera-capture"
+                                        disabled={isProcessing || imageFiles.length >= MAX_IMAGES}
+                                    />
+                                </>
                             )}
-                            <input type="file" accept="image/*" onChange={(e) => handleImageFiles(e.target.files)} className="hidden" id="image-upload" disabled={isProcessing || imageFiles.length >= MAX_IMAGES} multiple />
+                            <input type="file" accept="image/*" onChange={(e) => handleImageFiles(e.target.files)} className="hidden" id="client-image-upload" disabled={isProcessing || imageFiles.length >= MAX_IMAGES} multiple />
                         </div>
                     )}
                     {activeTab === 'audio' && (
@@ -456,25 +404,13 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
                 </div>
             </form>
             <style>{`
-                .loader-sm {
-                    border: 2px solid rgba(255,255,255,0.3);
-                    border-top: 2px solid #fff;
-                    border-radius: 50%;
-                    width: 16px;
-                    height: 16px;
-                    animation: spin 0.8s linear infinite;
+                @keyframes indeterminate-progress {
+                    0% { transform: translateX(-100%); width: 50%; }
+                    50% { transform: translateX(0%); width: 50%; }
+                    100% { transform: translateX(200%); width: 50%; }
                 }
-                .loader-lg {
-                    border: 4px solid rgba(100,116,139,0.2);
-                    border-top: 4px solid #3b82f6;
-                    border-radius: 50%;
-                    width: 48px;
-                    height: 48px;
-                    animation: spin 1s linear infinite;
-                }
-                @keyframes spin {
-                    0% { transform: rotate(0deg); }
-                    100% { transform: rotate(360deg); }
+                .animate-indeterminate-progress {
+                    animation: indeterminate-progress 1.5s ease-in-out infinite;
                 }
             `}</style>
         </Modal>
