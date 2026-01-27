@@ -22,7 +22,20 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<Blob[]>([]);
 
+    // Estados para UX de processamento
+    const [processingStage, setProcessingStage] = useState<'idle' | 'analyzing' | 'extracting' | 'filling'>('idle');
+    const [error, setError] = useState<string | null>(null);
+    const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+    const processingTimerRef = useRef<NodeJS.Timeout | null>(null);
+
     const MAX_IMAGES = 1;
+
+    const PROCESSING_MESSAGES = {
+        idle: '',
+        analyzing: 'Analisando entrada...',
+        extracting: 'Extraindo dados do cliente...',
+        filling: 'Preenchendo campos...'
+    };
 
     const stopRecordingCleanup = () => {
         if (mediaRecorderRef.current?.stream) {
@@ -42,6 +55,13 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
         setAudioUrl(null);
         setIsRecording(false);
         setIsDragging(false);
+        setProcessingStage('idle');
+        setError(null);
+        setShowCancelConfirm(false);
+        if (processingTimerRef.current) {
+            clearTimeout(processingTimerRef.current);
+            processingTimerRef.current = null;
+        }
     };
 
     useEffect(() => {
@@ -49,6 +69,9 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
             stopRecordingCleanup();
             imagePreviews.forEach(url => URL.revokeObjectURL(url));
             if (audioUrl) URL.revokeObjectURL(audioUrl);
+            if (processingTimerRef.current) {
+                clearTimeout(processingTimerRef.current);
+            }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [imagePreviews, audioUrl]);
@@ -60,6 +83,30 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen]);
+
+    // Simula progressão de etapas durante processamento
+    useEffect(() => {
+        if (isProcessing && processingStage === 'idle') {
+            setProcessingStage('analyzing');
+            setError(null);
+
+            // Avança para 'extracting' após 1.5s
+            processingTimerRef.current = setTimeout(() => {
+                setProcessingStage('extracting');
+                // Avança para 'filling' após mais 1.5s
+                processingTimerRef.current = setTimeout(() => {
+                    setProcessingStage('filling');
+                }, 1500);
+            }, 1500);
+        } else if (!isProcessing && processingStage !== 'idle') {
+            // Quando termina o processamento, reseta a etapa
+            setProcessingStage('idle');
+            if (processingTimerRef.current) {
+                clearTimeout(processingTimerRef.current);
+                processingTimerRef.current = null;
+            }
+        }
+    }, [isProcessing, processingStage]);
 
     const handleTabChange = (tab: 'text' | 'image' | 'audio') => {
         resetState();
@@ -141,8 +188,11 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
         setIsRecording(false);
     };
 
-    const handleSubmit = (e: FormEvent) => {
+    const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
+        if (isProcessing) return; // Prevenir duplo clique
+
+        setError(null);
         let processData: { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob } | null = null;
         switch (activeTab) {
             case 'text':
@@ -157,27 +207,57 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
         }
 
         if (processData) {
-            onProcess(processData);
+            try {
+                await onProcess(processData);
+            } catch (err) {
+                const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido ao processar. Tente novamente.';
+                setError(errorMessage);
+                setProcessingStage('idle');
+            }
         } else {
             alert("Forneça um conteúdo para processar.");
         }
+    };
+
+    const handleRetry = () => {
+        setError(null);
+        setProcessingStage('idle');
+    };
+
+    const handleCancelClick = () => {
+        if (isProcessing) {
+            setShowCancelConfirm(true);
+        } else {
+            onClose();
+        }
+    };
+
+    const handleConfirmCancel = () => {
+        setShowCancelConfirm(false);
+        onClose();
     };
 
     const isProcessable = (activeTab === 'text' && !!text.trim()) || (activeTab === 'image' && imageFiles.length > 0) || (activeTab === 'audio' && !!audioBlob);
 
     const footer = (
         <>
-            <button onClick={onClose} className="px-4 py-2 text-sm font-semibold rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 dark:text-slate-300 disabled:opacity-50" disabled={isProcessing}>
+            <button
+                onClick={handleCancelClick}
+                className="px-4 py-2 text-sm font-semibold rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 dark:text-slate-300 disabled:opacity-50"
+            >
                 Cancelar
             </button>
             <button
                 type="submit"
                 form="aiClientForm"
-                className="px-4 py-2 bg-slate-800 dark:bg-slate-700 text-white text-sm font-semibold rounded-md hover:bg-slate-700 dark:hover:bg-slate-600 min-w-[120px] disabled:bg-slate-500 disabled:cursor-wait"
-                disabled={isProcessing || !isProcessable}
+                className={`px-4 py-2 bg-slate-800 dark:bg-slate-700 text-white text-sm font-semibold rounded-md hover:bg-slate-700 dark:hover:bg-slate-600 min-w-[140px] disabled:bg-slate-500 disabled:cursor-not-allowed flex items-center justify-center gap-2 ${isProcessing ? 'cursor-wait' : ''}`}
+                disabled={isProcessing || !isProcessable || !!error}
             >
                 {isProcessing ? (
-                    <div className="loader-sm mx-auto"></div>
+                    <>
+                        <div className="loader-sm"></div>
+                        <span>Processando...</span>
+                    </>
                 ) : (
                     'Processar'
                 )}
@@ -197,9 +277,90 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
         </button>
     );
 
+    // Componente de Overlay de Loading
+    const LoadingOverlay = () => (
+        <div
+            className="absolute inset-0 bg-white/90 dark:bg-slate-800/95 flex flex-col items-center justify-center z-10 rounded-lg"
+            role="status"
+            aria-live="polite"
+        >
+            <div className="loader-lg mb-4"></div>
+            <p className="text-slate-700 dark:text-slate-200 font-medium text-lg mb-1">
+                {PROCESSING_MESSAGES[processingStage] || 'Processando...'}
+            </p>
+            <p className="text-slate-500 dark:text-slate-400 text-sm">
+                Isso pode levar alguns segundos
+            </p>
+            <div className="mt-4 flex gap-1">
+                <span className={`w-2 h-2 rounded-full ${processingStage === 'analyzing' ? 'bg-blue-500' : 'bg-slate-300 dark:bg-slate-600'}`}></span>
+                <span className={`w-2 h-2 rounded-full ${processingStage === 'extracting' ? 'bg-blue-500' : 'bg-slate-300 dark:bg-slate-600'}`}></span>
+                <span className={`w-2 h-2 rounded-full ${processingStage === 'filling' ? 'bg-blue-500' : 'bg-slate-300 dark:bg-slate-600'}`}></span>
+            </div>
+        </div>
+    );
+
+    // Componente de Estado de Erro
+    const ErrorState = () => (
+        <div className="absolute inset-0 bg-white/95 dark:bg-slate-800/95 flex flex-col items-center justify-center z-10 rounded-lg p-6">
+            <div className="w-16 h-16 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mb-4">
+                <i className="fas fa-exclamation-triangle text-2xl text-red-500"></i>
+            </div>
+            <p className="text-slate-700 dark:text-slate-200 font-medium text-lg mb-2 text-center">
+                Erro ao processar
+            </p>
+            <p className="text-slate-500 dark:text-slate-400 text-sm text-center mb-4 max-w-xs">
+                {error}
+            </p>
+            <button
+                onClick={handleRetry}
+                className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-md hover:bg-blue-700 flex items-center gap-2"
+            >
+                <i className="fas fa-redo"></i>
+                Tentar novamente
+            </button>
+        </div>
+    );
+
+    // Diálogo de confirmação de cancelamento
+    const CancelConfirmDialog = () => (
+        <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-20 rounded-lg">
+            <div className="bg-white dark:bg-slate-800 rounded-lg p-6 mx-4 max-w-sm shadow-xl">
+                <h3 className="text-lg font-semibold text-slate-800 dark:text-white mb-2">
+                    Processamento em andamento
+                </h3>
+                <p className="text-slate-600 dark:text-slate-300 text-sm mb-4">
+                    A IA está processando seus dados. Se você sair agora, o resultado pode ser perdido.
+                </p>
+                <div className="flex gap-3 justify-end">
+                    <button
+                        onClick={() => setShowCancelConfirm(false)}
+                        className="px-4 py-2 text-sm font-semibold rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 dark:text-slate-300"
+                    >
+                        Continuar
+                    </button>
+                    <button
+                        onClick={handleConfirmCancel}
+                        className="px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-md hover:bg-red-700"
+                    >
+                        Sair mesmo assim
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title="Preencher Cliente com IA" footer={footer}>
-            <form id="aiClientForm" onSubmit={handleSubmit} className="space-y-4">
+        <Modal isOpen={isOpen} onClose={handleCancelClick} title="Preencher Cliente com IA" footer={footer}>
+            <form id="aiClientForm" onSubmit={handleSubmit} className="space-y-4 relative" aria-busy={isProcessing}>
+                {/* Overlay de Loading */}
+                {isProcessing && <LoadingOverlay />}
+
+                {/* Estado de Erro */}
+                {error && !isProcessing && <ErrorState />}
+
+                {/* Diálogo de Cancelamento */}
+                {showCancelConfirm && <CancelConfirmDialog />}
+
                 <div className="flex space-x-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-lg">
                     <TabButton tab="text" icon="fas fa-font">Texto</TabButton>
                     <TabButton tab="image" icon="fas fa-image">Imagem</TabButton>
@@ -294,13 +455,21 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
                     )}
                 </div>
             </form>
-            <style jsx>{`
+            <style>{`
                 .loader-sm {
-                    border: 3px solid #f3f3f3;
-                    border-top: 3px solid #fff;
+                    border: 2px solid rgba(255,255,255,0.3);
+                    border-top: 2px solid #fff;
                     border-radius: 50%;
-                    width: 20px;
-                    height: 20px;
+                    width: 16px;
+                    height: 16px;
+                    animation: spin 0.8s linear infinite;
+                }
+                .loader-lg {
+                    border: 4px solid rgba(100,116,139,0.2);
+                    border-top: 4px solid #3b82f6;
+                    border-radius: 50%;
+                    width: 48px;
+                    height: 48px;
                     animation: spin 1s linear infinite;
                 }
                 @keyframes spin {

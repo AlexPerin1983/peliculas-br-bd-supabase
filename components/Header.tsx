@@ -32,7 +32,7 @@ const Header: React.FC<HeaderProps> = ({
                     <span className="absolute inset-0 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200/50 dark:border-slate-700/50 animate-pop-in z-0"></span>
                 )}
 
-                <i className={`${icon} text-base relative z-10 transition-transform duration-300 ${isActive ? 'scale-110' : 'group-hover:scale-110'}`}></i>
+                <i className={`${icon} text-base relative z-10 transition-transform duration-300 ${isActive ? 'scale-110 text-blue-600 dark:text-blue-400' : 'group-hover:scale-110'}`}></i>
                 <span className="text-[10px] sm:text-sm font-semibold relative z-10 hidden xs:inline sm:inline">{children}</span>
 
                 {/* Indicator Dot for Active Tab on Mobile */}
