@@ -48,9 +48,6 @@ const Header: React.FC<HeaderProps> = ({
             {/* Top Bar: Logo/Title & Sync */}
             <div className="flex items-center justify-between px-1">
                 <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 bg-slate-900 dark:bg-slate-100 rounded-lg flex items-center justify-center shadow-lg">
-                        <i className="fas fa-layer-group text-white dark:text-slate-900 text-xs"></i>
-                    </div>
                     <h1 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">
                         Películas<span className="text-blue-600 dark:text-blue-400">BR</span>
                     </h1>
