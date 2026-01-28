@@ -160,7 +160,7 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
 
             const genAI = new GoogleGenerativeAI(userInfo.aiConfig.apiKey);
             const model = genAI.getGenerativeModel({
-                model: "gemini-2.0-flash-exp",
+                model: "gemini-1.5-flash",
                 generationConfig: {
                     responseMimeType: "application/json",
                     responseSchema: {
