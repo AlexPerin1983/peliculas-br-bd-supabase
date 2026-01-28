@@ -2,7 +2,7 @@ import React from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import SyncStatusIndicator from './SyncStatusIndicator';
 
-type ActiveTab = 'client' | 'films' | 'settings' | 'history' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque';
+type ActiveTab = 'client' | 'films' | 'settings' | 'history' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code';
 
 interface HeaderProps {
     activeTab: ActiveTab;
@@ -43,16 +43,38 @@ const Header: React.FC<HeaderProps> = ({
         );
     };
 
+    const HeaderIconButton: React.FC<{ tabId: ActiveTab; icon: string; label: string }> = ({ tabId, icon, label }) => {
+        const isActive = activeTab === tabId;
+        return (
+            <button
+                onClick={() => onTabChange(tabId)}
+                aria-label={label}
+                title={label}
+                className={`w-10 h-10 flex items-center justify-center rounded-full transition-all duration-200 ${isActive
+                    ? 'bg-slate-100 dark:bg-slate-800 text-blue-600 dark:text-blue-400'
+                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+                    }`}
+            >
+                <i className={`${icon} text-lg`}></i>
+            </button>
+        );
+    };
+
     return (
         <div className="space-y-3">
             {/* Top Bar: Logo/Title & Sync */}
-            <div className="flex items-center justify-between px-1">
+            <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                     <h1 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">
                         Películas<span className="text-blue-600 dark:text-blue-400">BR</span>
                     </h1>
                 </div>
-                <SyncStatusIndicator />
+                <div className="flex items-center gap-1">
+                    <HeaderIconButton tabId="settings" icon="fas fa-cog" label="Configurações" />
+                    <HeaderIconButton tabId="account" icon="fas fa-user-circle" label="Minha Conta" />
+                    <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1"></div>
+                    <SyncStatusIndicator />
+                </div>
             </div>
 
             {/* Navigation Tabs */}
@@ -61,10 +83,9 @@ const Header: React.FC<HeaderProps> = ({
                     <TabButton tabId="client" icon="fas fa-user-friends" label="Clientes">Cliente</TabButton>
                     <TabButton tabId="films" icon="fas fa-layer-group" label="Películas">Películas</TabButton>
                     <TabButton tabId="estoque" icon="fas fa-boxes" label="Estoque">Estoque</TabButton>
+                    <TabButton tabId="qr_code" icon="fas fa-qrcode" label="QR Code">QR Code</TabButton>
                     <TabButton tabId="agenda" icon="fas fa-calendar-alt" label="Agenda">Agenda</TabButton>
                     <TabButton tabId="history" icon="fas fa-history" label="Histórico">Histórico</TabButton>
-                    <TabButton tabId="settings" icon="fas fa-cog" label="Empresa">Empresa</TabButton>
-                    <TabButton tabId="account" icon="fas fa-user-circle" label="Minha Conta">Conta</TabButton>
                     {isAdmin && <TabButton tabId="admin" icon="fas fa-user-shield" label="Painel Admin">Admin</TabButton>}
                 </div>
             </nav>

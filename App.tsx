@@ -63,7 +63,7 @@ import EstoqueView from './components/views/EstoqueView';
 
 
 type UIMeasurement = Measurement & { isNew?: boolean };
-type ActiveTab = 'client' | 'films' | 'settings' | 'history' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque';
+type ActiveTab = 'client' | 'films' | 'settings' | 'history' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code';
 
 type NumpadConfig = {
     isOpen: boolean;
@@ -2032,8 +2032,18 @@ const App: React.FC = () => {
         if (numpadConfig.isOpen) {
             handleNumpadClose();
         }
+
+        if (tab === 'qr_code') {
+            if (hasModule('qr_servicos')) {
+                setIsServicoQrModalOpen(true);
+            } else {
+                setShowQrUpgradeModal(true);
+            }
+            return;
+        }
+
         setActiveTab(tab);
-    }, [numpadConfig.isOpen, handleNumpadClose]);
+    }, [numpadConfig.isOpen, handleNumpadClose, hasModule]);
 
     const handleOpenFilmSelectionModal = useCallback((measurementId: number) => {
         if (numpadConfig.isOpen) {
@@ -3045,31 +3055,7 @@ Se não conseguir extrair, retorne: []`;
                     activeField={numpadConfig.field}
                 />
 
-                {/* Botão Flutuante - QR Code de Serviços */}
-                {userInfo && (
-                    <button
-                        onClick={() => {
-                            if (hasModule('qr_servicos')) {
-                                setIsServicoQrModalOpen(true);
-                            } else {
-                                setShowQrUpgradeModal(true);
-                            }
-                        }}
-                        className={`fixed bottom-36 sm:bottom-8 right-4 sm:right-8 ${hasModule('qr_servicos')
-                            ? 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700'
-                            : 'bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600'
-                            } text-white p-4 rounded-full shadow-2xl z-[9999] transition-all duration-300 hover:scale-110 flex items-center justify-center border-2 border-white relative`}
-                        title={hasModule('qr_servicos') ? "Gerar QR Code de Serviço" : "QR Code Serviços (PRO)"}
-                        style={{ width: '60px', height: '60px' }}
-                    >
-                        <i className="fas fa-qrcode text-2xl"></i>
-                        {!hasModule('qr_servicos') && (
-                            <span className="absolute -top-1 -right-1 bg-white text-amber-600 text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-md">
-                                PRO
-                            </span>
-                        )}
-                    </button>
-                )}
+
 
                 <LocationImportModal
                     isOpen={isLocationImportModalOpen}
