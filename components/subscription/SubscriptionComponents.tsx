@@ -376,6 +376,318 @@ export function UsageBar({ label, current, max, color = 'blue' }: UsageBarProps)
 }
 
 // ============================================
+// COMPONENTE: LockedScreen
+// Tela de bloqueio para abas/páginas inteiras
+// ============================================
+
+interface LockedScreenProps {
+    moduleId: string;
+    title?: string;
+    description?: string;
+    onUpgradeClick?: () => void;
+    showBackButton?: boolean;
+    onBackClick?: () => void;
+}
+
+export function LockedScreen({
+    moduleId,
+    title,
+    description,
+    onUpgradeClick,
+    showBackButton = false,
+    onBackClick
+}: LockedScreenProps) {
+    const { modules } = useSubscription();
+    const module = modules.find(m => m.id === moduleId);
+
+    // Benefícios visuais por módulo
+    const moduleVisuals: Record<string, {
+        emoji: string;
+        benefits: string[];
+        gradient: string;
+    }> = {
+        'estoque': {
+            emoji: '📦',
+            benefits: [
+                'Cadastre e controle suas bobinas',
+                'Gerencie retalhos e sobras',
+                'QR Code para rastreamento',
+                'Estatísticas de consumo'
+            ],
+            gradient: 'from-blue-600 to-cyan-600'
+        },
+        'qr_servicos': {
+            emoji: '🔗',
+            benefits: [
+                'Crie QR Codes únicos por serviço',
+                'Página pública de garantia',
+                'Cliente escaneia e vê detalhes',
+                'Marketing passivo automático'
+            ],
+            gradient: 'from-purple-600 to-pink-600'
+        },
+        'colaboradores': {
+            emoji: '👥',
+            benefits: [
+                'Convide colaboradores por e-mail',
+                'Defina níveis de acesso',
+                'Gerencie permissões',
+                'Veja atividades da equipe'
+            ],
+            gradient: 'from-teal-600 to-green-600'
+        },
+        'ia_ocr': {
+            emoji: '🧠',
+            benefits: [
+                'Cadastre clientes por foto/voz',
+                'Extraia medidas de imagens',
+                'Economize horas de digitação',
+                'Precisão de 95%+'
+            ],
+            gradient: 'from-violet-600 to-purple-600'
+        },
+        'personalizacao': {
+            emoji: '🎨',
+            benefits: [
+                'Logo da sua empresa nos PDFs',
+                'Cores personalizadas',
+                'Assinatura digital',
+                'Redes sociais nas propostas'
+            ],
+            gradient: 'from-orange-600 to-red-600'
+        },
+        'ilimitado': {
+            emoji: '♾️',
+            benefits: [
+                'Clientes ilimitados',
+                'Películas ilimitadas',
+                'PDFs ilimitados por mês',
+                'Agendamentos ilimitados'
+            ],
+            gradient: 'from-amber-600 to-yellow-500'
+        },
+        'locais_global': {
+            emoji: '📍',
+            benefits: [
+                'Adicione novos locais à base',
+                'Edite medidas existentes',
+                'Compartilhe com a comunidade',
+                'Economize tempo em futuros orçamentos'
+            ],
+            gradient: 'from-green-600 to-lime-600'
+        },
+        'corte_inteligente': {
+            emoji: '✂️',
+            benefits: [
+                'Otimização profunda de cortes',
+                'Reduza até 30% o desperdício',
+                'Histórico de versões',
+                'Cálculo de custo automático'
+            ],
+            gradient: 'from-rose-600 to-pink-600'
+        }
+    };
+
+    const visuals = moduleVisuals[moduleId] || {
+        emoji: '🔒',
+        benefits: ['Funcionalidade premium'],
+        gradient: 'from-gray-600 to-gray-700'
+    };
+
+    return (
+        <div className="flex flex-col items-center justify-center min-h-[60vh] p-6 animate-fadeIn">
+            {/* Back button */}
+            {showBackButton && onBackClick && (
+                <button
+                    onClick={onBackClick}
+                    className="self-start mb-6 flex items-center gap-2 text-gray-400 hover:text-white transition-colors"
+                >
+                    <Icons.ArrowLeft className="w-5 h-5" />
+                    <span>Voltar</span>
+                </button>
+            )}
+
+            {/* Emoji grande */}
+            <div className={`w-24 h-24 rounded-2xl bg-gradient-to-br ${visuals.gradient} flex items-center justify-center mb-6 shadow-lg`}>
+                <span className="text-5xl">{visuals.emoji}</span>
+            </div>
+
+            {/* Título */}
+            <h2 className="text-2xl font-bold text-white mb-2 text-center">
+                {title || module?.name || 'Recurso PRO'}
+            </h2>
+
+            {/* Descrição */}
+            <p className="text-gray-400 text-center max-w-md mb-6">
+                {description || module?.description || 'Esta funcionalidade está disponível no plano PRO.'}
+            </p>
+
+            {/* Benefícios */}
+            <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5 mb-6 max-w-md w-full">
+                <h3 className="text-white font-semibold mb-4 text-center">O que você ganha:</h3>
+                <ul className="space-y-3">
+                    {visuals.benefits.map((benefit, idx) => (
+                        <li key={idx} className="flex items-center gap-3 text-gray-300">
+                            <div className="w-6 h-6 rounded-full bg-green-500/20 flex items-center justify-center flex-shrink-0">
+                                <Icons.Check className="w-4 h-4 text-green-400" />
+                            </div>
+                            {benefit}
+                        </li>
+                    ))}
+                </ul>
+            </div>
+
+            {/* Preço e CTA */}
+            <div className="text-center mb-6">
+                <div className="flex items-baseline justify-center gap-2 mb-2">
+                    <span className="text-4xl font-bold text-white">
+                        R$ {module?.price_monthly?.toFixed(2) || '39,00'}
+                    </span>
+                    <span className="text-gray-400">
+                        / {module?.validity_months || 6} meses
+                    </span>
+                </div>
+                <p className="text-green-400 text-sm flex items-center justify-center gap-1">
+                    <span>🛡️</span>
+                    <span>Garantia de 7 dias ou seu dinheiro de volta</span>
+                </p>
+            </div>
+
+            {/* Botão de ativar */}
+            <button
+                onClick={onUpgradeClick}
+                className={`w-full max-w-md flex items-center justify-center gap-3 px-8 py-4 bg-gradient-to-r ${visuals.gradient} hover:opacity-90 text-white font-bold rounded-xl transition-all shadow-lg text-lg`}
+            >
+                <Crown className="w-6 h-6" />
+                Ativar Agora
+                <ArrowRight className="w-6 h-6" />
+            </button>
+
+            {/* Plano completo */}
+            <div className="mt-6 p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg max-w-md w-full">
+                <p className="text-amber-300 text-center text-sm">
+                    💎 <strong>Dica:</strong> Ative o <strong>Plano Completo</strong> por R$ 199,00 e ganhe todos os 8 módulos com 36% de desconto!
+                </p>
+            </div>
+        </div>
+    );
+}
+
+// ============================================
+// COMPONENTE: ProBadge
+// Badge "PRO" para marcar botões/features
+// ============================================
+
+interface ProBadgeProps {
+    size?: 'sm' | 'md' | 'lg';
+    className?: string;
+}
+
+export function ProBadge({ size = 'sm', className = '' }: ProBadgeProps) {
+    const sizes = {
+        sm: 'text-[10px] px-1.5 py-0.5',
+        md: 'text-xs px-2 py-0.5',
+        lg: 'text-sm px-2.5 py-1'
+    };
+
+    return (
+        <span className={`inline-flex items-center gap-1 bg-gradient-to-r from-amber-500 to-yellow-500 text-gray-900 font-bold rounded ${sizes[size]} ${className}`}>
+            <Crown className={size === 'sm' ? 'w-2.5 h-2.5' : size === 'md' ? 'w-3 h-3' : 'w-4 h-4'} />
+            PRO
+        </span>
+    );
+}
+
+// ============================================
+// COMPONENTE: ProButton
+// Botão que mostra badge PRO se não tiver acesso
+// ============================================
+
+interface ProButtonProps {
+    moduleId: string;
+    children: React.ReactNode;
+    onUpgradeClick?: () => void;
+    onClick?: (e: React.MouseEvent<HTMLButtonElement>) => void;
+    className?: string;
+    disabled?: boolean;
+    type?: 'button' | 'submit' | 'reset';
+}
+
+export function ProButton({ moduleId, children, onUpgradeClick, onClick, className = '', disabled, type = 'button' }: ProButtonProps) {
+    const { hasModule } = useSubscription();
+    const hasAccess = hasModule(moduleId);
+
+    const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+        if (hasAccess) {
+            onClick?.(e);
+        } else {
+            onUpgradeClick?.();
+        }
+    };
+
+    return (
+        <button
+            type={type}
+            disabled={disabled}
+            onClick={handleClick}
+            className={`relative ${className} ${!hasAccess ? 'opacity-90' : ''}`}
+        >
+            {children}
+            {!hasAccess && (
+                <ProBadge size="sm" className="absolute -top-2 -right-2" />
+            )}
+        </button>
+    );
+}
+
+// ============================================
+// COMPONENTE: LimitCounter
+// Contador de limite inline (ex: "3/10")
+// ============================================
+
+interface LimitCounterProps {
+    resource: 'clients' | 'films' | 'pdfs' | 'agendamentos';
+    currentCount: number;
+    showLabel?: boolean;
+}
+
+export function LimitCounter({ resource, currentCount, showLabel = true }: LimitCounterProps) {
+    const { info, isUnlimited } = useSubscription();
+
+    if (isUnlimited) {
+        return (
+            <span className="text-green-400 text-sm flex items-center gap-1">
+                <Icons.Infinity className="w-4 h-4" />
+                {showLabel && resourceNames[resource]}
+            </span>
+        );
+    }
+
+    const limits = info?.limits || { max_clients: 10, max_films: 5, max_pdfs_month: 10, max_agendamentos_month: 5 };
+    const maxMap: Record<string, number> = {
+        clients: limits.max_clients,
+        films: limits.max_films,
+        pdfs: limits.max_pdfs_month,
+        agendamentos: limits.max_agendamentos_month
+    };
+
+    const max = maxMap[resource] || 10;
+    const percentage = (currentCount / max) * 100;
+
+    let colorClass = 'text-gray-400';
+    if (percentage >= 100) colorClass = 'text-red-400';
+    else if (percentage >= 80) colorClass = 'text-amber-400';
+    else if (percentage >= 50) colorClass = 'text-yellow-400';
+
+    return (
+        <span className={`text-sm font-medium ${colorClass}`}>
+            {currentCount}/{max}
+            {showLabel && ` ${resourceNames[resource]}`}
+        </span>
+    );
+}
+
+// ============================================
 // UTILITÁRIOS
 // ============================================
 

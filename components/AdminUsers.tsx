@@ -20,14 +20,15 @@ interface UserWithSubscription extends Profile {
 }
 
 const AVAILABLE_MODULES = [
-    { id: 'estoque', name: 'Estoque', price: 29 },
-    { id: 'qr_servicos', name: 'QR Serviços', price: 29 },
-    { id: 'colaboradores', name: 'Colaboradores', price: 29 },
-    { id: 'ia_ocr', name: 'IA/OCR', price: 29 },
-    { id: 'personalizacao', name: 'Personalização', price: 29 },
-    { id: 'locais_global', name: 'Locais PRO', price: 29 },
-    { id: 'corte_inteligente', name: 'Corte Inteligente', price: 29 },
-    { id: 'ilimitado', name: 'Pacote Completo', price: 99 },
+    { id: 'estoque', name: 'Controle de Estoque', price: 39 },
+    { id: 'qr_servicos', name: 'QR Code de Serviços', price: 39 },
+    { id: 'colaboradores', name: 'Gestão de Equipe', price: 39 },
+    { id: 'ia_ocr', name: 'Extração com IA', price: 39 },
+    { id: 'personalizacao', name: 'Marca Própria', price: 39 },
+    { id: 'locais_global', name: 'Locais Globais PRO', price: 39 },
+    { id: 'corte_inteligente', name: 'Corte Inteligente', price: 39 },
+    { id: 'ilimitado', name: 'Sem Limites', price: 39 },
+    { id: 'pacote_completo', name: 'Pacote Completo (todos)', price: 149 },
 ];
 
 export const AdminUsers: React.FC = () => {
@@ -157,7 +158,7 @@ export const AdminUsers: React.FC = () => {
                 p_subscription_id: subData.id,
                 p_module_id: moduleId,
                 p_months: months,
-                p_payment_amount: moduleId === 'ilimitado' ? 99 : 29,
+                p_payment_amount: moduleId === 'pacote_completo' ? 149 : 39,
                 p_payment_reference: 'ADMIN-MANUAL'
             });
 
@@ -333,8 +334,8 @@ export const AdminUsers: React.FC = () => {
                                                         <button
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
-                                                                if (confirm('Ativar PACOTE COMPLETO (R$ 99 / 6 meses)?')) {
-                                                                    activateModuleForUser(profile, 'ilimitado', 6);
+                                                                if (confirm('Ativar PACOTE COMPLETO (R$ 149 / 6 meses)?')) {
+                                                                    activateModuleForUser(profile, 'pacote_completo', 6);
                                                                 }
                                                             }}
                                                             disabled={activatingModule?.userId === profile.id}
@@ -348,7 +349,7 @@ export const AdminUsers: React.FC = () => {
 
                                                 {/* Grid de módulos */}
                                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                                    {AVAILABLE_MODULES.filter(m => m.id !== 'ilimitado').map(module => {
+                                                    {AVAILABLE_MODULES.filter(m => m.id !== 'pacote_completo').map(module => {
                                                         const isActive = isModuleActive(profile, module.id) || hasFullPackage;
                                                         const expiryDays = getModuleExpiryDays(profile, module.id);
                                                         const isActivating = activatingModule?.userId === profile.id && activatingModule?.moduleId === module.id;

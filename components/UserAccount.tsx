@@ -120,61 +120,63 @@ export const UserAccount: React.FC = () => {
                                 )}
                             </div>
 
-                            {/* Oferta Especial - Pacote Completo */}
-                            {!hasFullPackage && (
-                                <div className="mb-6 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-xl p-5 text-white relative overflow-hidden">
-                                    <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
-                                    <div className="absolute -bottom-8 -left-8 w-24 h-24 bg-white/5 rounded-full" />
+                            {/* Oferta Especial - Pacote Completo (cálculo dinâmico) */}
+                            {!hasFullPackage && (() => {
+                                // Calcular preços dinamicamente dos módulos
+                                const allModules = modules.filter(m => m.id !== 'pacote_completo'); // Excluir o próprio pacote se existir
+                                const totalModulos = allModules.length;
+                                const precoAvulso = allModules.reduce((acc, m) => acc + (m.price_monthly || 39), 0);
+                                const precoPacote = 149;
+                                const desconto = precoAvulso - precoPacote;
+                                const descontoPercent = Math.round((desconto / precoAvulso) * 100);
 
-                                    <div className="relative">
-                                        <div className="flex items-center justify-between mb-3">
-                                            <span className="px-3 py-1 bg-yellow-400 text-yellow-900 text-xs font-bold rounded-full">
-                                                ⚡ OFERTA ESPECIAL
-                                            </span>
-                                            <span className="text-indigo-200 text-sm line-through">R$ 203,00</span>
+                                return (
+                                    <div className="mb-6 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-xl p-5 text-white relative overflow-hidden">
+                                        <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
+                                        <div className="absolute -bottom-8 -left-8 w-24 h-24 bg-white/5 rounded-full" />
+
+                                        <div className="relative">
+                                            <div className="flex items-center justify-between mb-3">
+                                                <span className="px-3 py-1 bg-yellow-400 text-yellow-900 text-xs font-bold rounded-full">
+                                                    ⚡ {descontoPercent}% OFF
+                                                </span>
+                                                <span className="text-indigo-200 text-sm line-through">R$ {precoAvulso.toFixed(0)},00</span>
+                                            </div>
+
+                                            <h4 className="text-xl font-bold mb-1">Pacote Completo</h4>
+                                            <p className="text-indigo-200 text-sm mb-4">
+                                                Libera TODOS os {totalModulos} módulos por 6 meses
+                                            </p>
+
+                                            <div className="flex items-baseline gap-2 mb-4">
+                                                <span className="text-4xl font-bold">R$ {precoPacote}</span>
+                                                <span className="text-indigo-200">/6 meses</span>
+                                            </div>
+
+                                            {/* Lista dinâmica de módulos inclusos */}
+                                            <div className="grid grid-cols-2 gap-2 mb-4 text-sm">
+                                                {allModules.slice(0, 8).map(mod => (
+                                                    <div key={mod.id} className="flex items-center gap-2">
+                                                        <Check className="w-4 h-4 text-green-400" /> {mod.name}
+                                                    </div>
+                                                ))}
+                                            </div>
+
+                                            <button
+                                                onClick={() => setShowActivateModal('pacote_completo')}
+                                                className="w-full py-3 bg-white text-indigo-600 font-bold rounded-lg hover:bg-indigo-50 transition-colors flex items-center justify-center gap-2"
+                                            >
+                                                <Zap className="w-5 h-5" />
+                                                Quero o Pacote Completo
+                                            </button>
+
+                                            <p className="text-center text-indigo-200/70 text-xs mt-3">
+                                                Economia de R$ {desconto.toFixed(0)},00 vs avulso
+                                            </p>
                                         </div>
-
-                                        <h4 className="text-xl font-bold mb-1">Pacote Completo</h4>
-                                        <p className="text-indigo-200 text-sm mb-4">
-                                            Libera TODOS os módulos por 6 meses
-                                        </p>
-
-                                        <div className="flex items-baseline gap-2 mb-4">
-                                            <span className="text-4xl font-bold">R$ 99</span>
-                                            <span className="text-indigo-200">/6 meses</span>
-                                        </div>
-
-                                        <div className="grid grid-cols-2 gap-2 mb-4 text-sm">
-                                            <div className="flex items-center gap-2">
-                                                <Check className="w-4 h-4 text-green-400" /> Estoque
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <Check className="w-4 h-4 text-green-400" /> QR Serviços
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <Check className="w-4 h-4 text-green-400" /> Corte Inteligente
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <Check className="w-4 h-4 text-green-400" /> IA/OCR
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <Check className="w-4 h-4 text-green-400" /> Colaboradores
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <Check className="w-4 h-4 text-green-400" /> Sem Limites
-                                            </div>
-                                        </div>
-
-                                        <button
-                                            onClick={() => setShowActivateModal('ilimitado')}
-                                            className="w-full py-3 bg-white text-indigo-600 font-bold rounded-lg hover:bg-indigo-50 transition-colors flex items-center justify-center gap-2"
-                                        >
-                                            <Zap className="w-5 h-5" />
-                                            Quero o Pacote Completo
-                                        </button>
                                     </div>
-                                </div>
-                            )}
+                                );
+                            })()}
 
                             {/* Lista de Módulos */}
                             <div>
@@ -182,65 +184,69 @@ export const UserAccount: React.FC = () => {
                                     Módulos Disponíveis
                                 </h4>
                                 <div className="space-y-3">
-                                    {modules.filter(m => m.id !== 'ilimitado').map(module => {
-                                        const isActive = hasModule(module.id) || hasFullPackage;
-                                        const expiryInfo = getModuleExpiry(module.id);
+                                    {/* Lista TODOS os módulos do banco, ordenados por sort_order/nome */}
+                                    {modules
+                                        .filter(m => m.id !== 'pacote_completo') // Exclui apenas o pacote que é tratado separadamente
+                                        .sort((a, b) => (a.sort_order || 99) - (b.sort_order || 99))
+                                        .map(module => {
+                                            const isActive = hasModule(module.id) || hasFullPackage;
+                                            const expiryInfo = getModuleExpiry(module.id);
 
-                                        return (
-                                            <div
-                                                key={module.id}
-                                                className={`p-4 rounded-xl border transition-all ${isActive
-                                                    ? 'bg-green-500/5 border-green-500/30'
-                                                    : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700'
-                                                    }`}
-                                            >
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${isActive
-                                                            ? 'bg-green-500/20 text-green-400'
-                                                            : 'bg-slate-200 dark:bg-slate-700 text-slate-500'
-                                                            }`}>
-                                                            <Package className="w-5 h-5" />
-                                                        </div>
-                                                        <div>
-                                                            <h5 className="font-medium text-slate-900 dark:text-white">
-                                                                {module.name}
-                                                            </h5>
-                                                            {isActive ? (
-                                                                <div className="flex items-center gap-2 text-sm">
-                                                                    <span className="text-green-400 font-medium">✓ Ativo</span>
-                                                                    {expiryInfo && (
-                                                                        <span className="text-slate-400">
-                                                                            • {expiryInfo.daysLeft} dias restantes
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                            ) : (
-                                                                <p className="text-sm text-slate-500">
-                                                                    {module.description}
-                                                                </p>
-                                                            )}
-                                                        </div>
-                                                    </div>
-
-                                                    {!isActive && (
-                                                        <div className="text-right">
-                                                            <div className="text-lg font-bold text-slate-900 dark:text-white">
-                                                                R$ 29
+                                            return (
+                                                <div
+                                                    key={module.id}
+                                                    className={`p-4 rounded-xl border transition-all ${isActive
+                                                        ? 'bg-green-500/5 border-green-500/30'
+                                                        : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700'
+                                                        }`}
+                                                >
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${isActive
+                                                                ? 'bg-green-500/20 text-green-400'
+                                                                : 'bg-slate-200 dark:bg-slate-700 text-slate-500'
+                                                                }`}>
+                                                                <Package className="w-5 h-5" />
                                                             </div>
-                                                            <div className="text-xs text-slate-500">/ 6 meses</div>
-                                                            <button
-                                                                onClick={() => setShowActivateModal(module.id)}
-                                                                className="mt-2 px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors"
-                                                            >
-                                                                Ativar
-                                                            </button>
+                                                            <div>
+                                                                <h5 className="font-medium text-slate-900 dark:text-white">
+                                                                    {module.name}
+                                                                </h5>
+                                                                {isActive ? (
+                                                                    <div className="flex items-center gap-2 text-sm">
+                                                                        <span className="text-green-400 font-medium">✓ Ativo</span>
+                                                                        {expiryInfo && (
+                                                                            <span className="text-slate-400">
+                                                                                • {expiryInfo.daysLeft} dias restantes
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                ) : (
+                                                                    <p className="text-sm text-slate-500">
+                                                                        {module.description}
+                                                                    </p>
+                                                                )}
+                                                            </div>
                                                         </div>
-                                                    )}
+
+                                                        {!isActive && (
+                                                            <div className="text-right">
+                                                                <div className="text-lg font-bold text-slate-900 dark:text-white">
+                                                                    R$ {module.price_monthly?.toFixed(0) || 39}
+                                                                </div>
+                                                                <div className="text-xs text-slate-500">/ 6 meses</div>
+                                                                <button
+                                                                    onClick={() => setShowActivateModal(module.id)}
+                                                                    className="mt-2 px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors"
+                                                                >
+                                                                    Ativar
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        );
-                                    })}
+                                            );
+                                        })}
                                 </div>
                             </div>
                         </>
@@ -324,7 +330,7 @@ export const UserAccount: React.FC = () => {
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
                     <div className="bg-white dark:bg-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl">
                         <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
-                            {showActivateModal === 'ilimitado' ? 'Ativar Pacote Completo' : 'Ativar Módulo'}
+                            {showActivateModal === 'pacote_completo' ? 'Ativar Pacote Completo' : 'Ativar Módulo'}
                         </h3>
                         <p className="text-slate-500 dark:text-slate-400 mb-6">
                             Para ativar, faça o pagamento via PIX e aguarde a confirmação.
@@ -334,7 +340,7 @@ export const UserAccount: React.FC = () => {
                             <div className="flex justify-between items-center mb-3">
                                 <span className="text-slate-600 dark:text-slate-400">Valor:</span>
                                 <span className="text-2xl font-bold text-slate-900 dark:text-white">
-                                    R$ {showActivateModal === 'ilimitado' ? '99,00' : '29,00'}
+                                    R$ {showActivateModal === 'pacote_completo' ? '149,00' : (modules.find(m => m.id === showActivateModal)?.price_monthly?.toFixed(2).replace('.', ',') || '39,00')}
                                 </span>
                             </div>
                             <div className="flex justify-between items-center">

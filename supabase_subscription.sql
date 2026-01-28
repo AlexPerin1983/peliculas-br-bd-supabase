@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS subscription_modules (
     description TEXT,
     price_monthly NUMERIC(10,2) NOT NULL DEFAULT 0,
     price_yearly NUMERIC(10,2), -- Com desconto anual
+    validity_months INTEGER DEFAULT 6, -- Período de validade padrão: 6 meses
     icon TEXT, -- Nome do ícone Lucide
     features JSONB, -- Lista de features incluídas
     is_active BOOLEAN DEFAULT true, -- Se o módulo está disponível para compra
@@ -19,21 +20,22 @@ CREATE TABLE IF NOT EXISTS subscription_modules (
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- Inserir módulos padrão
-INSERT INTO subscription_modules (id, name, description, price_monthly, price_yearly, icon, features, sort_order) VALUES
-('estoque', 'Controle de Estoque', 'Gerencie bobinas, retalhos e consumo de películas', 29.90, 299.00, 'Package', '["bobinas", "retalhos", "consumos", "qr_estoque"]', 1),
-('qr_servicos', 'QR Code de Serviços', 'Gere QR Codes para serviços prestados aos clientes', 19.90, 199.00, 'QrCode', '["servicos_prestados", "pagina_publica"]', 2),
-('colaboradores', 'Gestão de Equipe', 'Adicione colaboradores e gerencie permissões', 39.90, 399.00, 'Users', '["convites", "membros_ilimitados", "permissoes"]', 3),
-('ia_ocr', 'Extração com IA', 'Use IA para extrair dados de imagens automaticamente', 24.90, 249.00, 'Brain', '["ocr_gemini", "ocr_openai", "ocr_local"]', 4),
-('personalizacao', 'Marca Própria', 'Personalize cores, logo e aparência das propostas', 14.90, 149.00, 'Palette', '["cores_custom", "logo_custom", "assinatura"]', 5),
-('ilimitado', 'Sem Limites', 'Remove todos os limites de clientes, películas e propostas', 49.90, 499.00, 'Infinity', '["clientes_ilimitados", "filmes_ilimitados", "pdfs_ilimitados"]', 6),
-('locais_global', 'Locais Globais PRO', 'Adicione e edite medidas em locais compartilhados', 9.90, 99.00, 'MapPin', '["adicionar_locais", "editar_medidas"]', 7),
-('corte_inteligente', 'Corte Inteligente', 'Otimize o corte das bobinas para reduzir desperdício e maximizar aproveitamento', 34.90, 349.00, 'Scissors', '["otimizacao_corte", "sugestao_retalhos", "calculo_desperdicio", "plano_corte_visual"]', 8)
+-- Inserir módulos padrão (Todos R$ 39,00 por 6 meses)
+INSERT INTO subscription_modules (id, name, description, price_monthly, price_yearly, validity_months, icon, features, sort_order) VALUES
+('estoque', 'Controle de Estoque', 'Gerencie bobinas, retalhos e consumo de películas', 39.00, NULL, 6, 'Package', '["bobinas", "retalhos", "consumos", "qr_estoque"]', 1),
+('qr_servicos', 'QR Code de Serviços', 'Gere QR Codes para serviços prestados aos clientes', 39.00, NULL, 6, 'QrCode', '["servicos_prestados", "pagina_publica"]', 2),
+('colaboradores', 'Gestão de Equipe', 'Adicione colaboradores e gerencie permissões', 39.00, NULL, 6, 'Users', '["convites", "membros_ilimitados", "permissoes"]', 3),
+('ia_ocr', 'Extração com IA', 'Use IA para extrair dados de imagens automaticamente', 39.00, NULL, 6, 'Brain', '["ocr_gemini", "ocr_openai", "ocr_local"]', 4),
+('personalizacao', 'Marca Própria', 'Personalize cores, logo e aparência das propostas', 39.00, NULL, 6, 'Palette', '["cores_custom", "logo_custom", "assinatura"]', 5),
+('ilimitado', 'Sem Limites', 'Remove todos os limites de clientes, películas e propostas', 39.00, NULL, 6, 'Infinity', '["clientes_ilimitados", "filmes_ilimitados", "pdfs_ilimitados"]', 6),
+('locais_global', 'Locais Globais PRO', 'Adicione e edite medidas em locais compartilhados', 39.00, NULL, 6, 'MapPin', '["adicionar_locais", "editar_medidas"]', 7),
+('corte_inteligente', 'Corte Inteligente', 'Otimize o corte das bobinas para reduzir desperdício e maximizar aproveitamento', 39.00, NULL, 6, 'Scissors', '["otimizacao_corte", "sugestao_retalhos", "calculo_desperdicio", "plano_corte_visual"]', 8)
 ON CONFLICT (id) DO UPDATE SET
     name = EXCLUDED.name,
     description = EXCLUDED.description,
     price_monthly = EXCLUDED.price_monthly,
     price_yearly = EXCLUDED.price_yearly,
+    validity_months = EXCLUDED.validity_months,
     icon = EXCLUDED.icon,
     features = EXCLUDED.features,
     sort_order = EXCLUDED.sort_order;

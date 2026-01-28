@@ -8,7 +8,11 @@ export {
     LimitWarning,
     ModuleCard,
     UsageBar,
-    ActivateModuleModal
+    ActivateModuleModal,
+    LockedScreen,
+    ProBadge,
+    ProButton,
+    LimitCounter
 } from './SubscriptionComponents';
 
 export { SubscriptionPage } from './SubscriptionPage';
