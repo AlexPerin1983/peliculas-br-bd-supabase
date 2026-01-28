@@ -24,38 +24,6 @@ h6 {
 }
 
 ::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.3);
-  border-radius: 10px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.5);
-}
-
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-
-.no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-
-/* Focus States */
-:focus-visible {
-  outline: 2px solid #3b82f6;
-  outline-offset: 2px;
-}
-
-/* Glassmorphism Utilities */
-.glass {
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
@@ -437,6 +405,200 @@ h6 {
   opacity: 0.5;
 }
 
+.empty-state p {}
+
+.filters-container {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.status-filter {
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background-color: white;
+  font-size: 0.9rem;
+  color: #475569;
+  cursor: pointer;
+  min-width: 140px;
+}
+
+.status-filter:focus {
+  border-color: #3b82f6;
+  outline: none;
+}
+
+.view-toggle {
+  display: flex;
+  background: #f1f5f9;
+  padding: 4px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  border-radius: 6px;
+  color: #64748b;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.toggle-btn:hover {
+  color: #334155;
+}
+
+.toggle-btn.active {
+  background: white;
+  color: #3b82f6;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* --- Table View --- */
+.estoque-table-container {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  overflow-x: auto;
+  border: 1px solid #e2e8f0;
+}
+
+.estoque-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 800px;
+}
+
+.estoque-table th {
+  background: #f8fafc;
+  padding: 12px 16px;
+  text-align: left;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #64748b;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.estoque-table td {
+  padding: 16px;
+  border-bottom: 1px solid #f1f5f9;
+  color: #334155;
+  font-size: 0.95rem;
+  vertical-align: middle;
+}
+
+.estoque-table tr:last-child td {
+  border-bottom: none;
+}
+
+.estoque-table tr:hover td {
+  background-color: #f8fafc;
+}
+
+.table-film-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.table-film-info .film-id {
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.table-film-info .film-loc {
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.table-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.table-progress-bar {
+  flex: 1;
+  height: 8px;
+  background: #e2e8f0;
+  border-radius: 4px;
+  overflow: hidden;
+  min-width: 80px;
+}
+
+.table-progress-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.5s ease-out;
+}
+
+.table-progress span {
+  font-size: 0.85rem;
+  color: #475569;
+  font-weight: 500;
+  min-width: 45px;
+  text-align: right;
+}
+
+.status-badge.small {
+  padding: 4px 8px;
+  font-size: 0.75rem;
+}
+
+.table-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.table-actions button {
+  padding: 6px;
+  border-radius: 6px;
+  color: #64748b;
+  transition: all 0.2s;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.table-actions button:hover {
+  background: #f1f5f9;
+  color: #334155;
+}
+
+.table-actions button.text-red-500:hover {
+  background: #fee2e2;
+  color: #ef4444;
+}
+
+/* --- Empty State --- */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 2rem;
+  text-align: center;
+  color: #94a3b8;
+  background: white;
+  border-radius: 12px;
+  border: 2px dashed #e2e8f0;
+}
+
+.empty-state svg {
+  width: 48px;
+  height: 48px;
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+
 .empty-state p {
   font-size: 1.1rem;
   font-weight: 500;
@@ -448,4 +610,27 @@ h6 {
   color: #94a3b8;
   margin-top: 0.5rem;
   font-weight: 400;
+}
+
+/* Scroll Snap Utilities for Header Tabs */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.snap-x {
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+
+.snap-mandatory {
+  scroll-snap-type: x mandatory;
+}
+
+.scroll-snap-align-start {
+  scroll-snap-align: start;
 }
