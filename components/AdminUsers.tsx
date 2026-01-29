@@ -129,24 +129,6 @@ export const AdminUsers: React.FC = () => {
         }
     };
 
-    const toggleApproval = async (profile: Profile) => {
-        try {
-            const { error } = await supabase
-                .from('profiles')
-                .update({ approved: !profile.approved })
-                .eq('id', profile.id);
-
-            if (error) throw error;
-
-            setProfiles(profiles.map(p =>
-                p.id === profile.id ? { ...p, approved: !p.approved } : p
-            ));
-        } catch (error) {
-            console.error('Error updating profile:', error);
-            alert('Erro ao atualizar usuário');
-        }
-    };
-
     const activateModuleForUser = async (profile: UserWithSubscription, moduleId: string, months: number = 6) => {
         setActivatingModule({ userId: profile.id, moduleId });
 
@@ -249,18 +231,10 @@ export const AdminUsers: React.FC = () => {
     return (
         <div className="space-y-6">
             {/* Header com estatísticas */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
                     <div className="text-2xl font-bold text-slate-900 dark:text-white">{profiles.length}</div>
                     <div className="text-sm text-slate-500">Total Usuários</div>
-                </div>
-                <div className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
-                    <div className="text-2xl font-bold text-green-500">{profiles.filter(p => p.approved).length}</div>
-                    <div className="text-sm text-slate-500">Aprovados</div>
-                </div>
-                <div className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
-                    <div className="text-2xl font-bold text-yellow-500">{profiles.filter(p => !p.approved).length}</div>
-                    <div className="text-sm text-slate-500">Pendentes</div>
                 </div>
                 <div className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
                     <div className="text-2xl font-bold text-purple-500">
@@ -355,18 +329,6 @@ export const AdminUsers: React.FC = () => {
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-3">
-                                                {/* Status */}
-                                                {profile.approved ? (
-                                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                                                        <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
-                                                        Aprovado
-                                                    </span>
-                                                ) : (
-                                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">
-                                                        <span className="w-1.5 h-1.5 rounded-full bg-yellow-500"></span>
-                                                        Pendente
-                                                    </span>
-                                                )}
                                                 {/* Botão expandir */}
                                                 <button className="p-1 hover:bg-slate-200 dark:hover:bg-slate-600 rounded">
                                                     {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
@@ -395,18 +357,6 @@ export const AdminUsers: React.FC = () => {
                                                     <>
                                                         {/* Ações rápidas */}
                                                         <div className="flex items-center gap-2 mb-4">
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    toggleApproval(profile);
-                                                                }}
-                                                                className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors ${profile.approved
-                                                                    ? 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-400'
-                                                                    : 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-400'
-                                                                    }`}
-                                                            >
-                                                                {profile.approved ? 'Bloquear Acesso' : 'Aprovar Acesso'}
-                                                            </button>
                                                             {!hasFullPackage && (
                                                                 <button
                                                                     onClick={(e) => {

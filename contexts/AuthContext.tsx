@@ -9,7 +9,6 @@ interface AuthContextType {
     profile: Profile | null;
     loading: boolean;
     isAdmin: boolean;
-    isApproved: boolean;
     isBlocked: boolean;
     isOwner: boolean;
     organizationId: string | null;
@@ -157,7 +156,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         profile,
         loading,
         isAdmin: isAdminByEmail || profile?.role === 'admin',
-        isApproved: profile?.approved ?? false,
         isBlocked: memberStatus === 'blocked',
         isOwner,
         organizationId: profile?.organization_id ?? null,

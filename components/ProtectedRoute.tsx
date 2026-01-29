@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Login } from './Login';
 
 export const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const { session, loading, isApproved, isBlocked, signOut } = useAuth();
+    const { session, loading, isBlocked, signOut } = useAuth();
 
     if (loading) {
         return (
@@ -46,10 +46,6 @@ export const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ childr
             </div>
         );
     }
-
-    // REMOVIDO: Verificação de aprovação pendente
-    // Todos os usuários agora têm acesso liberado automaticamente
-    // if (!isApproved) { ... }
 
     return <>{children}</>;
 };
