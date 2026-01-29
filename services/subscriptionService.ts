@@ -370,17 +370,18 @@ export async function checkPermissions(): Promise<{
 }> {
     const info = await getSubscriptionInfo();
     const isUnlimited = info.active_modules.includes('ilimitado');
+    const hasFullPack = info.active_modules.includes('pacote_completo');
 
     return {
-        canAddClient: isUnlimited || true, // Precisará verificar contagem real
-        canAddFilm: isUnlimited || true,
-        canGeneratePdf: isUnlimited || info.usage.pdfs_generated < info.limits.max_pdfs_month,
-        canUseEstoque: info.active_modules.includes('estoque'),
-        canUseQrServicos: info.active_modules.includes('qr_servicos'),
-        canUseColaboradores: info.active_modules.includes('colaboradores'),
-        canUseIA: info.active_modules.includes('ia_ocr'),
-        canCustomize: info.active_modules.includes('personalizacao'),
-        canAddLocais: info.active_modules.includes('locais_global'),
+        canAddClient: isUnlimited || hasFullPack || true, // Precisará verificar contagem real
+        canAddFilm: isUnlimited || hasFullPack || true,
+        canGeneratePdf: isUnlimited || hasFullPack || info.usage.pdfs_generated < info.limits.max_pdfs_month,
+        canUseEstoque: hasFullPack || info.active_modules.includes('estoque'),
+        canUseQrServicos: hasFullPack || info.active_modules.includes('qr_servicos'),
+        canUseColaboradores: hasFullPack || info.active_modules.includes('colaboradores'),
+        canUseIA: hasFullPack || info.active_modules.includes('ia_ocr'),
+        canCustomize: hasFullPack || info.active_modules.includes('personalizacao'),
+        canAddLocais: hasFullPack || info.active_modules.includes('locais_global'),
         limits: info.limits,
         usage: info.usage,
         activeModules: info.active_modules

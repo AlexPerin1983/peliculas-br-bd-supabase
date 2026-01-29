@@ -45,7 +45,7 @@ export const UserAccount: React.FC = () => {
 
     // Calcular valor total se comprar individual vs pacote
     const activeModulesCount = info?.active_modules?.length || 0;
-    const hasFullPackage = hasModule('ilimitado');
+    const hasFullPackage = hasModule('pacote_completo') || hasModule('ilimitado');
 
     // Obter detalhes dos módulos ativos
     const getModuleExpiry = (moduleId: string) => {

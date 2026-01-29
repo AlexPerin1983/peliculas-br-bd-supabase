@@ -15,7 +15,7 @@ const Header: React.FC<HeaderProps> = ({
 }) => {
     const { isAdmin } = useAuth();
 
-    const TabButton: React.FC<{ tabId: ActiveTab; children: React.ReactNode, icon: string, label: string }> = ({ tabId, children, icon, label }) => {
+    const TabButton: React.FC<{ tabId: ActiveTab; icon: string; label: string }> = ({ tabId, icon, label }) => {
         const isActive = activeTab === tabId;
         return (
             <button
@@ -23,9 +23,8 @@ const Header: React.FC<HeaderProps> = ({
                 aria-label={label}
                 title={label}
                 className={`
-                    relative px-4 py-2.5 text-sm font-semibold rounded-xl 
-                    transition-all duration-200 flex-shrink-0 flex items-center justify-center gap-2
-                    scroll-snap-align-start
+                    flex-1 min-w-0 py-2.5 text-sm font-semibold rounded-xl 
+                    transition-all duration-200 flex items-center justify-center gap-2
                     ${isActive
                         ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm border border-slate-200/50 dark:border-slate-700/50'
                         : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/50'
@@ -33,7 +32,7 @@ const Header: React.FC<HeaderProps> = ({
                 `}
             >
                 <i className={`${icon} text-base ${isActive ? 'text-blue-600 dark:text-blue-400' : ''}`}></i>
-                <span className="hidden sm:inline">{children}</span>
+                <span className="hidden sm:inline truncate">{label}</span>
             </button>
         );
     };
@@ -79,16 +78,16 @@ const Header: React.FC<HeaderProps> = ({
                 </div>
             </div>
 
-            {/* Navigation Tabs - Segmented/Pill Style */}
-            <nav className="flex justify-start -mx-4 px-4">
-                <div className="flex items-center gap-1.5 p-1.5 bg-slate-100/60 dark:bg-slate-800/60 rounded-2xl overflow-x-auto scrollbar-hide snap-x snap-mandatory">
-                    <TabButton tabId="client" icon="fas fa-user-friends" label="Clientes">Cliente</TabButton>
-                    <TabButton tabId="films" icon="fas fa-layer-group" label="Películas">Películas</TabButton>
-                    <TabButton tabId="estoque" icon="fas fa-boxes" label="Estoque">Estoque</TabButton>
-                    <TabButton tabId="qr_code" icon="fas fa-qrcode" label="QR Code">QR Code</TabButton>
-                    <TabButton tabId="agenda" icon="fas fa-calendar-alt" label="Agenda">Agenda</TabButton>
-                    <TabButton tabId="history" icon="fas fa-history" label="Histórico">Histórico</TabButton>
-                    {isAdmin && <TabButton tabId="admin" icon="fas fa-user-shield" label="Painel Admin">Admin</TabButton>}
+            {/* Navigation Tabs - Distribuídos de ponta a ponta */}
+            <nav className="-mx-4 px-4" aria-label="Navegação principal">
+                <div className="flex items-center gap-1 sm:gap-1.5 p-1.5 bg-slate-100/60 dark:bg-slate-800/60 rounded-2xl w-full">
+                    <TabButton tabId="client" icon="fas fa-user-friends" label="Clientes" />
+                    <TabButton tabId="films" icon="fas fa-layer-group" label="Películas" />
+                    <TabButton tabId="estoque" icon="fas fa-boxes" label="Estoque" />
+                    <TabButton tabId="qr_code" icon="fas fa-qrcode" label="QR Code" />
+                    <TabButton tabId="agenda" icon="fas fa-calendar-alt" label="Agenda" />
+                    <TabButton tabId="history" icon="fas fa-history" label="Histórico" />
+                    {isAdmin && <TabButton tabId="admin" icon="fas fa-user-shield" label="Admin" />}
                 </div>
             </nav>
         </div>

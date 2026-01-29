@@ -11,8 +11,6 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ onMemberCountChange }) 
     const { organizationId, isOwner, user, profile } = useAuth();
     const [members, setMembers] = useState<OrganizationMember[]>([]);
     const [loading, setLoading] = useState(true);
-    const [inviteEmail, setInviteEmail] = useState('');
-    const [inviting, setInviting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
     const [canManageTeam, setCanManageTeam] = useState(false);
@@ -78,50 +76,6 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ onMemberCountChange }) 
         }
     };
 
-
-    const handleInvite = async () => {
-        if (!inviteEmail.trim() || !organizationId) return;
-
-        // Validar email
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(inviteEmail)) {
-            setError('Email inválido');
-            return;
-        }
-
-        // Verificar se já existe
-        const existingMember = members.find(m => m.email.toLowerCase() === inviteEmail.toLowerCase());
-        if (existingMember) {
-            setError('Este email já foi convidado');
-            return;
-        }
-
-        setInviting(true);
-        setError(null);
-
-        try {
-            const { error } = await supabase
-                .from('organization_members')
-                .insert({
-                    organization_id: organizationId,
-                    email: inviteEmail.toLowerCase().trim(),
-                    role: 'member',
-                    status: 'pending'
-                });
-
-            if (error) throw error;
-
-            setSuccess('Convite enviado! O colaborador pode se cadastrar com este email.');
-            setInviteEmail('');
-            setTimeout(() => setSuccess(null), 5000);
-            await fetchMembers();
-        } catch (error: any) {
-            console.error('Error inviting member:', error);
-            setError(error.message || 'Erro ao enviar convite');
-        } finally {
-            setInviting(false);
-        }
-    };
 
     const handleToggleStatus = async (member: OrganizationMember) => {
         const newStatus = member.status === 'active' ? 'blocked' : 'active';
@@ -221,7 +175,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ onMemberCountChange }) 
                     <div className="p-4 text-center text-slate-500">Carregando...</div>
                 ) : members.length === 0 ? (
                     <div className="p-4 text-center text-slate-500 dark:text-slate-400">
-                        Nenhum colaborador ainda. Convide usando o campo abaixo.
+                        Nenhum colaborador ainda. Gere um QR Code na seção abaixo para convidar.
                     </div>
                 ) : (
                     members.map(member => (
@@ -274,39 +228,11 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ onMemberCountChange }) 
                 )}
             </div>
 
-            {/* Formulário de convite - só aparece para o dono */}
-            {canManageTeam && (
-                <>
-                    <div className="flex items-center gap-2 pt-2">
-                        <div className="flex-1">
-                            <input
-                                type="email"
-                                value={inviteEmail}
-                                onChange={(e) => setInviteEmail(e.target.value)}
-                                placeholder="Email do colaborador"
-                                className="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:ring-2 focus:ring-slate-500 focus:border-transparent outline-none transition-all"
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                        e.preventDefault();
-                                        handleInvite();
-                                    }
-                                }}
-                            />
-                        </div>
-                        <button
-                            type="button"
-                            onClick={handleInvite}
-                            disabled={inviting || !inviteEmail.trim()}
-                            className="px-4 py-2.5 bg-slate-800 dark:bg-slate-700 text-white font-semibold rounded-lg hover:bg-slate-700 dark:hover:bg-slate-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            {inviting ? 'Enviando...' : 'Convidar'}
-                        </button>
-                    </div>
-
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                        O colaborador receberá acesso ao fazer cadastro com o email convidado.
-                    </p>
-                </>
+            {/* Dica para convidar via QR Code */}
+            {canManageTeam && members.length <= 1 && (
+                <p className="text-xs text-slate-500 dark:text-slate-400 text-center py-2">
+                    <span className="font-medium">Dica:</span> Use a seção "Convite para Colaboradores" abaixo para gerar um QR Code de acesso.
+                </p>
             )}
         </div>
     );

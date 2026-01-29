@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../services/supabaseClient';
 import { Profile } from '../types';
 import { useAuth } from '../contexts/AuthContext';
-import { Package, Crown, ChevronDown, ChevronUp, Check, X, Zap } from 'lucide-react';
+import { Crown, ChevronDown, ChevronUp, Check, X, Zap, Shield } from 'lucide-react';
 
 interface UserWithSubscription extends Profile {
     subscription?: {
@@ -30,6 +30,15 @@ const AVAILABLE_MODULES = [
     { id: 'ilimitado', name: 'Sem Limites', price: 39 },
     { id: 'pacote_completo', name: 'Pacote Completo (todos)', price: 149 },
 ];
+
+// Emails que são sempre admin (devem coincidir com AuthContext)
+const ADMIN_EMAILS = ['windowfilm.br@gmail.com', 'windowfilm.app@gmail.com'];
+
+// Verifica se um usuário é admin (por email ou role)
+const isUserAdmin = (profile: Profile): boolean => {
+    const isAdminByEmail = profile.email && ADMIN_EMAILS.includes(profile.email.toLowerCase());
+    return isAdminByEmail || profile.role === 'admin';
+};
 
 export const AdminUsers: React.FC = () => {
     const { isAdmin } = useAuth();
@@ -60,12 +69,26 @@ export const AdminUsers: React.FC = () => {
             const profilesWithSubs = await Promise.all(
                 (profilesData || []).map(async (profile) => {
                     try {
-                        // Buscar organização do usuário
-                        const { data: orgData } = await supabase
-                            .from('organizations')
-                            .select('id, name')
-                            .eq('owner_id', profile.id)
-                            .single();
+                        // Buscar organização do usuário (priorizando organization_id do profile para colaboradores)
+                        let targetOrgId = profile.organization_id;
+                        let orgData = null;
+
+                        if (targetOrgId) {
+                            const { data } = await supabase
+                                .from('organizations')
+                                .select('id, name')
+                                .eq('id', targetOrgId)
+                                .single();
+                            orgData = data;
+                        } else {
+                            // Fallback para buscar por owner_id caso organization_id não esteja no profile
+                            const { data } = await supabase
+                                .from('organizations')
+                                .select('id, name')
+                                .eq('owner_id', profile.id)
+                                .single();
+                            orgData = data;
+                        }
 
                         // Buscar subscription da organização
                         if (orgData) {
@@ -74,7 +97,6 @@ export const AdminUsers: React.FC = () => {
                                 .select('id, active_modules')
                                 .eq('organization_id', orgData.id)
                                 .single();
-
 
                             // Buscar detalhes dos módulos ativos
                             const { data: activationsData } = await supabase
@@ -126,36 +148,71 @@ export const AdminUsers: React.FC = () => {
     };
 
     const activateModuleForUser = async (profile: UserWithSubscription, moduleId: string, months: number = 6) => {
-        if (!profile.organization?.id) {
-            alert('Usuário não tem organização configurada');
-            return;
-        }
-
         setActivatingModule({ userId: profile.id, moduleId });
 
         try {
-            // Buscar subscription ID
+            // Priorizar organization_id do profile (importante para colaboradores)
+            let orgId = profile.organization_id || profile.organization?.id;
+
+            // Se usuário não tem organização, criar uma automaticamente
+            if (!orgId) {
+                const orgName = profile.email?.split('@')[0] || 'Organização';
+                const { data: newOrg, error: orgError } = await supabase
+                    .from('organizations')
+                    .insert({
+                        name: orgName,
+                        owner_id: profile.id
+                    })
+                    .select('id')
+                    .single();
+
+                if (orgError) throw new Error(`Erro ao criar organização: ${orgError.message}`);
+                orgId = newOrg.id;
+
+                // Atualizar profile com organization_id
+                await supabase
+                    .from('profiles')
+                    .update({ organization_id: orgId })
+                    .eq('id', profile.id);
+
+                // Adicionar usuário como OWNER em organization_members
+                // Isso permite que ele veja a opção "Convite para Colaboradores"
+                await supabase
+                    .from('organization_members')
+                    .insert({
+                        organization_id: orgId,
+                        user_id: profile.id,
+                        email: profile.email,
+                        role: 'owner',
+                        status: 'active'
+                    });
+            }
+
+            // Buscar ou criar subscription
+            let subId: string;
             const { data: subData, error: subError } = await supabase
                 .from('subscriptions')
                 .select('id')
-                .eq('organization_id', profile.organization.id)
+                .eq('organization_id', orgId)
                 .single();
 
             if (subError || !subData) {
                 // Criar subscription se não existir
                 const { data: newSub, error: createError } = await supabase
                     .from('subscriptions')
-                    .insert({ organization_id: profile.organization.id })
+                    .insert({ organization_id: orgId })
                     .select('id')
                     .single();
 
-                if (createError) throw createError;
-                subData.id = newSub.id;
+                if (createError) throw new Error(`Erro ao criar subscription: ${createError.message}`);
+                subId = newSub.id;
+            } else {
+                subId = subData.id;
             }
 
             // Chamar função de ativação
             const { error: activateError } = await supabase.rpc('activate_module', {
-                p_subscription_id: subData.id,
+                p_subscription_id: subId,
                 p_module_id: moduleId,
                 p_months: months,
                 p_payment_amount: moduleId === 'pacote_completo' ? 149 : 39,
@@ -241,6 +298,7 @@ export const AdminUsers: React.FC = () => {
                             const isExpanded = expandedUser === profile.id;
                             const activeModulesCount = profile.subscription?.active_modules?.length || 0;
                             const hasFullPackage = isModuleActive(profile, 'ilimitado');
+                            const isProfileAdmin = isUserAdmin(profile);
 
                             return (
                                 <div key={profile.id}>
@@ -251,13 +309,18 @@ export const AdminUsers: React.FC = () => {
                                     >
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-4">
-                                                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${hasFullPackage
-                                                    ? 'bg-gradient-to-br from-amber-400 to-yellow-500'
-                                                    : activeModulesCount > 0
-                                                        ? 'bg-green-500'
-                                                        : 'bg-slate-300 dark:bg-slate-600'
+                                                {/* Avatar */}
+                                                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isProfileAdmin
+                                                    ? 'bg-gradient-to-br from-purple-500 to-indigo-600'
+                                                    : hasFullPackage
+                                                        ? 'bg-gradient-to-br from-amber-400 to-yellow-500'
+                                                        : activeModulesCount > 0
+                                                            ? 'bg-green-500'
+                                                            : 'bg-slate-300 dark:bg-slate-600'
                                                     }`}>
-                                                    {hasFullPackage ? (
+                                                    {isProfileAdmin ? (
+                                                        <Shield className="w-5 h-5 text-white" />
+                                                    ) : hasFullPackage ? (
                                                         <Crown className="w-5 h-5 text-white" />
                                                     ) : (
                                                         <span className="text-white font-bold text-sm">
@@ -266,16 +329,16 @@ export const AdminUsers: React.FC = () => {
                                                     )}
                                                 </div>
                                                 <div>
-                                                    <div className="flex items-center gap-2">
+                                                    <div className="flex items-center gap-2 flex-wrap">
                                                         <span className="font-medium text-slate-900 dark:text-white">
                                                             {profile.email}
                                                         </span>
-                                                        {profile.role === 'admin' && (
+                                                        {isProfileAdmin && (
                                                             <span className="px-2 py-0.5 text-[10px] bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 rounded-full font-bold uppercase">
                                                                 Admin
                                                             </span>
                                                         )}
-                                                        {hasFullPackage && (
+                                                        {hasFullPackage && !isProfileAdmin && (
                                                             <span className="px-2 py-0.5 text-[10px] bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 rounded-full font-bold uppercase">
                                                                 Completo
                                                             </span>
@@ -283,9 +346,11 @@ export const AdminUsers: React.FC = () => {
                                                     </div>
                                                     <div className="flex items-center gap-3 text-sm text-slate-500">
                                                         <span>{new Date(profile.created_at).toLocaleDateString()}</span>
-                                                        {activeModulesCount > 0 && !hasFullPackage && (
+                                                        {isProfileAdmin ? (
+                                                            <span className="text-purple-500">• Acesso Total</span>
+                                                        ) : activeModulesCount > 0 && !hasFullPackage ? (
                                                             <span className="text-green-500">• {activeModulesCount} módulo(s)</span>
-                                                        )}
+                                                        ) : null}
                                                     </div>
                                                 </div>
                                             </div>
@@ -314,85 +379,99 @@ export const AdminUsers: React.FC = () => {
                                     {isExpanded && (
                                         <div className="px-4 pb-4 pt-0 bg-slate-50 dark:bg-slate-900/50">
                                             <div className="ml-14">
-                                                {/* Ações rápidas */}
-                                                <div className="flex items-center gap-2 mb-4">
-                                                    {profile.role !== 'admin' && (
-                                                        <button
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                toggleApproval(profile);
-                                                            }}
-                                                            className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors ${profile.approved
-                                                                ? 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-400'
-                                                                : 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-400'
-                                                                }`}
-                                                        >
-                                                            {profile.approved ? 'Bloquear Acesso' : 'Aprovar Acesso'}
-                                                        </button>
-                                                    )}
-                                                    {!hasFullPackage && (
-                                                        <button
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                if (confirm('Ativar PACOTE COMPLETO (R$ 149 / 6 meses)?')) {
-                                                                    activateModuleForUser(profile, 'pacote_completo', 6);
-                                                                }
-                                                            }}
-                                                            disabled={activatingModule?.userId === profile.id}
-                                                            className="flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-yellow-500 text-white hover:from-amber-400 hover:to-yellow-400 transition-colors disabled:opacity-50"
-                                                        >
-                                                            <Zap className="w-3 h-3" />
-                                                            Ativar Pacote Completo
-                                                        </button>
-                                                    )}
-                                                </div>
-
-                                                {/* Grid de módulos */}
-                                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                                    {AVAILABLE_MODULES.filter(m => m.id !== 'pacote_completo').map(module => {
-                                                        const isActive = isModuleActive(profile, module.id) || hasFullPackage;
-                                                        const expiryDays = getModuleExpiryDays(profile, module.id);
-                                                        const isActivating = activatingModule?.userId === profile.id && activatingModule?.moduleId === module.id;
-
-                                                        return (
-                                                            <div
-                                                                key={module.id}
-                                                                className={`p-3 rounded-lg border text-center transition-all ${isActive
-                                                                    ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
-                                                                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700'
+                                                {/* Se é admin, mostrar mensagem de acesso total */}
+                                                {isProfileAdmin ? (
+                                                    <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+                                                        <div className="flex items-center gap-2 text-purple-700 dark:text-purple-300">
+                                                            <Shield className="w-5 h-5" />
+                                                            <span className="font-semibold">Administrador do Sistema</span>
+                                                        </div>
+                                                        <p className="text-sm text-purple-600 dark:text-purple-400 mt-1">
+                                                            Este usuário tem acesso total automaticamente a todos os módulos e funcionalidades.
+                                                            Não é necessário ativar módulos individualmente.
+                                                        </p>
+                                                    </div>
+                                                ) : (
+                                                    <>
+                                                        {/* Ações rápidas */}
+                                                        <div className="flex items-center gap-2 mb-4">
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    toggleApproval(profile);
+                                                                }}
+                                                                className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors ${profile.approved
+                                                                    ? 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-400'
+                                                                    : 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-400'
                                                                     }`}
                                                             >
-                                                                <div className="flex items-center justify-center gap-1 mb-1">
-                                                                    {isActive ? (
-                                                                        <Check className="w-4 h-4 text-green-500" />
-                                                                    ) : (
-                                                                        <X className="w-4 h-4 text-slate-400" />
-                                                                    )}
-                                                                    <span className={`text-xs font-medium ${isActive ? 'text-green-600 dark:text-green-400' : 'text-slate-600 dark:text-slate-400'}`}>
-                                                                        {module.name}
-                                                                    </span>
-                                                                </div>
-                                                                {isActive && expiryDays !== null && (
-                                                                    <div className="text-[10px] text-green-500">{expiryDays}d restantes</div>
-                                                                )}
-                                                                {!isActive && !hasFullPackage && (
-                                                                    <button
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            if (confirm(`Ativar ${module.name} (R$ ${module.price} / 6 meses)?`)) {
-                                                                                activateModuleForUser(profile, module.id, 6);
-                                                                            }
-                                                                        }}
-                                                                        disabled={isActivating}
-                                                                        className="mt-1 text-[10px] px-2 py-0.5 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+                                                                {profile.approved ? 'Bloquear Acesso' : 'Aprovar Acesso'}
+                                                            </button>
+                                                            {!hasFullPackage && (
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        if (confirm('Ativar PACOTE COMPLETO (R$ 149 / 6 meses)?')) {
+                                                                            activateModuleForUser(profile, 'pacote_completo', 6);
+                                                                        }
+                                                                    }}
+                                                                    disabled={activatingModule?.userId === profile.id}
+                                                                    className="flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-yellow-500 text-white hover:from-amber-400 hover:to-yellow-400 transition-colors disabled:opacity-50"
+                                                                >
+                                                                    <Zap className="w-3 h-3" />
+                                                                    Ativar Pacote Completo
+                                                                </button>
+                                                            )}
+                                                        </div>
+
+                                                        {/* Grid de módulos */}
+                                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                                            {AVAILABLE_MODULES.filter(m => m.id !== 'pacote_completo').map(module => {
+                                                                const isActive = isModuleActive(profile, module.id) || hasFullPackage;
+                                                                const expiryDays = getModuleExpiryDays(profile, module.id);
+                                                                const isActivating = activatingModule?.userId === profile.id && activatingModule?.moduleId === module.id;
+
+                                                                return (
+                                                                    <div
+                                                                        key={module.id}
+                                                                        className={`p-3 rounded-lg border text-center transition-all ${isActive
+                                                                            ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+                                                                            : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700'
+                                                                            }`}
                                                                     >
-                                                                        {isActivating ? '...' : 'Ativar'}
-                                                                    </button>
-                                                                )}
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
+                                                                        <div className="flex items-center justify-center gap-1 mb-1">
+                                                                            {isActive ? (
+                                                                                <Check className="w-4 h-4 text-green-500" />
+                                                                            ) : (
+                                                                                <X className="w-4 h-4 text-slate-400" />
+                                                                            )}
+                                                                            <span className={`text-xs font-medium ${isActive ? 'text-green-600 dark:text-green-400' : 'text-slate-600 dark:text-slate-400'}`}>
+                                                                                {module.name}
+                                                                            </span>
+                                                                        </div>
+                                                                        {isActive && expiryDays !== null && (
+                                                                            <div className="text-[10px] text-green-500">{expiryDays}d restantes</div>
+                                                                        )}
+                                                                        {!isActive && !hasFullPackage && (
+                                                                            <button
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    if (confirm(`Ativar ${module.name} (R$ ${module.price} / 6 meses)?`)) {
+                                                                                        activateModuleForUser(profile, module.id, 6);
+                                                                                    }
+                                                                                }}
+                                                                                disabled={isActivating}
+                                                                                className="mt-1 text-[10px] px-2 py-0.5 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+                                                                            >
+                                                                                {isActivating ? '...' : 'Ativar'}
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </>
+                                                )}
                                             </div>
                                         </div>
                                     )}

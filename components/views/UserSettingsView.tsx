@@ -8,6 +8,7 @@ import InviteDisplay from '../InviteDisplay';
 import { getActiveInvite, createOrganizationInvite } from '../../services/inviteService';
 import { useTheme } from '../../src/contexts/ThemeContext';
 import { Facebook, Instagram, Youtube, MessageSquare, Moon, Sun, Share2, Building2, Palette, Users, Clock, Shield, Bot, QrCode, Settings, FileSignature, Smartphone, ChevronDown } from 'lucide-react';
+import { FeatureGate } from '../subscription/SubscriptionComponents';
 
 interface UserSettingsViewProps {
     userInfo: UserInfo;
@@ -350,56 +351,58 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({
             </SettingsSection>
 
             {/* ===== SEÇÃO: PERSONALIZAÇÃO ===== */}
-            <SettingsSection
-                title="Personalização do Orçamento"
-                subtitle="Logo, cores e identidade visual"
-                icon={<Palette className="w-5 h-5" />}
-                iconBg="from-violet-500 to-purple-600"
-            >
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* Upload de Logo */}
-                    <div>
-                        <label className={labelClass}>Logotipo da Empresa</label>
-                        <div className="mt-1 flex flex-col justify-center items-center p-6 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl min-h-[180px] bg-slate-50/50 dark:bg-slate-900/30 hover:border-slate-400 dark:hover:border-slate-500 transition-colors cursor-pointer group/logo">
-                            {logoPreview ? (
-                                <div className="text-center">
-                                    <img src={logoPreview} alt="Logo" className="mx-auto max-h-20 w-auto rounded-lg shadow-md mb-4" />
-                                    <div className="flex gap-3 justify-center">
-                                        <label htmlFor="logo-upload-input" className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors cursor-pointer">
-                                            Alterar
-                                            <input id="logo-upload-input" type="file" className="sr-only" accept="image/*" onChange={handleLogoChange} />
-                                        </label>
-                                        <button type="button" onClick={handleRemoveLogo} className="px-4 py-2 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
-                                            Remover
-                                        </button>
+            <FeatureGate moduleId="personalizacao">
+                <SettingsSection
+                    title="Personalização do Orçamento"
+                    subtitle="Logo, cores e identidade visual"
+                    icon={<Palette className="w-5 h-5" />}
+                    iconBg="from-violet-500 to-purple-600"
+                >
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {/* Upload de Logo */}
+                        <div>
+                            <label className={labelClass}>Logotipo da Empresa</label>
+                            <div className="mt-1 flex flex-col justify-center items-center p-6 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl min-h-[180px] bg-slate-50/50 dark:bg-slate-900/30 hover:border-slate-400 dark:hover:border-slate-500 transition-colors cursor-pointer group/logo">
+                                {logoPreview ? (
+                                    <div className="text-center">
+                                        <img src={logoPreview} alt="Logo" className="mx-auto max-h-20 w-auto rounded-lg shadow-md mb-4" />
+                                        <div className="flex gap-3 justify-center">
+                                            <label htmlFor="logo-upload-input" className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors cursor-pointer">
+                                                Alterar
+                                                <input id="logo-upload-input" type="file" className="sr-only" accept="image/*" onChange={handleLogoChange} />
+                                            </label>
+                                            <button type="button" onClick={handleRemoveLogo} className="px-4 py-2 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
+                                                Remover
+                                            </button>
+                                        </div>
                                     </div>
-                                </div>
-                            ) : (
-                                <label htmlFor="logo-upload-input" className="text-center cursor-pointer">
-                                    <div className="w-14 h-14 mx-auto mb-3 rounded-xl bg-slate-200 dark:bg-slate-700 flex items-center justify-center group-hover/logo:bg-slate-300 dark:group-hover/logo:bg-slate-600 transition-colors">
-                                        <Palette className="w-7 h-7 text-slate-400 dark:text-slate-500" />
-                                    </div>
-                                    <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Clique para fazer upload</p>
-                                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">PNG, JPG até 2MB</p>
-                                    <input id="logo-upload-input" type="file" className="sr-only" accept="image/*" onChange={handleLogoChange} />
-                                </label>
-                            )}
+                                ) : (
+                                    <label htmlFor="logo-upload-input" className="text-center cursor-pointer">
+                                        <div className="w-14 h-14 mx-auto mb-3 rounded-xl bg-slate-200 dark:bg-slate-700 flex items-center justify-center group-hover/logo:bg-slate-300 dark:group-hover/logo:bg-slate-600 transition-colors">
+                                            <Palette className="w-7 h-7 text-slate-400 dark:text-slate-500" />
+                                        </div>
+                                        <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Clique para fazer upload</p>
+                                        <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">PNG, JPG até 2MB</p>
+                                        <input id="logo-upload-input" type="file" className="sr-only" accept="image/*" onChange={handleLogoChange} />
+                                    </label>
+                                )}
+                            </div>
                         </div>
-                    </div>
 
-                    {/* Cores */}
-                    <div className="space-y-4">
-                        <div>
-                            <label className={labelClass}>Cor Primária</label>
-                            <ColorPicker color={formData.cores?.primaria || '#918B45'} onChange={(val) => handleColorChange('primaria', val)} />
-                        </div>
-                        <div>
-                            <label className={labelClass}>Cor Secundária</label>
-                            <ColorPicker color={formData.cores?.secundaria || '#4E6441'} onChange={(val) => handleColorChange('secundaria', val)} />
+                        {/* Cores */}
+                        <div className="space-y-4">
+                            <div>
+                                <label className={labelClass}>Cor Primária</label>
+                                <ColorPicker color={formData.cores?.primaria || '#918B45'} onChange={(val) => handleColorChange('primaria', val)} />
+                            </div>
+                            <div>
+                                <label className={labelClass}>Cor Secundária</label>
+                                <ColorPicker color={formData.cores?.secundaria || '#4E6441'} onChange={(val) => handleColorChange('secundaria', val)} />
+                            </div>
                         </div>
                     </div>
-                </div>
-            </SettingsSection>
+                </SettingsSection>
+            </FeatureGate>
 
             {/* ===== SEÇÃO: REDES SOCIAIS ===== */}
             <SettingsSection
@@ -520,33 +523,35 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({
             </SettingsSection>
 
             {/* ===== SEÇÃO: ASSINATURA DIGITAL ===== */}
-            <SettingsSection
-                title="Assinatura Digital"
-                subtitle="Sua assinatura nos orçamentos"
-                icon={<FileSignature className="w-5 h-5" />}
-                iconBg="from-amber-500 to-orange-500"
-            >
-                <div className="p-6 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl flex flex-col items-center justify-center min-h-[150px] bg-slate-50/50 dark:bg-slate-900/30">
-                    {formData.assinatura ? (
-                        <div className="text-center">
-                            <img src={formData.assinatura} alt="Assinatura" className="mx-auto max-h-20 rounded-lg shadow-md border bg-white p-2 mb-4" />
-                            <div className="flex gap-3 justify-center">
-                                <button type="button" onClick={() => setIsSignatureModalOpen(true)} className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                                    Alterar
-                                </button>
-                                <button type="button" onClick={() => setFormData(prev => ({ ...prev, assinatura: '' }))} className="px-4 py-2 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
-                                    Remover
-                                </button>
+            <FeatureGate moduleId="personalizacao">
+                <SettingsSection
+                    title="Assinatura Digital"
+                    subtitle="Sua assinatura nos orçamentos"
+                    icon={<FileSignature className="w-5 h-5" />}
+                    iconBg="from-amber-500 to-orange-500"
+                >
+                    <div className="p-6 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl flex flex-col items-center justify-center min-h-[150px] bg-slate-50/50 dark:bg-slate-900/30">
+                        {formData.assinatura ? (
+                            <div className="text-center">
+                                <img src={formData.assinatura} alt="Assinatura" className="mx-auto max-h-20 rounded-lg shadow-md border bg-white p-2 mb-4" />
+                                <div className="flex gap-3 justify-center">
+                                    <button type="button" onClick={() => setIsSignatureModalOpen(true)} className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                                        Alterar
+                                    </button>
+                                    <button type="button" onClick={() => setFormData(prev => ({ ...prev, assinatura: '' }))} className="px-4 py-2 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
+                                        Remover
+                                    </button>
+                                </div>
                             </div>
-                        </div>
-                    ) : (
-                        <button type="button" onClick={() => setIsSignatureModalOpen(true)} className="px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-semibold rounded-xl hover:from-amber-600 hover:to-orange-600 transition-all duration-300 flex items-center gap-2 shadow-lg shadow-amber-500/20">
-                            <FileSignature className="w-5 h-5" />
-                            Criar Assinatura
-                        </button>
-                    )}
-                </div>
-            </SettingsSection>
+                        ) : (
+                            <button type="button" onClick={() => setIsSignatureModalOpen(true)} className="px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-semibold rounded-xl hover:from-amber-600 hover:to-orange-600 transition-all duration-300 flex items-center gap-2 shadow-lg shadow-amber-500/20">
+                                <FileSignature className="w-5 h-5" />
+                                Criar Assinatura
+                            </button>
+                        )}
+                    </div>
+                </SettingsSection>
+            </FeatureGate>
 
             {/* ===== SEÇÃO: HORÁRIO DE FUNCIONAMENTO ===== */}
             <SettingsSection
@@ -569,8 +574,8 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({
                                     <label
                                         key={day}
                                         className={`px-4 py-2.5 rounded-xl cursor-pointer transition-all duration-200 border-2 font-medium text-sm ${isSelected
-                                                ? 'bg-blue-500 border-blue-500 text-white shadow-md shadow-blue-500/30'
-                                                : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600'
+                                            ? 'bg-blue-500 border-blue-500 text-white shadow-md shadow-blue-500/30'
+                                            : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600'
                                             }`}
                                     >
                                         <input
@@ -589,97 +594,103 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({
             </SettingsSection>
 
             {/* ===== SEÇÃO: COLABORADORES ===== */}
-            <SettingsSection
-                title="Colaboradores"
-                subtitle="Gerencie sua equipe"
-                icon={<Users className="w-5 h-5" />}
-                iconBg="from-fuchsia-500 to-pink-500"
-            >
-                <TeamManagement />
-            </SettingsSection>
+            <FeatureGate moduleId="colaboradores">
+                <SettingsSection
+                    title="Colaboradores"
+                    subtitle="Gerencie sua equipe"
+                    icon={<Users className="w-5 h-5" />}
+                    iconBg="from-fuchsia-500 to-pink-500"
+                >
+                    <TeamManagement />
+                </SettingsSection>
+            </FeatureGate>
 
             {/* ===== SEÇÃO: INTELIGÊNCIA ARTIFICIAL ===== */}
-            <SettingsSection
-                title="Inteligência Artificial"
-                subtitle="Configure o provedor de IA"
-                icon={<Bot className="w-5 h-5" />}
-                iconBg="from-violet-500 to-indigo-600"
-                badge="Beta"
-            >
-                <div className="space-y-4">
-                    <div className="p-3.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 rounded-xl">
-                        <p className="text-xs text-amber-700 dark:text-amber-400 flex items-start gap-2">
-                            <i className="fas fa-exclamation-triangle mt-0.5"></i>
-                            <span><strong>Privacidade:</strong> Ao configurar a IA, dados serão enviados ao provedor escolhido. A responsabilidade e custos são do usuário.</span>
-                        </p>
-                    </div>
+            <FeatureGate moduleId="ia_ocr">
+                <SettingsSection
+                    title="Inteligência Artificial"
+                    subtitle="Configure o provedor de IA"
+                    icon={<Bot className="w-5 h-5" />}
+                    iconBg="from-violet-500 to-indigo-600"
+                    badge="Beta"
+                >
+                    <div className="space-y-4">
+                        <div className="p-3.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 rounded-xl">
+                            <p className="text-xs text-amber-700 dark:text-amber-400 flex items-start gap-2">
+                                <i className="fas fa-exclamation-triangle mt-0.5"></i>
+                                <span><strong>Privacidade:</strong> Ao configurar a IA, dados serão enviados ao provedor escolhido. A responsabilidade e custos são do usuário.</span>
+                            </p>
+                        </div>
 
-                    <div>
-                        <label className={labelClass}>Provedor de IA</label>
-                        <div className="grid grid-cols-2 gap-2 mt-2">
-                            {[
-                                { id: 'gemini', label: 'Google Gemini' },
-                                { id: 'openai', label: 'OpenAI' }
-                            ].map((provider) => {
-                                const isSelected = formData.aiConfig?.provider === provider.id || formData.aiConfig?.provider === 'google-gemini' && provider.id === 'gemini';
-                                return (
-                                    <button
-                                        key={provider.id}
-                                        type="button"
-                                        onClick={() => setFormData(prev => ({ ...prev, aiConfig: { ...(prev.aiConfig || { apiKey: '' }), provider: provider.id as any } }))}
-                                        className={`py-3 px-4 rounded-xl font-medium text-sm transition-all duration-200 border-2 ${isSelected
+                        <div>
+                            <label className={labelClass}>Provedor de IA</label>
+                            <div className="grid grid-cols-2 gap-2 mt-2">
+                                {[
+                                    { id: 'gemini', label: 'Google Gemini' },
+                                    { id: 'openai', label: 'OpenAI' }
+                                ].map((provider) => {
+                                    const isSelected = formData.aiConfig?.provider === provider.id || formData.aiConfig?.provider === 'google-gemini' && provider.id === 'gemini';
+                                    return (
+                                        <button
+                                            key={provider.id}
+                                            type="button"
+                                            onClick={() => setFormData(prev => ({ ...prev, aiConfig: { ...(prev.aiConfig || { apiKey: '' }), provider: provider.id as any } }))}
+                                            className={`py-3 px-4 rounded-xl font-medium text-sm transition-all duration-200 border-2 ${isSelected
                                                 ? 'bg-violet-500 border-violet-500 text-white shadow-md shadow-violet-500/30'
                                                 : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600'
-                                            }`}
-                                    >
-                                        {provider.label}
-                                    </button>
-                                );
-                            })}
+                                                }`}
+                                        >
+                                            {provider.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
                         </div>
-                    </div>
 
-                    <button
-                        type="button"
-                        onClick={() => onOpenApiKeyModal(formData.aiConfig?.provider || 'gemini')}
-                        className="w-full px-4 py-3.5 bg-gradient-to-r from-violet-500 to-indigo-600 text-white font-medium rounded-xl hover:from-violet-600 hover:to-indigo-700 transition-all duration-300 flex items-center justify-center gap-2 shadow-lg shadow-violet-500/20"
-                    >
-                        <i className="fas fa-key"></i>
-                        {formData.aiConfig?.apiKey ? 'Alterar Chave de API' : 'Configurar Chave de API'}
-                    </button>
-                </div>
-            </SettingsSection>
+                        <button
+                            type="button"
+                            onClick={() => onOpenApiKeyModal(formData.aiConfig?.provider || 'gemini')}
+                            className="w-full px-4 py-3.5 bg-gradient-to-r from-violet-500 to-indigo-600 text-white font-medium rounded-xl hover:from-violet-600 hover:to-indigo-700 transition-all duration-300 flex items-center justify-center gap-2 shadow-lg shadow-violet-500/20"
+                        >
+                            <i className="fas fa-key"></i>
+                            {formData.aiConfig?.apiKey ? 'Alterar Chave de API' : 'Configurar Chave de API'}
+                        </button>
+                    </div>
+                </SettingsSection>
+            </FeatureGate>
 
             {/* ===== SEÇÃO: CONVITE (APENAS OWNER) ===== */}
             {userInfo.isOwner && (
-                <SettingsSection
-                    title="Convite para Colaboradores"
-                    subtitle="Gere um QR Code de acesso"
-                    icon={<QrCode className="w-5 h-5" />}
-                    iconBg="from-emerald-500 to-green-600"
-                >
-                    <div className="bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800/50 dark:to-slate-900/50 border border-slate-200/50 dark:border-slate-700/30 rounded-xl p-5">
-                        {!inviteCode ? (
-                            <button
-                                type="button"
-                                onClick={handleGenerateInvite}
-                                disabled={loadingInvite}
-                                className="w-full px-4 py-4 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 disabled:from-emerald-400 disabled:to-green-500 text-white font-semibold rounded-xl transition-all duration-300 flex items-center justify-center gap-3 shadow-lg shadow-emerald-500/20"
-                            >
-                                {loadingInvite ? (
-                                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                ) : (
-                                    <>
-                                        <QrCode className="w-5 h-5" />
-                                        Gerar Código de Convite
-                                    </>
-                                )}
-                            </button>
-                        ) : (
-                            <InviteDisplay inviteCode={inviteCode} onRegenerate={handleGenerateInvite} />
-                        )}
-                    </div>
-                </SettingsSection>
+                <FeatureGate moduleId="colaboradores">
+                    <SettingsSection
+                        title="Convite para Colaboradores"
+                        subtitle="Gere um QR Code de acesso"
+                        icon={<QrCode className="w-5 h-5" />}
+                        iconBg="from-emerald-500 to-green-600"
+                    >
+                        <div className="bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800/50 dark:to-slate-900/50 border border-slate-200/50 dark:border-slate-700/30 rounded-xl p-5">
+                            {!inviteCode ? (
+                                <button
+                                    type="button"
+                                    onClick={handleGenerateInvite}
+                                    disabled={loadingInvite}
+                                    className="w-full px-4 py-4 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 disabled:from-emerald-400 disabled:to-green-500 text-white font-semibold rounded-xl transition-all duration-300 flex items-center justify-center gap-3 shadow-lg shadow-emerald-500/20"
+                                >
+                                    {loadingInvite ? (
+                                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                    ) : (
+                                        <>
+                                            <QrCode className="w-5 h-5" />
+                                            Gerar Código de Convite
+                                        </>
+                                    )}
+                                </button>
+                            ) : (
+                                <InviteDisplay inviteCode={inviteCode} onRegenerate={handleGenerateInvite} />
+                            )}
+                        </div>
+                    </SettingsSection>
+                </FeatureGate>
             )}
 
             {/* ===== SEÇÃO: POLÍTICA DE PRIVACIDADE ===== */}
@@ -704,8 +715,8 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({
                     type="submit"
                     disabled={isSaving}
                     className={`w-full py-4 px-6 rounded-2xl font-bold text-lg shadow-xl transition-all duration-300 transform active:scale-[0.98] flex items-center justify-center gap-3 ${showSuccess
-                            ? 'bg-gradient-to-r from-emerald-500 to-green-500 text-white shadow-emerald-500/30'
-                            : 'bg-gradient-to-r from-slate-800 to-slate-900 dark:from-white dark:to-slate-100 text-white dark:text-slate-900 shadow-slate-900/20 dark:shadow-white/10 hover:shadow-2xl hover:-translate-y-0.5'
+                        ? 'bg-gradient-to-r from-emerald-500 to-green-500 text-white shadow-emerald-500/30'
+                        : 'bg-gradient-to-r from-slate-800 to-slate-900 dark:from-white dark:to-slate-100 text-white dark:text-slate-900 shadow-slate-900/20 dark:shadow-white/10 hover:shadow-2xl hover:-translate-y-0.5'
                         }`}
                 >
                     {isSaving ? (

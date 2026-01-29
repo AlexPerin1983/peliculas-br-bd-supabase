@@ -11,11 +11,7 @@ import {
 } from '../services/subscriptionService';
 import { useAuth } from './AuthContext';
 
-// Emails que têm acesso total liberado (admin)
-const ADMIN_EMAILS = [
-    'windowfilm.br@gmail.com',
-    'windowfilm.app@gmail.com'
-];
+
 
 // ============================================
 // TIPOS DO CONTEXTO
@@ -77,14 +73,12 @@ interface SubscriptionProviderProps {
 }
 
 export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
-    const { user } = useAuth();
+    const { user, isAdmin, organizationId } = useAuth();
     const [info, setInfo] = useState<SubscriptionInfo | null>(null);
     const [modules, setModules] = useState<SubscriptionModule[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    // Verificar se o usuário é admin (tem acesso total liberado)
-    const isAdminUser = user?.email && ADMIN_EMAILS.includes(user.email.toLowerCase());
 
     // Carregar dados iniciais
     const loadSubscriptionData = useCallback(async () => {
@@ -105,7 +99,7 @@ export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
         } finally {
             setIsLoading(false);
         }
-    }, []);
+    }, [organizationId]);
 
     useEffect(() => {
         loadSubscriptionData();
@@ -113,19 +107,21 @@ export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
 
     // Verificações - Admin tem acesso a tudo
     const hasModule = useCallback((moduleId: string): boolean => {
-        if (isAdminUser) return true; // Admin tem todos os módulos
+        if (isAdmin) return true; // Admin tem todos os módulos
         if (!info) return false;
+        // Se tem pacote completo, tem acesso a tudo (exceto se for verificar o próprio pacote)
+        if (moduleId !== 'pacote_completo' && info.active_modules.includes('pacote_completo')) return true;
         return info.active_modules.includes(moduleId);
-    }, [info, isAdminUser]);
+    }, [info, isAdmin]);
 
     const isLimitReached = useCallback((resource: 'clients' | 'films' | 'pdfs' | 'agendamentos', currentCount: number): boolean => {
         // Admin nunca atinge limites
-        if (isAdminUser) return false;
+        if (isAdmin) return false;
 
         if (!info) return false;
 
-        // Se tem módulo ilimitado, nunca atinge limite
-        if (info.active_modules.includes('ilimitado')) return false;
+        // Se tem módulo ilimitado ou o Pacote Completo, nunca atinge limite
+        if (hasModule('ilimitado') || hasModule('pacote_completo')) return false;
 
         const limits = info.limits || FREE_PLAN_LIMITS;
         const usage = info.usage || { pdfs_generated: 0, agendamentos_created: 0 };
@@ -142,13 +138,13 @@ export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
             default:
                 return false;
         }
-    }, [info, isAdminUser]);
+    }, [info, isAdmin]);
 
     const getRemainingQuota = useCallback((resource: 'clients' | 'films' | 'pdfs' | 'agendamentos', currentCount: number): number => {
         if (!info) return 0;
 
-        // Se tem módulo ilimitado, retorna -1 (infinito)
-        if (info.active_modules.includes('ilimitado')) return -1;
+        // Se tem módulo ilimitado ou o Pacote Completo, retorna -1 (infinito)
+        if (hasModule('ilimitado') || hasModule('pacote_completo')) return -1;
 
         const limits = info.limits || FREE_PLAN_LIMITS;
         const usage = info.usage || { pdfs_generated: 0, agendamentos_created: 0 };
@@ -175,7 +171,7 @@ export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
     const canCustomize = hasModule('personalizacao');
     const canAddLocais = hasModule('locais_global');
     const canUseCorteInteligente = hasModule('corte_inteligente');
-    const isUnlimited = hasModule('ilimitado');
+    const isUnlimited = hasModule('ilimitado') || hasModule('pacote_completo');
 
     // Função de refresh
     const refresh = useCallback(async () => {
