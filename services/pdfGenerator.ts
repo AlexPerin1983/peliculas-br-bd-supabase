@@ -365,6 +365,52 @@ const renderPdfContent = async (
                 safeText(userInfo.endereco, pageWidth / 2 + 10, yPos + (clientInfoLineHeight * 2));
             }
 
+            // --- REDES SOCIAIS - ÍCONES SIMPLES NO RODAPÉ ---
+            const socialLinks = userInfo.socialLinks;
+            const activeSocialLinks: { type: string; url: string; symbol: string }[] = [];
+
+            if (socialLinks) {
+                if (socialLinks.instagram) activeSocialLinks.push({ type: 'instagram', url: socialLinks.instagram, symbol: 'in' });
+                if (socialLinks.facebook) activeSocialLinks.push({ type: 'facebook', url: socialLinks.facebook, symbol: 'fb' });
+                if (socialLinks.youtube) activeSocialLinks.push({ type: 'youtube', url: socialLinks.youtube, symbol: 'yt' });
+                if (socialLinks.tiktok) activeSocialLinks.push({ type: 'tiktok', url: socialLinks.tiktok, symbol: 'tk' });
+                if (socialLinks.googleReviews) activeSocialLinks.push({ type: 'google', url: socialLinks.googleReviews, symbol: 'g' });
+            }
+
+            if (activeSocialLinks.length > 0) {
+                // Posição: rodapé da capa, alinhado à direita
+                const socialY = pageHeight - 10;
+
+                // Renderizar símbolos em linha separados por |
+                doc.setTextColor(...primaryColor);
+                doc.setFontSize(7);
+                doc.setFont("helvetica", 'normal');
+
+                let currentX = pageWidth - margin;
+
+                // Desenhar da direita para esquerda
+                for (let i = activeSocialLinks.length - 1; i >= 0; i--) {
+                    const social = activeSocialLinks[i];
+                    const symbolWidth = doc.getTextWidth(social.symbol);
+
+                    currentX -= symbolWidth;
+                    doc.text(social.symbol, currentX, socialY);
+
+                    // Criar área clicável
+                    doc.link(currentX, socialY - 3, symbolWidth, 6, { url: social.url });
+
+                    // Adicionar separador | (exceto antes do primeiro)
+                    if (i > 0) {
+                        currentX -= 3;
+                        doc.setTextColor(180, 180, 180);
+                        doc.text('|', currentX, socialY);
+                        doc.setTextColor(...primaryColor);
+                        currentX -= 3;
+                    }
+                }
+            }
+            // --- FIM REDES SOCIAIS ---
+
             // Add first content page
             await addNewPage();
         } else {
