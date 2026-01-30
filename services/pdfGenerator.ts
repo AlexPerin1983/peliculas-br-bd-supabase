@@ -396,8 +396,8 @@ const renderPdfContent = async (
                     currentX -= symbolWidth;
                     doc.text(social.symbol, currentX, socialY);
 
-                    // Criar área clicável
-                    doc.link(currentX, socialY - 3, symbolWidth, 6, { url: social.url });
+                    // Criar área clicável maior para facilitar toque no celular
+                    doc.link(currentX - 2, socialY - 5, symbolWidth + 4, 10, { url: social.url });
 
                     // Adicionar separador | (exceto antes do primeiro)
                     if (i > 0) {
