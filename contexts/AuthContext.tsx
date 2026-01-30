@@ -13,11 +13,14 @@ interface AuthContextType {
     isOwner: boolean;
     organizationId: string | null;
     memberStatus: 'pending' | 'active' | 'blocked' | null;
+    isPasswordRecovery: boolean;
     signOut: () => Promise<void>;
     refreshProfile: () => Promise<void>;
+    clearPasswordRecovery: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [session, setSession] = useState<Session | null>(null);
@@ -26,6 +29,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [memberStatus, setMemberStatus] = useState<'pending' | 'active' | 'blocked' | null>(null);
     const [isOwner, setIsOwner] = useState(false);
     const [loading, setLoading] = useState(true);
+    const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
 
     useEffect(() => {
         // Check active sessions and subscribe to auth changes
@@ -39,7 +43,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
         });
 
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+            // Detecta quando o usuário clica no link de recuperação de senha
+            if (event === 'PASSWORD_RECOVERY') {
+                console.log('[AuthContext] PASSWORD_RECOVERY event detected');
+                setIsPasswordRecovery(true);
+            }
+
             setSession(session);
             setUser(session?.user ?? null);
             if (session?.user) {
@@ -144,6 +154,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(null);
         setMemberStatus(null);
         setIsOwner(false);
+        setIsPasswordRecovery(false);
+    };
+
+    const clearPasswordRecovery = () => {
+        setIsPasswordRecovery(false);
     };
 
     // Emails que são sempre admin
@@ -160,8 +175,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isOwner,
         organizationId: profile?.organization_id ?? null,
         memberStatus,
+        isPasswordRecovery,
         signOut,
-        refreshProfile
+        refreshProfile,
+        clearPasswordRecovery
     };
 
     return (

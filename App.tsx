@@ -73,8 +73,31 @@ type NumpadConfig = {
     shouldClearOnNextInput: boolean;
 };
 
+// Função para sanitizar nomes com problemas de encoding para uso em filenames
+const sanitizeForFilename = (name: string): string => {
+    if (!name) return name;
 
+    // Padrões comuns de encoding corrompido para "Opção"
+    const corruptedPatterns = [
+        { pattern: /Op[�\uFFFD]{1,4}o/gi, replacement: 'Opcao' },
+        { pattern: /Op\?+o/gi, replacement: 'Opcao' },
+        { pattern: /Op[\x00-\x1F]+o/gi, replacement: 'Opcao' },
+        { pattern: /ção/gi, replacement: 'cao' },
+        { pattern: /ã/gi, replacement: 'a' },
+        { pattern: /[�\uFFFD]+/g, replacement: '' },
+    ];
 
+    let sanitized = name;
+
+    for (const { pattern, replacement } of corruptedPatterns) {
+        sanitized = sanitized.replace(pattern, replacement);
+    }
+
+    // Remover caracteres inválidos para filenames
+    sanitized = sanitized.replace(/[<>:"/\\|?*]/g, '');
+
+    return sanitized;
+};
 
 const App: React.FC = () => {
     const { isAdmin, user: authUser, organizationId, isOwner } = useAuth();
@@ -1095,7 +1118,7 @@ const App: React.FC = () => {
             const { generatePDF } = await import('./services/pdfGenerator');
             // Passando o nome da opção de proposta para o gerador de PDF
             const pdfBlob = await generatePDF(selectedClient!, userInfo!, activeMeasurements, films, generalDiscount, totals, activeOption!.name);
-            const filename = `orcamento_${selectedClient!.nome.replace(/\s+/g, '_').toLowerCase()}_${activeOption!.name.replace(/\s+/g, '_').toLowerCase()}_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.pdf`;
+            const filename = `orcamento_${sanitizeForFilename(selectedClient!.nome).replace(/\s+/g, '_').toLowerCase()}_${sanitizeForFilename(activeOption!.name).replace(/\s+/g, '_').toLowerCase()}_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.pdf`;
 
             const generalDiscountForDb: SavedPDF['generalDiscount'] = {
                 ...generalDiscount,
@@ -1171,7 +1194,7 @@ const App: React.FC = () => {
             const pdfBlob = await generateCombinedPDF(client, userInfo, selectedPdfs, films);
 
             const firstOptionName = selectedPdfs[0].proposalOptionName || 'Opcao';
-            const filename = `orcamento_combinado_${client.nome.replace(/\s+/g, '_').toLowerCase()}_${firstOptionName.replace(/\s+/g, '_').toLowerCase()}_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.pdf`;
+            const filename = `orcamento_combinado_${sanitizeForFilename(client.nome).replace(/\s+/g, '_').toLowerCase()}_${sanitizeForFilename(firstOptionName).replace(/\s+/g, '_').toLowerCase()}_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.pdf`;
 
             downloadBlob(pdfBlob, filename);
 

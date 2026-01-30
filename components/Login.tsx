@@ -154,7 +154,7 @@ export const Login: React.FC = () => {
                                         value={email}
                                         onChange={(e) => setEmail(e.target.value)}
                                         className={inputClasses}
-                                        placeholder="windowfilm.br@gmail.com"
+                                        placeholder="peliculasbr@gmail.com"
                                     />
                                 </div>
                             </div>

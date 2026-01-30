@@ -8,8 +8,9 @@ import './src/index.css';
 import App from './App';
 import { ErrorProvider } from './src/contexts/ErrorContext';
 import { ThemeProvider } from './src/contexts/ThemeContext';
-import { AuthProvider } from './contexts/AuthContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SubscriptionProvider } from './contexts/SubscriptionContext';
+import { ResetPassword } from './components/ResetPassword';
 
 // Lazy load das páginas públicas
 const EstoquePublicoView = lazy(() => import('./components/views/EstoquePublicoView'));
@@ -57,6 +58,17 @@ const PublicLoadingFallback = (
   </div>
 );
 
+// Wrapper que verifica se o usuário está em fluxo de recuperação de senha
+const AppWithPasswordRecovery: React.FC = () => {
+  const { isPasswordRecovery, clearPasswordRecovery } = useAuth();
+
+  if (isPasswordRecovery) {
+    return <ResetPassword onSuccess={clearPasswordRecovery} />;
+  }
+
+  return <App />;
+};
+
 if (isServicoPublico) {
   // Renderizar página pública de serviço (sem necessidade de login)
   root.render(
@@ -100,7 +112,7 @@ if (isServicoPublico) {
         <ThemeProvider>
           <AuthProvider>
             <SubscriptionProvider>
-              <App />
+              <AppWithPasswordRecovery />
             </SubscriptionProvider>
           </AuthProvider>
         </ThemeProvider>

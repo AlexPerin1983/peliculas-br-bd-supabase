@@ -1,6 +1,26 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { ProposalOption } from '../types';
 
+// Função para sanitizar nomes com problemas de encoding
+const sanitizeOptionName = (name: string): string => {
+    if (!name) return name;
+
+    // Padrões comuns de encoding corrompido para "Opção"
+    const corruptedPatterns = [
+        /Op[�\uFFFD]{1,4}o/gi,    // Op��o, Op�o, etc.
+        /Op\?+o/gi,               // Op??o
+        /Op[\x00-\x1F]+o/gi,      // Caracteres de controle
+    ];
+
+    let sanitized = name;
+
+    for (const pattern of corruptedPatterns) {
+        sanitized = sanitized.replace(pattern, 'Opção');
+    }
+
+    return sanitized;
+};
+
 interface ProposalOptionsCarouselProps {
     options: ProposalOption[];
     activeOptionId: number;
@@ -76,7 +96,7 @@ const ProposalOptionsCarousel: React.FC<ProposalOptionsCarouselProps> = ({
     const handleStartEdit = (option: ProposalOption, e: React.MouseEvent) => {
         e.stopPropagation();
         setEditingOptionId(option.id);
-        setEditingName(option.name);
+        setEditingName(sanitizeOptionName(option.name));
     };
 
     const handleSaveEdit = () => {
@@ -140,7 +160,7 @@ const ProposalOptionsCarousel: React.FC<ProposalOptionsCarouselProps> = ({
                                 onClick={() => onSelectOption(option.id)}
                                 className="text-xs font-semibold cursor-pointer"
                             >
-                                {option.name}
+                                {sanitizeOptionName(option.name)}
                             </span>
                         )}
 
