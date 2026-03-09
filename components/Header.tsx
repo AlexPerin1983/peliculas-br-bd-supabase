@@ -79,7 +79,7 @@ const Header: React.FC<HeaderProps> = ({
             </div>
 
             {/* Navigation Tabs - Distribuídos de ponta a ponta */}
-            <nav className="-mx-4 px-4" aria-label="Navegação principal">
+            <nav className="-mx-4 px-4 lg:hidden" aria-label="Navegação principal">
                 <div className="flex items-center gap-1 sm:gap-1.5 p-1.5 bg-slate-100/60 dark:bg-slate-800/60 rounded-2xl w-full">
                     <TabButton tabId="client" icon="fas fa-user-friends" label="Clientes" />
                     <TabButton tabId="films" icon="fas fa-layer-group" label="Películas" />

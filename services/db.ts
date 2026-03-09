@@ -22,6 +22,7 @@ export {
     // UserInfo functions
     getUserInfo,
     saveUserInfo,
+    updatePaymentMethodsOnly,
 
     // Custom Film functions
     getAllCustomFilms,

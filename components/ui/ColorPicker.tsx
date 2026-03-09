@@ -6,10 +6,10 @@ const hexToRgb = (hex: string): { r: number; g: number; b: number } | null => {
     const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
     return result
         ? {
-              r: parseInt(result[1], 16),
-              g: parseInt(result[2], 16),
-              b: parseInt(result[3], 16),
-          }
+            r: parseInt(result[1], 16),
+            g: parseInt(result[2], 16),
+            b: parseInt(result[3], 16),
+        }
         : null;
 };
 
@@ -81,7 +81,7 @@ const SaturationValuePicker: React.FC<{
                 whiteGrad.addColorStop(1, 'rgba(255,255,255,0)');
                 ctx.fillStyle = whiteGrad;
                 ctx.fillRect(0, 0, width, height);
-                
+
                 const blackGrad = ctx.createLinearGradient(0, 0, 0, height);
                 blackGrad.addColorStop(0, 'rgba(0,0,0,0)');
                 blackGrad.addColorStop(1, 'rgba(0,0,0,1)');
@@ -97,10 +97,10 @@ const SaturationValuePicker: React.FC<{
 
         const rect = canvas.getBoundingClientRect();
         const touch = 'touches' in event ? event.touches[0] : event;
-        
+
         let x = touch.clientX - rect.left;
         let y = touch.clientY - rect.top;
-        
+
         x = Math.max(0, Math.min(width, x));
         y = Math.max(0, Math.min(height, y));
 
@@ -112,7 +112,7 @@ const SaturationValuePicker: React.FC<{
     const onMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
         e.preventDefault();
         handleInteraction(e);
-        
+
         const onMouseMove = (event: MouseEvent) => handleInteraction(event);
         const onMouseUp = () => {
             document.removeEventListener('mousemove', onMouseMove);
@@ -121,10 +121,10 @@ const SaturationValuePicker: React.FC<{
         document.addEventListener('mousemove', onMouseMove);
         document.addEventListener('mouseup', onMouseUp);
     };
-    
+
     const onTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
         handleInteraction(e);
-        
+
         const onTouchMove = (event: TouchEvent) => handleInteraction(event);
         const onTouchEnd = () => {
             document.removeEventListener('touchmove', onTouchMove);
@@ -141,7 +141,7 @@ const SaturationValuePicker: React.FC<{
     return (
         <div className="relative cursor-crosshair" style={{ touchAction: 'none' }}>
             <canvas ref={canvasRef} width={width} height={height} onMouseDown={onMouseDown} onTouchStart={onTouchStart} />
-            <div 
+            <div
                 style={{
                     position: 'absolute',
                     left: `${handleX - 6}px`,
@@ -161,12 +161,14 @@ const SaturationValuePicker: React.FC<{
 const ColorPicker: React.FC<ColorPickerProps> = ({ color, onChange }) => {
     const [isOpen, setIsOpen] = useState(false);
     const pickerRef = useRef<HTMLDivElement>(null);
-    
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [containerWidth, setContainerWidth] = useState(250);
+
     const [hsv, setHsv] = useState(() => {
         const rgb = hexToRgb(color);
         return rgb ? rgbToHsv(rgb.r, rgb.g, rgb.b) : { h: 0, s: 100, v: 100 };
     });
-    
+
     const [hexInput, setHexInput] = useState(color);
 
     useEffect(() => {
@@ -174,25 +176,27 @@ const ColorPicker: React.FC<ColorPickerProps> = ({ color, onChange }) => {
         if (rgb) {
             const currentHsv = rgbToHsv(rgb.r, rgb.g, rgb.b);
             setHsv(currentHsv);
-            const { r,g,b } = hsvToRgb(currentHsv.h, currentHsv.s, currentHsv.v)
-            setHexInput(rgbToHex(r,g,b));
+            const { r, g, b } = hsvToRgb(currentHsv.h, currentHsv.s, currentHsv.v)
+            setHexInput(rgbToHex(r, g, b));
         }
     }, [color]);
-    
+
     useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            const target = event.target as Node;
-            if (pickerRef.current && !pickerRef.current.contains(target) && !(target.parentElement === pickerRef.current?.previousElementSibling)) {
-                 if (!pickerRef.current?.previousElementSibling?.contains(target)) {
-                    setIsOpen(false);
-                 }
+        const updateWidth = () => {
+            if (containerRef.current) {
+                setContainerWidth(containerRef.current.offsetWidth);
             }
         };
-        document.addEventListener("mousedown", handleClickOutside);
+
+        if (isOpen) {
+            updateWidth();
+            window.addEventListener('resize', updateWidth);
+        }
+
         return () => {
-            document.removeEventListener("mousedown", handleClickOutside);
+            window.removeEventListener('resize', updateWidth);
         };
-    }, []);
+    }, [isOpen]);
 
     const updateColor = useCallback((newHsv: { h: number; s: number; v: number }) => {
         setHsv(newHsv);
@@ -201,7 +205,7 @@ const ColorPicker: React.FC<ColorPickerProps> = ({ color, onChange }) => {
         setHexInput(newHex);
         onChange(newHex);
     }, [onChange]);
-    
+
     const handleHueChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         updateColor({ ...hsv, h: Number(e.target.value) });
     };
@@ -225,40 +229,66 @@ const ColorPicker: React.FC<ColorPickerProps> = ({ color, onChange }) => {
             }
         }
     };
-    
+
     return (
-        <div className="relative">
-            <div 
-                className="w-10 h-10 rounded-md border-slate-300 border cursor-pointer" 
-                style={{ backgroundColor: color }}
+        <div className="w-full" ref={containerRef}>
+            <div
+                className="flex items-center gap-3 p-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700/50 rounded-xl cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800/80 transition-colors"
                 onClick={() => setIsOpen(prev => !prev)}
-            />
+            >
+                <div
+                    className="w-10 h-10 rounded-lg shadow-sm border border-white/20"
+                    style={{ backgroundColor: color }}
+                />
+                <div className="flex-1">
+                    <div className="text-xs font-medium text-slate-500 dark:text-slate-400">Cor selecionada</div>
+                    <div className="text-sm font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider font-mono">{color}</div>
+                </div>
+                <div className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}>
+                    <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                </div>
+            </div>
+
             {isOpen && (
-                <div ref={pickerRef} className="absolute z-20 top-full mt-2 p-3 bg-white rounded-lg shadow-xl border border-slate-200 w-64 space-y-3">
+                <div className="mt-3 p-4 bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
                     <SaturationValuePicker
-                        width={232}
-                        height={150}
+                        width={containerWidth - 34} // Adjust for padding (p-4 = 16px each side + 2px border)
+                        height={160}
                         hue={hsv.h}
                         saturation={hsv.s}
                         value={hsv.v}
                         onChange={handleSaturationValueChange}
                     />
-                    <input
-                        type="range"
-                        min="0"
-                        max="359.9"
-                        step="0.1"
-                        value={hsv.h}
-                        onChange={handleHueChange}
-                        className="w-full h-2 bg-gradient-to-r from-red-500 via-yellow-500 to-red-500 rounded-lg appearance-none cursor-pointer"
-                        style={{ background: 'linear-gradient(to right, #f00 0%, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00 100%)' }}
-                    />
-                    <input
-                        type="text"
-                        value={hexInput}
-                        onChange={handleHexChange}
-                        className="w-full p-2 text-center border border-slate-300 rounded-md"
-                    />
+
+                    <div className="space-y-3">
+                        <div className="flex items-center gap-3">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 w-8">Tom</span>
+                            <div className="flex-1 relative h-3 flex items-center">
+                                <input
+                                    type="range"
+                                    min="0"
+                                    max="359.9"
+                                    step="0.1"
+                                    value={hsv.h}
+                                    onChange={handleHueChange}
+                                    className="w-full h-2 rounded-full appearance-none cursor-pointer"
+                                    style={{ background: 'linear-gradient(to right, #f00 0%, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00 100%)' }}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 w-8">HEX</span>
+                            <input
+                                type="text"
+                                value={hexInput}
+                                onChange={handleHexChange}
+                                className="flex-1 px-3 py-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-mono text-center text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-slate-400/20 outline-none transition-all uppercase"
+                            />
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

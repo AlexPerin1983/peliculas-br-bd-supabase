@@ -20,110 +20,9 @@ const FilmCard: React.FC<{
     swipedItemName: string | null;
     onSetSwipedItem: (name: string | null) => void;
     onOpenGallery: (images: string[], initialIndex: number) => void;
-}> = ({ film, onEdit, onDelete, isExpanded, onToggleExpand, swipedItemName, onSetSwipedItem, onOpenGallery }) => {
-    const [translateX, setTranslateX] = useState(0);
-    const touchStartX = useRef(0);
-    const touchStartY = useRef(0);
-    const isDraggingCard = useRef(false);
-    const gestureDirection = useRef<'horizontal' | 'vertical' | null>(null);
+    index: number;
+}> = ({ film, onEdit, onDelete, isExpanded, onToggleExpand, swipedItemName, onSetSwipedItem, onOpenGallery, index }) => {
     const swipeableRef = useRef<HTMLDivElement>(null);
-    const currentTranslateX = useRef(0);
-    const ACTIONS_WIDTH = 160;
-
-    useEffect(() => {
-        if (swipedItemName !== film.nome && swipeableRef.current) {
-            swipeableRef.current.style.transition = 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)';
-            swipeableRef.current.style.transform = `translateX(0px)`;
-            currentTranslateX.current = 0;
-            setTranslateX(0);
-        }
-    }, [swipedItemName, film.nome]);
-
-    const handleTouchStart = (e: React.TouchEvent) => {
-        const target = e.target as HTMLElement;
-        if (target.closest('.technical-data-section')) {
-            isDraggingCard.current = false;
-            return;
-        }
-
-        if (swipedItemName && swipedItemName !== film.nome) {
-            onSetSwipedItem(null);
-        }
-        isDraggingCard.current = true;
-        gestureDirection.current = null;
-        touchStartX.current = e.touches[0].clientX;
-        touchStartY.current = e.touches[0].clientY;
-        if (swipeableRef.current) {
-            swipeableRef.current.style.transition = 'none';
-        }
-    };
-
-    const handleTouchMove = (e: React.TouchEvent) => {
-        if (!isDraggingCard.current || !swipeableRef.current) return;
-
-        const deltaX = e.touches[0].clientX - touchStartX.current;
-        const deltaY = e.touches[0].clientY - touchStartY.current;
-
-        if (gestureDirection.current === null) {
-            if (Math.abs(deltaX) > 10 || Math.abs(deltaY) > 10) {
-                gestureDirection.current = Math.abs(deltaX) > Math.abs(deltaY) ? 'horizontal' : 'vertical';
-            }
-        }
-        if (gestureDirection.current === 'vertical') return;
-        if (e.cancelable) e.preventDefault();
-
-        const newTranslateX = currentTranslateX.current + deltaX;
-        let finalTranslateX = newTranslateX;
-        if (newTranslateX > 0) {
-            finalTranslateX = Math.pow(newTranslateX, 0.7);
-        } else if (newTranslateX < -ACTIONS_WIDTH) {
-            const overflow = -ACTIONS_WIDTH - newTranslateX;
-            finalTranslateX = -ACTIONS_WIDTH - Math.pow(overflow, 0.7);
-        }
-        swipeableRef.current.style.transform = `translateX(${finalTranslateX}px)`;
-    };
-
-    const handleTouchEnd = () => {
-        if (!isDraggingCard.current || !swipeableRef.current) return;
-        isDraggingCard.current = false;
-        if (gestureDirection.current === 'vertical') {
-            gestureDirection.current = null;
-            return;
-        }
-        gestureDirection.current = null;
-
-        const transformValue = swipeableRef.current.style.transform;
-        const matrix = new DOMMatrix(transformValue);
-        const currentX = matrix.m41;
-
-        swipeableRef.current.style.transition = 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)';
-        const threshold = -ACTIONS_WIDTH / 2;
-        if (currentX < threshold) {
-            swipeableRef.current.style.transform = `translateX(-${ACTIONS_WIDTH}px)`;
-            currentTranslateX.current = -ACTIONS_WIDTH;
-            setTranslateX(-ACTIONS_WIDTH);
-            onSetSwipedItem(film.nome);
-        } else {
-            swipeableRef.current.style.transform = `translateX(0px)`;
-            currentTranslateX.current = 0;
-            setTranslateX(0);
-            if (swipedItemName === film.nome) {
-                onSetSwipedItem(null);
-            }
-        }
-    };
-
-    const handleDeleteClick = (e: React.MouseEvent) => {
-        e.stopPropagation();
-        onDelete(film.nome);
-        onSetSwipedItem(null);
-    };
-
-    const handleEditClick = (e: React.MouseEvent) => {
-        e.stopPropagation();
-        onEdit(film);
-        onSetSwipedItem(null);
-    };
 
     const handleImageClick = (index: number, e: React.MouseEvent) => {
         e.stopPropagation();
@@ -134,133 +33,164 @@ const FilmCard: React.FC<{
 
     const hasTechnicalData = film.uv || film.ir || film.vtl || film.espessura || film.tser;
     const hasImages = (film.imagens?.length || 0) > 0;
-    const hasExpandableContent = hasTechnicalData || hasImages;
 
-    const TechnicalDataItem: React.FC<{ label: string; value: number | undefined; unit: string; }> = ({ label, value, unit }) => {
-        if (!value) return null;
+    const TechIndicator: React.FC<{ label: string; value: number | undefined; unit: string; color: string }> = ({ label, value, unit, color }) => {
+        if (value === undefined || value === 0) return null;
         return (
-            <div>
-                <span className="text-xs text-slate-500 dark:text-slate-400">{label}</span>
-                <p className="font-medium text-slate-700 dark:text-slate-300">{value}{unit}</p>
+            <div className="flex flex-col items-center gap-1">
+                <div className="relative w-12 h-12 flex items-center justify-center">
+                    <svg className="w-full h-full transform -rotate-90">
+                        <circle
+                            cx="24" cy="24" r="20"
+                            stroke="currentColor"
+                            strokeWidth="3"
+                            fill="transparent"
+                            className="text-slate-100 dark:text-slate-700/50"
+                        />
+                        <circle
+                            cx="24" cy="24" r="20"
+                            stroke="currentColor"
+                            strokeWidth="3"
+                            fill="transparent"
+                            strokeDasharray={125.6}
+                            strokeDashoffset={125.6 - (125.6 * (value > 100 ? 100 : value)) / 100}
+                            strokeLinecap="round"
+                            className={color}
+                        />
+                    </svg>
+                    <span className="absolute text-[10px] font-bold dark:text-slate-200">{value}{unit}</span>
+                </div>
+                <span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 dark:text-slate-500">{label}</span>
             </div>
         );
     };
 
-    const pricePerM2 = film.preco || film.maoDeObra || 0;
-    const priceLabel = film.preco > 0 ? 'Preço' : (film.maoDeObra > 0 ? 'Mão de Obra' : 'Preço');
+    const accentColor =
+        (film.ir ?? 0) >= 80  ? 'from-rose-500 to-orange-400' :
+        (film.uv ?? 0) >= 90  ? 'from-amber-400 to-yellow-300' :
+        (film.vtl ?? 0) <= 20 ? 'from-slate-600 to-slate-400' :
+                                 'from-blue-500 to-cyan-400';
 
     return (
-        <div className="relative rounded-lg sm:overflow-visible overflow-hidden bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
-            <div className="absolute inset-y-0 right-0 flex">
-                <button
-                    onClick={handleEditClick}
-                    className="w-20 h-full bg-slate-500 text-white flex flex-col items-center justify-center transition-colors hover:bg-slate-600"
-                    aria-label={`Editar película ${film.nome}`}
-                >
-                    <i className="fas fa-pen text-lg"></i>
-                    <span className="text-xs mt-1">Editar</span>
-                </button>
-                <button
-                    onClick={handleDeleteClick}
-                    className="w-20 h-full bg-red-600 text-white flex flex-col items-center justify-center transition-colors hover:bg-red-700"
-                    aria-label={`Excluir película ${film.nome}`}
-                >
-                    <i className="fas fa-trash-alt text-lg"></i>
-                    <span className="text-xs mt-1">Excluir</span>
-                </button>
-            </div>
+        <div
+            className="group animate-stagger relative bg-white dark:bg-slate-800/90 rounded-2xl border border-slate-200/60 dark:border-slate-700/50 shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden"
+            style={{ animationDelay: `${index * 0.1}s` }}
+        >
+            {/* Barra de acento no topo */}
+            <div className={`h-1 w-full bg-gradient-to-r ${accentColor}`} />
 
-            <div
-                ref={swipeableRef}
-                style={{ touchAction: 'pan-y' }}
-                onTouchStart={handleTouchStart}
-                onTouchMove={handleTouchMove}
-                onTouchEnd={handleTouchEnd}
-                className="relative z-10 w-full bg-white dark:bg-slate-800 rounded-lg"
-            >
-                <div
-                    onClick={hasExpandableContent ? onToggleExpand : undefined}
-                    className={`p-4 ${hasExpandableContent ? 'cursor-pointer' : 'cursor-default'}`}
-                    role="button"
-                    aria-expanded={isExpanded}
-                >
-                    <div className="flex justify-between items-start">
-                        <p className="font-bold text-slate-800 dark:text-slate-200 text-lg pr-4">{film.nome}</p>
-                        <div className="text-right flex-shrink-0">
-                            <p className="font-bold text-slate-800 dark:text-slate-200 text-lg">{formatCurrency(pricePerM2)}</p>
-                            <p className="text-sm text-slate-500 dark:text-slate-400">/ m² ({priceLabel})</p>
+            <div className="p-4">
+                {/* Header: nome + preço */}
+                <div className="flex justify-between items-start gap-3 mb-4">
+                    <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="text-lg font-black text-slate-800 dark:text-slate-100 tracking-tight uppercase truncate leading-tight">
+                                {film.nome}
+                            </h3>
+                            {film.pinned && (
+                                <i className="fas fa-thumbtack text-[10px] text-amber-500 rotate-45" title="Fixado" />
+                            )}
+                        </div>
+                        <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                            {film.garantiaFabricante ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-[10px] font-bold rounded-full uppercase">
+                                    <i className="fas fa-shield-alt text-[8px]" />
+                                    {film.garantiaFabricante} anos fabricante
+                                </span>
+                            ) : null}
+                            {film.garantiaMaoDeObra ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold rounded-full uppercase">
+                                    <i className="fas fa-tools text-[8px]" />
+                                    {film.garantiaMaoDeObra}d M.O.
+                                </span>
+                            ) : null}
                         </div>
                     </div>
-
-                    <div className="flex items-center gap-6 text-sm text-slate-600 dark:text-slate-400 mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
-                        <div>
-                            <span className="text-xs text-slate-500 dark:text-slate-400">Garantia Fab.</span>
-                            <p className="font-medium dark:text-slate-300">{film.garantiaFabricante || 'N/A'} anos</p>
-                        </div>
-                        <div>
-                            <span className="text-xs text-slate-500 dark:text-slate-400">Mão de Obra</span>
-                            <p className="font-medium dark:text-slate-300">{film.garantiaMaoDeObra || 'N/A'} dias</p>
-                        </div>
+                    <div className="text-right flex-shrink-0">
+                        <p className="text-xl font-black text-slate-900 dark:text-slate-50 leading-none tabular-nums">
+                            {formatCurrency(film.preco || 0)}
+                        </p>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">por m²</p>
+                        {film.maoDeObra ? (
+                            <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 tabular-nums">
+                                + {formatCurrency(film.maoDeObra)} M.O.
+                            </p>
+                        ) : null}
                     </div>
-
-                    {hasExpandableContent && (
-                        <div className="text-center text-slate-400 dark:text-slate-500 mt-3 -mb-1">
-                            <i className={`fas fa-chevron-down transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}></i>
-                        </div>
-                    )}
                 </div>
 
-                <div className={`transition-[max-height,opacity] duration-300 ease-in-out overflow-hidden ${isExpanded ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'}`}>
-                    <div className="p-4 pt-3 bg-slate-50/70 dark:bg-slate-900/50 border-t border-slate-200/80 dark:border-slate-700 technical-data-section">
-
-                        {hasTechnicalData && (
-                            <>
-                                <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Dados Técnicos</h4>
-                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2 text-sm mb-4 pb-4 border-b border-slate-200 dark:border-slate-700">
-                                    <TechnicalDataItem label="UV" value={film.uv} unit="%" />
-                                    <TechnicalDataItem label="IR" value={film.ir} unit="%" />
-                                    <TechnicalDataItem label="VTL" value={film.vtl} unit="%" />
-                                    <TechnicalDataItem label="Espessura" value={film.espessura} unit="mc" />
-                                    <TechnicalDataItem label="TSER" value={film.tser} unit="%" />
-                                </div>
-                            </>
-                        )}
-
-                        {/* Campos Customizados */}
-                        {film.customFields && Object.entries(film.customFields).length > 0 && (
-                            <div className="mb-4 pb-4 border-b border-slate-200 dark:border-slate-700">
-                                <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Outros Detalhes</h4>
-                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2 text-sm">
-                                    {Object.entries(film.customFields).map(([key, value]) => (
-                                        <div key={key}>
-                                            <span className="text-xs text-slate-500 dark:text-slate-400">{key}</span>
-                                            <p className="font-medium text-slate-700 dark:text-slate-300">{value}</p>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        {hasImages && (
-                            <>
-                                <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
-                                    {film.imagens!.length} Imagens de Amostra
-                                </h4>
-                                <div className="grid grid-cols-3 gap-3">
-                                    {film.imagens!.map((image, index) => (
-                                        <div key={index} className="aspect-square overflow-hidden rounded-lg shadow-md cursor-pointer">
-                                            <img
-                                                src={image}
-                                                alt={`Amostra ${index + 1} de ${film.nome}`}
-                                                onClick={(e) => handleImageClick(index, e)}
-                                                className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
-                                            />
-                                        </div>
-                                    ))}
-                                </div>
-                            </>
-                        )}
+                {/* Indicadores Técnicos */}
+                {hasTechnicalData && (
+                    <div className="flex justify-around items-center py-3 bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-slate-100 dark:border-slate-800/60 mb-4">
+                        <TechIndicator label="VTL" value={film.vtl} unit="%" color="text-emerald-500" />
+                        <TechIndicator label="UV"  value={film.uv}  unit="%" color="text-amber-500"  />
+                        <TechIndicator label="IR"  value={film.ir}  unit="%" color="text-rose-500"   />
+                        {film.tser ? <TechIndicator label="TSER" value={film.tser} unit="%" color="text-cyan-500" /> : null}
                     </div>
+                )}
+
+                {/* Imagens */}
+                {hasImages && (
+                    <div className="flex gap-2 overflow-x-auto pb-1 mb-4 no-scrollbar">
+                        {film.imagens!.map((img, idx) => (
+                            <div
+                                key={idx}
+                                onClick={(e) => handleImageClick(idx, e)}
+                                className="w-12 h-12 rounded-lg overflow-hidden shrink-0 cursor-pointer border-2 border-transparent hover:border-blue-500 transition-all shadow-sm"
+                            >
+                                <img src={img} alt="" className="w-full h-full object-cover" />
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                {/* Rodapé de Ações */}
+                <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-700/50">
+                    <div className="flex gap-1.5">
+                        <button
+                            onClick={(e) => { e.stopPropagation(); onEdit(film); }}
+                            className="h-8 px-3 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center gap-1.5 hover:bg-blue-600 hover:text-white dark:hover:bg-blue-600 transition-all text-xs font-semibold"
+                            title="Editar"
+                        >
+                            <i className="fas fa-pen text-[10px]"></i>
+                            Editar
+                        </button>
+                        <button
+                            onClick={(e) => { e.stopPropagation(); onDelete(film.nome); }}
+                            className="h-8 w-8 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 flex items-center justify-center hover:bg-red-600 hover:text-white dark:hover:bg-red-600 transition-all"
+                            title="Excluir"
+                        >
+                            <i className="fas fa-trash-alt text-[11px]"></i>
+                        </button>
+                    </div>
+
+                    {(film.espessura || film.customFields) && (
+                        <button
+                            onClick={onToggleExpand}
+                            className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
+                        >
+                            {isExpanded ? 'Menos' : 'Detalhes'}
+                            <i className={`fas fa-chevron-down text-[9px] transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}></i>
+                        </button>
+                    )}
+                </div>
+            </div>
+
+            {/* Expansão de Detalhes */}
+            <div className={`transition-all duration-300 ease-in-out bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-800/60 ${isExpanded ? 'max-h-48 opacity-100 py-3 px-4' : 'max-h-0 opacity-0 overflow-hidden'}`}>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                    {film.espessura && (
+                        <div>
+                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide">Espessura</span>
+                            <p className="font-semibold text-slate-700 dark:text-slate-200 text-sm">{film.espessura} mc</p>
+                        </div>
+                    )}
+                    {film.customFields && Object.entries(film.customFields).map(([key, value]) => (
+                        <div key={key}>
+                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide">{key}</span>
+                            <p className="font-semibold text-slate-700 dark:text-slate-200 text-sm">{value}</p>
+                        </div>
+                    ))}
                 </div>
             </div>
         </div>
@@ -296,53 +226,56 @@ const FilmListView: React.FC<FilmListViewProps> = ({ films, onAdd, onEdit, onDel
     };
 
     return (
-        <div className="space-y-4 p-4 sm:p-0">
-            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
-                <h2 className="text-xl font-bold text-slate-800 dark:text-slate-200">Minhas Películas</h2>
-                {films.length > 0 && (
-                    <button
-                        onClick={onAdd}
-                        className="px-5 py-2.5 bg-slate-800 dark:bg-slate-700 text-white font-semibold rounded-lg hover:bg-slate-700 dark:hover:bg-slate-600 transition duration-300 shadow-sm flex items-center justify-center gap-2"
-                    >
-                        <i className="fas fa-plus"></i>
-                        Adicionar Nova Película
-                    </button>
-                )}
+        <div className="space-y-6 min-h-screen mesh-gradient -m-4 p-4 lg:-m-6 lg:p-6 transition-colors duration-500">
+            {/* Header Unificado Premium */}
+            <div className="bg-white dark:bg-slate-800/50 p-6 rounded-3xl border border-slate-200/60 dark:border-slate-700/50 shadow-sm backdrop-blur-md">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                    <div>
+                        <h2 className="text-2xl font-black text-slate-800 dark:text-slate-100 tracking-tight">Minhas Películas</h2>
+                        <p className="text-sm text-slate-500 dark:text-slate-400">Gerencie seu catálogo de produtos e dados técnicos</p>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
+                        {films.length > 0 && (
+                            <div className="relative group/search">
+                                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                    <i className="fas fa-search text-slate-400 group-focus-within/search:text-blue-500 transition-colors"></i>
+                                </div>
+                                <input
+                                    type="text"
+                                    placeholder="Buscar película..."
+                                    className="w-full sm:w-64 pl-11 pr-10 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none text-sm font-medium"
+                                    value={searchTerm}
+                                    onChange={(e) => {
+                                        setSearchTerm(e.target.value);
+                                        setVisibleCount(10);
+                                    }}
+                                />
+                                {searchTerm && (
+                                    <button
+                                        onClick={() => setSearchTerm('')}
+                                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-red-500 transition-colors"
+                                    >
+                                        <i className="fas fa-times-circle"></i>
+                                    </button>
+                                )}
+                            </div>
+                        )}
+
+                        <button
+                            onClick={onAdd}
+                            className="bg-slate-900 dark:bg-blue-600 hover:bg-slate-800 dark:hover:bg-blue-700 text-white px-6 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-slate-900/10 dark:shadow-blue-900/20 transition-all hover:-translate-y-0.5 active:scale-95"
+                        >
+                            <i className="fas fa-plus-circle"></i>
+                            <span>Nova Película</span>
+                        </button>
+                    </div>
+                </div>
             </div>
 
-            {/* Search Bar */}
-            {films.length > 0 && (
-                <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                        <i className="fas fa-search text-slate-400 text-lg"></i>
-                    </div>
-                    <input
-                        type="text"
-                        placeholder="Buscar película..."
-                        className="w-full pl-12 pr-10 py-4 rounded-xl border-none bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 shadow-sm focus:ring-2 focus:ring-slate-500 transition-all text-base"
-                        value={searchTerm}
-                        onChange={(e) => {
-                            setSearchTerm(e.target.value);
-                            setVisibleCount(10);
-                        }}
-                    />
-                    {searchTerm && (
-                        <button
-                            onClick={() => {
-                                setSearchTerm('');
-                                setVisibleCount(10);
-                            }}
-                            className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-                        >
-                            <i className="fas fa-times-circle text-lg"></i>
-                        </button>
-                    )}
-                </div>
-            )}
-
             {displayedFilms.length > 0 ? (
-                <div className="space-y-3">
-                    {displayedFilms.map(film => (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                    {displayedFilms.map((film, idx) => (
                         <FilmCard
                             key={film.nome}
                             film={film}
@@ -353,6 +286,7 @@ const FilmListView: React.FC<FilmListViewProps> = ({ films, onAdd, onEdit, onDel
                             swipedItemName={swipedItemName}
                             onSetSwipedItem={setSwipedItemName}
                             onOpenGallery={onOpenGallery}
+                            index={idx}
                         />
                     ))}
 

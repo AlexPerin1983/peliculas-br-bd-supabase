@@ -266,16 +266,21 @@ export async function getUserInfo(): Promise<UserInfo | null> {
                 return userInfo;
             } else {
                 // Se já tem local, atualiza em background para a próxima vez
-                supabaseDb.getUserInfo().then(async (userInfo) => {
-                    if (userInfo) {
-                        await offlineDb.offlineDb.userInfo.put({
-                            ...userInfo,
-                            _localId: 'current_user',
-                            _syncStatus: 'synced',
-                            _lastModified: Date.now()
-                        });
-                    }
-                }).catch(err => console.error('[OfflineFirst] Erro ao atualizar userInfo em background:', err));
+                // MAS APENAS se o dado local não estiver pendente de sincronização
+                if (localUserInfo && localUserInfo._syncStatus !== 'pending') {
+                    supabaseDb.getUserInfo().then(async (userInfo) => {
+                        // Só atualiza se o dado remoto for válido e diferente do mock inicial
+                        // para evitar "resetar" os dados do usuário para o mock por erro de rede
+                        if (userInfo && userInfo.nome !== 'Empresa Exemplo') {
+                            await offlineDb.offlineDb.userInfo.put({
+                                ...userInfo,
+                                _localId: localUserInfo._localId || 'current_user',
+                                _syncStatus: 'synced',
+                                _lastModified: Date.now()
+                            });
+                        }
+                    }).catch(err => console.error('[OfflineFirst] Erro ao atualizar userInfo em background:', err));
+                }
 
                 return result;
             }
@@ -298,6 +303,45 @@ export async function saveUserInfo(userInfo: UserInfo): Promise<void> {
 
     if (isOnlineNow()) {
         syncAllPending().catch(console.error);
+    }
+}
+
+// Atualiza APENAS o campo payment_methods sem sobrescrever outros campos
+// Retorna o userInfo atualizado do banco para sincronizar com o estado local
+export async function updatePaymentMethodsOnly(paymentMethods: any[]): Promise<UserInfo | null> {
+    try {
+        if (isOnlineNow()) {
+            // Atualiza apenas payment_methods no banco
+            await supabaseDb.updatePaymentMethodsOnly(paymentMethods);
+
+            // Recarrega o userInfo completo e atualizado do banco
+            const updatedUserInfo = await supabaseDb.getUserInfo();
+
+            // Atualiza o cache local com os dados mais recentes
+            if (updatedUserInfo) {
+                await offlineDb.offlineDb.userInfo.put({
+                    ...updatedUserInfo,
+                    _localId: 'current_user',
+                    _syncStatus: 'synced',
+                    _lastModified: Date.now()
+                });
+            }
+
+            return updatedUserInfo;
+        } else {
+            // Offline: atualiza localmente
+            const localUserInfo = await offlineDb.getUserInfoLocal();
+            if (localUserInfo) {
+                const updatedLocal = { ...localUserInfo, payment_methods: paymentMethods };
+                await offlineDb.saveUserInfoLocal(updatedLocal);
+                const { _localId, _syncStatus, _lastModified, _syncedAt, _remoteId, ...userInfo } = updatedLocal;
+                return userInfo;
+            }
+            return null;
+        }
+    } catch (error) {
+        console.error('[OfflineFirst] Erro ao atualizar payment_methods:', error);
+        throw error;
     }
 }
 

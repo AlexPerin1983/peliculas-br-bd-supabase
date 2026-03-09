@@ -13,6 +13,7 @@ import {
     LocalFilm,
     LocalUserInfo
 } from './offlineDb';
+import { getOwnerUserId } from './supabaseDb';
 
 // Status de conexão
 let isOnline = navigator.onLine;
@@ -253,15 +254,15 @@ async function syncFilm(action: string, data: LocalFilm): Promise<void> {
 async function syncUserInfo(action: string, data: LocalUserInfo): Promise<void> {
     const { _localId, _syncStatus, _lastModified, _syncedAt, _remoteId, id, ...userRest } = data;
 
-    // Obter user_id atual
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-        throw new Error('Usuário não autenticado');
+    // Obter user_id atual (owner id se for colaborador)
+    const targetUserId = await getOwnerUserId();
+    if (!targetUserId) {
+        throw new Error('Usuário ou Organização não encontrados');
     }
 
     // Mapear campos para formato Supabase
     const supabaseData = {
-        user_id: user.id,
+        user_id: targetUserId,
         nome: userRest.nome,
         empresa: userRest.empresa,
         telefone: userRest.telefone,

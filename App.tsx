@@ -60,6 +60,7 @@ import PdfHistoryView from './components/views/PdfHistoryView';
 import FilmListView from './components/views/FilmListView';
 import AgendaView from './components/views/AgendaView';
 import EstoqueView from './components/views/EstoqueView';
+import DesktopSidebar from './components/layout/DesktopSidebar';
 
 
 type UIMeasurement = Measurement & { isNew?: boolean };
@@ -832,9 +833,15 @@ const App: React.FC = () => {
 
     const handleSavePaymentMethods = useCallback(async (methods: PaymentMethods) => {
         if (userInfo) {
-            const updatedUserInfo = { ...userInfo, payment_methods: methods };
-            await db.saveUserInfo(updatedUserInfo);
-            setUserInfo(updatedUserInfo);
+            // Usa a nova função que atualiza APENAS o payment_methods no banco
+            // e retorna o userInfo completo atualizado, evitando perda de logo/assinatura
+            const updatedUserInfo = await db.updatePaymentMethodsOnly(methods);
+            if (updatedUserInfo) {
+                setUserInfo(updatedUserInfo);
+            } else {
+                // Fallback: atualiza apenas o campo payment_methods no estado local
+                setUserInfo(prev => prev ? { ...prev, payment_methods: methods } : prev);
+            }
             setIsPaymentModalOpen(false);
         }
     }, [userInfo]);
@@ -1147,21 +1154,20 @@ const App: React.FC = () => {
                 proposalOptionName: activeOption!.name,
                 proposalOptionId: activeOption!.id
             };
-            await db.savePDF(pdfToSave);
+            const savedPdf = await db.savePDF(pdfToSave);
 
             downloadBlob(pdfBlob, filename);
 
-            setPdfGenerationStatus('success');
+            // Atualiza o estado imediatamente sem esperar sincronização remota
+            setAllSavedPdfs((prev: SavedPDF[]) => [savedPdf, ...prev]);
 
-            if (hasLoadedHistory) {
-                await loadAllPdfs();
-            }
+            setPdfGenerationStatus('success');
         } catch (error) {
             console.error("Erro ao gerar ou salvar PDF:", error);
             handleShowInfo("Ocorreu um erro ao gerar o PDF. Verifique o console para mais detalhes.");
             setPdfGenerationStatus('idle');
         }
-    }, [measurements, films, generalDiscount, totals, selectedClient, userInfo, activeOption, selectedClientId, downloadBlob, hasLoadedHistory, loadAllPdfs, handleShowInfo]);
+    }, [measurements, films, generalDiscount, totals, selectedClient, userInfo, activeOption, selectedClientId, downloadBlob, handleShowInfo]);
 
     const handleGeneratePdf = useCallback(async () => {
         if (!selectedClient || !userInfo || !activeOption) {
@@ -1810,20 +1816,20 @@ const App: React.FC = () => {
     }, [pdfToDeleteId, loadAllPdfs, hasLoadedAgendamentos, loadAgendamentos]);
 
     const handleUpdatePdfStatus = useCallback(async (pdfId: number, status: SavedPDF['status']) => {
+        // Atualiza estado imediatamente para refletir na UI sem esperar o banco
+        setAllSavedPdfs((prev: SavedPDF[]) => prev.map(p => p.id === pdfId ? { ...p, status } : p));
         try {
             const allPdfsFromDb = await db.getAllPDFs();
             const pdfToUpdate = allPdfsFromDb.find(p => p.id === pdfId);
-
             if (pdfToUpdate) {
-                const updatedPdf = { ...pdfToUpdate, status };
-                await db.updatePDF(updatedPdf);
-                await loadAllPdfs();
+                await db.updatePDF({ ...pdfToUpdate, status });
             }
         } catch (error) {
             console.error("Failed to update PDF status", error);
             handleShowInfo("Não foi possível atualizar o status do orçamento.");
+            await loadAllPdfs(); // reverte em caso de erro
         }
-    }, [loadAllPdfs]);
+    }, [loadAllPdfs, handleShowInfo]);
 
 
     const toggleFullScreen = useCallback(() => {
@@ -2921,112 +2927,132 @@ Se não conseguir extrair, retorne: []`;
 
 
     return (
-        <div className="h-full font-roboto flex flex-col">
+        <div className="h-full font-roboto flex lg:flex-row flex-col overflow-hidden bg-slate-50 dark:bg-slate-950">
             <ProtectedRoute>
-                {/* Banner de atualização automática */}
-                <UpdateBanner />
+                <DesktopSidebar activeTab={activeTab} onTabChange={handleTabChange} />
 
-                <main ref={mainRef} className="flex-grow overflow-y-auto pb-32 sm:pb-0 bg-slate-50 dark:bg-slate-950 transition-colors duration-500">
-                    <div className="sticky top-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md z-40 border-b border-slate-200/50 dark:border-slate-800/50">
-                        <div className="container mx-auto px-4 w-full max-w-2xl">
-                            <div className="py-2 sm:py-3">
-                                <Header
-                                    activeTab={activeTab}
-                                    onTabChange={handleTabChange}
-                                />
+                <div className="flex-grow flex flex-col min-w-0 h-full overflow-hidden">
+                    <UpdateBanner />
+
+                    <main ref={mainRef} className="flex-grow overflow-y-auto pb-32 lg:pb-0 sm:pb-0 transition-colors duration-500">
+                        <div className="sticky top-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md z-40 border-b border-slate-200/50 dark:border-slate-800/50">
+                            <div className="container mx-auto px-4 w-full max-w-2xl lg:max-w-5xl">
+                                <div className="py-2 sm:py-3">
+                                    <Header
+                                        activeTab={activeTab}
+                                        onTabChange={handleTabChange}
+                                    />
+                                </div>
                             </div>
                         </div>
-                    </div>
 
-                    <div className="container mx-auto px-0.5 sm:px-4 py-4 sm:py-8 w-full max-w-2xl">
-                        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-4 sm:p-6">
-                            {deferredPrompt && !isInstalled && (
-                                <div className="mb-4 p-3 bg-blue-100 border border-blue-200 rounded-lg flex justify-between items-center">
-                                    <p className="text-sm text-blue-800 font-medium">Instale o app para usar offline!</p>
-                                    <button
-                                        onClick={handlePromptPwaInstall}
-                                        className="px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-md hover:bg-blue-700 transition-colors"
-                                    >
-                                        Instalar
-                                    </button>
-                                </div>
-                            )}
+                        <div className="container mx-auto px-0.5 sm:px-4 py-4 sm:py-8 w-full max-w-2xl lg:max-w-5xl">
+                            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-4 sm:p-6">
+                                {deferredPrompt && !isInstalled && (
+                                    <div className="mb-4 p-3 bg-blue-100 border border-blue-200 rounded-lg flex justify-between items-center">
+                                        <p className="text-sm text-blue-800 font-medium">Instale o app para usar offline!</p>
+                                        <button
+                                            onClick={handlePromptPwaInstall}
+                                            className="px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-md hover:bg-blue-700 transition-colors"
+                                        >
+                                            Instalar
+                                        </button>
+                                    </div>
+                                )}
 
-                            {activeTab === 'client' ? (
-                                <>
-                                    {clients.length > 0 ? (
-                                        <div className="bg-slate-100 dark:bg-slate-900 p-2 px-2 rounded-xl">
-                                            <div className="relative z-20">
-                                                <ClientBar
-                                                    key={clientTransitionKey}
-                                                    selectedClient={selectedClient}
-                                                    onSelectClientClick={handleOpenClientSelectionModal}
-                                                    onAddClient={() => handleOpenClientModal('add')}
-                                                    onAddClientAI={handleOpenAIClientModal}
-                                                    onEditClient={() => handleOpenClientModal('edit')}
-                                                    onDeleteClient={handleDeleteClient}
-                                                    onSwipeLeft={goToNextClient}
-                                                    onSwipeRight={goToPrevClient}
-                                                />
+                                {activeTab === 'client' ? (
+                                    <>
+                                        {clients.length > 0 ? (
+                                            <div className="bg-slate-100 dark:bg-slate-900 p-2 px-2 rounded-xl">
+                                                <div className="relative z-20">
+                                                    <ClientBar
+                                                        key={clientTransitionKey}
+                                                        selectedClient={selectedClient}
+                                                        onSelectClientClick={handleOpenClientSelectionModal}
+                                                        onAddClient={() => handleOpenClientModal('add')}
+                                                        onAddClientAI={handleOpenAIClientModal}
+                                                        onEditClient={() => handleOpenClientModal('edit')}
+                                                        onDeleteClient={handleDeleteClient}
+                                                        onSwipeLeft={goToNextClient}
+                                                        onSwipeRight={goToPrevClient}
+                                                    />
+                                                </div>
+
+                                                {proposalOptions.length > 0 && activeOptionId && (
+                                                    <ProposalOptionsCarousel
+                                                        options={proposalOptions}
+                                                        activeOptionId={activeOptionId}
+                                                        onSelectOption={setActiveOptionId}
+                                                        onRenameOption={handleRenameProposalOption}
+                                                        onDeleteOption={handleRequestDeleteProposalOption}
+                                                        onAddOption={handleAddProposalOption}
+                                                        onSwipeDirectionChange={handleSwipeDirectionChange}
+                                                    />
+                                                )}
+
+                                                <div id="contentContainer" className="w-full min-h-[300px] animate-fade-in">
+                                                    {renderContent()}
+
+                                                    {/* Otimizador de Corte - Dentro do grupo de medidas */}
+                                                    {measurements.length > 0 && selectedClientId && (
+                                                        <div className="mt-4 mb-4 sm:mb-0">
+                                                            <CuttingOptimizationPanel
+                                                                measurements={measurements}
+                                                                clientId={selectedClientId ?? undefined}
+                                                                optionId={activeOptionId ?? undefined}
+                                                                films={films}
+                                                            />
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
-
-                                            {proposalOptions.length > 0 && activeOptionId && (
-                                                <ProposalOptionsCarousel
-                                                    options={proposalOptions}
-                                                    activeOptionId={activeOptionId}
-                                                    onSelectOption={setActiveOptionId}
-                                                    onRenameOption={handleRenameProposalOption}
-                                                    onDeleteOption={handleRequestDeleteProposalOption}
-                                                    onAddOption={handleAddProposalOption}
-                                                    onSwipeDirectionChange={handleSwipeDirectionChange}
-                                                />
-                                            )}
-
+                                        ) : (
                                             <div id="contentContainer" className="w-full min-h-[300px] animate-fade-in">
                                                 {renderContent()}
-
-                                                {/* Otimizador de Corte - Dentro do grupo de medidas */}
-                                                {measurements.length > 0 && selectedClientId && (
-                                                    <div className="mt-4 mb-4 sm:mb-0">
-                                                        <CuttingOptimizationPanel
-                                                            measurements={measurements}
-                                                            clientId={selectedClientId ?? undefined}
-                                                            optionId={activeOptionId ?? undefined}
-                                                            films={films}
-                                                        />
-                                                    </div>
-                                                )}
                                             </div>
-                                        </div>
-                                    ) : (
+                                        )}
+                                    </>
+                                ) : ['history', 'agenda'].includes(activeTab) ? (
+                                    <div className="bg-blue-50 dark:bg-slate-900 -m-4 sm:-m-6 p-4 sm:p-6 rounded-2xl">
                                         <div id="contentContainer" className="w-full min-h-[300px] animate-fade-in">
                                             {renderContent()}
                                         </div>
-                                    )}
-                                </>
-                            ) : ['history', 'agenda'].includes(activeTab) ? (
-                                <div className="bg-blue-50 dark:bg-slate-900 -m-4 sm:-m-6 p-4 sm:p-6 rounded-2xl">
+                                    </div>
+                                ) : (
                                     <div id="contentContainer" className="w-full min-h-[300px] animate-fade-in">
                                         {renderContent()}
                                     </div>
-                                </div>
-                            ) : (
-                                <div id="contentContainer" className="w-full min-h-[300px] animate-fade-in">
-                                    {renderContent()}
-                                </div>
-                            )}
+                                )}
 
 
-                            {activeTab === 'client' && selectedClientId && (
-                                <>
-                                    <div className="hidden sm:block mt-6 pt-6 border-t border-slate-200">
-                                        <SummaryBar
+                                {activeTab === 'client' && selectedClientId && (
+                                    <>
+                                        <div className="hidden sm:block mt-6 pt-6 border-t border-slate-200">
+                                            <SummaryBar
+                                                totals={totals}
+                                                generalDiscount={generalDiscount}
+                                                onOpenGeneralDiscountModal={() => setIsGeneralDiscountModalOpen(true)}
+                                                isDesktop
+                                            />
+                                            <ActionsBar
+                                                onAddMeasurement={addMeasurement}
+                                                onDuplicateMeasurements={duplicateAllMeasurements}
+                                                onGeneratePdf={handleGeneratePdf}
+                                                isGeneratingPdf={pdfGenerationStatus === 'generating'}
+                                                onOpenAIModal={() => {
+                                                    if (hasModule('ia_ocr')) {
+                                                        setIsAIMeasurementModalOpen(true);
+                                                    } else {
+                                                        setShowIaUpgradeModal(true);
+                                                    }
+                                                }}
+                                            />
+                                        </div>
+                                        <MobileFooter
                                             totals={totals}
                                             generalDiscount={generalDiscount}
                                             onOpenGeneralDiscountModal={() => setIsGeneralDiscountModalOpen(true)}
-                                            isDesktop
-                                        />
-                                        <ActionsBar
+                                            onUpdateGeneralDiscount={handleGeneralDiscountChange}
                                             onAddMeasurement={addMeasurement}
                                             onDuplicateMeasurements={duplicateAllMeasurements}
                                             onGeneratePdf={handleGeneratePdf}
@@ -3039,121 +3065,104 @@ Se não conseguir extrair, retorne: []`;
                                                 }
                                             }}
                                         />
-                                    </div>
-                                    <MobileFooter
-                                        totals={totals}
-                                        generalDiscount={generalDiscount}
-                                        onOpenGeneralDiscountModal={() => setIsGeneralDiscountModalOpen(true)}
-                                        onUpdateGeneralDiscount={handleGeneralDiscountChange}
-                                        onAddMeasurement={addMeasurement}
-                                        onDuplicateMeasurements={duplicateAllMeasurements}
-                                        onGeneratePdf={handleGeneratePdf}
-                                        isGeneratingPdf={pdfGenerationStatus === 'generating'}
-                                        onOpenAIModal={() => {
-                                            if (hasModule('ia_ocr')) {
-                                                setIsAIMeasurementModalOpen(true);
-                                            } else {
-                                                setShowIaUpgradeModal(true);
-                                            }
-                                        }}
-                                    />
-                                </>
-                            )}
+                                    </>
+                                )}
+                            </div>
                         </div>
-                    </div>
-                </main>
+                    </main>
 
 
-                <ModalsContainer {...modalProps} />
-                <CustomNumpad
-                    ref={numpadRef}
-                    isOpen={numpadConfig.isOpen}
-                    onInput={handleNumpadInput}
-                    onDelete={handleNumpadDelete}
-                    onDone={handleNumpadDone}
-                    onClose={handleNumpadClose}
-                    onDuplicate={handleNumpadDuplicate}
-                    onClear={handleNumpadClear}
-                    onAddGroup={handleNumpadAddGroup}
-                    activeField={numpadConfig.field}
-                />
-
-
-
-                <LocationImportModal
-                    isOpen={isLocationImportModalOpen}
-                    onClose={() => setIsLocationImportModalOpen(false)}
-                    onImportMeasurements={(importedMeasurements) => {
-                        handleMeasurementsChange([...measurements, ...importedMeasurements]);
-                        setIsLocationImportModalOpen(false);
-                    }}
-                    currentFilm={films[0]?.nome}
-                />
-
-                {newVersionAvailable && (
-                    <UpdateNotification onUpdate={handleUpdate} />
-                )}
-                {showUndoToast && deletedMeasurement && (
-                    <Toast
-                        message="Medida excluída"
-                        onUndo={handleUndoDelete}
-                        onDismiss={handleDismissUndo}
-                        duration={5000}
+                    <ModalsContainer {...modalProps} />
+                    <CustomNumpad
+                        ref={numpadRef}
+                        isOpen={numpadConfig.isOpen}
+                        onInput={handleNumpadInput}
+                        onDelete={handleNumpadDelete}
+                        onDone={handleNumpadDone}
+                        onClose={handleNumpadClose}
+                        onDuplicate={handleNumpadDuplicate}
+                        onClear={handleNumpadClear}
+                        onAddGroup={handleNumpadAddGroup}
+                        activeField={numpadConfig.field}
                     />
-                )}
 
-                <ServicoQrModal
-                    isOpen={isServicoQrModalOpen}
-                    onClose={() => setIsServicoQrModalOpen(false)}
-                    userInfo={userInfo}
-                    films={films}
-                    clients={clients}
-                    isClientsLoading={isLoading}
-                    onTogglePin={handleToggleClientPin}
-                    onAddNewClient={handleAddNewClientFromSelection}
-                />
 
-                {/* Modal de Upgrade - QR Code Serviços */}
-                {showQrUpgradeModal && (
-                    <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-                        <div className="bg-gray-900 border border-gray-700 rounded-2xl max-w-md w-full p-6 shadow-2xl">
-                            <UpgradePrompt
-                                module={modules.find(m => m.id === 'qr_servicos')}
-                                onUpgradeClick={() => {
-                                    setShowQrUpgradeModal(false);
-                                    setActiveTab('account');
-                                }}
-                            />
-                            <button
-                                onClick={() => setShowQrUpgradeModal(false)}
-                                className="w-full mt-4 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
-                            >
-                                Fechar
-                            </button>
+
+                    <LocationImportModal
+                        isOpen={isLocationImportModalOpen}
+                        onClose={() => setIsLocationImportModalOpen(false)}
+                        onImportMeasurements={(importedMeasurements) => {
+                            handleMeasurementsChange([...measurements, ...importedMeasurements]);
+                            setIsLocationImportModalOpen(false);
+                        }}
+                        currentFilm={films[0]?.nome}
+                    />
+
+                    {newVersionAvailable && (
+                        <UpdateNotification onUpdate={handleUpdate} />
+                    )}
+                    {showUndoToast && deletedMeasurement && (
+                        <Toast
+                            message="Medida excluída"
+                            onUndo={handleUndoDelete}
+                            onDismiss={handleDismissUndo}
+                            duration={5000}
+                        />
+                    )}
+
+                    <ServicoQrModal
+                        isOpen={isServicoQrModalOpen}
+                        onClose={() => setIsServicoQrModalOpen(false)}
+                        userInfo={userInfo}
+                        films={films}
+                        clients={clients}
+                        isClientsLoading={isLoading}
+                        onTogglePin={handleToggleClientPin}
+                        onAddNewClient={handleAddNewClientFromSelection}
+                    />
+
+                    {/* Modal de Upgrade - QR Code Serviços */}
+                    {showQrUpgradeModal && (
+                        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+                            <div className="bg-gray-900 border border-gray-700 rounded-2xl max-w-md w-full p-6 shadow-2xl">
+                                <UpgradePrompt
+                                    module={modules.find(m => m.id === 'qr_servicos')}
+                                    onUpgradeClick={() => {
+                                        setShowQrUpgradeModal(false);
+                                        setActiveTab('account');
+                                    }}
+                                />
+                                <button
+                                    onClick={() => setShowQrUpgradeModal(false)}
+                                    className="w-full mt-4 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+                                >
+                                    Fechar
+                                </button>
+                            </div>
                         </div>
-                    </div>
-                )}
+                    )}
 
-                {/* Modal de Upgrade - IA/OCR */}
-                {showIaUpgradeModal && (
-                    <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-                        <div className="bg-gray-900 border border-gray-700 rounded-2xl max-w-md w-full p-6 shadow-2xl">
-                            <UpgradePrompt
-                                module={modules.find(m => m.id === 'ia_ocr')}
-                                onUpgradeClick={() => {
-                                    setShowIaUpgradeModal(false);
-                                    setActiveTab('account');
-                                }}
-                            />
-                            <button
-                                onClick={() => setShowIaUpgradeModal(false)}
-                                className="w-full mt-4 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
-                            >
-                                Fechar
-                            </button>
+                    {/* Modal de Upgrade - IA/OCR */}
+                    {showIaUpgradeModal && (
+                        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+                            <div className="bg-gray-900 border border-gray-700 rounded-2xl max-w-md w-full p-6 shadow-2xl">
+                                <UpgradePrompt
+                                    module={modules.find(m => m.id === 'ia_ocr')}
+                                    onUpgradeClick={() => {
+                                        setShowIaUpgradeModal(false);
+                                        setActiveTab('account');
+                                    }}
+                                />
+                                <button
+                                    onClick={() => setShowIaUpgradeModal(false)}
+                                    className="w-full mt-4 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+                                >
+                                    Fechar
+                                </button>
+                            </div>
                         </div>
-                    </div>
-                )}
+                    )}
+                </div>
             </ProtectedRoute>
         </div>
     );

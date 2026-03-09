@@ -1638,6 +1638,14 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
                     scrollbar-width: none;
                 }
 
+                @media (min-width: 1024px) {
+                    .stats-bar {
+                        overflow-x: visible;
+                        display: grid;
+                        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                    }
+                }
+
                 .stats-bar::-webkit-scrollbar {
                     display: none;
                 }
@@ -1841,6 +1849,7 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
                 .estoque-list {
                     display: grid;
                     gap: 1rem;
+                    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
                 }
 
                 .estoque-card {

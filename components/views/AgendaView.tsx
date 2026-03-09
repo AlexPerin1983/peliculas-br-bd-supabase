@@ -144,55 +144,57 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
 
 
     return (
-        <div className="p-1">
-            <header className="flex items-center justify-between mb-4">
-                <button onClick={() => changeMonth(-1)} className="h-10 w-10 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400">
-                    <i className="fas fa-chevron-left"></i>
-                </button>
-                <h2 className="text-xl font-bold text-slate-800 dark:text-slate-200 capitalize">
-                    {currentDate.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}
-                </h2>
-                <button onClick={() => changeMonth(1)} className="h-10 w-10 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400">
-                    <i className="fas fa-chevron-right"></i>
-                </button>
-            </header>
+        <div className="p-1 lg:flex lg:gap-8 lg:items-start">
+            <div className="lg:flex-1">
+                <header className="flex items-center justify-between mb-4">
+                    <button onClick={() => changeMonth(-1)} className="h-10 w-10 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400">
+                        <i className="fas fa-chevron-left"></i>
+                    </button>
+                    <h2 className="text-xl font-bold text-slate-800 dark:text-slate-200 capitalize">
+                        {currentDate.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}
+                    </h2>
+                    <button onClick={() => changeMonth(1)} className="h-10 w-10 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400">
+                        <i className="fas fa-chevron-right"></i>
+                    </button>
+                </header>
 
-            <div className="grid grid-cols-7 gap-1 text-center text-sm font-semibold text-slate-500 mb-2">
-                {weekDays.map(day => <div key={day}>{day}</div>)}
+                <div className="grid grid-cols-7 gap-1 text-center text-sm font-semibold text-slate-500 mb-2">
+                    {weekDays.map(day => <div key={day}>{day}</div>)}
+                </div>
+
+                <div className="grid grid-cols-7 gap-1">
+                    {daysInMonth.map((day, index) => {
+                        const dayAgendamentos = day ? agendamentosByDate.get(day.toDateString()) || [] : [];
+                        return (
+                            <div
+                                key={index}
+                                onClick={() => day && setSelectedDate(day)}
+                                className={`relative pt-[100%] rounded-md transition-colors duration-200 ${day ? 'bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700' : 'bg-transparent'}`}
+                            >
+                                {day && (
+                                    <div className="absolute inset-0 p-1.5 flex flex-col items-center overflow-hidden">
+                                        <span className={getDayNumberClasses(day)}>
+                                            {day.getDate()}
+                                        </span>
+                                        {dayAgendamentos.length > 0 && (
+                                            <div className="mt-1.5 flex flex-wrap justify-center items-center gap-1">
+                                                {dayAgendamentos.slice(0, 3).map(ag => (
+                                                    <div key={ag.id} className={`w-2 h-2 rounded-full ${getStatusColor(ag.status)}`} title={ag.clienteNome}></div>
+                                                ))}
+                                                {dayAgendamentos.length > 3 && (
+                                                    <div className="w-2 h-2 rounded-full bg-slate-300" title={`${dayAgendamentos.length - 3} mais`}></div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
             </div>
 
-            <div className="grid grid-cols-7 gap-1">
-                {daysInMonth.map((day, index) => {
-                    const dayAgendamentos = day ? agendamentosByDate.get(day.toDateString()) || [] : [];
-                    return (
-                        <div
-                            key={index}
-                            onClick={() => day && setSelectedDate(day)}
-                            className={`relative pt-[100%] rounded-md transition-colors duration-200 ${day ? 'bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700' : 'bg-transparent'}`}
-                        >
-                            {day && (
-                                <div className="absolute inset-0 p-1.5 flex flex-col items-center overflow-hidden">
-                                    <span className={getDayNumberClasses(day)}>
-                                        {day.getDate()}
-                                    </span>
-                                    {dayAgendamentos.length > 0 && (
-                                        <div className="mt-1.5 flex flex-wrap justify-center items-center gap-1">
-                                            {dayAgendamentos.slice(0, 3).map(ag => (
-                                                <div key={ag.id} className={`w-2 h-2 rounded-full ${getStatusColor(ag.status)}`} title={ag.clienteNome}></div>
-                                            ))}
-                                            {dayAgendamentos.length > 3 && (
-                                                <div className="w-2 h-2 rounded-full bg-slate-300" title={`${dayAgendamentos.length - 3} mais`}></div>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-                    );
-                })}
-            </div>
-
-            <div className="mt-8">
+            <div className="mt-8 lg:mt-0 lg:w-96 lg:sticky lg:top-4">
                 <div className="flex justify-between items-center pb-2 mb-4 border-b border-slate-200">
                     <div>
                         <span className="text-sm font-semibold text-slate-500">Agenda:</span>

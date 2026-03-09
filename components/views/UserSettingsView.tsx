@@ -311,9 +311,9 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({
     const dayLabels = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
     return (
-        <form id="userForm" onSubmit={handleSubmit} className="space-y-4 pb-32">
-            {/* Header da página */}
-            <div className="mb-6">
+        <form id="userForm" onSubmit={handleSubmit} className="space-y-4 pb-32 lg:grid lg:grid-cols-2 lg:gap-6 lg:space-y-0 lg:items-start">
+            {/* Header da página - Ocupa as 2 colunas */}
+            <div className="mb-6 lg:col-span-2">
                 <div className="flex items-center gap-3 mb-2">
                     <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-slate-700 to-slate-900 dark:from-slate-600 dark:to-slate-800 flex items-center justify-center">
                         <Settings className="w-5 h-5 text-white" />
@@ -389,15 +389,42 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({
                             </div>
                         </div>
 
-                        {/* Cores */}
-                        <div className="space-y-4">
-                            <div>
-                                <label className={labelClass}>Cor Primária</label>
-                                <ColorPicker color={formData.cores?.primaria || '#918B45'} onChange={(val) => handleColorChange('primaria', val)} />
-                            </div>
-                            <div>
-                                <label className={labelClass}>Cor Secundária</label>
-                                <ColorPicker color={formData.cores?.secundaria || '#4E6441'} onChange={(val) => handleColorChange('secundaria', val)} />
+                        {/* Branding / Cores */}
+                        <div className="flex flex-col space-y-4">
+                            <div className="p-5 bg-slate-50/50 dark:bg-slate-900/40 rounded-2xl border border-slate-200/50 dark:border-slate-700/50 space-y-5">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <div className="w-1.5 h-4 bg-violet-500 rounded-full" />
+                                    <h4 className="text-xs font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Paleta da Marca</h4>
+                                </div>
+
+                                <div className="grid grid-cols-1 gap-5">
+                                    <div className="group/color">
+                                        <label className={labelClass}>Cor Primária</label>
+                                        <ColorPicker color={formData.cores?.primaria || '#918B45'} onChange={(val) => handleColorChange('primaria', val)} />
+                                    </div>
+                                    <div className="group/color">
+                                        <label className={labelClass}>Cor Secundária</label>
+                                        <ColorPicker color={formData.cores?.secundaria || '#4E6441'} onChange={(val) => handleColorChange('secundaria', val)} />
+                                    </div>
+                                </div>
+
+                                {/* Preview Card */}
+                                <div className="mt-2 space-y-3">
+                                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 text-center">Visualização no Orçamento</p>
+                                    <div className="relative h-20 rounded-xl overflow-hidden shadow-lg shadow-slate-200 dark:shadow-black/20 border border-white/10 flex">
+                                        <div
+                                            className="w-1/3 h-full flex items-center justify-center transition-colors duration-500"
+                                            style={{ backgroundColor: formData.cores?.primaria || '#918B45' }}
+                                        >
+                                            <div className="w-8 h-8 rounded-lg bg-white/20 backdrop-blur-sm" />
+                                        </div>
+                                        <div className="flex-1 h-full bg-white dark:bg-slate-800 p-3 space-y-2">
+                                            <div className="h-2 w-2/3 rounded-full bg-slate-100 dark:bg-slate-700" />
+                                            <div className="h-2 w-full rounded-full bg-slate-100 dark:bg-slate-700" />
+                                            <div className="h-6 w-1/2 rounded-lg mt-1 transition-colors duration-500" style={{ backgroundColor: formData.cores?.secundaria || '#4E6441' }} />
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -710,7 +737,7 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({
             </SettingsSection>
 
             {/* ===== BOTÃO SALVAR FIXO ===== */}
-            <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-slate-100 via-slate-100 to-transparent dark:from-slate-900 dark:via-slate-900 z-40 sm:relative sm:bg-transparent sm:dark:bg-transparent sm:p-0 sm:pt-6">
+            <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-slate-100 via-slate-100 to-transparent dark:from-slate-900 dark:via-slate-900 z-40 sm:relative sm:bg-transparent sm:dark:bg-transparent sm:p-0 sm:pt-6 lg:col-span-2">
                 <button
                     type="submit"
                     disabled={isSaving}

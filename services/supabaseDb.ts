@@ -23,6 +23,34 @@ const getCurrentUserId = async (): Promise<string | null> => {
     return cachedUserId;
 };
 
+// Helper para obter o ID do dono da organização (para configurações compartilhadas)
+export const getOwnerUserId = async (): Promise<string | null> => {
+    const userId = await getCurrentUserId();
+    if (!userId) return null;
+
+    // Buscar o organization_id do usuário atual  
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('organization_id')
+        .eq('id', userId)
+        .single();
+
+    // Se tem organização, buscar o owner_id
+    if (profile?.organization_id) {
+        const { data: org } = await supabase
+            .from('organizations')
+            .select('owner_id')
+            .eq('id', profile.organization_id)
+            .single();
+
+        if (org?.owner_id) {
+            return org.owner_id;
+        }
+    }
+
+    return userId;
+};
+
 // ============================================
 // CLIENT FUNCTIONS
 // ============================================
@@ -234,27 +262,10 @@ export const getUserInfo = async (): Promise<UserInfo> => {
     const userId = await getCurrentUserId();
     if (!userId) return mockUserInfo;
 
-    // Primeiro, buscar o organization_id do usuário atual  
-    const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('organization_id')
-        .eq('id', userId)
-        .single();
+    // Sempre buscar os dados do OWNER para garantir consistência na empresa
+    const targetUserId = await getOwnerUserId();
 
-    let targetUserId = userId;
-
-    // Se tem organização, buscar o user_info do owner da organização
-    if (profile?.organization_id) {
-        const { data: org } = await supabase
-            .from('organizations')
-            .select('owner_id')
-            .eq('id', profile.organization_id)
-            .single();
-
-        if (org?.owner_id) {
-            targetUserId = org.owner_id;
-        }
-    }
+    if (!targetUserId) return mockUserInfo;
 
 
     // Buscar user_info do owner (ou do próprio usuário se for owner)
@@ -298,8 +309,11 @@ export const saveUserInfo = async (userInfo: UserInfo): Promise<UserInfo> => {
     const userId = await getCurrentUserId();
     if (!userId) throw new Error('User not authenticated');
 
+    // Se o usuário faz parte de uma organização, salvar na linha do OWNER
+    const targetUserId = await getOwnerUserId() || userId;
+
     const userInfoData = {
-        user_id: userId,
+        user_id: targetUserId,
         nome: userInfo.nome,
         empresa: userInfo.empresa,
         telefone: userInfo.telefone,
@@ -328,6 +342,25 @@ export const saveUserInfo = async (userInfo: UserInfo): Promise<UserInfo> => {
 
     if (error) throw error;
     return userInfo;
+};
+
+// Atualiza APENAS o campo payment_methods sem sobrescrever outros campos
+export const updatePaymentMethodsOnly = async (paymentMethods: any[]): Promise<UserInfo | null> => {
+    const userId = await getCurrentUserId();
+    if (!userId) throw new Error('User not authenticated');
+
+    // Se o usuário faz parte de uma organização, atualizar na linha do OWNER
+    const targetUserId = await getOwnerUserId() || userId;
+
+    const { error } = await supabase
+        .from('user_info')
+        .update({ payment_methods: paymentMethods })
+        .eq('user_id', targetUserId);
+
+    if (error) throw error;
+
+    // Retornar o userInfo completo atualizado
+    return await getUserInfo();
 };
 
 // ============================================

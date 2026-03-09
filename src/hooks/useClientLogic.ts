@@ -869,9 +869,15 @@ export const useClientLogic = ({
 
     const handleSavePaymentMethods = useCallback(async (methods: PaymentMethods) => {
         if (userInfo) {
-            const updatedUserInfo = { ...userInfo, paymentMethods: methods };
-            setUserInfo(updatedUserInfo);
-            await db.saveUserInfo(updatedUserInfo);
+            // Usa a nova função que atualiza APENAS o payment_methods no banco
+            // e retorna o userInfo completo atualizado, evitando perda de logo/assinatura
+            const updatedUserInfo = await db.updatePaymentMethodsOnly(methods);
+            if (updatedUserInfo) {
+                setUserInfo(updatedUserInfo);
+            } else {
+                // Fallback: atualiza apenas o campo payment_methods no estado local
+                setUserInfo({ ...userInfo, payment_methods: methods });
+            }
             setIsPaymentModalOpen(false);
         }
     }, [userInfo, setUserInfo]);

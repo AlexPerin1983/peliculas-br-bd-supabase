@@ -223,7 +223,7 @@ export async function getUserInfoLocal(): Promise<LocalUserInfo | null> {
 export async function saveUserInfoLocal(userInfo: UserInfo): Promise<LocalUserInfo> {
     const now = Date.now();
     const existing = await getUserInfoLocal();
-    const localId = existing?._localId || generateLocalId();
+    const localId = existing?._localId || 'current_user';
 
     const localUserInfo: LocalUserInfo = {
         ...userInfo,

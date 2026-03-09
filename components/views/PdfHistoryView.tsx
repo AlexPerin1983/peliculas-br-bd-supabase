@@ -183,91 +183,118 @@ const PdfHistoryItem: React.FC<{
                 style={{ touchAction: 'pan-y' }}
                 className="relative z-10 w-full"
             >
-                <div className="relative z-10 w-full p-4 bg-white dark:bg-slate-800 rounded-lg border border-slate-200/80 dark:border-slate-700 shadow-md">
-                    <div className="flex items-start justify-between gap-4">
-                        <div className="flex items-center flex-shrink-0 mr-3">
-                            <input
-                                type="checkbox"
-                                checked={isSelected}
-                                onChange={() => onToggleSelect(pdf.id!)}
-                                onClick={(e) => e.stopPropagation()}
-                                className="h-5 w-5 text-slate-800 border-slate-300 rounded focus:ring-slate-500 cursor-pointer"
-                                aria-label="Selecionar para PDF combinado"
-                            />
-                        </div>
+                {/* Status accent bar */}
+                <div className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-lg z-20 ${
+                    pdf.status === 'approved' ? 'bg-emerald-500' :
+                    pdf.status === 'revised'  ? 'bg-amber-400' :
+                                                'bg-slate-300 dark:bg-slate-600'
+                }`} />
+
+                <div className="relative z-10 w-full pl-4 pr-4 pt-3 pb-3 bg-white dark:bg-slate-800 rounded-lg border border-slate-200/80 dark:border-slate-700 shadow-md">
+
+                    {/* Row 1: checkbox + título + ações */}
+                    <div className="flex items-center gap-2">
+                        <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => onToggleSelect(pdf.id!)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="h-4 w-4 flex-shrink-0 text-slate-800 border-slate-300 rounded focus:ring-slate-500 cursor-pointer"
+                            aria-label="Selecionar para PDF combinado"
+                        />
                         <div className="flex-grow min-w-0">
                             {pdf.proposalOptionName && (
                                 pdf.proposalOptionId ? (
                                     <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            onNavigateToOption(pdf.clienteId, pdf.proposalOptionId);
-                                        }}
-                                        className="font-bold text-slate-900 dark:text-slate-100 text-lg truncate hover:text-blue-600 dark:hover:text-blue-400 transition-colors text-left w-full"
+                                        onClick={(e) => { e.stopPropagation(); onNavigateToOption(pdf.clienteId, pdf.proposalOptionId); }}
+                                        className="font-bold text-slate-900 dark:text-slate-100 text-base leading-tight truncate hover:text-blue-600 dark:hover:text-blue-400 transition-colors text-left w-full"
                                     >
                                         {pdf.proposalOptionName}
                                     </button>
                                 ) : (
-                                    <p className="font-bold text-slate-900 dark:text-slate-100 text-lg truncate">
+                                    <p className="font-bold text-slate-900 dark:text-slate-100 text-base leading-tight truncate">
                                         {pdf.proposalOptionName}
                                     </p>
                                 )
                             )}
-                            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+                            <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
                                 {new Date(pdf.date).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                             </p>
                         </div>
-                        <div className="flex items-center space-x-1 text-slate-500 flex-shrink-0">
+                        <div className="flex items-center gap-0.5 text-slate-400 flex-shrink-0">
                             <button
                                 onClick={(e) => { e.stopPropagation(); onDownload(pdf, pdf.nomeArquivo); }}
-                                className="h-9 w-9 flex items-center justify-center rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-800 dark:hover:text-white transition-colors"
+                                className="h-8 w-8 flex items-center justify-center rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-700 dark:hover:text-white transition-colors text-sm"
                                 aria-label="Baixar PDF"
                             >
                                 <i className="fas fa-download"></i>
                             </button>
                             <button
                                 onClick={(e) => { e.stopPropagation(); onDelete(pdf.id!); }}
-                                className="h-9 w-9 flex items-center justify-center rounded-md hover:bg-red-50 hover:text-red-600 transition-colors"
+                                className="h-8 w-8 flex items-center justify-center rounded-md hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-500 transition-colors text-sm"
                                 aria-label="Excluir PDF"
                             >
                                 <i className="fas fa-trash-alt"></i>
                             </button>
                         </div>
                     </div>
-                    <div className="flex items-center gap-3 mt-2 flex-wrap">
+
+                    {/* Row 2: status + validade */}
+                    <div className="flex items-center gap-2 mt-2 flex-wrap">
                         <StatusBadge status={pdf.status} />
                         {expirationDate && (
-                            <div className={`flex items-center text-sm ${isExpired ? 'text-red-600 font-semibold' : 'text-slate-600'}`}>
-                                <i className="far fa-calendar-alt mr-2 text-slate-400"></i>
-                                <span>Vence em: {expirationDate.toLocaleDateString('pt-BR')}</span>
-                            </div>
+                            <span className={`text-xs ${isExpired ? 'text-red-500 font-semibold' : 'text-slate-400 dark:text-slate-500'}`}>
+                                {isExpired ? <><i className="fas fa-exclamation-circle mr-1"/>Vencido</> : <>Vence {expirationDate.toLocaleDateString('pt-BR')}</>}
+                            </span>
                         )}
                     </div>
 
+                    {/* Row 3: filmes */}
+                    {pdf.measurements && pdf.measurements.length > 0 && (() => {
+                        const filmMap = new Map<string, number>();
+                        pdf.measurements!.forEach(m => {
+                            if (m.pelicula) {
+                                const m2 = (parseFloat(String(m.largura).replace(',', '.')) * parseFloat(String(m.altura).replace(',', '.'))) * (m.quantidade || 1) / 10000;
+                                filmMap.set(m.pelicula, (filmMap.get(m.pelicula) || 0) + m2);
+                            }
+                        });
+                        if (filmMap.size === 0) return null;
+                        return (
+                            <div className="mt-2 flex flex-wrap gap-1">
+                                {Array.from(filmMap.entries()).map(([nome, m2]) => (
+                                    <span key={nome} style={{ fontSize: '9px' }} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-medium leading-none">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-slate-400 dark:bg-slate-500 flex-shrink-0" />
+                                        {nome} · {m2.toFixed(2).replace('.', ',')} m²
+                                    </span>
+                                ))}
+                            </div>
+                        );
+                    })()}
 
-                    <div className="flex items-end justify-between mt-4 pt-4 border-t border-slate-100 dark:border-slate-700">
-                        <div className="flex flex-col">
-                            <p className="text-slate-600 dark:text-slate-400 font-medium">
+                    {/* Row 4: m² + agendamento + preço */}
+                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-100 dark:border-slate-700/60">
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded-full">
                                 {pdf.totalM2.toFixed(2).replace('.', ',')} m²
-                            </p>
+                            </span>
                             {agendamento ? (
-                                <button onClick={() => onSchedule({ pdf, agendamento })} className="mt-2 text-left">
-                                    <div className="flex items-center text-sm font-semibold text-blue-600 bg-blue-100 px-2 py-1 rounded-md">
-                                        <i className="fas fa-check-circle mr-2"></i>
-                                        <span>{new Date(agendamento.start).toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                                <button onClick={() => onSchedule({ pdf, agendamento })} className="text-left">
+                                    <div className="flex items-center text-xs font-semibold text-blue-600 bg-blue-100 dark:bg-blue-900/40 dark:text-blue-400 px-2 py-0.5 rounded-full">
+                                        <i className="fas fa-check-circle mr-1 text-[9px]"></i>
+                                        {new Date(agendamento.start).toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
                                     </div>
                                 </button>
                             ) : (
                                 <button
                                     onClick={() => onSchedule({ pdf })}
-                                    className="mt-2 px-3 py-1.5 bg-slate-800 dark:bg-slate-700 text-white font-semibold rounded-lg hover:bg-slate-700 dark:hover:bg-slate-600 transition-colors text-sm flex items-center gap-2"
+                                    className="text-xs px-2 py-0.5 rounded-full border border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:bg-slate-800 hover:text-white hover:border-slate-800 transition-all flex items-center gap-1"
                                 >
-                                    <i className="fas fa-calendar-plus"></i>
+                                    <i className="fas fa-calendar-plus text-[9px]"></i>
                                     Agendar
                                 </button>
                             )}
                         </div>
-                        <p className="font-bold text-slate-900 dark:text-slate-100 text-lg">
+                        <p className="font-bold text-slate-900 dark:text-slate-100 text-base tabular-nums">
                             {formatNumberBR(pdf.totalPreco)}
                         </p>
                     </div>
@@ -507,7 +534,7 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
                     </button>
                 </div>
             )}
-            <div className="space-y-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
                 {displayedHistory.length > 0 ? (
                     <>
                         {displayedHistory.map(group => (

@@ -261,32 +261,22 @@ const UserModal: React.FC<UserModalProps> = ({ isOpen, onClose, onSave, userInfo
                             </div>
                         </div>
 
-                        <div className="md:col-span-2">
-                            <label className={labelClass}>Cores</label>
-                            <div className="mt-1 space-y-2">
-                                <div className="p-3 bg-white rounded-lg border border-slate-200 shadow-sm">
-                                    <div className="flex items-center gap-3">
-                                        <ColorPicker
-                                            color={formData.cores?.primaria || '#918B45'}
-                                            onChange={(value) => handleColorChange('primaria', value)}
-                                        />
-                                        <div>
-                                            <p className="font-medium text-slate-800">Primária</p>
-                                            <p className="text-sm text-slate-500 uppercase font-mono">{formData.cores?.primaria || '#918B45'}</p>
-                                        </div>
-                                    </div>
+                        <div className="md:col-span-2 space-y-4">
+                            <label className={labelClass}>Identidade Visual</label>
+                            <div className="space-y-3">
+                                <div className="space-y-1">
+                                    <span className="text-xs font-medium text-slate-500 ml-1">Cor Primária</span>
+                                    <ColorPicker
+                                        color={formData.cores?.primaria || '#918B45'}
+                                        onChange={(value) => handleColorChange('primaria', value)}
+                                    />
                                 </div>
-                                <div className="p-3 bg-white rounded-lg border border-slate-200 shadow-sm">
-                                    <div className="flex items-center gap-3">
-                                        <ColorPicker
-                                            color={formData.cores?.secundaria || '#4E6441'}
-                                            onChange={(value) => handleColorChange('secundaria', value)}
-                                        />
-                                        <div>
-                                            <p className="font-medium text-slate-800">Secundária</p>
-                                            <p className="text-sm text-slate-500 uppercase font-mono">{formData.cores?.secundaria || '#4E6441'}</p>
-                                        </div>
-                                    </div>
+                                <div className="space-y-1">
+                                    <span className="text-xs font-medium text-slate-500 ml-1">Cor Secundária</span>
+                                    <ColorPicker
+                                        color={formData.cores?.secundaria || '#4E6441'}
+                                        onChange={(value) => handleColorChange('secundaria', value)}
+                                    />
                                 </div>
                             </div>
                         </div>
