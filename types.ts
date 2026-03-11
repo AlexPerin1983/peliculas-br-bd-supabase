@@ -6,6 +6,7 @@ export interface Fornecedor {
     representacoes?: string;
     email?: string;
     observacao?: string;
+    endereco?: string;
     criadoEm: string;
 }
 

@@ -13,13 +13,14 @@ const EMPTY_FORM = {
     telefone: '',
     representacoes: '',
     email: '',
+    endereco: '',
     observacao: '',
 };
 
 function formatPhone(raw: string): string {
     const digits = raw.replace(/\D/g, '').slice(0, 11);
-    if (digits.length <= 2)  return digits;
-    if (digits.length <= 7)  return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+    if (digits.length <= 2) return digits;
+    if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
     if (digits.length <= 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
     return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
 }
@@ -35,7 +36,26 @@ const FornecedorCard: React.FC<{
     onEdit: (f: Fornecedor) => void;
     onDelete: (id: string) => void;
 }> = ({ f, onEdit, onDelete }) => {
+    const [copied, setCopied] = useState(false);
     const initials = f.empresa.slice(0, 2).toUpperCase();
+
+    const handleCopyAddress = (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (f.endereco) {
+            navigator.clipboard.writeText(f.endereco);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        }
+    };
+
+    const openMaps = (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (f.endereco) {
+            window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(f.endereco)}`, '_blank');
+        }
+    };
 
     return (
         <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/70 dark:border-slate-700/50 shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden">
@@ -74,6 +94,40 @@ const FornecedorCard: React.FC<{
                     </div>
                 </div>
 
+                {/* Endereço */}
+                {f.endereco && (
+                    <div className="mb-3 flex items-center gap-2 group">
+                        <div className="flex-grow min-w-0 bg-slate-50 dark:bg-slate-700/40 px-3 py-2 rounded-xl border border-slate-100 dark:border-slate-700/50">
+                            <div className="flex items-center gap-2 mb-0.5">
+                                <i className="fas fa-map-marker-alt text-[10px] text-emerald-500"></i>
+                                <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Endereço</span>
+                            </div>
+                            <p className="text-xs text-slate-600 dark:text-slate-300 truncate" title={f.endereco}>
+                                {f.endereco}
+                            </p>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                            <button
+                                onClick={openMaps}
+                                className="h-7 w-7 flex items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 hover:bg-blue-600 hover:text-white transition-all"
+                                title="Abrir no Maps"
+                            >
+                                <i className="fas fa-external-link-alt text-[10px]"></i>
+                            </button>
+                            <button
+                                onClick={handleCopyAddress}
+                                className={`h-7 w-7 flex items-center justify-center rounded-lg transition-all ${copied
+                                        ? 'bg-emerald-500 text-white'
+                                        : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-emerald-500 hover:text-white'
+                                    }`}
+                                title={copied ? "Copiado!" : "Copiar endereço"}
+                            >
+                                <i className={`fas ${copied ? 'fa-check' : 'fa-copy'} text-[10px]`}></i>
+                            </button>
+                        </div>
+                    </div>
+                )}
+
                 {/* Representações */}
                 {f.representacoes && (
                     <div className="mb-3 flex flex-wrap gap-1">
@@ -88,7 +142,7 @@ const FornecedorCard: React.FC<{
                 {/* Separador */}
                 <div className="border-t border-slate-100 dark:border-slate-700/60 pt-3 flex items-center justify-between gap-3">
                     {/* Contatos */}
-                    <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex items-center gap-2 flex-wrap min-w-0">
                         {f.email && (
                             <a
                                 href={`mailto:${f.email}`}
@@ -96,11 +150,11 @@ const FornecedorCard: React.FC<{
                                 title={f.email}
                             >
                                 <i className="fas fa-envelope text-[10px]"></i>
-                                <span className="truncate max-w-[120px]">{f.email}</span>
+                                <span className="truncate max-w-[100px]">{f.email}</span>
                             </a>
                         )}
                         {f.observacao && (
-                            <span className="text-xs text-slate-400 dark:text-slate-500 italic truncate max-w-[140px]" title={f.observacao}>
+                            <span className="text-xs text-slate-400 dark:text-slate-500 italic truncate max-w-[100px]" title={f.observacao}>
                                 {f.observacao}
                             </span>
                         )}
@@ -135,6 +189,7 @@ const FornecedorModal: React.FC<{
                 telefone: editing.telefone,
                 representacoes: editing.representacoes || '',
                 email: editing.email || '',
+                endereco: editing.endereco || '',
                 observacao: editing.observacao || '',
             }
             : { ...EMPTY_FORM }
@@ -174,11 +229,12 @@ const FornecedorModal: React.FC<{
 
                 <form onSubmit={handleSubmit} className="p-5 space-y-3 overflow-y-auto max-h-[75vh] sm:max-h-none">
                     {[
-                        { key: 'empresa',        label: 'Empresa *',                    placeholder: 'Nome da empresa',          type: 'text' },
-                        { key: 'contato',        label: 'Nome do Contato *',            placeholder: 'Ex: João Silva',           type: 'text' },
-                        { key: 'telefone',       label: 'Telefone / WhatsApp *',        placeholder: '(11) 99999-9999',          type: 'tel'  },
-                        { key: 'representacoes', label: 'Marcas / Representações',      placeholder: 'Ex: 3M, SunTek, Llumar',   type: 'text' },
-                        { key: 'email',          label: 'E-mail',                       placeholder: 'contato@empresa.com',      type: 'email'},
+                        { key: 'empresa', label: 'Empresa *', placeholder: 'Nome da empresa', type: 'text' },
+                        { key: 'contato', label: 'Nome do Contato *', placeholder: 'Ex: João Silva', type: 'text' },
+                        { key: 'telefone', label: 'Telefone / WhatsApp *', placeholder: '(11) 99999-9999', type: 'tel' },
+                        { key: 'representacoes', label: 'Marcas / Representações', placeholder: 'Ex: 3M, SunTek, Llumar', type: 'text' },
+                        { key: 'email', label: 'E-mail', placeholder: 'contato@empresa.com', type: 'email' },
+                        { key: 'endereco', label: 'Endereço', placeholder: 'Rua, Número, Bairro, Cidade', type: 'text' },
                     ].map(({ key, label, placeholder, type }) => (
                         <div key={key}>
                             <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">{label}</label>
