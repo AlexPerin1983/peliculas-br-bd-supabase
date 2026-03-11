@@ -1,3 +1,14 @@
+export interface Fornecedor {
+    id: string;
+    empresa: string;
+    contato: string;
+    telefone: string;
+    representacoes?: string;
+    email?: string;
+    observacao?: string;
+    criadoEm: string;
+}
+
 export interface Client {
     id?: number;
     nome: string;

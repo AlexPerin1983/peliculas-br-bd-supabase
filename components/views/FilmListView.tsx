@@ -226,51 +226,40 @@ const FilmListView: React.FC<FilmListViewProps> = ({ films, onAdd, onEdit, onDel
     };
 
     return (
-        <div className="space-y-6 min-h-screen mesh-gradient -m-4 p-4 lg:-m-6 lg:p-6 transition-colors duration-500">
-            {/* Header Unificado Premium */}
-            <div className="bg-white dark:bg-slate-800/50 p-6 rounded-3xl border border-slate-200/60 dark:border-slate-700/50 shadow-sm backdrop-blur-md">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-                    <div>
-                        <h2 className="text-2xl font-black text-slate-800 dark:text-slate-100 tracking-tight">Minhas Películas</h2>
-                        <p className="text-sm text-slate-500 dark:text-slate-400">Gerencie seu catálogo de produtos e dados técnicos</p>
+        <div className="space-y-6">
+            {/* Busca + Adicionar */}
+            <div className="flex gap-3 items-center">
+                <div className="relative flex-grow">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <i className="fas fa-search text-slate-400 text-lg"></i>
                     </div>
-
-                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
-                        {films.length > 0 && (
-                            <div className="relative group/search">
-                                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                                    <i className="fas fa-search text-slate-400 group-focus-within/search:text-blue-500 transition-colors"></i>
-                                </div>
-                                <input
-                                    type="text"
-                                    placeholder="Buscar película..."
-                                    className="w-full sm:w-64 pl-11 pr-10 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none text-sm font-medium"
-                                    value={searchTerm}
-                                    onChange={(e) => {
-                                        setSearchTerm(e.target.value);
-                                        setVisibleCount(10);
-                                    }}
-                                />
-                                {searchTerm && (
-                                    <button
-                                        onClick={() => setSearchTerm('')}
-                                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-red-500 transition-colors"
-                                    >
-                                        <i className="fas fa-times-circle"></i>
-                                    </button>
-                                )}
-                            </div>
-                        )}
-
+                    <input
+                        type="text"
+                        placeholder="Buscar película..."
+                        className="w-full pl-12 pr-10 py-4 rounded-xl border-none bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50 focus:ring-2 focus:ring-slate-500 transition-all text-base"
+                        value={searchTerm}
+                        onChange={(e) => {
+                            setSearchTerm(e.target.value);
+                            setVisibleCount(10);
+                        }}
+                    />
+                    {searchTerm && (
                         <button
-                            onClick={onAdd}
-                            className="bg-slate-900 dark:bg-blue-600 hover:bg-slate-800 dark:hover:bg-blue-700 text-white px-6 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-slate-900/10 dark:shadow-blue-900/20 transition-all hover:-translate-y-0.5 active:scale-95"
+                            onClick={() => setSearchTerm('')}
+                            className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
                         >
-                            <i className="fas fa-plus-circle"></i>
-                            <span>Nova Película</span>
+                            <i className="fas fa-times-circle text-lg"></i>
                         </button>
-                    </div>
+                    )}
                 </div>
+                <button
+                    onClick={onAdd}
+                    className="flex-shrink-0 h-14 px-5 bg-slate-900 dark:bg-blue-600 hover:bg-slate-700 dark:hover:bg-blue-700 text-white rounded-xl font-bold flex items-center gap-2 shadow-lg transition-all active:scale-95"
+                    title="Nova Película"
+                >
+                    <i className="fas fa-plus text-base"></i>
+                    <span className="hidden sm:inline text-sm">Nova Película</span>
+                </button>
             </div>
 
             {displayedFilms.length > 0 ? (

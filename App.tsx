@@ -60,11 +60,13 @@ import PdfHistoryView from './components/views/PdfHistoryView';
 import FilmListView from './components/views/FilmListView';
 import AgendaView from './components/views/AgendaView';
 import EstoqueView from './components/views/EstoqueView';
+import FornecedoresView from './components/views/FornecedoresView';
+import { getFornecedores } from './services/fornecedorService';
 import DesktopSidebar from './components/layout/DesktopSidebar';
 
 
 type UIMeasurement = Measurement & { isNew?: boolean };
-type ActiveTab = 'client' | 'films' | 'settings' | 'history' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code';
+type ActiveTab = 'client' | 'films' | 'settings' | 'history' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores';
 
 type NumpadConfig = {
     isOpen: boolean;
@@ -116,9 +118,10 @@ const App: React.FC = () => {
     const [films, setFilms] = useState<Film[]>([]);
     const [allSavedPdfs, setAllSavedPdfs] = useState<SavedPDF[]>([]);
     const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
+    const [fornecedores, setFornecedores] = useState(() => getFornecedores());
     const [activeTab, setActiveTab] = useState<ActiveTab>(() => {
         const saved = localStorage.getItem('peliculas-br-active-tab');
-        if (saved && ['client', 'films', 'settings', 'history', 'agenda', 'sales', 'admin', 'account', 'estoque'].includes(saved)) {
+        if (saved && ['client', 'films', 'settings', 'history', 'agenda', 'sales', 'admin', 'account', 'estoque', 'fornecedores'].includes(saved)) {
             return saved as ActiveTab;
         }
         return 'client';
@@ -2699,6 +2702,15 @@ Se não conseguir extrair, retorne: []`;
             );
         }
 
+        if (activeTab === 'fornecedores') {
+            return (
+                <FornecedoresView
+                    fornecedores={fornecedores}
+                    onUpdate={setFornecedores}
+                />
+            );
+        }
+
         if (clients.length === 0) {
             return (
                 <div className="text-center p-8 flex flex-col items-center justify-center h-full min-h-[300px] bg-slate-50 dark:bg-slate-900 rounded-lg border-2 border-dashed border-slate-200 dark:border-slate-700">
@@ -2934,10 +2946,10 @@ Se não conseguir extrair, retorne: []`;
                 <div className="flex-grow flex flex-col min-w-0 h-full overflow-hidden">
                     <UpdateBanner />
 
-                    <main ref={mainRef} className="flex-grow overflow-y-auto pb-32 lg:pb-0 sm:pb-0 transition-colors duration-500">
-                        <div className="sticky top-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md z-40 border-b border-slate-200/50 dark:border-slate-800/50">
+                    <main ref={mainRef} className="flex-grow overflow-y-auto pb-32 lg:pb-0 sm:pb-0 transition-colors duration-500 bg-slate-50 dark:bg-slate-950">
+                        <div className="sticky top-0 bg-slate-50/90 dark:bg-slate-950/90 backdrop-blur-md z-40 border-b border-slate-200/60 dark:border-slate-800/60">
                             <div className="container mx-auto px-4 w-full max-w-2xl lg:max-w-5xl">
-                                <div className="py-2 sm:py-3">
+                                <div className="py-2 sm:py-3 lg:py-4">
                                     <Header
                                         activeTab={activeTab}
                                         onTabChange={handleTabChange}
@@ -2946,8 +2958,8 @@ Se não conseguir extrair, retorne: []`;
                             </div>
                         </div>
 
-                        <div className="container mx-auto px-0.5 sm:px-4 py-4 sm:py-8 w-full max-w-2xl lg:max-w-5xl">
-                            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-4 sm:p-6">
+                        <div className="container mx-auto px-2 sm:px-4 lg:px-6 py-4 sm:py-6 w-full max-w-2xl lg:max-w-5xl">
+                            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200/60 dark:border-slate-800/60 p-4 sm:p-6">
                                 {deferredPrompt && !isInstalled && (
                                     <div className="mb-4 p-3 bg-blue-100 border border-blue-200 rounded-lg flex justify-between items-center">
                                         <p className="text-sm text-blue-800 font-medium">Instale o app para usar offline!</p>
