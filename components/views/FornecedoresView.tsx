@@ -227,6 +227,197 @@ const FornecedorCard: React.FC<{
     );
 };
 
+const FornecedorListItem: React.FC<{
+    fornecedor: Fornecedor;
+    onEdit: (fornecedor: Fornecedor) => void;
+    onDelete: (id: string) => void;
+    onWhatsAppClick: (fornecedor: Fornecedor) => void;
+}> = ({ fornecedor, onEdit, onDelete, onWhatsAppClick }) => {
+    const initials = fornecedor.empresa.slice(0, 2).toUpperCase();
+    const tags = fornecedor.representacoes
+        ?.split(',')
+        .map(item => item.trim())
+        .filter(Boolean)
+        .slice(0, 3) || [];
+    const hasAddress = Boolean(fornecedor.endereco);
+    const hasEmail = Boolean(fornecedor.email);
+    const [showActions, setShowActions] = useState(false);
+
+    return (
+        <div className="rounded-2xl border border-slate-200/70 bg-white p-3 shadow-sm transition-all hover:shadow-md dark:border-slate-700/60 dark:bg-slate-800/90 sm:p-4">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                <div className="grid min-w-0 flex-1 grid-cols-[48px_minmax(0,1fr)_40px] items-start gap-x-3 gap-y-2 sm:flex sm:items-start sm:gap-3">
+                    <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-blue-600 text-sm font-bold text-white shadow-md shadow-blue-900/20">
+                        {initials}
+                    </div>
+
+                    <div className="col-start-2 min-w-0 sm:flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="truncate text-base font-black uppercase tracking-tight text-slate-800 dark:text-slate-100 sm:text-lg">
+                                {fornecedor.empresa}
+                            </h3>
+                            {tags.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5">
+                                    {tags.map(item => (
+                                        <span
+                                            key={item}
+                                            className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold uppercase text-blue-600 dark:bg-blue-900/30 dark:text-blue-300"
+                                        >
+                                            {item}
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-500 dark:text-slate-400">
+                            <span className="truncate">{fornecedor.contato}</span>
+                            {fornecedor.email && (
+                                <a
+                                    href={`mailto:${fornecedor.email}`}
+                                    className="hidden truncate hover:text-blue-600 dark:hover:text-blue-400 sm:inline"
+                                >
+                                    {fornecedor.email}
+                                </a>
+                            )}
+                        </div>
+
+                        {fornecedor.endereco && (
+                            <p className="mt-1 truncate text-sm text-slate-600 dark:text-slate-300">
+                                {fornecedor.endereco}
+                            </p>
+                        )}
+                    </div>
+
+                    <div className="relative col-start-3 row-span-2 flex shrink-0 flex-col items-center gap-2 sm:hidden">
+                        <button
+                            type="button"
+                            onClick={() => setShowActions(previous => !previous)}
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 text-slate-500 transition-colors hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600"
+                            title="Mais ações"
+                        >
+                            <i className="fas fa-ellipsis-v text-[11px]"></i>
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() => onWhatsAppClick(fornecedor)}
+                            className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500 text-white shadow-sm shadow-emerald-900/20 transition-colors hover:bg-emerald-600"
+                            title={`Falar com ${fornecedor.empresa} no WhatsApp`}
+                        >
+                            <i className="fab fa-whatsapp text-base"></i>
+                        </button>
+
+                        {showActions && (
+                            <div className="absolute right-0 top-10 z-10 mt-2 flex min-w-[160px] flex-col rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl dark:border-slate-700 dark:bg-slate-800">
+                                {fornecedor.endereco && (
+                                    <a
+                                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fornecedor.endereco)}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-600 transition-colors hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-700"
+                                        onClick={() => setShowActions(false)}
+                                    >
+                                        <i className="fas fa-map-marker-alt text-[11px]"></i>
+                                        Abrir no Maps
+                                    </a>
+                                )}
+                                {fornecedor.email && (
+                                    <a
+                                        href={`mailto:${fornecedor.email}`}
+                                        className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-600 transition-colors hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-700"
+                                        onClick={() => setShowActions(false)}
+                                    >
+                                        <i className="fas fa-envelope text-[11px]"></i>
+                                        Enviar e-mail
+                                    </a>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setShowActions(false);
+                                        onEdit(fornecedor);
+                                    }}
+                                    className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-600 transition-colors hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-700"
+                                >
+                                    <i className="fas fa-pen text-[11px]"></i>
+                                    Editar
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setShowActions(false);
+                                        onDelete(fornecedor.id);
+                                    }}
+                                    className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
+                                >
+                                    <i className="fas fa-trash-alt text-[11px]"></i>
+                                    Excluir
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                <div className="hidden items-center justify-between gap-3 border-t border-slate-100 pt-3 dark:border-slate-700/60 sm:flex xl:min-w-[280px] xl:justify-end xl:border-t-0 xl:pt-0">
+                    <div className="hidden min-w-0 items-center gap-2 text-xs text-slate-400 dark:text-slate-500 sm:flex">
+                        {hasAddress && (
+                            <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-700">
+                                <i className="fas fa-map-marker-alt text-[11px]"></i>
+                            </span>
+                        )}
+                        {hasEmail && (
+                            <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-700">
+                                <i className="fas fa-envelope text-[11px]"></i>
+                            </span>
+                        )}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={() => onWhatsAppClick(fornecedor)}
+                            className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500 text-white shadow-sm shadow-emerald-900/20 transition-colors hover:bg-emerald-600 sm:h-9 sm:w-auto sm:px-3 sm:gap-2"
+                            title={`Falar com ${fornecedor.empresa} no WhatsApp`}
+                        >
+                            <i className="fab fa-whatsapp text-base sm:text-sm"></i>
+                            <span className="hidden text-sm font-bold sm:inline">{formatPhone(fornecedor.telefone)}</span>
+                        </button>
+
+                        {fornecedor.endereco && (
+                            <a
+                                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fornecedor.endereco)}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="hidden h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-500 transition-colors hover:bg-blue-600 hover:text-white dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-blue-600 sm:inline-flex sm:h-9 sm:w-9 sm:rounded-lg"
+                                title="Abrir no Maps"
+                            >
+                                <i className="fas fa-map-marker-alt text-[11px]"></i>
+                            </a>
+                        )}
+                        <button
+                            type="button"
+                            onClick={() => onEdit(fornecedor)}
+                            className="hidden h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-600 transition-colors hover:bg-blue-600 hover:text-white dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-blue-600 sm:inline-flex sm:h-9 sm:w-9 sm:rounded-lg"
+                            title="Editar"
+                        >
+                            <i className="fas fa-pen text-[10px]"></i>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => onDelete(fornecedor.id)}
+                            className="hidden h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-500 transition-colors hover:bg-red-600 hover:text-white dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-red-600 sm:inline-flex sm:h-9 sm:w-9 sm:rounded-lg"
+                            title="Excluir"
+                        >
+                            <i className="fas fa-trash-alt text-[11px]"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const WhatsAppChooserModal: React.FC<{
     fornecedor: Fornecedor | null;
     onClose: () => void;
@@ -549,6 +740,72 @@ const FornecedorStyledModal: React.FC<{
     );
 };
 
+const FornecedoresToolbar: React.FC<{
+    search: string;
+    viewType: 'grid' | 'table';
+    onSearchChange: (value: string) => void;
+    onClearSearch: () => void;
+    onCreate: () => void;
+    onChangeView: (view: 'grid' | 'table') => void;
+}> = ({ search, viewType, onSearchChange, onClearSearch, onCreate, onChangeView }) => {
+    return (
+        <div className="space-y-3 sm:space-y-0 sm:flex sm:items-center sm:gap-3">
+            <div className="relative w-full sm:flex-grow">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <i className="fas fa-search text-slate-400 text-lg"></i>
+                </div>
+                <input
+                    type="text"
+                    placeholder="Buscar por empresa, contato ou marca..."
+                    className="w-full pl-12 pr-10 py-4 rounded-xl border-none bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50 focus:ring-2 focus:ring-slate-500 transition-all text-base"
+                    value={search}
+                    onChange={(event) => onSearchChange(event.target.value)}
+                />
+                {search && (
+                    <button
+                        type="button"
+                        onClick={onClearSearch}
+                        className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                    >
+                        <i className="fas fa-times-circle text-lg"></i>
+                    </button>
+                )}
+            </div>
+
+            <div className="flex items-center gap-3 sm:flex-shrink-0">
+                <button
+                    type="button"
+                    onClick={onCreate}
+                    className="h-14 flex-1 sm:flex-none sm:px-5 bg-slate-900 dark:bg-blue-600 hover:bg-slate-700 dark:hover:bg-blue-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95"
+                    title="Novo Fornecedor"
+                >
+                    <i className="fas fa-plus text-base"></i>
+                    <span className="text-sm sm:inline">Novo Fornecedor</span>
+                </button>
+
+                <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl shadow-sm flex-shrink-0">
+                    <button
+                        type="button"
+                        className={`h-12 w-12 rounded-lg flex items-center justify-center transition-all ${viewType === 'grid' ? 'bg-white dark:bg-slate-700 shadow-sm text-emerald-600' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
+                        onClick={() => onChangeView('grid')}
+                        title="Visualização em grade"
+                    >
+                        <i className="fas fa-th-large"></i>
+                    </button>
+                    <button
+                        type="button"
+                        className={`h-12 w-12 rounded-lg flex items-center justify-center transition-all ${viewType === 'table' ? 'bg-white dark:bg-slate-700 shadow-sm text-emerald-600' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
+                        onClick={() => onChangeView('table')}
+                        title="Visualização em lista"
+                    >
+                        <i className="fas fa-list"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const FornecedoresView: React.FC = () => {
     const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
     const [loading, setLoading] = useState(true);
@@ -628,6 +885,18 @@ const FornecedoresView: React.FC = () => {
 
     return (
         <div className="space-y-6">
+            <FornecedoresToolbar
+                search={search}
+                viewType={viewType}
+                onSearchChange={setSearch}
+                onClearSearch={() => setSearch('')}
+                onCreate={() => {
+                    setSelectedF(null);
+                    setShowModal(true);
+                }}
+                onChangeView={setViewType}
+            />
+            {false && (
             <div className="space-y-3 sm:space-y-0 sm:flex sm:items-center sm:gap-3">
                 <div className="relative w-full sm:flex-grow">
                     <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
@@ -682,6 +951,8 @@ const FornecedoresView: React.FC = () => {
                 </div>
             </div>
 
+            )}
+
             {loading ? (
                 <div className="text-center p-8 flex flex-col items-center justify-center min-h-[350px]">
                     <div className="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-2xl flex items-center justify-center mb-6 shadow-sm">
@@ -693,21 +964,38 @@ const FornecedoresView: React.FC = () => {
                     </p>
                 </div>
             ) : filtered.length > 0 ? (
-                <div className={`grid gap-6 ${viewType === 'grid' ? 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3' : 'grid-cols-1'}`}>
-                    {filtered.map((fornecedor, index) => (
-                        <FornecedorCard
-                            key={fornecedor.id}
-                            fornecedor={fornecedor}
-                            index={index}
-                            onEdit={(item) => {
-                                setSelectedF(item);
-                                setShowModal(true);
-                            }}
-                            onDelete={handleRequestDelete}
-                            onWhatsAppClick={setFornecedorForWhatsApp}
-                        />
-                    ))}
-                </div>
+                viewType === 'grid' ? (
+                    <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+                        {filtered.map((fornecedor, index) => (
+                            <FornecedorCard
+                                key={fornecedor.id}
+                                fornecedor={fornecedor}
+                                index={index}
+                                onEdit={(item) => {
+                                    setSelectedF(item);
+                                    setShowModal(true);
+                                }}
+                                onDelete={handleRequestDelete}
+                                onWhatsAppClick={setFornecedorForWhatsApp}
+                            />
+                        ))}
+                    </div>
+                ) : (
+                    <div className="space-y-4">
+                        {filtered.map(fornecedor => (
+                            <FornecedorListItem
+                                key={fornecedor.id}
+                                fornecedor={fornecedor}
+                                onEdit={(item) => {
+                                    setSelectedF(item);
+                                    setShowModal(true);
+                                }}
+                                onDelete={handleRequestDelete}
+                                onWhatsAppClick={setFornecedorForWhatsApp}
+                            />
+                        ))}
+                    </div>
+                )
             ) : search.trim() ? (
                 <div className="text-center py-12">
                     <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 mb-4">
