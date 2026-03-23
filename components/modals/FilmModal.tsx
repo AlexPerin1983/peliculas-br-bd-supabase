@@ -198,6 +198,7 @@ const FilmModal: React.FC<FilmModalProps> = ({ isOpen, onClose, onSave, onDelete
     };
 
     const handleDelete = () => {
+        if (isSaving) return;
         if (film) {
             onDelete(film.nome);
             onClose();
@@ -209,13 +210,14 @@ const FilmModal: React.FC<FilmModalProps> = ({ isOpen, onClose, onSave, onDelete
             {film && (
                 <button
                     onClick={handleDelete}
-                    className="px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-md hover:bg-red-700"
+                    disabled={isSaving}
+                    className="px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                     Excluir
                 </button>
             )}
             <div className="flex-grow"></div>
-            <button onClick={onClose} className="px-4 py-2 text-sm font-semibold rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 dark:text-slate-300">
+            <button onClick={onClose} disabled={isSaving} className="px-4 py-2 text-sm font-semibold rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 dark:text-slate-300 disabled:opacity-50 disabled:cursor-not-allowed">
                 Cancelar
             </button>
             <button
@@ -261,7 +263,7 @@ const FilmModal: React.FC<FilmModalProps> = ({ isOpen, onClose, onSave, onDelete
     );
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title={modalTitle} footer={footer}>
+        <Modal isOpen={isOpen} onClose={isSaving ? () => {} : onClose} title={modalTitle} footer={footer} disableClose={isSaving}>
             <form id="filmForm" onSubmit={handleSubmit} className="space-y-4">
                 <fieldset disabled={isSaving} className="space-y-4">
                     <div className="p-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg space-y-4">

@@ -10,6 +10,8 @@ interface ConfirmationModalProps {
     confirmButtonText?: string;
     cancelButtonText?: string;
     confirmButtonVariant?: 'danger' | 'primary';
+    isProcessing?: boolean;
+    processingText?: string;
 }
 
 const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
@@ -20,7 +22,9 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
     message,
     confirmButtonText = 'Confirmar',
     cancelButtonText = 'Cancelar',
-    confirmButtonVariant = 'primary'
+    confirmButtonVariant = 'primary',
+    isProcessing = false,
+    processingText = 'Processando...'
 }) => {
     
     const confirmButtonClasses = {
@@ -32,15 +36,18 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
         <>
             <button
                 onClick={onClose}
-                className="px-4 py-2 text-sm font-semibold rounded-md hover:bg-slate-100 transition-colors"
+                disabled={isProcessing}
+                className="px-4 py-2 text-sm font-semibold rounded-md hover:bg-slate-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
                 {cancelButtonText}
             </button>
             <button
                 onClick={onConfirm}
-                className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors ${confirmButtonClasses[confirmButtonVariant]}`}
+                disabled={isProcessing}
+                className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors min-w-[132px] inline-flex items-center justify-center gap-2 disabled:opacity-80 disabled:cursor-not-allowed ${confirmButtonClasses[confirmButtonVariant]}`}
             >
-                {confirmButtonText}
+                {isProcessing && <i className="fas fa-spinner fa-spin" aria-hidden="true"></i>}
+                <span>{isProcessing ? processingText : confirmButtonText}</span>
             </button>
         </>
     );
@@ -48,9 +55,10 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
     return (
         <Modal
             isOpen={isOpen}
-            onClose={onClose}
+            onClose={isProcessing ? () => {} : onClose}
             title={title}
             footer={footer}
+            disableClose={isProcessing}
         >
             <div className="text-slate-600">
                 {message}

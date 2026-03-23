@@ -47,6 +47,8 @@ describe('useClientFlow', () => {
       useClientFlow({
         clients,
         setClients: vi.fn(),
+        setAllSavedPdfs: vi.fn(),
+        setAgendamentos: vi.fn(),
         selectedClientId: 1,
         setSelectedClientId: vi.fn(),
         setActiveTab: vi.fn(),

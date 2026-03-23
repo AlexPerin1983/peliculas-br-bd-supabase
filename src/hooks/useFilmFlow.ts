@@ -4,10 +4,12 @@ import { Film, Measurement } from '../../types';
 
 interface UseFilmFlowParams {
     films: Film[];
+    setFilms: Dispatch<SetStateAction<Film[]>>;
     measurements: Measurement[];
     editingMeasurementIdForFilm: number | null;
     editingMeasurement: Measurement | null;
     filmToDeleteName: string | null;
+    setIsDeletingFilm: Dispatch<SetStateAction<boolean>>;
     setEditingFilm: Dispatch<SetStateAction<Film | null>>;
     setIsFilmModalOpen: Dispatch<SetStateAction<boolean>>;
     setIsFilmSelectionModalOpen: Dispatch<SetStateAction<boolean>>;
@@ -19,10 +21,12 @@ interface UseFilmFlowParams {
     setEditingMeasurement: Dispatch<SetStateAction<Measurement | null>>;
     loadFilms: () => Promise<void>;
     handleMeasurementsChange: (measurements: Measurement[]) => void;
+    handleShowInfo: (message: string, title?: string) => void;
 }
 
 export function useFilmFlow({
     films,
+    setFilms,
     measurements,
     editingMeasurementIdForFilm,
     editingMeasurement,
@@ -36,8 +40,10 @@ export function useFilmFlow({
     setFilmToApplyToAll,
     setNewFilmName,
     setEditingMeasurement,
+    setIsDeletingFilm,
     loadFilms,
-    handleMeasurementsChange
+    handleMeasurementsChange,
+    handleShowInfo
 }: UseFilmFlowParams) {
     const handleOpenFilmModal = useCallback((film: Film | null) => {
         setEditingFilm(film);
@@ -112,10 +118,20 @@ export function useFilmFlow({
     const handleConfirmDeleteFilm = useCallback(async () => {
         if (filmToDeleteName === null) return;
 
-        await db.deleteCustomFilm(filmToDeleteName);
-        await loadFilms();
-        setFilmToDeleteName(null);
-    }, [filmToDeleteName, loadFilms, setFilmToDeleteName]);
+        setIsDeletingFilm(true);
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+
+        try {
+            await db.deleteCustomFilm(filmToDeleteName);
+            setFilms(previous => previous.filter(film => film.nome !== filmToDeleteName));
+            setFilmToDeleteName(null);
+        } catch (error) {
+            console.error('Erro ao excluir película:', error);
+            handleShowInfo('Não foi possível excluir a película. Tente novamente.');
+        } finally {
+            setIsDeletingFilm(false);
+        }
+    }, [filmToDeleteName, setFilms, setFilmToDeleteName, setIsDeletingFilm, handleShowInfo]);
 
     const handleSelectFilmForMeasurement = useCallback((filmName: string) => {
         if (editingMeasurementIdForFilm === null) return;

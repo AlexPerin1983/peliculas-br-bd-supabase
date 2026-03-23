@@ -82,21 +82,25 @@ interface ModalsContainerProps {
     filmToDeleteName: string | null;
     setFilmToDeleteName: (value: string | null) => void;
     handleConfirmDeleteFilm: () => void;
+    isDeletingFilm: boolean;
 
     // Delete Client Modal
     isDeleteClientModalOpen: boolean;
     setIsDeleteClientModalOpen: (value: boolean) => void;
     handleConfirmDeleteClient: () => void;
+    isDeletingClient: boolean;
 
     // Delete PDF Modal
     pdfToDeleteId: number | null;
     setPdfToDeleteId: (value: number | null) => void;
     handleConfirmDeletePdf: () => void;
+    isDeletingPdf: boolean;
 
     // Delete Agendamento Modal
     agendamentoToDelete: Agendamento | null;
     setAgendamentoToDelete: (value: Agendamento | null) => void;
     handleConfirmDeleteAgendamento: () => void;
+    isDeletingAgendamento: boolean;
 
     // Exit Confirm Modal
     isExitConfirmModalOpen: boolean;
@@ -182,12 +186,14 @@ interface ModalsContainerProps {
     setMeasurementToDeleteId: (value: number | null) => void;
     handleConfirmDeleteIndividualMeasurement: () => void;
     measurementToDelete: UIMeasurement | null;
+    isDeletingMeasurement: boolean;
 
     // Delete Proposal Option Modal
     isDeleteProposalOptionModalOpen: boolean;
     setIsDeleteProposalOptionModalOpen: (value: boolean) => void;
     handleConfirmDeleteProposalOption: () => void;
     proposalOptionToDeleteName: string | null;
+    isDeletingProposalOption: boolean;
 }
 
 export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
@@ -291,6 +297,8 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
                     message={`Tem certeza que deseja excluir a película "${props.filmToDeleteName}"? Esta ação não pode ser desfeita.`}
                     confirmButtonText="Sim, Excluir"
                     confirmButtonVariant="danger"
+                    isProcessing={props.isDeletingFilm}
+                    processingText="Excluindo..."
                 />
             )}
 
@@ -389,6 +397,8 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
                     }
                     confirmButtonText="Sim, Excluir Cliente"
                     confirmButtonVariant="danger"
+                    isProcessing={props.isDeletingClient}
+                    processingText="Excluindo..."
                 />
             )}
 
@@ -402,6 +412,8 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
                     message="Tem certeza que deseja apagar este orçamento do histórico? Esta ação não pode ser desfeita."
                     confirmButtonText="Sim, Excluir"
                     confirmButtonVariant="danger"
+                    isProcessing={props.isDeletingPdf}
+                    processingText="Excluindo..."
                 />
             )}
 
@@ -419,6 +431,8 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
                     }
                     confirmButtonText="Sim, Excluir Agendamento"
                     confirmButtonVariant="danger"
+                    isProcessing={props.isDeletingAgendamento}
+                    processingText="Excluindo..."
                 />
             )}
 
@@ -555,6 +569,8 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
                     message={`Tem certeza que deseja excluir a medida "${props.measurementToDelete.local}"? Esta ação não pode ser desfeita.`}
                     confirmButtonText="Sim, Excluir Medida"
                     confirmButtonVariant="danger"
+                    isProcessing={props.isDeletingMeasurement}
+                    processingText="Excluindo..."
                 />
             )}
             {/* Delete Proposal Option Confirmation Modal */}
@@ -567,6 +583,8 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
                     message={`Tem certeza que deseja excluir a opção "${props.proposalOptionToDeleteName || ''}"? Esta ação não pode ser desfeita.`}
                     confirmButtonText="Sim, Excluir Opção"
                     confirmButtonVariant="danger"
+                    isProcessing={props.isDeletingProposalOption}
+                    processingText="Excluindo..."
                 />
             )}
         </>

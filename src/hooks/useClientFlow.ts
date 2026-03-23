@@ -1,12 +1,14 @@
 import { Dispatch, SetStateAction, useCallback, useEffect, useMemo } from 'react';
 import * as db from '../../services/db';
-import { Client, SchedulingInfo, UserInfo } from '../../types';
+import { Agendamento, Client, SavedPDF, SchedulingInfo, UserInfo } from '../../types';
 
 type SetActiveTab = Dispatch<SetStateAction<'client' | 'films' | 'settings' | 'history' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores'>>;
 
 interface UseClientFlowParams {
     clients: Client[];
     setClients: Dispatch<SetStateAction<Client[]>>;
+    setAllSavedPdfs: Dispatch<SetStateAction<SavedPDF[]>>;
+    setAgendamentos: Dispatch<SetStateAction<Agendamento[]>>;
     selectedClientId: number | null;
     setSelectedClientId: Dispatch<SetStateAction<number | null>>;
     setActiveTab: SetActiveTab;
@@ -21,17 +23,21 @@ interface UseClientFlowParams {
     setNewClientName: Dispatch<SetStateAction<string>>;
     setAiClientData: Dispatch<SetStateAction<Partial<Client> | undefined>>;
     setIsDeleteClientModalOpen: Dispatch<SetStateAction<boolean>>;
+    setIsDeletingClient: Dispatch<SetStateAction<boolean>>;
     loadClients: (clientIdToSelect?: number, shouldReorder?: boolean) => Promise<void>;
     loadAllPdfs: () => Promise<void>;
     loadAgendamentos: () => Promise<void>;
     hasLoadedHistory: boolean;
     hasLoadedAgendamentos: boolean;
     handleOpenAgendamentoModal: (info: SchedulingInfo) => void;
+    handleShowInfo: (message: string, title?: string) => void;
 }
 
 export function useClientFlow({
     clients,
     setClients,
+    setAllSavedPdfs,
+    setAgendamentos,
     selectedClientId,
     setSelectedClientId,
     setActiveTab,
@@ -46,12 +52,14 @@ export function useClientFlow({
     setNewClientName,
     setAiClientData,
     setIsDeleteClientModalOpen,
+    setIsDeletingClient,
     loadClients,
     loadAllPdfs,
     loadAgendamentos,
     hasLoadedHistory,
     hasLoadedAgendamentos,
-    handleOpenAgendamentoModal
+    handleOpenAgendamentoModal,
+    handleShowInfo
 }: UseClientFlowParams) {
     useEffect(() => {
         if (selectedClientId !== null && userInfo && userInfo.lastSelectedClientId !== selectedClientId) {
@@ -99,59 +107,67 @@ export function useClientFlow({
         setPostClientSaveAction
     ]);
 
-    const handleConfirmDeleteClient = useCallback(() => {
+    const handleConfirmDeleteClient = useCallback(async () => {
         if (!selectedClientId) return;
 
         const idToDelete = selectedClientId;
-        setIsDeleteClientModalOpen(false);
+        setIsDeletingClient(true);
 
-        setClients(previous => {
-            const updatedClients = previous.filter(client => client.id !== idToDelete);
+        try {
+            await new Promise<void>(resolve => {
+                window.requestAnimationFrame(() => resolve());
+            });
 
-            if (selectedClientId === idToDelete) {
-                if (updatedClients.length > 0) {
-                    setSelectedClientId(updatedClients[0].id!);
-                } else {
-                    setSelectedClientId(null);
+            await db.deleteClient(idToDelete);
+            await db.deleteProposalOptions(idToDelete);
+
+            const pdfsForClient = await db.getPDFsForClient(idToDelete);
+            const pdfIdsToDelete = new Set(
+                pdfsForClient
+                    .map(pdf => pdf.id)
+                    .filter((id): id is number => typeof id === 'number')
+            );
+
+            for (const pdf of pdfsForClient) {
+                if (pdf.id) {
+                    await db.deletePDF(pdf.id);
                 }
             }
 
-            return updatedClients;
-        });
+            setClients(previous => previous.filter(client => client.id !== idToDelete));
+            setSelectedClientId(previous => previous === idToDelete ? null : previous);
+            setAllSavedPdfs(previous => previous.filter(pdf => pdf.clienteId !== idToDelete && (!pdf.id || !pdfIdsToDelete.has(pdf.id))));
+            setAgendamentos(previous => previous.filter(agendamento => agendamento.clienteId !== idToDelete && (!agendamento.pdfId || !pdfIdsToDelete.has(agendamento.pdfId))));
 
-        setTimeout(async () => {
-            try {
-                await db.deleteClient(idToDelete);
-                await db.deleteProposalOptions(idToDelete);
-
-                const pdfsForClient = await db.getPDFsForClient(idToDelete);
-                for (const pdf of pdfsForClient) {
-                    if (pdf.id) {
-                        await db.deletePDF(pdf.id);
-                    }
-                }
-
-                if (hasLoadedHistory) {
-                    loadAllPdfs();
-                }
-                if (hasLoadedAgendamentos) {
-                    loadAgendamentos();
-                }
-            } catch (error) {
-                console.error('Erro ao deletar cliente no background:', error);
-                loadClients();
+            if (hasLoadedHistory) {
+                await loadAllPdfs();
             }
-        }, 50);
+            if (hasLoadedAgendamentos) {
+                await loadAgendamentos();
+            }
+
+            setIsDeleteClientModalOpen(false);
+        } catch (error) {
+            console.error('Erro ao excluir cliente:', error);
+            handleShowInfo('Não foi possível excluir o cliente. Tente novamente.');
+            await loadClients();
+        } finally {
+            setIsDeletingClient(false);
+        }
     }, [
         selectedClientId,
-        setIsDeleteClientModalOpen,
         setClients,
         setSelectedClientId,
+        setAllSavedPdfs,
+        setAgendamentos,
+        setIsDeleteClientModalOpen,
+        setIsDeletingClient,
         hasLoadedHistory,
         hasLoadedAgendamentos,
         loadAllPdfs,
         loadAgendamentos,
-        loadClients
+        loadClients,
+        handleShowInfo
     ]);
 
     const handleToggleClientPin = useCallback(async (clientId: number) => {

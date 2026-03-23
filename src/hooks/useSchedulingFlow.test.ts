@@ -42,6 +42,8 @@ describe('useSchedulingFlow', () => {
       useSchedulingFlow({
         allSavedPdfs: [savedPdf],
         agendamentoToDelete: null,
+        setAgendamentos: vi.fn(),
+        setAllSavedPdfs: vi.fn(),
         setSchedulingInfo: vi.fn(),
         setAgendamentoToDelete: vi.fn(),
         setPdfGenerationStatus: vi.fn(),
@@ -94,8 +96,8 @@ describe('useSchedulingFlow', () => {
   });
 
   it('exclui agendamento e remove vinculo do pdf', async () => {
-    const loadAgendamentos = vi.fn().mockResolvedValue(undefined);
-    const loadAllPdfs = vi.fn().mockResolvedValue(undefined);
+    const setAgendamentos = vi.fn();
+    const setAllSavedPdfs = vi.fn();
     const setAgendamentoToDelete = vi.fn();
 
     mockedDb.getAllPDFs.mockResolvedValue([
@@ -106,8 +108,8 @@ describe('useSchedulingFlow', () => {
 
     const { result } = buildHook({
       agendamentoToDelete: agendamento,
-      loadAgendamentos,
-      loadAllPdfs,
+      setAgendamentos,
+      setAllSavedPdfs,
       setAgendamentoToDelete
     });
 
@@ -117,8 +119,8 @@ describe('useSchedulingFlow', () => {
 
     expect(mockedDb.deleteAgendamento).toHaveBeenCalledWith(50);
     expect(mockedDb.updatePDF).toHaveBeenCalledWith(savedPdf);
-    expect(loadAgendamentos).toHaveBeenCalled();
-    expect(loadAllPdfs).toHaveBeenCalled();
+    expect(setAllSavedPdfs).toHaveBeenCalled();
+    expect(setAgendamentos).toHaveBeenCalled();
     expect(setAgendamentoToDelete).toHaveBeenCalledWith(null);
   });
 
@@ -148,15 +150,17 @@ describe('useSchedulingFlow', () => {
       handleShowInfo
     });
 
-    await act(async () => {
-      await result.current.handleSaveAgendamento({
-        pdfId: 10,
-        clienteId: 1,
-        clienteNome: 'Cliente',
-        start: agendamento.start,
-        end: agendamento.end
-      } as any);
-    });
+    await expect(
+      act(async () => {
+        await result.current.handleSaveAgendamento({
+          pdfId: 10,
+          clienteId: 1,
+          clienteNome: 'Cliente',
+          start: agendamento.start,
+          end: agendamento.end
+        } as any);
+      })
+    ).rejects.toThrow('falha ao salvar');
 
     expect(handleShowInfo).toHaveBeenCalledWith('Nao foi possivel salvar o agendamento. Tente novamente.');
   });

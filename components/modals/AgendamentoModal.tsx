@@ -283,6 +283,7 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
     };
 
     const handleDelete = () => {
+        if (isSaving || isSuggesting) return;
         if (isEditing && agendamento) {
             onDelete(agendamento as Agendamento);
         }
@@ -362,7 +363,8 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                 <button
                     type="button"
                     onClick={handleDelete}
-                    className="px-4 py-2 text-sm font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+                    disabled={isSaving || isSuggesting}
+                    className="px-4 py-2 text-sm font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                     Excluir
                 </button>
@@ -390,7 +392,7 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
     const textareaClassName = `${inputClassName} min-h-[120px] resize-none`;
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title={modalTitle} footer={footerContent}>
+        <Modal isOpen={isOpen} onClose={isSaving ? () => {} : onClose} title={modalTitle} footer={footerContent} disableClose={isSaving}>
             <form id="agendamentoForm" onSubmit={handleSubmit} className="space-y-5">
                 <fieldset disabled={isSaving} className="space-y-5">
                     <div>

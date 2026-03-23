@@ -7,9 +7,10 @@ interface ModalProps {
     children: ReactNode;
     footer?: ReactNode;
     wrapperClassName?: string;
+    disableClose?: boolean;
 }
 
-const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, footer, wrapperClassName }) => {
+const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, footer, wrapperClassName, disableClose = false }) => {
     if (!isOpen) return null;
 
     return (
@@ -17,7 +18,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, footer,
             <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl transform transition-transform duration-300 ease-in-out max-w-lg w-full mx-4 sm:mx-0 scale-100 flex flex-col">
                 <div className="flex justify-between items-center p-4 border-b border-slate-200 dark:border-slate-700">
                     <h2 className="text-xl font-semibold text-slate-800 dark:text-white flex-grow min-w-0">{title}</h2>
-                    <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 focus:outline-none h-8 w-8 rounded-full flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-700 flex-shrink-0 ml-2">
+                    <button onClick={onClose} disabled={disableClose} className="text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 focus:outline-none h-8 w-8 rounded-full flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-700 flex-shrink-0 ml-2 disabled:opacity-50 disabled:cursor-not-allowed">
                         <i className="fas fa-times"></i>
                     </button>
                 </div>

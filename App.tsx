@@ -174,8 +174,11 @@ const App: React.FC = () => {
         }
     }, []);
     const [filmToDeleteName, setFilmToDeleteName] = useState<string | null>(null);
+    const [isDeletingFilm, setIsDeletingFilm] = useState(false);
     const [isDeleteClientModalOpen, setIsDeleteClientModalOpen] = useState(false);
+    const [isDeletingClient, setIsDeletingClient] = useState(false);
     const [pdfToDeleteId, setPdfToDeleteId] = useState<number | null>(null);
+    const [isDeletingPdf, setIsDeletingPdf] = useState(false);
     const [isFilmSelectionModalOpen, setIsFilmSelectionModalOpen] = useState(false);
     const [isApplyFilmToAllModalOpen, setIsApplyFilmToAllModalOpen] = useState(false);
     const [newFilmName, setNewFilmName] = useState<string>('');
@@ -188,6 +191,7 @@ const App: React.FC = () => {
 
     const [schedulingInfo, setSchedulingInfo] = useState<SchedulingInfo | null>(null);
     const [agendamentoToDelete, setAgendamentoToDelete] = useState<Agendamento | null>(null);
+    const [isDeletingAgendamento, setIsDeletingAgendamento] = useState(false);
     const [postClientSaveAction, setPostClientSaveAction] = useState<'openAgendamentoModal' | null>(null);
     const [isAIMeasurementModalOpen, setIsAIMeasurementModalOpen] = useState(false);
     const [isAIClientModalOpen, setIsAIClientModalOpen] = useState(false);
@@ -203,6 +207,7 @@ const App: React.FC = () => {
     const [isServicoQrModalOpen, setIsServicoQrModalOpen] = useState(false);
     const [isDeleteProposalOptionModalOpen, setIsDeleteProposalOptionModalOpen] = useState(false);
     const [proposalOptionToDeleteId, setProposalOptionToDeleteId] = useState<number | null>(null);
+    const [isDeletingProposalOption, setIsDeletingProposalOption] = useState(false);
 
     // Estados para modais de upgrade de módulos premium
     const [showQrUpgradeModal, setShowQrUpgradeModal] = useState(false);
@@ -342,6 +347,7 @@ const App: React.FC = () => {
         handleMeasurementsChange,
         createEmptyMeasurement
     });
+    const [isDeletingMeasurement, setIsDeletingMeasurement] = useState(false);
 
     const handleSwipeDirectionChange = useCallback((direction: 'left' | 'right' | null, distance: number) => {
         setSwipeDirection(direction);
@@ -463,11 +469,18 @@ const App: React.FC = () => {
     }, []);
 
     const handleConfirmDeleteProposalOption = useCallback(() => {
-        if (proposalOptionToDeleteId !== null) {
-            deleteProposalOption(proposalOptionToDeleteId);
-            setIsDeleteProposalOptionModalOpen(false);
-            setProposalOptionToDeleteId(null);
-        }
+        if (proposalOptionToDeleteId === null) return;
+
+        setIsDeletingProposalOption(true);
+        window.requestAnimationFrame(() => {
+            try {
+                deleteProposalOption(proposalOptionToDeleteId);
+                setIsDeleteProposalOptionModalOpen(false);
+                setProposalOptionToDeleteId(null);
+            } finally {
+                setIsDeletingProposalOption(false);
+            }
+        });
     }, [proposalOptionToDeleteId, deleteProposalOption]);
 
     const handleConfirmClearAll = useCallback(() => {
@@ -506,6 +519,8 @@ const App: React.FC = () => {
     } = useSchedulingFlow({
         allSavedPdfs,
         agendamentoToDelete,
+        setAgendamentos,
+        setAllSavedPdfs,
         setSchedulingInfo,
         setAgendamentoToDelete,
         setPdfGenerationStatus,
@@ -514,6 +529,18 @@ const App: React.FC = () => {
         loadAllPdfs,
         handleShowInfo
     });
+
+    const handleConfirmDeleteAgendamentoWithFeedback = useCallback(async () => {
+        setIsDeletingAgendamento(true);
+        try {
+            await new Promise<void>(resolve => {
+                window.requestAnimationFrame(() => resolve());
+            });
+            await handleConfirmDeleteAgendamento();
+        } finally {
+            setIsDeletingAgendamento(false);
+        }
+    }, [handleConfirmDeleteAgendamento]);
 
     const {
         selectedClient,
@@ -526,6 +553,8 @@ const App: React.FC = () => {
     } = useClientFlow({
         clients,
         setClients,
+        setAllSavedPdfs,
+        setAgendamentos,
         selectedClientId,
         setSelectedClientId,
         setActiveTab,
@@ -540,12 +569,14 @@ const App: React.FC = () => {
         setNewClientName,
         setAiClientData,
         setIsDeleteClientModalOpen,
+        setIsDeletingClient,
         loadClients,
         loadAllPdfs,
         loadAgendamentos,
         hasLoadedHistory,
         hasLoadedAgendamentos,
-        handleOpenAgendamentoModal
+        handleOpenAgendamentoModal,
+        handleShowInfo
     });
 
     const handleDeleteClient = useCallback(() => {
@@ -617,10 +648,12 @@ const App: React.FC = () => {
         handleAddNewFilmFromSelection
     } = useFilmFlow({
         films,
+        setFilms,
         measurements,
         editingMeasurementIdForFilm,
         editingMeasurement,
         filmToDeleteName,
+        setIsDeletingFilm,
         setEditingFilm,
         setIsFilmModalOpen,
         setIsFilmSelectionModalOpen,
@@ -631,7 +664,8 @@ const App: React.FC = () => {
         setNewFilmName,
         setEditingMeasurement,
         loadFilms,
-        handleMeasurementsChange
+        handleMeasurementsChange,
+        handleShowInfo
     });
 
     const handleClosePdfStatusModal = useCallback(() => {
@@ -1216,15 +1250,41 @@ const App: React.FC = () => {
         setPdfToDeleteId(pdfId);
     }, []);
 
+    const handleConfirmDeleteMeasurementWithFeedback = useCallback(async () => {
+        setIsDeletingMeasurement(true);
+        try {
+            await new Promise<void>(resolve => {
+                window.requestAnimationFrame(() => resolve());
+            });
+            handleConfirmDeleteIndividualMeasurement();
+        } finally {
+            setIsDeletingMeasurement(false);
+        }
+    }, [handleConfirmDeleteIndividualMeasurement]);
+
     const handleConfirmDeletePdf = useCallback(async () => {
         if (pdfToDeleteId === null) return;
-        await db.deletePDF(pdfToDeleteId);
-        await loadAllPdfs();
-        if (hasLoadedAgendamentos) {
-            await loadAgendamentos();
+        setIsDeletingPdf(true);
+        try {
+            const deletedPdfId = pdfToDeleteId;
+            setAllSavedPdfs((prev: SavedPDF[]) => prev.filter(pdf => pdf.id !== deletedPdfId));
+            await db.deletePDF(deletedPdfId);
+            if (hasLoadedAgendamentos) {
+                setAgendamentos((prev: Agendamento[]) => prev.filter(agendamento => agendamento.pdfId !== deletedPdfId));
+                await loadAgendamentos();
+            }
+            setPdfToDeleteId(null);
+        } catch (error) {
+            console.error('Erro ao excluir orçamento:', error);
+            await loadAllPdfs();
+            if (hasLoadedAgendamentos) {
+                await loadAgendamentos();
+            }
+            handleShowInfo('Não foi possível excluir o orçamento. Tente novamente.');
+        } finally {
+            setIsDeletingPdf(false);
         }
-        setPdfToDeleteId(null);
-    }, [pdfToDeleteId, loadAllPdfs, hasLoadedAgendamentos, loadAgendamentos]);
+    }, [pdfToDeleteId, loadAllPdfs, hasLoadedAgendamentos, loadAgendamentos, handleShowInfo]);
 
     const handleUpdatePdfStatus = useCallback(async (pdfId: number, status: SavedPDF['status']) => {
         // Atualiza estado imediatamente para refletir na UI sem esperar o banco
@@ -1715,18 +1775,22 @@ Se não conseguir extrair, retorne: []`;
         filmToDeleteName,
         setFilmToDeleteName,
         handleConfirmDeleteFilm,
+        isDeletingFilm,
         filmToApplyToAll,
         setFilmToApplyToAll,
 
         isDeleteClientModalOpen,
         setIsDeleteClientModalOpen,
         handleConfirmDeleteClient,
+        isDeletingClient,
         pdfToDeleteId,
         setPdfToDeleteId,
         handleConfirmDeletePdf,
+        isDeletingPdf,
         agendamentoToDelete,
         setAgendamentoToDelete,
-        handleConfirmDeleteAgendamento,
+        handleConfirmDeleteAgendamento: handleConfirmDeleteAgendamentoWithFeedback,
+        isDeletingAgendamento,
         isExitConfirmModalOpen,
         setIsExitConfirmModalOpen,
         pdfGenerationStatus,
@@ -1756,12 +1820,14 @@ Se não conseguir extrair, retorne: []`;
         handleConfirmDuplicateAll,
         measurementToDeleteId,
         setMeasurementToDeleteId,
-        handleConfirmDeleteIndividualMeasurement,
+        handleConfirmDeleteIndividualMeasurement: handleConfirmDeleteMeasurementWithFeedback,
         measurementToDelete,
+        isDeletingMeasurement,
         isDeleteProposalOptionModalOpen,
         setIsDeleteProposalOptionModalOpen,
         handleConfirmDeleteProposalOption,
         proposalOptionToDeleteName: proposalOptions.find(opt => opt.id === proposalOptionToDeleteId)?.name || null,
+        isDeletingProposalOption,
 
         // Discount Modal
         editingMeasurementForDiscount,

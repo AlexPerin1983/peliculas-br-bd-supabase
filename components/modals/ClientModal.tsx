@@ -7,7 +7,7 @@ import Tooltip from '../ui/Tooltip';
 interface ClientModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSave: (client: Omit<Client, 'id'> | Client) => void;
+    onSave: (client: Omit<Client, 'id'> | Client) => Promise<void>;
     mode: 'add' | 'edit';
     client: Client | null;
     initialName?: string;
@@ -72,6 +72,7 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSave, mode
     const [formData, setFormData] = useState<Omit<Client, 'id'>>(initialFormData);
     const [isFetchingCep, setIsFetchingCep] = useState(false);
     const [isSearchingByAddress, setIsSearchingByAddress] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [emailSuggestion, setEmailSuggestion] = useState<string | null>(null);
     const numberInputRef = useRef<HTMLInputElement>(null);
@@ -186,6 +187,7 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSave, mode
 
     useEffect(() => {
         if (isOpen) {
+            setIsSaving(false);
             setError(null);
             setEmailSuggestion(null);
 
@@ -245,10 +247,21 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSave, mode
     const handleDomainTagClick = (domain: string) => { let currentValue = formData.email; const atIndex = currentValue.indexOf('@'); if (atIndex !== -1) { currentValue = currentValue.substring(0, atIndex); } const newValue = `${currentValue}@${domain}`; setFormData(prev => ({ ...prev, email: newValue })); setEmailSuggestion(null); };
     const handleEmailKeyDown = (e: KeyboardEvent<HTMLInputElement>) => { if ((e.key === 'Tab' || e.key === 'Enter') && emailSuggestion) { e.preventDefault(); setFormData(prev => ({ ...prev, email: emailSuggestion })); setEmailSuggestion(null); } };
 
-    const handleSubmit = (e: FormEvent) => {
+    const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
-        onSave(formData);
+        if (isSaving) return;
+
+        setIsSaving(true);
+        setError(null);
+        try {
+            await onSave(formData);
+        } catch (err: any) {
+            setError(err?.message || 'Erro ao salvar cliente. Tente novamente.');
+            setIsSaving(false);
+        }
     };
+
+    const isBusy = isSaving || isFetchingCep || isSearchingByAddress;
 
     const modalTitle = (
         <div className="flex justify-between items-center w-full">
@@ -260,7 +273,8 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSave, mode
                     <button
                         type="button"
                         onClick={(e) => { e.preventDefault(); onOpenAIModal(); }}
-                        className="px-3 py-1.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors flex items-center gap-2 text-sm"
+                        disabled={isBusy}
+                        className="px-3 py-1.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors flex items-center gap-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                         aria-label="Preencher formulário com Inteligência Artificial"
                     >
                         <i className="fas fa-robot"></i>
@@ -275,17 +289,17 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSave, mode
         <button
             type="submit"
             form="clientForm"
-            disabled={isFetchingCep || isSearchingByAddress}
+            disabled={isBusy}
             className="w-full p-3 bg-slate-800 dark:bg-slate-700 text-white rounded-md hover:bg-slate-700 dark:hover:bg-slate-600 transition duration-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 disabled:bg-slate-500 disabled:cursor-wait"
         >
-            {isFetchingCep || isSearchingByAddress ? 'Processando...' : 'Salvar Cliente'}
+            {isSaving ? 'Salvando...' : (isFetchingCep || isSearchingByAddress ? 'Processando...' : 'Salvar Cliente')}
         </button>
     );
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title={modalTitle} footer={footerContent}>
+        <Modal isOpen={isOpen} onClose={isSaving ? () => {} : onClose} title={modalTitle} footer={footerContent} disableClose={isSaving}>
             <form id="clientForm" onSubmit={handleSubmit} className="space-y-4">
-                <fieldset disabled={isFetchingCep || isSearchingByAddress} className="space-y-4">
+                <fieldset disabled={isBusy} className="space-y-4">
                     <Input id="nome" label="Nome do Cliente" type="text" value={formData.nome} onChange={handleChange} required placeholder="Ex: João da Silva" />
                     <Input id="telefone" label="Telefone" type="tel" value={formData.telefone} onChange={handleChange} placeholder="(XX) XXXXX-XXXX" maxLength={15} />
                     <Input

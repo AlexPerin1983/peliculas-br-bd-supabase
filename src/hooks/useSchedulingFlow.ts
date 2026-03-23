@@ -7,6 +7,8 @@ type SetActiveTab = Dispatch<SetStateAction<'client' | 'films' | 'settings' | 'h
 interface UseSchedulingFlowParams {
     allSavedPdfs: SavedPDF[];
     agendamentoToDelete: Agendamento | null;
+    setAgendamentos: Dispatch<SetStateAction<Agendamento[]>>;
+    setAllSavedPdfs: Dispatch<SetStateAction<SavedPDF[]>>;
     setSchedulingInfo: Dispatch<SetStateAction<SchedulingInfo | null>>;
     setAgendamentoToDelete: Dispatch<SetStateAction<Agendamento | null>>;
     setPdfGenerationStatus: Dispatch<SetStateAction<'idle' | 'generating' | 'success'>>;
@@ -19,6 +21,8 @@ interface UseSchedulingFlowParams {
 export function useSchedulingFlow({
     allSavedPdfs,
     agendamentoToDelete,
+    setAgendamentos,
+    setAllSavedPdfs,
     setSchedulingInfo,
     setAgendamentoToDelete,
     setPdfGenerationStatus,
@@ -53,6 +57,7 @@ export function useSchedulingFlow({
         } catch (error) {
             console.error('Erro ao salvar agendamento:', error);
             handleShowInfo('Nao foi possivel salvar o agendamento. Tente novamente.');
+            throw error;
         }
     }, [handleCloseAgendamentoModal, handleShowInfo, loadAgendamentos, loadAllPdfs]);
 
@@ -75,16 +80,18 @@ export function useSchedulingFlow({
                 const updatedPdf = { ...pdfToUnlink };
                 delete updatedPdf.agendamentoId;
                 await db.updatePDF(updatedPdf);
+                setAllSavedPdfs(previous => previous.map(pdf => pdf.id === updatedPdf.id ? updatedPdf : pdf));
             }
 
-            await Promise.all([loadAgendamentos(), loadAllPdfs()]);
+            setAgendamentos(previous => previous.filter(agendamento => agendamento.id !== agendamentoId));
         } catch (error) {
             console.error('Erro ao excluir agendamento:', error);
             handleShowInfo('Nao foi possivel excluir o agendamento. Tente novamente.');
+            await Promise.all([loadAgendamentos(), loadAllPdfs()]);
         } finally {
             setAgendamentoToDelete(null);
         }
-    }, [agendamentoToDelete, handleShowInfo, loadAgendamentos, loadAllPdfs, setAgendamentoToDelete]);
+    }, [agendamentoToDelete, handleShowInfo, loadAgendamentos, loadAllPdfs, setAgendamentoToDelete, setAgendamentos, setAllSavedPdfs]);
 
     const handleCreateNewAgendamento = useCallback((date: Date) => {
         const startDate = new Date(date);

@@ -1,11 +1,13 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Fornecedor } from '../../types';
+import ConfirmationModal from '../modals/ConfirmationModal';
+import Modal from '../ui/Modal';
 import {
-    getFornecedores,
-    saveFornecedor,
-    deleteFornecedor,
     createFornecedor,
-    migrateFromLocalStorage
+    deleteFornecedor,
+    getFornecedores,
+    migrateFromLocalStorage,
+    saveFornecedor
 } from '../../services/fornecedorService';
 
 const EMPTY_FORM = {
@@ -33,135 +35,178 @@ function whatsappUrl(phone: string): string {
 }
 
 const FornecedorCard: React.FC<{
-    f: Fornecedor;
-    onEdit: (f: Fornecedor) => void;
+    fornecedor: Fornecedor;
+    onEdit: (fornecedor: Fornecedor) => void;
     onDelete: (id: string) => void;
-}> = ({ f, onEdit, onDelete }) => {
+    index: number;
+}> = ({ fornecedor, onEdit, onDelete, index }) => {
     const [copied, setCopied] = useState(false);
-    const initials = f.empresa.slice(0, 2).toUpperCase();
+    const initials = fornecedor.empresa.slice(0, 2).toUpperCase();
 
-    const handleCopyAddress = (e: React.MouseEvent) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (f.endereco) {
-            navigator.clipboard.writeText(f.endereco);
-            setCopied(true);
-            setTimeout(() => setCopied(false), 2000);
-        }
+    const handleCopyAddress = (event: React.MouseEvent) => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        if (!fornecedor.endereco) return;
+
+        navigator.clipboard.writeText(fornecedor.endereco);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
     };
 
-    const openMaps = (e: React.MouseEvent) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (f.endereco) {
-            window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(f.endereco)}`, '_blank');
-        }
+    const handleOpenMaps = (event: React.MouseEvent) => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        if (!fornecedor.endereco) return;
+
+        window.open(
+            `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fornecedor.endereco)}`,
+            '_blank'
+        );
     };
 
     return (
-        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/70 dark:border-slate-700/50 shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden">
+        <div
+            className="group relative bg-white dark:bg-slate-800/90 rounded-2xl border border-slate-200/60 dark:border-slate-700/50 shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden"
+            style={{ animationDelay: `${index * 0.08}s` }}
+        >
             <div className="h-1 w-full bg-gradient-to-r from-emerald-500 to-teal-400" />
+
             <div className="p-4">
-                <div className="flex items-start gap-3 mb-3">
+                <div className="flex items-start gap-3 mb-4">
                     <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0 shadow-md shadow-emerald-900/20">
                         {initials}
                     </div>
-                    <div className="flex-grow min-w-0">
-                        <h3 className="font-bold text-slate-900 dark:text-slate-100 text-base leading-tight truncate">
-                            {f.empresa}
+
+                    <div className="flex-1 min-w-0">
+                        <h3 className="text-lg font-black text-slate-800 dark:text-slate-100 tracking-tight uppercase truncate leading-tight">
+                            {fornecedor.empresa}
                         </h3>
                         <p className="text-sm text-slate-500 dark:text-slate-400 truncate mt-0.5">
-                            {f.contato}
+                            {fornecedor.contato}
                         </p>
-                    </div>
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                        <button
-                            onClick={() => onEdit(f)}
-                            className="h-8 w-8 flex items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-blue-600 hover:text-white transition-all"
-                            title="Editar"
-                        >
-                            <i className="fas fa-pen text-xs"></i>
-                        </button>
-                        <button
-                            onClick={() => onDelete(f.id)}
-                            className="h-8 w-8 flex items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-red-600 hover:text-white transition-all"
-                            title="Excluir"
-                        >
-                            <i className="fas fa-trash-alt text-xs"></i>
-                        </button>
+
+                        {fornecedor.representacoes && (
+                            <div className="flex flex-wrap gap-1.5 mt-2">
+                                {fornecedor.representacoes
+                                    .split(',')
+                                    .map(item => item.trim())
+                                    .filter(Boolean)
+                                    .slice(0, 3)
+                                    .map(item => (
+                                        <span
+                                            key={item}
+                                            className="inline-flex items-center px-2 py-0.5 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold rounded-full uppercase"
+                                        >
+                                            {item}
+                                        </span>
+                                    ))}
+                            </div>
+                        )}
                     </div>
                 </div>
 
-                {f.endereco && (
-                    <div className="mb-3 flex items-center gap-2 group">
-                        <div className="flex-grow min-w-0 bg-slate-50 dark:bg-slate-700/40 px-3 py-2 rounded-xl border border-slate-100 dark:border-slate-700/50">
-                            <div className="flex items-center gap-2 mb-0.5">
-                                <i className="fas fa-map-marker-alt text-[10px] text-emerald-500"></i>
-                                <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Endereço</span>
+                <div className="bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-slate-100 dark:border-slate-800/60 p-3 mb-4 min-h-[92px] flex flex-col justify-center">
+                    {fornecedor.endereco ? (
+                        <div className="flex items-start gap-3">
+                            <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <i className="fas fa-map-marker-alt text-[10px] text-emerald-500"></i>
+                                    <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                                        Endereço
+                                    </span>
+                                </div>
+                                <p className="text-sm text-slate-600 dark:text-slate-300 leading-snug line-clamp-2" title={fornecedor.endereco}>
+                                    {fornecedor.endereco}
+                                </p>
                             </div>
-                            <p className="text-xs text-slate-600 dark:text-slate-300 truncate" title={f.endereco}>
-                                {f.endereco}
-                            </p>
-                        </div>
-                        <div className="flex flex-col gap-1">
-                            <button
-                                onClick={openMaps}
-                                className="h-7 w-7 flex items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 hover:bg-blue-600 hover:text-white transition-all"
-                                title="Abrir no Maps"
-                            >
-                                <i className="fas fa-external-link-alt text-[10px]"></i>
-                            </button>
-                            <button
-                                onClick={handleCopyAddress}
-                                className={`h-7 w-7 flex items-center justify-center rounded-lg transition-all ${copied
-                                    ? 'bg-emerald-500 text-white'
-                                    : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-emerald-500 hover:text-white'
+
+                            <div className="flex flex-col gap-1.5 shrink-0">
+                                <button
+                                    onClick={handleOpenMaps}
+                                    className="h-8 w-8 flex items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 hover:bg-blue-600 hover:text-white transition-all"
+                                    title="Abrir no Maps"
+                                >
+                                    <i className="fas fa-external-link-alt text-[10px]"></i>
+                                </button>
+                                <button
+                                    onClick={handleCopyAddress}
+                                    className={`h-8 w-8 flex items-center justify-center rounded-lg transition-all ${
+                                        copied
+                                            ? 'bg-emerald-500 text-white'
+                                            : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-emerald-500 hover:text-white'
                                     }`}
-                                title={copied ? "Copiado!" : "Copiar endereço"}
-                            >
-                                <i className={`fas ${copied ? 'fa-check' : 'fa-copy'} text-[10px]`}></i>
-                            </button>
+                                    title={copied ? 'Copiado!' : 'Copiar endereço'}
+                                >
+                                    <i className={`fas ${copied ? 'fa-check' : 'fa-copy'} text-[10px]`}></i>
+                                </button>
+                            </div>
                         </div>
-                    </div>
-                )}
+                    ) : (
+                        <div className="text-center">
+                            <i className="fas fa-map-marker-alt text-slate-300 dark:text-slate-600 text-xl mb-2"></i>
+                            <p className="text-sm text-slate-400 dark:text-slate-500">Endereço não informado</p>
+                        </div>
+                    )}
+                </div>
 
-                {f.representacoes && (
-                    <div className="mb-3 flex flex-wrap gap-1">
-                        {f.representacoes.split(',').map(r => r.trim()).filter(Boolean).map(r => (
-                            <span key={r} className="inline-flex items-center px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-medium">
-                                {r}
-                            </span>
-                        ))}
-                    </div>
-                )}
-
-                <div className="border-t border-slate-100 dark:border-slate-700/60 pt-3 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2 flex-wrap min-w-0">
-                        {f.email && (
+                <div className="border-t border-slate-100 dark:border-slate-700/50 pt-3 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                        {fornecedor.email && (
                             <a
-                                href={`mailto:${f.email}`}
+                                href={`mailto:${fornecedor.email}`}
                                 className="inline-flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                                title={f.email}
+                                title={fornecedor.email}
                             >
                                 <i className="fas fa-envelope text-[10px]"></i>
-                                <span className="truncate max-w-[100px]">{f.email}</span>
+                                <span className="truncate max-w-[120px]">{fornecedor.email}</span>
                             </a>
                         )}
-                        {f.observacao && (
-                            <span className="text-xs text-slate-400 dark:text-slate-500 italic truncate max-w-[100px]" title={f.observacao}>
-                                {f.observacao}
+
+                        {fornecedor.observacao && (
+                            <span
+                                className="text-xs text-slate-400 dark:text-slate-500 italic truncate max-w-[120px]"
+                                title={fornecedor.observacao}
+                            >
+                                {fornecedor.observacao}
                             </span>
                         )}
                     </div>
+
                     <a
-                        href={whatsappUrl(f.telefone)}
+                        href={whatsappUrl(fornecedor.telefone)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex-shrink-0 inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold rounded-xl transition-colors shadow-sm shadow-emerald-900/20"
                     >
                         <i className="fab fa-whatsapp text-sm"></i>
-                        {formatPhone(f.telefone)}
+                        {formatPhone(fornecedor.telefone)}
                     </a>
+                </div>
+
+                <div className="flex items-center justify-between pt-3 mt-3 border-t border-slate-100 dark:border-slate-700/50">
+                    <div className="flex gap-1.5">
+                        <button
+                            onClick={() => onEdit(fornecedor)}
+                            className="h-8 px-3 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center gap-1.5 hover:bg-blue-600 hover:text-white dark:hover:bg-blue-600 transition-all text-xs font-semibold"
+                            title="Editar"
+                        >
+                            <i className="fas fa-pen text-[10px]"></i>
+                            Editar
+                        </button>
+                        <button
+                            onClick={() => onDelete(fornecedor.id)}
+                            className="h-8 w-8 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 flex items-center justify-center hover:bg-red-600 hover:text-white dark:hover:bg-red-600 transition-all"
+                            title="Excluir"
+                        >
+                            <i className="fas fa-trash-alt text-[11px]"></i>
+                        </button>
+                    </div>
+
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                        Fornecedor
+                    </span>
                 </div>
             </div>
         </div>
@@ -170,32 +215,52 @@ const FornecedorCard: React.FC<{
 
 const FornecedorModal: React.FC<{
     editing: Fornecedor | null;
-    onSave: (data: Fornecedor) => void;
+    onSave: (data: Fornecedor) => Promise<void>;
     onClose: () => void;
 }> = ({ editing, onSave, onClose }) => {
-    const [form, setForm] = useState<Fornecedor>(
-        editing || createFornecedor()
-    );
+    const [form, setForm] = useState<Fornecedor>(editing || createFornecedor());
+    const [isSaving, setIsSaving] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
-    const set = (key: keyof typeof EMPTY_FORM) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-        setForm(prev => ({ ...prev, [key]: e.target.value }));
+    useEffect(() => {
+        setForm(editing || createFornecedor());
+        setIsSaving(false);
+        setError(null);
+    }, [editing]);
+
+    const setField = (key: keyof typeof EMPTY_FORM) => (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        if (error) setError(null);
+        setForm(previous => ({ ...previous, [key]: event.target.value }));
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!form.empresa.trim() || !form.contato.trim() || !form.telefone.trim()) return;
-        onSave(form);
+    const handleSubmit = async (event: React.FormEvent) => {
+        event.preventDefault();
+        if (isSaving) return;
+        if (!form.empresa.trim() || !form.contato.trim() || !form.telefone.trim()) {
+            setError('Preencha empresa, contato e telefone para continuar.');
+            return;
+        }
+
+        setIsSaving(true);
+        setError(null);
+        try {
+            await onSave(form);
+        } catch (err: any) {
+            setError(err?.message || 'Não foi possível salvar o fornecedor. Tente novamente.');
+            setIsSaving(false);
+        }
     };
 
     return (
         <div className="fixed inset-0 z-50 flex flex-col justify-end sm:justify-center sm:items-center sm:p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
             <div
                 className="bg-white dark:bg-slate-800 w-full sm:max-w-md sm:rounded-2xl rounded-t-3xl shadow-2xl border-t border-slate-200 dark:border-slate-700 sm:border overflow-hidden"
-                onClick={e => e.stopPropagation()}
+                onClick={event => event.stopPropagation()}
             >
                 <div className="flex justify-center pt-3 pb-1 sm:hidden">
                     <div className="w-10 h-1 rounded-full bg-slate-300 dark:bg-slate-600" />
                 </div>
+
                 <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-700">
                     <h2 className="font-bold text-slate-900 dark:text-slate-100 text-lg">
                         {editing && !editing.id?.startsWith('temp-') ? 'Editar Fornecedor' : 'Novo Fornecedor'}
@@ -204,6 +269,7 @@ const FornecedorModal: React.FC<{
                         <i className="fas fa-times"></i>
                     </button>
                 </div>
+
                 <form onSubmit={handleSubmit} className="p-5 space-y-3 overflow-y-auto max-h-[75vh] sm:max-h-none">
                     {[
                         { key: 'empresa', label: 'Empresa *', placeholder: 'Nome da empresa', type: 'text' },
@@ -217,34 +283,191 @@ const FornecedorModal: React.FC<{
                             <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">{label}</label>
                             <input
                                 type={type}
-                                value={(form as any)[key]}
-                                onChange={set(key as any)}
+                                value={(form as Record<string, string>)[key] || ''}
+                                onChange={setField(key as keyof typeof EMPTY_FORM)}
                                 placeholder={placeholder}
                                 className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50 text-slate-900 dark:text-slate-100 text-sm focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 outline-none transition-all"
                             />
                         </div>
                     ))}
+
                     <div>
                         <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Observação</label>
                         <textarea
                             value={form.observacao || ''}
-                            onChange={set('observacao')}
+                            onChange={setField('observacao')}
                             placeholder="Informações adicionais..."
                             rows={2}
                             className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50 text-slate-900 dark:text-slate-100 text-sm focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 outline-none transition-all resize-none"
                         />
                     </div>
+
                     <div className="flex gap-2 pt-1 pb-safe">
                         <button type="button" onClick={onClose} className="flex-1 py-3 rounded-xl border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-400 text-sm font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
                             Cancelar
                         </button>
                         <button type="submit" className="flex-1 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold transition-colors shadow-sm">
-                            {(editing && !editing.id?.startsWith('temp-')) ? 'Salvar' : 'Adicionar'}
+                            {editing && !editing.id?.startsWith('temp-') ? 'Salvar' : 'Adicionar'}
                         </button>
                     </div>
                 </form>
             </div>
         </div>
+    );
+};
+
+const FornecedorStyledModal: React.FC<{
+    editing: Fornecedor | null;
+    onSave: (data: Fornecedor) => Promise<void>;
+    onClose: () => void;
+}> = ({ editing, onSave, onClose }) => {
+    const [form, setForm] = useState<Fornecedor>(editing || createFornecedor());
+    const [isSaving, setIsSaving] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        setForm(editing || createFornecedor());
+        setIsSaving(false);
+        setError(null);
+    }, [editing]);
+
+    const setField = (key: keyof typeof EMPTY_FORM) => (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        if (error) setError(null);
+        setForm(previous => ({ ...previous, [key]: event.target.value }));
+    };
+
+    const handleSubmit = async (event: React.FormEvent) => {
+        event.preventDefault();
+        if (isSaving) return;
+
+        if (!form.empresa.trim() || !form.contato.trim() || !form.telefone.trim()) {
+            setError('Preencha empresa, contato e telefone para continuar.');
+            return;
+        }
+
+        setIsSaving(true);
+        setError(null);
+        try {
+            await onSave(form);
+        } catch (err: any) {
+            setError(err?.message || 'Não foi possível salvar o fornecedor. Tente novamente.');
+            setIsSaving(false);
+        }
+    };
+
+    const footer = (
+        <>
+            <button
+                type="button"
+                onClick={onClose}
+                disabled={isSaving}
+                className="px-4 py-2 text-sm font-semibold rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 dark:text-slate-300 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+                Cancelar
+            </button>
+            <button
+                type="submit"
+                form="fornecedorStyledForm"
+                disabled={isSaving}
+                className="px-4 py-2 bg-slate-800 dark:bg-slate-700 text-white text-sm font-semibold rounded-md hover:bg-slate-700 dark:hover:bg-slate-600 disabled:opacity-70 disabled:cursor-wait flex items-center gap-2"
+            >
+                {isSaving ? (
+                    <>
+                        <i className="fas fa-spinner fa-spin"></i>
+                        <span>Salvando...</span>
+                    </>
+                ) : (
+                    <span>{editing && !editing.id?.startsWith('temp-') ? 'Salvar Alterações' : 'Adicionar Fornecedor'}</span>
+                )}
+            </button>
+        </>
+    );
+
+    return (
+        <Modal
+            isOpen={true}
+            onClose={onClose}
+            disableClose={isSaving}
+            wrapperClassName="backdrop-blur-sm"
+            title={
+                <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
+                        <i className="fas fa-truck-loading"></i>
+                    </div>
+                    <div className="min-w-0">
+                        <div className="text-xl font-semibold text-slate-800 dark:text-white">
+                            {editing && !editing.id?.startsWith('temp-') ? 'Editar Fornecedor' : 'Novo Fornecedor'}
+                        </div>
+                    </div>
+                </div>
+            }
+            footer={footer}
+        >
+            <form id="fornecedorStyledForm" onSubmit={handleSubmit} className="space-y-5">
+                {error && (
+                    <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">
+                        {error}
+                    </div>
+                )}
+
+                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                    <div className="sm:col-span-2">
+                        <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                            Empresa *
+                        </label>
+                        <input type="text" value={form.empresa || ''} onChange={setField('empresa')} placeholder="Nome da empresa" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition-all focus:border-slate-400 focus:ring-2 focus:ring-slate-300/40 dark:border-slate-600 dark:bg-slate-700/50 dark:text-slate-100" />
+                    </div>
+
+                    <div>
+                        <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                            Contato *
+                        </label>
+                        <input type="text" value={form.contato || ''} onChange={setField('contato')} placeholder="Ex: João Silva" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition-all focus:border-slate-400 focus:ring-2 focus:ring-slate-300/40 dark:border-slate-600 dark:bg-slate-700/50 dark:text-slate-100" />
+                    </div>
+
+                    <div>
+                        <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                            Telefone / WhatsApp *
+                        </label>
+                        <input type="tel" value={form.telefone || ''} onChange={setField('telefone')} placeholder="(11) 99999-9999" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition-all focus:border-slate-400 focus:ring-2 focus:ring-slate-300/40 dark:border-slate-600 dark:bg-slate-700/50 dark:text-slate-100" />
+                    </div>
+
+                    <div className="sm:col-span-2">
+                        <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                            Marcas / Representações
+                        </label>
+                        <input type="text" value={form.representacoes || ''} onChange={setField('representacoes')} placeholder="Ex: 3M, SunTek, Llumar" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition-all focus:border-slate-400 focus:ring-2 focus:ring-slate-300/40 dark:border-slate-600 dark:bg-slate-700/50 dark:text-slate-100" />
+                    </div>
+
+                    <div>
+                        <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                            E-mail
+                        </label>
+                        <input type="email" value={form.email || ''} onChange={setField('email')} placeholder="contato@empresa.com" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition-all focus:border-slate-400 focus:ring-2 focus:ring-slate-300/40 dark:border-slate-600 dark:bg-slate-700/50 dark:text-slate-100" />
+                    </div>
+
+                    <div>
+                        <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                            Endereço
+                        </label>
+                        <input type="text" value={form.endereco || ''} onChange={setField('endereco')} placeholder="Rua, número, bairro, cidade" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition-all focus:border-slate-400 focus:ring-2 focus:ring-slate-300/40 dark:border-slate-600 dark:bg-slate-700/50 dark:text-slate-100" />
+                    </div>
+                </div>
+
+                <div>
+                    <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        Observação
+                    </label>
+                    <textarea
+                        value={form.observacao || ''}
+                        onChange={setField('observacao')}
+                        placeholder="Informações adicionais sobre atendimento, prazo, marcas ou condições."
+                        rows={3}
+                        className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition-all focus:border-slate-400 focus:ring-2 focus:ring-slate-300/40 dark:border-slate-600 dark:bg-slate-700/50 dark:text-slate-100"
+                    />
+                </div>
+            </form>
+        </Modal>
     );
 };
 
@@ -255,6 +478,8 @@ const FornecedoresView: React.FC = () => {
     const [search, setSearch] = useState('');
     const [showModal, setShowModal] = useState(false);
     const [selectedF, setSelectedF] = useState<Fornecedor | null>(null);
+    const [fornecedorToDelete, setFornecedorToDelete] = useState<Fornecedor | null>(null);
+    const [isDeletingFornecedor, setIsDeletingFornecedor] = useState(false);
 
     const loadData = useCallback(async () => {
         setLoading(true);
@@ -269,90 +494,107 @@ const FornecedoresView: React.FC = () => {
         }
     }, []);
 
-    React.useEffect(() => {
+    useEffect(() => {
         loadData();
     }, [loadData]);
 
     const filtered = useMemo(() => {
-        return fornecedores.filter(f =>
-            f.empresa.toLowerCase().includes(search.toLowerCase()) ||
-            f.contato.toLowerCase().includes(search.toLowerCase()) ||
-            f.representacoes?.toLowerCase().includes(search.toLowerCase())
+        return fornecedores.filter(fornecedor =>
+            fornecedor.empresa.toLowerCase().includes(search.toLowerCase()) ||
+            fornecedor.contato.toLowerCase().includes(search.toLowerCase()) ||
+            fornecedor.representacoes?.toLowerCase().includes(search.toLowerCase())
         );
     }, [fornecedores, search]);
 
-    const handleSave = async (f: Fornecedor) => {
+    const handleSave = async (fornecedor: Fornecedor) => {
         try {
-            const saved = await saveFornecedor(f);
-            if (f.id && !f.id.startsWith('temp-')) {
-                setFornecedores(prev => prev.map(item => item.id === saved.id ? saved : item));
+            const saved = await saveFornecedor(fornecedor);
+            if (fornecedor.id && !fornecedor.id.startsWith('temp-')) {
+                setFornecedores(previous => previous.map(item => item.id === saved.id ? saved : item));
             } else {
-                setFornecedores(prev => [saved, ...prev]);
+                setFornecedores(previous => [saved, ...previous]);
             }
             setShowModal(false);
             setSelectedF(null);
         } catch (error) {
             console.error('Erro ao salvar:', error);
-            alert('Erro ao salvar fornecedor no servidor.');
+            throw error;
         }
     };
 
-    const handleDelete = async (id: string) => {
-        if (!confirm('Excluir este fornecedor?')) return;
+    const handleRequestDelete = useCallback((id: string) => {
+        const fornecedor = fornecedores.find(item => item.id === id) || null;
+        setFornecedorToDelete(fornecedor);
+    }, [fornecedores]);
+
+    const handleConfirmDelete = useCallback(async () => {
+        if (!fornecedorToDelete) return;
+
         try {
-            await deleteFornecedor(id);
-            setFornecedores(prev => prev.filter(f => f.id !== id));
+            setIsDeletingFornecedor(true);
+            await new Promise<void>(resolve => {
+                window.requestAnimationFrame(() => resolve());
+            });
+
+            await deleteFornecedor(fornecedorToDelete.id);
+            setFornecedores(previous => previous.filter(item => item.id !== fornecedorToDelete.id));
+            setFornecedorToDelete(null);
         } catch (error) {
             console.error('Erro ao excluir:', error);
+            alert('Não foi possível excluir o fornecedor. Tente novamente.');
+        } finally {
+            setIsDeletingFornecedor(false);
         }
-    };
+    }, [fornecedorToDelete]);
 
     return (
-        <div className="view-container">
-            <header className="view-header">
-                <div className="header-left">
-                    <div className="header-icon-box">
-                        <i className="fas fa-truck"></i>
+        <div className="space-y-6">
+            <div className="flex gap-3 items-center">
+                <div className="relative flex-grow">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <i className="fas fa-search text-slate-400 text-lg"></i>
                     </div>
-                    <div>
-                        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Fornecedores</h1>
-                        <p className="text-slate-500 dark:text-slate-400">Gerencie seus contatos e fabricantes de películas</p>
-                    </div>
-                </div>
-                <div className="header-actions">
-                    <button
-                        className="btn-primary flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-all"
-                        onClick={() => {
-                            setSelectedF(null);
-                            setShowModal(true);
-                        }}
-                    >
-                        <i className="fas fa-plus"></i> Novo Fornecedor
-                    </button>
-                </div>
-            </header>
-
-            <div className="filter-bar flex gap-4 my-6">
-                <div className="search-box relative flex-grow">
-                    <i className="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
                     <input
                         type="text"
                         placeholder="Buscar por empresa, contato ou marca..."
+                        className="w-full pl-12 pr-10 py-4 rounded-xl border-none bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50 focus:ring-2 focus:ring-slate-500 transition-all text-base"
                         value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-emerald-500/20 outline-none"
+                        onChange={(event) => setSearch(event.target.value)}
                     />
+                    {search && (
+                        <button
+                            onClick={() => setSearch('')}
+                            className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                        >
+                            <i className="fas fa-times-circle text-lg"></i>
+                        </button>
+                    )}
                 </div>
-                <div className="view-toggle flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
+
+                <button
+                    onClick={() => {
+                        setSelectedF(null);
+                        setShowModal(true);
+                    }}
+                    className="flex-shrink-0 h-14 px-5 bg-slate-900 dark:bg-blue-600 hover:bg-slate-700 dark:hover:bg-blue-700 text-white rounded-xl font-bold flex items-center gap-2 shadow-lg transition-all active:scale-95"
+                    title="Novo Fornecedor"
+                >
+                    <i className="fas fa-plus text-base"></i>
+                    <span className="hidden sm:inline text-sm">Novo Fornecedor</span>
+                </button>
+
+                <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl shadow-sm">
                     <button
-                        className={`p-2 rounded-md ${viewType === 'grid' ? 'bg-white dark:bg-slate-700 shadow-sm text-emerald-600' : 'text-slate-400'}`}
+                        className={`h-12 w-12 rounded-lg flex items-center justify-center transition-all ${viewType === 'grid' ? 'bg-white dark:bg-slate-700 shadow-sm text-emerald-600' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
                         onClick={() => setViewType('grid')}
+                        title="Visualização em grade"
                     >
                         <i className="fas fa-th-large"></i>
                     </button>
                     <button
-                        className={`p-2 rounded-md ${viewType === 'table' ? 'bg-white dark:bg-slate-700 shadow-sm text-emerald-600' : 'text-slate-400'}`}
+                        className={`h-12 w-12 rounded-lg flex items-center justify-center transition-all ${viewType === 'table' ? 'bg-white dark:bg-slate-700 shadow-sm text-emerald-600' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
                         onClick={() => setViewType('table')}
+                        title="Visualização em lista"
                     >
                         <i className="fas fa-list"></i>
                     </button>
@@ -360,41 +602,91 @@ const FornecedoresView: React.FC = () => {
             </div>
 
             {loading ? (
-                <div className="flex flex-col items-center justify-center py-20">
-                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-emerald-500 mb-4"></div>
-                    <p className="text-slate-500">Carregando fornecedores...</p>
+                <div className="text-center p-8 flex flex-col items-center justify-center min-h-[350px]">
+                    <div className="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-2xl flex items-center justify-center mb-6 shadow-sm">
+                        <i className="fas fa-spinner fa-spin text-4xl text-slate-400 dark:text-slate-500"></i>
+                    </div>
+                    <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-2">Carregando fornecedores</h3>
+                    <p className="text-slate-600 dark:text-slate-400 max-w-xs mx-auto leading-relaxed text-sm">
+                        Buscando seus contatos e fabricantes cadastrados.
+                    </p>
                 </div>
             ) : filtered.length > 0 ? (
-                <div className={`grid gap-6 ${viewType === 'grid' ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1'}`}>
-                    {filtered.map(f => (
+                <div className={`grid gap-6 ${viewType === 'grid' ? 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3' : 'grid-cols-1'}`}>
+                    {filtered.map((fornecedor, index) => (
                         <FornecedorCard
-                            key={f.id}
-                            f={f}
+                            key={fornecedor.id}
+                            fornecedor={fornecedor}
+                            index={index}
                             onEdit={(item) => {
                                 setSelectedF(item);
                                 setShowModal(true);
                             }}
-                            onDelete={handleDelete}
+                            onDelete={handleRequestDelete}
                         />
                     ))}
                 </div>
-            ) : (
-                <div className="flex flex-col items-center justify-center py-20 text-center">
-                    <div className="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
-                        <i className="fas fa-truck-loading text-3xl text-slate-300"></i>
+            ) : search.trim() ? (
+                <div className="text-center py-12">
+                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 mb-4">
+                        <i className="fas fa-search text-slate-400 text-2xl"></i>
                     </div>
-                    <h3 className="text-xl font-bold text-slate-700 dark:text-slate-200">Nenhum fornecedor encontrado</h3>
-                    <p className="text-slate-500 max-w-xs mx-auto">Comece cadastrando seu primeiro contato.</p>
+                    <h3 className="text-lg font-medium text-slate-900 dark:text-slate-100">Nenhum fornecedor encontrado</h3>
+                    <p className="text-slate-500 dark:text-slate-400 mt-1">Tente buscar por outro nome, contato ou marca.</p>
+                </div>
+            ) : (
+                <div className="text-center p-8 flex flex-col items-center justify-center h-full min-h-[350px] opacity-0 animate-fade-in">
+                    <div className="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-2xl flex items-center justify-center mb-6 shadow-sm">
+                        <i className="fas fa-truck-loading text-4xl text-slate-400 dark:text-slate-500"></i>
+                    </div>
+                    <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-2">Nenhum fornecedor cadastrado</h3>
+                    <p className="text-slate-600 dark:text-slate-400 max-w-xs mx-auto leading-relaxed mb-8 text-sm">
+                        Adicione fabricantes, distribuidores e representantes para manter sua operação organizada.
+                    </p>
+                    <button
+                        onClick={() => {
+                            setSelectedF(null);
+                            setShowModal(true);
+                        }}
+                        className="px-8 py-3.5 bg-slate-800 dark:bg-slate-700 text-white font-semibold rounded-xl hover:bg-slate-700 dark:hover:bg-slate-600 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-[1.02] flex items-center gap-3"
+                    >
+                        <i className="fas fa-plus text-lg"></i>
+                        <span>Adicionar Fornecedor</span>
+                    </button>
                 </div>
             )}
 
             {showModal && (
-                <FornecedorModal
+                <FornecedorStyledModal
                     editing={selectedF}
                     onSave={handleSave}
-                    onClose={() => { setShowModal(false); setSelectedF(null); }}
+                    onClose={() => {
+                        setShowModal(false);
+                        setSelectedF(null);
+                    }}
                 />
             )}
+
+            <ConfirmationModal
+                isOpen={!!fornecedorToDelete}
+                onClose={() => {
+                    if (isDeletingFornecedor) return;
+                    setFornecedorToDelete(null);
+                }}
+                onConfirm={handleConfirmDelete}
+                title="Confirmar Exclusão de Fornecedor"
+                message={
+                    <>
+                        Tem certeza que deseja excluir o fornecedor <strong>"{fornecedorToDelete?.empresa || ''}"</strong>?
+                        <br />
+                        Esta ação não pode ser desfeita.
+                    </>
+                }
+                confirmButtonText="Sim, Excluir"
+                confirmButtonVariant="danger"
+                isProcessing={isDeletingFornecedor}
+                processingText="Excluindo..."
+            />
         </div>
     );
 };
