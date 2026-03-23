@@ -5,6 +5,7 @@ interface ServiceWorkerRegistrationWithUpdate extends ServiceWorkerRegistration 
 }
 
 export const usePwaUpdate = () => {
+    const isLocalDev = import.meta.env.DEV || ['localhost', '127.0.0.1'].includes(window.location.hostname);
     const [newVersionAvailable, setNewVersionAvailable] = useState(false);
     const [waitingWorker, setWaitingWorker] = useState<ServiceWorker | null>(null);
 
@@ -23,6 +24,8 @@ export const usePwaUpdate = () => {
     }, [waitingWorker]);
 
     useEffect(() => {
+        if (isLocalDev) return;
+
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.ready.then((registration) => {
                 const reg = registration as ServiceWorkerRegistrationWithUpdate;
@@ -53,7 +56,7 @@ export const usePwaUpdate = () => {
             // 3. Listener para o evento 'controllerchange' removido para evitar reload automático indesejado.
             // O reload será controlado manualmente pelo handleUpdate.
         }
-    }, []);
+    }, [isLocalDev]);
 
     return { newVersionAvailable, handleUpdate };
 };

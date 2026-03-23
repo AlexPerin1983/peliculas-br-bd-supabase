@@ -66,10 +66,18 @@
       src="https://www.facebook.com/tr?id=847876754650924&ev=PageView&noscript=1" />
   </noscript>
   <div id="root" class="h-full"></div>
+  <script>
+    if ('serviceWorker' in navigator && ['localhost', '127.0.0.1'].includes(window.location.hostname)) {
+      navigator.serviceWorker.getRegistrations()
+        .then((registrations) => Promise.all(registrations.map((registration) => registration.unregister())))
+        .catch((error) => console.warn('Falha ao desregistrar Service Workers locais:', error));
+    }
+  </script>
   <script type="module" src="/index.tsx"></script>
   <script>
     // Service Worker Registration with Auto-Update
     if ('serviceWorker' in navigator) {
+      const isLocalDev = ['localhost', '127.0.0.1'].includes(window.location.hostname);
       let refreshing = false;
 
       // Listen for controlling service worker change
@@ -79,7 +87,23 @@
         window.location.reload();
       });
 
-      window.addEventListener('load', () => {
+      window.addEventListener('load', async () => {
+        if (isLocalDev) {
+          try {
+            const registrations = await navigator.serviceWorker.getRegistrations();
+            await Promise.all(registrations.map(registration => registration.unregister()));
+
+            if ('caches' in window) {
+              const cacheNames = await caches.keys();
+              await Promise.all(cacheNames.map(cacheName => caches.delete(cacheName)));
+            }
+
+          } catch (error) {
+            console.warn('Falha ao limpar Service Workers locais:', error);
+          }
+          return;
+        }
+
         navigator.serviceWorker.register('/service-worker.js', {
           scope: '/'
         })

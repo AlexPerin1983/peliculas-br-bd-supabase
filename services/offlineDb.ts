@@ -22,6 +22,26 @@ export type LocalUserInfo = UserInfo & SyncMetadata;
 export type LocalSavedPDF = SavedPDF & SyncMetadata;
 export type LocalAgendamento = Agendamento & SyncMetadata;
 export type LocalProposalOption = ProposalOption & SyncMetadata & { clientId: number };
+export interface SyncQueueItem {
+    id?: number;
+    table: string;
+    action: 'create' | 'update' | 'delete';
+    data: any;
+    timestamp: number;
+    status: 'pending' | 'error';
+    retryCount: number;
+    lastError?: string;
+    lastAttemptAt?: number;
+}
+
+export interface FailedSyncItem {
+    id: number;
+    table: string;
+    action: 'create' | 'update' | 'delete';
+    retryCount: number;
+    lastError: string | null;
+    lastAttemptAt: number | null;
+}
 
 // Classe do banco de dados IndexedDB
 class OfflineDatabase extends Dexie {
@@ -31,7 +51,7 @@ class OfflineDatabase extends Dexie {
     savedPdfs!: Table<LocalSavedPDF, string>;
     agendamentos!: Table<LocalAgendamento, string>;
     proposalOptions!: Table<LocalProposalOption, string>;
-    syncQueue!: Table<{ id?: number; table: string; action: 'create' | 'update' | 'delete'; data: any; timestamp: number }, number>;
+    syncQueue!: Table<SyncQueueItem, number>;
 
     constructor() {
         super('PeliculasBROfflineDB');
@@ -45,6 +65,23 @@ class OfflineDatabase extends Dexie {
             proposalOptions: '_localId, id, clientId, _syncStatus',
             syncQueue: '++id, table, timestamp'
         });
+        this.version(2).stores({
+            clients: '_localId, id, nome, _syncStatus',
+            films: '_localId, nome, _syncStatus',
+            userInfo: '_localId, id, _syncStatus',
+            savedPdfs: '_localId, id, clienteId, _syncStatus',
+            agendamentos: '_localId, id, clienteId, _syncStatus',
+            proposalOptions: '_localId, id, clientId, _syncStatus',
+            syncQueue: '++id, table, status, timestamp, lastAttemptAt'
+        }).upgrade(async tx => {
+            const syncQueueTable = tx.table('syncQueue');
+            await syncQueueTable.toCollection().modify((item: SyncQueueItem) => {
+                item.status = item.status || 'pending';
+                item.retryCount = item.retryCount || 0;
+                item.lastError = item.lastError || undefined;
+                item.lastAttemptAt = item.lastAttemptAt || undefined;
+            });
+        });
     }
 }
 
@@ -55,6 +92,14 @@ export const offlineDb = new OfflineDatabase();
 export const generateLocalId = (): string => {
     return `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 };
+
+async function enqueueSyncItem(item: Omit<SyncQueueItem, 'id' | 'status' | 'retryCount'>): Promise<void> {
+    await offlineDb.syncQueue.add({
+        ...item,
+        status: 'pending',
+        retryCount: 0
+    });
+}
 
 // =====================================================
 // FUNÇÕES DE CLIENTES
@@ -110,7 +155,7 @@ export async function saveClientLocal(client: Omit<Client, 'id'> | Client): Prom
     await offlineDb.clients.put(localClient);
 
     // Adicionar à fila de sincronização
-    await offlineDb.syncQueue.add({
+    await enqueueSyncItem({
         table: 'clients',
         action: clientId ? 'update' : 'create',
         data: localClient,
@@ -129,7 +174,7 @@ export async function deleteClientLocal(clientId: number | string): Promise<void
     if (client) {
         // Se tem ID remoto, marcar para deletar no servidor
         if (client._remoteId || client.id) {
-            await offlineDb.syncQueue.add({
+            await enqueueSyncItem({
                 table: 'clients',
                 action: 'delete',
                 data: { id: client._remoteId || client.id },
@@ -184,7 +229,7 @@ export async function saveFilmLocal(film: Film): Promise<LocalFilm> {
 
     await offlineDb.films.put(localFilm);
 
-    await offlineDb.syncQueue.add({
+    await enqueueSyncItem({
         table: 'films',
         action: existingFilm ? 'update' : 'create',
         data: localFilm,
@@ -200,7 +245,7 @@ export async function deleteFilmLocal(filmName: string): Promise<void> {
         .first();
 
     if (film) {
-        await offlineDb.syncQueue.add({
+        await enqueueSyncItem({
             table: 'films',
             action: 'delete',
             data: { nome: filmName },
@@ -234,7 +279,7 @@ export async function saveUserInfoLocal(userInfo: UserInfo): Promise<LocalUserIn
 
     await offlineDb.userInfo.put(localUserInfo);
 
-    await offlineDb.syncQueue.add({
+    await enqueueSyncItem({
         table: 'userInfo',
         action: existing ? 'update' : 'create',
         data: localUserInfo,
@@ -278,7 +323,7 @@ export async function saveProposalOptionsLocal(clientId: number, options: Propos
     }
 
     // Adicionar à fila de sincronização
-    await offlineDb.syncQueue.add({
+    await enqueueSyncItem({
         table: 'proposalOptions',
         action: 'update',
         data: { clientId, options },
@@ -390,7 +435,7 @@ export async function savePdfLocal(pdf: SavedPDF): Promise<LocalSavedPDF> {
 
     await offlineDb.savedPdfs.put(localPdf);
 
-    await offlineDb.syncQueue.add({
+    await enqueueSyncItem({
         table: 'savedPdfs',
         action: pdf.id ? 'update' : 'create',
         data: localPdf,
@@ -422,7 +467,7 @@ export async function saveAgendamentoLocal(agendamento: Agendamento): Promise<Lo
 
     await offlineDb.agendamentos.put(localAgendamento);
 
-    await offlineDb.syncQueue.add({
+    await enqueueSyncItem({
         table: 'agendamentos',
         action: agendamento.id ? 'update' : 'create',
         data: localAgendamento,
@@ -449,7 +494,48 @@ export async function clearAllLocalData(): Promise<void> {
 
 // Obter contagem de itens pendentes de sincronização
 export async function getPendingSyncCount(): Promise<number> {
-    return await offlineDb.syncQueue.count();
+    return await offlineDb.syncQueue.where('status').equals('pending').count();
+}
+
+export async function getFailedSyncCount(): Promise<number> {
+    return await offlineDb.syncQueue.where('status').equals('error').count();
+}
+
+export async function getFailedSyncItems(limit = 3): Promise<FailedSyncItem[]> {
+    const items = await offlineDb.syncQueue
+        .where('status')
+        .equals('error')
+        .reverse()
+        .sortBy('lastAttemptAt');
+
+    return items
+        .slice(0, limit)
+        .map(item => ({
+            id: item.id!,
+            table: item.table,
+            action: item.action,
+            retryCount: item.retryCount,
+            lastError: item.lastError || null,
+            lastAttemptAt: item.lastAttemptAt || null
+        }));
+}
+
+export async function markSyncItemError(id: number, errorMessage: string): Promise<void> {
+    const item = await offlineDb.syncQueue.get(id);
+    await offlineDb.syncQueue.update(id, {
+        status: 'error',
+        lastError: errorMessage,
+        lastAttemptAt: Date.now(),
+        retryCount: (item?.retryCount || 0) + 1
+    });
+}
+
+export async function markSyncItemPending(id: number): Promise<void> {
+    await offlineDb.syncQueue.update(id, {
+        status: 'pending',
+        lastError: undefined,
+        lastAttemptAt: Date.now()
+    });
 }
 
 // Marcar item como sincronizado
@@ -461,8 +547,7 @@ export async function markAsSynced(table: string, localId: string, remoteId?: nu
             await offlineDb.clients.update(localId, {
                 _syncStatus: 'synced',
                 _syncedAt: now,
-                _remoteId: remoteId,
-                id: remoteId as number
+                ...(remoteId !== undefined ? { _remoteId: remoteId, id: remoteId as number } : {})
             });
             break;
         case 'films':
@@ -470,6 +555,20 @@ export async function markAsSynced(table: string, localId: string, remoteId?: nu
             break;
         case 'userInfo':
             await offlineDb.userInfo.update(localId, { _syncStatus: 'synced', _syncedAt: now });
+            break;
+        case 'savedPdfs':
+            await offlineDb.savedPdfs.update(localId, {
+                _syncStatus: 'synced',
+                _syncedAt: now,
+                ...(remoteId !== undefined ? { _remoteId: remoteId, id: remoteId as number } : {})
+            });
+            break;
+        case 'agendamentos':
+            await offlineDb.agendamentos.update(localId, {
+                _syncStatus: 'synced',
+                _syncedAt: now,
+                ...(remoteId !== undefined ? { _remoteId: remoteId, id: remoteId as number } : {})
+            });
             break;
     }
 }

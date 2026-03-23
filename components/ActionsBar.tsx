@@ -63,7 +63,7 @@ const ActionsBar: React.FC<ActionsBarProps> = ({
                 )}
             </button>
 
-            <style jsx>{`
+            <style>{`
                 .loader-sm {
                     border: 2px solid rgba(255,255,255,0.3);
                     border-top: 2px solid #ffffff;

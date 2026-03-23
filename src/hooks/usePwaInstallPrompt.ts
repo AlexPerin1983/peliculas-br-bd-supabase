@@ -7,6 +7,7 @@ interface BeforeInstallPromptEvent extends Event {
 }
 
 export const usePwaInstallPrompt = () => {
+    const isLocalDev = import.meta.env.DEV || ['localhost', '127.0.0.1'].includes(window.location.hostname);
     const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
     const [isInstalled, setIsInstalled] = useState(false);
     const [canInstall, setCanInstall] = useState(false);
@@ -30,6 +31,10 @@ export const usePwaInstallPrompt = () => {
 
         const installed = checkIfInstalled();
 
+        if (isLocalDev) {
+            return;
+        }
+
         // Only listen for install prompt if not already installed
         if (!installed) {
             const handler = (e: Event) => {
@@ -52,7 +57,7 @@ export const usePwaInstallPrompt = () => {
                 window.removeEventListener('beforeinstallprompt', handler);
             };
         }
-    }, []);
+    }, [isLocalDev]);
 
     const promptInstall = useCallback(async () => {
         if (!deferredPrompt) {

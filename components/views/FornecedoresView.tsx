@@ -1,11 +1,12 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { Fornecedor } from '../../types';
-import { saveFornecedor, deleteFornecedor, createFornecedor } from '../../services/fornecedorService';
-
-interface FornecedoresViewProps {
-    fornecedores: Fornecedor[];
-    onUpdate: (list: Fornecedor[]) => void;
-}
+import {
+    getFornecedores,
+    saveFornecedor,
+    deleteFornecedor,
+    createFornecedor,
+    migrateFromLocalStorage
+} from '../../services/fornecedorService';
 
 const EMPTY_FORM = {
     empresa: '',
@@ -59,11 +60,8 @@ const FornecedorCard: React.FC<{
 
     return (
         <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/70 dark:border-slate-700/50 shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden">
-            {/* Top accent */}
             <div className="h-1 w-full bg-gradient-to-r from-emerald-500 to-teal-400" />
-
             <div className="p-4">
-                {/* Header */}
                 <div className="flex items-start gap-3 mb-3">
                     <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0 shadow-md shadow-emerald-900/20">
                         {initials}
@@ -94,7 +92,6 @@ const FornecedorCard: React.FC<{
                     </div>
                 </div>
 
-                {/* Endereço */}
                 {f.endereco && (
                     <div className="mb-3 flex items-center gap-2 group">
                         <div className="flex-grow min-w-0 bg-slate-50 dark:bg-slate-700/40 px-3 py-2 rounded-xl border border-slate-100 dark:border-slate-700/50">
@@ -117,8 +114,8 @@ const FornecedorCard: React.FC<{
                             <button
                                 onClick={handleCopyAddress}
                                 className={`h-7 w-7 flex items-center justify-center rounded-lg transition-all ${copied
-                                        ? 'bg-emerald-500 text-white'
-                                        : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-emerald-500 hover:text-white'
+                                    ? 'bg-emerald-500 text-white'
+                                    : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-emerald-500 hover:text-white'
                                     }`}
                                 title={copied ? "Copiado!" : "Copiar endereço"}
                             >
@@ -128,7 +125,6 @@ const FornecedorCard: React.FC<{
                     </div>
                 )}
 
-                {/* Representações */}
                 {f.representacoes && (
                     <div className="mb-3 flex flex-wrap gap-1">
                         {f.representacoes.split(',').map(r => r.trim()).filter(Boolean).map(r => (
@@ -139,9 +135,7 @@ const FornecedorCard: React.FC<{
                     </div>
                 )}
 
-                {/* Separador */}
                 <div className="border-t border-slate-100 dark:border-slate-700/60 pt-3 flex items-center justify-between gap-3">
-                    {/* Contatos */}
                     <div className="flex items-center gap-2 flex-wrap min-w-0">
                         {f.email && (
                             <a
@@ -159,8 +153,6 @@ const FornecedorCard: React.FC<{
                             </span>
                         )}
                     </div>
-
-                    {/* WhatsApp */}
                     <a
                         href={whatsappUrl(f.telefone)}
                         target="_blank"
@@ -178,21 +170,11 @@ const FornecedorCard: React.FC<{
 
 const FornecedorModal: React.FC<{
     editing: Fornecedor | null;
-    onSave: (data: typeof EMPTY_FORM) => void;
+    onSave: (data: Fornecedor) => void;
     onClose: () => void;
 }> = ({ editing, onSave, onClose }) => {
-    const [form, setForm] = useState(
-        editing
-            ? {
-                empresa: editing.empresa,
-                contato: editing.contato,
-                telefone: editing.telefone,
-                representacoes: editing.representacoes || '',
-                email: editing.email || '',
-                endereco: editing.endereco || '',
-                observacao: editing.observacao || '',
-            }
-            : { ...EMPTY_FORM }
+    const [form, setForm] = useState<Fornecedor>(
+        editing || createFornecedor()
     );
 
     const set = (key: keyof typeof EMPTY_FORM) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -207,26 +189,21 @@ const FornecedorModal: React.FC<{
 
     return (
         <div className="fixed inset-0 z-50 flex flex-col justify-end sm:justify-center sm:items-center sm:p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
-            {/* Bottom-sheet on mobile, centered dialog on sm+ */}
             <div
                 className="bg-white dark:bg-slate-800 w-full sm:max-w-md sm:rounded-2xl rounded-t-3xl shadow-2xl border-t border-slate-200 dark:border-slate-700 sm:border overflow-hidden"
                 onClick={e => e.stopPropagation()}
             >
-                {/* Drag handle — mobile only */}
                 <div className="flex justify-center pt-3 pb-1 sm:hidden">
                     <div className="w-10 h-1 rounded-full bg-slate-300 dark:bg-slate-600" />
                 </div>
-
-                {/* Header modal */}
                 <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-700">
                     <h2 className="font-bold text-slate-900 dark:text-slate-100 text-lg">
-                        {editing ? 'Editar Fornecedor' : 'Novo Fornecedor'}
+                        {editing && !editing.id?.startsWith('temp-') ? 'Editar Fornecedor' : 'Novo Fornecedor'}
                     </h2>
                     <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-700 dark:hover:text-white transition-colors">
                         <i className="fas fa-times"></i>
                     </button>
                 </div>
-
                 <form onSubmit={handleSubmit} className="p-5 space-y-3 overflow-y-auto max-h-[75vh] sm:max-h-none">
                     {[
                         { key: 'empresa', label: 'Empresa *', placeholder: 'Nome da empresa', type: 'text' },
@@ -240,8 +217,8 @@ const FornecedorModal: React.FC<{
                             <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">{label}</label>
                             <input
                                 type={type}
-                                value={form[key as keyof typeof EMPTY_FORM]}
-                                onChange={set(key as keyof typeof EMPTY_FORM)}
+                                value={(form as any)[key]}
+                                onChange={set(key as any)}
                                 placeholder={placeholder}
                                 className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50 text-slate-900 dark:text-slate-100 text-sm focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 outline-none transition-all"
                             />
@@ -250,20 +227,19 @@ const FornecedorModal: React.FC<{
                     <div>
                         <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Observação</label>
                         <textarea
-                            value={form.observacao}
+                            value={form.observacao || ''}
                             onChange={set('observacao')}
                             placeholder="Informações adicionais..."
                             rows={2}
                             className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50 text-slate-900 dark:text-slate-100 text-sm focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 outline-none transition-all resize-none"
                         />
                     </div>
-
                     <div className="flex gap-2 pt-1 pb-safe">
                         <button type="button" onClick={onClose} className="flex-1 py-3 rounded-xl border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-400 text-sm font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
                             Cancelar
                         </button>
                         <button type="submit" className="flex-1 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold transition-colors shadow-sm">
-                            {editing ? 'Salvar' : 'Adicionar'}
+                            {(editing && !editing.id?.startsWith('temp-')) ? 'Salvar' : 'Adicionar'}
                         </button>
                     </div>
                 </form>
@@ -272,144 +248,152 @@ const FornecedorModal: React.FC<{
     );
 };
 
-const FornecedoresView: React.FC<FornecedoresViewProps> = ({ fornecedores, onUpdate }) => {
+const FornecedoresView: React.FC = () => {
+    const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [viewType, setViewType] = useState<'grid' | 'table'>('grid');
     const [search, setSearch] = useState('');
-    const [modalOpen, setModalOpen] = useState(false);
-    const [editing, setEditing] = useState<Fornecedor | null>(null);
-    const [deleteId, setDeleteId] = useState<string | null>(null);
+    const [showModal, setShowModal] = useState(false);
+    const [selectedF, setSelectedF] = useState<Fornecedor | null>(null);
+
+    const loadData = useCallback(async () => {
+        setLoading(true);
+        try {
+            await migrateFromLocalStorage();
+            const data = await getFornecedores();
+            setFornecedores(data);
+        } catch (error) {
+            console.error('Erro ao carregar fornecedores:', error);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    React.useEffect(() => {
+        loadData();
+    }, [loadData]);
 
     const filtered = useMemo(() => {
-        if (!search.trim()) return fornecedores;
-        const t = search.toLowerCase();
         return fornecedores.filter(f =>
-            f.empresa.toLowerCase().includes(t) ||
-            f.contato.toLowerCase().includes(t) ||
-            (f.representacoes || '').toLowerCase().includes(t)
+            f.empresa.toLowerCase().includes(search.toLowerCase()) ||
+            f.contato.toLowerCase().includes(search.toLowerCase()) ||
+            f.representacoes?.toLowerCase().includes(search.toLowerCase())
         );
     }, [fornecedores, search]);
 
-    const handleSave = useCallback((data: typeof EMPTY_FORM) => {
-        let updated: Fornecedor;
-        if (editing) {
-            updated = saveFornecedor({ ...editing, ...data });
-        } else {
-            updated = saveFornecedor(createFornecedor(data));
+    const handleSave = async (f: Fornecedor) => {
+        try {
+            const saved = await saveFornecedor(f);
+            if (f.id && !f.id.startsWith('temp-')) {
+                setFornecedores(prev => prev.map(item => item.id === saved.id ? saved : item));
+            } else {
+                setFornecedores(prev => [saved, ...prev]);
+            }
+            setShowModal(false);
+            setSelectedF(null);
+        } catch (error) {
+            console.error('Erro ao salvar:', error);
+            alert('Erro ao salvar fornecedor no servidor.');
         }
-        const next = editing
-            ? fornecedores.map(f => f.id === updated.id ? updated : f)
-            : [updated, ...fornecedores];
-        onUpdate(next);
-        setModalOpen(false);
-        setEditing(null);
-    }, [editing, fornecedores, onUpdate]);
+    };
 
-    const handleDelete = useCallback((id: string) => {
-        deleteFornecedor(id);
-        onUpdate(fornecedores.filter(f => f.id !== id));
-        setDeleteId(null);
-    }, [fornecedores, onUpdate]);
-
-    const openAdd = () => { setEditing(null); setModalOpen(true); };
-    const openEdit = (f: Fornecedor) => { setEditing(f); setModalOpen(true); };
+    const handleDelete = async (id: string) => {
+        if (!confirm('Excluir este fornecedor?')) return;
+        try {
+            await deleteFornecedor(id);
+            setFornecedores(prev => prev.filter(f => f.id !== id));
+        } catch (error) {
+            console.error('Erro ao excluir:', error);
+        }
+    };
 
     return (
-        <div className="space-y-6">
-            {/* Busca + Adicionar */}
-            <div className="flex gap-3 items-center">
-                <div className="relative flex-grow">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                        <i className="fas fa-search text-slate-400 text-lg"></i>
+        <div className="view-container">
+            <header className="view-header">
+                <div className="header-left">
+                    <div className="header-icon-box">
+                        <i className="fas fa-truck"></i>
                     </div>
+                    <div>
+                        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Fornecedores</h1>
+                        <p className="text-slate-500 dark:text-slate-400">Gerencie seus contatos e fabricantes de películas</p>
+                    </div>
+                </div>
+                <div className="header-actions">
+                    <button
+                        className="btn-primary flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-all"
+                        onClick={() => {
+                            setSelectedF(null);
+                            setShowModal(true);
+                        }}
+                    >
+                        <i className="fas fa-plus"></i> Novo Fornecedor
+                    </button>
+                </div>
+            </header>
+
+            <div className="filter-bar flex gap-4 my-6">
+                <div className="search-box relative flex-grow">
+                    <i className="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
                     <input
                         type="text"
                         placeholder="Buscar por empresa, contato ou marca..."
                         value={search}
-                        onChange={e => setSearch(e.target.value)}
-                        className="w-full pl-12 pr-10 py-4 rounded-xl border-none bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50 focus:ring-2 focus:ring-slate-500 transition-all text-base"
+                        onChange={(e) => setSearch(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-emerald-500/20 outline-none"
                     />
-                    {search && (
-                        <button onClick={() => setSearch('')} className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600 transition-colors">
-                            <i className="fas fa-times-circle text-lg"></i>
-                        </button>
-                    )}
                 </div>
-                <button
-                    onClick={openAdd}
-                    className="flex-shrink-0 h-14 px-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center gap-2 shadow-lg transition-all active:scale-95"
-                    title="Novo Fornecedor"
-                >
-                    <i className="fas fa-plus text-base"></i>
-                    <span className="hidden sm:inline text-sm">Novo Fornecedor</span>
-                </button>
+                <div className="view-toggle flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
+                    <button
+                        className={`p-2 rounded-md ${viewType === 'grid' ? 'bg-white dark:bg-slate-700 shadow-sm text-emerald-600' : 'text-slate-400'}`}
+                        onClick={() => setViewType('grid')}
+                    >
+                        <i className="fas fa-th-large"></i>
+                    </button>
+                    <button
+                        className={`p-2 rounded-md ${viewType === 'table' ? 'bg-white dark:bg-slate-700 shadow-sm text-emerald-600' : 'text-slate-400'}`}
+                        onClick={() => setViewType('table')}
+                    >
+                        <i className="fas fa-list"></i>
+                    </button>
+                </div>
             </div>
 
-            {/* Lista */}
-            {filtered.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {loading ? (
+                <div className="flex flex-col items-center justify-center py-20">
+                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-emerald-500 mb-4"></div>
+                    <p className="text-slate-500">Carregando fornecedores...</p>
+                </div>
+            ) : filtered.length > 0 ? (
+                <div className={`grid gap-6 ${viewType === 'grid' ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1'}`}>
                     {filtered.map(f => (
                         <FornecedorCard
                             key={f.id}
                             f={f}
-                            onEdit={openEdit}
-                            onDelete={id => setDeleteId(id)}
+                            onEdit={(item) => {
+                                setSelectedF(item);
+                                setShowModal(true);
+                            }}
+                            onDelete={handleDelete}
                         />
                     ))}
                 </div>
-            ) : search ? (
-                <div className="text-center py-16">
-                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 mb-4">
-                        <i className="fas fa-search text-slate-400 text-2xl"></i>
-                    </div>
-                    <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-300">Nenhum resultado</h3>
-                    <p className="text-slate-500 text-sm mt-1">Tente outros termos de busca.</p>
-                </div>
             ) : (
-                <div className="text-center py-16 flex flex-col items-center">
-                    <div className="w-20 h-20 bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl flex items-center justify-center mb-5">
-                        <i className="fas fa-truck text-3xl text-emerald-500"></i>
+                <div className="flex flex-col items-center justify-center py-20 text-center">
+                    <div className="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
+                        <i className="fas fa-truck-loading text-3xl text-slate-300"></i>
                     </div>
-                    <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-2">Nenhum Fornecedor Cadastrado</h3>
-                    <p className="text-slate-500 dark:text-slate-400 text-sm max-w-xs text-center leading-relaxed mb-6">
-                        Adicione seus fornecedores para acessar contatos e WhatsApp rapidamente.
-                    </p>
-                    <button
-                        onClick={openAdd}
-                        className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl shadow-md transition-all flex items-center gap-2"
-                    >
-                        <i className="fas fa-plus"></i>
-                        Adicionar Fornecedor
-                    </button>
+                    <h3 className="text-xl font-bold text-slate-700 dark:text-slate-200">Nenhum fornecedor encontrado</h3>
+                    <p className="text-slate-500 max-w-xs mx-auto">Comece cadastrando seu primeiro contato.</p>
                 </div>
             )}
 
-            {/* Modal Add/Edit */}
-            {modalOpen && (
+            {showModal && (
                 <FornecedorModal
-                    editing={editing}
+                    editing={selectedF}
                     onSave={handleSave}
-                    onClose={() => { setModalOpen(false); setEditing(null); }}
+                    onClose={() => { setShowModal(false); setSelectedF(null); }}
                 />
-            )}
-
-            {/* Confirm Delete */}
-            {deleteId && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-sm p-6 border border-slate-200 dark:border-slate-700">
-                        <div className="w-12 h-12 rounded-xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center mb-4">
-                            <i className="fas fa-trash-alt text-red-500 text-lg"></i>
-                        </div>
-                        <h3 className="font-bold text-slate-900 dark:text-slate-100 text-lg mb-1">Excluir Fornecedor?</h3>
-                        <p className="text-slate-500 dark:text-slate-400 text-sm mb-5">Esta ação não pode ser desfeita.</p>
-                        <div className="flex gap-2">
-                            <button onClick={() => setDeleteId(null)} className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-400 font-semibold text-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                                Cancelar
-                            </button>
-                            <button onClick={() => handleDelete(deleteId)} className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-sm transition-colors">
-                                Excluir
-                            </button>
-                        </div>
-                    </div>
-                </div>
             )}
         </div>
     );

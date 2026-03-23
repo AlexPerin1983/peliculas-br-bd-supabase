@@ -98,7 +98,7 @@ export function InviteEmailForm({ inviteCode, organizationName, inviterName }: I
                 </p>
             </div>
 
-            <style jsx>{`
+      <style>{`
         .invite-email-form {
           max-width: 500px;
           padding: 20px;

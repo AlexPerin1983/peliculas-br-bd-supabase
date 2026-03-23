@@ -489,7 +489,7 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
                 />
             )}
 
-            <style jsx>{`
+      <style>{`
 @keyframes carousel-left {
     0% { opacity: 1; transform: translateX(0) scale(1); }
     25% { opacity: 0.5; transform: translateX(-50px) scale(0.95); }

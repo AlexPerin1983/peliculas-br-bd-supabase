@@ -1,4 +1,8 @@
-@import "tailwindcss";
+@import "tailwindcss" source(none);
+@source "../index.html";
+@source "../*.tsx";
+@source "./**/*.{tsx,jsx}";
+@source "../components/**/*.{tsx,jsx}";
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* Custom Styles */

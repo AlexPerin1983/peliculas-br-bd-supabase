@@ -66,12 +66,20 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
     const { request } = event;
     const url = new URL(request.url);
+    const isLocalDev = ['localhost', '127.0.0.1'].includes(url.hostname);
+    const isViteRequest =
+        url.pathname.startsWith('/@vite') ||
+        url.pathname.startsWith('/@react-refresh') ||
+        url.pathname.startsWith('/node_modules/') ||
+        url.pathname.endsWith('.ts') ||
+        url.pathname.endsWith('.tsx');
 
     // Ignora requisições não-GET
     if (request.method !== 'GET') return;
 
     // Ignora extensões do Chrome e outras origens
     if (url.origin !== location.origin) return;
+    if (isLocalDev || isViteRequest) return;
 
     // Ignora requisições de API (supabase, etc)
     if (url.pathname.includes('/api/') || url.hostname.includes('supabase')) return;

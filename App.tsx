@@ -1,18 +1,12 @@
 ﻿import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense, useRef } from 'react';
 import './src/estoque-dark-mode.css';
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
-import { Client, Measurement, UserInfo, Film, PaymentMethods, SavedPDF, Agendamento, ProposalOption, SchedulingInfo, ExtractedClientData, Totals } from './types';
+import { Client, Measurement, UserInfo, Film, PaymentMethods, SavedPDF, Agendamento, SchedulingInfo, ExtractedClientData, Totals, UIMeasurement } from './types';
 import { CuttingOptimizer } from './utils/CuttingOptimizer';
 import * as db from './services/db';
-import * as estoqueDb from './services/estoqueDb';
 import { supabase } from './services/supabaseClient';
 // pdfGenerator será importado dinamicamente para code splitting
 import Header from './components/Header';
-import ClientBar from './components/ClientBar';
-import MeasurementList from './components/MeasurementList';
-import SummaryBar from './components/SummaryBar';
-import ActionsBar from './components/ActionsBar';
-import MobileFooter from './components/MobileFooter';
 import ClientModal from './components/modals/ClientModal';
 import ClientSelectionModal from './components/modals/ClientSelectionModal';
 import PaymentMethodsModal from './components/modals/PaymentMethodsModal';
@@ -30,8 +24,6 @@ import AIMeasurementModal from './components/modals/AIMeasurementModal';
 import AIClientModal from './components/modals/AIClientModal';
 import AIFilmModal from './components/modals/AIFilmModal';
 import ApiKeyModal from './components/modals/ApiKeyModal';
-import ProposalOptionsCarousel from './components/ProposalOptionsCarousel';
-import CuttingOptimizationPanel from './components/CuttingOptimizationPanel';
 import ImageGalleryModal from './components/modals/ImageGalleryModal';
 import LocationImportModal from './components/modals/LocationImportModal';
 import ServicoQrModal from './components/modals/ServicoQrModal';
@@ -40,41 +32,31 @@ import UpdateBanner from './components/UpdateBanner';
 import { ModalsContainer } from './components/ModalsContainer';
 import { usePwaInstallPrompt } from './src/hooks/usePwaInstallPrompt';
 import { usePwaUpdate } from './src/hooks/usePwaUpdate';
+import { useAppBootstrap } from './src/hooks/useAppBootstrap';
+import { useProposalEditor } from './src/hooks/useProposalEditor';
+import { useMeasurementEditor } from './src/hooks/useMeasurementEditor';
+import { useProposalTotals } from './src/hooks/useProposalTotals';
+import { usePdfActions } from './src/hooks/usePdfActions';
+import { useClientFlow } from './src/hooks/useClientFlow';
+import { useFilmFlow } from './src/hooks/useFilmFlow';
+import { useSchedulingFlow } from './src/hooks/useSchedulingFlow';
+import { AppContentRouter } from './src/components/app/AppContentRouter';
+import { AppClientWorkspace } from './src/components/app/AppClientWorkspace';
 
 import { useError } from './src/contexts/ErrorContext';
 import { Skeleton, CardSkeleton } from './components/ui/Skeleton';
 import Toast from './components/ui/Toast';
 import { ProtectedRoute } from './components/ProtectedRoute';
-import { AdminUsers } from './components/AdminUsers';
 import { useAuth } from './contexts/AuthContext';
-import { UserAccount } from './components/UserAccount';
-import { FeatureGate, UpgradePrompt } from './components/subscription/SubscriptionComponents';
+import { UpgradePrompt } from './components/subscription/SubscriptionComponents';
 import { useSubscription } from './contexts/SubscriptionContext';
 import SyncStatusIndicator from './components/SyncStatusIndicator';
-import { initSyncService } from './services/syncService';
 
-
-
-import UserSettingsView from './components/views/UserSettingsView';
-import PdfHistoryView from './components/views/PdfHistoryView';
-import FilmListView from './components/views/FilmListView';
-import AgendaView from './components/views/AgendaView';
-import EstoqueView from './components/views/EstoqueView';
-import FornecedoresView from './components/views/FornecedoresView';
 import { getFornecedores } from './services/fornecedorService';
 import DesktopSidebar from './components/layout/DesktopSidebar';
 
 
-type UIMeasurement = Measurement & { isNew?: boolean };
 type ActiveTab = 'client' | 'films' | 'settings' | 'history' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores';
-
-type NumpadConfig = {
-    isOpen: boolean;
-    measurementId: number | null;
-    field: 'largura' | 'altura' | 'quantidade' | null;
-    currentValue: string;
-    shouldClearOnNextInput: boolean;
-};
 
 // Função para sanitizar nomes com problemas de encoding para uso em filenames
 const sanitizeForFilename = (name: string): string => {
@@ -112,13 +94,10 @@ const App: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [clients, setClients] = useState<Client[]>([]);
     const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
-    const [proposalOptions, setProposalOptions] = useState<ProposalOption[]>([]);
-    const [activeOptionId, setActiveOptionId] = useState<number | null>(null);
     const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
     const [films, setFilms] = useState<Film[]>([]);
     const [allSavedPdfs, setAllSavedPdfs] = useState<SavedPDF[]>([]);
     const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
-    const [fornecedores, setFornecedores] = useState(() => getFornecedores());
     const [activeTab, setActiveTab] = useState<ActiveTab>(() => {
         const saved = localStorage.getItem('peliculas-br-active-tab');
         if (saved && ['client', 'films', 'settings', 'history', 'agenda', 'sales', 'admin', 'account', 'estoque', 'fornecedores'].includes(saved)) {
@@ -126,7 +105,6 @@ const App: React.FC = () => {
         }
         return 'client';
     });
-    const [isDirty, setIsDirty] = useState(false);
 
     // Persist active tab to localStorage
     useEffect(() => {
@@ -149,7 +127,6 @@ const App: React.FC = () => {
             const pendingCode = localStorage.getItem('pendingInviteCode');
             if (authUser && pendingCode) {
                 try {
-                    console.log('Processando convite pendente:', pendingCode);
                     const { data, error } = await supabase.rpc('redeem_invite', { code: pendingCode });
 
                     if (error) throw error;
@@ -209,12 +186,9 @@ const App: React.FC = () => {
     // ... (existing code)
 
 
-    const [editingMeasurement, setEditingMeasurement] = useState<UIMeasurement | null>(null);
     const [schedulingInfo, setSchedulingInfo] = useState<SchedulingInfo | null>(null);
     const [agendamentoToDelete, setAgendamentoToDelete] = useState<Agendamento | null>(null);
     const [postClientSaveAction, setPostClientSaveAction] = useState<'openAgendamentoModal' | null>(null);
-    const [editingMeasurementForDiscount, setEditingMeasurementForDiscount] = useState<UIMeasurement | null>(null);
-    const [editingMeasurementBasePrice, setEditingMeasurementBasePrice] = useState<number>(0);
     const [isAIMeasurementModalOpen, setIsAIMeasurementModalOpen] = useState(false);
     const [isAIClientModalOpen, setIsAIClientModalOpen] = useState(false);
     const [aiClientData, setAiClientData] = useState<Partial<Client> | undefined>(undefined);
@@ -227,7 +201,6 @@ const App: React.FC = () => {
     const [isDuplicateAllModalOpen, setIsDuplicateAllModalOpen] = useState(false);
     const [isLocationImportModalOpen, setIsLocationImportModalOpen] = useState(false);
     const [isServicoQrModalOpen, setIsServicoQrModalOpen] = useState(false);
-    const [measurementToDeleteId, setMeasurementToDeleteId] = useState<number | null>(null);
     const [isDeleteProposalOptionModalOpen, setIsDeleteProposalOptionModalOpen] = useState(false);
     const [proposalOptionToDeleteId, setProposalOptionToDeleteId] = useState<number | null>(null);
 
@@ -243,19 +216,7 @@ const App: React.FC = () => {
     const [isExitConfirmModalOpen, setIsExitConfirmModalOpen] = useState(false);
 
     // Undo states
-    const [deletedMeasurement, setDeletedMeasurement] = useState<UIMeasurement | null>(null);
-    const [deletedMeasurementIndex, setDeletedMeasurementIndex] = useState<number | null>(null);
-    const [showUndoToast, setShowUndoToast] = useState(false);
-
-
-
-    const [numpadConfig, setNumpadConfig] = useState<NumpadConfig>({
-        isOpen: false,
-        measurementId: null,
-        field: null,
-        currentValue: '',
-        shouldClearOnNextInput: false,
-    });
+    
 
     const mainRef = useRef<HTMLElement>(null);
     const numpadRef = useRef<HTMLDivElement>(null);
@@ -300,6 +261,99 @@ const App: React.FC = () => {
         if (urlParams.toString()) {
             window.history.replaceState({}, '', window.location.pathname);
         }
+    }, []);
+
+    const {
+        loadClients,
+        loadFilms,
+        loadAllPdfs,
+        loadAgendamentos
+    } = useAppBootstrap({
+        authUserId: authUser?.id,
+        lastSelectedClientId: userInfo?.lastSelectedClientId,
+        setIsLoading,
+        setClients,
+        setSelectedClientId,
+        setUserInfo,
+        setFilms,
+        setAllSavedPdfs,
+        setAgendamentos,
+        setHasLoadedHistory,
+        setHasLoadedAgendamentos
+    });
+
+    const {
+        proposalOptions,
+        activeOptionId,
+        setActiveOptionId,
+        activeOption,
+        measurements,
+        generalDiscount,
+        isDirty,
+        handleSaveChanges,
+        handleMeasurementsChange,
+        handleGeneralDiscountChange,
+        createEmptyMeasurement,
+        addMeasurement,
+        duplicateActiveOption,
+        addProposalOption,
+        renameProposalOption,
+        deleteProposalOption,
+        clearMeasurements
+    } = useProposalEditor({
+        selectedClientId,
+        films,
+        loadClients
+    });
+
+    const {
+        numpadConfig,
+        editingMeasurement,
+        setEditingMeasurement,
+        editingMeasurementForDiscount,
+        editingMeasurementBasePrice,
+        measurementToDeleteId,
+        setMeasurementToDeleteId,
+        deletedMeasurement,
+        showUndoToast,
+        handleOpenNumpad,
+        handleNumpadClose,
+        handleNumpadDone,
+        handleNumpadInput,
+        handleNumpadDelete,
+        handleNumpadDuplicate,
+        handleNumpadClear,
+        handleNumpadAddGroup,
+        handleOpenEditMeasurementModal,
+        handleCloseEditMeasurementModal,
+        handleUpdateEditingMeasurement,
+        handleRequestDeleteMeasurement,
+        handleConfirmDeleteIndividualMeasurement,
+        handleDeleteMeasurementFromEditModal,
+        handleDeleteMeasurementFromGroup,
+        handleImmediateDeleteMeasurement,
+        handleUndoDelete,
+        handleDismissUndo,
+        handleOpenDiscountModal,
+        handleCloseDiscountModal,
+        handleSaveDiscount
+    } = useMeasurementEditor({
+        measurements,
+        handleMeasurementsChange,
+        createEmptyMeasurement
+    });
+
+    const handleSwipeDirectionChange = useCallback((direction: 'left' | 'right' | null, distance: number) => {
+        setSwipeDirection(direction);
+        setSwipeDistance(distance);
+    }, []);
+
+    const handleShowInfo = useCallback((message: string, title: string = "AtenÃ§Ã£o") => {
+        setInfoModalConfig({ isOpen: true, title, message });
+    }, []);
+
+    const handleCloseInfoModal = useCallback(() => {
+        setInfoModalConfig(prev => ({ ...prev, isOpen: false }));
     }, []);
 
     // Intercepta o botão voltar do navegador/Android
@@ -357,7 +411,7 @@ const App: React.FC = () => {
             }
         };
     }, [numpadConfig.isOpen, isClientModalOpen, isFilmModalOpen, editingMeasurement,
-        isFilmSelectionModalOpen, isGalleryOpen, schedulingInfo]);
+        isFilmSelectionModalOpen, isGalleryOpen, schedulingInfo, handleNumpadClose, handleShowInfo]);
 
     useEffect(() => {
         const mainEl = mainRef.current;
@@ -392,232 +446,6 @@ const App: React.FC = () => {
         }
     }, [numpadConfig.isOpen, numpadConfig.measurementId]);
 
-    const loadClients = useCallback(async (clientIdToSelect?: number, shouldReorder: boolean = true) => {
-        const storedClients = await db.getAllClients();
-
-        let finalClients = storedClients;
-
-        if (shouldReorder) {
-            finalClients = storedClients.sort((a, b) => {
-                const dateA = a.lastUpdated ? new Date(a.lastUpdated).getTime() : 0;
-                const dateB = b.lastUpdated ? new Date(b.lastUpdated).getTime() : 0;
-                return dateB - dateA;
-            });
-        }
-
-        setClients(finalClients);
-
-        let idToSelect = clientIdToSelect;
-
-        if (!idToSelect && userInfo?.lastSelectedClientId) {
-            const lastClient = finalClients.find(c => c.id === userInfo.lastSelectedClientId);
-            if (lastClient) {
-                idToSelect = lastClient.id;
-            }
-        }
-
-        if (idToSelect) {
-            setSelectedClientId(idToSelect);
-        } else if (finalClients.length > 0) {
-            setSelectedClientId(finalClients[0].id!);
-        } else {
-            setSelectedClientId(null);
-        }
-    }, [userInfo?.lastSelectedClientId]);
-
-    const loadFilms = useCallback(async () => {
-        const customFilms = await db.getAllCustomFilms();
-        const sortedFilms = customFilms.sort((a, b) => a.nome.localeCompare(b.nome));
-        setFilms(sortedFilms);
-    }, []);
-
-    const loadAllPdfs = useCallback(async () => {
-        const pdfs = await db.getAllPDFs();
-        setAllSavedPdfs(pdfs);
-    }, []);
-
-    const loadAgendamentos = useCallback(async () => {
-        const data = await db.getAllAgendamentos();
-        setAgendamentos(data);
-    }, []);
-
-
-    useEffect(() => {
-        const init = async () => {
-            // Inicializar serviço de sincronização offline
-            initSyncService();
-
-            // Só carrega dados se houver usuário autenticado
-            if (!authUser) {
-                console.log('[App init] Sem usuário autenticado, pulando carregamento');
-                setIsLoading(false);
-                return;
-            }
-
-            console.log('[App init] Usuário autenticado, carregando dados...', authUser.id);
-            setIsLoading(true);
-
-            // Carregar todos os dados em paralelo para trocas de abas instantâneas
-            const [loadedUserInfo] = await Promise.all([
-                db.getUserInfo(),
-                loadClients(),
-                loadFilms(),
-                loadAllPdfs(),
-                loadAgendamentos(),
-                estoqueDb.getAllBobinas(),
-                estoqueDb.getAllRetalhos(),
-                estoqueDb.getEstoqueStats()
-            ]);
-
-            setHasLoadedHistory(true);
-            setHasLoadedAgendamentos(true);
-
-            console.log('[App init] Dados essenciais carregados');
-            setUserInfo(loadedUserInfo);
-
-            // Migração automática de PDFs (roda apenas uma vez)
-            const migrationKey = 'peliculas-br-bd-pdf_migration_v1';
-            const migrationCompleted = localStorage.getItem(migrationKey);
-
-            if (!migrationCompleted) {
-                try {
-
-                    const result = await db.migratePDFsWithProposalOptionId();
-
-                    localStorage.setItem(migrationKey, 'true');
-                } catch (error) {
-                    console.error('Erro na migração automática:', error);
-                }
-            }
-
-            setIsLoading(false);
-        };
-        init();
-    }, [authUser?.id]); // Recarrega quando o usuário muda
-
-    useEffect(() => {
-        if (selectedClientId !== null && userInfo && userInfo.lastSelectedClientId !== selectedClientId) {
-            const updatedUserInfo = { ...userInfo, lastSelectedClientId: selectedClientId };
-            setUserInfo(updatedUserInfo);
-            db.saveUserInfo(updatedUserInfo);
-        }
-        setClientTransitionKey(prev => prev + 1);
-    }, [selectedClientId, userInfo]);
-
-    useEffect(() => {
-        const loadDataForClient = async () => {
-            if (selectedClientId) {
-                const savedOptions = await db.getProposalOptions(selectedClientId);
-
-                if (savedOptions.length === 0) {
-                    const defaultOption: ProposalOption = {
-                        id: Date.now(),
-                        name: 'Op��o 1',
-                        measurements: [],
-                        generalDiscount: { value: '', type: 'percentage' }
-                    };
-                    setProposalOptions([defaultOption]);
-                    setActiveOptionId(defaultOption.id);
-                } else {
-                    setProposalOptions(savedOptions);
-                    setActiveOptionId(savedOptions[0].id);
-                }
-                setIsDirty(false);
-            } else {
-                setProposalOptions([]);
-                setActiveOptionId(null);
-                setIsDirty(false);
-            }
-        };
-        loadDataForClient();
-    }, [selectedClientId]);
-
-    const activeOption = useMemo(() => {
-        return proposalOptions.find(opt => opt.id === activeOptionId) || null;
-    }, [proposalOptions, activeOptionId]);
-
-    const measurements = activeOption?.measurements || [];
-    const generalDiscount = activeOption?.generalDiscount || { value: '', type: 'percentage' as const };
-
-    const handleSaveChanges = useCallback(async () => {
-        if (selectedClientId && proposalOptions.length > 0) {
-            await db.saveProposalOptions(selectedClientId, proposalOptions);
-            setIsDirty(false);
-
-            await loadClients(selectedClientId);
-        }
-    }, [selectedClientId, proposalOptions, loadClients]);
-
-    const handleMeasurementsChange = useCallback((newMeasurements: UIMeasurement[]) => {
-        if (!activeOptionId) return;
-
-        setProposalOptions(prev => prev.map(opt =>
-            opt.id === activeOptionId
-                ? { ...opt, measurements: newMeasurements }
-                : opt
-        ));
-        setIsDirty(true);
-    }, [activeOptionId]);
-
-    useEffect(() => {
-        if (!isDirty) {
-            return;
-        }
-        const timerId = setTimeout(() => {
-            handleSaveChanges();
-        }, 1500);
-
-        return () => clearTimeout(timerId);
-    }, [proposalOptions, isDirty, handleSaveChanges]);
-
-
-
-
-    const handleGeneralDiscountChange = useCallback((discount: { value: string; type: 'percentage' | 'fixed' }) => {
-        if (!activeOptionId) return;
-
-        setProposalOptions(prev => prev.map(opt =>
-            opt.id === activeOptionId
-                ? { ...opt, generalDiscount: discount }
-                : opt
-        ));
-        setIsDirty(true);
-    }, [activeOptionId]);
-
-    const handleSwipeDirectionChange = useCallback((direction: 'left' | 'right' | null, distance: number) => {
-        setSwipeDirection(direction);
-        setSwipeDistance(distance);
-    }, []);
-
-    const handleShowInfo = useCallback((message: string, title: string = "Aten��o") => {
-        setInfoModalConfig({ isOpen: true, title, message });
-    }, []);
-
-    const handleCloseInfoModal = useCallback(() => {
-        setInfoModalConfig(prev => ({ ...prev, isOpen: false }));
-    }, []);
-
-    const createEmptyMeasurement = useCallback((): Measurement => ({
-        id: Date.now(),
-        largura: '',
-        altura: '',
-        quantidade: 1,
-        ambiente: 'Desconhecido',
-        tipoAplicacao: 'Desconhecido',
-        pelicula: films[0]?.nome || 'Nenhuma',
-        active: true,
-        discount: { value: '0', type: 'percentage' },
-    }), [films]);
-
-    const addMeasurement = useCallback(() => {
-        const newMeasurement: UIMeasurement = { ...createEmptyMeasurement(), isNew: true };
-        const updatedMeasurements = [
-            ...measurements.map(m => ({ ...m, isNew: false })),
-            newMeasurement,
-        ];
-        handleMeasurementsChange(updatedMeasurements);
-    }, [createEmptyMeasurement, measurements, handleMeasurementsChange]);
-
     const duplicateAllMeasurements = useCallback(() => {
         if (!activeOption) return;
 
@@ -625,57 +453,9 @@ const App: React.FC = () => {
     }, [activeOption]);
 
     const handleConfirmDuplicateAll = useCallback(() => {
-        if (!activeOption) return;
-
-        const newOption: ProposalOption = {
-            id: Date.now(),
-            name: `Op��o ${proposalOptions.length + 1}`,
-            measurements: activeOption.measurements.map((m, index) => ({
-                ...m,
-                id: Date.now() + index,
-                isNew: false
-            })),
-            generalDiscount: { ...activeOption.generalDiscount }
-        };
-
-        setProposalOptions(prev => [...prev, newOption]);
-        setActiveOptionId(newOption.id);
-        setIsDirty(true);
+        duplicateActiveOption();
         setIsDuplicateAllModalOpen(false);
-    }, [activeOption, proposalOptions.length]);
-
-    const handleAddProposalOption = useCallback(() => {
-        setProposalOptions(prevOptions => {
-            const newOption: ProposalOption = {
-                id: Date.now(),
-                name: `Op��o 1`,
-                measurements: [],
-                generalDiscount: { value: '', type: 'percentage' }
-            };
-
-            const newOptions = [...prevOptions, newOption];
-            setActiveOptionId(newOption.id);
-            setIsDirty(true);
-            return newOptions;
-        });
-    }, []);
-
-    const handleRenameProposalOption = useCallback((optionId: number, newName: string) => {
-        setProposalOptions(prev => prev.map(opt =>
-            opt.id === optionId ? { ...opt, name: newName } : opt
-        ));
-        setIsDirty(true);
-    }, []);
-
-    const handleDeleteProposalOption = useCallback((optionId: number) => {
-        const remainingOptions = proposalOptions.filter(opt => opt.id !== optionId);
-        setProposalOptions(remainingOptions);
-
-        if (activeOptionId === optionId && remainingOptions.length > 0) {
-            setActiveOptionId(remainingOptions[0].id);
-        }
-        setIsDirty(true);
-    }, [proposalOptions, activeOptionId]);
+    }, [duplicateActiveOption]);
 
     const handleRequestDeleteProposalOption = useCallback((optionId: number) => {
         setProposalOptionToDeleteId(optionId);
@@ -684,49 +464,22 @@ const App: React.FC = () => {
 
     const handleConfirmDeleteProposalOption = useCallback(() => {
         if (proposalOptionToDeleteId !== null) {
-            handleDeleteProposalOption(proposalOptionToDeleteId);
+            deleteProposalOption(proposalOptionToDeleteId);
             setIsDeleteProposalOptionModalOpen(false);
             setProposalOptionToDeleteId(null);
         }
-    }, [proposalOptionToDeleteId, handleDeleteProposalOption]);
+    }, [proposalOptionToDeleteId, deleteProposalOption]);
 
     const handleConfirmClearAll = useCallback(() => {
-
-        handleMeasurementsChange([]);
+        clearMeasurements();
         setIsClearAllModalOpen(false);
-    }, [handleMeasurementsChange]);
+    }, [clearMeasurements]);
 
-    const selectedClient = useMemo(() => {
-        return clients.find(c => c.id === selectedClientId) || null;
-    }, [clients, selectedClientId]);
-
-    // Função auxiliar para salvar o valor atual do Numpad no Measurement
-    const saveCurrentNumpadValue = useCallback((config: NumpadConfig, currentMeasurements: UIMeasurement[]) => {
-        const { measurementId, field, currentValue } = config;
-        if (measurementId === null || field === null) return currentMeasurements;
-
-        let finalValue: string | number;
-        if (field === 'quantidade') {
-            finalValue = parseInt(String(currentValue), 10) || 1;
-        } else {
-            // Garante que o valor seja salvo com vírgula, se for numérico
-            finalValue = (String(currentValue) === '' || String(currentValue) === '.') ? '0' : String(currentValue).replace('.', ',');
-        }
-
-        return currentMeasurements.map(m =>
-            m.id === measurementId ? { ...m, [field]: finalValue } : m
-        );
-    }, []);
-
-    const handleNumpadClose = useCallback(() => {
-        setNumpadConfig(prev => {
-            // Salva o valor atual antes de fechar
-            const updatedMeasurements = saveCurrentNumpadValue(prev, measurements);
-            handleMeasurementsChange(updatedMeasurements);
-
-            return { isOpen: false, measurementId: null, field: null, currentValue: '', shouldClearOnNextInput: false };
-        });
-    }, [measurements, handleMeasurementsChange, saveCurrentNumpadValue]);
+    const totals = useProposalTotals({
+        measurements,
+        films,
+        generalDiscount
+    });
 
     const handleOpenClientModal = useCallback((mode: 'add' | 'edit') => {
         if (numpadConfig.isOpen) {
@@ -741,31 +494,59 @@ const App: React.FC = () => {
         setIsClientModalOpen(true);
     }, [selectedClientId, numpadConfig.isOpen, handleNumpadClose]);
 
-    const handleOpenAgendamentoModal = useCallback((info: SchedulingInfo) => {
-        setSchedulingInfo(info);
-    }, []);
+    const {
+        handleOpenAgendamentoModal,
+        handleCloseAgendamentoModal,
+        handleSaveAgendamento,
+        handleRequestDeleteAgendamento,
+        handleConfirmDeleteAgendamento,
+        handleCreateNewAgendamento,
+        handleEditAgendamento,
+        handleGoToHistoryFromPdf
+    } = useSchedulingFlow({
+        allSavedPdfs,
+        agendamentoToDelete,
+        setSchedulingInfo,
+        setAgendamentoToDelete,
+        setPdfGenerationStatus,
+        setActiveTab,
+        loadAgendamentos,
+        loadAllPdfs,
+        handleShowInfo
+    });
 
-    const handleSaveClient = useCallback(async (client: Omit<Client, 'id'>) => {
-        let savedClient: Client;
-        if (clientModalMode === 'edit' && selectedClientId) {
-            savedClient = await db.saveClient({ ...client, id: selectedClientId });
-        } else {
-            savedClient = await db.saveClient(client);
-        }
-
-        await loadClients(savedClient.id!);
-
-        setIsClientModalOpen(false);
-        setNewClientName('');
-        setAiClientData(undefined);
-
-        if (postClientSaveAction === 'openAgendamentoModal') {
-            handleOpenAgendamentoModal({
-                agendamento: { clienteId: savedClient.id }
-            });
-            setPostClientSaveAction(null);
-        }
-    }, [clientModalMode, selectedClientId, postClientSaveAction, handleOpenAgendamentoModal, loadClients]);
+    const {
+        selectedClient,
+        handleSaveClient,
+        handleConfirmDeleteClient,
+        handleToggleClientPin,
+        goToNextClient,
+        goToPrevClient,
+        handleNavigateToOption
+    } = useClientFlow({
+        clients,
+        setClients,
+        selectedClientId,
+        setSelectedClientId,
+        setActiveTab,
+        setActiveOptionId,
+        userInfo,
+        setUserInfo,
+        clientModalMode,
+        postClientSaveAction,
+        setPostClientSaveAction,
+        setClientTransitionKey,
+        setIsClientModalOpen,
+        setNewClientName,
+        setAiClientData,
+        setIsDeleteClientModalOpen,
+        loadClients,
+        loadAllPdfs,
+        loadAgendamentos,
+        hasLoadedHistory,
+        hasLoadedAgendamentos,
+        handleOpenAgendamentoModal
+    });
 
     const handleDeleteClient = useCallback(() => {
         if (numpadConfig.isOpen) {
@@ -776,58 +557,6 @@ const App: React.FC = () => {
         }
         setIsDeleteClientModalOpen(true);
     }, [selectedClientId, numpadConfig.isOpen, handleNumpadClose]);
-
-    const handleConfirmDeleteClient = useCallback(() => {
-        if (!selectedClientId) return;
-
-        const idToDelete = selectedClientId;
-
-        // 1. Fechar o modal imediatamente para resposta instantânea
-        setIsDeleteClientModalOpen(false);
-
-        // 2. Atualização Otimista: Remover da lista de clientes na UI imediatamente
-        setClients(prev => {
-            const updatedClients = prev.filter(c => c.id !== idToDelete);
-
-            // 3. Selecionar o próximo cliente disponível ou null
-            if (selectedClientId === idToDelete) {
-                if (updatedClients.length > 0) {
-                    setSelectedClientId(updatedClients[0].id!);
-                } else {
-                    setSelectedClientId(null);
-                }
-            }
-
-            return updatedClients;
-        });
-
-        // 4. Processar exclusões no banco de dados em background
-        setTimeout(async () => {
-            try {
-                // Deletar cliente e suas dependências
-                await db.deleteClient(idToDelete);
-                await db.deleteProposalOptions(idToDelete);
-
-                const pdfsForClient = await db.getPDFsForClient(idToDelete);
-                for (const pdf of pdfsForClient) {
-                    if (pdf.id) {
-                        await db.deletePDF(pdf.id);
-                    }
-                }
-
-                // Atualizar outros estados se necessário (em background)
-                if (hasLoadedHistory) {
-                    loadAllPdfs();
-                }
-                if (hasLoadedAgendamentos) {
-                    loadAgendamentos();
-                }
-            } catch (error) {
-                console.error('Erro ao deletar cliente no background:', error);
-                loadClients();
-            }
-        }, 50);
-    }, [selectedClientId, hasLoadedHistory, loadAllPdfs, hasLoadedAgendamentos, loadAgendamentos, loadClients]);
 
     const handleSaveUserInfo = useCallback(async (info: UserInfo) => {
         await db.saveUserInfo(info);
@@ -849,376 +578,61 @@ const App: React.FC = () => {
         }
     }, [userInfo]);
 
-    const handleOpenFilmModal = useCallback((film: Film | null) => {
-        setEditingFilm(film);
-        setIsFilmModalOpen(true);
-    }, []);
-
-    const handleEditFilmFromSelection = useCallback((film: Film) => {
-        setIsFilmSelectionModalOpen(false);
-        setIsApplyFilmToAllModalOpen(false);
-        setEditingMeasurementIdForFilm(null);
-
-        handleOpenFilmModal(film);
-    }, [handleOpenFilmModal]);
-
-    const handleSaveFilm = useCallback(async (newFilmData: Film, originalFilm: Film | null) => {
-        if (originalFilm && originalFilm.nome !== newFilmData.nome) {
-            await db.deleteCustomFilm(originalFilm.nome);
-        }
-
-
-        await db.saveCustomFilm(newFilmData);
-        await loadFilms();
-        setIsFilmModalOpen(false);
-        setEditingFilm(null);
-
-        if (editingMeasurementIdForFilm !== null) {
-            const updatedMeasurements = measurements.map(m =>
-                m.id === editingMeasurementIdForFilm ? { ...m, pelicula: newFilmData.nome } : m
-            );
-            handleMeasurementsChange(updatedMeasurements);
-            setEditingMeasurementIdForFilm(null);
-        }
-    }, [loadFilms, editingMeasurementIdForFilm, measurements, handleMeasurementsChange]);
-
-    const handleToggleClientPin = useCallback(async (clientId: number) => {
-        const client = clients.find(c => c.id === clientId);
-        if (client) {
-            const isPinned = !client.pinned;
-            const updatedClient = {
-                ...client,
-                pinned: isPinned,
-                pinnedAt: isPinned ? Date.now() : undefined
-            };
-            await db.saveClient(updatedClient);
-            await loadClients();
-        }
-    }, [clients, loadClients]);
-
-    const handleToggleFilmPin = useCallback(async (filmName: string) => {
-        const film = films.find(f => f.nome === filmName);
-        if (film) {
-            const isPinned = !film.pinned;
-            const updatedFilm = {
-                ...film,
-                pinned: isPinned,
-                pinnedAt: isPinned ? Date.now() : undefined
-            };
-            await db.saveCustomFilm(updatedFilm);
-            await loadFilms();
-        }
-    }, [films, loadFilms]);
-
-    const handleDeleteFilm = useCallback(async (filmName: string) => {
-        setFilmToDeleteName(filmName);
-    }, []);
-
-    const handleRequestDeleteFilm = useCallback((filmName: string) => {
-        setIsFilmSelectionModalOpen(false);
-        setFilmToDeleteName(filmName);
-    }, []);
-
-    const handleConfirmDeleteFilm = useCallback(async () => {
-        if (filmToDeleteName === null) return;
-        await db.deleteCustomFilm(filmToDeleteName);
-        await loadFilms();
-        setFilmToDeleteName(null);
-    }, [filmToDeleteName, loadFilms]);
-
-
-    const downloadBlob = useCallback((blobOrBase64: Blob | string, filename: string) => {
-        let blob: Blob;
-
-        // Se é uma string (base64), converter para Blob
-        if (typeof blobOrBase64 === 'string') {
-            try {
-                // Formato base64: data:application/pdf;base64,xxxxx
-                if (!blobOrBase64.includes(',')) {
-                    console.error('[App] downloadBlob: formato base64 inválido');
-                    return;
-                }
-                const parts = blobOrBase64.split(',');
-                const mime = parts[0].match(/:(.*?);/)?.[1] || 'application/pdf';
-                const bstr = atob(parts[1]);
-                let n = bstr.length;
-                const u8arr = new Uint8Array(n);
-                while (n--) {
-                    u8arr[n] = bstr.charCodeAt(n);
-                }
-                blob = new Blob([u8arr], { type: mime });
-            } catch (error) {
-                console.error('[App] Erro ao converter base64 para Blob:', error);
-                return;
-            }
-        } else {
-            blob = blobOrBase64;
-        }
-
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    }, []);
-
-    const handleDownloadPdf = useCallback(async (pdf: SavedPDF, filename: string) => {
-        let blob = pdf.pdfBlob;
-        if (!blob && pdf.id) {
-            // Se o blob não estiver presente, buscar do banco (Supabase ou Local)
-            try {
-                blob = await db.getPDFBlob(pdf.id) || undefined;
-            } catch (error) {
-                console.error('[App] Erro ao buscar blob do PDF:', error);
-            }
-        }
-
-        if (blob) {
-            downloadBlob(blob, filename);
-        } else {
-            handleShowInfo("Não foi possível baixar o PDF.");
-        }
-    }, [downloadBlob, handleShowInfo]);
-
-    const totals = useMemo(() => {
-        const groupedTotals: { [key: string]: any } = {};
-
-        const result = measurements.reduce((acc, m) => {
-            if (m.active) {
-                const largura = parseFloat(m.largura.replace(',', '.')) || 0;
-                const altura = parseFloat(m.altura.replace(',', '.')) || 0;
-                const quantidade = parseInt(String(m.quantidade), 10) || 0;
-                const m2 = largura * altura * quantidade;
-                const film = films.find(f => f.nome === m.pelicula);
-
-                let pricePerM2 = 0;
-                if (film) {
-                    if (film.preco > 0) {
-                        pricePerM2 = film.preco;
-                    } else if (film.maoDeObra && film.maoDeObra > 0) {
-                        pricePerM2 = film.maoDeObra;
-                    }
-                }
-
-                const basePrice = pricePerM2 * m2;
-
-                const materialPrice = (film?.preco || 0) * m2;
-                const laborPrice = (film?.maoDeObra || 0) * m2;
-
-                let itemDiscountAmount = 0;
-                const discountObj = m.discount || { value: '0', type: 'percentage' };
-                const discountValue = parseFloat(String(discountObj.value).replace(',', '.')) || 0;
-
-                if (discountObj.type === 'percentage' && discountValue > 0) {
-                    itemDiscountAmount = basePrice * (discountValue / 100);
-                } else if (discountObj.type === 'fixed' && discountValue > 0) {
-                    itemDiscountAmount = discountValue;
-                }
-
-                const finalItemPrice = Math.max(0, basePrice - itemDiscountAmount);
-
-                acc.totalM2 += m2;
-                acc.subtotal += basePrice;
-                acc.totalItemDiscount += itemDiscountAmount;
-                acc.priceAfterItemDiscounts += finalItemPrice;
-                acc.totalQuantity += quantidade;
-                acc.totalMaterial += materialPrice;
-                acc.totalLabor += laborPrice;
-
-                // Agrupamento por película para o detalhamento
-                if (!groupedTotals[m.pelicula]) {
-                    groupedTotals[m.pelicula] = {
-                        filmName: m.pelicula,
-                        totalM2: 0,
-                        totalLinearMeters: 0,
-                        totalMaterial: 0,
-                        totalLabor: 0,
-                        totalLinearMeterCost: 0,
-                        unitPriceMaterial: film?.preco || 0,
-                        unitPriceLabor: film?.maoDeObra || 0,
-                        unitPriceLinearMeter: film?.precoMetroLinear || 0
-                    };
-                }
-                groupedTotals[m.pelicula].totalM2 += m2;
-                groupedTotals[m.pelicula].totalMaterial += materialPrice;
-                groupedTotals[m.pelicula].totalLabor += laborPrice;
-            }
-            return acc;
-        }, { totalM2: 0, subtotal: 0, totalItemDiscount: 0, priceAfterItemDiscounts: 0, totalQuantity: 0, totalMaterial: 0, totalLabor: 0 });
-
-        let generalDiscountAmount = 0;
-        const discountInputValue = parseFloat(String(generalDiscount.value).replace(',', '.')) || 0;
-        if (discountInputValue > 0) {
-            if (generalDiscount.type === 'percentage') {
-                generalDiscountAmount = result.priceAfterItemDiscounts * (discountInputValue / 100);
-            } else if (generalDiscount.type === 'fixed') {
-                generalDiscountAmount = discountInputValue;
-            }
-        }
-
-        const finalTotal = Math.max(0, result.priceAfterItemDiscounts - generalDiscountAmount);
-
-        const groupedByFilm: { [key: string]: Measurement[] } = {};
-        measurements.filter(m => m.active).forEach(m => {
-            if (!groupedByFilm[m.pelicula]) groupedByFilm[m.pelicula] = [];
-            groupedByFilm[m.pelicula].push(m);
-        });
-
-        let totalLinearMeters = 0;
-        let linearMeterCost = 0;
-
-        Object.entries(groupedByFilm).forEach(([filmName, filmMeasurements]) => {
-            const film = films.find(f => f.nome === filmName);
-            const rollWidth = 152; // Largura padrão da bobina em cm
-
-            const optimizer = new CuttingOptimizer({
-                rollWidth,
-                bladeWidth: 0,
-                allowRotation: true
-            });
-
-            filmMeasurements.forEach(m => {
-                const qty = Math.max(1, Math.floor(m.quantidade || 1));
-                const w = parseFloat(String(m.largura).replace(',', '.')) * 100;
-                const h = parseFloat(String(m.altura).replace(',', '.')) * 100;
-                if (!isNaN(w) && !isNaN(h) && w > 0 && h > 0) {
-                    for (let i = 0; i < qty; i++) {
-                        optimizer.addItem(w, h);
-                    }
-                }
-            });
-
-            const optimizationResult = optimizer.optimize();
-            const linearMeters = optimizationResult.totalHeight / 100;
-            totalLinearMeters += linearMeters;
-
-            if (groupedTotals[filmName]) {
-                groupedTotals[filmName].totalLinearMeters = linearMeters;
-                if (film?.precoMetroLinear) {
-                    const cost = linearMeters * film.precoMetroLinear;
-                    linearMeterCost += cost;
-                    groupedTotals[filmName].totalLinearMeterCost = cost;
-                }
-            }
-        });
-
-        return {
-            ...result,
-            generalDiscountAmount,
-            finalTotal,
-            totalLinearMeters,
-            linearMeterCost,
-            groupedTotals
-        };
-    }, [measurements, films, generalDiscount]);
-
-    const executePdfGeneration = useCallback(async () => {
-        const activeMeasurements = measurements.filter(m => m.active && parseFloat(String(m.largura).replace(',', '.')) > 0 && parseFloat(String(m.altura).replace(',', '.')) > 0);
-        if (activeMeasurements.length === 0) {
-            handleShowInfo("Não há medidas válidas para gerar um orçamento.");
-            return;
-        }
-
-        setPdfGenerationStatus('generating');
-        try {
-            // Importação dinâmica do módulo pdfGenerator para code splitting
-            const { generatePDF } = await import('./services/pdfGenerator');
-            // Passando o nome da opção de proposta para o gerador de PDF
-            const pdfBlob = await generatePDF(selectedClient!, userInfo!, activeMeasurements, films, generalDiscount, totals, activeOption!.name);
-            const filename = `orcamento_${sanitizeForFilename(selectedClient!.nome).replace(/\s+/g, '_').toLowerCase()}_${sanitizeForFilename(activeOption!.name).replace(/\s+/g, '_').toLowerCase()}_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.pdf`;
-
-            const generalDiscountForDb: SavedPDF['generalDiscount'] = {
-                ...generalDiscount,
-                value: parseFloat(String(generalDiscount.value).replace(',', '.')) || 0,
-                type: generalDiscount.value ? generalDiscount.type : 'none',
-            };
-
-            const validityDays = userInfo!.proposalValidityDays || 60;
-            const issueDate = new Date();
-            const expirationDate = new Date();
-            expirationDate.setDate(issueDate.getDate() + validityDays);
-
-            const pdfToSave: Omit<SavedPDF, 'id'> = {
-                clienteId: selectedClientId!,
-                date: issueDate.toISOString(),
-                expirationDate: expirationDate.toISOString(),
-                totalPreco: totals.finalTotal,
-                totalM2: totals.totalM2,
-                subtotal: totals.subtotal,
-                generalDiscountAmount: totals.generalDiscountAmount,
-                generalDiscount: generalDiscountForDb,
-                pdfBlob: pdfBlob,
-                nomeArquivo: filename,
-                measurements: activeMeasurements.map(({ isNew, ...rest }) => rest),
-                status: 'pending',
-                proposalOptionName: activeOption!.name,
-                proposalOptionId: activeOption!.id
-            };
-            const savedPdf = await db.savePDF(pdfToSave);
-
-            downloadBlob(pdfBlob, filename);
-
-            // Atualiza o estado imediatamente sem esperar sincronização remota
-            setAllSavedPdfs((prev: SavedPDF[]) => [savedPdf, ...prev]);
-
-            setPdfGenerationStatus('success');
-        } catch (error) {
-            console.error("Erro ao gerar ou salvar PDF:", error);
-            handleShowInfo("Ocorreu um erro ao gerar o PDF. Verifique o console para mais detalhes.");
-            setPdfGenerationStatus('idle');
-        }
-    }, [measurements, films, generalDiscount, totals, selectedClient, userInfo, activeOption, selectedClientId, downloadBlob, handleShowInfo]);
+    const {
+        handleDownloadPdf,
+        handleGeneratePdfWithSaveCheck,
+        handleConfirmSaveBeforePdf,
+        handleGenerateCombinedPdf
+    } = usePdfActions({
+        measurements,
+        films,
+        generalDiscount,
+        totals,
+        selectedClient,
+        selectedClientId,
+        userInfo,
+        activeOption,
+        clients,
+        setAllSavedPdfs,
+        setPdfGenerationStatus,
+        setIsSaveBeforePdfModalOpen,
+        handleShowInfo,
+        handleSaveChanges
+    });
 
     const handleGeneratePdf = useCallback(async () => {
-        if (!selectedClient || !userInfo || !activeOption) {
-            handleShowInfo("Selecione um cliente e preencha as informações da empresa antes de gerar o PDF.");
-            return;
-        }
-        if (isDirty) {
-            setIsSaveBeforePdfModalOpen(true);
-            return;
-        }
-        await executePdfGeneration();
-    }, [selectedClient, userInfo, activeOption, isDirty, handleShowInfo, executePdfGeneration]);
+        await handleGeneratePdfWithSaveCheck(isDirty);
+    }, [handleGeneratePdfWithSaveCheck, isDirty]);
 
-    const handleConfirmSaveBeforePdf = useCallback(async () => {
-        await handleSaveChanges();
-        setIsSaveBeforePdfModalOpen(false);
-        await executePdfGeneration();
-    }, [handleSaveChanges, executePdfGeneration]);
-
-    const handleGenerateCombinedPdf = useCallback(async (selectedPdfs: SavedPDF[]) => {
-        if (!userInfo || selectedPdfs.length === 0) return;
-
-        setPdfGenerationStatus('generating');
-        try {
-            const client = clients.find(c => c.id === selectedPdfs[0].clienteId);
-            if (!client) throw new Error("Cliente não encontrado para os orçamentos selecionados.");
-
-            // Importação dinâmica do módulo pdfGenerator para code splitting
-            const { generateCombinedPDF } = await import('./services/pdfGenerator');
-            const pdfBlob = await generateCombinedPDF(client, userInfo, selectedPdfs, films);
-
-            const firstOptionName = selectedPdfs[0].proposalOptionName || 'Opcao';
-            const filename = `orcamento_combinado_${sanitizeForFilename(client.nome).replace(/\s+/g, '_').toLowerCase()}_${sanitizeForFilename(firstOptionName).replace(/\s+/g, '_').toLowerCase()}_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.pdf`;
-
-            downloadBlob(pdfBlob, filename);
-
-            setPdfGenerationStatus('success');
-        } catch (error) {
-            console.error("Erro ao gerar PDF combinado:", error);
-            handleShowInfo(`Ocorreu um erro ao gerar o PDF combinado: ${error instanceof Error ? error.message : String(error)} `);
-            setPdfGenerationStatus('idle');
-        }
-    }, [userInfo, clients, films, downloadBlob]);
-
-    const handleGoToHistoryFromPdf = useCallback(() => {
-        setPdfGenerationStatus('idle');
-        setActiveTab('history');
-    }, []);
+    const {
+        handleOpenFilmModal,
+        handleEditFilmFromSelection,
+        handleSaveFilm,
+        handleToggleFilmPin,
+        handleDeleteFilm,
+        handleRequestDeleteFilm,
+        handleConfirmDeleteFilm,
+        handleSelectFilmForMeasurement,
+        handleApplyFilmToAll,
+        handleAddNewFilmFromSelection
+    } = useFilmFlow({
+        films,
+        measurements,
+        editingMeasurementIdForFilm,
+        editingMeasurement,
+        filmToDeleteName,
+        setEditingFilm,
+        setIsFilmModalOpen,
+        setIsFilmSelectionModalOpen,
+        setIsApplyFilmToAllModalOpen,
+        setEditingMeasurementIdForFilm,
+        setFilmToDeleteName,
+        setFilmToApplyToAll,
+        setNewFilmName,
+        setEditingMeasurement,
+        loadFilms,
+        handleMeasurementsChange
+    });
 
     const handleClosePdfStatusModal = useCallback(() => {
         setPdfGenerationStatus('idle');
@@ -1352,8 +766,6 @@ const App: React.FC = () => {
                     text = ocrResult.text;
                 }
 
-                console.log("[OCR Local] Texto extraído para cliente:", text);
-
                 const { extractClientFromOCR } = await import('./src/lib/parsePrint');
                 const extractedData = extractClientFromOCR(text, 100);
 
@@ -1430,8 +842,6 @@ const App: React.FC = () => {
                     const ocrResult = await performOCR(files[0]);
                     text = ocrResult.text;
                 }
-
-                console.log("[OCR Local] Texto extraído para película:", text);
 
                 // Parser simples para dados de película
                 const filmData: Partial<Film> = {};
@@ -1744,8 +1154,6 @@ const App: React.FC = () => {
                     text = ocrResult.text;
                 }
 
-                console.log("[OCR Local] Texto extraído para medidas:", text);
-
                 // Importar parser dinamicamente
                 const { extractMeasurementsFromOCR } = await import('./src/lib/parsePrint');
                 const extractedData = extractMeasurementsFromOCR(text, 100);
@@ -1847,219 +1255,6 @@ const App: React.FC = () => {
         }
     }, []);
 
-    const handleOpenNumpad = useCallback((measurementId: number, field: 'largura' | 'altura' | 'quantidade', currentValue: string | number) => {
-        setNumpadConfig(prev => {
-            const isSameButton = prev.isOpen && prev.measurementId === measurementId && prev.field === field;
-
-            // 1. Se o Numpad já estava aberto em um campo diferente, salve o valor anterior.
-            if (prev.isOpen && (prev.measurementId !== measurementId || prev.field !== field)) {
-                const updatedMeasurements = saveCurrentNumpadValue(prev, measurements);
-                handleMeasurementsChange(updatedMeasurements);
-            }
-
-            if (isSameButton) {
-                return {
-                    ...prev,
-                    shouldClearOnNextInput: false,
-                };
-            }
-
-            // 2. Abre o Numpad no novo campo
-            return {
-                isOpen: true,
-                measurementId,
-                field,
-                currentValue: String(currentValue).replace(',', '.'),
-                shouldClearOnNextInput: true,
-            };
-        });
-    }, [measurements, handleMeasurementsChange, saveCurrentNumpadValue]);
-
-    const handleNumpadDone = useCallback(() => {
-        const { measurementId, field, currentValue } = numpadConfig;
-        if (measurementId === null || field === null) return;
-
-        let finalValue: string | number;
-        if (field === 'quantidade') {
-            finalValue = parseInt(String(currentValue), 10) || 1;
-        } else {
-            finalValue = (String(currentValue) === '' || String(currentValue) === '.') ? '0' : String(currentValue).replace('.', ',');
-        }
-
-        const updatedMeasurements = measurements.map(m =>
-            m.id === measurementId ? { ...m, [field]: finalValue } : m
-        );
-        handleMeasurementsChange(updatedMeasurements);
-
-        const fieldSequence: Array<'largura' | 'altura' | 'quantidade'> = ['largura', 'altura', 'quantidade'];
-        const currentIndex = fieldSequence.indexOf(field);
-        const nextIndex = currentIndex + 1;
-
-        if (nextIndex < fieldSequence.length) {
-            const nextField = fieldSequence[nextIndex];
-            const currentMeasurement = updatedMeasurements.find(m => m.id === measurementId);
-            const nextValue = currentMeasurement ? currentMeasurement[nextField] : '';
-
-            setNumpadConfig({
-                isOpen: true,
-                measurementId,
-                field: nextField,
-                currentValue: String(nextValue).replace(',', '.'),
-                shouldClearOnNextInput: true,
-            });
-        } else {
-            setNumpadConfig({ isOpen: false, measurementId: null, field: null, currentValue: '', shouldClearOnNextInput: false });
-        }
-    }, [numpadConfig, measurements, handleMeasurementsChange]);
-
-    const handleNumpadInput = useCallback((value: string) => {
-        setNumpadConfig(prev => {
-            const shouldClear = prev.shouldClearOnNextInput;
-            let newValue = prev.currentValue;
-
-            const char = value === ',' ? '.' : value;
-
-            if (char === '.') {
-                if (prev.field !== 'quantidade') {
-                    newValue = shouldClear ? '0.' : (newValue.includes('.') ? newValue : newValue + '.');
-                }
-            } else {
-                newValue = shouldClear ? char : newValue + char;
-            }
-
-            const isWidthOrHeight = prev.field === 'largura' || prev.field === 'altura';
-            const matchesPattern = /^\d\.\d{2}$/.test(newValue);
-
-            if (isWidthOrHeight && matchesPattern) {
-                const finalValue = newValue.replace('.', ',');
-                const measurementsWithSavedValue = measurements.map(m =>
-                    m.id === prev.measurementId ? { ...m, [prev.field!]: finalValue } : m
-                );
-                handleMeasurementsChange(measurementsWithSavedValue);
-
-                const fieldSequence: Array<'largura' | 'altura' | 'quantidade'> = ['largura', 'altura', 'quantidade'];
-                const currentIndex = fieldSequence.indexOf(prev.field!);
-                const nextIndex = currentIndex + 1;
-
-                if (nextIndex < fieldSequence.length) {
-                    const nextField = fieldSequence[nextIndex];
-                    const currentMeasurement = measurementsWithSavedValue.find(m => m.id === prev.measurementId);
-                    const nextValueForField = currentMeasurement ? currentMeasurement[nextField] : '';
-
-                    return {
-                        isOpen: true,
-                        measurementId: prev.measurementId,
-                        field: nextField,
-                        currentValue: String(nextValueForField).replace(',', '.'),
-                        shouldClearOnNextInput: true,
-                    };
-                } else {
-                    // Se for o último campo, salva e fecha
-                    return { isOpen: false, measurementId: null, field: null, currentValue: '', shouldClearOnNextInput: false };
-                }
-            }
-
-            return { ...prev, currentValue: newValue, shouldClearOnNextInput: false };
-        });
-    }, [measurements, handleMeasurementsChange]);
-
-    const handleNumpadDelete = useCallback(() => {
-        setNumpadConfig(prev => ({
-            ...prev,
-            currentValue: prev.currentValue.slice(0, -1),
-            shouldClearOnNextInput: false
-        }));
-    }, []);
-
-    const handleNumpadDuplicate = useCallback(() => {
-        const { measurementId, field, currentValue } = numpadConfig;
-        if (measurementId === null || field === null) return;
-
-        let finalValue: string | number;
-        if (field === 'quantidade') {
-            finalValue = parseInt(String(currentValue), 10) || 1;
-        } else {
-            finalValue = (String(currentValue) === '' || String(currentValue) === '.') ? '0' : String(currentValue).replace('.', ',');
-        }
-
-        const measurementsWithSavedValue = measurements.map(m =>
-            m.id === measurementId ? { ...m, [field]: finalValue } : m
-        );
-
-        const measurementToDuplicate = measurementsWithSavedValue.find(m => m.id === measurementId);
-
-        if (measurementToDuplicate) {
-            const newMeasurement: UIMeasurement = {
-                ...measurementToDuplicate,
-                id: Date.now(),
-                isNew: false
-            };
-
-            const index = measurementsWithSavedValue.findIndex(m => m.id === measurementId);
-            const finalMeasurements = [...measurementsWithSavedValue];
-            finalMeasurements.splice(index + 1, 0, newMeasurement);
-
-            handleMeasurementsChange(finalMeasurements.map(m =>
-                m.id === newMeasurement.id ? m : { ...m, isNew: false }
-            ));
-
-            setNumpadConfig({ isOpen: false, measurementId: null, field: null, currentValue: '', shouldClearOnNextInput: false });
-        }
-    }, [numpadConfig, measurements, handleMeasurementsChange]);
-
-    const handleNumpadClear = useCallback(() => {
-        const { measurementId, field } = numpadConfig;
-        if (measurementId === null) return;
-
-        const updatedMeasurements = measurements.map(m =>
-            m.id === measurementId ? { ...m, largura: '', altura: '', quantidade: 1 } : m
-        );
-        handleMeasurementsChange(updatedMeasurements);
-
-        setNumpadConfig(prev => ({
-            ...prev,
-            currentValue: field === 'quantidade' ? '1' : '',
-            shouldClearOnNextInput: true,
-        }));
-    }, [numpadConfig, measurements, handleMeasurementsChange]);
-
-    const handleNumpadAddGroup = useCallback(() => {
-        const { measurementId, field, currentValue } = numpadConfig;
-
-        setProposalOptions(currentOptions => {
-            if (!activeOptionId) return currentOptions;
-
-            return currentOptions.map(opt => {
-                if (opt.id !== activeOptionId) return opt;
-
-                let measurementsWithSavedValue = opt.measurements;
-                if (measurementId !== null && field !== null) {
-                    let finalValue: string | number;
-                    if (field === 'quantidade') {
-                        finalValue = parseInt(String(currentValue), 10) || 1;
-                    } else {
-                        finalValue = (String(currentValue) === '' || String(currentValue) === '.') ? '0' : String(currentValue).replace('.', ',');
-                    }
-                    measurementsWithSavedValue = opt.measurements.map(m =>
-                        m.id === measurementId ? { ...m, [field]: finalValue } : m
-                    );
-                }
-
-                const newMeasurement: UIMeasurement = { ...createEmptyMeasurement(), isNew: true };
-                const finalMeasurements = [
-                    ...measurementsWithSavedValue.map(m => ({ ...m, isNew: false })),
-                    newMeasurement,
-                ];
-
-                return { ...opt, measurements: finalMeasurements };
-            });
-        });
-
-        setIsDirty(true);
-
-        setNumpadConfig({ isOpen: false, measurementId: null, field: null, currentValue: '', shouldClearOnNextInput: false });
-    }, [numpadConfig, createEmptyMeasurement, activeOptionId]);
-
     const handleTabChange = useCallback((tab: ActiveTab) => {
         if (numpadConfig.isOpen) {
             handleNumpadClose();
@@ -2085,32 +1280,6 @@ const App: React.FC = () => {
         setIsFilmSelectionModalOpen(true);
     }, [numpadConfig.isOpen, handleNumpadClose]);
 
-    const handleSelectFilmForMeasurement = useCallback((filmName: string) => {
-        if (editingMeasurementIdForFilm === null) return;
-
-        const updatedMeasurements = measurements.map(m =>
-            m.id === editingMeasurementIdForFilm ? { ...m, pelicula: filmName } : m
-        );
-        handleMeasurementsChange(updatedMeasurements);
-
-        // Se a medida sendo editada for a mesma que recebeu a nova película, atualiza o estado da modal também
-        if (editingMeasurement && editingMeasurement.id === editingMeasurementIdForFilm) {
-            setEditingMeasurement(prev => prev ? { ...prev, pelicula: filmName } : null);
-        }
-
-        setIsFilmSelectionModalOpen(false);
-        setEditingMeasurementIdForFilm(null);
-    }, [editingMeasurementIdForFilm, measurements, handleMeasurementsChange, editingMeasurement]);
-
-    const handleApplyFilmToAll = useCallback((filmName: string | null) => {
-        if (filmName) {
-            const updatedMeasurements = measurements.map(m => ({ ...m, pelicula: filmName }));
-            handleMeasurementsChange(updatedMeasurements);
-            setFilmToApplyToAll(null);
-            setIsApplyFilmToAllModalOpen(false);
-        }
-    }, [measurements, handleMeasurementsChange]);
-
 
 
     const handleAddNewClientFromSelection = useCallback((clientName: string) => {
@@ -2121,145 +1290,6 @@ const App: React.FC = () => {
         setIsClientModalOpen(true);
     }, []);
 
-    const handleAddNewFilmFromSelection = useCallback((filmName: string) => {
-        setIsFilmSelectionModalOpen(false);
-        setNewFilmName(filmName);
-        handleOpenFilmModal(null);
-    }, [handleOpenFilmModal]);
-
-    const handleOpenEditMeasurementModal = useCallback((measurement: UIMeasurement) => {
-        if (numpadConfig.isOpen) {
-            handleNumpadClose();
-        }
-        setEditingMeasurement(measurement);
-    }, [numpadConfig.isOpen, handleNumpadClose]);
-
-    const handleCloseEditMeasurementModal = useCallback(() => {
-        setEditingMeasurement(null);
-    }, []);
-
-    const handleUpdateEditingMeasurement = useCallback((updatedData: Partial<Measurement>) => {
-        if (!editingMeasurement) return;
-        const updatedMeasurement = { ...editingMeasurement, ...updatedData };
-        setEditingMeasurement(updatedMeasurement);
-        const newMeasurements = measurements.map(m => m.id === updatedMeasurement.id ? updatedMeasurement : m);
-        handleMeasurementsChange(newMeasurements);
-    }, [editingMeasurement, measurements, handleMeasurementsChange]);
-
-    const handleRequestDeleteMeasurement = useCallback((measurementId: number) => {
-        handleCloseEditMeasurementModal();
-        setMeasurementToDeleteId(measurementId);
-    }, [handleCloseEditMeasurementModal]);
-
-    const handleConfirmDeleteIndividualMeasurement = useCallback(() => {
-        if (measurementToDeleteId !== null) {
-            handleMeasurementsChange(measurements.filter(m => m.id !== measurementToDeleteId));
-            setMeasurementToDeleteId(null);
-        }
-    }, [measurementToDeleteId, measurements, handleMeasurementsChange]);
-
-    const handleDeleteMeasurementFromEditModal = useCallback(() => {
-        if (editingMeasurement) {
-            handleRequestDeleteMeasurement(editingMeasurement.id);
-        }
-    }, [editingMeasurement, handleRequestDeleteMeasurement]);
-
-    const handleDeleteMeasurementFromGroup = useCallback((measurementId: number) => {
-        handleRequestDeleteMeasurement(measurementId);
-    }, [handleRequestDeleteMeasurement]);
-
-    const handleImmediateDeleteMeasurement = useCallback((measurementId: number) => {
-        const measurementIndex = measurements.findIndex(m => m.id === measurementId);
-        const measurement = measurements[measurementIndex];
-
-        if (measurement && measurementIndex !== -1) {
-            // Save for undo
-            setDeletedMeasurement(measurement);
-            setDeletedMeasurementIndex(measurementIndex);
-            setShowUndoToast(true);
-
-            // Delete
-            handleMeasurementsChange(measurements.filter(m => m.id !== measurementId));
-        }
-    }, [measurements, handleMeasurementsChange]);
-
-    const handleUndoDelete = useCallback(() => {
-        if (deletedMeasurement && deletedMeasurementIndex !== null) {
-            const newMeasurements = [...measurements];
-            newMeasurements.splice(deletedMeasurementIndex, 0, deletedMeasurement);
-            handleMeasurementsChange(newMeasurements);
-
-            // Clear undo state
-            setDeletedMeasurement(null);
-            setDeletedMeasurementIndex(null);
-            setShowUndoToast(false);
-        }
-    }, [deletedMeasurement, deletedMeasurementIndex, measurements, handleMeasurementsChange]);
-
-    const handleDismissUndo = useCallback(() => {
-        setDeletedMeasurement(null);
-        setDeletedMeasurementIndex(null);
-        setShowUndoToast(false);
-    }, []);
-
-
-
-    const handleCloseAgendamentoModal = useCallback(() => {
-        setSchedulingInfo(null);
-    }, []);
-
-    const handleSaveAgendamento = useCallback(async (agendamentoData: Omit<Agendamento, 'id'> | Agendamento) => {
-        try {
-            const savedAgendamento = await db.saveAgendamento(agendamentoData);
-
-            if (savedAgendamento.pdfId) {
-                const allPdfsFromDb = await db.getAllPDFs();
-                const pdfToUpdate = allPdfsFromDb.find(p => p.id === savedAgendamento.pdfId);
-
-                if (pdfToUpdate && pdfToUpdate.agendamentoId !== savedAgendamento.id) {
-                    await db.updatePDF({ ...pdfToUpdate, agendamentoId: savedAgendamento.id });
-                }
-            }
-
-            await Promise.all([loadAgendamentos(), loadAllPdfs()]);
-
-            handleCloseAgendamentoModal();
-        } catch (error) {
-            console.error("Erro ao salvar agendamento:", error);
-            handleShowInfo("N�o foi poss�vel salvar o agendamento. Tente novamente.");
-        }
-    }, [handleCloseAgendamentoModal, loadAgendamentos, loadAllPdfs]);
-
-    const handleRequestDeleteAgendamento = useCallback((agendamento: Agendamento) => {
-        handleCloseAgendamentoModal();
-        setAgendamentoToDelete(agendamento);
-    }, [handleCloseAgendamentoModal]);
-
-    const handleConfirmDeleteAgendamento = useCallback(async () => {
-        if (!agendamentoToDelete?.id) return;
-
-        try {
-            const agendamentoId = agendamentoToDelete.id;
-            const allPdfsFromDb = await db.getAllPDFs();
-            const pdfToUnlink = allPdfsFromDb.find(p => p.agendamentoId === agendamentoId);
-
-            await db.deleteAgendamento(agendamentoId);
-
-            if (pdfToUnlink) {
-                const updatedPdf = { ...pdfToUnlink };
-                delete updatedPdf.agendamentoId;
-                await db.updatePDF(updatedPdf);
-            }
-
-            await Promise.all([loadAgendamentos(), loadAllPdfs()]);
-        } catch (error) {
-            console.error("Erro ao excluir agendamento:", error);
-            handleShowInfo("N�o foi poss�vel excluir o agendamento. Tente novamente.");
-        } finally {
-            setAgendamentoToDelete(null);
-        }
-    }, [agendamentoToDelete, loadAgendamentos, loadAllPdfs]);
-
     const handleAddNewClientFromAgendamento = useCallback((clientName: string) => {
         handleCloseAgendamentoModal();
         setPostClientSaveAction('openAgendamentoModal');
@@ -2269,46 +1299,12 @@ const App: React.FC = () => {
         setIsClientModalOpen(true);
     }, [handleCloseAgendamentoModal]);
 
-    const handleCreateNewAgendamento = useCallback((date: Date) => {
-        const startDate = new Date(date);
-        startDate.setHours(9, 0, 0, 0);
-
-        handleOpenAgendamentoModal({
-            agendamento: {
-                start: startDate.toISOString(),
-            }
-        });
-    }, [handleOpenAgendamentoModal]);
-
     const handleOpenClientSelectionModal = useCallback(() => {
         if (numpadConfig.isOpen) {
             handleNumpadClose();
         }
         setIsClientSelectionModalOpen(true);
     }, [numpadConfig.isOpen, handleNumpadClose]);
-
-    const handleOpenDiscountModal = useCallback((measurement: UIMeasurement, basePrice: number = 0) => {
-        if (numpadConfig.isOpen) {
-            handleNumpadClose();
-        }
-        setEditingMeasurementForDiscount(measurement);
-        setEditingMeasurementBasePrice(basePrice);
-    }, [numpadConfig.isOpen, handleNumpadClose]);
-
-    const handleCloseDiscountModal = useCallback(() => {
-        setEditingMeasurementForDiscount(null);
-        setEditingMeasurementBasePrice(0);
-    }, []);
-
-    const handleSaveDiscount = useCallback((discount: { value: string; type: 'percentage' | 'fixed' }) => {
-        if (!editingMeasurementForDiscount) return;
-
-        const updatedMeasurements = measurements.map(m =>
-            m.id === editingMeasurementForDiscount.id ? { ...m, discount } : m
-        );
-        handleMeasurementsChange(updatedMeasurements);
-        handleCloseDiscountModal();
-    }, [editingMeasurementForDiscount, measurements, handleMeasurementsChange, handleCloseDiscountModal]);
 
     const handleOpenApiKeyModal = useCallback((provider: 'gemini' | 'openai') => {
         setApiKeyModalProvider(provider);
@@ -2438,7 +1434,7 @@ Se não conseguir extrair, retorne: []`;
             // Parse JSON
             const jsonMatch = responseText.match(/\[[\s\S]*\]/);
             if (!jsonMatch) {
-                handleShowInfo("N�o foi poss�vel extrair medidas. Tente reformular.");
+                handleShowInfo("NÃ£o foi possÃ­vel extrair medidas. Tente reformular.");
                 return;
             }
 
@@ -2485,37 +1481,9 @@ Se não conseguir extrair, retorne: []`;
         if (deferredPrompt) {
             promptInstall();
         } else {
-            alert("Para instalar, use o menu 'Compartilhar' do seu navegador e selecione 'Adicionar � Tela de In�cio'.");
+            alert("Para instalar, use o menu 'Compartilhar' do seu navegador e selecione 'Adicionar Ã  Tela de InÃ­cio'.");
         }
     }, [deferredPrompt, promptInstall]);
-
-    const goToNextClient = useCallback(() => {
-        if (clients.length <= 1 || !selectedClientId) return;
-        const currentIndex = clients.findIndex(c => c.id === selectedClientId);
-        const nextIndex = (currentIndex + 1) % clients.length;
-
-        setSelectedClientId(clients[nextIndex].id!);
-    }, [clients, selectedClientId]);
-
-    const goToPrevClient = useCallback(() => {
-        if (clients.length <= 1 || !selectedClientId) return;
-        const currentIndex = clients.findIndex(c => c.id === selectedClientId);
-        const prevIndex = (currentIndex - 1 + clients.length) % clients.length;
-
-        setSelectedClientId(clients[prevIndex].id!);
-    }, [clients, selectedClientId]);
-
-    const handleNavigateToOption = useCallback((clientId: number, optionId: number) => {
-        // Muda para a aba de cliente
-        setActiveTab('client');
-        // Seleciona o cliente
-        setSelectedClientId(clientId);
-        // Aguarda um momento para garantir que o cliente foi carregado, então seleciona a opção
-        setTimeout(() => {
-            setActiveOptionId(optionId);
-        }, 100);
-    }, []);
-
 
     const ClientViewSkeleton = () => (
         <div className="animate-pulse space-y-6">
@@ -2615,192 +1583,60 @@ Se não conseguir extrair, retorne: []`;
         </div>
     );
 
-    const renderContent = () => {
-        if (isLoading) {
-            if (activeTab === 'client') return <ClientViewSkeleton />;
-            if (activeTab === 'estoque') return <EstoqueSkeleton />;
-            return <LoadingSpinner />;
-        }
-
-        if (activeTab === 'settings') {
-            if (userInfo) {
-                return (
-                    <UserSettingsView
-                        userInfo={{
-                            ...userInfo,
-                            organizationId: organizationId || undefined,
-                            isOwner: isOwner
-                        }}
-                        onSave={handleSaveUserInfo}
-                        onOpenPaymentMethods={() => setIsPaymentModalOpen(true)}
-                        onOpenApiKeyModal={handleOpenApiKeyModal}
-                        isPwaInstalled={isInstalled}
-                        onPromptPwaInstall={handlePromptPwaInstall}
-                    />
-                );
-            }
-            return null;
-        }
-
-        if (activeTab === 'admin') {
-            return <AdminUsers />;
-        }
-
-        if (activeTab === 'account') {
-            return <UserAccount />;
-        }
-
-        if (activeTab === 'history') {
-            return (
-                <PdfHistoryView
-                    pdfs={allSavedPdfs}
-                    clients={clients}
-                    agendamentos={agendamentos}
-                    onDelete={handleRequestDeletePdf}
-                    onDownload={handleDownloadPdf}
-                    onUpdateStatus={handleUpdatePdfStatus}
-                    onSchedule={handleOpenAgendamentoModal}
-                    onGenerateCombinedPdf={handleGenerateCombinedPdf}
-                    onNavigateToOption={handleNavigateToOption}
-                />
-            );
-        }
-
-        if (activeTab === 'agenda') {
-            return (
-                <AgendaView
-                    agendamentos={agendamentos}
-                    pdfs={allSavedPdfs}
-                    clients={clients}
-                    onEditAgendamento={(agendamento) => {
-                        const pdf = allSavedPdfs.find(p => p.id === agendamento.pdfId);
-                        setSchedulingInfo({ agendamento, pdf });
-                    }}
-                    onCreateNewAgendamento={handleCreateNewAgendamento}
-                />
-            );
-        }
-
-
-        if (activeTab === 'films') {
-            return (
-                <FilmListView
-                    films={films}
-                    onAdd={() => handleOpenFilmModal(null)}
-                    onEdit={handleOpenFilmModal}
-                    onDelete={handleRequestDeleteFilm}
-                    onOpenGallery={handleOpenGallery}
-                />
-            );
-        }
-
-        if (activeTab === 'estoque') {
-            return (
-                <FeatureGate moduleId="estoque">
-                    <EstoqueView films={films} initialAction={initialEstoqueAction} />
-                </FeatureGate>
-            );
-        }
-
-        if (activeTab === 'fornecedores') {
-            return (
-                <FornecedoresView
-                    fornecedores={fornecedores}
-                    onUpdate={setFornecedores}
-                />
-            );
-        }
-
-        if (clients.length === 0) {
-            return (
-                <div className="text-center p-8 flex flex-col items-center justify-center h-full min-h-[300px] bg-slate-50 dark:bg-slate-900 rounded-lg border-2 border-dashed border-slate-200 dark:border-slate-700">
-                    <div className="w-16 h-16 bg-slate-200 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
-                        <i className="fas fa-users fa-2x text-slate-500 dark:text-slate-400"></i>
-                    </div>
-                    <h3 className="text-xl font-semibold text-slate-800 dark:text-slate-200">Crie seu Primeiro Cliente</h3>
-                    <p className="mt-2 text-slate-600 dark:text-slate-400 max-w-xs mx-auto">Tudo comea com um cliente. Adicione os dados para comear a gerar oramentos.</p>
-                    <button
-                        onClick={() => handleOpenClientModal('add')}
-                        className="mt-6 px-6 py-3 bg-slate-800 dark:bg-slate-700 text-white font-semibold rounded-lg hover:bg-slate-700 dark:hover:bg-slate-600 transition duration-300 shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 flex items-center gap-2"
-                    >
-                        <i className="fas fa-plus"></i>
-                        Adicionar Cliente
-                    </button>
-                </div>
-            );
-        }
-
-        if (selectedClientId && measurements.length > 0) {
-            return (
-                <MeasurementList
-                    measurements={measurements}
-                    films={films}
-                    clientId={selectedClientId}
-                    optionId={activeOptionId}
-                    onMeasurementsChange={handleMeasurementsChange}
-                    onOpenFilmModal={handleOpenFilmModal}
-                    onOpenFilmSelectionModal={handleOpenFilmSelectionModal}
-                    onOpenClearAllModal={() => setIsClearAllModalOpen(true)}
-                    onOpenApplyFilmToAllModal={() => setIsApplyFilmToAllModalOpen(true)}
-                    numpadConfig={numpadConfig}
-                    onOpenNumpad={handleOpenNumpad}
-                    activeMeasurementId={numpadConfig.measurementId}
-                    onOpenEditModal={handleOpenEditMeasurementModal}
-                    onOpenDiscountModal={handleOpenDiscountModal}
-                    swipeDirection={swipeDirection}
-                    swipeDistance={swipeDistance}
-                    onDeleteMeasurement={handleDeleteMeasurementFromGroup}
-                    onDeleteMeasurementImmediate={handleImmediateDeleteMeasurement}
-                    totalM2={totals.totalM2}
-                    totalQuantity={totals.totalQuantity}
-                />
-            );
-        }
-        if (selectedClientId && measurements.length === 0) {
-            return (
-                <div className="text-center p-8 flex flex-col items-center justify-center h-full min-h-[350px] opacity-0 animate-fade-in">
-                    <div className="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-2xl flex items-center justify-center mb-6 shadow-sm">
-                        <i className="fas fa-ruler-combined text-4xl text-slate-400 dark:text-slate-500"></i>
-                    </div>
-                    <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-2">Nenhuma Medida Ainda</h3>
-                    <p className="text-slate-600 dark:text-slate-400 max-w-xs mx-auto leading-relaxed mb-6 text-sm">
-                        Adicione as dimensões das janelas ou busque medidas de um local conhecido.
-                    </p>
-                    <div className="flex flex-col gap-3 w-full max-w-xs">
-                        <button
-                            onClick={addMeasurement}
-                            className="w-full px-6 py-3.5 bg-slate-800 dark:bg-slate-700 text-white font-semibold rounded-xl hover:bg-slate-700 dark:hover:bg-slate-600 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-[1.02] flex items-center justify-center gap-3"
-                        >
-                            <i className="fas fa-plus text-lg"></i>
-                            <span>Adicionar Medida</span>
-                        </button>
-                        <button
-                            onClick={() => setIsLocationImportModalOpen(true)}
-                            className="w-full px-6 py-3.5 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-[1.02] flex items-center justify-center gap-3"
-                        >
-                            <i className="fas fa-building text-lg"></i>
-                            <span>Buscar por Localização</span>
-                        </button>
-                    </div>
-                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-4 max-w-xs">
-                        <i className="fas fa-info-circle mr-1"></i>
-                        Busque por condomínio ou empresa para importar medidas já cadastradas
-                    </p>
-                </div>
-            );
-        }
-        return (
-            <div className="text-center p-8 flex flex-col items-center justify-center h-full min-h-[350px] opacity-0 animate-fade-in">
-                <div className="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-2xl flex items-center justify-center mb-6 shadow-sm">
-                    <i className="fas fa-user-check text-4xl text-slate-400 dark:text-slate-500"></i>
-                </div>
-                <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-2">Nenhum Cliente Selecionado</h3>
-                <p className="text-slate-600 dark:text-slate-400 max-w-xs mx-auto leading-relaxed text-sm">
-                    Escolha um cliente no menu acima para ver suas medidas.
-                </p>
-            </div>
-        );
-    }
+    const tabContent = (
+        <AppContentRouter
+            activeTab={activeTab}
+            isLoading={isLoading}
+            userInfo={userInfo}
+            organizationId={organizationId || undefined}
+            isOwner={isOwner}
+            isInstalled={isInstalled}
+            allSavedPdfs={allSavedPdfs}
+            clients={clients}
+            agendamentos={agendamentos}
+            films={films}
+            initialEstoqueAction={initialEstoqueAction}
+            selectedClientId={selectedClientId}
+            measurements={measurements}
+            activeOptionId={activeOptionId}
+            totals={{ totalM2: totals.totalM2, totalQuantity: totals.totalQuantity }}
+            numpadConfig={numpadConfig}
+            swipeDirection={swipeDirection}
+            swipeDistance={swipeDistance}
+            clientLoadingView={<ClientViewSkeleton />}
+            estoqueLoadingView={<EstoqueSkeleton />}
+            defaultLoadingView={<LoadingSpinner />}
+            onSaveUserInfo={handleSaveUserInfo}
+            onOpenPaymentMethods={() => setIsPaymentModalOpen(true)}
+            onOpenApiKeyModal={handleOpenApiKeyModal}
+            onPromptPwaInstall={handlePromptPwaInstall}
+            onDeletePdf={handleRequestDeletePdf}
+            onDownloadPdf={handleDownloadPdf}
+            onUpdatePdfStatus={handleUpdatePdfStatus}
+            onSchedulePdf={handleOpenAgendamentoModal}
+            onGenerateCombinedPdf={handleGenerateCombinedPdf}
+            onNavigateToOption={handleNavigateToOption}
+            onEditAgendamento={handleEditAgendamento}
+            onCreateNewAgendamento={handleCreateNewAgendamento}
+            onAddFilm={() => handleOpenFilmModal(null)}
+            onEditFilm={handleOpenFilmModal}
+            onDeleteFilm={handleRequestDeleteFilm}
+            onOpenGallery={handleOpenGallery}
+            onOpenClientModal={handleOpenClientModal}
+            onAddMeasurement={addMeasurement}
+            onOpenLocationImport={() => setIsLocationImportModalOpen(true)}
+            onMeasurementsChange={handleMeasurementsChange}
+            onOpenFilmModal={handleOpenFilmModal}
+            onOpenFilmSelectionModal={handleOpenFilmSelectionModal}
+            onOpenClearAllModal={() => setIsClearAllModalOpen(true)}
+            onOpenApplyFilmToAllModal={() => setIsApplyFilmToAllModalOpen(true)}
+            onOpenNumpad={handleOpenNumpad}
+            onOpenEditModal={handleOpenEditMeasurementModal}
+            onOpenDiscountModal={handleOpenDiscountModal}
+            onDeleteMeasurement={handleDeleteMeasurementFromGroup}
+            onDeleteMeasurementImmediate={handleImmediateDeleteMeasurement}
+        />
+    );
 
     const measurementToDelete = measurements.find(m => m.id === measurementToDeleteId);
 
@@ -2973,112 +1809,57 @@ Se não conseguir extrair, retorne: []`;
                                 )}
 
                                 {activeTab === 'client' ? (
-                                    <>
-                                        {clients.length > 0 ? (
-                                            <div className="bg-slate-100 dark:bg-slate-900 p-2 px-2 rounded-xl">
-                                                <div className="relative z-20">
-                                                    <ClientBar
-                                                        key={clientTransitionKey}
-                                                        selectedClient={selectedClient}
-                                                        onSelectClientClick={handleOpenClientSelectionModal}
-                                                        onAddClient={() => handleOpenClientModal('add')}
-                                                        onAddClientAI={handleOpenAIClientModal}
-                                                        onEditClient={() => handleOpenClientModal('edit')}
-                                                        onDeleteClient={handleDeleteClient}
-                                                        onSwipeLeft={goToNextClient}
-                                                        onSwipeRight={goToPrevClient}
-                                                    />
-                                                </div>
-
-                                                {proposalOptions.length > 0 && activeOptionId && (
-                                                    <ProposalOptionsCarousel
-                                                        options={proposalOptions}
-                                                        activeOptionId={activeOptionId}
-                                                        onSelectOption={setActiveOptionId}
-                                                        onRenameOption={handleRenameProposalOption}
-                                                        onDeleteOption={handleRequestDeleteProposalOption}
-                                                        onAddOption={handleAddProposalOption}
-                                                        onSwipeDirectionChange={handleSwipeDirectionChange}
-                                                    />
-                                                )}
-
-                                                <div id="contentContainer" className="w-full min-h-[300px] animate-fade-in">
-                                                    {renderContent()}
-
-                                                    {/* Otimizador de Corte - Dentro do grupo de medidas */}
-                                                    {measurements.length > 0 && selectedClientId && (
-                                                        <div className="mt-4 mb-4 sm:mb-0">
-                                                            <CuttingOptimizationPanel
-                                                                measurements={measurements}
-                                                                clientId={selectedClientId ?? undefined}
-                                                                optionId={activeOptionId ?? undefined}
-                                                                films={films}
-                                                            />
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <div id="contentContainer" className="w-full min-h-[300px] animate-fade-in">
-                                                {renderContent()}
-                                            </div>
-                                        )}
-                                    </>
+                                    <AppClientWorkspace
+                                        clientsCount={clients.length}
+                                        selectedClient={selectedClient}
+                                        clientTransitionKey={clientTransitionKey}
+                                        proposalOptions={proposalOptions}
+                                        activeOptionId={activeOptionId}
+                                        selectedClientId={selectedClientId}
+                                        measurements={measurements}
+                                        films={films}
+                                        totals={totals}
+                                        generalDiscount={generalDiscount}
+                                        content={tabContent}
+                                        isGeneratingPdf={pdfGenerationStatus === 'generating'}
+                                        onSelectClientClick={handleOpenClientSelectionModal}
+                                        onAddClient={() => handleOpenClientModal('add')}
+                                        onAddClientAI={handleOpenAIClientModal}
+                                        onEditClient={() => handleOpenClientModal('edit')}
+                                        onDeleteClient={handleDeleteClient}
+                                        onSwipeLeft={goToNextClient}
+                                        onSwipeRight={goToPrevClient}
+                                        onSelectOption={setActiveOptionId}
+                                        onRenameOption={renameProposalOption}
+                                        onDeleteOption={handleRequestDeleteProposalOption}
+                                        onAddOption={addProposalOption}
+                                        onSwipeDirectionChange={handleSwipeDirectionChange}
+                                        onOpenGeneralDiscountModal={() => setIsGeneralDiscountModalOpen(true)}
+                                        onUpdateGeneralDiscount={handleGeneralDiscountChange}
+                                        onAddMeasurement={addMeasurement}
+                                        onDuplicateMeasurements={duplicateAllMeasurements}
+                                        onGeneratePdf={handleGeneratePdf}
+                                        onOpenAIModal={() => {
+                                            if (hasModule('ia_ocr')) {
+                                                setIsAIMeasurementModalOpen(true);
+                                            } else {
+                                                setShowIaUpgradeModal(true);
+                                            }
+                                        }}
+                                    />
                                 ) : ['history', 'agenda'].includes(activeTab) ? (
                                     <div className="bg-blue-50 dark:bg-slate-900 -m-4 sm:-m-6 p-4 sm:p-6 rounded-2xl">
                                         <div id="contentContainer" className="w-full min-h-[300px] animate-fade-in">
-                                            {renderContent()}
+                                            {tabContent}
                                         </div>
                                     </div>
                                 ) : (
                                     <div id="contentContainer" className="w-full min-h-[300px] animate-fade-in">
-                                        {renderContent()}
+                                        {tabContent}
                                     </div>
                                 )}
 
 
-                                {activeTab === 'client' && selectedClientId && (
-                                    <>
-                                        <div className="hidden sm:block mt-6 pt-6 border-t border-slate-200">
-                                            <SummaryBar
-                                                totals={totals}
-                                                generalDiscount={generalDiscount}
-                                                onOpenGeneralDiscountModal={() => setIsGeneralDiscountModalOpen(true)}
-                                                isDesktop
-                                            />
-                                            <ActionsBar
-                                                onAddMeasurement={addMeasurement}
-                                                onDuplicateMeasurements={duplicateAllMeasurements}
-                                                onGeneratePdf={handleGeneratePdf}
-                                                isGeneratingPdf={pdfGenerationStatus === 'generating'}
-                                                onOpenAIModal={() => {
-                                                    if (hasModule('ia_ocr')) {
-                                                        setIsAIMeasurementModalOpen(true);
-                                                    } else {
-                                                        setShowIaUpgradeModal(true);
-                                                    }
-                                                }}
-                                            />
-                                        </div>
-                                        <MobileFooter
-                                            totals={totals}
-                                            generalDiscount={generalDiscount}
-                                            onOpenGeneralDiscountModal={() => setIsGeneralDiscountModalOpen(true)}
-                                            onUpdateGeneralDiscount={handleGeneralDiscountChange}
-                                            onAddMeasurement={addMeasurement}
-                                            onDuplicateMeasurements={duplicateAllMeasurements}
-                                            onGeneratePdf={handleGeneratePdf}
-                                            isGeneratingPdf={pdfGenerationStatus === 'generating'}
-                                            onOpenAIModal={() => {
-                                                if (hasModule('ia_ocr')) {
-                                                    setIsAIMeasurementModalOpen(true);
-                                                } else {
-                                                    setShowIaUpgradeModal(true);
-                                                }
-                                            }}
-                                        />
-                                    </>
-                                )}
                             </div>
                         </div>
                     </main>
@@ -3181,4 +1962,6 @@ Se não conseguir extrair, retorne: []`;
 };
 
 export default App;
+
+
 

@@ -126,8 +126,8 @@ interface SocialInputProps {
 }
 
 const SocialInput: React.FC<SocialInputProps> = ({ id, icon, gradient, value, onChange, placeholder }) => (
-    <div className="flex items-center gap-3 group/social">
-        <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center shrink-0 shadow-md transition-transform duration-200 group-hover/social:scale-110`}>
+    <div className="flex items-center gap-3 group">
+        <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center shrink-0 shadow-md transition-transform duration-200 group-hover:scale-110`}>
             {icon}
         </div>
         <input
@@ -362,7 +362,7 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({
                         {/* Upload de Logo */}
                         <div>
                             <label className={labelClass}>Logotipo da Empresa</label>
-                            <div className="mt-1 flex flex-col justify-center items-center p-6 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl min-h-[180px] bg-slate-50/50 dark:bg-slate-900/30 hover:border-slate-400 dark:hover:border-slate-500 transition-colors cursor-pointer group/logo">
+                            <div className="mt-1 flex flex-col justify-center items-center p-6 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl min-h-[180px] bg-slate-50/50 dark:bg-slate-900/30 hover:border-slate-400 dark:hover:border-slate-500 transition-colors cursor-pointer group">
                                 {logoPreview ? (
                                     <div className="text-center">
                                         <img src={logoPreview} alt="Logo" className="mx-auto max-h-20 w-auto rounded-lg shadow-md mb-4" />
@@ -378,7 +378,7 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({
                                     </div>
                                 ) : (
                                     <label htmlFor="logo-upload-input" className="text-center cursor-pointer">
-                                        <div className="w-14 h-14 mx-auto mb-3 rounded-xl bg-slate-200 dark:bg-slate-700 flex items-center justify-center group-hover/logo:bg-slate-300 dark:group-hover/logo:bg-slate-600 transition-colors">
+                                        <div className="w-14 h-14 mx-auto mb-3 rounded-xl bg-slate-200 dark:bg-slate-700 flex items-center justify-center group-hover:bg-slate-300 dark:group-hover:bg-slate-600 transition-colors">
                                             <Palette className="w-7 h-7 text-slate-400 dark:text-slate-500" />
                                         </div>
                                         <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Clique para fazer upload</p>
@@ -398,11 +398,11 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({
                                 </div>
 
                                 <div className="grid grid-cols-1 gap-5">
-                                    <div className="group/color">
+                                    <div className="group">
                                         <label className={labelClass}>Cor Primária</label>
                                         <ColorPicker color={formData.cores?.primaria || '#918B45'} onChange={(val) => handleColorChange('primaria', val)} />
                                     </div>
-                                    <div className="group/color">
+                                    <div className="group">
                                         <label className={labelClass}>Cor Secundária</label>
                                         <ColorPicker color={formData.cores?.secundaria || '#4E6441'} onChange={(val) => handleColorChange('secundaria', val)} />
                                     </div>

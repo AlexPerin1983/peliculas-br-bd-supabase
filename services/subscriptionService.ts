@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { getCurrentUserId, getEffectiveOrganizationId } from './sessionScope';
 
 // ============================================
 // TIPOS PARA SISTEMA DE ASSINATURAS
@@ -108,24 +109,14 @@ export async function getSubscriptionInfo(forceRefresh = false): Promise<Subscri
     }
 
     // Buscar organization_id do usuário atual
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-        return getDefaultSubscriptionInfo();
-    }
-
-    const { data: profile } = await supabase
-        .from('profiles')
-        .select('organization_id')
-        .eq('id', user.id)
-        .single();
-
-    if (!profile?.organization_id) {
+    const organizationId = await getEffectiveOrganizationId();
+    if (!organizationId) {
         return getDefaultSubscriptionInfo();
     }
 
     // Chamar função RPC que retorna todas as infos
     const { data, error } = await supabase
-        .rpc('get_subscription_info', { p_organization_id: profile.organization_id });
+        .rpc('get_subscription_info', { p_organization_id: organizationId });
 
     if (error) {
         console.error('Erro ao buscar subscription info:', error);
@@ -188,22 +179,14 @@ export async function hasReachedLimit(resource: 'clients' | 'films' | 'pdfs' | '
  * Incrementa contador de uso (para PDFs e agendamentos)
  */
 export async function incrementUsage(resource: 'pdfs' | 'agendamentos'): Promise<void> {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const { data: profile } = await supabase
-        .from('profiles')
-        .select('organization_id')
-        .eq('id', user.id)
-        .single();
-
-    if (!profile?.organization_id) return;
+    const organizationId = await getEffectiveOrganizationId();
+    if (!organizationId) return;
 
     const field = resource === 'pdfs' ? 'pdfs_generated' : 'agendamentos_created';
 
     // Atualizar usando JSONB
     const { error } = await supabase.rpc('increment_subscription_usage', {
-        p_organization_id: profile.organization_id,
+        p_organization_id: organizationId,
         p_field: field
     });
 
@@ -222,18 +205,13 @@ export async function requestModuleActivation(
     moduleId: string,
     billingCycle: 'monthly' | 'yearly' = 'monthly'
 ): Promise<{ success: boolean; activationId?: string; error?: string }> {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
+    const userId = await getCurrentUserId();
+    if (!userId) {
         return { success: false, error: 'Usuário não autenticado' };
     }
 
-    const { data: profile } = await supabase
-        .from('profiles')
-        .select('organization_id')
-        .eq('id', user.id)
-        .single();
-
-    if (!profile?.organization_id) {
+    const organizationId = await getEffectiveOrganizationId();
+    if (!organizationId) {
         return { success: false, error: 'Organização não encontrada' };
     }
 
@@ -241,7 +219,7 @@ export async function requestModuleActivation(
     const { data: subscription } = await supabase
         .from('subscriptions')
         .select('id')
-        .eq('organization_id', profile.organization_id)
+        .eq('organization_id', organizationId)
         .single();
 
     if (!subscription) {

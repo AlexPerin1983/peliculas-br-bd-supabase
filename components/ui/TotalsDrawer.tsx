@@ -64,7 +64,8 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
             <Drawer.Portal>
                 <Drawer.Overlay className="fixed inset-0 bg-black/40 z-50" />
                 <Drawer.Content className="bg-white dark:bg-slate-900 flex flex-col rounded-t-[20px] h-auto max-h-[90vh] fixed bottom-0 left-0 right-0 z-50 outline-none border-t border-slate-200 dark:border-slate-700">
-                    <div className="p-4 bg-white dark:bg-slate-900 rounded-t-[20px] overflow-y-auto">
+                    <div className="p-4 bg-white dark:bg-slate-900 rounded-t-[20px] overflow-y-auto"
+                        style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 2rem)" }}>
                         <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-slate-300 dark:bg-slate-700 mb-6" />
 
                         <div className="max-w-md mx-auto space-y-6 pb-8">
@@ -239,7 +240,7 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                     </div>
                 </Drawer.Content>
             </Drawer.Portal>
-            <style jsx>{`
+      <style>{`
                 .custom-scrollbar::-webkit-scrollbar {
                     width: 4px;
                 }

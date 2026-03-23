@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+﻿import React, { useState, useRef } from 'react';
 import { Drawer } from 'vaul';
 import { Client } from '../types';
 import Tooltip from './ui/Tooltip';
@@ -77,7 +77,7 @@ const ClientBar: React.FC<ClientBarProps> = ({
         if (!phoneNumber.startsWith('55')) {
             phoneNumber = '55' + phoneNumber;
         }
-        const message = `Olá ${selectedClient.nome}, estou entrando em contato sobre o orçamento de películas.`;
+        const message = `OlÃ¡ ${selectedClient.nome}, estou entrando em contato sobre o orÃ§amento de pelÃ­culas.`;
         const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
         window.open(whatsappUrl, '_blank');
     };
@@ -279,7 +279,7 @@ const ClientBar: React.FC<ClientBarProps> = ({
                                         rel="noopener noreferrer"
                                         onClick={(e) => e.stopPropagation()}
                                         className="mt-1.5 inline-flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 hover:text-blue-500 transition-colors"
-                                        aria-label={`Abrir endereço no mapa: ${fullAddress}`}
+                                        aria-label={`Abrir endereÃ§o no mapa: ${fullAddress}`}
                                     >
                                         <i className="fas fa-map-marker-alt text-[10px]"></i>
                                         <span className="truncate hover:underline">{fullAddress}</span>
@@ -352,7 +352,7 @@ const ClientBar: React.FC<ClientBarProps> = ({
                         </div>
                         <div className="px-6 pb-8 pt-4 overflow-y-auto overscroll-contain">
                             <div className="mb-6 px-2">
-                                <h3 className="text-2xl font-bold text-slate-800 dark:text-white tracking-tight">Ações do Cliente</h3>
+                                <h3 className="text-2xl font-bold text-slate-800 dark:text-white tracking-tight">AÃ§Ãµes do Cliente</h3>
                                 <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">O que deseja fazer com <span className="font-bold text-blue-500">{selectedClient?.nome}</span>?</p>
                             </div>
 
@@ -375,7 +375,7 @@ const ClientBar: React.FC<ClientBarProps> = ({
                                 <MenuItem
                                     onClick={handleOpenMaps}
                                     icon="fas fa-map-marker-alt"
-                                    label="Ver Endereço"
+                                    label="Ver EndereÃ§o"
                                     description="Abrir no Google Maps"
                                     disabled={!fullAddress}
                                 />
@@ -386,7 +386,7 @@ const ClientBar: React.FC<ClientBarProps> = ({
                                     onClick={onEditClient}
                                     icon="fas fa-pen"
                                     label="Editar Dados"
-                                    description="Alterar informações do cliente"
+                                    description="Alterar informaÃ§Ãµes do cliente"
                                 />
                                 <MenuItem
                                     onClick={onAddClient}
@@ -417,7 +417,7 @@ const ClientBar: React.FC<ClientBarProps> = ({
                 </Drawer.Portal>
             </Drawer.Root>
 
-            <style jsx>{`
+      <style>{`
                 @keyframes fade-in-scale {
                     from { opacity: 0; transform: scale(0.95); }
                     to { opacity: 1; transform: scale(1); }
@@ -438,3 +438,5 @@ const ClientBar: React.FC<ClientBarProps> = ({
 };
 
 export default React.memo(ClientBar);
+
+

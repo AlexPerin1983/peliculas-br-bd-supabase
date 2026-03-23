@@ -30,11 +30,40 @@ export default defineConfig(({ mode }) => {
     build: {
       rollupOptions: {
         output: {
-          manualChunks: {
-            'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-            'vendor-supabase': ['@supabase/supabase-js'],
-            'vendor-utils': ['dexie', 'lucide-react', 'qrcode', 'qrcode.react'],
-            'vendor-ai': ['@google/generative-ai', 'tesseract.js'],
+          manualChunks(id) {
+            if (!id.includes('node_modules')) {
+              return undefined;
+            }
+
+            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom')) {
+              return 'vendor-react';
+            }
+
+            if (id.includes('@supabase/supabase-js')) {
+              return 'vendor-supabase';
+            }
+
+            if (id.includes('@google/generative-ai') || id.includes('tesseract.js')) {
+              return 'vendor-ai';
+            }
+
+            if (id.includes('jspdf')) {
+              return 'vendor-jspdf';
+            }
+
+            if (id.includes('html2canvas') || id.includes('html-to-image')) {
+              return 'vendor-dom-capture';
+            }
+
+            if (id.includes('html5-qrcode') || id.includes('qrcode.react') || id.includes('qrcode')) {
+              return 'vendor-qr';
+            }
+
+            if (id.includes('dexie') || id.includes('lucide-react') || id.includes('vaul')) {
+              return 'vendor-utils';
+            }
+
+            return undefined;
           }
         }
       }

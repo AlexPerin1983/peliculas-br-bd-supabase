@@ -38,7 +38,7 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
         <button
             onClick={onClick}
             aria-label={label}
-            className={`flex flex-col items-center justify-center transition-all duration-300 w-14 h-12 rounded-xl group ${isActive
+            className={`flex flex-col items-center justify-center transition-all duration-300 w-16 h-14 rounded-xl group ${isActive
                 ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20'
                 : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'}`}
         >
@@ -50,10 +50,10 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
     const PdfActionButton = () => {
         if (isGeneratingPdf) {
             return (
-                <div className="flex flex-col items-center justify-center w-14 h-12 text-blue-600 dark:text-blue-400">
+                <div className="flex flex-col items-center justify-center w-16 h-14 text-blue-600 dark:text-blue-400">
                     <div className="loader-xs"></div>
                     <span className="text-[9px] mt-1 font-bold uppercase tracking-wider">...</span>
-                    <style jsx>{`
+                    <style>{`
                         .loader-xs {
                             border: 2px solid rgba(59, 130, 246, 0.1);
                             border-top: 2px solid currentColor;
@@ -66,7 +66,7 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
                             0% { transform: rotate(0deg); }
                             100% { transform: rotate(360deg); }
                         }
-                     `}</style>
+                    `}</style>
                 </div>
             );
         }
@@ -79,16 +79,18 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
 
     return (
         <>
-            <div className="sm:hidden fixed bottom-4 left-4 right-4 z-40">
-                <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.15)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-white/20 dark:border-slate-800/50 rounded-2xl px-2 py-2">
+            <div
+                className="sm:hidden fixed left-4 right-4 z-40"
+                style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)' }}
+            >
+                <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.15)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-white/20 dark:border-slate-800/50 rounded-2xl px-2 py-2">
                     <div className="flex justify-between items-center relative">
                         <div className="flex gap-1">
                             <ActionButton onClick={onOpenAIModal} label="IA" icon="fas fa-robot" />
-                            <ActionButton onClick={onDuplicateMeasurements} label="Cópia" icon="fas fa-copy" />
+                            <ActionButton onClick={onDuplicateMeasurements} label="Copia" icon="fas fa-copy" />
                         </div>
 
-                        {/* Floating Action Button (FAB) */}
-                        <div className="absolute left-1/2 -translate-x-1/2 -top-10">
+                        <div className="absolute left-1/2 -translate-x-1/2 -top-12">
                             <button
                                 onClick={onAddMeasurement}
                                 aria-label="Adicionar Nova Medida"

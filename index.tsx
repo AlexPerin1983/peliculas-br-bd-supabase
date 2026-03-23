@@ -1,4 +1,4 @@
-// PARA FORÇAR UMA NOVA VERSÃO: Altere o número da versão abaixo (ex: 71 -> 72)
+// PARA FORCAR UMA NOVA VERSAO: Altere o numero da versao abaixo (ex: 71 -> 72)
 // console.log('App Version: 81 - Sistema de Assinaturas');
 
 import React, { lazy, Suspense } from 'react';
@@ -12,21 +12,18 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SubscriptionProvider } from './contexts/SubscriptionContext';
 import { ResetPassword } from './components/ResetPassword';
 
-// Lazy load das páginas públicas
 const EstoquePublicoView = lazy(() => import('./components/views/EstoquePublicoView'));
 const ServicoPublicoView = lazy(() => import('./components/views/ServicoPublicoView'));
 const InviteRegister = lazy(() => import('./components/InviteRegister'));
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
-  throw new Error("Could not find root element to mount to");
+  throw new Error('Could not find root element to mount to');
 }
 
-// Verificar se é uma consulta pública
 const urlParams = new URLSearchParams(window.location.search);
 const pathname = window.location.pathname;
 
-// Consulta pública de estoque (ex: ?qr=PBR-XXX ou ?code=XXX)
 const isPublicEstoque = urlParams.has('qr') || urlParams.has('code');
 const isEstoquePublico = isPublicEstoque && (
   pathname === '/' ||
@@ -35,30 +32,28 @@ const isEstoquePublico = isPublicEstoque && (
   pathname.endsWith('index.html')
 );
 
-// Consulta pública de serviço prestado (ex: ?servico=SVC-XXX ou ?s=XXX)
 const isPublicServico = urlParams.has('servico') || urlParams.has('s');
 const isServicoPublico = isPublicServico && !isEstoquePublico;
 
-// Página de cadastro via convite (ex: /convite/ABCD1234)
 const isInvitePage = pathname.startsWith('/convite/') || pathname.includes('/convite/');
 
 const root = ReactDOM.createRoot(rootElement);
 
-// Fallback de loading para páginas públicas
 const PublicLoadingFallback = (
-  <div style={{
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    height: '100vh',
-    background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
-    color: 'white'
-  }}>
+  <div
+    style={{
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      height: '100vh',
+      background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
+      color: 'white'
+    }}
+  >
     <div>Carregando...</div>
   </div>
 );
 
-// Wrapper que verifica se o usuário está em fluxo de recuperação de senha
 const AppWithPasswordRecovery: React.FC = () => {
   const { isPasswordRecovery, clearPasswordRecovery } = useAuth();
 
@@ -70,53 +65,41 @@ const AppWithPasswordRecovery: React.FC = () => {
 };
 
 if (isServicoPublico) {
-  // Renderizar página pública de serviço (sem necessidade de login)
   root.render(
-    <React.StrictMode>
-      <ThemeProvider>
-        <Suspense fallback={PublicLoadingFallback}>
-          <ServicoPublicoView />
-        </Suspense>
-      </ThemeProvider>
-    </React.StrictMode>
+    <ThemeProvider>
+      <Suspense fallback={PublicLoadingFallback}>
+        <ServicoPublicoView />
+      </Suspense>
+    </ThemeProvider>
   );
 } else if (isEstoquePublico) {
-  // Renderizar página pública de estoque (sem necessidade de login)
   root.render(
-    <React.StrictMode>
-      <ThemeProvider>
-        <Suspense fallback={PublicLoadingFallback}>
-          <EstoquePublicoView />
-        </Suspense>
-      </ThemeProvider>
-    </React.StrictMode>
+    <ThemeProvider>
+      <Suspense fallback={PublicLoadingFallback}>
+        <EstoquePublicoView />
+      </Suspense>
+    </ThemeProvider>
   );
 } else if (isInvitePage) {
-  // Renderizar página de cadastro via convite (sem necessidade de login)
   root.render(
-    <React.StrictMode>
-      <ThemeProvider>
-        <Suspense fallback={PublicLoadingFallback}>
-          <BrowserRouter>
-            <InviteRegister />
-          </BrowserRouter>
-        </Suspense>
-      </ThemeProvider>
-    </React.StrictMode>
+    <ThemeProvider>
+      <Suspense fallback={PublicLoadingFallback}>
+        <BrowserRouter>
+          <InviteRegister />
+        </BrowserRouter>
+      </Suspense>
+    </ThemeProvider>
   );
 } else {
-  // Renderizar app normal (com autenticação e controle de assinatura)
   root.render(
-    <React.StrictMode>
-      <ErrorProvider>
-        <ThemeProvider>
-          <AuthProvider>
-            <SubscriptionProvider>
-              <AppWithPasswordRecovery />
-            </SubscriptionProvider>
-          </AuthProvider>
-        </ThemeProvider>
-      </ErrorProvider>
-    </React.StrictMode>
+    <ErrorProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <SubscriptionProvider>
+            <AppWithPasswordRecovery />
+          </SubscriptionProvider>
+        </AuthProvider>
+      </ThemeProvider>
+    </ErrorProvider>
   );
 }

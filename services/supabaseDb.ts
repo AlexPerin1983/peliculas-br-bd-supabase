@@ -3,32 +3,29 @@
 import { supabase } from './supabaseClient';
 import { Client, Measurement, UserInfo, Film, SavedPDF, Agendamento, ProposalOption } from '../types';
 import { mockUserInfo } from './mockData';
+import {
+    getCurrentUserId as getSessionUserId,
+    getEffectiveOrganizationId,
+    getEffectiveOwnerUserId
+} from './sessionScope';
 
 // Cache para o ID do usuário para evitar chamadas repetidas ao auth.getUser()
-let cachedUserId: string | null = null;
 
 // Helper para obter o user_id atual
 const getCurrentUserId = async (): Promise<string | null> => {
-    if (cachedUserId) return cachedUserId;
-
+    return getSessionUserId();
     // Tenta obter da sessão primeiro (mais rápido)
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.user?.id) {
-        cachedUserId = session.user.id;
-        return cachedUserId;
-    }
 
-    const { data: { user } } = await supabase.auth.getUser();
-    cachedUserId = user?.id || null;
-    return cachedUserId;
 };
 
 // Helper para obter o ID do dono da organização (para configurações compartilhadas)
 export const getOwnerUserId = async (): Promise<string | null> => {
+    return getEffectiveOwnerUserId();
     const userId = await getCurrentUserId();
     if (!userId) return null;
 
     // Buscar o organization_id do usuário atual  
+    const orgId = await getEffectiveOrganizationId();
     const { data: profile } = await supabase
         .from('profiles')
         .select('organization_id')
@@ -199,6 +196,7 @@ export const getProposalOptions = async (clientId: number): Promise<ProposalOpti
 export const saveProposalOptions = async (clientId: number, options: ProposalOption[]): Promise<void> => {
     const userId = await getCurrentUserId();
     if (!userId) throw new Error('User not authenticated');
+    const orgId = await getEffectiveOrganizationId();
 
     // Buscar organization_id do usuário para manter consistência
     const { data: profile } = await supabase
@@ -207,7 +205,6 @@ export const saveProposalOptions = async (clientId: number, options: ProposalOpt
         .eq('id', userId)
         .single();
 
-    const orgId = profile?.organization_id;
 
     // Delete existing options for this client (RLS controla acesso por organização)
     // Não filtramos por user_id para permitir colaboradores editar dados do owner
@@ -782,6 +779,54 @@ export const saveMeasurements = async (clientId: number, medidas: Measurement[])
 export const deleteMeasurements = async (clientId: number): Promise<void> => {
     await deleteProposalOptions(clientId);
 };
+
+// ============================================
+// REMOTE WRITE OPERATIONS
+// ============================================
+
+export async function saveClientRemote(client: Omit<Client, 'id'> | Client): Promise<Client> {
+    return saveClient(client);
+}
+
+export async function deleteClientRemote(id: number): Promise<void> {
+    return deleteClient(id);
+}
+
+export async function saveProposalOptionsRemote(clientId: number, options: ProposalOption[]): Promise<void> {
+    return saveProposalOptions(clientId, options);
+}
+
+export async function saveUserInfoRemote(userInfo: UserInfo): Promise<UserInfo> {
+    return saveUserInfo(userInfo);
+}
+
+export async function saveCustomFilmRemote(film: Film): Promise<Film> {
+    return saveCustomFilm(film);
+}
+
+export async function deleteCustomFilmRemote(filmName: string): Promise<void> {
+    return deleteCustomFilm(filmName);
+}
+
+export async function savePDFRemote(pdfData: Omit<SavedPDF, 'id'> | SavedPDF): Promise<SavedPDF> {
+    const normalizedPdfBlob = typeof pdfData.pdfBlob === 'string'
+        ? base64ToBlob(pdfData.pdfBlob)
+        : pdfData.pdfBlob;
+
+    if ('id' in pdfData && pdfData.id) {
+        return updatePDF({ ...pdfData, pdfBlob: normalizedPdfBlob });
+    }
+
+    return savePDF({ ...pdfData, pdfBlob: normalizedPdfBlob });
+}
+
+export async function saveAgendamentoRemote(agendamento: Agendamento | Omit<Agendamento, 'id'>): Promise<Agendamento> {
+    return saveAgendamento(agendamento);
+}
+
+export async function deleteAgendamentoRemote(id: number): Promise<void> {
+    return deleteAgendamento(id);
+}
 
 // ============================================
 // MIGRATION FUNCTION
