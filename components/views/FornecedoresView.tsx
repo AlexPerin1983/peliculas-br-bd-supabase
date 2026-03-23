@@ -549,8 +549,8 @@ const FornecedoresView: React.FC = () => {
 
     return (
         <div className="space-y-6">
-            <div className="flex gap-3 items-center">
-                <div className="relative flex-grow">
+            <div className="space-y-3 sm:space-y-0 sm:flex sm:items-center sm:gap-3">
+                <div className="relative w-full sm:flex-grow">
                     <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                         <i className="fas fa-search text-slate-400 text-lg"></i>
                     </div>
@@ -571,33 +571,35 @@ const FornecedoresView: React.FC = () => {
                     )}
                 </div>
 
-                <button
-                    onClick={() => {
-                        setSelectedF(null);
-                        setShowModal(true);
-                    }}
-                    className="flex-shrink-0 h-14 px-5 bg-slate-900 dark:bg-blue-600 hover:bg-slate-700 dark:hover:bg-blue-700 text-white rounded-xl font-bold flex items-center gap-2 shadow-lg transition-all active:scale-95"
-                    title="Novo Fornecedor"
-                >
-                    <i className="fas fa-plus text-base"></i>
-                    <span className="hidden sm:inline text-sm">Novo Fornecedor</span>
-                </button>
+                <div className="flex items-center gap-3 sm:flex-shrink-0">
+                    <button
+                        onClick={() => {
+                            setSelectedF(null);
+                            setShowModal(true);
+                        }}
+                        className="h-14 flex-1 sm:flex-none sm:px-5 bg-slate-900 dark:bg-blue-600 hover:bg-slate-700 dark:hover:bg-blue-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95"
+                        title="Novo Fornecedor"
+                    >
+                        <i className="fas fa-plus text-base"></i>
+                        <span className="text-sm sm:inline">Novo Fornecedor</span>
+                    </button>
 
-                <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl shadow-sm">
-                    <button
-                        className={`h-12 w-12 rounded-lg flex items-center justify-center transition-all ${viewType === 'grid' ? 'bg-white dark:bg-slate-700 shadow-sm text-emerald-600' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
-                        onClick={() => setViewType('grid')}
-                        title="Visualização em grade"
-                    >
-                        <i className="fas fa-th-large"></i>
-                    </button>
-                    <button
-                        className={`h-12 w-12 rounded-lg flex items-center justify-center transition-all ${viewType === 'table' ? 'bg-white dark:bg-slate-700 shadow-sm text-emerald-600' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
-                        onClick={() => setViewType('table')}
-                        title="Visualização em lista"
-                    >
-                        <i className="fas fa-list"></i>
-                    </button>
+                    <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl shadow-sm flex-shrink-0">
+                        <button
+                            className={`h-12 w-12 rounded-lg flex items-center justify-center transition-all ${viewType === 'grid' ? 'bg-white dark:bg-slate-700 shadow-sm text-emerald-600' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
+                            onClick={() => setViewType('grid')}
+                            title="Visualização em grade"
+                        >
+                            <i className="fas fa-th-large"></i>
+                        </button>
+                        <button
+                            className={`h-12 w-12 rounded-lg flex items-center justify-center transition-all ${viewType === 'table' ? 'bg-white dark:bg-slate-700 shadow-sm text-emerald-600' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
+                            onClick={() => setViewType('table')}
+                            title="Visualização em lista"
+                        >
+                            <i className="fas fa-list"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
 
