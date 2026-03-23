@@ -34,12 +34,27 @@ function whatsappUrl(phone: string): string {
     return `https://wa.me/${num}`;
 }
 
+function whatsappPhone(phone: string): string {
+    const digits = phone.replace(/\D/g, '');
+    return digits.startsWith('55') ? digits : `55${digits}`;
+}
+
+function whatsappBusinessUrl(phone: string): string {
+    const num = whatsappPhone(phone);
+    if (/Android/i.test(window.navigator.userAgent)) {
+        return `intent://send?phone=${num}#Intent;scheme=whatsapp;package=com.whatsapp.w4b;end`;
+    }
+
+    return `https://wa.me/${num}`;
+}
+
 const FornecedorCard: React.FC<{
     fornecedor: Fornecedor;
     onEdit: (fornecedor: Fornecedor) => void;
     onDelete: (id: string) => void;
+    onWhatsAppClick: (fornecedor: Fornecedor) => void;
     index: number;
-}> = ({ fornecedor, onEdit, onDelete, index }) => {
+}> = ({ fornecedor, onEdit, onDelete, onWhatsAppClick, index }) => {
     const [copied, setCopied] = useState(false);
     const initials = fornecedor.empresa.slice(0, 2).toUpperCase();
 
@@ -174,15 +189,14 @@ const FornecedorCard: React.FC<{
                         )}
                     </div>
 
-                    <a
-                        href={whatsappUrl(fornecedor.telefone)}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                    <button
+                        type="button"
+                        onClick={() => onWhatsAppClick(fornecedor)}
                         className="flex-shrink-0 inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold rounded-xl transition-colors shadow-sm shadow-emerald-900/20"
                     >
                         <i className="fab fa-whatsapp text-sm"></i>
                         {formatPhone(fornecedor.telefone)}
-                    </a>
+                    </button>
                 </div>
 
                 <div className="flex items-center justify-between pt-3 mt-3 border-t border-slate-100 dark:border-slate-700/50">
@@ -210,6 +224,70 @@ const FornecedorCard: React.FC<{
                 </div>
             </div>
         </div>
+    );
+};
+
+const WhatsAppChooserModal: React.FC<{
+    fornecedor: Fornecedor | null;
+    onClose: () => void;
+}> = ({ fornecedor, onClose }) => {
+    if (!fornecedor) return null;
+
+    const regularUrl = `whatsapp://send?phone=${whatsappPhone(fornecedor.telefone)}`;
+    const businessUrl = whatsappBusinessUrl(fornecedor.telefone);
+
+    return (
+        <Modal
+            isOpen={true}
+            onClose={onClose}
+            wrapperClassName="backdrop-blur-sm"
+            title={
+                <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
+                        <i className="fab fa-whatsapp"></i>
+                    </div>
+                    <div className="min-w-0">
+                        <div className="text-xl font-semibold text-slate-800 dark:text-white">
+                            Abrir conversa
+                        </div>
+                    </div>
+                </div>
+            }
+        >
+            <div className="space-y-4">
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                    Escolha qual app deseja usar para falar com <strong className="text-slate-700 dark:text-slate-200">{fornecedor.empresa}</strong>.
+                </p>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                    <a
+                        href={regularUrl}
+                        onClick={onClose}
+                        className="flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-600"
+                    >
+                        <i className="fab fa-whatsapp text-base"></i>
+                        WhatsApp
+                    </a>
+
+                    <a
+                        href={businessUrl}
+                        onClick={onClose}
+                        className="flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600"
+                    >
+                        <i className="fas fa-briefcase text-sm"></i>
+                        WhatsApp Business
+                    </a>
+                </div>
+
+                <button
+                    type="button"
+                    onClick={onClose}
+                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                >
+                    Cancelar
+                </button>
+            </div>
+        </Modal>
     );
 };
 
@@ -479,6 +557,7 @@ const FornecedoresView: React.FC = () => {
     const [showModal, setShowModal] = useState(false);
     const [selectedF, setSelectedF] = useState<Fornecedor | null>(null);
     const [fornecedorToDelete, setFornecedorToDelete] = useState<Fornecedor | null>(null);
+    const [fornecedorForWhatsApp, setFornecedorForWhatsApp] = useState<Fornecedor | null>(null);
     const [isDeletingFornecedor, setIsDeletingFornecedor] = useState(false);
 
     const loadData = useCallback(async () => {
@@ -625,6 +704,7 @@ const FornecedoresView: React.FC = () => {
                                 setShowModal(true);
                             }}
                             onDelete={handleRequestDelete}
+                            onWhatsAppClick={setFornecedorForWhatsApp}
                         />
                     ))}
                 </div>
@@ -668,6 +748,11 @@ const FornecedoresView: React.FC = () => {
                     }}
                 />
             )}
+
+            <WhatsAppChooserModal
+                fornecedor={fornecedorForWhatsApp}
+                onClose={() => setFornecedorForWhatsApp(null)}
+            />
 
             <ConfirmationModal
                 isOpen={!!fornecedorToDelete}
