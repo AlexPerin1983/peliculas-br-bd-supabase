@@ -141,6 +141,7 @@ const PdfHistoryItem: React.FC<{
 }> = React.memo(({ pdf, clientName, agendamento, onDownload, onDelete, onUpdateStatus, onSchedule, films, messageTemplates, swipedItemId, onSetSwipedItem, isSelected, onToggleSelect, onNavigateToOption }) => {
     const [translateX, setTranslateX] = useState(0);
     const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(null);
+    const [isMessagesExpanded, setIsMessagesExpanded] = useState(false);
     const touchStartX = useRef(0);
     const touchStartY = useRef(0);
     const isDraggingCard = useRef(false);
@@ -431,29 +432,39 @@ const PdfHistoryItem: React.FC<{
                                     Copie a mensagem que fizer mais sentido para enviar junto com o PDF.
                                 </p>
                             </div>
+                            <ActionButton
+                                onClick={() => setIsMessagesExpanded(current => !current)}
+                                variant="ghost"
+                                size="sm"
+                                iconClassName={isMessagesExpanded ? 'fas fa-chevron-up' : 'fas fa-chevron-down'}
+                            >
+                                {isMessagesExpanded ? 'Recolher' : 'Expandir'}
+                            </ActionButton>
                         </div>
-                        <div className="space-y-2">
-                            {persuasiveMessages.map((message, index) => (
-                                <div
-                                    key={`${pdf.id}-message-${index}`}
-                                    className="rounded-xl border border-slate-200/80 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/30 p-3"
-                                >
-                                    <div className="flex items-start justify-between gap-3">
-                                        <p className="text-sm leading-6 text-slate-600 dark:text-slate-300">
-                                            {message}
-                                        </p>
-                                        <ActionButton
-                                            onClick={() => handleCopyMessage(message, index)}
-                                            variant={copiedMessageIndex === index ? 'secondary' : 'primary'}
-                                            size="sm"
-                                            iconClassName={copiedMessageIndex === index ? 'fas fa-check' : 'fas fa-copy'}
-                                        >
-                                            {copiedMessageIndex === index ? 'Copiado' : 'Copiar'}
-                                        </ActionButton>
+                        {isMessagesExpanded && (
+                            <div className="space-y-2">
+                                {persuasiveMessages.map((message, index) => (
+                                    <div
+                                        key={`${pdf.id}-message-${index}`}
+                                        className="rounded-xl border border-slate-200/80 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/30 p-3"
+                                    >
+                                        <div className="flex items-start justify-between gap-3">
+                                            <p className="text-sm leading-6 text-slate-600 dark:text-slate-300">
+                                                {message}
+                                            </p>
+                                            <ActionButton
+                                                onClick={() => handleCopyMessage(message, index)}
+                                                variant={copiedMessageIndex === index ? 'secondary' : 'primary'}
+                                                size="sm"
+                                                iconClassName={copiedMessageIndex === index ? 'fas fa-check' : 'fas fa-copy'}
+                                            >
+                                                {copiedMessageIndex === index ? 'Copiado' : 'Copiar'}
+                                            </ActionButton>
+                                        </div>
                                     </div>
-                                </div>
-                            ))}
-                        </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
