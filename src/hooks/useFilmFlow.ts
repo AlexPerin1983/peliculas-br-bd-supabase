@@ -75,7 +75,7 @@ export function useFilmFlow({
         if (editingMeasurementIdForFilm !== null) {
             const updatedMeasurements = measurements.map(measurement =>
                 measurement.id === editingMeasurementIdForFilm
-                    ? { ...measurement, pelicula: newFilmData.nome }
+                    ? { ...measurement, pelicula: newFilmData.nome, aiFilmSuggestion: undefined }
                     : measurement
             );
             handleMeasurementsChange(updatedMeasurements);
@@ -138,13 +138,13 @@ export function useFilmFlow({
 
         const updatedMeasurements = measurements.map(measurement =>
             measurement.id === editingMeasurementIdForFilm
-                ? { ...measurement, pelicula: filmName }
+                ? { ...measurement, pelicula: filmName, aiFilmSuggestion: undefined }
                 : measurement
         );
         handleMeasurementsChange(updatedMeasurements);
 
         if (editingMeasurement && editingMeasurement.id === editingMeasurementIdForFilm) {
-            setEditingMeasurement(previous => previous ? { ...previous, pelicula: filmName } : null);
+            setEditingMeasurement(previous => previous ? { ...previous, pelicula: filmName, aiFilmSuggestion: undefined } : null);
         }
 
         setIsFilmSelectionModalOpen(false);
@@ -164,7 +164,8 @@ export function useFilmFlow({
 
         const updatedMeasurements = measurements.map(measurement => ({
             ...measurement,
-            pelicula: filmName
+            pelicula: filmName,
+            aiFilmSuggestion: undefined
         }));
 
         handleMeasurementsChange(updatedMeasurements);

@@ -53,6 +53,7 @@ import { useSubscription } from './contexts/SubscriptionContext';
 import SyncStatusIndicator from './components/SyncStatusIndicator';
 
 import { getFornecedores } from './services/fornecedorService';
+import { matchFilmFromExtractedText } from './services/filmMatchingService';
 import DesktopSidebar from './components/layout/DesktopSidebar';
 
 
@@ -82,6 +83,60 @@ const sanitizeForFilename = (name: string): string => {
     sanitized = sanitized.replace(/[<>:"/\\|?*]/g, '');
 
     return sanitized;
+};
+
+const extractFirstJsonArray = (rawText: string): string | null => {
+    if (!rawText) return null;
+
+    const text = rawText.trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '');
+    let startIndex = -1;
+    let depth = 0;
+    let inString = false;
+    let isEscaped = false;
+
+    for (let i = 0; i < text.length; i += 1) {
+        const char = text[i];
+
+        if (inString) {
+            if (isEscaped) {
+                isEscaped = false;
+                continue;
+            }
+
+            if (char === '\\') {
+                isEscaped = true;
+                continue;
+            }
+
+            if (char === '"') {
+                inString = false;
+            }
+
+            continue;
+        }
+
+        if (char === '"') {
+            inString = true;
+            continue;
+        }
+
+        if (char === '[') {
+            if (depth === 0) {
+                startIndex = i;
+            }
+            depth += 1;
+            continue;
+        }
+
+        if (char === ']' && depth > 0) {
+            depth -= 1;
+            if (depth === 0 && startIndex >= 0) {
+                return text.slice(startIndex, i + 1);
+            }
+        }
+    }
+
+    return null;
 };
 
 const App: React.FC = () => {
@@ -1449,10 +1504,12 @@ Sua tarefa é extrair as medidas e retornar um array JSON.
 
 **OUTRAS REGRAS:**
 1. Largura e Altura devem ser strings com vírgula como decimal (ex: "1,20").
+2. Se identificar o nome ou tipo da película, retorne no campo opcional "peliculaDetectada".
+3. Se não tiver confiança sobre a película, use string vazia em "peliculaDetectada".
 
 FORMATO DE RESPOSTA (JSON PURO):
 [
-  { "local": "Janela da Sala", "largura": "1,20", "altura": "2,10", "quantidade": 5 }
+  { "local": "Janela da Sala", "largura": "1,20", "altura": "2,10", "quantidade": 5, "peliculaDetectada": "Fumê Espelhado" }
 ]
 
 Se não conseguir extrair, retorne: []`;
@@ -1491,35 +1548,80 @@ Se não conseguir extrair, retorne: []`;
             const result = await model.generateContent(parts);
             const responseText = result.response.text();
 
-            // Parse JSON
-            const jsonMatch = responseText.match(/\[[\s\S]*\]/);
-            if (!jsonMatch) {
+            const extractedJson = extractFirstJsonArray(responseText);
+            if (!extractedJson) {
                 handleShowInfo("NÃ£o foi possÃ­vel extrair medidas. Tente reformular.");
                 return;
             }
 
-            const extractedMeasurements = JSON.parse(jsonMatch[0]);
+            const extractedMeasurements = JSON.parse(extractedJson);
 
             if (!Array.isArray(extractedMeasurements) || extractedMeasurements.length === 0) {
                 handleShowInfo("Nenhuma medida foi encontrada. Tente novamente.");
                 return;
             }
 
+            const highConfidenceThreshold = 0.85;
+            const suggestionConfidenceThreshold = 0.6;
+            let autoMatchedFilmsCount = 0;
+            const suggestedFilms: string[] = [];
+
             // Adiciona as medidas extraídas
-            const newMeasurements = extractedMeasurements.map((m: any, index: number) => ({
-                ...createEmptyMeasurement(),
-                id: Date.now() + index, // Garante ID único
-                ambiente: m.local || '', // Mapeia 'local' do JSON para 'ambiente' do objeto Measurement
-                largura: m.largura || '',
-                altura: m.altura || '',
-                quantidade: m.quantidade || 1,
-                isNew: false
-            }));
+            const newMeasurements = extractedMeasurements.map((m: any, index: number) => {
+                const baseMeasurement = {
+                    ...createEmptyMeasurement(),
+                    id: Date.now() + index, // Garante ID único
+                    ambiente: m.local || '', // Mapeia 'local' do JSON para 'ambiente' do objeto Measurement
+                    largura: m.largura || '',
+                    altura: m.altura || '',
+                    quantidade: m.quantidade || 1,
+                    isNew: false
+                };
+
+                if (!films.length || !m.peliculaDetectada) {
+                    return baseMeasurement;
+                }
+
+                const filmMatch = matchFilmFromExtractedText(m.peliculaDetectada, films);
+                if (filmMatch.matchedFilmName && filmMatch.confidence >= highConfidenceThreshold) {
+                    autoMatchedFilmsCount += 1;
+                    return {
+                        ...baseMeasurement,
+                        pelicula: filmMatch.matchedFilmName
+                    };
+                }
+
+                if (filmMatch.matchedFilmName && filmMatch.confidence >= suggestionConfidenceThreshold) {
+                    const measurementLabel = baseMeasurement.ambiente || `Medida ${index + 1}`;
+                    suggestedFilms.push(
+                        `${measurementLabel}: sugestão "${filmMatch.matchedFilmName}" a partir de "${filmMatch.extractedFilmText}".`
+                    );
+                    return {
+                        ...baseMeasurement,
+                        aiFilmSuggestion: {
+                            extractedText: filmMatch.extractedFilmText,
+                            suggestedFilm: filmMatch.matchedFilmName,
+                            confidence: filmMatch.confidence
+                        }
+                    };
+                }
+
+                return baseMeasurement;
+            });
 
 
             handleMeasurementsChange([...measurements, ...newMeasurements]);
             setIsAIMeasurementModalOpen(false);
-            handleShowInfo(`${newMeasurements.length} medida(s) adicionada(s) com sucesso!`);
+            if (autoMatchedFilmsCount > 0) {
+                const suggestionSummary = suggestedFilms.length > 0
+                    ? `\n\nSugestões para revisar manualmente:\n${suggestedFilms.slice(0, 3).join('\n')}${suggestedFilms.length > 3 ? '\n...' : ''}`
+                    : '';
+                handleShowInfo(`${newMeasurements.length} medida(s) adicionada(s). ${autoMatchedFilmsCount} película(s) foram reconhecidas automaticamente.${suggestionSummary}`);
+            } else if (suggestedFilms.length > 0) {
+                handleShowInfo(`${newMeasurements.length} medida(s) adicionada(s).\n\nSugestões de película para revisar:\n${suggestedFilms.slice(0, 3).join('\n')}${suggestedFilms.length > 3 ? '\n...' : ''}`);
+            } else {
+                handleShowInfo(`${newMeasurements.length} medida(s) adicionada(s) com sucesso!`);
+            }
 
         } catch (error) {
             console.error("Erro ao processar medidas com IA:", error);
@@ -1527,7 +1629,7 @@ Se não conseguir extrair, retorne: []`;
         } finally {
             setIsProcessingAI(false);
         }
-    }, [userInfo, measurements, handleMeasurementsChange, createEmptyMeasurement]);
+    }, [userInfo, measurements, handleMeasurementsChange, createEmptyMeasurement, films]);
 
 
     const LoadingSpinner = () => (

@@ -42,6 +42,11 @@ export interface Measurement {
         value: string;
         type: 'percentage' | 'fixed';
     };
+    aiFilmSuggestion?: {
+        extractedText: string;
+        suggestedFilm: string;
+        confidence: number;
+    };
     observation?: string;
     locked?: boolean;
     locationId?: number;
