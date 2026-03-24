@@ -180,4 +180,78 @@ describe('syncService', () => {
     expect(saveClientRemoteMock).toHaveBeenCalled();
     expect(deleteMock).toHaveBeenCalledWith(3);
   });
+
+  it('interrompe a fila quando encontra erro de autenticacao expirada', async () => {
+    const firstQueueItem = {
+      id: 4,
+      table: 'films',
+      action: 'create',
+      data: {
+        _localId: 'film_local_1',
+        nome: 'Film A'
+      },
+      timestamp: Date.now(),
+      status: 'pending',
+      retryCount: 0
+    };
+
+    const secondQueueItem = {
+      id: 5,
+      table: 'clients',
+      action: 'create',
+      data: {
+        _localId: 'client_local_1',
+        nome: 'Cliente B',
+        telefone: '',
+        email: '',
+        cpfCnpj: ''
+      },
+      timestamp: Date.now(),
+      status: 'pending',
+      retryCount: 0
+    };
+
+    const deleteMock = vi.fn();
+    const markSyncItemErrorMock = vi.fn();
+    const saveCustomFilmRemoteMock = vi.fn().mockRejectedValue({ code: 'PGRST303', message: 'JWT expired' });
+    const saveClientRemoteMock = vi.fn();
+
+    vi.doMock('./offlineDb', () => ({
+      offlineDb: {
+        syncQueue: {
+          orderBy: vi.fn(() => ({
+            toArray: vi.fn().mockResolvedValue([firstQueueItem, secondQueueItem])
+          })),
+          delete: deleteMock
+        }
+      },
+      getFailedSyncItems: vi.fn().mockResolvedValue([]),
+      getFailedSyncCount: vi.fn().mockResolvedValue(1),
+      getPendingSyncCount: vi.fn().mockResolvedValue(1),
+      markSyncItemError: markSyncItemErrorMock,
+      markSyncItemPending: vi.fn(),
+      markAsSynced: vi.fn()
+    }));
+
+    vi.doMock('./supabaseDb', () => ({
+      saveClientRemote: saveClientRemoteMock,
+      deleteClientRemote: vi.fn(),
+      saveCustomFilmRemote: saveCustomFilmRemoteMock,
+      deleteCustomFilmRemote: vi.fn(),
+      saveUserInfoRemote: vi.fn(),
+      saveProposalOptionsRemote: vi.fn(),
+      savePDFRemote: vi.fn(),
+      saveAgendamentoRemote: vi.fn(),
+      deleteAgendamentoRemote: vi.fn()
+    }));
+
+    const { syncAllPending } = await import('./syncService');
+
+    await syncAllPending();
+
+    expect(saveCustomFilmRemoteMock).toHaveBeenCalled();
+    expect(saveClientRemoteMock).not.toHaveBeenCalled();
+    expect(markSyncItemErrorMock).toHaveBeenCalledTimes(1);
+    expect(deleteMock).not.toHaveBeenCalled();
+  });
 });

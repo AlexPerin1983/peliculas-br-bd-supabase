@@ -20,9 +20,37 @@ export function isPrivilegedAdminEmail(email?: string | null): boolean {
     return !!email && ADMIN_EMAILS.includes(email.toLowerCase());
 }
 
+function isSessionExpired(session: Session | null): boolean {
+    if (!session?.expires_at) return false;
+    return (session.expires_at * 1000) <= Date.now();
+}
+
+function shouldRefreshSession(session: Session | null): boolean {
+    if (!session?.expires_at) return false;
+    const expiresAtMs = session.expires_at * 1000;
+    return (expiresAtMs - Date.now()) < 60_000;
+}
+
 export async function getCurrentSession(): Promise<Session | null> {
     const { data: { session } } = await supabase.auth.getSession();
-    return session ?? null;
+
+    if (!session) {
+        return null;
+    }
+
+    if (shouldRefreshSession(session)) {
+        const { data, error } = await supabase.auth.refreshSession();
+        if (!error && data.session) {
+            return data.session;
+        }
+
+        if (isSessionExpired(session)) {
+            console.warn('[sessionScope] Session refresh failed for expired token:', error);
+            return null;
+        }
+    }
+
+    return session;
 }
 
 export async function getCurrentUser(): Promise<User | null> {

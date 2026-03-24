@@ -58,6 +58,27 @@ let currentStatus: SyncStatus = {
     error: null
 };
 
+function isAuthError(error: unknown): boolean {
+    const message = error instanceof Error
+        ? error.message
+        : typeof error === 'object' && error !== null && 'message' in error
+            ? String((error as { message?: unknown }).message || '')
+            : String(error || '');
+
+    const code = typeof error === 'object' && error !== null && 'code' in error
+        ? String((error as { code?: unknown }).code || '')
+        : '';
+
+    const normalizedMessage = message.toLowerCase();
+    const normalizedCode = code.toUpperCase();
+
+    return normalizedMessage.includes('jwt expired')
+        || normalizedMessage.includes('unauthorized')
+        || normalizedMessage.includes('invalid jwt')
+        || normalizedCode === 'PGRST301'
+        || normalizedCode === 'PGRST303';
+}
+
 export function initSyncService(): void {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
@@ -100,6 +121,11 @@ export async function syncAllPending(): Promise<void> {
             } catch (error: any) {
                 currentStatus.error = `${item.table}: ${error?.message || error}`;
                 await markSyncItemError(item.id!, currentStatus.error);
+
+                if (isAuthError(error)) {
+                    currentStatus.error = 'Sessao expirada. Faca login novamente para continuar sincronizando.';
+                    break;
+                }
             }
         }
 
