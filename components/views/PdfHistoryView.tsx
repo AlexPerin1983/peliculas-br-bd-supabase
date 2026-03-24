@@ -1,13 +1,15 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { SavedPDF, Client, Agendamento } from '../../types';
+import { SavedPDF, Client, Agendamento, Film } from '../../types';
 import ActionButton from '../ui/ActionButton';
 import ContentState from '../ui/ContentState';
 import PageCollectionToolbar from '../ui/PageCollectionToolbar';
+import Modal from '../ui/Modal';
 
 interface PdfHistoryViewProps {
     pdfs: SavedPDF[];
     clients: Client[];
     agendamentos: Agendamento[];
+    films: Film[];
     onDelete: (pdfId: number) => void;
     onDownload: (pdf: SavedPDF, filename: string) => void;
     onUpdateStatus: (pdfId: number, status: SavedPDF['status']) => void;
@@ -23,6 +25,104 @@ const formatNumberBR = (number: number) => {
     }).format(number);
 };
 
+const PDF_MESSAGE_TEMPLATES_STORAGE_KEY = 'peliculas-br-pdf-message-templates';
+
+const DEFAULT_PDF_MESSAGE_TEMPLATES = [
+    'Segue seu orçamento, {{primeiroNome}}. Considerei {{peliculas}} {{garantia}}. Se quiser, eu também posso te orientar sobre a melhor aplicação para cada ambiente.',
+    '{{primeiroNome}}, te enviei o orçamento em PDF. Orcei {{peliculas}} {{garantia}}. Se quiser, ajusto rapidinho qualquer detalhe para chegar na melhor opção para você.',
+    'Segue o orçamento, {{primeiroNome}}. A opção com {{peliculas}} {{garantia}} ficou em {{valor}}. Se fizer sentido para você, já posso te explicar os próximos passos da instalação.'
+];
+
+const getFirstName = (name: string) => name.trim().split(/\s+/)[0] || name;
+
+const buildFilmSummary = (filmNames: string[]) => {
+    if (filmNames.length === 0) return 'as películas selecionadas';
+    if (filmNames.length === 1) return `a película ${filmNames[0]}`;
+    if (filmNames.length === 2) return `as películas ${filmNames[0]} e ${filmNames[1]}`;
+    return `as películas ${filmNames[0]}, ${filmNames[1]} e outras`;
+};
+
+const buildWarrantyText = (films: Film[], filmNames: string[]) => {
+    const matchedFilms = filmNames
+        .map(name => films.find(film => film.nome === name))
+        .filter((film): film is Film => Boolean(film));
+
+    const fabricante = matchedFilms
+        .map(film => film.garantiaFabricante)
+        .filter((value): value is number => typeof value === 'number' && value > 0);
+
+    const maoDeObra = matchedFilms
+        .map(film => film.garantiaMaoDeObra)
+        .filter((value): value is number => typeof value === 'number' && value > 0);
+
+    const parts: string[] = [];
+
+    if (fabricante.length > 0) {
+        const maxFabricante = Math.max(...fabricante);
+        parts.push(`garantia de fabricante de ${maxFabricante} ano${maxFabricante > 1 ? 's' : ''}`);
+    }
+
+    if (maoDeObra.length > 0) {
+        const maxMaoDeObra = Math.max(...maoDeObra);
+        parts.push(`garantia de instalação de ${maxMaoDeObra} ano${maxMaoDeObra > 1 ? 's' : ''}`);
+    }
+
+    if (parts.length === 0) {
+        return 'com garantia conforme a película escolhida';
+    }
+
+    return `com ${parts.join(' e ')}`;
+};
+
+const buildPersuasiveMessages = (pdf: SavedPDF, clientName: string, films: Film[]) => {
+    const filmTotals = new Map<string, number>();
+
+    (pdf.measurements || []).forEach(measurement => {
+        if (!measurement.pelicula) return;
+        const width = parseFloat(String(measurement.largura).replace(',', '.'));
+        const height = parseFloat(String(measurement.altura).replace(',', '.'));
+        const quantity = measurement.quantidade || 1;
+
+        if (Number.isNaN(width) || Number.isNaN(height)) return;
+
+        const totalM2 = (width * height * quantity) / 10000;
+        filmTotals.set(measurement.pelicula, (filmTotals.get(measurement.pelicula) || 0) + totalM2);
+    });
+
+    const orderedFilmNames = Array.from(filmTotals.entries())
+        .sort((a, b) => b[1] - a[1])
+        .map(([filmName]) => filmName);
+
+    const firstName = getFirstName(clientName);
+    const filmSummary = buildFilmSummary(orderedFilmNames);
+    const warrantyText = buildWarrantyText(films, orderedFilmNames);
+    const totalText = formatNumberBR(pdf.totalPreco);
+
+    return [
+        `Segue seu orçamento, ${firstName}. Considerei ${filmSummary} ${warrantyText}. Se quiser, eu também posso te orientar sobre a melhor aplicação para cada ambiente.`,
+        `${firstName}, te enviei o orçamento em PDF. Orcei ${filmSummary} ${warrantyText}. Se quiser, ajusto rapidinho qualquer detalhe para chegar na melhor opção para você.`,
+        `Segue o orçamento, ${firstName}. A opção com ${filmSummary} ${warrantyText} ficou em ${totalText}. Se fizer sentido para você, já posso te explicar os próximos passos da instalação.`
+    ];
+};
+
+const buildPdfMessageContext = (pdf: SavedPDF, clientName: string, films: Film[]) => {
+    const filmNames = Array.from(new Set((pdf.measurements || []).map(measurement => measurement.pelicula).filter(Boolean)));
+
+    return {
+        cliente: clientName,
+        primeiroNome: getFirstName(clientName),
+        peliculas: buildFilmSummary(filmNames),
+        garantia: buildWarrantyText(films, filmNames),
+        valor: formatNumberBR(pdf.totalPreco)
+    };
+};
+
+const renderPdfMessageTemplate = (template: string, context: Record<string, string>) => {
+    return template.replace(/\{\{\s*(cliente|primeiroNome|peliculas|garantia|valor)\s*\}\}/g, (_, key: string) => {
+        return context[key] || '';
+    });
+};
+
 const PdfHistoryItem: React.FC<{
     pdf: SavedPDF;
     clientName: string;
@@ -31,13 +131,16 @@ const PdfHistoryItem: React.FC<{
     onDelete: (id: number) => void;
     onUpdateStatus: (id: number, status: SavedPDF['status']) => void;
     onSchedule: (info: { pdf: SavedPDF; agendamento?: Agendamento } | { agendamento: Agendamento; pdf?: SavedPDF }) => void;
+    films: Film[];
+    messageTemplates: string[];
     swipedItemId: number | null;
     onSetSwipedItem: (id: number | null) => void;
     isSelected: boolean;
     onToggleSelect: (id: number) => void;
     onNavigateToOption: (clientId: number, optionId: number) => void;
-}> = React.memo(({ pdf, clientName, agendamento, onDownload, onDelete, onUpdateStatus, onSchedule, swipedItemId, onSetSwipedItem, isSelected, onToggleSelect, onNavigateToOption }) => {
+}> = React.memo(({ pdf, clientName, agendamento, onDownload, onDelete, onUpdateStatus, onSchedule, films, messageTemplates, swipedItemId, onSetSwipedItem, isSelected, onToggleSelect, onNavigateToOption }) => {
     const [translateX, setTranslateX] = useState(0);
+    const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(null);
     const touchStartX = useRef(0);
     const touchStartY = useRef(0);
     const isDraggingCard = useRef(false);
@@ -154,6 +257,22 @@ const PdfHistoryItem: React.FC<{
 
     const expirationDate = pdf.expirationDate ? new Date(pdf.expirationDate) : null;
     const isExpired = expirationDate ? new Date(expirationDate.toDateString()) < new Date(new Date().toDateString()) : false;
+    const persuasiveMessages = useMemo(() => {
+        const context = buildPdfMessageContext(pdf, clientName, films);
+        return messageTemplates.map(template => renderPdfMessageTemplate(template, context));
+    }, [pdf, clientName, films, messageTemplates]);
+
+    const handleCopyMessage = useCallback(async (message: string, index: number) => {
+        try {
+            await navigator.clipboard.writeText(message);
+            setCopiedMessageIndex(index);
+            window.setTimeout(() => {
+                setCopiedMessageIndex(current => current === index ? null : current);
+            }, 1800);
+        } catch (error) {
+            console.error('Erro ao copiar mensagem do orçamento:', error);
+        }
+    }, []);
 
     return (
         <div className="relative rounded-lg bg-slate-100 overflow-hidden">
@@ -301,6 +420,41 @@ const PdfHistoryItem: React.FC<{
                             {formatNumberBR(pdf.totalPreco)}
                         </p>
                     </div>
+
+                    <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700/60 space-y-2">
+                        <div className="flex items-center justify-between gap-3">
+                            <div>
+                                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
+                                    Textos prontos
+                                </p>
+                                <p className="text-xs text-slate-500 dark:text-slate-400">
+                                    Copie a mensagem que fizer mais sentido para enviar junto com o PDF.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            {persuasiveMessages.map((message, index) => (
+                                <div
+                                    key={`${pdf.id}-message-${index}`}
+                                    className="rounded-xl border border-slate-200/80 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/30 p-3"
+                                >
+                                    <div className="flex items-start justify-between gap-3">
+                                        <p className="text-sm leading-6 text-slate-600 dark:text-slate-300">
+                                            {message}
+                                        </p>
+                                        <ActionButton
+                                            onClick={() => handleCopyMessage(message, index)}
+                                            variant={copiedMessageIndex === index ? 'secondary' : 'primary'}
+                                            size="sm"
+                                            iconClassName={copiedMessageIndex === index ? 'fas fa-check' : 'fas fa-copy'}
+                                        >
+                                            {copiedMessageIndex === index ? 'Copiado' : 'Copiar'}
+                                        </ActionButton>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -308,12 +462,45 @@ const PdfHistoryItem: React.FC<{
 });
 
 
-const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendamentos, onDelete, onDownload, onUpdateStatus, onSchedule, onGenerateCombinedPdf, onNavigateToOption }) => {
+const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendamentos, films, onDelete, onDownload, onUpdateStatus, onSchedule, onGenerateCombinedPdf, onNavigateToOption }) => {
     const [swipedItemId, setSwipedItemId] = useState<number | null>(null);
     const [expandedClientId, setExpandedClientId] = useState<number | null>(null);
     const [selectedPdfIds, setSelectedPdfIds] = useState<Set<number>>(new Set());
     const [searchTerm, setSearchTerm] = useState('');
     const [visibleCount, setVisibleCount] = useState(10);
+    const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
+    const [messageTemplates, setMessageTemplates] = useState<string[]>(() => {
+        if (typeof window === 'undefined') return [...DEFAULT_PDF_MESSAGE_TEMPLATES];
+        try {
+            const savedTemplates = window.localStorage.getItem(PDF_MESSAGE_TEMPLATES_STORAGE_KEY);
+            if (!savedTemplates) return [...DEFAULT_PDF_MESSAGE_TEMPLATES];
+            const parsedTemplates = JSON.parse(savedTemplates);
+            if (Array.isArray(parsedTemplates) && parsedTemplates.length === 3) {
+                return parsedTemplates.map(template => typeof template === 'string' ? template : '');
+            }
+        } catch (error) {
+            console.error('Erro ao carregar templates de mensagens do histórico:', error);
+        }
+        return [...DEFAULT_PDF_MESSAGE_TEMPLATES];
+    });
+    const [draftMessageTemplates, setDraftMessageTemplates] = useState<string[]>(messageTemplates);
+
+    useEffect(() => {
+        if (!isTemplateModalOpen) {
+            setDraftMessageTemplates(messageTemplates);
+        }
+    }, [isTemplateModalOpen, messageTemplates]);
+
+    const handleSaveTemplates = useCallback(() => {
+        const normalizedTemplates = draftMessageTemplates.map((template, index) => template.trim() || DEFAULT_PDF_MESSAGE_TEMPLATES[index]);
+        setMessageTemplates(normalizedTemplates);
+        window.localStorage.setItem(PDF_MESSAGE_TEMPLATES_STORAGE_KEY, JSON.stringify(normalizedTemplates));
+        setIsTemplateModalOpen(false);
+    }, [draftMessageTemplates]);
+
+    const handleResetTemplates = useCallback(() => {
+        setDraftMessageTemplates([...DEFAULT_PDF_MESSAGE_TEMPLATES]);
+    }, []);
 
     const clientsById = useMemo(() => {
         return new Map(clients.map(c => [c.id, c]));
@@ -479,6 +666,8 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
                                 onDelete={onDelete}
                                 onUpdateStatus={onUpdateStatus}
                                 onSchedule={onSchedule}
+                                films={films}
+                                messageTemplates={messageTemplates}
                                 swipedItemId={swipedItemId}
                                 onSetSwipedItem={setSwipedItemId}
                                 isSelected={selectedPdfIds.has(pdf.id!)}
@@ -507,6 +696,16 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
                 }}
                 searchPlaceholder="Buscar por cliente, proposta, data ou valor..."
             />
+            <div className="flex justify-end">
+                <ActionButton
+                    onClick={() => setIsTemplateModalOpen(true)}
+                    variant="secondary"
+                    size="sm"
+                    iconClassName="fas fa-comment-dots"
+                >
+                    Editar textos prontos
+                </ActionButton>
+            </div>
             {selectedPdfIds.size > 0 && (
                 <div className="sticky top-16 sm:top-20 z-10 mb-4 p-3 bg-slate-800 rounded-lg shadow-xl flex justify-between items-center">
                     <p className="text-white text-sm font-semibold">
@@ -558,6 +757,59 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
                         />
                     ))}
             </div>
+            <Modal
+                isOpen={isTemplateModalOpen}
+                onClose={() => setIsTemplateModalOpen(false)}
+                title="Editar textos prontos"
+                footer={
+                    <>
+                        <ActionButton onClick={handleResetTemplates} variant="ghost" size="sm">
+                            Restaurar padrão
+                        </ActionButton>
+                        <ActionButton onClick={() => setIsTemplateModalOpen(false)} variant="secondary" size="sm">
+                            Cancelar
+                        </ActionButton>
+                        <ActionButton onClick={handleSaveTemplates} variant="primary" size="sm" iconClassName="fas fa-save">
+                            Salvar textos
+                        </ActionButton>
+                    </>
+                }
+            >
+                <div className="space-y-2">
+                    <p className="text-sm text-slate-600 dark:text-slate-300">
+                        Personalize os 3 textos que aparecem no histórico. Você pode usar:
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                        {['{{cliente}}', '{{primeiroNome}}', '{{peliculas}}', '{{garantia}}', '{{valor}}'].map(token => (
+                            <span
+                                key={token}
+                                className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-700 dark:text-slate-200"
+                            >
+                                {token}
+                            </span>
+                        ))}
+                    </div>
+                </div>
+                <div className="space-y-4">
+                    {draftMessageTemplates.map((template, index) => (
+                        <label key={`template-${index}`} className="block space-y-2">
+                            <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                                Texto {index + 1}
+                            </span>
+                            <textarea
+                                value={template}
+                                onChange={(event) => {
+                                    const nextTemplates = [...draftMessageTemplates];
+                                    nextTemplates[index] = event.target.value;
+                                    setDraftMessageTemplates(nextTemplates);
+                                }}
+                                rows={4}
+                                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm transition focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:focus:border-slate-500 dark:focus:ring-slate-700"
+                            />
+                        </label>
+                    ))}
+                </div>
+            </Modal>
         </div>
     );
 };

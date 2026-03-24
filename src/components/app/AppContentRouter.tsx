@@ -165,6 +165,7 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
                 pdfs={allSavedPdfs}
                 clients={clients}
                 agendamentos={agendamentos}
+                films={films}
                 onDelete={onDeletePdf}
                 onDownload={onDownloadPdf}
                 onUpdateStatus={onUpdatePdfStatus}
