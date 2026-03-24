@@ -1506,6 +1506,15 @@ Sua tarefa é extrair as medidas e retornar um array JSON.
 1. Largura e Altura devem ser strings com vírgula como decimal (ex: "1,20").
 2. Se identificar o nome ou tipo da película, retorne no campo opcional "peliculaDetectada".
 3. Se não tiver confiança sobre a película, use string vazia em "peliculaDetectada".
+4. Em imagens, prints, fotos de orçamento ou fotos de anotações, procure o nome da película em títulos, observações, descrições, legendas, tabelas, etiquetas, marcas e abreviações.
+5. Em imagens, se houver medidas e película na mesma linha, bloco ou cartão visual, associe a película à medida correta.
+6. Em imagens, prefira retornar o texto bruto mais útil da película em "peliculaDetectada" mesmo que não esteja perfeitamente padronizado. Ex: "jateada", "fumê espelhado", "blackout", "nano ceramic", "g20".
+7. Nunca invente uma película. Se a imagem não deixar isso claro, use string vazia em "peliculaDetectada".
+
+**REGRAS ESPECIAIS PARA FOTO/PRINT:**
+1. Ignore textos decorativos da interface, botões, menus e propagandas.
+2. Priorize textos próximos das medidas ou do item medido.
+3. Se houver mais de uma película possível na imagem e não for claro qual pertence à medida, não chute.
 
 FORMATO DE RESPOSTA (JSON PURO):
 [
