@@ -72,8 +72,8 @@ describe('AppContentRouter', () => {
   it('mostra estado vazio de clientes e permite abrir cadastro', () => {
     render(<AppContentRouter {...baseProps} />);
 
-    expect(screen.getByText('Crie seu Primeiro Cliente')).toBeInTheDocument();
-    expect(screen.getByText(/Tudo comeca com um cliente/i)).toBeInTheDocument();
+    expect(screen.getByText('Crie seu primeiro cliente')).toBeInTheDocument();
+    expect(screen.getByText(/Tudo começa com um cliente/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Adicionar Cliente/i }));
 

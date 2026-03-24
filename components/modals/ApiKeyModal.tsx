@@ -1,5 +1,6 @@
 import React, { useState, useEffect, FormEvent } from 'react';
 import Modal from '../ui/Modal';
+import ActionButton from '../ui/ActionButton';
 import Input from '../ui/Input';
 
 interface ApiKeyModalProps {
@@ -51,24 +52,20 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onSave, curr
 
     const footer = (
         <>
-            <button onClick={onClose} disabled={isSaving} className="px-4 py-2 text-sm font-semibold rounded-md hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed">
+            <ActionButton onClick={onClose} disabled={isSaving} variant="ghost" size="sm">
                 Cancelar
-            </button>
-            <button
+            </ActionButton>
+            <ActionButton
                 type="submit"
                 form="apiKeyForm"
                 disabled={isSaving || !apiKey.trim()}
-                className="px-4 py-2 bg-slate-800 text-white text-sm font-semibold rounded-md hover:bg-slate-700 disabled:opacity-70 disabled:cursor-wait flex items-center gap-2"
+                loading={isSaving}
+                loadingText="Salvando..."
+                variant="primary"
+                size="sm"
             >
-                {isSaving ? (
-                    <>
-                        <i className="fas fa-spinner fa-spin"></i>
-                        <span>Salvando...</span>
-                    </>
-                ) : (
-                    'Salvar Chave'
-                )}
-            </button>
+                Salvar Chave
+            </ActionButton>
         </>
     );
 

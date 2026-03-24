@@ -1,5 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Agendamento, Client, SavedPDF } from '../../types';
+import ActionButton from '../ui/ActionButton';
+import ContentState from '../ui/ContentState';
 
 interface AgendaViewProps {
     agendamentos: Agendamento[];
@@ -202,13 +204,14 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                             {selectedDateString}
                         </h3>
                     </div>
-                    <button
+                    <ActionButton
                         onClick={() => onCreateNewAgendamento(selectedDate)}
-                        className="w-10 h-10 bg-slate-800 dark:bg-slate-700 text-white rounded-lg flex items-center justify-center hover:bg-slate-700 dark:hover:bg-slate-600 transition-colors shadow"
+                        variant="primary"
+                        size="md"
+                        iconOnly
+                        iconClassName="fas fa-plus"
                         aria-label="Criar novo agendamento para o dia selecionado"
-                    >
-                        <i className="fas fa-plus text-lg"></i>
-                    </button>
+                    />
                 </div>
 
                 {selectedDayAgendamentos.length > 0 ? (
@@ -253,9 +256,16 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                         })}
                     </div>
                 ) : (
-                    <div className="text-center text-slate-500 p-8 mt-4">
-                        <i className="fas fa-calendar-check fa-3x mb-4 text-slate-400"></i>
-                        <p className="text-slate-600">Nenhum servi√ßo agendado para este dia.</p>
+                    <div className="mt-4 rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
+                        <ContentState
+                            compact
+                            iconClassName="fas fa-calendar-check"
+                            title="Nenhum serviÁo agendado"
+                            description="Crie um agendamento para o dia selecionado e acompanhe seus hor·rios aqui."
+                            actionLabel="Novo Agendamento"
+                            actionIconClassName="fas fa-plus"
+                            onAction={() => onCreateNewAgendamento(selectedDate)}
+                        />
                     </div>
                 )}
             </div>

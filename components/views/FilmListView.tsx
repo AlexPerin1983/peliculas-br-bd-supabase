@@ -1,5 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Film } from '../../types';
+import ActionButton from '../ui/ActionButton';
+import ContentState from '../ui/ContentState';
+import PageCollectionToolbar from '../ui/PageCollectionToolbar';
 
 interface FilmListViewProps {
     films: Film[];
@@ -227,40 +230,17 @@ const FilmListView: React.FC<FilmListViewProps> = ({ films, onAdd, onEdit, onDel
 
     return (
         <div className="space-y-6">
-            {/* Busca + Adicionar */}
-            <div className="flex gap-3 items-center">
-                <div className="relative flex-grow">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                        <i className="fas fa-search text-slate-400 text-lg"></i>
-                    </div>
-                    <input
-                        type="text"
-                        placeholder="Buscar película..."
-                        className="w-full pl-12 pr-10 py-4 rounded-xl border-none bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50 focus:ring-2 focus:ring-slate-500 transition-all text-base"
-                        value={searchTerm}
-                        onChange={(e) => {
-                            setSearchTerm(e.target.value);
-                            setVisibleCount(10);
-                        }}
-                    />
-                    {searchTerm && (
-                        <button
-                            onClick={() => setSearchTerm('')}
-                            className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-                        >
-                            <i className="fas fa-times-circle text-lg"></i>
-                        </button>
-                    )}
-                </div>
-                <button
-                    onClick={onAdd}
-                    className="flex-shrink-0 h-14 px-5 bg-slate-900 dark:bg-blue-600 hover:bg-slate-700 dark:hover:bg-blue-700 text-white rounded-xl font-bold flex items-center gap-2 shadow-lg transition-all active:scale-95"
-                    title="Nova Película"
-                >
-                    <i className="fas fa-plus text-base"></i>
-                    <span className="hidden sm:inline text-sm">Nova Película</span>
-                </button>
-            </div>
+            <PageCollectionToolbar
+                search={searchTerm}
+                onSearchChange={(value) => {
+                    setSearchTerm(value);
+                    setVisibleCount(10);
+                }}
+                onClearSearch={() => setSearchTerm('')}
+                searchPlaceholder="Buscar película..."
+                primaryActionLabel="Nova Película"
+                onPrimaryAction={onAdd}
+            />
 
             {displayedFilms.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -281,41 +261,32 @@ const FilmListView: React.FC<FilmListViewProps> = ({ films, onAdd, onEdit, onDel
 
                     {visibleCount < filteredFilms.length && (
                         <div className="pt-4 flex justify-center">
-                            <button
+                            <ActionButton
                                 onClick={handleLoadMore}
-                                className="group flex items-center gap-2 px-6 py-3 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-semibold rounded-full shadow-md hover:shadow-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-all duration-300"
+                                variant="secondary"
+                                size="md"
+                                className="group rounded-full px-6"
                             >
-                                <span>Carregar mais</span>
-                                <i className="fas fa-chevron-down text-sm group-hover:translate-y-0.5 transition-transform"></i>
-                            </button>
+                                Carregar mais
+                            </ActionButton>
                         </div>
                     )}
                 </div>
             ) : searchTerm ? (
-                <div className="text-center py-12">
-                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 mb-4">
-                        <i className="fas fa-search text-slate-400 text-2xl"></i>
-                    </div>
-                    <h3 className="text-lg font-medium text-slate-900 dark:text-slate-100">Nenhuma película encontrada</h3>
-                    <p className="text-slate-500 dark:text-slate-400 mt-1">Tente buscar com outros termos.</p>
-                </div>
+                <ContentState
+                    compact
+                    iconClassName="fas fa-search"
+                    title="Nenhuma película encontrada"
+                    description="Tente buscar com outros termos."
+                />
             ) : (
-                <div className="text-center p-8 flex flex-col items-center justify-center h-full min-h-[350px] opacity-0 animate-fade-in">
-                    <div className="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-2xl flex items-center justify-center mb-6 shadow-sm">
-                        <i className="fas fa-layer-group text-4xl text-slate-400 dark:text-slate-500"></i>
-                    </div>
-                    <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-2">Nenhuma Película Cadastrada</h3>
-                    <p className="text-slate-600 dark:text-slate-400 max-w-xs mx-auto leading-relaxed mb-8 text-sm">
-                        Adicione os tipos de películas com que você trabalha.
-                    </p>
-                    <button
-                        onClick={onAdd}
-                        className="px-8 py-3.5 bg-slate-800 dark:bg-slate-700 text-white font-semibold rounded-xl hover:bg-slate-700 dark:hover:bg-slate-600 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-[1.02] flex items-center gap-3"
-                    >
-                        <i className="fas fa-plus text-lg"></i>
-                        <span>Adicionar Película</span>
-                    </button>
-                </div>
+                <ContentState
+                    iconClassName="fas fa-layer-group"
+                    title="Nenhuma Película Cadastrada"
+                    description="Adicione os tipos de películas com que você trabalha."
+                    actionLabel="Adicionar Película"
+                    onAction={onAdd}
+                />
             )}
         </div>
     );

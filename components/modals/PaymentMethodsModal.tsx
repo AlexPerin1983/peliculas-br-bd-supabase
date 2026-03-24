@@ -1,6 +1,7 @@
 import React, { useState, useEffect, FormEvent } from 'react';
 import { PaymentMethods, PaymentMethod } from '../../types';
 import Modal from '../ui/Modal';
+import ActionButton from '../ui/ActionButton';
 import Input from '../ui/Input';
 
 interface PaymentMethodsModalProps {
@@ -133,24 +134,20 @@ const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({ isOpen, onClo
 
     const footer = (
         <>
-            <button onClick={onClose} disabled={isSaving} className="px-4 py-2 text-sm font-semibold rounded-md hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed">
+            <ActionButton onClick={onClose} disabled={isSaving} variant="ghost" size="sm">
                 Cancelar
-            </button>
-            <button
+            </ActionButton>
+            <ActionButton
                 type="submit"
                 form="paymentMethodsForm"
                 disabled={isSaving}
-                className="px-4 py-2 bg-slate-800 text-white text-sm font-semibold rounded-md hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 disabled:opacity-70 disabled:cursor-wait flex items-center justify-center gap-2 min-w-[120px]"
+                loading={isSaving}
+                loadingText="Salvando..."
+                variant="primary"
+                size="sm"
             >
-                {isSaving ? (
-                    <>
-                        <i className="fas fa-spinner fa-spin"></i>
-                        <span>Salvando...</span>
-                    </>
-                ) : (
-                    'Salvar Alterações'
-                )}
-            </button>
+                Salvar Alterações
+            </ActionButton>
         </>
     );
 
@@ -273,3 +270,4 @@ const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({ isOpen, onClo
 };
 
 export default PaymentMethodsModal;
+

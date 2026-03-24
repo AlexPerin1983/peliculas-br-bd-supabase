@@ -3,6 +3,8 @@ import { Client, Film, Agendamento, SavedPDF, UserInfo, UIMeasurement } from '..
 import MeasurementList from '../../../components/MeasurementList';
 import { FeatureGate } from '../../../components/subscription/SubscriptionComponents';
 import { NumpadConfig } from '../../hooks/useMeasurementEditor';
+import ActionButton from '../../../components/ui/ActionButton';
+import ContentState from '../../../components/ui/ContentState';
 
 const UserSettingsView = lazy(() => import('../../../components/views/UserSettingsView'));
 const PdfHistoryView = lazy(() => import('../../../components/views/PdfHistoryView'));
@@ -215,19 +217,22 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
 
     if (clients.length === 0) {
         return (
-            <div className="text-center p-8 flex flex-col items-center justify-center h-full min-h-[300px] bg-slate-50 dark:bg-slate-900 rounded-lg border-2 border-dashed border-slate-200 dark:border-slate-700">
-                <div className="w-16 h-16 bg-slate-200 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
-                    <i className="fas fa-users fa-2x text-slate-500 dark:text-slate-400"></i>
+            <div className="space-y-4">
+                <ContentState
+                    iconClassName="fas fa-users"
+                    title="Crie seu primeiro cliente"
+                    description="Tudo começa com um cliente. Adicione os dados para começar a gerar orçamentos."
+                />
+                <div className="flex justify-center">
+                    <ActionButton
+                        onClick={() => onOpenClientModal('add')}
+                        variant="primary"
+                        size="lg"
+                        iconClassName="fas fa-plus"
+                    >
+                        Adicionar Cliente
+                    </ActionButton>
                 </div>
-                <h3 className="text-xl font-semibold text-slate-800 dark:text-slate-200">Crie seu Primeiro Cliente</h3>
-                <p className="mt-2 text-slate-600 dark:text-slate-400 max-w-xs mx-auto">Tudo comeca com um cliente. Adicione os dados para comecar a gerar orcamentos.</p>
-                <button
-                    onClick={() => onOpenClientModal('add')}
-                    className="mt-6 px-6 py-3 bg-slate-800 dark:bg-slate-700 text-white font-semibold rounded-lg hover:bg-slate-700 dark:hover:bg-slate-600 transition duration-300 shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 flex items-center gap-2"
-                >
-                    <i className="fas fa-plus"></i>
-                    Adicionar Cliente
-                </button>
             </div>
         );
     }

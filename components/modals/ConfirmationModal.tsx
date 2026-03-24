@@ -1,5 +1,6 @@
 import React, { ReactNode } from 'react';
 import Modal from '../ui/Modal';
+import ActionButton from '../ui/ActionButton';
 
 interface ConfirmationModalProps {
     isOpen: boolean;
@@ -26,29 +27,27 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
     isProcessing = false,
     processingText = 'Processando...'
 }) => {
-    
-    const confirmButtonClasses = {
-        primary: 'bg-slate-800 text-white hover:bg-slate-700',
-        danger: 'bg-red-600 text-white hover:bg-red-700'
-    };
-
     const footer = (
         <>
-            <button
+            <ActionButton
                 onClick={onClose}
                 disabled={isProcessing}
-                className="px-4 py-2 text-sm font-semibold rounded-md hover:bg-slate-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                variant="ghost"
+                size="md"
             >
                 {cancelButtonText}
-            </button>
-            <button
+            </ActionButton>
+            <ActionButton
                 onClick={onConfirm}
                 disabled={isProcessing}
-                className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors min-w-[132px] inline-flex items-center justify-center gap-2 disabled:opacity-80 disabled:cursor-not-allowed ${confirmButtonClasses[confirmButtonVariant]}`}
+                variant={confirmButtonVariant}
+                size="md"
+                loading={isProcessing}
+                loadingText={processingText}
+                className="min-w-[132px]"
             >
-                {isProcessing && <i className="fas fa-spinner fa-spin" aria-hidden="true"></i>}
-                <span>{isProcessing ? processingText : confirmButtonText}</span>
-            </button>
+                {confirmButtonText}
+            </ActionButton>
         </>
     );
 

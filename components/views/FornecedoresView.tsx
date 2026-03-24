@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Fornecedor } from '../../types';
 import ConfirmationModal from '../modals/ConfirmationModal';
+import ContentState from '../ui/ContentState';
 import Modal from '../ui/Modal';
+import PageCollectionToolbar from '../ui/PageCollectionToolbar';
 import {
     createFornecedor,
     deleteFornecedor,
@@ -742,89 +744,48 @@ const FornecedorStyledModal: React.FC<{
 
 const FornecedoresToolbar: React.FC<{
     search: string;
-    viewType: 'grid' | 'table';
+    viewType: 'grid' | 'list';
     onSearchChange: (value: string) => void;
     onClearSearch: () => void;
     onCreate: () => void;
-    onChangeView: (view: 'grid' | 'table') => void;
+    onChangeView: (view: 'grid' | 'list') => void;
 }> = ({ search, viewType, onSearchChange, onClearSearch, onCreate, onChangeView }) => {
     return (
-        <div className="space-y-3 sm:space-y-0 sm:flex sm:items-center sm:gap-3">
-            <div className="relative w-full sm:flex-grow">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <i className="fas fa-search text-slate-400 text-lg"></i>
-                </div>
-                <input
-                    type="text"
-                    placeholder="Buscar por empresa, contato ou marca..."
-                    className="w-full pl-12 pr-10 py-4 rounded-xl border-none bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50 focus:ring-2 focus:ring-slate-500 transition-all text-base"
-                    value={search}
-                    onChange={(event) => onSearchChange(event.target.value)}
-                />
-                {search && (
-                    <button
-                        type="button"
-                        onClick={onClearSearch}
-                        className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-                    >
-                        <i className="fas fa-times-circle text-lg"></i>
-                    </button>
-                )}
-            </div>
-
-            <div className="flex items-center gap-3 sm:flex-shrink-0">
-                <button
-                    type="button"
-                    onClick={onCreate}
-                    className="h-14 flex-1 sm:flex-none sm:px-5 bg-slate-900 dark:bg-blue-600 hover:bg-slate-700 dark:hover:bg-blue-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95"
-                    title="Novo Fornecedor"
-                >
-                    <i className="fas fa-plus text-base"></i>
-                    <span className="text-sm sm:inline">Novo Fornecedor</span>
-                </button>
-
-                <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl shadow-sm flex-shrink-0">
-                    <button
-                        type="button"
-                        className={`h-12 w-12 rounded-lg flex items-center justify-center transition-all ${viewType === 'grid' ? 'bg-white dark:bg-slate-700 shadow-sm text-emerald-600' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
-                        onClick={() => onChangeView('grid')}
-                        title="Visualização em grade"
-                    >
-                        <i className="fas fa-th-large"></i>
-                    </button>
-                    <button
-                        type="button"
-                        className={`h-12 w-12 rounded-lg flex items-center justify-center transition-all ${viewType === 'table' ? 'bg-white dark:bg-slate-700 shadow-sm text-emerald-600' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
-                        onClick={() => onChangeView('table')}
-                        title="Visualização em lista"
-                    >
-                        <i className="fas fa-list"></i>
-                    </button>
-                </div>
-            </div>
-        </div>
+        <PageCollectionToolbar
+            search={search}
+            onSearchChange={onSearchChange}
+            onClearSearch={onClearSearch}
+            searchPlaceholder="Buscar por empresa, contato ou marca..."
+            primaryActionLabel="Novo Fornecedor"
+            onPrimaryAction={onCreate}
+            viewMode={viewType}
+            onViewModeChange={onChangeView}
+        />
     );
 };
 
 const FornecedoresView: React.FC = () => {
     const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
     const [loading, setLoading] = useState(true);
-    const [viewType, setViewType] = useState<'grid' | 'table'>('grid');
+    const [viewType, setViewType] = useState<'grid' | 'list'>('grid');
     const [search, setSearch] = useState('');
     const [showModal, setShowModal] = useState(false);
     const [selectedF, setSelectedF] = useState<Fornecedor | null>(null);
     const [fornecedorToDelete, setFornecedorToDelete] = useState<Fornecedor | null>(null);
     const [fornecedorForWhatsApp, setFornecedorForWhatsApp] = useState<Fornecedor | null>(null);
     const [isDeletingFornecedor, setIsDeletingFornecedor] = useState(false);
+    const [loadError, setLoadError] = useState<string | null>(null);
 
     const loadData = useCallback(async () => {
         setLoading(true);
+        setLoadError(null);
         try {
             await migrateFromLocalStorage();
             const data = await getFornecedores();
             setFornecedores(data);
         } catch (error) {
             console.error('Erro ao carregar fornecedores:', error);
+            setLoadError('Não foi possível carregar os fornecedores agora.');
         } finally {
             setLoading(false);
         }
@@ -896,73 +857,22 @@ const FornecedoresView: React.FC = () => {
                 }}
                 onChangeView={setViewType}
             />
-            {false && (
-            <div className="space-y-3 sm:space-y-0 sm:flex sm:items-center sm:gap-3">
-                <div className="relative w-full sm:flex-grow">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                        <i className="fas fa-search text-slate-400 text-lg"></i>
-                    </div>
-                    <input
-                        type="text"
-                        placeholder="Buscar por empresa, contato ou marca..."
-                        className="w-full pl-12 pr-10 py-4 rounded-xl border-none bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50 focus:ring-2 focus:ring-slate-500 transition-all text-base"
-                        value={search}
-                        onChange={(event) => setSearch(event.target.value)}
-                    />
-                    {search && (
-                        <button
-                            onClick={() => setSearch('')}
-                            className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-                        >
-                            <i className="fas fa-times-circle text-lg"></i>
-                        </button>
-                    )}
-                </div>
-
-                <div className="flex items-center gap-3 sm:flex-shrink-0">
-                    <button
-                        onClick={() => {
-                            setSelectedF(null);
-                            setShowModal(true);
-                        }}
-                        className="h-14 flex-1 sm:flex-none sm:px-5 bg-slate-900 dark:bg-blue-600 hover:bg-slate-700 dark:hover:bg-blue-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95"
-                        title="Novo Fornecedor"
-                    >
-                        <i className="fas fa-plus text-base"></i>
-                        <span className="text-sm sm:inline">Novo Fornecedor</span>
-                    </button>
-
-                    <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl shadow-sm flex-shrink-0">
-                        <button
-                            className={`h-12 w-12 rounded-lg flex items-center justify-center transition-all ${viewType === 'grid' ? 'bg-white dark:bg-slate-700 shadow-sm text-emerald-600' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
-                            onClick={() => setViewType('grid')}
-                            title="Visualização em grade"
-                        >
-                            <i className="fas fa-th-large"></i>
-                        </button>
-                        <button
-                            className={`h-12 w-12 rounded-lg flex items-center justify-center transition-all ${viewType === 'table' ? 'bg-white dark:bg-slate-700 shadow-sm text-emerald-600' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
-                            onClick={() => setViewType('table')}
-                            title="Visualização em lista"
-                        >
-                            <i className="fas fa-list"></i>
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            )}
 
             {loading ? (
-                <div className="text-center p-8 flex flex-col items-center justify-center min-h-[350px]">
-                    <div className="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-2xl flex items-center justify-center mb-6 shadow-sm">
-                        <i className="fas fa-spinner fa-spin text-4xl text-slate-400 dark:text-slate-500"></i>
-                    </div>
-                    <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-2">Carregando fornecedores</h3>
-                    <p className="text-slate-600 dark:text-slate-400 max-w-xs mx-auto leading-relaxed text-sm">
-                        Buscando seus contatos e fabricantes cadastrados.
-                    </p>
-                </div>
+                <ContentState
+                    iconClassName="fas fa-spinner fa-spin"
+                    title="Carregando fornecedores"
+                    description="Buscando seus contatos e fabricantes cadastrados."
+                />
+            ) : loadError ? (
+                <ContentState
+                    iconClassName="fas fa-exclamation-triangle"
+                    title="Erro ao carregar fornecedores"
+                    description={loadError}
+                    actionLabel="Tentar novamente"
+                    actionIconClassName="fas fa-rotate-right"
+                    onAction={loadData}
+                />
             ) : filtered.length > 0 ? (
                 viewType === 'grid' ? (
                     <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
@@ -997,33 +907,26 @@ const FornecedoresView: React.FC = () => {
                     </div>
                 )
             ) : search.trim() ? (
-                <div className="text-center py-12">
-                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 mb-4">
-                        <i className="fas fa-search text-slate-400 text-2xl"></i>
-                    </div>
-                    <h3 className="text-lg font-medium text-slate-900 dark:text-slate-100">Nenhum fornecedor encontrado</h3>
-                    <p className="text-slate-500 dark:text-slate-400 mt-1">Tente buscar por outro nome, contato ou marca.</p>
-                </div>
+                <ContentState
+                    compact
+                    iconClassName="fas fa-search"
+                    title="Nenhum fornecedor encontrado"
+                    description="Tente buscar por outro nome, contato ou marca."
+                />
             ) : (
-                <div className="text-center p-8 flex flex-col items-center justify-center h-full min-h-[350px] opacity-0 animate-fade-in">
-                    <div className="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-2xl flex items-center justify-center mb-6 shadow-sm">
-                        <i className="fas fa-truck-loading text-4xl text-slate-400 dark:text-slate-500"></i>
-                    </div>
-                    <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-2">Nenhum fornecedor cadastrado</h3>
-                    <p className="text-slate-600 dark:text-slate-400 max-w-xs mx-auto leading-relaxed mb-8 text-sm">
-                        Adicione fabricantes, distribuidores e representantes para manter sua operação organizada.
-                    </p>
-                    <button
-                        onClick={() => {
-                            setSelectedF(null);
-                            setShowModal(true);
-                        }}
-                        className="px-8 py-3.5 bg-slate-800 dark:bg-slate-700 text-white font-semibold rounded-xl hover:bg-slate-700 dark:hover:bg-slate-600 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-[1.02] flex items-center gap-3"
-                    >
-                        <i className="fas fa-plus text-lg"></i>
-                        <span>Adicionar Fornecedor</span>
-                    </button>
-                </div>
+                <>
+                <ContentState
+                    iconClassName="fas fa-truck-loading"
+                    title="Nenhum fornecedor cadastrado"
+                    description="Adicione fabricantes, distribuidores e representantes para manter sua operação organizada."
+                    actionLabel="Adicionar Fornecedor"
+                    actionIconClassName="fas fa-plus"
+                    onAction={() => {
+                        setSelectedF(null);
+                        setShowModal(true);
+                    }}
+                />
+                </>
             )}
 
             {showModal && (
@@ -1067,3 +970,4 @@ const FornecedoresView: React.FC = () => {
 };
 
 export default FornecedoresView;
+

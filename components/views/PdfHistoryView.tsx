@@ -1,5 +1,8 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { SavedPDF, Client, Agendamento } from '../../types';
+import ActionButton from '../ui/ActionButton';
+import ContentState from '../ui/ContentState';
+import PageCollectionToolbar from '../ui/PageCollectionToolbar';
 
 interface PdfHistoryViewProps {
     pdfs: SavedPDF[];
@@ -492,46 +495,32 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
 
     return (
         <div className="space-y-6">
-            {/* Search Section */}
-            <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <i className="fas fa-search text-slate-400 text-lg"></i>
-                </div>
-                <input
-                    type="text"
-                    placeholder="Buscar por cliente, proposta, data ou valor..."
-                    className="w-full pl-12 pr-10 py-4 rounded-xl border-none bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50 focus:ring-2 focus:ring-slate-500 transition-all text-base"
-                    value={searchTerm}
-                    onChange={(e) => {
-                        setSearchTerm(e.target.value);
-                        setVisibleCount(10); // Reset pagination on search
-                    }}
-                />
-                {searchTerm && (
-                    <button
-                        onClick={() => {
-                            setSearchTerm('');
-                            setVisibleCount(10);
-                        }}
-                        className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-                    >
-                        <i className="fas fa-times-circle text-lg"></i>
-                    </button>
-                )}
-            </div>
+            <PageCollectionToolbar
+                search={searchTerm}
+                onSearchChange={(value) => {
+                    setSearchTerm(value);
+                    setVisibleCount(10);
+                }}
+                onClearSearch={() => {
+                    setSearchTerm('');
+                    setVisibleCount(10);
+                }}
+                searchPlaceholder="Buscar por cliente, proposta, data ou valor..."
+            />
             {selectedPdfIds.size > 0 && (
                 <div className="sticky top-16 sm:top-20 z-10 mb-4 p-3 bg-slate-800 rounded-lg shadow-xl flex justify-between items-center">
                     <p className="text-white text-sm font-semibold">
                         {selectedPdfIds.size} orçamento{selectedPdfIds.size > 1 ? 's' : ''} selecionado{selectedPdfIds.size > 1 ? 's' : ''}
                     </p>
-                    <button
+                    <ActionButton
                         onClick={handleGenerateCombined}
                         disabled={selectedPdfIds.size < 2}
-                        className="px-4 py-2 bg-green-500 text-white text-sm font-semibold rounded-md hover:bg-green-600 transition-colors disabled:bg-green-700/50 disabled:cursor-not-allowed flex items-center gap-2"
+                        variant="secondary"
+                        size="sm"
+                        iconClassName="fas fa-file-pdf"
                     >
-                        <i className="fas fa-file-pdf"></i>
                         Gerar PDF Combinado
-                    </button>
+                    </ActionButton>
                 </div>
             )}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
@@ -543,31 +532,30 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
 
                         {visibleCount < filteredGroupedHistory.length && (
                             <div className="pt-4 flex justify-center">
-                                <button
+                                <ActionButton
                                     onClick={handleLoadMore}
-                                    className="group flex items-center gap-2 px-6 py-3 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-semibold rounded-full shadow-md hover:shadow-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-all duration-300"
+                                    variant="secondary"
+                                    iconClassName="fas fa-chevron-down"
                                 >
-                                    <span>Carregar mais</span>
-                                    <i className="fas fa-chevron-down text-sm group-hover:translate-y-0.5 transition-transform"></i>
-                                </button>
+                                    Carregar mais
+                                </ActionButton>
                             </div>
                         )}
                     </>
                 ) : (
                     searchTerm ? (
-                        <div className="text-center py-12">
-                            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 mb-4">
-                                <i className="fas fa-search text-slate-400 text-2xl"></i>
-                            </div>
-                            <h3 className="text-lg font-medium text-slate-900 dark:text-slate-100">Nenhum resultado encontrado</h3>
-                            <p className="text-slate-500 dark:text-slate-400 mt-1">Tente buscar com outros termos.</p>
-                        </div>
+                        <ContentState
+                            compact
+                            iconClassName="fas fa-search"
+                            title="Nenhum resultado encontrado"
+                            description="Tente buscar com outros termos."
+                        />
                     ) : (
-                        <div className="text-center text-slate-500 p-8 flex flex-col items-center justify-center h-full min-h-[300px] bg-white/50 rounded-lg border-2 border-dashed border-slate-200">
-                            <i className="fas fa-history fa-3x mb-4 text-slate-300"></i>
-                            <h3 className="text-xl font-semibold text-slate-700">Nenhum PDF no Histórico</h3>
-                            <p className="mt-1">Quando um orçamento for gerado, ele aparecerá aqui.</p>
-                        </div>
+                        <ContentState
+                            iconClassName="fas fa-history"
+                            title="Nenhum PDF no histórico"
+                            description="Quando um orçamento for gerado, ele aparecerá aqui."
+                        />
                     ))}
             </div>
         </div>
@@ -575,3 +563,4 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
 };
 
 export default PdfHistoryView;
+

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, FormEvent } from 'react';
 import Modal from '../ui/Modal';
+import ActionButton from '../ui/ActionButton';
 import Input from '../ui/Input';
 
 interface DiscountModalProps {
@@ -64,16 +65,17 @@ const DiscountModal: React.FC<DiscountModalProps> = ({ isOpen, onClose, onSave, 
 
     const footer = (
         <>
-            <button onClick={onClose} className="px-4 py-2 text-sm font-semibold rounded-md hover:bg-slate-100">
+            <ActionButton onClick={onClose} variant="ghost" size="sm">
                 Cancelar
-            </button>
-            <button
+            </ActionButton>
+            <ActionButton
                 type="submit"
                 form="discountForm"
-                className="px-4 py-2 bg-slate-800 text-white text-sm font-semibold rounded-md hover:bg-slate-700"
+                variant="primary"
+                size="sm"
             >
                 Salvar Desconto
-            </button>
+            </ActionButton>
         </>
     );
 

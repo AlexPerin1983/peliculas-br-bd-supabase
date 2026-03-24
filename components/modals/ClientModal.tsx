@@ -1,6 +1,7 @@
 import React, { useState, useEffect, FormEvent, useRef, KeyboardEvent } from 'react';
 import { Client } from '../../types';
 import Modal from '../ui/Modal';
+import ActionButton from '../ui/ActionButton';
 import Input from '../ui/Input';
 import Tooltip from '../ui/Tooltip';
 
@@ -286,14 +287,18 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSave, mode
     );
 
     const footerContent = (
-        <button
-            type="submit"
-            form="clientForm"
-            disabled={isBusy}
-            className="w-full p-3 bg-slate-800 dark:bg-slate-700 text-white rounded-md hover:bg-slate-700 dark:hover:bg-slate-600 transition duration-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 disabled:bg-slate-500 disabled:cursor-wait"
-        >
-            {isSaving ? 'Salvando...' : (isFetchingCep || isSearchingByAddress ? 'Processando...' : 'Salvar Cliente')}
-        </button>
+        <div className="flex w-full justify-end">
+            <ActionButton
+                type="submit"
+                form="clientForm"
+                disabled={isBusy}
+                loading={isSaving || isFetchingCep || isSearchingByAddress}
+                loadingText={isSaving ? 'Salvando...' : 'Processando...'}
+                variant="primary"
+            >
+                Salvar Cliente
+            </ActionButton>
+        </div>
     );
 
     return (

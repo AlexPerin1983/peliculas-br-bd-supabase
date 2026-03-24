@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Client } from '../../types';
+import ActionButton from '../ui/ActionButton';
+import ContentState from '../ui/ContentState';
 import { ListSkeleton } from '../ui/Skeleton';
 
 const useDebounce = (value: string, delay: number) => {
@@ -272,26 +274,36 @@ const ClientSelectionModal: React.FC<ClientSelectionModalProps> = ({
 
                             {visibleCount < filteredClients.length && (
                                 <div className="pt-4 flex justify-center">
-                                    <button
+                                    <ActionButton
                                         onClick={handleLoadMore}
-                                        className="group flex items-center gap-2 px-6 py-3 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-semibold rounded-full shadow-md hover:shadow-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-all duration-300"
+                                        variant="secondary"
+                                        iconClassName="fas fa-chevron-down"
                                     >
-                                        <span>Carregar mais</span>
-                                        <i className="fas fa-chevron-down text-sm group-hover:translate-y-0.5 transition-transform"></i>
-                                    </button>
+                                        Carregar mais
+                                    </ActionButton>
                                 </div>
                             )}
                             {filteredClients.length === 0 && debouncedSearchTerm && (
-                                <div className="text-center py-10 px-4">
-                                    <p className="text-slate-500 dark:text-slate-400 mb-4">Nenhum cliente encontrado com o nome <strong className="text-slate-700 dark:text-slate-300">"{debouncedSearchTerm}"</strong>.</p>
-                                    <button
-                                        onClick={handleAddNew}
-                                        className="px-5 py-2.5 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 transition duration-300 shadow-sm flex items-center justify-center gap-2 mx-auto"
-                                    >
-                                        <i className="fas fa-plus"></i>
-                                        Adicionar "{debouncedSearchTerm}"
-                                    </button>
-                                </div>
+                                <ContentState
+                                    compact
+                                    iconClassName="fas fa-search"
+                                    title="Nenhum cliente encontrado"
+                                    description={`Tente outro nome ou adicione "${debouncedSearchTerm}" como novo cliente.`}
+                                    actionLabel={`Adicionar "${debouncedSearchTerm}"`}
+                                    actionIconClassName="fas fa-plus"
+                                    onAction={handleAddNew}
+                                />
+                            )}
+                            {filteredClients.length === 0 && !debouncedSearchTerm && !isLoading && (
+                                <ContentState
+                                    compact
+                                    iconClassName="fas fa-user-plus"
+                                    title="Nenhum cliente cadastrado"
+                                    description="Adicione seu primeiro cliente para começar um novo atendimento."
+                                    actionLabel="Adicionar Novo Cliente"
+                                    actionIconClassName="fas fa-plus"
+                                    onAction={handleAddNewEmpty}
+                                />
                             )}
                         </>
                     )}
@@ -301,14 +313,15 @@ const ClientSelectionModal: React.FC<ClientSelectionModalProps> = ({
             {/* Footer */}
             <div className="flex-shrink-0 p-4 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 sticky bottom-0">
                 <div className="max-w-3xl mx-auto">
-                    <button
+                    <ActionButton
                         onClick={handleAddNewEmpty}
-                        className="w-full p-3 bg-slate-800 dark:bg-slate-700 text-white font-semibold rounded-lg hover:bg-slate-700 dark:hover:bg-slate-600 transition duration-300 shadow-md flex items-center justify-center gap-2"
+                        className="w-full"
+                        size="lg"
+                        iconClassName="fas fa-plus"
                         disabled={isLoading}
                     >
-                        <i className="fas fa-plus"></i>
                         Adicionar Novo Cliente
-                    </button>
+                    </ActionButton>
                 </div>
             </div>
       <style>{`

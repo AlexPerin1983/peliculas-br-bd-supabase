@@ -1,6 +1,7 @@
 import React, { useState, useEffect, FormEvent } from 'react';
 import { Agendamento, Client, UserInfo, SavedPDF, SchedulingInfo } from '../../types';
 import Modal from '../ui/Modal';
+import ActionButton from '../ui/ActionButton';
 import Input from '../ui/Input';
 import SearchableSelect from '../ui/SearchableSelect';
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
@@ -360,31 +361,28 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
     const footerContent = (
         <>
             {isEditing && (
-                <button
+                <ActionButton
                     type="button"
                     onClick={handleDelete}
                     disabled={isSaving || isSuggesting}
-                    className="px-4 py-2 text-sm font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    variant="danger"
+                    size="sm"
                 >
                     Excluir
-                </button>
+                </ActionButton>
             )}
             <div className="flex-grow"></div>
-            <button
+            <ActionButton
                 type="submit"
                 form="agendamentoForm"
                 disabled={isSaving || isSuggesting}
-                className="font-semibold text-white bg-slate-800 dark:bg-slate-700 px-5 py-2.5 rounded-lg shadow-sm hover:bg-slate-700 dark:hover:bg-slate-600 disabled:opacity-70 disabled:cursor-wait flex items-center gap-2"
+                loading={isSaving}
+                loadingText="Salvando..."
+                variant="primary"
+                size="sm"
             >
-                {isSaving ? (
-                    <>
-                        <i className="fas fa-spinner fa-spin"></i>
-                        <span>Salvando...</span>
-                    </>
-                ) : (
-                    isEditing ? 'Salvar' : 'Agendar'
-                )}
-            </button>
+                {isEditing ? 'Salvar' : 'Agendar'}
+            </ActionButton>
         </>
     );
 
@@ -411,14 +409,15 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                                     <p className="text-sm text-slate-500 mb-3">
                                         Nenhum cliente encontrado.
                                     </p>
-                                    <button
+                                    <ActionButton
                                         type="button"
                                         onClick={() => onAddNewClient(searchTerm)}
-                                        className="px-4 py-2 bg-slate-200 text-slate-700 font-semibold rounded-lg hover:bg-slate-300 transition text-sm flex items-center justify-center gap-2 mx-auto"
+                                        variant="secondary"
+                                        size="sm"
                                     >
                                         <i className="fas fa-plus"></i>
                                         Adicionar "{searchTerm}"
-                                    </button>
+                                    </ActionButton>
                                 </li>
                             )}
                         />

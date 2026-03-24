@@ -1,6 +1,7 @@
 import React, { useState, useEffect, FormEvent } from 'react';
 import { Film } from '../../types';
 import Modal from '../ui/Modal';
+import ActionButton from '../ui/ActionButton';
 import Input from '../ui/Input';
 import Tooltip from '../ui/Tooltip';
 import InfoModal from './InfoModal';
@@ -208,33 +209,30 @@ const FilmModal: React.FC<FilmModalProps> = ({ isOpen, onClose, onSave, onDelete
     const footer = (
         <>
             {film && (
-                <button
+                <ActionButton
                     onClick={handleDelete}
                     disabled={isSaving}
-                    className="px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    variant="danger"
+                    size="sm"
                 >
                     Excluir
-                </button>
+                </ActionButton>
             )}
             <div className="flex-grow"></div>
-            <button onClick={onClose} disabled={isSaving} className="px-4 py-2 text-sm font-semibold rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 dark:text-slate-300 disabled:opacity-50 disabled:cursor-not-allowed">
+            <ActionButton onClick={onClose} disabled={isSaving} variant="ghost" size="sm">
                 Cancelar
-            </button>
-            <button
+            </ActionButton>
+            <ActionButton
                 type="submit"
                 form="filmForm"
                 disabled={isSaving}
-                className="px-4 py-2 bg-slate-800 dark:bg-slate-700 text-white text-sm font-semibold rounded-md hover:bg-slate-700 dark:hover:bg-slate-600 disabled:opacity-70 disabled:cursor-wait flex items-center gap-2"
+                loading={isSaving}
+                loadingText="Salvando..."
+                variant="primary"
+                size="sm"
             >
-                {isSaving ? (
-                    <>
-                        <i className="fas fa-spinner fa-spin"></i>
-                        <span>Salvando...</span>
-                    </>
-                ) : (
-                    film ? 'Salvar Alterações' : 'Adicionar Película'
-                )}
-            </button>
+                {film ? 'Salvar Alterações' : 'Adicionar Película'}
+            </ActionButton>
         </>
     );
 
@@ -496,3 +494,4 @@ const FilmModal: React.FC<FilmModalProps> = ({ isOpen, onClose, onSave, onDelete
 };
 
 export default FilmModal;
+
