@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Measurement, Film } from '../types';
 import { CuttingOptimizer, OptimizationResult, Rect } from '../utils/CuttingOptimizer';
@@ -81,10 +81,15 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
     const [selectedPieceId, setSelectedPieceId] = useState<string | null>(null);
     const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
     const [fullscreenZoom, setFullscreenZoom] = useState<number>(1);
+    const [fullscreenOrientation, setFullscreenOrientation] = useState<'portrait' | 'landscape'>('portrait');
 
     // Virtualização: rastrear posição do scroll para renderizar apenas peças visíveis
     const [scrollTop, setScrollTop] = useState(0);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
+    const fullscreenScrollRef = useRef<HTMLDivElement>(null);
+    const fullscreenContentRef = useRef<HTMLDivElement>(null);
+    const zoomLevelRef = useRef(zoomLevel);
+    const fullscreenZoomRef = useRef(fullscreenZoom);
 
     // Storage key for this client/option combination
     const storageKey = clientId && optionId ? `peliculas-br-bd-cutting_history_${clientId}_${optionId}` : null;
@@ -192,6 +197,323 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
     useEffect(() => {
         resultRef.current = result;
     }, [result]);
+
+    useEffect(() => {
+        zoomLevelRef.current = zoomLevel;
+    }, [zoomLevel]);
+
+    useEffect(() => {
+        fullscreenZoomRef.current = fullscreenZoom;
+    }, [fullscreenZoom]);
+
+    useEffect(() => {
+        if (!isFullscreen) return;
+
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+
+        return () => {
+            document.body.style.overflow = previousOverflow;
+        };
+    }, [isFullscreen]);
+
+    useEffect(() => {
+        console.info('[CuttingOptimizationPanel] isFullscreen:', isFullscreen);
+    }, [isFullscreen]);
+
+    useEffect(() => {
+        if (!isFullscreen) return;
+
+        requestAnimationFrame(() => {
+            const container = fullscreenScrollRef.current;
+            if (!container) return;
+
+            if (typeof container.scrollTo === 'function') {
+                container.scrollTo({ left: 0, top: 0 });
+                return;
+            }
+
+            container.scrollLeft = 0;
+            container.scrollTop = 0;
+        });
+    }, [isFullscreen, fullscreenOrientation]);
+
+    const clampZoom = React.useCallback((value: number, min: number, max: number) => {
+        return Math.min(max, Math.max(min, value));
+    }, []);
+
+    const getTouchDistance = React.useCallback((touches: TouchList) => {
+        const [firstTouch, secondTouch] = [touches[0], touches[1]];
+        return Math.hypot(secondTouch.clientX - firstTouch.clientX, secondTouch.clientY - firstTouch.clientY);
+    }, []);
+
+    const attachPinchZoom = React.useCallback((
+        container: HTMLDivElement | null,
+        getZoom: () => number,
+        setZoom: React.Dispatch<React.SetStateAction<number>>,
+        minZoom: number,
+        maxZoom: number
+    ) => {
+        if (!container) return () => { };
+
+        let pinchState: {
+            lastDistance: number;
+        } | null = null;
+
+        const handleTouchStart = (event: TouchEvent) => {
+            if (event.touches.length !== 2) return;
+
+            const lastDistance = getTouchDistance(event.touches);
+            if (!Number.isFinite(lastDistance) || lastDistance <= 0) return;
+
+            pinchState = {
+                lastDistance
+            };
+        };
+
+        const handleTouchMove = (event: TouchEvent) => {
+            if (!pinchState || event.touches.length !== 2) return;
+
+            if (event.cancelable) {
+                event.preventDefault();
+            }
+
+            const currentDistance = getTouchDistance(event.touches);
+            if (!Number.isFinite(currentDistance) || currentDistance <= 0) return;
+
+            const distanceRatio = currentDistance / pinchState.lastDistance;
+            const pinchDeadZone = 0.015;
+            const pinchSensitivity = 0.18;
+
+            if (Math.abs(distanceRatio - 1) < pinchDeadZone) {
+                return;
+            }
+
+            const rect = container.getBoundingClientRect();
+            const centerX = (event.touches[0].clientX + event.touches[1].clientX) / 2;
+            const centerY = (event.touches[0].clientY + event.touches[1].clientY) / 2;
+            const focalX = centerX - rect.left;
+            const focalY = centerY - rect.top;
+            const previousZoom = getZoom();
+            const softenedRatio = 1 + ((distanceRatio - 1) * pinchSensitivity);
+            const nextZoom = clampZoom(previousZoom * softenedRatio, minZoom, maxZoom);
+            const zoomRatio = nextZoom / previousZoom;
+
+            if (Math.abs(previousZoom - nextZoom) < 0.005) {
+                pinchState.lastDistance = currentDistance;
+                return;
+            }
+
+            setZoom(nextZoom);
+            container.scrollLeft = Math.max(0, ((container.scrollLeft + focalX) * zoomRatio) - focalX);
+            container.scrollTop = Math.max(0, ((container.scrollTop + focalY) * zoomRatio) - focalY);
+            pinchState.lastDistance = currentDistance;
+        };
+
+        const resetPinch = () => {
+            pinchState = null;
+        };
+
+        const handleTouchEnd = (event: TouchEvent) => {
+            if (event.touches.length < 2) {
+                resetPinch();
+            }
+        };
+
+        container.addEventListener('touchstart', handleTouchStart, { passive: true });
+        container.addEventListener('touchmove', handleTouchMove, { passive: false });
+        container.addEventListener('touchend', handleTouchEnd);
+        container.addEventListener('touchcancel', resetPinch);
+
+        return () => {
+            container.removeEventListener('touchstart', handleTouchStart);
+            container.removeEventListener('touchmove', handleTouchMove);
+            container.removeEventListener('touchend', handleTouchEnd);
+            container.removeEventListener('touchcancel', resetPinch);
+        };
+    }, [clampZoom, getTouchDistance]);
+
+    useEffect(() => {
+        return attachPinchZoom(
+            scrollContainerRef.current,
+            () => zoomLevelRef.current,
+            setZoomLevel,
+            0.5,
+            3
+        );
+    }, [attachPinchZoom, result]);
+
+    useEffect(() => {
+        if (!isFullscreen) return;
+
+        const container = fullscreenScrollRef.current;
+        const content = fullscreenContentRef.current;
+        if (!container || !content) return;
+
+        let pinchState: {
+            baseZoom: number;
+            targetZoom: number;
+            startDistance: number;
+            centerXInContainer: number;
+            centerYInContainer: number;
+            contentOffsetLeft: number;
+            contentOffsetTop: number;
+            anchorContentX: number;
+            anchorContentY: number;
+        } | null = null;
+
+        let rafId: number | null = null;
+
+        const resetVisualZoom = () => {
+            content.style.transform = '';
+            content.style.transformOrigin = '';
+            content.style.willChange = '';
+        };
+
+        const applyVisualZoom = () => {
+            if (!pinchState) {
+                rafId = null;
+                return;
+            }
+
+            const visualScale = pinchState.targetZoom / pinchState.baseZoom;
+            content.style.transformOrigin = 'top left';
+            content.style.transform = `scale(${visualScale})`;
+            content.style.willChange = 'transform';
+
+            container.scrollLeft = Math.max(
+                0,
+                pinchState.contentOffsetLeft + (pinchState.anchorContentX * visualScale) - pinchState.centerXInContainer
+            );
+            container.scrollTop = Math.max(
+                0,
+                pinchState.contentOffsetTop + (pinchState.anchorContentY * visualScale) - pinchState.centerYInContainer
+            );
+            rafId = null;
+        };
+
+        const scheduleVisualZoom = () => {
+            if (rafId !== null) return;
+            rafId = window.requestAnimationFrame(applyVisualZoom);
+        };
+
+        const commitPinchZoom = () => {
+            if (!pinchState) return;
+
+            const {
+                baseZoom,
+                targetZoom,
+                centerXInContainer,
+                centerYInContainer,
+                contentOffsetLeft,
+                contentOffsetTop,
+                anchorContentX,
+                anchorContentY
+            } = pinchState;
+            const zoomRatio = targetZoom / baseZoom;
+
+            resetVisualZoom();
+            pinchState = null;
+
+            setFullscreenZoom(targetZoom);
+
+            window.requestAnimationFrame(() => {
+                const activeContainer = fullscreenScrollRef.current;
+                if (!activeContainer || !Number.isFinite(zoomRatio) || zoomRatio <= 0) return;
+
+                activeContainer.scrollLeft = Math.max(0, contentOffsetLeft + (anchorContentX * zoomRatio) - centerXInContainer);
+                activeContainer.scrollTop = Math.max(0, contentOffsetTop + (anchorContentY * zoomRatio) - centerYInContainer);
+            });
+        };
+
+        const handleTouchStart = (event: TouchEvent) => {
+            if (event.touches.length !== 2) return;
+
+            const lastDistance = getTouchDistance(event.touches);
+            if (!Number.isFinite(lastDistance) || lastDistance <= 0) return;
+
+            const containerRect = container.getBoundingClientRect();
+            const rect = content.getBoundingClientRect();
+            const centerX = (event.touches[0].clientX + event.touches[1].clientX) / 2;
+            const centerY = (event.touches[0].clientY + event.touches[1].clientY) / 2;
+            const centerXInContainer = centerX - containerRect.left;
+            const centerYInContainer = centerY - containerRect.top;
+            const contentOffsetLeft = rect.left - containerRect.left + container.scrollLeft;
+            const contentOffsetTop = rect.top - containerRect.top + container.scrollTop;
+
+            pinchState = {
+                baseZoom: fullscreenZoomRef.current,
+                targetZoom: fullscreenZoomRef.current,
+                startDistance: lastDistance,
+                centerXInContainer,
+                centerYInContainer,
+                contentOffsetLeft,
+                contentOffsetTop,
+                anchorContentX: centerXInContainer + container.scrollLeft - contentOffsetLeft,
+                anchorContentY: centerYInContainer + container.scrollTop - contentOffsetTop
+            };
+        };
+
+        const handleTouchMove = (event: TouchEvent) => {
+            if (!pinchState || event.touches.length !== 2) return;
+
+            if (event.cancelable) {
+                event.preventDefault();
+            }
+
+            const currentDistance = getTouchDistance(event.touches);
+            if (!Number.isFinite(currentDistance) || currentDistance <= 0) return;
+
+            const distanceRatio = currentDistance / pinchState.startDistance;
+            const pinchDeadZone = 0.01;
+            const pinchSensitivity = 0.45;
+
+            if (Math.abs(distanceRatio - 1) < pinchDeadZone) {
+                return;
+            }
+
+            const containerRect = container.getBoundingClientRect();
+            const centerX = (event.touches[0].clientX + event.touches[1].clientX) / 2;
+            const centerY = (event.touches[0].clientY + event.touches[1].clientY) / 2;
+            const softenedRatio = Math.pow(distanceRatio, pinchSensitivity);
+
+            pinchState.centerXInContainer = centerX - containerRect.left;
+            pinchState.centerYInContainer = centerY - containerRect.top;
+            pinchState.targetZoom = clampZoom(pinchState.baseZoom * softenedRatio, 0.25, 5);
+            scheduleVisualZoom();
+        };
+
+        const handleTouchEnd = (event: TouchEvent) => {
+            if (event.touches.length < 2) {
+                commitPinchZoom();
+            }
+        };
+
+        const handleTouchCancel = () => {
+            if (rafId !== null) {
+                window.cancelAnimationFrame(rafId);
+                rafId = null;
+            }
+            resetVisualZoom();
+            pinchState = null;
+        };
+
+        container.addEventListener('touchstart', handleTouchStart, { passive: true });
+        container.addEventListener('touchmove', handleTouchMove, { passive: false });
+        container.addEventListener('touchend', handleTouchEnd);
+        container.addEventListener('touchcancel', handleTouchCancel);
+
+        return () => {
+            if (rafId !== null) {
+                window.cancelAnimationFrame(rafId);
+            }
+            resetVisualZoom();
+            container.removeEventListener('touchstart', handleTouchStart);
+            container.removeEventListener('touchmove', handleTouchMove);
+            container.removeEventListener('touchend', handleTouchEnd);
+            container.removeEventListener('touchcancel', handleTouchCancel);
+        };
+    }, [clampZoom, getTouchDistance, isFullscreen]);
 
     const handleOptimize = React.useCallback((saveToHistory: boolean = false) => {
         const width = parseFloat(currentSettings.rollWidth);
@@ -324,6 +646,170 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
     const baseScale = result && result.rollWidth > 0 ? availableWidth / result.rollWidth : 2;
     const scale = baseScale * zoomLevel;
 
+    const formatRulerLabel = React.useCallback((valueInCm: number) => {
+        if (valueInCm === 0) return '0';
+
+        const minimumFractionDigits = valueInCm % 100 === 0 ? 0 : valueInCm % 10 === 0 ? 1 : 2;
+        return (valueInCm / 100).toLocaleString('pt-BR', {
+            minimumFractionDigits,
+            maximumFractionDigits: 2
+        });
+    }, []);
+
+    const getRulerLabelStep = React.useCallback((pixelsPerCm: number) => {
+        if (pixelsPerCm >= 18) return 5;
+        if (pixelsPerCm >= 8) return 10;
+        if (pixelsPerCm >= 4) return 20;
+        if (pixelsPerCm >= 2) return 50;
+        return 100;
+    }, []);
+
+    const buildRulerLabels = React.useCallback((lengthInCm: number, pixelsPerCm: number) => {
+        const labelStep = getRulerLabelStep(pixelsPerCm);
+        const labels: number[] = [];
+
+        for (let value = 0; value <= lengthInCm; value += 10) {
+            if (value !== 0 && value % labelStep !== 0) continue;
+            labels.push(value);
+        }
+
+        return labels;
+    }, [getRulerLabelStep]);
+
+    const filterLabelsNearTerminalMarker = React.useCallback((
+        labels: number[],
+        lengthInCm: number,
+        pixelsPerCm: number,
+        minDistancePx: number = 48
+    ) => {
+        if (lengthInCm % 10 === 0) return labels;
+
+        const terminalPosition = lengthInCm * pixelsPerCm;
+        return labels.filter((value) => {
+            if (value === 0) return true;
+            return terminalPosition - (value * pixelsPerCm) >= minDistancePx;
+        });
+    }, []);
+
+    const createHorizontalTickStyle = React.useCallback((pixelsPerCm: number, stepInCm: number, color: string) => ({
+        backgroundImage: `repeating-linear-gradient(to right, ${color} 0 1px, transparent 1px ${pixelsPerCm * stepInCm}px)`
+    }), []);
+
+    const createVerticalTickStyle = React.useCallback((pixelsPerCm: number, stepInCm: number, color: string) => ({
+        backgroundImage: `repeating-linear-gradient(to bottom, ${color} 0 1px, transparent 1px ${pixelsPerCm * stepInCm}px)`
+    }), []);
+
+    const getHorizontalLabelStyle = React.useCallback((valueInCm: number, pixelsPerCm: number, totalLengthInCm: number) => {
+        const left = valueInCm * pixelsPerCm;
+        const totalWidth = totalLengthInCm * pixelsPerCm;
+
+        if (left <= 8) {
+            return { left: `${left + 2}px`, transform: 'none' };
+        }
+
+        if (totalWidth - left <= 16) {
+            return { left: `${left}px`, transform: 'translateX(-100%)' };
+        }
+
+        return { left: `${left}px`, transform: 'translateX(-50%)' };
+    }, []);
+
+    const getVerticalLabelStyle = React.useCallback((valueInCm: number, pixelsPerCm: number, totalLengthInCm: number) => {
+        const top = valueInCm * pixelsPerCm;
+        const totalHeight = totalLengthInCm * pixelsPerCm;
+
+        if (top <= 8) {
+            return { top: `${top}px`, transform: 'none' };
+        }
+
+        if (totalHeight - top <= 14) {
+            return { top: `${top - 2}px`, transform: 'translateY(-100%)' };
+        }
+
+        return { top: `${top}px`, transform: 'translateY(-50%)' };
+    }, []);
+
+    const horizontalRulerLabels = useMemo(() => {
+        if (!result) return [];
+        return filterLabelsNearTerminalMarker(
+            buildRulerLabels(result.rollWidth, scale),
+            result.rollWidth,
+            scale
+        );
+    }, [result, buildRulerLabels, filterLabelsNearTerminalMarker, scale]);
+
+    const verticalRulerLabels = useMemo(() => {
+        if (!result) return [];
+        return filterLabelsNearTerminalMarker(
+            buildRulerLabels(result.totalHeight, scale),
+            result.totalHeight,
+            scale,
+            64
+        );
+    }, [result, buildRulerLabels, filterLabelsNearTerminalMarker, scale]);
+
+    const fullscreenHorizontalRulerLabels = useMemo(() => {
+        if (!result) return [];
+        const axisLength = fullscreenOrientation === 'landscape' ? result.totalHeight : result.rollWidth;
+        return filterLabelsNearTerminalMarker(
+            buildRulerLabels(axisLength, baseScale * fullscreenZoom),
+            axisLength,
+            baseScale * fullscreenZoom
+        );
+    }, [result, buildRulerLabels, filterLabelsNearTerminalMarker, baseScale, fullscreenZoom, fullscreenOrientation]);
+
+    const fullscreenVerticalRulerLabels = useMemo(() => {
+        if (!result) return [];
+        const axisLength = fullscreenOrientation === 'landscape' ? result.rollWidth : result.totalHeight;
+        return filterLabelsNearTerminalMarker(
+            buildRulerLabels(axisLength, baseScale * fullscreenZoom),
+            axisLength,
+            baseScale * fullscreenZoom,
+            64
+        );
+    }, [result, buildRulerLabels, filterLabelsNearTerminalMarker, baseScale, fullscreenZoom, fullscreenOrientation]);
+
+    const fullscreenScale = baseScale * fullscreenZoom;
+    const fullscreenAxisWidth = result
+        ? (fullscreenOrientation === 'landscape' ? result.totalHeight : result.rollWidth)
+        : 0;
+    const fullscreenAxisHeight = result
+        ? (fullscreenOrientation === 'landscape' ? result.rollWidth : result.totalHeight)
+        : 0;
+    const fullscreenLinearMeters = result ? (result.totalHeight / 100).toFixed(2).replace('.', ',') : '0,00';
+    const fullscreenUsage = result ? result.efficiency.toFixed(0) : '0';
+    const fullscreenPieces = result ? result.placedItems.length : 0;
+
+    const getFullscreenItemFrame = React.useCallback((item: Rect) => {
+        const isLandscape = fullscreenOrientation === 'landscape';
+
+        return {
+            left: `${(isLandscape ? item.y : item.x) * fullscreenScale}px`,
+            top: `${(isLandscape ? item.x : item.y) * fullscreenScale}px`,
+            width: `${(isLandscape ? item.h : item.w) * fullscreenScale}px`,
+            height: `${(isLandscape ? item.w : item.h) * fullscreenScale}px`,
+            horizontalLabel: ((isLandscape ? item.h : item.w) / 100).toFixed(2),
+            verticalLabel: ((isLandscape ? item.w : item.h) / 100).toFixed(2),
+        };
+    }, [fullscreenOrientation, fullscreenScale]);
+
+    const handleFullscreenWheel = React.useCallback((event: React.WheelEvent<HTMLDivElement>) => {
+        if (fullscreenOrientation !== 'landscape') return;
+        if (event.ctrlKey) return;
+
+        const container = fullscreenScrollRef.current;
+        if (!container) return;
+
+        const hasHorizontalOverflow = container.scrollWidth > container.clientWidth;
+        if (!hasHorizontalOverflow) return;
+
+        const primarilyVerticalScroll = Math.abs(event.deltaY) > Math.abs(event.deltaX);
+        if (!primarilyVerticalScroll || event.deltaY === 0) return;
+
+        event.preventDefault();
+        container.scrollLeft += event.deltaY;
+    }, [fullscreenOrientation]);
+
     // Virtualização: calcular quais peças estão visíveis na viewport
     const VIEWPORT_HEIGHT = 600; // Altura aproximada da viewport visível
     const BUFFER_PX = 500; // Buffer acima/abaixo para scroll suave
@@ -358,6 +844,11 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
 
         return Object.values(groups).sort((a, b) => (b.w * b.h) - (a.w * a.h));
     }, [result]);
+
+    const openFullscreenView = React.useCallback(() => {
+        setFullscreenZoom(1);
+        setIsFullscreen(true);
+    }, []);
 
     return (
         <div className="mt-8 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
@@ -490,7 +981,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                             </div>
                                             <input type="checkbox" checked={useDeepSearch} onChange={e => setUseDeepSearch(e.target.checked)} className="hidden" />
                                             <span className={`text-[11px] font-medium flex items-center gap-0.5 transition-colors ${useDeepSearch ? 'text-purple-400' : 'text-slate-400'}`}>
-                                                Pro<span className="text-[8px] bg-purple-500/20 text-purple-400 px-1 rounded font-bold">β</span>
+                                                Pro<span className="text-[8px] bg-purple-500/20 text-purple-400 px-1 rounded font-bold">ß</span>
                                             </span>
                                         </label>
                                     </div>
@@ -538,7 +1029,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                             <div className={`bg-white w-4 h-4 rounded-full shadow-sm transform transition-transform ${useDeepSearch ? 'translate-x-4' : 'translate-x-0'}`} />
                                         </div>
                                         <input type="checkbox" checked={useDeepSearch} onChange={e => setUseDeepSearch(e.target.checked)} className="hidden" />
-                                        <span className="text-sm text-slate-700 dark:text-slate-300 font-medium flex items-center gap-1">Otimização Profunda<span className="text-[10px] text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 px-1 py-0.5 rounded-full border border-purple-100 dark:border-purple-800">β</span></span>
+                                        <span className="text-sm text-slate-700 dark:text-slate-300 font-medium flex items-center gap-1">Otimização Profunda<span className="text-[10px] text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 px-1 py-0.5 rounded-full border border-purple-100 dark:border-purple-800">ß</span></span>
                                     </label>
                                 </div>
                                 <button onClick={() => handleOptimize(true)} disabled={!result || isOptimizing} className={`bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors ml-auto text-sm flex items-center gap-2 ${(!result || isOptimizing) ? 'opacity-50 cursor-not-allowed' : ''}`}>
@@ -602,57 +1093,94 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                         {result && (
                             <div className="animate-fade-in" ref={containerRef}>
                                 {/* Stats - Compact inline for mobile */}
-                                <div className="flex items-center justify-between gap-2 sm:gap-4 mb-2 sm:mb-6 p-2 sm:p-4 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700">
-                                    {/* Stats - distributed evenly */}
-                                    <div className="flex items-center gap-2 sm:gap-4 flex-1">
-                                        <div className="flex items-baseline gap-1 flex-1 justify-center sm:justify-start">
-                                            <span className="font-bold text-slate-800 dark:text-slate-100 text-base sm:text-lg">{result.totalHeight.toFixed(0)}</span>
-                                            <span className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400">cm</span>
+                                <div className="mb-2 sm:mb-6 p-2 sm:p-4 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700">
+                                    {/* Mobile layout */}
+                                    <div className="sm:hidden space-y-2.5">
+                                        <div className="grid grid-cols-3 gap-2">
+                                            <div className="rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2 py-2 text-center">
+                                                <div className="text-[9px] uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold">Altura</div>
+                                                <div className="mt-0.5 flex items-baseline justify-center gap-1">
+                                                    <span className="font-bold text-slate-800 dark:text-slate-100 text-sm">{result.totalHeight.toFixed(0)}</span>
+                                                    <span className="text-[10px] text-slate-500 dark:text-slate-400">cm</span>
+                                                </div>
+                                            </div>
+                                            <div className="rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2 py-2 text-center">
+                                                <div className="text-[9px] uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold">Uso</div>
+                                                <div className="mt-0.5 flex items-baseline justify-center gap-1">
+                                                    <span className="font-bold text-slate-800 dark:text-slate-100 text-sm">{result.efficiency.toFixed(0)}</span>
+                                                    <span className="text-[10px] text-slate-500 dark:text-slate-400">%</span>
+                                                </div>
+                                            </div>
+                                            <div className="rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2 py-2 text-center">
+                                                <div className="text-[9px] uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold">Peças</div>
+                                                <div className="mt-0.5 flex items-baseline justify-center gap-1">
+                                                    <span className="font-bold text-slate-800 dark:text-slate-100 text-sm">{result.placedItems.length}</span>
+                                                    <span className="text-[10px] text-slate-500 dark:text-slate-400">pçs</span>
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div className="w-px h-5 bg-slate-300 dark:bg-slate-600"></div>
-                                        <div className="flex items-baseline gap-1 flex-1 justify-center sm:justify-start">
-                                            <span className="font-bold text-slate-800 dark:text-slate-100 text-base sm:text-lg">{result.efficiency.toFixed(0)}</span>
-                                            <span className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400">%</span>
-                                        </div>
-                                        <div className="w-px h-5 bg-slate-300 dark:bg-slate-600"></div>
-                                        <div className="flex items-baseline gap-1 flex-1 justify-center sm:justify-start">
-                                            <span className="font-bold text-slate-800 dark:text-slate-100 text-base sm:text-lg">{result.placedItems.length}</span>
-                                            <span className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400">pçs</span>
+
+                                        <div className="relative z-30 flex items-center gap-2">
+                                            <div className="flex-1 flex items-center justify-between gap-1 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2 py-1.5">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setZoomLevel(prev => Math.max(0.5, prev - 0.25))}
+                                                    className="p-1.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 active:bg-slate-300"
+                                                    title="Diminuir zoom"
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                                                        <path fillRule="evenodd" d="M4 10a.75.75 0 01.75-.75h10.5a.75.75 0 010 1.5H4.75A.75.75 0 014 10z" clipRule="evenodd" />
+                                                    </svg>
+                                                </button>
+                                                <span className="text-xs font-mono text-slate-700 dark:text-slate-300 min-w-[42px] text-center">{Math.round(zoomLevel * 100)}%</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setZoomLevel(prev => Math.min(3, prev + 0.25))}
+                                                    className="p-1.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 active:bg-slate-300"
+                                                    title="Aumentar zoom"
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                                                        <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
+                                                    </svg>
+                                                </button>
+                                            </div>
+
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    console.info('[CuttingOptimizationPanel] Expandir clicado (mobile)');
+                                                    openFullscreenView();
+                                                }}
+                                                className="relative z-20 shrink-0 pointer-events-auto inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-600 text-white active:bg-blue-700 shadow-sm touch-manipulation"
+                                                title="Expandir tela cheia"
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                                                    <path d="M13.28 7.78l3.22-3.22v2.69a.75.75 0 001.5 0v-4.5a.75.75 0 00-.75-.75h-4.5a.75.75 0 000 1.5h2.69l-3.22 3.22a.75.75 0 001.06 1.06zM2 17.25v-4.5a.75.75 0 011.5 0v2.69l3.22-3.22a.75.75 0 011.06 1.06L4.56 16.5h2.69a.75.75 0 010 1.5h-4.5a.75.75 0 01-.75-.75zM12.22 13.28l3.22 3.22h-2.69a.75.75 0 000 1.5h4.5a.75.75 0 00.75-.75v-4.5a.75.75 0 00-1.5 0v2.69l-3.22-3.22a.75.75 0 00-1.06 1.06zM3.5 4.56l3.22 3.22a.75.75 0 001.06-1.06L4.56 3.5h2.69a.75.75 0 000-1.5h-4.5a.75.75 0 00-.75.75v4.5a.75.75 0 001.5 0V4.56z" />
+                                                </svg>
+                                                <span className="text-[11px] font-semibold">Expandir</span>
+                                            </button>
                                         </div>
                                     </div>
-                                    {/* Zoom controls inline on mobile */}
-                                    <div className="flex items-center gap-1.5 sm:hidden border-l border-slate-300 dark:border-slate-600 pl-2">
-                                        <button
-                                            onClick={() => setZoomLevel(prev => Math.max(0.5, prev - 0.25))}
-                                            className="p-1.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 active:bg-slate-300"
-                                        >
-                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                                                <path fillRule="evenodd" d="M4 10a.75.75 0 01.75-.75h10.5a.75.75 0 010 1.5H4.75A.75.75 0 014 10z" clipRule="evenodd" />
-                                            </svg>
-                                        </button>
-                                        <span className="text-xs font-mono text-slate-600 dark:text-slate-400 min-w-[36px] text-center">{Math.round(zoomLevel * 100)}%</span>
-                                        <button
-                                            onClick={() => setZoomLevel(prev => Math.min(3, prev + 0.25))}
-                                            className="p-1.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 active:bg-slate-300"
-                                        >
-                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                                                <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
-                                            </svg>
-                                        </button>
+
+                                    {/* Desktop layout */}
+                                    <div className="hidden sm:flex items-center justify-between gap-4">
+                                        <div className="flex items-center gap-4 flex-1">
+                                            <div className="flex items-baseline gap-1 flex-1 justify-center sm:justify-start">
+                                                <span className="font-bold text-slate-800 dark:text-slate-100 text-base sm:text-lg">{result.totalHeight.toFixed(0)}</span>
+                                                <span className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400">cm</span>
+                                            </div>
+                                            <div className="w-px h-5 bg-slate-300 dark:bg-slate-600"></div>
+                                            <div className="flex items-baseline gap-1 flex-1 justify-center sm:justify-start">
+                                                <span className="font-bold text-slate-800 dark:text-slate-100 text-base sm:text-lg">{result.efficiency.toFixed(0)}</span>
+                                                <span className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400">%</span>
+                                            </div>
+                                            <div className="w-px h-5 bg-slate-300 dark:bg-slate-600"></div>
+                                            <div className="flex items-baseline gap-1 flex-1 justify-center sm:justify-start">
+                                                <span className="font-bold text-slate-800 dark:text-slate-100 text-base sm:text-lg">{result.placedItems.length}</span>
+                                                <span className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400">pçs</span>
+                                            </div>
+                                        </div>
                                     </div>
-                                    {/* Botão Expandir - Mobile */}
-                                    <button
-                                        onClick={() => {
-                                            setFullscreenZoom(1);
-                                            setIsFullscreen(true);
-                                        }}
-                                        className="sm:hidden p-1.5 rounded bg-blue-600 text-white active:bg-blue-700 ml-1"
-                                        title="Expandir tela cheia"
-                                    >
-                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                                            <path d="M13.28 7.78l3.22-3.22v2.69a.75.75 0 001.5 0v-4.5a.75.75 0 00-.75-.75h-4.5a.75.75 0 000 1.5h2.69l-3.22 3.22a.75.75 0 001.06 1.06zM2 17.25v-4.5a.75.75 0 011.5 0v2.69l3.22-3.22a.75.75 0 011.06 1.06L4.56 16.5h2.69a.75.75 0 010 1.5h-4.5a.75.75 0 01-.75-.75zM12.22 13.28l3.22 3.22h-2.69a.75.75 0 000 1.5h4.5a.75.75 0 00.75-.75v-4.5a.75.75 0 00-1.5 0v2.69l-3.22-3.22a.75.75 0 00-1.06 1.06zM3.5 4.56l3.22 3.22a.75.75 0 001.06-1.06L4.56 3.5h2.69a.75.75 0 000-1.5h-4.5a.75.75 0 00-.75.75v4.5a.75.75 0 001.5 0V4.56z" />
-                                        </svg>
-                                    </button>
                                 </div>
 
                                 {/* Estimated Cost - Compact */}
@@ -674,7 +1202,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                 })()}
 
                                 {/* Zoom Slider - Desktop only, mobile uses buttons in stats bar */}
-                                <div className="hidden sm:flex mb-4 items-center justify-center gap-3 px-4 w-full max-w-3xl mx-auto">
+                                <div className="relative z-30 hidden sm:flex mb-4 items-center justify-center gap-3 px-4 w-full max-w-3xl mx-auto">
                                     <input
                                         type="range"
                                         min="50"
@@ -689,11 +1217,12 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                     <span className="text-xs font-medium text-slate-600 dark:text-slate-400 min-w-[45px] text-center">{Math.round(zoomLevel * 100)}%</span>
                                     {/* Botão Expandir - Desktop */}
                                     <button
+                                        type="button"
                                         onClick={() => {
-                                            setFullscreenZoom(1);
-                                            setIsFullscreen(true);
+                                            console.info('[CuttingOptimizationPanel] Expandir clicado (desktop)');
+                                            openFullscreenView();
                                         }}
-                                        className="p-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-colors flex items-center gap-1.5"
+                                        className="relative z-20 shrink-0 pointer-events-auto p-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-colors flex items-center gap-1.5 touch-manipulation"
                                         title="Expandir tela cheia"
                                     >
                                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
@@ -709,45 +1238,57 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                     onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
                                     className="relative overflow-auto pb-8 border border-slate-200 dark:border-slate-800 rounded-lg bg-slate-100 dark:bg-slate-950 min-h-[400px] max-h-[70vh] text-center shadow-2xl"
                                 >
-                                    <div className="inline-block relative m-12" style={{ textAlign: 'initial' }}>
+                                    <div className="pointer-events-none inline-block relative mt-24 mb-16 mx-12" style={{ textAlign: 'initial' }}>
 
                                         {/* Horizontal Ruler (Top) */}
-                                        <div className="absolute top-[-30px] left-0 w-full h-[30px] border-b border-slate-300 dark:border-slate-700">
-                                            {Array.from({ length: Math.ceil(result.rollWidth / 10) + 1 }).map((_, i) => {
-                                                const val = i * 10;
-                                                if (val > result.rollWidth) return null;
-                                                const isMajor = true; // Every 10cm is major in this loop
-                                                return (
-                                                    <div key={val} className="absolute bottom-0 flex flex-col items-center" style={{ left: `${val * scale}px`, transform: 'translateX(-50%)' }}>
-                                                        <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 mb-1">{val === 0 ? '0' : (val / 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })}</span>
-                                                        <div className="h-2 w-px bg-slate-400 dark:bg-slate-500"></div>
-                                                    </div>
-                                                );
-                                            })}
+                                        <div className="absolute top-[-64px] left-0 w-full h-[64px] border-b border-slate-300 dark:border-slate-700 overflow-visible">
+                                            <div className="absolute inset-x-0 bottom-0 h-[3px] opacity-70" style={createHorizontalTickStyle(scale, 1, 'rgba(148, 163, 184, 0.35)')}></div>
+                                            <div className="absolute inset-x-0 bottom-0 h-[6px] opacity-90" style={createHorizontalTickStyle(scale, 5, 'rgba(100, 116, 139, 0.5)')}></div>
+                                            <div className="absolute inset-x-0 bottom-0 h-[10px]" style={createHorizontalTickStyle(scale, 10, 'rgba(71, 85, 105, 0.7)')}></div>
+                                            {horizontalRulerLabels.map((val) => (
+                                                <span
+                                                    key={val}
+                                                    className="absolute top-[28px] text-[10px] leading-none font-mono text-slate-500 dark:text-slate-400 bg-slate-50/90 dark:bg-slate-900/85 px-0.5 rounded-sm"
+                                                    style={getHorizontalLabelStyle(val, scale, result.rollWidth)}
+                                                >
+                                                    {formatRulerLabel(val)}
+                                                </span>
+                                            ))}
                                             {/* Last Value Marker (if not exact multiple) */}
                                             {result.rollWidth % 10 !== 0 && (
-                                                <div className="absolute bottom-0 flex flex-col items-center" style={{ left: `${result.rollWidth * scale}px`, transform: 'translateX(-50%)' }}>
-                                                    <span className="text-[10px] font-mono text-cyan-400 font-bold mb-1">{(result.rollWidth / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                                <div className="absolute bottom-0 z-20" style={{ left: `${result.rollWidth * scale}px` }}>
+                                                    <span
+                                                        className="absolute -top-[58px] text-[10px] leading-none font-mono text-cyan-400 font-bold bg-slate-900/95 px-1 py-0.5 rounded-sm shadow-md"
+                                                        style={{ left: '-4px', transform: 'translateX(-100%)' }}
+                                                    >
+                                                        {(result.rollWidth / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                    </span>
                                                     <div className="h-3 w-px bg-cyan-500"></div>
                                                 </div>
                                             )}
                                         </div>
 
                                         {/* Vertical Ruler (Left) */}
-                                        <div className="absolute left-[-35px] top-0 h-full w-[35px] border-r border-slate-300 dark:border-slate-700">
-                                            {Array.from({ length: Math.ceil(result.totalHeight / 10) + 1 }).map((_, i) => {
-                                                const val = i * 10;
-                                                if (val > result.totalHeight) return null;
-                                                return (
-                                                    <div key={val} className="absolute right-0 flex items-center" style={{ top: `${val * scale}px`, transform: 'translateY(-50%)' }}>
-                                                        <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 mr-1">{val === 0 ? '0' : (val / 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })}</span>
-                                                        <div className="w-2 h-px bg-slate-400 dark:bg-slate-500"></div>
-                                                    </div>
-                                                );
-                                            })}
+                                        <div className="absolute left-[-40px] top-0 h-full w-[40px] border-r border-slate-300 dark:border-slate-700 overflow-visible">
+                                            <div className="absolute top-0 bottom-0 right-0 w-[3px] opacity-70" style={createVerticalTickStyle(scale, 1, 'rgba(148, 163, 184, 0.35)')}></div>
+                                            <div className="absolute top-0 bottom-0 right-0 w-[6px] opacity-90" style={createVerticalTickStyle(scale, 5, 'rgba(100, 116, 139, 0.5)')}></div>
+                                            <div className="absolute top-0 bottom-0 right-0 w-[10px]" style={createVerticalTickStyle(scale, 10, 'rgba(71, 85, 105, 0.7)')}></div>
+                                            {verticalRulerLabels.map((val) => (
+                                                <span
+                                                    key={val}
+                                                    className="absolute right-[12px] text-[10px] leading-none font-mono text-slate-500 dark:text-slate-400 bg-slate-50/90 dark:bg-slate-900/85 px-0.5 rounded-sm"
+                                                    style={getVerticalLabelStyle(val, scale, result.totalHeight)}
+                                                >
+                                                    {formatRulerLabel(val)}
+                                                </span>
+                                            ))}
                                             {/* Last Height Marker */}
-                                            <div className="absolute right-0 flex items-center" style={{ top: `${result.totalHeight * scale}px`, transform: 'translateY(-50%)' }}>
-                                                <span className="text-[10px] font-mono text-cyan-400 font-bold mr-1">{(result.totalHeight / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                            <div className="absolute right-0" style={{ top: `${result.totalHeight * scale}px` }}>
+                                                <span
+                                                    className="absolute top-[8px] right-[12px] text-[10px] leading-none font-mono text-cyan-400 font-bold bg-slate-900/95 px-1 py-0.5 rounded-sm shadow-md"
+                                                >
+                                                    {(result.totalHeight / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                </span>
                                                 <div className="w-3 h-px bg-cyan-500"></div>
                                             </div>
                                         </div>
@@ -761,12 +1302,16 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                                 backgroundImage: `
                                             linear-gradient(to right, rgba(148, 163, 184, 0.1) 1px, transparent 1px),
                                             linear-gradient(to bottom, rgba(148, 163, 184, 0.1) 1px, transparent 1px),
+                                            linear-gradient(to right, rgba(148, 163, 184, 0.075) 1px, transparent 1px),
+                                            linear-gradient(to bottom, rgba(148, 163, 184, 0.075) 1px, transparent 1px),
                                             linear-gradient(to right, rgba(148, 163, 184, 0.05) 1px, transparent 1px),
                                             linear-gradient(to bottom, rgba(148, 163, 184, 0.05) 1px, transparent 1px)
                                         `,
                                                 backgroundSize: `
                                             ${10 * scale}px ${10 * scale}px,
                                             ${10 * scale}px ${10 * scale}px,
+                                            ${5 * scale}px ${5 * scale}px,
+                                            ${5 * scale}px ${5 * scale}px,
                                             ${1 * scale}px ${1 * scale}px,
                                             ${1 * scale}px ${1 * scale}px
                                         `,
@@ -1023,13 +1568,23 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                             </div>
                         </Modal>
 
-                        {/* Fullscreen Modal - Rendered via Portal */}
+                        {/* Fullscreen Modal */}
                         {isFullscreen && result && createPortal(
-                            <div className="fixed inset-0 bg-slate-100 dark:bg-slate-950 flex flex-col" style={{ zIndex: 99999 }}>
+                            <div
+                                className="bg-slate-100 dark:bg-slate-950 flex flex-col relative overflow-hidden"
+                                style={{
+                                    position: 'fixed',
+                                    top: 0,
+                                    right: 0,
+                                    bottom: 0,
+                                    left: 0,
+                                    zIndex: 99999,
+                                }}
+                            >
                                 {/* Barra de controles minimalista */}
-                                <div className="flex items-center justify-between px-3 py-2 bg-white/90 dark:bg-slate-900/80 backdrop-blur-sm border-b border-slate-200 dark:border-slate-800">
+                                <div className="flex items-center justify-between gap-3 px-3 py-2 bg-white/90 dark:bg-slate-900/80 backdrop-blur-sm border-b border-slate-200 dark:border-slate-800">
                                     {/* Zoom Controls */}
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-2 flex-wrap min-w-0">
                                         <button
                                             onClick={() => setFullscreenZoom(prev => Math.max(0.25, prev - 0.25))}
                                             className="p-2 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-white active:bg-slate-300 dark:active:bg-slate-600"
@@ -1053,6 +1608,38 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                         >
                                             Reset
                                         </button>
+                                        <button
+                                            onClick={() => setFullscreenOrientation(prev => prev === 'portrait' ? 'landscape' : 'portrait')}
+                                            className="p-2 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-white active:bg-slate-300 dark:active:bg-slate-600"
+                                            title={fullscreenOrientation === 'portrait' ? 'Ver mesa na horizontal' : 'Ver mesa na vertical'}
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+                                                <path d="M3.75 5A1.75 1.75 0 0 1 5.5 3.25h5A1.75 1.75 0 0 1 12.25 5v10A1.75 1.75 0 0 1 10.5 16.75h-5A1.75 1.75 0 0 1 3.75 15V5Zm1.5 0a.25.25 0 0 0-.25.25v10c0 .138.112.25.25.25h5a.25.25 0 0 0 .25-.25V5a.25.25 0 0 0-.25-.25h-5Zm5.75 3A1.75 1.75 0 0 1 12.75 6.25h1.75A1.75 1.75 0 0 1 16.25 8v6A1.75 1.75 0 0 1 14.5 15.75h-1.75A1.75 1.75 0 0 1 11 14V8Zm1.5 0a.25.25 0 0 0-.25.25v6c0 .138.112.25.25.25h1.75a.25.25 0 0 0 .25-.25V8a.25.25 0 0 0-.25-.25h-1.75Z" />
+                                            </svg>
+                                        </button>
+                                    </div>
+                                    <div className="hidden lg:flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/95 dark:bg-slate-900/70 px-2 py-1 shadow-sm">
+                                        <div className="rounded-lg bg-white/90 dark:bg-slate-800/90 px-3 py-1.5 min-w-[96px]">
+                                            <div className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold">Metro linear</div>
+                                            <div className="mt-0.5 flex items-baseline gap-1">
+                                                <span className="text-sm font-bold text-slate-800 dark:text-slate-100">{fullscreenLinearMeters}</span>
+                                                <span className="text-[10px] text-slate-500 dark:text-slate-400">m</span>
+                                            </div>
+                                        </div>
+                                        <div className="rounded-lg bg-white/90 dark:bg-slate-800/90 px-3 py-1.5 min-w-[76px]">
+                                            <div className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold">Uso</div>
+                                            <div className="mt-0.5 flex items-baseline gap-1">
+                                                <span className="text-sm font-bold text-slate-800 dark:text-slate-100">{fullscreenUsage}</span>
+                                                <span className="text-[10px] text-slate-500 dark:text-slate-400">%</span>
+                                            </div>
+                                        </div>
+                                        <div className="rounded-lg bg-white/90 dark:bg-slate-800/90 px-3 py-1.5 min-w-[76px]">
+                                            <div className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold">Peças</div>
+                                            <div className="mt-0.5 flex items-baseline gap-1">
+                                                <span className="text-sm font-bold text-slate-800 dark:text-slate-100">{fullscreenPieces}</span>
+                                                <span className="text-[10px] text-slate-500 dark:text-slate-400">pçs</span>
+                                            </div>
+                                        </div>
                                     </div>
                                     {/* Close Button */}
                                     <button
@@ -1064,55 +1651,75 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                         </svg>
                                     </button>
                                 </div>
-
                                 {/* Fullscreen Content */}
-                                <div className="flex-1 overflow-auto flex items-start justify-center p-2">
-                                    <div className="inline-block relative my-4" style={{ marginLeft: '40px', marginTop: '35px' }}>
+                                <div
+                                    ref={fullscreenScrollRef}
+                                    className="flex-1 overflow-auto p-2"
+                                    onWheel={handleFullscreenWheel}
+                                    style={{ overscrollBehavior: 'contain' }}
+                                >
+                                    <div
+                                        className="min-w-max min-h-full flex items-start justify-start"
+                                        style={{
+                                            paddingRight: fullscreenOrientation === 'landscape' ? '220px' : '16px',
+                                            paddingBottom: fullscreenOrientation === 'landscape' ? '32px' : '16px',
+                                        }}
+                                    >
+                                        <div
+                                            ref={fullscreenContentRef}
+                                            className="inline-block relative mt-4 mb-14"
+                                            style={{ marginLeft: '40px', marginTop: '68px' }}
+                                        >
 
                                         {/* Horizontal Ruler (Top) - Fullscreen */}
-                                        <div className="absolute left-0 right-0 h-[30px] border-b border-slate-300 dark:border-slate-700" style={{ top: '-30px' }}>
-                                            {(() => {
-                                                const fsScale = baseScale * fullscreenZoom;
-                                                const step = fullscreenZoom < 0.5 ? 20 : 10;
-                                                return Array.from({ length: Math.ceil(result.rollWidth / step) + 1 }).map((_, i) => {
-                                                    const val = i * step;
-                                                    if (val > result.rollWidth) return null;
-                                                    return (
-                                                        <div key={val} className="absolute bottom-0 flex flex-col items-center" style={{ left: `${val * fsScale}px`, transform: 'translateX(-50%)' }}>
-                                                            <span className="text-[9px] font-mono text-slate-500 dark:text-slate-400 mb-0.5">{val === 0 ? '0' : (val / 100).toFixed(1)}</span>
-                                                            <div className="h-2 w-px bg-slate-400 dark:bg-slate-500"></div>
-                                                        </div>
-                                                    );
-                                                });
-                                            })()}
+                                        <div className="absolute left-0 right-0 h-[64px] border-b border-slate-300 dark:border-slate-700 overflow-visible" style={{ top: '-64px' }}>
+                                            <div className="absolute inset-x-0 bottom-0 h-[3px] opacity-70" style={createHorizontalTickStyle(baseScale * fullscreenZoom, 1, 'rgba(148, 163, 184, 0.35)')}></div>
+                                            <div className="absolute inset-x-0 bottom-0 h-[6px] opacity-90" style={createHorizontalTickStyle(baseScale * fullscreenZoom, 5, 'rgba(100, 116, 139, 0.5)')}></div>
+                                            <div className="absolute inset-x-0 bottom-0 h-[10px]" style={createHorizontalTickStyle(baseScale * fullscreenZoom, 10, 'rgba(71, 85, 105, 0.7)')}></div>
+                                            {fullscreenHorizontalRulerLabels.map((val) => (
+                                                <span
+                                                    key={val}
+                                                    className="absolute top-[24px] text-[9px] leading-none font-mono text-slate-500 dark:text-slate-400 bg-slate-100/90 dark:bg-slate-950/85 px-0.5 rounded-sm"
+                                                    style={getHorizontalLabelStyle(val, fullscreenScale, fullscreenAxisWidth)}
+                                                >
+                                                    {formatRulerLabel(val)}
+                                                </span>
+                                            ))}
                                             {/* Largura total marker */}
-                                            {result.rollWidth % 10 !== 0 && (
-                                                <div className="absolute flex flex-col items-center" style={{ left: `${result.rollWidth * baseScale * fullscreenZoom}px`, bottom: '8px', transform: 'translateX(-50%)' }}>
-                                                    <span className="text-[9px] font-mono text-cyan-400 font-bold mb-0.5 bg-slate-900/80 px-1 rounded">{(result.rollWidth / 100).toFixed(2)}</span>
+                                            {fullscreenAxisWidth % 10 !== 0 && (
+                                                <div className="absolute bottom-0 z-20" style={{ left: `${fullscreenAxisWidth * fullscreenScale}px` }}>
+                                                    <span
+                                                        className="absolute -top-[58px] text-[9px] leading-none font-mono text-cyan-400 font-bold bg-slate-900/95 px-1 py-0.5 rounded-sm shadow-md"
+                                                        style={{ left: '-4px', transform: 'translateX(-100%)' }}
+                                                    >
+                                                        {(fullscreenAxisWidth / 100).toFixed(2)}
+                                                    </span>
                                                     <div className="h-3 w-px bg-cyan-500"></div>
                                                 </div>
                                             )}
                                         </div>
 
                                         {/* Vertical Ruler (Left) - Fullscreen */}
-                                        <div className="absolute top-0 bottom-0 w-[35px] border-r border-slate-300 dark:border-slate-700" style={{ left: '-35px' }}>
-                                            {(() => {
-                                                const fsScale = baseScale * fullscreenZoom;
-                                                const step = fullscreenZoom < 0.5 ? 20 : 10;
-                                                return Array.from({ length: Math.ceil(result.totalHeight / step) + 1 }).map((_, i) => {
-                                                    const val = i * step;
-                                                    if (val > result.totalHeight) return null;
-                                                    return (
-                                                        <div key={val} className="absolute right-0 flex items-center" style={{ top: `${val * fsScale}px`, transform: 'translateY(-50%)' }}>
-                                                            <span className="text-[9px] font-mono text-slate-500 dark:text-slate-400 mr-1">{val === 0 ? '0' : (val / 100).toFixed(1)}</span>
-                                                            <div className="w-2 h-px bg-slate-400 dark:bg-slate-500"></div>
-                                                        </div>
-                                                    );
-                                                });
-                                            })()}
+                                        <div className="absolute top-0 bottom-0 w-[40px] border-r border-slate-300 dark:border-slate-700 overflow-visible" style={{ left: '-40px' }}>
+                                            <div className="absolute top-0 bottom-0 right-0 w-[3px] opacity-70" style={createVerticalTickStyle(baseScale * fullscreenZoom, 1, 'rgba(148, 163, 184, 0.35)')}></div>
+                                            <div className="absolute top-0 bottom-0 right-0 w-[6px] opacity-90" style={createVerticalTickStyle(baseScale * fullscreenZoom, 5, 'rgba(100, 116, 139, 0.5)')}></div>
+                                            <div className="absolute top-0 bottom-0 right-0 w-[10px]" style={createVerticalTickStyle(baseScale * fullscreenZoom, 10, 'rgba(71, 85, 105, 0.7)')}></div>
+                                            {fullscreenVerticalRulerLabels.map((val) => (
+                                                <span
+                                                    key={val}
+                                                    className="absolute right-[12px] text-[9px] leading-none font-mono text-slate-500 dark:text-slate-400 bg-slate-100/90 dark:bg-slate-950/85 px-0.5 rounded-sm"
+                                                    style={getVerticalLabelStyle(val, fullscreenScale, fullscreenAxisHeight)}
+                                                >
+                                                    {formatRulerLabel(val)}
+                                                </span>
+                                            ))}
                                             {/* Altura total marker */}
-                                            <div className="absolute right-0 flex items-center" style={{ top: `${result.totalHeight * baseScale * fullscreenZoom}px`, transform: 'translateY(-50%)' }}>
-                                                <span className="text-[9px] font-mono text-cyan-400 font-bold mr-1">{(result.totalHeight / 100).toFixed(2)}</span>
+                                            <div className="absolute right-0" style={{ top: `${fullscreenAxisHeight * fullscreenScale}px` }}>
+                                                <span
+                                                    className="absolute top-[8px] right-[12px] text-[9px] leading-none font-mono text-cyan-400 font-bold bg-slate-900/95 px-1 py-0.5 rounded-sm shadow-md"
+                                                >
+                                                    {(fullscreenAxisHeight / 100).toFixed(2)}
+                                                </span>
                                                 <div className="w-3 h-px bg-cyan-500"></div>
                                             </div>
                                         </div>
@@ -1121,58 +1728,174 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                         <div
                                             className="relative bg-white dark:bg-slate-900/50 shadow-inner overflow-hidden border border-slate-200 dark:border-slate-700 rounded"
                                             style={{
-                                                width: `${result.rollWidth * baseScale * fullscreenZoom}px`,
-                                                height: `${result.totalHeight * baseScale * fullscreenZoom}px`,
+                                                width: `${fullscreenAxisWidth * fullscreenScale}px`,
+                                                height: `${fullscreenAxisHeight * fullscreenScale}px`,
                                                 backgroundImage: `
-                                            linear-gradient(to right, rgba(148, 163, 184, 0.1) 1px, transparent 1px),
-                                            linear-gradient(to bottom, rgba(148, 163, 184, 0.1) 1px, transparent 1px)
+                                            linear-gradient(to right, rgba(148, 163, 184, 0.12) 1px, transparent 1px),
+                                            linear-gradient(to bottom, rgba(148, 163, 184, 0.12) 1px, transparent 1px),
+                                            linear-gradient(to right, rgba(148, 163, 184, 0.08) 1px, transparent 1px),
+                                            linear-gradient(to bottom, rgba(148, 163, 184, 0.08) 1px, transparent 1px),
+                                            linear-gradient(to right, rgba(148, 163, 184, 0.05) 1px, transparent 1px),
+                                            linear-gradient(to bottom, rgba(148, 163, 184, 0.05) 1px, transparent 1px)
                                         `,
-                                                backgroundSize: `${10 * baseScale * fullscreenZoom}px ${10 * baseScale * fullscreenZoom}px`
+                                                backgroundSize: `
+                                            ${10 * fullscreenScale}px ${10 * fullscreenScale}px,
+                                            ${10 * fullscreenScale}px ${10 * fullscreenScale}px,
+                                            ${5 * fullscreenScale}px ${5 * fullscreenScale}px,
+                                            ${5 * fullscreenScale}px ${5 * fullscreenScale}px,
+                                            ${1 * fullscreenScale}px ${1 * fullscreenScale}px,
+                                            ${1 * fullscreenScale}px ${1 * fullscreenScale}px
+                                        `,
+                                                backgroundPosition: '-1px -1px'
                                             }}
                                         >
                                             {/* Items */}
                                             {result.placedItems.map((item, idx) => {
-                                                const fsScale = baseScale * fullscreenZoom;
+                                                const itemFrame = getFullscreenItemFrame(item);
+                                                const isSelected = selectedPieceId === item.id;
+                                                const isLocked = lockedItems[item.id!];
+                                                const pieceScaledWidth = (fullscreenOrientation === 'landscape' ? item.h : item.w) * fullscreenScale;
+                                                const pieceScaledHeight = (fullscreenOrientation === 'landscape' ? item.w : item.h) * fullscreenScale;
+                                                const needsLargerButtons = pieceScaledWidth < 72 || pieceScaledHeight < 48;
+
                                                 return (
                                                     <div
                                                         key={item.id || idx}
-                                                        className="absolute flex items-center justify-center text-xs font-bold border-2 transition-all"
+                                                        onClick={() => {
+                                                            if (selectedPieceId === item.id) {
+                                                                setSelectedPieceId(null);
+                                                            } else {
+                                                                setSelectedPieceId(item.id || null);
+                                                            }
+                                                        }}
+                                                        className={`absolute flex items-center justify-center text-xs font-bold border-2 transition-all cursor-pointer backdrop-blur-[1px] ${isSelected
+                                                            ? 'z-20 shadow-[0_0_24px_rgba(250,204,21,0.45)] scale-[1.01]'
+                                                            : 'hover:z-10 hover:shadow-[0_0_12px_rgba(56,189,248,0.28)]'
+                                                            }`}
                                                         style={{
-                                                            left: `${item.x * fsScale}px`,
-                                                            top: `${item.y * fsScale}px`,
-                                                            width: `${item.w * fsScale}px`,
-                                                            height: `${item.h * fsScale}px`,
-                                                            backgroundColor: 'rgba(14, 165, 233, 0.15)',
-                                                            borderColor: 'rgba(56, 189, 248, 0.6)',
+                                                            left: itemFrame.left,
+                                                            top: itemFrame.top,
+                                                            width: itemFrame.width,
+                                                            height: itemFrame.height,
+                                                            backgroundColor: isSelected
+                                                                ? 'rgba(250, 204, 21, 0.22)'
+                                                                : isLocked
+                                                                    ? 'rgba(239, 68, 68, 0.15)'
+                                                                    : 'rgba(14, 165, 233, 0.15)',
+                                                            borderColor: isSelected
+                                                                ? 'rgba(250, 204, 21, 0.85)'
+                                                                : isLocked
+                                                                    ? 'rgba(239, 68, 68, 0.6)'
+                                                                    : 'rgba(56, 189, 248, 0.6)',
                                                             color: 'rgba(224, 242, 254, 0.9)'
                                                         }}
+                                                        title={`#${idx + 1}: ${item.label} (${item.w.toFixed(1)} x ${item.h.toFixed(1)}) - Clique para selecionar`}
                                                     >
                                                         {/* Large Watermark ID */}
                                                         <div
                                                             className="absolute inset-0 flex items-center justify-center font-black pointer-events-none select-none"
                                                             style={{
-                                                                fontSize: `${Math.min(item.w, item.h) * fsScale * 0.5}px`,
-                                                                color: 'rgba(255, 255, 255, 0.15)'
+                                                                fontSize: `${Math.min(item.w, item.h) * fullscreenScale * 0.5}px`,
+                                                                color: isSelected ? 'rgba(250, 204, 21, 0.28)' : 'rgba(255, 255, 255, 0.15)'
                                                             }}
                                                         >
                                                             {idx + 1}
                                                         </div>
                                                         {/* Dimensions */}
-                                                        {item.w * fsScale > 50 && item.h * fsScale > 50 && (
+                                                        {Math.min(item.w, item.h) * fullscreenScale > 50 && (
                                                             <>
-                                                                <div className="absolute bottom-1 right-2 text-[11px] font-mono font-medium px-1 rounded text-sky-200 bg-slate-900/60">
-                                                                    {(item.w / 100).toFixed(2)}
+                                                                <div className={`absolute bottom-1 right-2 text-[11px] font-mono font-medium px-1 rounded ${isSelected ? 'text-yellow-200 bg-yellow-900/50' : 'text-sky-200 bg-slate-900/60'}`}>
+                                                                    {itemFrame.horizontalLabel}
                                                                 </div>
                                                                 <div className="absolute left-1 top-0 h-full flex items-center">
-                                                                    <span className="origin-center -rotate-90 text-[11px] font-mono font-medium px-1 rounded text-sky-200 bg-slate-900/60">
-                                                                        {(item.h / 100).toFixed(2)}
+                                                                    <span className={`origin-center -rotate-90 text-[11px] font-mono font-medium px-1 rounded ${isSelected ? 'text-yellow-200 bg-yellow-900/50' : 'text-sky-200 bg-slate-900/60'}`}>
+                                                                        {itemFrame.verticalLabel}
                                                                     </span>
                                                                 </div>
                                                             </>
                                                         )}
+
+                                                        {item.rotated && !isSelected && (
+                                                            <div className="absolute top-1 right-1 opacity-70">
+                                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-sky-400">
+                                                                    <path fillRule="evenodd" d="M4.755 10.059a7.5 7.5 0 0112.548-3.364l1.903 1.903h-3.183a.75.75 0 100 1.5h4.992a.75.75 0 00.75-.75V4.356a.75.75 0 00-1.5 0v3.18l-1.9-1.9A9 9 0 003.306 9.67a.75.75 0 101.45.388zm15.408 3.352a.75.75 0 00-.919.53 7.5 7.5 0 01-12.548 3.364l-1.902-1.903h3.183a.75.75 0 000-1.5H2.984a.75.75 0 00-.75.75v4.992a.75.75 0 001.5 0v-3.18l1.9 1.9a9 9 0 0015.059-4.035.75.75 0 00-.53-.918z" clipRule="evenodd" />
+                                                                </svg>
+                                                            </div>
+                                                        )}
+
+                                                        {isLocked && !isSelected && (
+                                                            <div className="absolute top-1 left-1 opacity-80">
+                                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-red-400">
+                                                                    <path fillRule="evenodd" d="M12 1.5a5.25 5.25 0 00-5.25 5.25v3a3 3 0 00-3 3v6.75a3 3 0 003 3h10.5a3 3 0 003-3v-6.75a3 3 0 00-3-3v-3c0-2.9-2.35-5.25-5.25-5.25zm3.75 8.25v-3a3.75 3.75 0 10-7.5 0v3h7.5z" clipRule="evenodd" />
+                                                                </svg>
+                                                            </div>
+                                                        )}
+
+                                                        {isSelected && (
+                                                            <div className="absolute inset-0 flex items-center justify-center z-30 pointer-events-none">
+                                                                <div className={`flex gap-2 pointer-events-auto ${needsLargerButtons ? 'scale-90' : ''}`}>
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            if (item.id) {
+                                                                                if (item.h > result.rollWidth) {
+                                                                                    setWarningMessage(`Não é possível girar esta peça. A dimensão de ${(item.h / 100).toFixed(2)}m é maior que a largura da bobina (${(result.rollWidth / 100).toFixed(2)}m).`);
+                                                                                    return;
+                                                                                }
+
+                                                                                const currentRotated = item.rotated || false;
+                                                                                setManualRotations(prev => ({
+                                                                                    ...prev,
+                                                                                    [item.id!]: !currentRotated
+                                                                                }));
+                                                                            }
+                                                                        }}
+                                                                        className="flex items-center justify-center w-10 h-10 bg-sky-600 hover:bg-sky-500 active:bg-sky-700 text-white rounded-full shadow-lg transition-colors"
+                                                                        title="Girar peça 90°"
+                                                                    >
+                                                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+                                                                            <path fillRule="evenodd" d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H3.989a.75.75 0 00-.75.75v4.242a.75.75 0 001.5 0v-2.43l.31.31a7 7 0 0011.712-3.138.75.75 0 00-1.449-.39zm-1.373-7.227a.75.75 0 00.75-.75V1.206a.75.75 0 00-1.5 0v2.432l-.31-.31A7 7 0 001.166 6.466a.75.75 0 001.45.388 5.5 5.5 0 019.201-2.466l.312.31H9.696a.75.75 0 000 1.5h4.242z" clipRule="evenodd" />
+                                                                        </svg>
+                                                                    </button>
+
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            if (item.id) {
+                                                                                setLockedItems(prev => {
+                                                                                    const newLocked = { ...prev };
+                                                                                    if (newLocked[item.id!]) {
+                                                                                        delete newLocked[item.id!];
+                                                                                    } else {
+                                                                                        newLocked[item.id!] = { ...item, locked: true };
+                                                                                    }
+                                                                                    return newLocked;
+                                                                                });
+                                                                            }
+                                                                        }}
+                                                                        className={`flex items-center justify-center w-10 h-10 text-white rounded-full shadow-lg transition-colors ${isLocked
+                                                                            ? 'bg-red-600 hover:bg-red-500 active:bg-red-700'
+                                                                            : 'bg-slate-600 hover:bg-slate-500 active:bg-slate-700'
+                                                                            }`}
+                                                                        title={isLocked ? 'Destravar peça' : 'Travar posição'}
+                                                                    >
+                                                                        {isLocked ? (
+                                                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+                                                                                <path fillRule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clipRule="evenodd" />
+                                                                            </svg>
+                                                                        ) : (
+                                                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+                                                                                <path fillRule="evenodd" d="M14.5 1A4.5 4.5 0 0010 5.5V9H3a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-1.5V5.5a3 3 0 116 0v2.75a.75.75 0 001.5 0V5.5A4.5 4.5 0 0014.5 1z" clipRule="evenodd" />
+                                                                            </svg>
+                                                                        )}
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 );
                                             })}
+                                        </div>
                                         </div>
                                     </div>
                                 </div>
@@ -1187,3 +1910,8 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
 };
 
 export default CuttingOptimizationPanel;
+
+
+
+
+
