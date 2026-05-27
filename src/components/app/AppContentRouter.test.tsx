@@ -24,7 +24,9 @@ describe('AppContentRouter', () => {
     initialEstoqueAction: null,
     selectedClientId: null,
     measurements: [],
+    proposalOptions: [],
     activeOptionId: null,
+    pricingMode: 'complete' as const,
     totals: { totalM2: 0, totalQuantity: 0 },
     numpadConfig: {
       isOpen: false,
@@ -55,6 +57,18 @@ describe('AppContentRouter', () => {
     onDeleteFilm: vi.fn(),
     onOpenGallery: vi.fn(),
     onOpenClientModal: vi.fn(),
+    onOpenAIQuickProposal: vi.fn(),
+    onTabChange: vi.fn(),
+    onSelectOption: vi.fn(),
+    onRenameOption: vi.fn(),
+    onDeleteOption: vi.fn(),
+    onAddOption: vi.fn(),
+    onSelectPricingMode: vi.fn(),
+    onOpenProposalPaymentConfig: vi.fn(),
+    onOpenProposalExpenses: vi.fn(),
+    hasCustomProposalPaymentConfig: false,
+    hasActiveExpenses: false,
+    onSwipeDirectionChange: vi.fn(),
     onAddMeasurement: vi.fn(),
     onOpenLocationImport: vi.fn(),
     onMeasurementsChange: vi.fn(),
@@ -89,9 +103,9 @@ describe('AppContentRouter', () => {
       />
     );
 
-    expect(screen.getByText('Nenhuma Medida Ainda')).toBeInTheDocument();
-    expect(screen.getByText(/Adicione as dimensoes das janelas/i)).toBeInTheDocument();
+    expect(screen.getByText('Adicione a primeira medida')).toBeInTheDocument();
+    expect(screen.getByText(/Registre largura, altura, quantidade e pel[ií]cula/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Adicionar Medida/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Buscar por Localizacao/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Buscar por Localizacao/i })).not.toBeInTheDocument();
   });
 });

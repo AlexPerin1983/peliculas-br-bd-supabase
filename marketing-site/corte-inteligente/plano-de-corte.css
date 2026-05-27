@@ -1,0 +1,565 @@
+:root {
+    --pc-bg: #e8f3ff;
+    --pc-bg-soft: #f5faff;
+    --pc-panel: rgba(255, 255, 255, 0.92);
+    --pc-panel-strong: #ffffff;
+    --pc-border: rgba(30, 64, 175, 0.16);
+    --pc-text: #102346;
+    --pc-muted: #4b648c;
+    --pc-blue: #1d4ed8;
+    --pc-blue-deep: #15357a;
+    --pc-sky: #64b5ff;
+    --pc-emerald: #16a34a;
+    --pc-shadow: 0 32px 80px rgba(29, 78, 216, 0.12);
+}
+
+body.planocorte-page {
+    color-scheme: light;
+    background:
+        radial-gradient(circle at top, rgba(96, 165, 250, 0.24), transparent 24%),
+        linear-gradient(180deg, #f7fbff 0%, #e7f1ff 44%, #f8fbff 100%);
+    color: var(--pc-text);
+}
+
+.planocorte-page .site-header {
+    background: rgba(247, 251, 255, 0.86);
+    border-bottom: 1px solid rgba(30, 64, 175, 0.1);
+    backdrop-filter: blur(18px);
+}
+
+.planocorte-page .brand,
+.planocorte-page .nav-link,
+.planocorte-page .site-footer__inner {
+    color: var(--pc-text);
+}
+
+.planocorte-page .nav-link {
+    opacity: 0.78;
+}
+
+.planocorte-page .nav-link:hover {
+    opacity: 1;
+}
+
+.planocorte-page .brand__mark {
+    background: linear-gradient(135deg, #1d4ed8 0%, #60a5fa 100%);
+    box-shadow: 0 14px 32px rgba(29, 78, 216, 0.22);
+    color: #fff;
+}
+
+.planocorte-page .button--primary {
+    background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%);
+    box-shadow: 0 18px 42px rgba(37, 99, 235, 0.22);
+}
+
+.planocorte-page .button--secondary {
+    background: #fff;
+    color: var(--pc-text);
+    border-color: rgba(29, 78, 216, 0.16);
+}
+
+.planocorte-page .button--ghost {
+    background: rgba(29, 78, 216, 0.06);
+    border-color: rgba(29, 78, 216, 0.14);
+    color: var(--pc-blue-deep);
+}
+
+.planocorte-page .site-footer {
+    border-top: 1px solid rgba(30, 64, 175, 0.12);
+    background: rgba(255, 255, 255, 0.72);
+}
+
+.section__eyebrow--blue {
+    background: rgba(29, 78, 216, 0.08);
+    border-color: rgba(29, 78, 216, 0.14);
+    color: var(--pc-blue-deep);
+}
+
+.section-title--dark,
+.section-subtitle--dark {
+    color: var(--pc-text);
+}
+
+.section-subtitle--dark {
+    opacity: 0.82;
+}
+
+.cutting-hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.06fr) minmax(420px, 0.94fr);
+    gap: 28px;
+    align-items: center;
+}
+
+.cutting-hero__copy,
+.hero-visual-card,
+.problem-card,
+.visual-card,
+.comparison-card,
+.step-card,
+.case-card,
+.value-band,
+.faq-item,
+.final-cta,
+.metric-card,
+.proof-card {
+    background: var(--pc-panel);
+    border: 1px solid var(--pc-border);
+    box-shadow: var(--pc-shadow);
+}
+
+.cutting-hero__copy,
+.hero-visual-card,
+.final-cta,
+.value-band {
+    border-radius: 32px;
+}
+
+.cutting-hero__copy {
+    padding: 38px;
+}
+
+.cutting-hero__title {
+    margin: 18px 0 0;
+    font-family: 'Sora', system-ui, sans-serif;
+    font-size: clamp(2.7rem, 5vw, 5rem);
+    line-height: 0.98;
+    letter-spacing: -0.055em;
+    color: var(--pc-text);
+}
+
+.cutting-hero__text {
+    margin-top: 18px;
+    max-width: 60ch;
+    color: var(--pc-muted);
+    font-size: 1.05rem;
+    line-height: 1.78;
+}
+
+.cutting-hero__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-top: 28px;
+}
+
+.hero-metrics {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    margin-top: 28px;
+}
+
+.metric-card {
+    min-height: 146px;
+    padding: 18px;
+    border-radius: 22px;
+}
+
+.metric-card strong {
+    display: block;
+    font-family: 'Sora', system-ui, sans-serif;
+    font-size: 1.34rem;
+    letter-spacing: -0.04em;
+    color: var(--pc-blue-deep);
+}
+
+.metric-card span {
+    display: block;
+    margin-top: 10px;
+    color: var(--pc-muted);
+    line-height: 1.56;
+}
+
+.cutting-hero__visual {
+    position: relative;
+    min-height: 640px;
+}
+
+.hero-visual-card {
+    height: 100%;
+    overflow: hidden;
+    padding: 20px;
+}
+
+.hero-visual-card img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 24px;
+}
+
+.proof-card {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 210px;
+    padding: 18px 20px;
+    border-radius: 24px;
+}
+
+.proof-card--top {
+    top: -12px;
+    left: -8px;
+}
+
+.proof-card--accent {
+    right: -12px;
+    bottom: 18px;
+    background: linear-gradient(180deg, rgba(13, 148, 136, 0.1), rgba(255, 255, 255, 0.96));
+    border-color: rgba(22, 163, 74, 0.18);
+}
+
+.proof-card__label,
+.comparison-card__eyebrow {
+    font-size: 0.76rem;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-muted);
+}
+
+.proof-card strong {
+    font-family: 'Sora', system-ui, sans-serif;
+    font-size: 1.32rem;
+    color: var(--pc-text);
+}
+
+.proof-card span:last-child {
+    color: var(--pc-muted);
+    line-height: 1.5;
+}
+
+.section--soft {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.35), rgba(230, 242, 255, 0.75));
+}
+
+.section-heading {
+    max-width: 760px;
+}
+
+.split-grid,
+.comparison-grid,
+.cases-grid,
+.how-grid,
+.faq-grid {
+    display: grid;
+    gap: 22px;
+    margin-top: 30px;
+}
+
+.split-grid {
+    grid-template-columns: 0.9fr 1.1fr;
+    align-items: center;
+}
+
+.problem-card,
+.visual-card,
+.comparison-card,
+.step-card,
+.case-card,
+.faq-item {
+    border-radius: 28px;
+}
+
+.problem-card {
+    padding: 30px;
+}
+
+.problem-card h3,
+.comparison-card h3,
+.step-card h3,
+.case-card h3,
+.faq-item h3 {
+    margin: 0;
+    font-family: 'Sora', system-ui, sans-serif;
+    font-size: 1.28rem;
+    letter-spacing: -0.04em;
+    color: var(--pc-text);
+}
+
+.bullet-list {
+    display: grid;
+    gap: 14px;
+    margin: 22px 0 0;
+    padding-left: 20px;
+    color: var(--pc-muted);
+    line-height: 1.65;
+}
+
+.inline-proof {
+    margin-top: 24px;
+    padding: 18px 20px;
+    border-radius: 20px;
+    background: rgba(29, 78, 216, 0.06);
+    border: 1px solid rgba(29, 78, 216, 0.1);
+}
+
+.inline-proof strong {
+    display: block;
+    color: var(--pc-blue-deep);
+}
+
+.inline-proof span {
+    display: block;
+    margin-top: 8px;
+    color: var(--pc-muted);
+}
+
+.visual-card {
+    overflow: hidden;
+    padding: 18px;
+}
+
+.visual-card img {
+    width: 100%;
+    border-radius: 22px;
+}
+
+.comparison-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.comparison-card {
+    overflow: hidden;
+}
+
+.comparison-card__media {
+    background: linear-gradient(180deg, #edf6ff, #ffffff);
+}
+
+.comparison-card__media img {
+    width: 100%;
+    aspect-ratio: 16 / 10;
+    object-fit: cover;
+}
+
+.comparison-card__body {
+    padding: 24px;
+}
+
+.comparison-card__body p,
+.step-card p,
+.case-card p,
+.faq-item p {
+    margin: 12px 0 0;
+    color: var(--pc-muted);
+    line-height: 1.68;
+}
+
+.how-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.step-card {
+    padding: 24px;
+}
+
+.step-card__number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    margin-bottom: 16px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #1d4ed8, #60a5fa);
+    color: #fff;
+    font-weight: 800;
+}
+
+.cases-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.case-card {
+    overflow: hidden;
+}
+
+.case-card--featured {
+    transform: translateY(-8px);
+    border-color: rgba(16, 185, 129, 0.2);
+}
+
+.case-card__image {
+    width: 100%;
+    aspect-ratio: 16 / 11;
+    object-fit: cover;
+    background: linear-gradient(180deg, #edf6ff, #ffffff);
+}
+
+.case-card__body {
+    padding: 24px;
+}
+
+.case-metrics {
+    display: grid;
+    gap: 8px;
+    margin-top: 18px;
+    padding-top: 18px;
+    border-top: 1px solid rgba(30, 64, 175, 0.12);
+    color: var(--pc-muted);
+}
+
+.case-metrics strong {
+    color: var(--pc-emerald);
+    font-family: 'Sora', system-ui, sans-serif;
+    font-size: 1.1rem;
+}
+
+.value-band {
+    padding: 34px;
+}
+
+.value-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 16px;
+    margin-top: 28px;
+}
+
+.value-card {
+    padding: 22px;
+    border-radius: 24px;
+    background: rgba(29, 78, 216, 0.04);
+    border: 1px solid rgba(29, 78, 216, 0.1);
+}
+
+.value-card h3 {
+    margin: 0;
+    font-family: 'Sora', system-ui, sans-serif;
+    font-size: 1.08rem;
+    color: var(--pc-text);
+}
+
+.value-card p {
+    margin: 10px 0 0;
+    color: var(--pc-muted);
+    line-height: 1.62;
+}
+
+.faq-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.faq-item {
+    padding: 24px;
+}
+
+.final-cta {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 24px;
+    align-items: center;
+    padding: 34px;
+    background:
+        radial-gradient(circle at left top, rgba(96, 165, 250, 0.16), transparent 32%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(244, 249, 255, 0.96));
+}
+
+.final-cta h2 {
+    margin: 14px 0 0;
+    font-family: 'Sora', system-ui, sans-serif;
+    font-size: clamp(2rem, 4vw, 3.2rem);
+    line-height: 1;
+    letter-spacing: -0.05em;
+    color: var(--pc-text);
+}
+
+.final-cta p {
+    margin: 16px 0 0;
+    max-width: 58ch;
+    color: var(--pc-muted);
+    line-height: 1.72;
+}
+
+.final-cta__actions {
+    display: grid;
+    gap: 12px;
+    min-width: 240px;
+}
+
+@media (max-width: 1120px) {
+    .cutting-hero,
+    .split-grid,
+    .comparison-grid,
+    .cases-grid,
+    .how-grid,
+    .value-grid,
+    .faq-grid,
+    .final-cta {
+        grid-template-columns: 1fr;
+    }
+
+    .cutting-hero__visual {
+        min-height: auto;
+    }
+
+    .hero-visual-card {
+        min-height: 420px;
+    }
+
+    .proof-card {
+        position: static;
+        margin-top: 16px;
+    }
+
+    .hero-metrics {
+        grid-template-columns: 1fr;
+    }
+
+    .final-cta__actions {
+        min-width: 0;
+    }
+}
+
+@media (max-width: 860px) {
+    .planocorte-page .site-header__inner {
+        align-items: flex-start;
+    }
+
+    .planocorte-page .site-nav {
+        width: 100%;
+    }
+
+    .cutting-hero__copy,
+    .value-band,
+    .final-cta {
+        padding: 24px;
+    }
+
+    .hero-visual-card {
+        min-height: 320px;
+        padding: 14px;
+    }
+}
+
+@media (max-width: 640px) {
+    .section {
+        padding: 64px 0;
+    }
+
+    .cutting-hero__title {
+        font-size: clamp(2.1rem, 12vw, 3.2rem);
+    }
+
+    .metric-card,
+    .problem-card,
+    .comparison-card__body,
+    .step-card,
+    .case-card__body,
+    .faq-item {
+        padding: 20px;
+    }
+
+    .hero-visual-card {
+        min-height: 240px;
+    }
+
+    .planocorte-page .site-nav .button,
+    .cutting-hero__actions .button,
+    .final-cta__actions .button {
+        width: 100%;
+    }
+}

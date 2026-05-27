@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Location } from '../../types';
 import { locationService } from '../../services/locationService';
 import { useAuth } from '../../contexts/AuthContext';
+import { useFeedback } from '../../src/contexts/FeedbackContext';
 
 interface LocationSearchInputProps {
     value?: number;
@@ -38,6 +39,7 @@ const LocationSearchInput: React.FC<LocationSearchInputProps> = ({
     onShareChange
 }) => {
     const { user } = useAuth();
+    const { showToast } = useFeedback();
     const [query, setQuery] = useState(locationName || '');
     const [results, setResults] = useState<Location[]>([]);
     const [isSearching, setIsSearching] = useState(false);
@@ -215,13 +217,13 @@ const LocationSearchInput: React.FC<LocationSearchInputProps> = ({
 
         // Validação de campos obrigatórios
         if (!formData.name.trim() || !formData.cep.trim() || !formData.bairro.trim() || !formData.cidade.trim() || !formData.uf.trim() || !user) {
-            alert('Por favor, preencha todos os campos obrigatórios (Nome, CEP, Bairro, Cidade e UF).');
+            showToast('Preencha todos os campos obrigatorios: Nome, CEP, Bairro, Cidade e UF.', { tone: 'warning' });
             return;
         }
 
         // BLOQUEAR apenas se existe local com MESMO CEP E MESMO NOME
         if (exactDuplicate) {
-            alert('Já existe um local cadastrado com este nome e CEP. Use o botão "Usar este local" para vincular ao local existente.');
+            showToast('Ja existe um local com este nome e CEP. Use "Usar este local" para vincular ao cadastro existente.', { tone: 'warning' });
             return;
         }
 
@@ -233,7 +235,7 @@ const LocationSearchInput: React.FC<LocationSearchInputProps> = ({
                 if (duplicate) {
                     setExactDuplicate(duplicate);
                     setIsSaving(false);
-                    alert('Já existe um local cadastrado com este nome e CEP. Use o botão "Usar este local" para vincular ao local existente.');
+                    showToast('Ja existe um local com este nome e CEP. Use "Usar este local" para vincular ao cadastro existente.', { tone: 'warning' });
                     return;
                 }
             }

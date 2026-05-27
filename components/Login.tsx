@@ -1,7 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabaseClient';
-import { emailHelper } from '../services/emailHelper';
 import { User, Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react';
+
+const LOGIN_TIMEOUT_MS = 25_000;
+const withLoginTimeout = async <T,>(promise: Promise<T>): Promise<T> => {
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => {
+            reject(new Error('login_timeout'));
+        }, LOGIN_TIMEOUT_MS);
+    });
+
+    try {
+        return await Promise.race([promise, timeout]);
+    } finally {
+        if (timeoutId) {
+            clearTimeout(timeoutId);
+        }
+    }
+};
 
 export const Login: React.FC = () => {
     const [loading, setLoading] = useState(false);
@@ -15,7 +32,6 @@ export const Login: React.FC = () => {
     const [showForgotPassword, setShowForgotPassword] = useState(false);
     const [resetEmail, setResetEmail] = useState('');
 
-    // Verificar se há mensagem do registro via convite
     useEffect(() => {
         const loginMessage = sessionStorage.getItem('loginMessage');
         const loginEmail = sessionStorage.getItem('loginEmail');
@@ -38,59 +54,57 @@ export const Login: React.FC = () => {
 
         try {
             if (showForgotPassword) {
-                const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
-                    redirectTo: window.location.origin,
-                });
+                const redirectTo = `${window.location.origin}/reset-password`;
+                const { error } = await withLoginTimeout(
+                    supabase.auth.resetPasswordForEmail(resetEmail, {
+                        redirectTo,
+                    })
+                );
+
                 if (error) throw error;
 
-                // Enviar email personalizado via Resend
-                await emailHelper.sendPasswordResetEmail(resetEmail, {
-                    userName: 'Usuário',
-                    resetLink: `${window.location.origin}/reset-password`,
-                    expiresIn: '24 horas'
-                });
-
-                setMessage({ type: 'success', text: 'Email de redefinição enviado! Verifique sua caixa de entrada.' });
+                setMessage({ type: 'success', text: 'Email de redefinicao enviado. Verifique sua caixa de entrada.' });
                 setShowForgotPassword(false);
             } else if (isSignUp) {
                 if (password !== confirmPassword) {
                     throw new Error('As senhas não coincidem');
                 }
 
-                const { data, error } = await supabase.auth.signUp({
-                    email,
-                    password,
-                    options: {
-                        data: {
-                            full_name: fullName,
+                const { data, error } = await withLoginTimeout(
+                    supabase.auth.signUp({
+                        email,
+                        password,
+                        options: {
+                            data: {
+                                full_name: fullName,
+                            }
                         }
-                    }
-                });
+                    })
+                );
+
                 if (error) throw error;
 
-                if (data.user) {
-                    await emailHelper.sendWelcomeEmail(email, {
-                        userName: fullName || email.split('@')[0],
-                        organizationName: 'Filmstec'
-                    });
-
-                    if (!data.session) {
-                        setMessage({ type: 'success', text: 'Cadastro realizado! Verifique seu email para confirmar.' });
-                    }
+                if (data.user && !data.session) {
+                    setMessage({ type: 'success', text: 'Cadastro realizado. Verifique seu email para confirmar.' });
                 }
             } else {
-                const { error } = await supabase.auth.signInWithPassword({
-                    email,
-                    password,
-                });
+                const { error } = await withLoginTimeout(
+                    supabase.auth.signInWithPassword({
+                        email,
+                        password,
+                    })
+                );
+
                 if (error) throw error;
             }
         } catch (error: any) {
             console.error('[Login] Erro:', error);
             setMessage({
                 type: 'error',
-                text: error.message === 'Failed to fetch'
-                    ? 'Erro de conexão: Verifique sua internet.'
+                text: error.message === 'login_timeout'
+                    ? 'O servidor demorou para responder. Tente novamente em instantes.'
+                    : error.message === 'Failed to fetch'
+                    ? 'Nao conseguimos conectar ao servidor agora. Tente novamente em instantes.'
                     : error.message || 'Erro ao autenticar'
             });
         } finally {
@@ -98,13 +112,13 @@ export const Login: React.FC = () => {
         }
     };
 
-    const inputClasses = "w-full pl-11 pr-4 py-3 bg-[#f1f5f9] border-none rounded-xl text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-slate-300 outline-none transition-all";
+    const inputClasses = 'w-full pl-11 pr-4 py-3 bg-[#f1f5f9] border-none rounded-xl text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-slate-300 outline-none transition-all';
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] px-4 font-sans">
-            <div className="max-w-md w-full bg-white rounded-[2rem] shadow-[0_20px_50px_rgba(0,0,0,0.05)] p-10 border border-slate-100">
+        <div className="flex min-h-[100dvh] w-full flex-1 items-center justify-center bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.10),transparent_28%),linear-gradient(180deg,#f8fafc_0%,#eef2ff_100%)] px-4 py-6 font-sans sm:px-6 lg:px-8">
+            <div className="mx-auto w-full max-w-[420px] rounded-[2rem] border border-slate-100 bg-white p-6 shadow-[0_20px_50px_rgba(0,0,0,0.05)] sm:p-8 lg:p-10">
                 <div className="text-center mb-10">
-                    <h2 className="text-3xl font-extrabold text-[#020617] mb-3">
+                    <h2 className="font-display mb-3 text-3xl font-bold tracking-tight text-[#020617]">
                         {showForgotPassword ? 'Redefinir Senha' : (isSignUp ? 'Criar Conta' : 'Fazer Login')}
                     </h2>
                     <p className="text-slate-500 font-medium">
@@ -136,7 +150,7 @@ export const Login: React.FC = () => {
                                             value={fullName}
                                             onChange={(e) => setFullName(e.target.value)}
                                             className={inputClasses}
-                                            placeholder="João Silva"
+                                            placeholder="Joao Silva"
                                         />
                                     </div>
                                 </div>
@@ -166,12 +180,12 @@ export const Login: React.FC = () => {
                                         <Lock size={20} />
                                     </div>
                                     <input
-                                        type={showPassword ? "text" : "password"}
+                                        type={showPassword ? 'text' : 'password'}
                                         required
                                         value={password}
                                         onChange={(e) => setPassword(e.target.value)}
                                         className={`${inputClasses} pr-12`}
-                                        placeholder="••••••••"
+                                        placeholder="********"
                                     />
                                     <button
                                         type="button"
@@ -191,12 +205,12 @@ export const Login: React.FC = () => {
                                             <Lock size={20} />
                                         </div>
                                         <input
-                                            type={showPassword ? "text" : "password"}
+                                            type={showPassword ? 'text' : 'password'}
                                             required
                                             value={confirmPassword}
                                             onChange={(e) => setConfirmPassword(e.target.value)}
                                             className={inputClasses}
-                                            placeholder="••••••••"
+                                            placeholder="********"
                                         />
                                     </div>
                                 </div>
@@ -216,7 +230,7 @@ export const Login: React.FC = () => {
                         </>
                     ) : (
                         <div className="space-y-2">
-                            <label className="text-sm font-bold text-[#020617] ml-1">Email para recuperação</label>
+                            <label className="text-sm font-bold text-[#020617] ml-1">Email para recuperacao</label>
                             <div className="relative group">
                                 <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-slate-600 transition-colors">
                                     <Mail size={20} />
@@ -271,8 +285,9 @@ export const Login: React.FC = () => {
                             <span className="text-slate-900 font-bold">Voltar para o login</span>
                         ) : (
                             <>
-                                {isSignUp ? 'Já tem uma conta?' : 'Não tem conta?'} <span className="text-slate-950 font-extrabold hover:underline">
-                                    {isSignUp ? 'Faça login' : 'Crie uma conta'}
+                                {isSignUp ? 'Já tem uma conta?' : 'Não tem conta?'}{' '}
+                                <span className="text-slate-950 font-extrabold hover:underline">
+                                    {isSignUp ? 'Faca login' : 'Crie uma conta'}
                                 </span>
                             </>
                         )}
@@ -282,4 +297,3 @@ export const Login: React.FC = () => {
         </div>
     );
 };
-

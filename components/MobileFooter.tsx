@@ -1,19 +1,12 @@
 import React, { useState } from 'react';
 import { TotalsDrawer } from './ui/TotalsDrawer';
-
-interface Totals {
-    totalM2: number;
-    subtotal: number;
-    totalItemDiscount: number;
-    generalDiscountAmount: number;
-    finalTotal: number;
-}
+import { ProposalDiscount, Totals } from '../types';
 
 interface MobileFooterProps {
     totals: Totals;
-    generalDiscount: { value: string; type: 'percentage' | 'fixed' };
+    generalDiscount: ProposalDiscount;
     onOpenGeneralDiscountModal: () => void;
-    onUpdateGeneralDiscount: (value: { value: string; type: 'percentage' | 'fixed' }) => void;
+    onUpdateGeneralDiscount: (value: ProposalDiscount) => void;
     onAddMeasurement: () => void;
     onDuplicateMeasurements: () => void;
     onGeneratePdf: () => void;
@@ -73,8 +66,8 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
         return <ActionButton onClick={onGeneratePdf} label="PDF" icon="fas fa-file-pdf" />;
     };
 
-    const handleUpdateDiscount = (value: string, type: 'percentage' | 'fixed') => {
-        onUpdateGeneralDiscount({ value, type });
+    const handleUpdateDiscount = (discount: ProposalDiscount) => {
+        onUpdateGeneralDiscount(discount);
     };
 
     return (

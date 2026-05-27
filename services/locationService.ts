@@ -7,7 +7,7 @@ export interface LocationWithMeasurements extends Location {
 
 export const locationService = {
     // =====================================================
-    // FUNÇÕES AUXILIARES DE NORMALIZAÇÃO E SIMILARIDADE
+    // FUNÇÕES AUXILIARES DE NORMALIZA??O E SIMILARIDADE
     // =====================================================
 
     // Remove acentos, converte para minúsculo, remove espaços extras
@@ -21,7 +21,7 @@ export const locationService = {
             .trim();
     },
 
-    // Calcula similaridade entre duas strings (algoritmo de distância de Levenshtein)
+    // Calcula similaridade entre duas strings (algoritmo de dist?ncia de Levenshtein)
     calculateSimilarity(str1: string, str2: string): number {
         const s1 = this.normalizeText(str1);
         const s2 = this.normalizeText(str2);
@@ -36,7 +36,7 @@ export const locationService = {
             return shorterLen / longerLen;
         }
 
-        // Distância de Levenshtein
+        // Dist?ncia de Levenshtein
         const matrix: number[][] = [];
         for (let i = 0; i <= s1.length; i++) {
             matrix[i] = [i];
@@ -135,7 +135,7 @@ export const locationService = {
     },
 
     // =====================================================
-    // VERIFICAÇÃO DE DUPLICIDADE
+    // VERIFICA??O DE DUPLICIDADE
     // =====================================================
 
     // Verificar se já existe um local com o mesmo CEP E Nome similar

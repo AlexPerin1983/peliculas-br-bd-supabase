@@ -61,7 +61,7 @@ describe('SyncStatusIndicator', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /1 erro/i }));
 
-    expect(screen.getByText('Conexao')).toBeInTheDocument();
+    expect(screen.getByText('Conexão')).toBeInTheDocument();
     expect(screen.getByText(/clients.*update.*tentativa 2/i)).toBeInTheDocument();
     expect(screen.getByText('Falha de rede')).toBeInTheDocument();
 

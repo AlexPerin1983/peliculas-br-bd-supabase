@@ -3,6 +3,11 @@
 
 import { supabase } from './supabaseClient';
 import { Bobina, Retalho, Consumo } from '../types';
+import {
+    calculateAreaM2FromCentimeters,
+    normalizeLegacyCentimeterValue,
+    normalizeLegacyRetalhoDimensions
+} from '../src/lib/estoqueDimensions';
 
 // Cache para o ID do usuário para evitar chamadas repetidas ao auth.getUser()
 let cachedUserId: string | null = null;
@@ -135,7 +140,6 @@ export const saveBobina = async (bobina: Omit<Bobina, 'id'> | Bobina): Promise<B
             .from('bobinas')
             .update(bobinaData)
             .eq('id', bobina.id)
-            .eq('user_id', userId)
             .select()
             .single();
 
@@ -160,8 +164,7 @@ export const deleteBobina = async (id: number): Promise<void> => {
     const { error } = await supabase
         .from('bobinas')
         .delete()
-        .eq('id', id)
-        .eq('user_id', userId);
+        .eq('id', id);
 
     if (error) throw error;
 };
@@ -170,7 +173,7 @@ const mapRowToBobina = (row: any): Bobina => ({
     id: row.id,
     filmId: row.film_id,
     codigoQr: row.codigo_qr,
-    larguraCm: row.largura_cm,
+    larguraCm: normalizeLegacyCentimeterValue(row.largura_cm),
     comprimentoTotalM: row.comprimento_total_m,
     comprimentoRestanteM: row.comprimento_restante_m,
     custoTotal: row.custo_total,
@@ -273,6 +276,7 @@ export const saveRetalho = async (retalho: Omit<Retalho, 'id'> | Retalho): Promi
         largura_cm: retalho.larguraCm,
         comprimento_cm: retalho.comprimentoCm,
         status: retalho.status || 'disponivel',
+        data_utilizacao: retalho.dataUtilizacao,
         localizacao: retalho.localizacao,
         observacao: retalho.observacao
     };
@@ -282,7 +286,6 @@ export const saveRetalho = async (retalho: Omit<Retalho, 'id'> | Retalho): Promi
             .from('retalhos')
             .update(retalhoData)
             .eq('id', retalho.id)
-            .eq('user_id', userId)
             .select()
             .single();
 
@@ -307,26 +310,36 @@ export const deleteRetalho = async (id: number): Promise<void> => {
     const { error } = await supabase
         .from('retalhos')
         .delete()
-        .eq('id', id)
-        .eq('user_id', userId);
+        .eq('id', id);
 
     if (error) throw error;
 };
 
-const mapRowToRetalho = (row: any): Retalho => ({
-    id: row.id,
-    bobinaId: row.bobina_id,
-    filmId: row.film_id,
-    codigoQr: row.codigo_qr,
-    larguraCm: row.largura_cm,
-    comprimentoCm: row.comprimento_cm,
-    areaM2: row.area_m2,
-    dataCadastro: row.data_cadastro,
-    dataUtilizacao: row.data_utilizacao,
-    status: row.status,
-    localizacao: row.localizacao,
-    observacao: row.observacao
-});
+const mapRowToRetalho = (row: any): Retalho => {
+    const normalizedDimensions = normalizeLegacyRetalhoDimensions(
+        row.largura_cm,
+        row.comprimento_cm,
+        row.area_m2
+    );
+
+    return {
+        id: row.id,
+        bobinaId: row.bobina_id,
+        filmId: row.film_id,
+        codigoQr: row.codigo_qr,
+        larguraCm: normalizedDimensions.larguraCm,
+        comprimentoCm: normalizedDimensions.comprimentoCm,
+        areaM2: calculateAreaM2FromCentimeters(
+            normalizedDimensions.larguraCm,
+            normalizedDimensions.comprimentoCm
+        ),
+        dataCadastro: row.data_cadastro,
+        dataUtilizacao: row.data_utilizacao,
+        status: row.status,
+        localizacao: row.localizacao,
+        observacao: row.observacao
+    };
+};
 
 // ============================================
 // CONSUMOS FUNCTIONS
@@ -407,8 +420,7 @@ export const deleteConsumo = async (id: number): Promise<void> => {
     const { error } = await supabase
         .from('consumos')
         .delete()
-        .eq('id', id)
-        .eq('user_id', userId);
+        .eq('id', id);
 
     if (error) throw error;
 };
@@ -464,7 +476,7 @@ export const getEstoqueStats = async (): Promise<EstoqueStats> => {
     // RLS controla acesso por organização
     const { data: retalhos } = await supabase
         .from('retalhos')
-        .select('area_m2')
+        .select('largura_cm, comprimento_cm, area_m2')
         .eq('status', 'disponivel');
 
     // Buscar consumos dos últimos 30 dias
@@ -478,7 +490,18 @@ export const getEstoqueStats = async (): Promise<EstoqueStats> => {
         .gte('data_consumo', thirtyDaysAgo.toISOString());
 
     const totalMetros = (bobinas || []).reduce((sum, b) => sum + (b.comprimento_restante_m || 0), 0);
-    const totalAreaRetalhos = (retalhos || []).reduce((sum, r) => sum + (r.area_m2 || 0), 0);
+    const totalAreaRetalhos = (retalhos || []).reduce((sum, retalhoRow) => {
+        const normalizedDimensions = normalizeLegacyRetalhoDimensions(
+            retalhoRow.largura_cm,
+            retalhoRow.comprimento_cm,
+            retalhoRow.area_m2
+        );
+
+        return sum + calculateAreaM2FromCentimeters(
+            normalizedDimensions.larguraCm,
+            normalizedDimensions.comprimentoCm
+        );
+    }, 0);
     const consumo30Dias = (consumos || []).reduce((sum, c) => sum + (c.metros_consumidos || 0), 0);
 
     return {

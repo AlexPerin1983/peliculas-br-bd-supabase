@@ -2,7 +2,7 @@ import { Dispatch, SetStateAction, useCallback } from 'react';
 import * as db from '../../services/db';
 import { Agendamento, SavedPDF, SchedulingInfo } from '../../types';
 
-type SetActiveTab = Dispatch<SetStateAction<'client' | 'films' | 'settings' | 'history' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores'>>;
+type SetActiveTab = Dispatch<SetStateAction<'dashboard' | 'client' | 'films' | 'settings' | 'history' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores'>>;
 
 interface UseSchedulingFlowParams {
     allSavedPdfs: SavedPDF[];
@@ -56,7 +56,7 @@ export function useSchedulingFlow({
             handleCloseAgendamentoModal();
         } catch (error) {
             console.error('Erro ao salvar agendamento:', error);
-            handleShowInfo('Nao foi possivel salvar o agendamento. Tente novamente.');
+            handleShowInfo('Não foi possível salvar o agendamento. Tente novamente.');
             throw error;
         }
     }, [handleCloseAgendamentoModal, handleShowInfo, loadAgendamentos, loadAllPdfs]);
@@ -86,7 +86,7 @@ export function useSchedulingFlow({
             setAgendamentos(previous => previous.filter(agendamento => agendamento.id !== agendamentoId));
         } catch (error) {
             console.error('Erro ao excluir agendamento:', error);
-            handleShowInfo('Nao foi possivel excluir o agendamento. Tente novamente.');
+            handleShowInfo('Não foi possível excluir o agendamento. Tente novamente.');
             await Promise.all([loadAgendamentos(), loadAllPdfs()]);
         } finally {
             setAgendamentoToDelete(null);

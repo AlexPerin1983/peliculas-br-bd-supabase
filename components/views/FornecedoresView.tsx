@@ -1,9 +1,8 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+﻿import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { Fornecedor } from '../../types';
 import ConfirmationModal from '../modals/ConfirmationModal';
 import ContentState from '../ui/ContentState';
 import Modal from '../ui/Modal';
-import PageCollectionToolbar from '../ui/PageCollectionToolbar';
 import {
     createFornecedor,
     deleteFornecedor,
@@ -11,6 +10,7 @@ import {
     migrateFromLocalStorage,
     saveFornecedor
 } from '../../services/fornecedorService';
+import { useFeedback } from '../../src/contexts/FeedbackContext';
 
 const EMPTY_FORM = {
     empresa: '',
@@ -22,18 +22,36 @@ const EMPTY_FORM = {
     observacao: '',
 };
 
+type FornecedorViewMode = 'grid' | 'list';
+
+const FORNECEDOR_VIEW_MODE_STORAGE_KEY = 'fornecedores-view-mode';
+
+function getFornecedorTags(fornecedor: Fornecedor): string[] {
+    return fornecedor.representacoes
+        ?.split(',')
+        .map(item => item.trim())
+        .filter(Boolean)
+        .slice(0, 3) || [];
+}
+
+function getFornecedorCollapsedSummary(fornecedor: Fornecedor, tags = getFornecedorTags(fornecedor)): string {
+    const primaryTag = tags[0] ? `${tags[0]}${tags.length > 1 ? ` +${tags.length - 1}` : ''}` : null;
+
+    return [
+        fornecedor.contato || null,
+        primaryTag,
+        fornecedor.endereco ? 'Endereço salvo' : null,
+    ]
+        .filter(Boolean)
+        .join(' / ');
+}
+
 function formatPhone(raw: string): string {
     const digits = raw.replace(/\D/g, '').slice(0, 11);
     if (digits.length <= 2) return digits;
     if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
     if (digits.length <= 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
     return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
-}
-
-function whatsappUrl(phone: string): string {
-    const digits = phone.replace(/\D/g, '');
-    const num = digits.startsWith('55') ? digits : `55${digits}`;
-    return `https://wa.me/${num}`;
 }
 
 function whatsappPhone(phone: string): string {
@@ -50,6 +68,42 @@ function whatsappBusinessUrl(phone: string): string {
     return `https://wa.me/${num}`;
 }
 
+const FornecedorViewModeToggle: React.FC<{
+    value: FornecedorViewMode;
+    onChange: (value: FornecedorViewMode) => void;
+}> = ({ value, onChange }) => {
+    return (
+        <div className="inline-flex items-center gap-1 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-1 shadow-[var(--shadow-hairline)]">
+            <button
+                type="button"
+                onClick={() => onChange('grid')}
+                className={`inline-flex h-[30px] w-[30px] items-center justify-center rounded-[12px] transition-all ${
+                    value === 'grid'
+                        ? 'bg-[var(--surface)] text-[var(--brand-primary)] shadow-sm'
+                        : 'text-[var(--text-muted)] hover:bg-[var(--surface)] hover:text-[var(--text-strong)]'
+                }`}
+                title="Visualização em grade"
+                aria-label="Visualização em grade"
+            >
+                <i className="fas fa-th-large text-[10px]" aria-hidden="true"></i>
+            </button>
+            <button
+                type="button"
+                onClick={() => onChange('list')}
+                className={`inline-flex h-[30px] w-[30px] items-center justify-center rounded-[12px] transition-all ${
+                    value === 'list'
+                        ? 'bg-[var(--surface)] text-[var(--brand-primary)] shadow-sm'
+                        : 'text-[var(--text-muted)] hover:bg-[var(--surface)] hover:text-[var(--text-strong)]'
+                }`}
+                title="Visualização em lista"
+                aria-label="Visualização em lista"
+            >
+                <i className="fas fa-list text-[10px]" aria-hidden="true"></i>
+            </button>
+        </div>
+    );
+};
+
 const FornecedorCard: React.FC<{
     fornecedor: Fornecedor;
     onEdit: (fornecedor: Fornecedor) => void;
@@ -59,6 +113,8 @@ const FornecedorCard: React.FC<{
 }> = ({ fornecedor, onEdit, onDelete, onWhatsAppClick, index }) => {
     const [copied, setCopied] = useState(false);
     const initials = fornecedor.empresa.slice(0, 2).toUpperCase();
+    const tags = getFornecedorTags(fornecedor);
+    const hasAddress = Boolean(fornecedor.endereco);
 
     const handleCopyAddress = (event: React.MouseEvent) => {
         event.preventDefault();
@@ -68,7 +124,7 @@ const FornecedorCard: React.FC<{
 
         navigator.clipboard.writeText(fornecedor.endereco);
         setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+        window.setTimeout(() => setCopied(false), 2000);
     };
 
     const handleOpenMaps = (event: React.MouseEvent) => {
@@ -84,148 +140,157 @@ const FornecedorCard: React.FC<{
     };
 
     return (
-        <div
-            className="group relative bg-white dark:bg-slate-800/90 rounded-2xl border border-slate-200/60 dark:border-slate-700/50 shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden"
+        <article
+            className="group animate-stagger relative overflow-hidden rounded-[var(--radius-card)] border border-[var(--border-subtle)] bg-[var(--surface)] shadow-[var(--shadow-hairline)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[var(--shadow-soft)]"
             style={{ animationDelay: `${index * 0.08}s` }}
         >
             <div className="h-1 w-full bg-gradient-to-r from-emerald-500 to-teal-400" />
 
-            <div className="p-4">
-                <div className="flex items-start gap-3 mb-4">
-                    <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0 shadow-md shadow-emerald-900/20">
-                        {initials}
+            <div className="p-4 sm:p-5">
+                <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-start gap-3">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] border border-emerald-100 bg-emerald-50 text-sm font-semibold text-emerald-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-300">
+                            {initials}
+                        </div>
+
+                        <div className="min-w-0">
+                            <h3 className="truncate text-[1.08rem] font-semibold leading-tight tracking-[-0.03em] text-slate-900 dark:text-slate-50 sm:text-[1.15rem]">
+                                {fornecedor.empresa}
+                            </h3>
+                            <p className="mt-1 truncate text-[12px] font-medium text-slate-500 dark:text-slate-400">
+                                {fornecedor.contato}
+                            </p>
+                        </div>
                     </div>
 
-                    <div className="flex-1 min-w-0">
-                        <h3 className="text-lg font-black text-slate-800 dark:text-slate-100 tracking-tight uppercase truncate leading-tight">
-                            {fornecedor.empresa}
-                        </h3>
-                        <p className="text-sm text-slate-500 dark:text-slate-400 truncate mt-0.5">
-                            {fornecedor.contato}
+                    <div className="shrink-0 pl-2 text-right">
+                        <p className="text-[0.95rem] font-semibold leading-none tracking-[-0.03em] text-slate-950 dark:text-slate-50 sm:text-[1.02rem]">
+                            {formatPhone(fornecedor.telefone)}
                         </p>
-
-                        {fornecedor.representacoes && (
-                            <div className="flex flex-wrap gap-1.5 mt-2">
-                                {fornecedor.representacoes
-                                    .split(',')
-                                    .map(item => item.trim())
-                                    .filter(Boolean)
-                                    .slice(0, 3)
-                                    .map(item => (
-                                        <span
-                                            key={item}
-                                            className="inline-flex items-center px-2 py-0.5 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold rounded-full uppercase"
-                                        >
-                                            {item}
-                                        </span>
-                                    ))}
-                            </div>
-                        )}
+                        <p className="mt-1 text-[8px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+                            whatsapp
+                        </p>
                     </div>
                 </div>
 
-                <div className="bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-slate-100 dark:border-slate-800/60 p-3 mb-4 min-h-[92px] flex flex-col justify-center">
-                    {fornecedor.endereco ? (
-                        <div className="flex items-start gap-3">
-                            <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 mb-1">
-                                    <i className="fas fa-map-marker-alt text-[10px] text-emerald-500"></i>
-                                    <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
-                                        Endereço
-                                    </span>
-                                </div>
-                                <p className="text-sm text-slate-600 dark:text-slate-300 leading-snug line-clamp-2" title={fornecedor.endereco}>
-                                    {fornecedor.endereco}
-                                </p>
-                            </div>
+                {tags.length > 0 ? (
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                        {tags.map(item => (
+                            <span
+                                key={item}
+                                className="inline-flex items-center rounded-full bg-emerald-50/90 px-2 py-1 text-[9px] font-semibold text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300"
+                            >
+                                {item}
+                            </span>
+                        ))}
+                    </div>
+                ) : null}
 
-                            <div className="flex flex-col gap-1.5 shrink-0">
+                <div className="mt-4 rounded-[18px] border border-slate-100 bg-slate-50/92 p-3 dark:border-slate-800/60 dark:bg-slate-900/45">
+                    <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                            <span className="text-[9px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+                                Endereço
+                            </span>
+                            <p
+                                className="mt-1 line-clamp-2 text-sm leading-6 text-slate-600 dark:text-slate-300"
+                                title={fornecedor.endereco || 'Endereço não informado'}
+                            >
+                                {fornecedor.endereco || 'Endereço não informado.'}
+                            </p>
+                        </div>
+
+                        {hasAddress ? (
+                            <div className="flex shrink-0 gap-1.5">
                                 <button
+                                    type="button"
                                     onClick={handleOpenMaps}
-                                    className="h-8 w-8 flex items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 hover:bg-blue-600 hover:text-white transition-all"
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-[11px] border border-slate-200 bg-white text-slate-500 transition-all hover:border-emerald-200 hover:text-emerald-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:border-emerald-800 dark:hover:text-emerald-300"
                                     title="Abrir no Maps"
                                 >
-                                    <i className="fas fa-external-link-alt text-[10px]"></i>
+                                    <i className="fas fa-location-arrow text-[10px]" aria-hidden="true"></i>
                                 </button>
                                 <button
+                                    type="button"
                                     onClick={handleCopyAddress}
-                                    className={`h-8 w-8 flex items-center justify-center rounded-lg transition-all ${
+                                    className={`inline-flex h-8 w-8 items-center justify-center rounded-[11px] border transition-all ${
                                         copied
-                                            ? 'bg-emerald-500 text-white'
-                                            : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-emerald-500 hover:text-white'
+                                            ? 'border-emerald-500 bg-emerald-500 text-white'
+                                            : 'border-slate-200 bg-white text-slate-500 hover:border-emerald-200 hover:text-emerald-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:border-emerald-800 dark:hover:text-emerald-300'
                                     }`}
-                                    title={copied ? 'Copiado!' : 'Copiar endereço'}
+                                    title={copied ? 'Endereço copiado' : 'Copiar endereço'}
                                 >
-                                    <i className={`fas ${copied ? 'fa-check' : 'fa-copy'} text-[10px]`}></i>
+                                    <i className={`fas ${copied ? 'fa-check' : 'fa-copy'} text-[10px]`} aria-hidden="true"></i>
                                 </button>
                             </div>
+                        ) : null}
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-2 gap-3 text-[12px] sm:text-[13px]">
+                        <div>
+                            <span className="text-[8px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+                                Contato
+                            </span>
+                            <p className="mt-1 font-medium text-slate-700 dark:text-slate-200">
+                                {fornecedor.contato}
+                            </p>
                         </div>
-                    ) : (
-                        <div className="text-center">
-                            <i className="fas fa-map-marker-alt text-slate-300 dark:text-slate-600 text-xl mb-2"></i>
-                            <p className="text-sm text-slate-400 dark:text-slate-500">Endereço não informado</p>
+
+                        <div>
+                            <span className="text-[8px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+                                E-mail
+                            </span>
+                            <p className="mt-1 truncate font-medium text-slate-700 dark:text-slate-200">
+                                {fornecedor.email || 'Não informado'}
+                            </p>
                         </div>
-                    )}
+
+                        {fornecedor.observacao ? (
+                            <div className="col-span-2">
+                                <span className="text-[8px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+                                    Observação
+                                </span>
+                                <p className="mt-1 line-clamp-2 font-medium text-slate-600 dark:text-slate-300">
+                                    {fornecedor.observacao}
+                                </p>
+                            </div>
+                        ) : null}
+                    </div>
                 </div>
 
-                <div className="border-t border-slate-100 dark:border-slate-700/50 pt-3 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2 min-w-0 flex-wrap">
-                        {fornecedor.email && (
-                            <a
-                                href={`mailto:${fornecedor.email}`}
-                                className="inline-flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                                title={fornecedor.email}
-                            >
-                                <i className="fas fa-envelope text-[10px]"></i>
-                                <span className="truncate max-w-[120px]">{fornecedor.email}</span>
-                            </a>
-                        )}
+                <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-100 pt-3.5 dark:border-slate-700/60">
+                    <div className="flex gap-2">
+                        <button
+                            type="button"
+                            onClick={() => onEdit(fornecedor)}
+                            className="inline-flex h-9 items-center gap-2 rounded-[12px] bg-slate-100 px-3.5 text-[11px] font-medium text-slate-600 transition-all hover:bg-slate-900 hover:text-white dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-100 dark:hover:text-slate-900"
+                            title="Editar"
+                        >
+                            <i className="fas fa-pen text-[9px]" aria-hidden="true"></i>
+                            Editar
+                        </button>
 
-                        {fornecedor.observacao && (
-                            <span
-                                className="text-xs text-slate-400 dark:text-slate-500 italic truncate max-w-[120px]"
-                                title={fornecedor.observacao}
-                            >
-                                {fornecedor.observacao}
-                            </span>
-                        )}
+                        <button
+                            type="button"
+                            onClick={() => onDelete(fornecedor.id)}
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-[12px] bg-slate-100 text-slate-500 transition-all hover:bg-red-600 hover:text-white dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-red-600"
+                            title="Excluir"
+                        >
+                            <i className="fas fa-trash-alt text-[10px]" aria-hidden="true"></i>
+                        </button>
                     </div>
 
                     <button
                         type="button"
                         onClick={() => onWhatsAppClick(fornecedor)}
-                        className="flex-shrink-0 inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold rounded-xl transition-colors shadow-sm shadow-emerald-900/20"
+                        className="inline-flex h-9 items-center gap-2 rounded-[12px] bg-emerald-500 px-3.5 text-[11px] font-semibold text-white shadow-[0_10px_18px_rgba(16,185,129,0.22)] transition-all hover:bg-emerald-600"
                     >
-                        <i className="fab fa-whatsapp text-sm"></i>
-                        {formatPhone(fornecedor.telefone)}
+                        <i className="fab fa-whatsapp text-[12px]" aria-hidden="true"></i>
+                        WhatsApp
                     </button>
                 </div>
-
-                <div className="flex items-center justify-between pt-3 mt-3 border-t border-slate-100 dark:border-slate-700/50">
-                    <div className="flex gap-1.5">
-                        <button
-                            onClick={() => onEdit(fornecedor)}
-                            className="h-8 px-3 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center gap-1.5 hover:bg-blue-600 hover:text-white dark:hover:bg-blue-600 transition-all text-xs font-semibold"
-                            title="Editar"
-                        >
-                            <i className="fas fa-pen text-[10px]"></i>
-                            Editar
-                        </button>
-                        <button
-                            onClick={() => onDelete(fornecedor.id)}
-                            className="h-8 w-8 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 flex items-center justify-center hover:bg-red-600 hover:text-white dark:hover:bg-red-600 transition-all"
-                            title="Excluir"
-                        >
-                            <i className="fas fa-trash-alt text-[11px]"></i>
-                        </button>
-                    </div>
-
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                        Fornecedor
-                    </span>
-                </div>
             </div>
-        </div>
+        </article>
     );
 };
 
@@ -234,189 +299,419 @@ const FornecedorListItem: React.FC<{
     onEdit: (fornecedor: Fornecedor) => void;
     onDelete: (id: string) => void;
     onWhatsAppClick: (fornecedor: Fornecedor) => void;
-}> = ({ fornecedor, onEdit, onDelete, onWhatsAppClick }) => {
+    isExpanded: boolean;
+    onToggleExpand: () => void;
+    index: number;
+}> = ({ fornecedor, onEdit, onDelete, onWhatsAppClick, isExpanded, onToggleExpand, index }) => {
     const initials = fornecedor.empresa.slice(0, 2).toUpperCase();
-    const tags = fornecedor.representacoes
-        ?.split(',')
-        .map(item => item.trim())
-        .filter(Boolean)
-        .slice(0, 3) || [];
-    const hasAddress = Boolean(fornecedor.endereco);
-    const hasEmail = Boolean(fornecedor.email);
-    const [showActions, setShowActions] = useState(false);
+    const tags = getFornecedorTags(fornecedor);
+    const collapsedSummary = getFornecedorCollapsedSummary(fornecedor, tags);
 
     return (
-        <div className="rounded-2xl border border-slate-200/70 bg-white p-3 shadow-sm transition-all hover:shadow-md dark:border-slate-700/60 dark:bg-slate-800/90 sm:p-4">
-            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-                <div className="grid min-w-0 flex-1 grid-cols-[48px_minmax(0,1fr)_40px] items-start gap-x-3 gap-y-2 sm:flex sm:items-start sm:gap-3">
-                    <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-blue-600 text-sm font-bold text-white shadow-md shadow-blue-900/20">
+        <article
+            className="group animate-stagger relative bg-transparent transition-all duration-300"
+            style={{ animationDelay: `${index * 0.05}s` }}
+        >
+            <button
+                type="button"
+                onClick={onToggleExpand}
+                aria-expanded={isExpanded}
+                className="w-full px-4 py-3 text-left transition-colors hover:bg-slate-50/70 dark:hover:bg-slate-700/20 sm:px-5 sm:py-3.5"
+            >
+                <div className="flex items-start gap-3">
+                    <div className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-[12px] border border-slate-200/70 bg-slate-50 text-sm font-semibold text-emerald-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] dark:border-slate-700 dark:bg-slate-800 dark:text-emerald-300 sm:flex sm:h-12 sm:w-12 sm:rounded-[13px]">
                         {initials}
                     </div>
 
-                    <div className="col-start-2 min-w-0 sm:flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="truncate text-base font-black uppercase tracking-tight text-slate-800 dark:text-slate-100 sm:text-lg">
+                    <div className="min-w-0 flex-1">
+                        <div className="flex items-start gap-1.5">
+                            <span className="mt-[0.38rem] h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+                            <h3 className="text-[0.92rem] font-medium leading-[1.2] tracking-[-0.02em] text-slate-900 dark:text-slate-50 sm:truncate sm:text-[1.04rem]">
                                 {fornecedor.empresa}
                             </h3>
-                            {tags.length > 0 && (
-                                <div className="flex flex-wrap gap-1.5">
-                                    {tags.map(item => (
-                                        <span
-                                            key={item}
-                                            className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold uppercase text-blue-600 dark:bg-blue-900/30 dark:text-blue-300"
-                                        >
-                                            {item}
-                                        </span>
-                                    ))}
-                                </div>
-                            )}
                         </div>
 
-                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-500 dark:text-slate-400">
-                            <span className="truncate">{fornecedor.contato}</span>
-                            {fornecedor.email && (
-                                <a
-                                    href={`mailto:${fornecedor.email}`}
-                                    className="hidden truncate hover:text-blue-600 dark:hover:text-blue-400 sm:inline"
-                                >
-                                    {fornecedor.email}
-                                </a>
-                            )}
-                        </div>
+                        <p className="mt-1 text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                            <span className="sm:hidden">{fornecedor.contato}</span>
+                            <span className="hidden sm:inline">{collapsedSummary || 'Toque para ver os detalhes do fornecedor'}</span>
+                        </p>
 
-                        {fornecedor.endereco && (
-                            <p className="mt-1 truncate text-sm text-slate-600 dark:text-slate-300">
-                                {fornecedor.endereco}
+                        <div className="mt-2 flex items-center justify-between gap-3 pr-1 sm:hidden">
+                            <p className="text-[0.98rem] font-semibold leading-none tracking-[-0.03em] text-slate-950 dark:text-slate-50">
+                                {formatPhone(fornecedor.telefone)}
                             </p>
-                        )}
+                            <p className="text-[8px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+                                whatsapp
+                            </p>
+                        </div>
                     </div>
 
-                    <div className="relative col-start-3 row-span-2 flex shrink-0 flex-col items-center gap-2 sm:hidden">
-                        <button
-                            type="button"
-                            onClick={() => setShowActions(previous => !previous)}
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 text-slate-500 transition-colors hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600"
-                            title="Mais ações"
-                        >
-                            <i className="fas fa-ellipsis-v text-[11px]"></i>
-                        </button>
+                    <div className="hidden shrink-0 pl-2 text-right sm:block">
+                        <p className="text-[1.02rem] font-semibold leading-none tracking-[-0.03em] text-slate-950 dark:text-slate-50 sm:text-[1.08rem]">
+                            {formatPhone(fornecedor.telefone)}
+                        </p>
+                        <p className="mt-1 text-[8px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+                            whatsapp
+                        </p>
+                    </div>
 
-                        <button
-                            type="button"
-                            onClick={() => onWhatsAppClick(fornecedor)}
-                            className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500 text-white shadow-sm shadow-emerald-900/20 transition-colors hover:bg-emerald-600"
-                            title={`Falar com ${fornecedor.empresa} no WhatsApp`}
-                        >
-                            <i className="fab fa-whatsapp text-base"></i>
-                        </button>
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100/80 text-slate-400 dark:bg-slate-700/70 dark:text-slate-300">
+                        <i
+                            className={`fas fa-chevron-right text-[10px] transition-transform duration-300 ${isExpanded ? 'rotate-90' : ''}`}
+                            aria-hidden="true"
+                        ></i>
+                    </div>
+                </div>
+            </button>
 
-                        {showActions && (
-                            <div className="absolute right-0 top-10 z-10 mt-2 flex min-w-[160px] flex-col rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl dark:border-slate-700 dark:bg-slate-800">
-                                {fornecedor.endereco && (
+            <div
+                className={`overflow-hidden transition-all duration-300 ${
+                    isExpanded ? 'max-h-[560px] opacity-100' : 'max-h-0 opacity-0'
+                }`}
+            >
+                <div className="border-t border-slate-100/80 bg-slate-50/60 px-4 py-3 dark:border-slate-700/60 dark:bg-slate-900/20 sm:px-5">
+                    <div className="space-y-3">
+                        {tags.length > 0 ? (
+                            <div className="flex flex-wrap gap-1.5">
+                                {tags.map(item => (
+                                    <span
+                                        key={item}
+                                        className="inline-flex items-center rounded-full bg-emerald-50/90 px-2 py-1 text-[10px] font-medium text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300"
+                                    >
+                                        {item}
+                                    </span>
+                                ))}
+                            </div>
+                        ) : null}
+
+                        <div className="grid grid-cols-2 gap-3 text-[12px] sm:text-[13px]">
+                            <div>
+                                <span className="text-[8px] font-semibold uppercase tracking-[0.14em] text-slate-400 sm:text-[9px]">
+                                    Contato
+                                </span>
+                                <p className="mt-1 font-medium text-slate-700 dark:text-slate-200">
+                                    {fornecedor.contato}
+                                </p>
+                            </div>
+
+                            <div>
+                                <span className="text-[8px] font-semibold uppercase tracking-[0.14em] text-slate-400 sm:text-[9px]">
+                                    Telefone
+                                </span>
+                                <p className="mt-1 font-medium text-slate-700 dark:text-slate-200">
+                                    {formatPhone(fornecedor.telefone)}
+                                </p>
+                            </div>
+
+                            {fornecedor.email ? (
+                                <div>
+                                    <span className="text-[8px] font-semibold uppercase tracking-[0.14em] text-slate-400 sm:text-[9px]">
+                                        E-mail
+                                    </span>
+                                    <p className="mt-1 truncate font-medium text-slate-700 dark:text-slate-200">
+                                        {fornecedor.email}
+                                    </p>
+                                </div>
+                            ) : null}
+
+                            {fornecedor.endereco ? (
+                                <div className={fornecedor.email ? '' : 'col-span-2'}>
+                                    <span className="text-[8px] font-semibold uppercase tracking-[0.14em] text-slate-400 sm:text-[9px]">
+                                        Endereço
+                                    </span>
+                                    <p className="mt-1 line-clamp-2 font-medium text-slate-600 dark:text-slate-300">
+                                        {fornecedor.endereco}
+                                    </p>
+                                </div>
+                            ) : null}
+
+                            {fornecedor.observacao ? (
+                                <div className="col-span-2">
+                                    <span className="text-[8px] font-semibold uppercase tracking-[0.14em] text-slate-400 sm:text-[9px]">
+                                        Observação
+                                    </span>
+                                    <p className="mt-1 line-clamp-2 font-medium text-slate-600 dark:text-slate-300">
+                                        {fornecedor.observacao}
+                                    </p>
+                                </div>
+                            ) : null}
+                        </div>
+
+                        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100/80 pt-3 dark:border-slate-700/60">
+                            <div className="flex flex-wrap gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => onWhatsAppClick(fornecedor)}
+                                    className="inline-flex h-8 items-center gap-1.5 rounded-[10px] bg-emerald-500 px-3 text-[11px] font-medium text-white shadow-[0_10px_18px_rgba(16,185,129,0.22)] transition-all hover:bg-emerald-600"
+                                >
+                                    <i className="fab fa-whatsapp text-[11px]" aria-hidden="true"></i>
+                                    WhatsApp
+                                </button>
+
+                                {fornecedor.endereco ? (
                                     <a
                                         href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fornecedor.endereco)}`}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-600 transition-colors hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-700"
-                                        onClick={() => setShowActions(false)}
+                                        className="inline-flex h-8 items-center gap-1.5 rounded-[10px] bg-white px-3 text-[11px] font-medium text-slate-600 shadow-sm transition-all hover:text-emerald-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:text-emerald-300"
                                     >
-                                        <i className="fas fa-map-marker-alt text-[11px]"></i>
-                                        Abrir no Maps
+                                        <i className="fas fa-location-arrow text-[10px]" aria-hidden="true"></i>
+                                        Maps
                                     </a>
-                                )}
-                                {fornecedor.email && (
+                                ) : null}
+
+                                {fornecedor.email ? (
                                     <a
                                         href={`mailto:${fornecedor.email}`}
-                                        className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-600 transition-colors hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-700"
-                                        onClick={() => setShowActions(false)}
+                                        className="inline-flex h-8 items-center gap-1.5 rounded-[10px] bg-white px-3 text-[11px] font-medium text-slate-600 shadow-sm transition-all hover:text-emerald-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:text-emerald-300"
                                     >
-                                        <i className="fas fa-envelope text-[11px]"></i>
-                                        Enviar e-mail
+                                        <i className="fas fa-envelope text-[10px]" aria-hidden="true"></i>
+                                        E-mail
                                     </a>
-                                )}
+                                ) : null}
+                            </div>
+
+                            <div className="flex gap-2">
                                 <button
                                     type="button"
-                                    onClick={() => {
-                                        setShowActions(false);
-                                        onEdit(fornecedor);
-                                    }}
-                                    className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-600 transition-colors hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-700"
+                                    onClick={() => onEdit(fornecedor)}
+                                    className="inline-flex h-8 items-center gap-1.5 rounded-[10px] bg-white px-3 text-[11px] font-medium text-slate-600 shadow-sm transition-all hover:bg-slate-900 hover:text-white dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-100 dark:hover:text-slate-900"
+                                    title="Editar"
                                 >
-                                    <i className="fas fa-pen text-[11px]"></i>
+                                    <i className="fas fa-pen text-[9px]" aria-hidden="true"></i>
                                     Editar
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={() => {
-                                        setShowActions(false);
-                                        onDelete(fornecedor.id);
-                                    }}
-                                    className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
+                                    onClick={() => onDelete(fornecedor.id)}
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] bg-white text-slate-500 shadow-sm transition-all hover:bg-red-600 hover:text-white dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-red-600"
+                                    title="Excluir"
                                 >
-                                    <i className="fas fa-trash-alt text-[11px]"></i>
-                                    Excluir
+                                    <i className="fas fa-trash-alt text-[10px]" aria-hidden="true"></i>
                                 </button>
                             </div>
-                        )}
+                        </div>
                     </div>
                 </div>
+            </div>
+        </article>
+    );
+};
 
-                <div className="hidden items-center justify-between gap-3 border-t border-slate-100 pt-3 dark:border-slate-700/60 sm:flex xl:min-w-[280px] xl:justify-end xl:border-t-0 xl:pt-0">
-                    <div className="hidden min-w-0 items-center gap-2 text-xs text-slate-400 dark:text-slate-500 sm:flex">
-                        {hasAddress && (
-                            <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-700">
-                                <i className="fas fa-map-marker-alt text-[11px]"></i>
+interface FornecedoresMobileToolbarProps {
+    totalFornecedores: number;
+    filteredCount: number;
+    searchTerm: string;
+    isSearchActive: boolean;
+    searchInputRef: React.RefObject<HTMLInputElement | null>;
+    onActivateSearch: () => void;
+    onCloseSearch: () => void;
+    onSearchChange: (value: string) => void;
+    onClearSearch: () => void;
+    onCreate: () => void;
+}
+
+const FornecedoresMobileToolbar: React.FC<FornecedoresMobileToolbarProps> = ({
+    totalFornecedores,
+    filteredCount,
+    searchTerm,
+    isSearchActive,
+    searchInputRef,
+    onActivateSearch,
+    onCloseSearch,
+    onSearchChange,
+    onClearSearch,
+    onCreate,
+}) => {
+    if (isSearchActive) {
+        return (
+            <section className="sm:hidden">
+                <div className="rounded-[18px] border border-slate-200/80 bg-white/96 p-2 shadow-[0_8px_18px_rgba(15,23,42,0.05)] dark:border-slate-700/70 dark:bg-slate-900/95">
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={onCloseSearch}
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-[12px] border border-slate-200 bg-slate-50 text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                            aria-label="Fechar busca"
+                        >
+                            <i className="fas fa-arrow-left text-[13px]" aria-hidden="true"></i>
+                        </button>
+
+                        <label className="relative flex-1">
+                            <i
+                                className="fas fa-search pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[12px] text-slate-400 dark:text-slate-500"
+                                aria-hidden="true"
+                            ></i>
+                            <input
+                                ref={searchInputRef}
+                                type="text"
+                                value={searchTerm}
+                                onChange={(event) => onSearchChange(event.target.value)}
+                                placeholder="Buscar fornecedor..."
+                                className="h-10 w-full rounded-[14px] border border-slate-200 bg-slate-50/90 pl-9 pr-9 text-[13px] font-medium text-slate-800 outline-none transition-all focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:bg-slate-800"
+                            />
+                            {searchTerm ? (
+                                <button
+                                    type="button"
+                                    onClick={onClearSearch}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-slate-600 dark:hover:text-slate-200"
+                                    aria-label="Limpar busca"
+                                >
+                                    <i className="fas fa-times-circle text-[13px]" aria-hidden="true"></i>
+                                </button>
+                            ) : null}
+                        </label>
+                    </div>
+
+                    <div className="pl-11 pt-2 text-[10px] font-medium text-slate-500 dark:text-slate-400">
+                        {searchTerm.trim()
+                            ? `${filteredCount} resultados em foco`
+                            : totalFornecedores > 0
+                              ? 'Busque por empresa, contato, telefone ou marca'
+                              : 'Cadastre um fornecedor para liberar a busca'}
+                    </div>
+                </div>
+            </section>
+        );
+    }
+
+    return (
+        <section className="sm:hidden">
+            <div className="rounded-[20px] border border-slate-200/80 bg-white/96 p-3 shadow-[0_8px_20px_rgba(15,23,42,0.05)] dark:border-slate-700/70 dark:bg-slate-900/95">
+                <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                            <h2 className="text-[1.3rem] font-semibold tracking-[-0.03em] text-slate-900 dark:text-slate-50">
+                                Fornecedores
+                            </h2>
+                            <span className="inline-flex min-h-6 items-center rounded-full bg-slate-100 px-2 text-[9px] font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-300">
+                                {totalFornecedores}
                             </span>
-                        )}
-                        {hasEmail && (
-                            <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-700">
-                                <i className="fas fa-envelope text-[11px]"></i>
-                            </span>
-                        )}
+                        </div>
+                        <p className="mt-1 pr-1 text-[11px] leading-5 text-slate-500 dark:text-slate-400">
+                            {totalFornecedores === 0
+                                ? 'Monte sua rede de compras.'
+                                : `${filteredCount} contatos prontos para consulta.`}
+                        </p>
                     </div>
 
                     <div className="flex items-center gap-2">
                         <button
                             type="button"
-                            onClick={() => onWhatsAppClick(fornecedor)}
-                            className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500 text-white shadow-sm shadow-emerald-900/20 transition-colors hover:bg-emerald-600 sm:h-9 sm:w-auto sm:px-3 sm:gap-2"
-                            title={`Falar com ${fornecedor.empresa} no WhatsApp`}
+                            onClick={onActivateSearch}
+                            disabled={totalFornecedores === 0}
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-[12px] border border-slate-200 bg-slate-50 text-slate-600 shadow-sm transition-all hover:border-slate-300 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
+                            aria-label="Buscar fornecedor"
                         >
-                            <i className="fab fa-whatsapp text-base sm:text-sm"></i>
-                            <span className="hidden text-sm font-bold sm:inline">{formatPhone(fornecedor.telefone)}</span>
+                            <i className="fas fa-search text-[13px]" aria-hidden="true"></i>
                         </button>
 
-                        {fornecedor.endereco && (
-                            <a
-                                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fornecedor.endereco)}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="hidden h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-500 transition-colors hover:bg-blue-600 hover:text-white dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-blue-600 sm:inline-flex sm:h-9 sm:w-9 sm:rounded-lg"
-                                title="Abrir no Maps"
-                            >
-                                <i className="fas fa-map-marker-alt text-[11px]"></i>
-                            </a>
-                        )}
                         <button
                             type="button"
-                            onClick={() => onEdit(fornecedor)}
-                            className="hidden h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-600 transition-colors hover:bg-blue-600 hover:text-white dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-blue-600 sm:inline-flex sm:h-9 sm:w-9 sm:rounded-lg"
-                            title="Editar"
+                            onClick={onCreate}
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-[12px] bg-slate-900 text-white shadow-[0_8px_16px_rgba(15,23,42,0.12)] transition-all hover:bg-slate-800 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+                            aria-label="Adicionar fornecedor"
                         >
-                            <i className="fas fa-pen text-[10px]"></i>
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => onDelete(fornecedor.id)}
-                            className="hidden h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-500 transition-colors hover:bg-red-600 hover:text-white dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-red-600 sm:inline-flex sm:h-9 sm:w-9 sm:rounded-lg"
-                            title="Excluir"
-                        >
-                            <i className="fas fa-trash-alt text-[11px]"></i>
+                            <i className="fas fa-plus text-[13px]" aria-hidden="true"></i>
                         </button>
                     </div>
                 </div>
             </div>
-        </div>
+        </section>
+    );
+};
+
+interface FornecedoresDesktopHeaderProps {
+    totalFornecedores: number;
+    filteredCount: number;
+    totalMarcas: number;
+    searchTerm: string;
+    onSearchChange: (value: string) => void;
+    onClearSearch: () => void;
+    onCreate: () => void;
+}
+
+const FornecedoresDesktopHeader: React.FC<FornecedoresDesktopHeaderProps> = ({
+    totalFornecedores,
+    filteredCount,
+    totalMarcas,
+    searchTerm,
+    onSearchChange,
+    onClearSearch,
+    onCreate,
+}) => {
+    const summary =
+        totalFornecedores === 0
+            ? 'Monte uma base confiavel de fabricantes e distribuidores com busca e consulta mais rapidas.'
+            : filteredCount !== totalFornecedores
+              ? `${filteredCount} de ${totalFornecedores} fornecedores em foco agora.`
+              : `${totalFornecedores} fornecedores e ${totalMarcas} marcas mapeadas para consulta rapida.`;
+
+    return (
+        <section className="hidden sm:block">
+            <div className="rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface-raised)] p-5 shadow-[var(--shadow-soft)]">
+                <div className="mb-5 flex items-end justify-between gap-4">
+                    <div className="space-y-2">
+                        <span className="inline-flex rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-600 dark:border-emerald-900/50 dark:bg-emerald-900/20 dark:text-emerald-300">
+                            Rede
+                        </span>
+                        <div className="flex items-center gap-3">
+                            <h2 className="text-3xl font-black tracking-[-0.03em] text-[var(--text-strong)]">
+                                Fornecedores
+                            </h2>
+                            <span className="inline-flex min-h-8 items-center rounded-full bg-[var(--surface-muted)] px-3 text-xs font-bold text-[var(--text-muted)]">
+                                {totalFornecedores}
+                            </span>
+                        </div>
+                        <p className="max-w-2xl text-sm leading-6 text-[var(--text-muted)]">
+                            {summary}
+                        </p>
+                    </div>
+
+                    {totalFornecedores > 0 ? (
+                        <div className="hidden items-center gap-2 rounded-full border border-[var(--border-subtle)] bg-[var(--surface)] px-3 py-2 text-xs font-semibold text-[var(--text-muted)] shadow-[var(--shadow-hairline)] lg:inline-flex">
+                            <span className="inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
+                            {filteredCount} visíveis agora
+                        </div>
+                    ) : null}
+                </div>
+
+                <div className="flex items-center gap-3">
+                    <label className="relative flex-1">
+                        <i
+                            className="fas fa-search pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[13px] text-slate-400"
+                            aria-hidden="true"
+                        ></i>
+                        <input
+                            type="text"
+                            value={searchTerm}
+                            onChange={(event) => onSearchChange(event.target.value)}
+                            placeholder="Buscar por empresa, contato, telefone ou marca..."
+                            className="h-12 w-full rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] pl-11 pr-11 text-sm font-medium text-[var(--text-strong)] shadow-[var(--shadow-hairline)] outline-none transition-all placeholder:text-[var(--text-soft)] focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10"
+                        />
+                        {searchTerm ? (
+                            <button
+                                type="button"
+                                onClick={onClearSearch}
+                                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-slate-700 dark:hover:text-slate-100"
+                                aria-label="Limpar busca"
+                            >
+                                <i className="fas fa-times-circle text-[14px]" aria-hidden="true"></i>
+                            </button>
+                        ) : null}
+                    </label>
+
+                    <button
+                        type="button"
+                        onClick={onCreate}
+                        className="inline-flex h-12 items-center gap-2 rounded-[var(--radius-control)] bg-slate-950 px-5 text-sm font-semibold text-white shadow-[0_14px_28px_rgba(15,23,42,0.14)] transition-all hover:bg-slate-800 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+                    >
+                        <i className="fas fa-plus text-[12px]" aria-hidden="true"></i>
+                        Novo fornecedor
+                    </button>
+                </div>
+            </div>
+        </section>
     );
 };
 
@@ -484,109 +779,6 @@ const WhatsAppChooserModal: React.FC<{
     );
 };
 
-const FornecedorModal: React.FC<{
-    editing: Fornecedor | null;
-    onSave: (data: Fornecedor) => Promise<void>;
-    onClose: () => void;
-}> = ({ editing, onSave, onClose }) => {
-    const [form, setForm] = useState<Fornecedor>(editing || createFornecedor());
-    const [isSaving, setIsSaving] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-
-    useEffect(() => {
-        setForm(editing || createFornecedor());
-        setIsSaving(false);
-        setError(null);
-    }, [editing]);
-
-    const setField = (key: keyof typeof EMPTY_FORM) => (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-        if (error) setError(null);
-        setForm(previous => ({ ...previous, [key]: event.target.value }));
-    };
-
-    const handleSubmit = async (event: React.FormEvent) => {
-        event.preventDefault();
-        if (isSaving) return;
-        if (!form.empresa.trim() || !form.contato.trim() || !form.telefone.trim()) {
-            setError('Preencha empresa, contato e telefone para continuar.');
-            return;
-        }
-
-        setIsSaving(true);
-        setError(null);
-        try {
-            await onSave(form);
-        } catch (err: any) {
-            setError(err?.message || 'Não foi possível salvar o fornecedor. Tente novamente.');
-            setIsSaving(false);
-        }
-    };
-
-    return (
-        <div className="fixed inset-0 z-50 flex flex-col justify-end sm:justify-center sm:items-center sm:p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
-            <div
-                className="bg-white dark:bg-slate-800 w-full sm:max-w-md sm:rounded-2xl rounded-t-3xl shadow-2xl border-t border-slate-200 dark:border-slate-700 sm:border overflow-hidden"
-                onClick={event => event.stopPropagation()}
-            >
-                <div className="flex justify-center pt-3 pb-1 sm:hidden">
-                    <div className="w-10 h-1 rounded-full bg-slate-300 dark:bg-slate-600" />
-                </div>
-
-                <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-700">
-                    <h2 className="font-bold text-slate-900 dark:text-slate-100 text-lg">
-                        {editing && !editing.id?.startsWith('temp-') ? 'Editar Fornecedor' : 'Novo Fornecedor'}
-                    </h2>
-                    <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-700 dark:hover:text-white transition-colors">
-                        <i className="fas fa-times"></i>
-                    </button>
-                </div>
-
-                <form onSubmit={handleSubmit} className="p-5 space-y-3 overflow-y-auto max-h-[75vh] sm:max-h-none">
-                    {[
-                        { key: 'empresa', label: 'Empresa *', placeholder: 'Nome da empresa', type: 'text' },
-                        { key: 'contato', label: 'Nome do Contato *', placeholder: 'Ex: João Silva', type: 'text' },
-                        { key: 'telefone', label: 'Telefone / WhatsApp *', placeholder: '(11) 99999-9999', type: 'tel' },
-                        { key: 'representacoes', label: 'Marcas / Representações', placeholder: 'Ex: 3M, SunTek, Llumar', type: 'text' },
-                        { key: 'email', label: 'E-mail', placeholder: 'contato@empresa.com', type: 'email' },
-                        { key: 'endereco', label: 'Endereço', placeholder: 'Rua, Número, Bairro, Cidade', type: 'text' },
-                    ].map(({ key, label, placeholder, type }) => (
-                        <div key={key}>
-                            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">{label}</label>
-                            <input
-                                type={type}
-                                value={(form as Record<string, string>)[key] || ''}
-                                onChange={setField(key as keyof typeof EMPTY_FORM)}
-                                placeholder={placeholder}
-                                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50 text-slate-900 dark:text-slate-100 text-sm focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 outline-none transition-all"
-                            />
-                        </div>
-                    ))}
-
-                    <div>
-                        <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Observação</label>
-                        <textarea
-                            value={form.observacao || ''}
-                            onChange={setField('observacao')}
-                            placeholder="Informações adicionais..."
-                            rows={2}
-                            className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50 text-slate-900 dark:text-slate-100 text-sm focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 outline-none transition-all resize-none"
-                        />
-                    </div>
-
-                    <div className="flex gap-2 pt-1 pb-safe">
-                        <button type="button" onClick={onClose} className="flex-1 py-3 rounded-xl border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-400 text-sm font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                            Cancelar
-                        </button>
-                        <button type="submit" className="flex-1 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold transition-colors shadow-sm">
-                            {editing && !editing.id?.startsWith('temp-') ? 'Salvar' : 'Adicionar'}
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    );
-};
-
 const FornecedorStyledModal: React.FC<{
     editing: Fornecedor | null;
     onSave: (data: Fornecedor) => Promise<void>;
@@ -632,7 +824,7 @@ const FornecedorStyledModal: React.FC<{
                 type="button"
                 onClick={onClose}
                 disabled={isSaving}
-                className="px-4 py-2 text-sm font-semibold rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 dark:text-slate-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="rounded-md px-4 py-2 text-sm font-semibold hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
                 Cancelar
             </button>
@@ -640,7 +832,7 @@ const FornecedorStyledModal: React.FC<{
                 type="submit"
                 form="fornecedorStyledForm"
                 disabled={isSaving}
-                className="px-4 py-2 bg-slate-800 dark:bg-slate-700 text-white text-sm font-semibold rounded-md hover:bg-slate-700 dark:hover:bg-slate-600 disabled:opacity-70 disabled:cursor-wait flex items-center gap-2"
+                className="flex items-center gap-2 rounded-md bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 disabled:cursor-wait disabled:opacity-70"
             >
                 {isSaving ? (
                     <>
@@ -648,7 +840,7 @@ const FornecedorStyledModal: React.FC<{
                         <span>Salvando...</span>
                     </>
                 ) : (
-                    <span>{editing && !editing.id?.startsWith('temp-') ? 'Salvar Alterações' : 'Adicionar Fornecedor'}</span>
+                    <span>{editing && !editing.id?.startsWith('temp-') ? 'Salvar alteracoes' : 'Adicionar fornecedor'}</span>
                 )}
             </button>
         </>
@@ -667,7 +859,7 @@ const FornecedorStyledModal: React.FC<{
                     </div>
                     <div className="min-w-0">
                         <div className="text-xl font-semibold text-slate-800 dark:text-white">
-                            {editing && !editing.id?.startsWith('temp-') ? 'Editar Fornecedor' : 'Novo Fornecedor'}
+                            {editing && !editing.id?.startsWith('temp-') ? 'Editar fornecedor' : 'Novo fornecedor'}
                         </div>
                     </div>
                 </div>
@@ -675,53 +867,89 @@ const FornecedorStyledModal: React.FC<{
             footer={footer}
         >
             <form id="fornecedorStyledForm" onSubmit={handleSubmit} className="space-y-5">
-                {error && (
+                {error ? (
                     <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">
                         {error}
                     </div>
-                )}
+                ) : null}
 
                 <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                     <div className="sm:col-span-2">
                         <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                             Empresa *
                         </label>
-                        <input type="text" value={form.empresa || ''} onChange={setField('empresa')} placeholder="Nome da empresa" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition-all focus:border-slate-400 focus:ring-2 focus:ring-slate-300/40 dark:border-slate-600 dark:bg-slate-700/50 dark:text-slate-100" />
+                        <input
+                            type="text"
+                            value={form.empresa || ''}
+                            onChange={setField('empresa')}
+                            placeholder="Nome da empresa"
+                            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition-all focus:border-slate-400 focus:ring-2 focus:ring-slate-300/40 dark:border-slate-600 dark:bg-slate-700/50 dark:text-slate-100"
+                        />
                     </div>
 
                     <div>
                         <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                             Contato *
                         </label>
-                        <input type="text" value={form.contato || ''} onChange={setField('contato')} placeholder="Ex: João Silva" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition-all focus:border-slate-400 focus:ring-2 focus:ring-slate-300/40 dark:border-slate-600 dark:bg-slate-700/50 dark:text-slate-100" />
+                        <input
+                            type="text"
+                            value={form.contato || ''}
+                            onChange={setField('contato')}
+                            placeholder="Ex: Joao Silva"
+                            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition-all focus:border-slate-400 focus:ring-2 focus:ring-slate-300/40 dark:border-slate-600 dark:bg-slate-700/50 dark:text-slate-100"
+                        />
                     </div>
 
                     <div>
                         <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                             Telefone / WhatsApp *
                         </label>
-                        <input type="tel" value={form.telefone || ''} onChange={setField('telefone')} placeholder="(11) 99999-9999" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition-all focus:border-slate-400 focus:ring-2 focus:ring-slate-300/40 dark:border-slate-600 dark:bg-slate-700/50 dark:text-slate-100" />
+                        <input
+                            type="tel"
+                            value={form.telefone || ''}
+                            onChange={setField('telefone')}
+                            placeholder="(11) 99999-9999"
+                            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition-all focus:border-slate-400 focus:ring-2 focus:ring-slate-300/40 dark:border-slate-600 dark:bg-slate-700/50 dark:text-slate-100"
+                        />
                     </div>
 
                     <div className="sm:col-span-2">
                         <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                            Marcas / Representações
+                            Marcas / Representacoes
                         </label>
-                        <input type="text" value={form.representacoes || ''} onChange={setField('representacoes')} placeholder="Ex: 3M, SunTek, Llumar" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition-all focus:border-slate-400 focus:ring-2 focus:ring-slate-300/40 dark:border-slate-600 dark:bg-slate-700/50 dark:text-slate-100" />
+                        <input
+                            type="text"
+                            value={form.representacoes || ''}
+                            onChange={setField('representacoes')}
+                            placeholder="Ex: 3M, SunTek, Llumar"
+                            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition-all focus:border-slate-400 focus:ring-2 focus:ring-slate-300/40 dark:border-slate-600 dark:bg-slate-700/50 dark:text-slate-100"
+                        />
                     </div>
 
                     <div>
                         <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                             E-mail
                         </label>
-                        <input type="email" value={form.email || ''} onChange={setField('email')} placeholder="contato@empresa.com" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition-all focus:border-slate-400 focus:ring-2 focus:ring-slate-300/40 dark:border-slate-600 dark:bg-slate-700/50 dark:text-slate-100" />
+                        <input
+                            type="email"
+                            value={form.email || ''}
+                            onChange={setField('email')}
+                            placeholder="contato@empresa.com"
+                            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition-all focus:border-slate-400 focus:ring-2 focus:ring-slate-300/40 dark:border-slate-600 dark:bg-slate-700/50 dark:text-slate-100"
+                        />
                     </div>
 
                     <div>
                         <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                             Endereço
                         </label>
-                        <input type="text" value={form.endereco || ''} onChange={setField('endereco')} placeholder="Rua, número, bairro, cidade" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition-all focus:border-slate-400 focus:ring-2 focus:ring-slate-300/40 dark:border-slate-600 dark:bg-slate-700/50 dark:text-slate-100" />
+                        <input
+                            type="text"
+                            value={form.endereco || ''}
+                            onChange={setField('endereco')}
+                            placeholder="Rua, numero, bairro, cidade"
+                            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition-all focus:border-slate-400 focus:ring-2 focus:ring-slate-300/40 dark:border-slate-600 dark:bg-slate-700/50 dark:text-slate-100"
+                        />
                     </div>
                 </div>
 
@@ -732,7 +960,7 @@ const FornecedorStyledModal: React.FC<{
                     <textarea
                         value={form.observacao || ''}
                         onChange={setField('observacao')}
-                        placeholder="Informações adicionais sobre atendimento, prazo, marcas ou condições."
+                        placeholder="Informacoes adicionais sobre atendimento, prazo, marcas ou condicoes."
                         rows={3}
                         className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition-all focus:border-slate-400 focus:ring-2 focus:ring-slate-300/40 dark:border-slate-600 dark:bg-slate-700/50 dark:text-slate-100"
                     />
@@ -742,39 +970,30 @@ const FornecedorStyledModal: React.FC<{
     );
 };
 
-const FornecedoresToolbar: React.FC<{
-    search: string;
-    viewType: 'grid' | 'list';
-    onSearchChange: (value: string) => void;
-    onClearSearch: () => void;
-    onCreate: () => void;
-    onChangeView: (view: 'grid' | 'list') => void;
-}> = ({ search, viewType, onSearchChange, onClearSearch, onCreate, onChangeView }) => {
-    return (
-        <PageCollectionToolbar
-            search={search}
-            onSearchChange={onSearchChange}
-            onClearSearch={onClearSearch}
-            searchPlaceholder="Buscar por empresa, contato ou marca..."
-            primaryActionLabel="Novo Fornecedor"
-            onPrimaryAction={onCreate}
-            viewMode={viewType}
-            onViewModeChange={onChangeView}
-        />
-    );
-};
-
 const FornecedoresView: React.FC = () => {
+    const { showAlert } = useFeedback();
     const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
     const [loading, setLoading] = useState(true);
-    const [viewType, setViewType] = useState<'grid' | 'list'>('grid');
+    const [viewType, setViewType] = useState<FornecedorViewMode>(() => {
+        if (typeof window === 'undefined') return 'list';
+
+        try {
+            return window.localStorage.getItem(FORNECEDOR_VIEW_MODE_STORAGE_KEY) === 'grid' ? 'grid' : 'list';
+        } catch {
+            return 'list';
+        }
+    });
     const [search, setSearch] = useState('');
+    const [isSearchActive, setIsSearchActive] = useState(false);
+    const [expandedFornecedorId, setExpandedFornecedorId] = useState<string | null>(null);
     const [showModal, setShowModal] = useState(false);
     const [selectedF, setSelectedF] = useState<Fornecedor | null>(null);
     const [fornecedorToDelete, setFornecedorToDelete] = useState<Fornecedor | null>(null);
     const [fornecedorForWhatsApp, setFornecedorForWhatsApp] = useState<Fornecedor | null>(null);
     const [isDeletingFornecedor, setIsDeletingFornecedor] = useState(false);
     const [loadError, setLoadError] = useState<string | null>(null);
+    const searchInputRef = useRef<HTMLInputElement | null>(null);
+    const deferredSearch = useDeferredValue(search);
 
     const loadData = useCallback(async () => {
         setLoading(true);
@@ -795,13 +1014,59 @@ const FornecedoresView: React.FC = () => {
         loadData();
     }, [loadData]);
 
+    useEffect(() => {
+        if (!isSearchActive) return;
+
+        const frame = window.requestAnimationFrame(() => {
+            searchInputRef.current?.focus();
+        });
+
+        return () => window.cancelAnimationFrame(frame);
+    }, [isSearchActive]);
+
+    useEffect(() => {
+        try {
+            window.localStorage.setItem(FORNECEDOR_VIEW_MODE_STORAGE_KEY, viewType);
+        } catch {
+            // Ignore storage failures and keep the current session state in memory.
+        }
+    }, [viewType]);
+
     const filtered = useMemo(() => {
-        return fornecedores.filter(fornecedor =>
-            fornecedor.empresa.toLowerCase().includes(search.toLowerCase()) ||
-            fornecedor.contato.toLowerCase().includes(search.toLowerCase()) ||
-            fornecedor.representacoes?.toLowerCase().includes(search.toLowerCase())
+        const lowerTerm = deferredSearch.toLowerCase().trim();
+        const phoneTerm = deferredSearch.replace(/\D/g, '');
+
+        if (!lowerTerm && !phoneTerm) return fornecedores;
+
+        return fornecedores.filter(fornecedor => {
+            const tags = getFornecedorTags(fornecedor).join(' ').toLowerCase();
+            const normalizedPhone = fornecedor.telefone.replace(/\D/g, '');
+
+            return (
+                fornecedor.empresa.toLowerCase().includes(lowerTerm) ||
+                fornecedor.contato.toLowerCase().includes(lowerTerm) ||
+                (fornecedor.email || '').toLowerCase().includes(lowerTerm) ||
+                (fornecedor.endereco || '').toLowerCase().includes(lowerTerm) ||
+                tags.includes(lowerTerm) ||
+                (phoneTerm ? normalizedPhone.includes(phoneTerm) : false)
+            );
+        });
+    }, [deferredSearch, fornecedores]);
+
+    const totalMarcas = useMemo(() => {
+        const unique = new Set(
+            fornecedores.flatMap(fornecedor =>
+                getFornecedorTags(fornecedor).map(item => item.toLowerCase())
+            )
         );
-    }, [fornecedores, search]);
+
+        return unique.size;
+    }, [fornecedores]);
+
+    const handleOpenCreate = () => {
+        setSelectedF(null);
+        setShowModal(true);
+    };
 
     const handleSave = async (fornecedor: Fornecedor) => {
         try {
@@ -838,25 +1103,86 @@ const FornecedoresView: React.FC = () => {
             setFornecedorToDelete(null);
         } catch (error) {
             console.error('Erro ao excluir:', error);
-            alert('Não foi possível excluir o fornecedor. Tente novamente.');
+            showAlert({
+                title: 'Erro ao excluir fornecedor',
+                message: 'Não foi possível excluir o fornecedor. Tente novamente.',
+                tone: 'error'
+            });
         } finally {
             setIsDeletingFornecedor(false);
         }
-    }, [fornecedorToDelete]);
+    }, [fornecedorToDelete, showAlert]);
+
+    const handleToggleExpand = (fornecedorId: string) => {
+        setExpandedFornecedorId(current => current === fornecedorId ? null : fornecedorId);
+    };
+
+    const handleSearchChange = (value: string) => {
+        setSearch(value);
+        setExpandedFornecedorId(null);
+    };
+
+    const handleClearSearch = () => {
+        setSearch('');
+        setExpandedFornecedorId(null);
+    };
+
+    const handleCloseSearch = () => {
+        setIsSearchActive(false);
+        handleClearSearch();
+    };
 
     return (
-        <div className="space-y-6">
-            <FornecedoresToolbar
-                search={search}
-                viewType={viewType}
-                onSearchChange={setSearch}
-                onClearSearch={() => setSearch('')}
-                onCreate={() => {
-                    setSelectedF(null);
-                    setShowModal(true);
-                }}
-                onChangeView={setViewType}
+        <div className="space-y-5 sm:space-y-6">
+            <FornecedoresMobileToolbar
+                totalFornecedores={fornecedores.length}
+                filteredCount={filtered.length}
+                searchTerm={search}
+                isSearchActive={isSearchActive}
+                searchInputRef={searchInputRef}
+                onActivateSearch={() => setIsSearchActive(true)}
+                onCloseSearch={handleCloseSearch}
+                onSearchChange={handleSearchChange}
+                onClearSearch={handleClearSearch}
+                onCreate={handleOpenCreate}
             />
+
+            <FornecedoresDesktopHeader
+                totalFornecedores={fornecedores.length}
+                filteredCount={filtered.length}
+                totalMarcas={totalMarcas}
+                searchTerm={search}
+                onSearchChange={handleSearchChange}
+                onClearSearch={handleClearSearch}
+                onCreate={handleOpenCreate}
+            />
+
+            {fornecedores.length > 0 ? (
+                <div className="flex items-start justify-between gap-3 px-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center rounded-full border border-[var(--border-subtle)] bg-[var(--surface)] px-3 py-1.5 text-[11px] font-medium text-[var(--text-muted)] shadow-[var(--shadow-hairline)] sm:text-xs">
+                            {filtered.length} de {fornecedores.length} fornecedores
+                        </span>
+                        {totalMarcas > 0 ? (
+                            <span className="inline-flex items-center rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1.5 text-[11px] font-medium text-emerald-700 shadow-sm dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-300 sm:text-xs">
+                                {totalMarcas} marcas mapeadas
+                            </span>
+                        ) : null}
+                        {search.trim() ? (
+                            <button
+                                type="button"
+                                onClick={handleClearSearch}
+                                className="inline-flex items-center gap-2 rounded-full border border-[var(--border-subtle)] bg-[var(--surface)] px-3 py-1.5 text-[11px] font-medium text-[var(--text-muted)] shadow-[var(--shadow-hairline)] transition-colors hover:text-[var(--text-strong)] sm:text-xs"
+                            >
+                                <i className="fas fa-times-circle text-[11px]" aria-hidden="true"></i>
+                                Limpar busca
+                            </button>
+                        ) : null}
+                    </div>
+
+                    <FornecedorViewModeToggle value={viewType} onChange={setViewType} />
+                </div>
+            ) : null}
 
             {loading ? (
                 <ContentState
@@ -875,7 +1201,7 @@ const FornecedoresView: React.FC = () => {
                 />
             ) : filtered.length > 0 ? (
                 viewType === 'grid' ? (
-                    <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+                    <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2 xl:grid-cols-3">
                         {filtered.map((fornecedor, index) => (
                             <FornecedorCard
                                 key={fornecedor.id}
@@ -891,11 +1217,14 @@ const FornecedoresView: React.FC = () => {
                         ))}
                     </div>
                 ) : (
-                    <div className="space-y-4">
-                        {filtered.map(fornecedor => (
+                    <div className="divide-y divide-slate-100 overflow-hidden rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface)] shadow-[var(--shadow-soft)] dark:divide-slate-700/60">
+                        {filtered.map((fornecedor, index) => (
                             <FornecedorListItem
                                 key={fornecedor.id}
                                 fornecedor={fornecedor}
+                                isExpanded={expandedFornecedorId === fornecedor.id}
+                                onToggleExpand={() => handleToggleExpand(fornecedor.id)}
+                                index={index}
                                 onEdit={(item) => {
                                     setSelectedF(item);
                                     setShowModal(true);
@@ -911,25 +1240,20 @@ const FornecedoresView: React.FC = () => {
                     compact
                     iconClassName="fas fa-search"
                     title="Nenhum fornecedor encontrado"
-                    description="Tente buscar por outro nome, contato ou marca."
+                    description="Tente outro nome, contato, telefone ou marca."
                 />
             ) : (
-                <>
                 <ContentState
                     iconClassName="fas fa-truck-loading"
-                    title="Nenhum fornecedor cadastrado"
-                    description="Adicione fabricantes, distribuidores e representantes para manter sua operação organizada."
-                    actionLabel="Adicionar Fornecedor"
+                    title="Cadastre seu primeiro fornecedor"
+                    description="Adicione fabricantes e distribuidores para consultar contatos quando precisar."
+                    actionLabel="Adicionar fornecedor"
                     actionIconClassName="fas fa-plus"
-                    onAction={() => {
-                        setSelectedF(null);
-                        setShowModal(true);
-                    }}
+                    onAction={handleOpenCreate}
                 />
-                </>
             )}
 
-            {showModal && (
+            {showModal ? (
                 <FornecedorStyledModal
                     editing={selectedF}
                     onSave={handleSave}
@@ -938,7 +1262,7 @@ const FornecedoresView: React.FC = () => {
                         setSelectedF(null);
                     }}
                 />
-            )}
+            ) : null}
 
             <WhatsAppChooserModal
                 fornecedor={fornecedorForWhatsApp}
@@ -952,7 +1276,7 @@ const FornecedoresView: React.FC = () => {
                     setFornecedorToDelete(null);
                 }}
                 onConfirm={handleConfirmDelete}
-                title="Confirmar Exclusão de Fornecedor"
+                title="Confirmar exclusao de fornecedor"
                 message={
                     <>
                         Tem certeza que deseja excluir o fornecedor <strong>"{fornecedorToDelete?.empresa || ''}"</strong>?
@@ -960,7 +1284,7 @@ const FornecedoresView: React.FC = () => {
                         Esta ação não pode ser desfeita.
                     </>
                 }
-                confirmButtonText="Sim, Excluir"
+                confirmButtonText="Sim, excluir"
                 confirmButtonVariant="danger"
                 isProcessing={isDeletingFornecedor}
                 processingText="Excluindo..."
@@ -970,4 +1294,3 @@ const FornecedoresView: React.FC = () => {
 };
 
 export default FornecedoresView;
-

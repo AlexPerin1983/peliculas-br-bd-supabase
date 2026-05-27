@@ -11,6 +11,7 @@ export function useEstoqueForm() {
     const [formObservacao, setFormObservacao] = useState('');
     const [formBobinaId, setFormBobinaId] = useState<number | ''>('');
     const [formDeduzirDaBobina, setFormDeduzirDaBobina] = useState(false);
+    const [formQuantidade, setFormQuantidade] = useState('1');
 
     return {
         form: {
@@ -24,6 +25,7 @@ export function useEstoqueForm() {
             formObservacao,
             formBobinaId,
             formDeduzirDaBobina,
+            formQuantidade,
         },
         setters: {
             setFormFilmId,
@@ -36,6 +38,7 @@ export function useEstoqueForm() {
             setFormObservacao,
             setFormBobinaId,
             setFormDeduzirDaBobina,
+            setFormQuantidade,
         },
     };
 }

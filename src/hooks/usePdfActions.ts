@@ -1,9 +1,9 @@
 import { Dispatch, SetStateAction, useCallback } from 'react';
 import * as db from '../../services/db';
-import { Client, Film, ProposalOption, SavedPDF, Totals, UIMeasurement, UserInfo } from '../../types';
+import { Client, Film, ProposalDiscount, ProposalOption, ProposalPaymentConfig, SavedPDF, Totals, UIMeasurement, UserInfo } from '../../types';
 
 type PdfGenerationStatus = 'idle' | 'generating' | 'success';
-type DiscountType = { value: string; type: 'percentage' | 'fixed' };
+type DiscountType = ProposalDiscount;
 
 interface UsePdfActionsParams {
     measurements: UIMeasurement[];
@@ -14,6 +14,7 @@ interface UsePdfActionsParams {
     selectedClientId: number | null;
     userInfo: UserInfo | null;
     activeOption: ProposalOption | null;
+    proposalPaymentConfig: ProposalPaymentConfig;
     clients: Client[];
     setAllSavedPdfs: Dispatch<SetStateAction<SavedPDF[]>>;
     setPdfGenerationStatus: Dispatch<SetStateAction<PdfGenerationStatus>>;
@@ -26,12 +27,12 @@ export const sanitizeForFilename = (name: string): string => {
     if (!name) return name;
 
     const corruptedPatterns = [
-        { pattern: /Op[�\uFFFD]{1,4}o/gi, replacement: 'Opcao' },
+        { pattern: /Op[?\uFFFD]{1,4}o/gi, replacement: 'Opcao' },
         { pattern: /Op\?+o/gi, replacement: 'Opcao' },
         { pattern: /Op[\x00-\x1F]+o/gi, replacement: 'Opcao' },
         { pattern: /ção/gi, replacement: 'cao' },
         { pattern: /ã/gi, replacement: 'a' },
-        { pattern: /[�\uFFFD]+/g, replacement: '' }
+        { pattern: /[?\uFFFD]+/g, replacement: '' }
     ];
 
     let sanitized = name;
@@ -51,6 +52,7 @@ export function usePdfActions({
     selectedClientId,
     userInfo,
     activeOption,
+    proposalPaymentConfig,
     clients,
     setAllSavedPdfs,
     setPdfGenerationStatus,
@@ -138,7 +140,8 @@ export function usePdfActions({
                 films,
                 generalDiscount,
                 totals,
-                activeOption!.name
+                activeOption!.name,
+                proposalPaymentConfig
             );
 
             const filename = `orcamento_${sanitizeForFilename(selectedClient!.nome).replace(/\s+/g, '_').toLowerCase()}_${sanitizeForFilename(activeOption!.name).replace(/\s+/g, '_').toLowerCase()}_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.pdf`;
@@ -146,7 +149,16 @@ export function usePdfActions({
             const generalDiscountForDb: SavedPDF['generalDiscount'] = {
                 ...generalDiscount,
                 value: parseFloat(String(generalDiscount.value).replace(',', '.')) || 0,
-                type: generalDiscount.value ? generalDiscount.type : 'none'
+                type: generalDiscount.value ? generalDiscount.type : 'none',
+                operation: generalDiscount.operation === 'increase' ? 'increase' : 'discount',
+                expenseSnapshot: {
+                    operationalExpenses: totals.operationalExpenses,
+                    estimatedMaterialCost: totals.estimatedMaterialCost,
+                    estimatedTotalCost: totals.estimatedTotalCost,
+                    estimatedProfit: totals.estimatedProfit,
+                    estimatedMarginPercentage: totals.estimatedMarginPercentage,
+                    expensesByCategory: totals.expensesByCategory || []
+                }
             };
 
             const validityDays = userInfo!.proposalValidityDays || 60;
@@ -156,6 +168,7 @@ export function usePdfActions({
 
             const pdfToSave: Omit<SavedPDF, 'id'> = {
                 clienteId: selectedClientId!,
+                clientName: selectedClient.nome,
                 date: issueDate.toISOString(),
                 expirationDate: expirationDate.toISOString(),
                 totalPreco: totals.finalTotal,
@@ -188,6 +201,7 @@ export function usePdfActions({
         generalDiscount,
         totals,
         activeOption,
+        proposalPaymentConfig,
         selectedClientId,
         setPdfGenerationStatus,
         downloadBlob,

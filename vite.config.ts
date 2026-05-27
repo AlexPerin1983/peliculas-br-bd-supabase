@@ -4,10 +4,6 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
-
-  // Fallback para variáveis de ambiente do sistema (Vercel)
-  const supabaseUrl = env.VITE_SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-  const supabaseAnonKey = env.VITE_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
   const geminiApiKey = env.GEMINI_API_KEY || process.env.GEMINI_API_KEY;
 
   return {
@@ -18,9 +14,7 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     define: {
       'process.env.API_KEY': JSON.stringify(geminiApiKey),
-      'process.env.GEMINI_API_KEY': JSON.stringify(geminiApiKey),
-      'import.meta.env.VITE_SUPABASE_URL': JSON.stringify(supabaseUrl),
-      'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(supabaseAnonKey)
+      'process.env.GEMINI_API_KEY': JSON.stringify(geminiApiKey)
     },
     resolve: {
       alias: {

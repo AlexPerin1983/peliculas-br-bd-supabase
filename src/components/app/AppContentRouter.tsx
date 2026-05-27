@@ -1,21 +1,27 @@
 import React, { ReactNode, Suspense, lazy } from 'react';
-import { Client, Film, Agendamento, SavedPDF, UserInfo, UIMeasurement } from '../../../types';
+import { Bolt, ClipboardPaste, Plus, Ruler, Sparkles, UserCheck, Users } from 'lucide-react';
+import { Client, Film, Agendamento, ProposalOption, ProposalPricingMode, SavedPDF, UserInfo, UIMeasurement } from '../../../types';
 import MeasurementList from '../../../components/MeasurementList';
+import ProposalOptionsCarousel from '../../../components/ProposalOptionsCarousel';
 import { FeatureGate } from '../../../components/subscription/SubscriptionComponents';
+import { PremiumFeatureSection } from '../../../components/subscription/PremiumFeatureSection';
 import { NumpadConfig } from '../../hooks/useMeasurementEditor';
 import ActionButton from '../../../components/ui/ActionButton';
 import ContentState from '../../../components/ui/ContentState';
+import { getMeasurementClipboardCount } from '../../lib/measurementClipboard';
 
+const DashboardView = lazy(() => import('../../../components/views/DashboardView'));
 const UserSettingsView = lazy(() => import('../../../components/views/UserSettingsView'));
 const PdfHistoryView = lazy(() => import('../../../components/views/PdfHistoryView'));
 const FilmListView = lazy(() => import('../../../components/views/FilmListView'));
 const AgendaView = lazy(() => import('../../../components/views/AgendaView'));
 const EstoqueView = lazy(() => import('../../../components/views/EstoqueView'));
 const FornecedoresView = lazy(() => import('../../../components/views/FornecedoresView'));
+const ServicoQrView = lazy(() => import('../../../components/views/ServicoQrView'));
 const AdminUsers = lazy(() => import('../../../components/AdminUsers').then(module => ({ default: module.AdminUsers })));
 const UserAccount = lazy(() => import('../../../components/UserAccount').then(module => ({ default: module.UserAccount })));
 
-type ActiveTab = 'client' | 'films' | 'settings' | 'history' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores';
+type ActiveTab = 'dashboard' | 'client' | 'films' | 'settings' | 'history' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores';
 
 interface AppContentRouterProps {
     activeTab: ActiveTab;
@@ -31,7 +37,9 @@ interface AppContentRouterProps {
     initialEstoqueAction: { action: 'scan', code: string } | null;
     selectedClientId: number | null;
     measurements: UIMeasurement[];
+    proposalOptions: ProposalOption[];
     activeOptionId: number | null;
+    pricingMode: ProposalPricingMode;
     totals: { totalM2: number; totalQuantity: number };
     numpadConfig: NumpadConfig;
     swipeDirection: 'left' | 'right' | null;
@@ -56,9 +64,22 @@ interface AppContentRouterProps {
     onDeleteFilm: (filmName: string) => void;
     onOpenGallery: (images: string[], initialIndex: number) => void;
     onOpenClientModal: (mode: 'add' | 'edit') => void;
+    onOpenAIQuickProposal: () => void;
+    onTabChange: (tab: ActiveTab) => void;
+    onSelectOption: (optionId: number) => void;
+    onRenameOption: (optionId: number, newName: string) => void;
+    onDeleteOption: (optionId: number) => void;
+    onAddOption: () => void;
+    onSelectPricingMode: (pricingMode: ProposalPricingMode) => void;
+    onOpenProposalPaymentConfig: () => void;
+    onOpenProposalExpenses: () => void;
+    hasCustomProposalPaymentConfig: boolean;
+    hasActiveExpenses: boolean;
+    onSwipeDirectionChange: (direction: 'left' | 'right' | null, distance: number) => void;
     onAddMeasurement: () => void;
     onOpenLocationImport: () => void;
     onMeasurementsChange: (measurements: UIMeasurement[]) => void;
+    onPersistMeasurementsChange?: (measurements: UIMeasurement[]) => Promise<void>;
     onOpenFilmModal: (film: Film | null) => void;
     onOpenFilmSelectionModal: (measurementId: number) => void;
     onOpenClearAllModal: () => void;
@@ -68,6 +89,10 @@ interface AppContentRouterProps {
     onOpenDiscountModal: (measurement: UIMeasurement) => void;
     onDeleteMeasurement: (measurementId: number) => void;
     onDeleteMeasurementImmediate: (id: number) => void;
+    onPasteCopiedMeasurements?: () => void | Promise<void>;
+    onTogglePin?: (id: number) => void;
+    onAddNewClient?: (clientName: string) => void;
+    isClientsLoading?: boolean;
 }
 
 export const AppContentRouter: React.FC<AppContentRouterProps> = ({
@@ -84,7 +109,9 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
     initialEstoqueAction,
     selectedClientId,
     measurements,
+    proposalOptions,
     activeOptionId,
+    pricingMode,
     totals,
     numpadConfig,
     swipeDirection,
@@ -109,9 +136,22 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
     onDeleteFilm,
     onOpenGallery,
     onOpenClientModal,
+    onOpenAIQuickProposal,
+    onTabChange,
+    onSelectOption,
+    onRenameOption,
+    onDeleteOption,
+    onAddOption,
+    onSelectPricingMode,
+    onOpenProposalPaymentConfig,
+    onOpenProposalExpenses,
+    hasCustomProposalPaymentConfig,
+    hasActiveExpenses,
+    onSwipeDirectionChange,
     onAddMeasurement,
     onOpenLocationImport,
     onMeasurementsChange,
+    onPersistMeasurementsChange,
     onOpenFilmModal,
     onOpenFilmSelectionModal,
     onOpenClearAllModal,
@@ -120,8 +160,33 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
     onOpenEditModal,
     onOpenDiscountModal,
     onDeleteMeasurement,
-    onDeleteMeasurementImmediate
+    onDeleteMeasurementImmediate,
+    onPasteCopiedMeasurements,
+    onTogglePin,
+    onAddNewClient,
+    isClientsLoading = false
 }) => {
+    const copiedMeasurementsCount = getMeasurementClipboardCount();
+    const mobileProposalOptionsSlot = proposalOptions.length > 0 && activeOptionId ? (
+        <div className="sm:hidden">
+            <ProposalOptionsCarousel
+                options={proposalOptions}
+                activeOptionId={activeOptionId}
+                onSelectOption={onSelectOption}
+                onRenameOption={onRenameOption}
+                onDeleteOption={onDeleteOption}
+                onAddOption={onAddOption}
+                onSelectPricingMode={onSelectPricingMode}
+                onOpenPaymentConfig={onOpenProposalPaymentConfig}
+                onOpenExpenses={onOpenProposalExpenses}
+                hasActivePaymentOverride={hasCustomProposalPaymentConfig}
+                hasActiveExpenses={hasActiveExpenses}
+                onSwipeDirectionChange={onSwipeDirectionChange}
+                showPricingMode={false}
+            />
+        </div>
+    ) : null;
+
     const renderDeferred = (content: ReactNode, fallback: ReactNode = defaultLoadingView) => (
         <Suspense fallback={fallback}>{content}</Suspense>
     );
@@ -159,6 +224,21 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
         return renderDeferred(<UserAccount />);
     }
 
+    if (activeTab === 'dashboard') {
+        return renderDeferred(
+            <DashboardView
+                allSavedPdfs={allSavedPdfs}
+                clients={clients}
+                agendamentos={agendamentos}
+                films={films}
+                onTabChange={onTabChange}
+                onOpenAIQuickProposal={onOpenAIQuickProposal}
+                onOpenClientModal={onOpenClientModal}
+            />,
+            defaultLoadingView
+        );
+    }
+
     if (activeTab === 'history') {
         return renderDeferred(
             <PdfHistoryView
@@ -166,6 +246,7 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
                 clients={clients}
                 agendamentos={agendamentos}
                 films={films}
+                googleReviewsLink={userInfo?.socialLinks?.googleReviews}
                 onDelete={onDeletePdf}
                 onDownload={onDownloadPdf}
                 onUpdateStatus={onUpdatePdfStatus}
@@ -205,7 +286,16 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
 
     if (activeTab === 'estoque') {
         return renderDeferred(
-            <FeatureGate moduleId="estoque">
+            <FeatureGate
+                moduleId="estoque"
+                fallback={
+                    <PremiumFeatureSection
+                        moduleId="estoque"
+                        title="Controle de Estoque"
+                        description="Organize bobinas, retalhos e consumo com um fluxo premium mais claro e profissional."
+                    />
+                }
+            >
                 <EstoqueView films={films} initialAction={initialEstoqueAction} />
             </FeatureGate>,
             estoqueLoadingView
@@ -216,20 +306,53 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
         return renderDeferred(<FornecedoresView />, defaultLoadingView);
     }
 
+    if (activeTab === 'qr_code') {
+        return renderDeferred(
+            <FeatureGate
+                moduleId="qr_servicos"
+                fallback={
+                    <PremiumFeatureSection
+                        moduleId="qr_servicos"
+                        title="QR Code de Servicos"
+                        description="Gere etiquetas, entregue garantia e abra uma experiencia publica mais premium para o cliente."
+                    />
+                }
+            >
+                <ServicoQrView
+                    userInfo={userInfo}
+                    films={films}
+                    clients={clients}
+                    isClientsLoading={isClientsLoading}
+                    onTogglePin={onTogglePin}
+                    onAddNewClient={onAddNewClient}
+                />
+            </FeatureGate>,
+            defaultLoadingView
+        );
+    }
+
     if (clients.length === 0) {
         return (
             <div className="space-y-4">
                 <ContentState
-                    iconClassName="fas fa-users"
+                    icon={<Users className="h-7 w-7" aria-hidden="true" />}
                     title="Crie seu primeiro cliente"
                     description="Tudo começa com um cliente. Adicione os dados para começar a gerar orçamentos."
                 />
-                <div className="flex justify-center">
+                <div className="flex flex-wrap justify-center gap-3">
                     <ActionButton
-                        onClick={() => onOpenClientModal('add')}
+                        onClick={onOpenAIQuickProposal}
                         variant="primary"
                         size="lg"
-                        iconClassName="fas fa-plus"
+                        icon={<Bolt className="h-4 w-4" aria-hidden="true" />}
+                    >
+                        Proposta rapida com IA
+                    </ActionButton>
+                    <ActionButton
+                        onClick={() => onOpenClientModal('add')}
+                        variant="secondary"
+                        size="lg"
+                        icon={<Plus className="h-4 w-4" aria-hidden="true" />}
                     >
                         Adicionar Cliente
                     </ActionButton>
@@ -243,9 +366,11 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
             <MeasurementList
                 measurements={measurements}
                 films={films}
+                pricingMode={pricingMode}
                 clientId={selectedClientId}
                 optionId={activeOptionId}
                 onMeasurementsChange={onMeasurementsChange}
+                onPersistMeasurementsChange={onPersistMeasurementsChange}
                 onOpenFilmModal={onOpenFilmModal}
                 onOpenFilmSelectionModal={onOpenFilmSelectionModal}
                 onOpenClearAllModal={onOpenClearAllModal}
@@ -259,55 +384,112 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
                 swipeDistance={swipeDistance}
                 onDeleteMeasurement={onDeleteMeasurement}
                 onDeleteMeasurementImmediate={onDeleteMeasurementImmediate}
+                onPasteCopiedMeasurements={onPasteCopiedMeasurements}
                 totalM2={totals.totalM2}
                 totalQuantity={totals.totalQuantity}
+                proposalOptionsSlot={mobileProposalOptionsSlot}
             />
         );
     }
 
     if (selectedClientId && measurements.length === 0) {
         return (
-            <div className="text-center p-8 flex flex-col items-center justify-center h-full min-h-[350px] opacity-0 animate-fade-in">
-                <div className="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-2xl flex items-center justify-center mb-6 shadow-sm">
-                    <i className="fas fa-ruler-combined text-4xl text-slate-400 dark:text-slate-500"></i>
+            <div className="min-h-[380px] opacity-0 animate-fade-in rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface-raised)] p-5 shadow-[var(--shadow-soft)]">
+                <div className="grid min-h-[330px] gap-5 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-center">
+                    <div className="text-center lg:text-left">
+                        <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-muted)] shadow-[var(--shadow-hairline)] lg:mx-0">
+                            <Ruler className="h-8 w-8" aria-hidden="true" />
+                        </div>
+                        <p className="ui-kicker">Proposta pronta para começar</p>
+                        <h3 className="mt-2 text-2xl font-bold leading-tight text-[var(--text-strong)]">Adicione a primeira medida</h3>
+                        <p className="mt-3 max-w-lg text-sm leading-relaxed text-[var(--text-muted)]">
+                            Registre largura, altura, quantidade e película para montar o valor do atendimento com mais precisão.
+                        </p>
+                        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center lg:justify-start">
+                            <ActionButton
+                                onClick={onAddMeasurement}
+                                variant="primary"
+                                size="lg"
+                                icon={<Plus className="h-4 w-4" aria-hidden="true" />}
+                            >
+                                Adicionar Medida
+                            </ActionButton>
+                            {copiedMeasurementsCount > 0 && onPasteCopiedMeasurements && (
+                                <ActionButton
+                                    onClick={() => { void onPasteCopiedMeasurements(); }}
+                                    variant="secondary"
+                                    size="lg"
+                                    icon={<ClipboardPaste className="h-4 w-4" aria-hidden="true" />}
+                                >
+                                    Colar {copiedMeasurementsCount === 1 ? '1 Medida' : `${copiedMeasurementsCount} Medidas`}
+                                </ActionButton>
+                            )}
+                        </div>
+                    </div>
+                    <div className="rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface)] p-4 shadow-[var(--shadow-hairline)]">
+                        <p className="ui-kicker">Fluxo recomendado</p>
+                        <div className="mt-4 space-y-3">
+                            <div className="flex gap-3">
+                                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-[var(--brand-primary-soft)] text-[var(--brand-primary)]">
+                                    <Ruler className="h-4 w-4" aria-hidden="true" />
+                                </span>
+                                <div>
+                                    <p className="text-sm font-bold text-[var(--text-strong)]">Medidas</p>
+                                    <p className="text-xs text-[var(--text-muted)]">Informe dimensoes e quantidade.</p>
+                                </div>
+                            </div>
+                            <div className="flex gap-3">
+                                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-300">
+                                    <Sparkles className="h-4 w-4" aria-hidden="true" />
+                                </span>
+                                <div>
+                                    <p className="text-sm font-bold text-[var(--text-strong)]">IA ou manual</p>
+                                    <p className="text-xs text-[var(--text-muted)]">Use IA quando o pedido vier em texto.</p>
+                                </div>
+                            </div>
+                            <div className="flex gap-3">
+                                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                                    <Bolt className="h-4 w-4" aria-hidden="true" />
+                                </span>
+                                <div>
+                                    <p className="text-sm font-bold text-[var(--text-strong)]">PDF</p>
+                                    <p className="text-xs text-[var(--text-muted)]">Finalize quando os valores estiverem prontos.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-2">Nenhuma Medida Ainda</h3>
-                <p className="text-slate-600 dark:text-slate-400 max-w-xs mx-auto leading-relaxed mb-6 text-sm">
-                    Adicione as dimensoes das janelas ou busque medidas de um local conhecido.
-                </p>
-                <div className="flex flex-col gap-3 w-full max-w-xs">
-                    <button
-                        onClick={onAddMeasurement}
-                        className="w-full px-6 py-3.5 bg-slate-800 dark:bg-slate-700 text-white font-semibold rounded-xl hover:bg-slate-700 dark:hover:bg-slate-600 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-[1.02] flex items-center justify-center gap-3"
-                    >
-                        <i className="fas fa-plus text-lg"></i>
-                        <span>Adicionar Medida</span>
-                    </button>
-                    <button
-                        onClick={onOpenLocationImport}
-                        className="w-full px-6 py-3.5 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-[1.02] flex items-center justify-center gap-3"
-                    >
-                        <i className="fas fa-building text-lg"></i>
-                        <span>Buscar por Localizacao</span>
-                    </button>
-                </div>
-                <p className="text-xs text-slate-400 dark:text-slate-500 mt-4 max-w-xs">
-                    <i className="fas fa-info-circle mr-1"></i>
-                    Busque por condominio ou empresa para importar medidas ja cadastradas
-                </p>
             </div>
         );
     }
 
     return (
-        <div className="text-center p-8 flex flex-col items-center justify-center h-full min-h-[350px] opacity-0 animate-fade-in">
-            <div className="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-2xl flex items-center justify-center mb-6 shadow-sm">
-                <i className="fas fa-user-check text-4xl text-slate-400 dark:text-slate-500"></i>
+        <div className="text-center p-8 flex flex-col items-center justify-center h-full min-h-[350px] opacity-0 animate-fade-in rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface-raised)] shadow-[var(--shadow-soft)]">
+            <div className="w-16 h-16 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-[var(--radius-panel)] flex items-center justify-center mb-5 shadow-[var(--shadow-hairline)] text-[var(--text-muted)]">
+                <UserCheck className="h-8 w-8" aria-hidden="true" />
             </div>
-            <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-2">Nenhum Cliente Selecionado</h3>
-            <p className="text-slate-600 dark:text-slate-400 max-w-xs mx-auto leading-relaxed text-sm">
+            <h3 className="text-xl font-bold text-[var(--text-strong)] mb-2">Nenhum Cliente Selecionado</h3>
+            <p className="text-[var(--text-muted)] max-w-xs mx-auto leading-relaxed text-sm mb-6">
                 Escolha um cliente no menu acima para ver suas medidas.
             </p>
+            <div className="flex flex-wrap justify-center gap-3">
+                <ActionButton
+                    onClick={onOpenAIQuickProposal}
+                    variant="primary"
+                    size="md"
+                    icon={<Bolt className="h-4 w-4" aria-hidden="true" />}
+                >
+                    Proposta rapida com IA
+                </ActionButton>
+                <ActionButton
+                    onClick={() => onOpenClientModal('add')}
+                    variant="secondary"
+                    size="md"
+                    icon={<Plus className="h-4 w-4" aria-hidden="true" />}
+                >
+                    Adicionar Cliente
+                </ActionButton>
+            </div>
         </div>
     );
 };

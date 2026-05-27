@@ -43,6 +43,7 @@ describe('useProposalEditor', () => {
     expect(result.current.proposalOptions).toHaveLength(1);
     expect(result.current.activeOption?.name).toBe('Opcao 1');
     expect(result.current.activeOption?.measurements).toEqual([]);
+    expect(result.current.generalDiscount.pricingMode).toBe('complete');
   });
 
   it('carrega opcoes salvas e ativa a primeira', async () => {
@@ -51,7 +52,7 @@ describe('useProposalEditor', () => {
         id: 50,
         name: 'Opcao Salva',
         measurements: [{ id: 1, largura: '1', altura: '1', quantidade: 1 }],
-        generalDiscount: { value: '5', type: 'percentage' }
+        generalDiscount: { value: '5', type: 'percentage', pricingMode: 'labor_only' }
       },
       {
         id: 51,
@@ -67,7 +68,13 @@ describe('useProposalEditor', () => {
 
     expect(result.current.proposalOptions).toHaveLength(2);
     expect(result.current.activeOptionId).toBe(50);
-    expect(result.current.generalDiscount).toEqual({ value: '5', type: 'percentage' });
+    expect(result.current.generalDiscount).toEqual({
+      value: '5',
+      type: 'percentage',
+      operation: 'discount',
+      pricingMode: 'labor_only',
+      expenses: []
+    });
   });
 
   it('adiciona medida usando a pelicula padrao disponivel', async () => {
@@ -138,7 +145,52 @@ describe('useProposalEditor', () => {
     });
 
     expect(mockedDb.saveProposalOptions).toHaveBeenCalledWith(1, expect.any(Array));
-    expect(loadClients).toHaveBeenCalledWith(1);
+    expect(loadClients).toHaveBeenCalledWith(1, false);
     expect(result.current.isDirty).toBe(false);
+  });
+
+  it('permite trocar o modo de cobranca da opcao ativa', async () => {
+    mockedDb.getProposalOptions.mockResolvedValue([]);
+
+    const { result } = buildHook();
+
+    await act(async () => {});
+
+    act(() => {
+      result.current.handleProposalPricingModeChange('labor_only');
+    });
+
+    expect(result.current.generalDiscount.pricingMode).toBe('labor_only');
+  });
+
+  it('preserva modo de cobranca ao atualizar desconto e salva gastos da proposta', async () => {
+    mockedDb.getProposalOptions.mockResolvedValue([
+      {
+        id: 10,
+        name: 'Opcao Base',
+        measurements: [],
+        generalDiscount: { value: '', type: 'percentage', pricingMode: 'labor_only' }
+      }
+    ]);
+
+    const { result } = buildHook();
+
+    await act(async () => {});
+
+    act(() => {
+      result.current.handleProposalExpensesChange([
+        { id: 'traffic', category: 'paid_traffic', amount: '20' }
+      ]);
+    });
+
+    act(() => {
+      result.current.handleGeneralDiscountChange({ value: '5', type: 'percentage' });
+    });
+
+    expect(result.current.generalDiscount.pricingMode).toBe('labor_only');
+    expect(result.current.generalDiscount.operation).toBe('discount');
+    expect(result.current.generalDiscount.expenses).toEqual([
+      { id: 'traffic', category: 'paid_traffic', amount: '20' }
+    ]);
   });
 });

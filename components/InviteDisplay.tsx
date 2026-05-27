@@ -47,7 +47,7 @@ const InviteDisplay: React.FC<InviteDisplayProps> = ({ inviteCode, onRegenerate 
                 </div>
                 <p className="text-sm text-gray-600 dark:text-gray-400 text-center">
                     <i className="fas fa-camera mr-2"></i>
-                    Escaneie com a câmera do celular
+                    Escaneie com a c?mera do celular
                 </p>
             </div>
 

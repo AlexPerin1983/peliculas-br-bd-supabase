@@ -1,7 +1,7 @@
-﻿import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense, useRef } from 'react';
 import './src/estoque-dark-mode.css';
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
-import { Client, Measurement, UserInfo, Film, PaymentMethods, SavedPDF, Agendamento, SchedulingInfo, ExtractedClientData, Totals, UIMeasurement } from './types';
+import { Client, Measurement, UserInfo, Film, PaymentMethods, SavedPDF, Agendamento, SchedulingInfo, ExtractedClientData, UIMeasurement, ProposalExpense, ProposalOption, ProposalDiscount } from './types';
 import { CuttingOptimizer } from './utils/CuttingOptimizer';
 import * as db from './services/db';
 import { supabase } from './services/supabaseClient';
@@ -20,13 +20,13 @@ import InfoModal from './components/modals/InfoModal';
 import AgendamentoModal from './components/modals/AgendamentoModal';
 import DiscountModal from './components/modals/DiscountModal';
 import GeneralDiscountModal from './components/modals/GeneralDiscountModal';
+import ProposalExpensesModal from './components/modals/ProposalExpensesModal';
 import AIMeasurementModal from './components/modals/AIMeasurementModal';
 import AIClientModal from './components/modals/AIClientModal';
 import AIFilmModal from './components/modals/AIFilmModal';
 import ApiKeyModal from './components/modals/ApiKeyModal';
 import ImageGalleryModal from './components/modals/ImageGalleryModal';
 import LocationImportModal from './components/modals/LocationImportModal';
-import ServicoQrModal from './components/modals/ServicoQrModal';
 import UpdateNotification from './components/UpdateNotification';
 import UpdateBanner from './components/UpdateBanner';
 import { ModalsContainer } from './components/ModalsContainer';
@@ -35,6 +35,7 @@ import { usePwaUpdate } from './src/hooks/usePwaUpdate';
 import { useAppBootstrap } from './src/hooks/useAppBootstrap';
 import { useProposalEditor } from './src/hooks/useProposalEditor';
 import { useMeasurementEditor } from './src/hooks/useMeasurementEditor';
+import { useProposalPaymentOverrides } from './src/hooks/useProposalPaymentOverrides';
 import { useProposalTotals } from './src/hooks/useProposalTotals';
 import { usePdfActions } from './src/hooks/usePdfActions';
 import { useClientFlow } from './src/hooks/useClientFlow';
@@ -44,20 +45,50 @@ import { AppContentRouter } from './src/components/app/AppContentRouter';
 import { AppClientWorkspace } from './src/components/app/AppClientWorkspace';
 
 import { useError } from './src/contexts/ErrorContext';
+import { useFeedback } from './src/contexts/FeedbackContext';
 import { Skeleton, CardSkeleton } from './components/ui/Skeleton';
 import Toast from './components/ui/Toast';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { useAuth } from './contexts/AuthContext';
-import { UpgradePrompt } from './components/subscription/SubscriptionComponents';
+import { BillingReturnModal, type BillingReturnMode, type BillingReturnStatus } from './components/subscription/BillingReturnModal';
+import { PremiumFeatureSection } from './components/subscription/PremiumFeatureSection';
 import { useSubscription } from './contexts/SubscriptionContext';
 import SyncStatusIndicator from './components/SyncStatusIndicator';
+import { OrganizationSetup } from './components/OrganizationSetup';
+import { getSubscriptionInfo } from './services/subscriptionService';
 
 import { getFornecedores } from './services/fornecedorService';
 import { matchFilmFromExtractedText } from './services/filmMatchingService';
 import DesktopSidebar from './components/layout/DesktopSidebar';
+import { GEMINI_TEXT_MODEL } from './src/lib/geminiModel';
+import { createPastedMeasurementsFromClipboard } from './src/lib/measurementClipboard';
 
 
-type ActiveTab = 'client' | 'films' | 'settings' | 'history' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores';
+type ActiveTab = 'dashboard' | 'client' | 'films' | 'settings' | 'history' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores';
+
+interface BillingReturnState {
+    status: BillingReturnStatus;
+    mode: BillingReturnMode;
+    moduleId: string | null;
+    attempts: number;
+}
+
+interface QuickProposalMeasurement {
+    local?: string;
+    ambiente?: string;
+    largura?: string | number;
+    altura?: string | number;
+    quantidade?: number;
+    peliculaDetectada?: string;
+    tipoAplicacao?: string;
+    observacao?: string;
+}
+
+interface QuickProposalExtraction {
+    cliente?: Partial<ExtractedClientData>;
+    medidas?: QuickProposalMeasurement[];
+    observacoes?: string;
+}
 
 // Função para sanitizar nomes com problemas de encoding para uso em filenames
 const sanitizeForFilename = (name: string): string => {
@@ -65,12 +96,12 @@ const sanitizeForFilename = (name: string): string => {
 
     // Padrões comuns de encoding corrompido para "Opção"
     const corruptedPatterns = [
-        { pattern: /Op[�\uFFFD]{1,4}o/gi, replacement: 'Opcao' },
+        { pattern: /Op[?\uFFFD]{1,4}o/gi, replacement: 'Opcao' },
         { pattern: /Op\?+o/gi, replacement: 'Opcao' },
         { pattern: /Op[\x00-\x1F]+o/gi, replacement: 'Opcao' },
         { pattern: /ção/gi, replacement: 'cao' },
         { pattern: /ã/gi, replacement: 'a' },
-        { pattern: /[�\uFFFD]+/g, replacement: '' },
+        { pattern: /[?\uFFFD]+/g, replacement: '' },
     ];
 
     let sanitized = name;
@@ -139,12 +170,78 @@ const extractFirstJsonArray = (rawText: string): string | null => {
     return null;
 };
 
+const extractFirstJsonObject = (rawText: string): string | null => {
+    if (!rawText) return null;
+
+    const text = rawText.trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '');
+    let startIndex = -1;
+    let depth = 0;
+    let inString = false;
+    let isEscaped = false;
+
+    for (let i = 0; i < text.length; i += 1) {
+        const char = text[i];
+
+        if (inString) {
+            if (isEscaped) {
+                isEscaped = false;
+                continue;
+            }
+
+            if (char === '\\') {
+                isEscaped = true;
+                continue;
+            }
+
+            if (char === '"') {
+                inString = false;
+            }
+
+            continue;
+        }
+
+        if (char === '"') {
+            inString = true;
+            continue;
+        }
+
+        if (char === '{') {
+            if (depth === 0) {
+                startIndex = i;
+            }
+            depth += 1;
+            continue;
+        }
+
+        if (char === '}' && depth > 0) {
+            depth -= 1;
+            if (depth === 0 && startIndex >= 0) {
+                return text.slice(startIndex, i + 1);
+            }
+        }
+    }
+
+    return null;
+};
+
+const formatModuleIdLabel = (moduleId: string | null): string => {
+    if (!moduleId) {
+        return 'seu modulo premium';
+    }
+
+    return moduleId
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, (letter) => letter.toUpperCase());
+};
+
 const App: React.FC = () => {
-    const { isAdmin, user: authUser, organizationId, isOwner } = useAuth();
+    const { isAdmin, user: authUser, organizationId, isOwner, refreshProfile } = useAuth();
     const { showError } = useError();
+    const { showAlert, showToast } = useFeedback();
     const { deferredPrompt, promptInstall, isInstalled } = usePwaInstallPrompt();
     const { newVersionAvailable, handleUpdate } = usePwaUpdate();
-    const { hasModule, modules } = useSubscription();
+    const { hasModule, refresh: refreshSubscription, modules: subscriptionModules } = useSubscription();
+    const needsOrganizationSetup = !!authUser && !organizationId;
 
     const [isLoading, setIsLoading] = useState(true);
     const [clients, setClients] = useState<Client[]>([]);
@@ -155,11 +252,13 @@ const App: React.FC = () => {
     const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
     const [activeTab, setActiveTab] = useState<ActiveTab>(() => {
         const saved = localStorage.getItem('peliculas-br-active-tab');
-        if (saved && ['client', 'films', 'settings', 'history', 'agenda', 'sales', 'admin', 'account', 'estoque', 'fornecedores'].includes(saved)) {
+        if (saved && ['dashboard', 'client', 'films', 'settings', 'history', 'agenda', 'sales', 'admin', 'account', 'estoque', 'qr_code', 'fornecedores'].includes(saved)) {
             return saved as ActiveTab;
         }
-        return 'client';
+        return 'dashboard';
     });
+    const [billingReturnState, setBillingReturnState] = useState<BillingReturnState | null>(null);
+    const [isBillingReturnVisible, setIsBillingReturnVisible] = useState(false);
 
     // Persist active tab to localStorage
     useEffect(() => {
@@ -187,9 +286,11 @@ const App: React.FC = () => {
                     if (error) throw error;
 
                     if (data && data.success) {
-                        alert('Convite aceito com sucesso! Você agora faz parte da organização.');
+                        showToast('Convite aceito com sucesso! Você agora faz parte da organização.', { tone: 'success', duration: 1800 });
                         localStorage.removeItem('pendingInviteCode');
-                        window.location.reload(); // Recarregar para atualizar permissões
+                        window.setTimeout(() => {
+                            window.location.reload();
+                        }, 1400); // Recarregar para atualizar permissões
                     } else {
                         console.error('Erro ao processar convite:', data?.error);
                         localStorage.removeItem('pendingInviteCode');
@@ -205,6 +306,7 @@ const App: React.FC = () => {
     }, [authUser]);
     const [clientModalMode, setClientModalMode] = useState<'add' | 'edit'>('add');
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+    const [isProposalPaymentModalOpen, setIsProposalPaymentModalOpen] = useState(false);
     const [isFilmModalOpen, setIsFilmModalOpen] = useState(false);
     const [editingFilm, setEditingFilm] = useState<Film | null>(null);
     const [pdfGenerationStatus, setPdfGenerationStatus] = useState<'idle' | 'generating' | 'success'>('idle');
@@ -224,8 +326,16 @@ const App: React.FC = () => {
             if (action === 'scan' && code) {
                 setInitialEstoqueAction({ action: 'scan', code });
             }
-            // Limpar URL para não reprocessar ao recarregar
-            window.history.replaceState({}, '', '/');
+            // Limpar apenas os parametros consumidos e preservar outros retornos do app.
+            const nextUrl = new URL(window.location.href);
+            nextUrl.searchParams.delete('tab');
+            nextUrl.searchParams.delete('action');
+            nextUrl.searchParams.delete('code');
+            window.history.replaceState(
+                {},
+                '',
+                `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`
+            );
         }
     }, []);
     const [filmToDeleteName, setFilmToDeleteName] = useState<string | null>(null);
@@ -250,6 +360,7 @@ const App: React.FC = () => {
     const [postClientSaveAction, setPostClientSaveAction] = useState<'openAgendamentoModal' | null>(null);
     const [isAIMeasurementModalOpen, setIsAIMeasurementModalOpen] = useState(false);
     const [isAIClientModalOpen, setIsAIClientModalOpen] = useState(false);
+    const [isAIQuickProposalModalOpen, setIsAIQuickProposalModalOpen] = useState(false);
     const [aiClientData, setAiClientData] = useState<Partial<Client> | undefined>(undefined);
     const [isAIFilmModalOpen, setIsAIFilmModalOpen] = useState(false);
     const [aiFilmData, setAiFilmData] = useState<Partial<Film> | undefined>(undefined);
@@ -257,9 +368,9 @@ const App: React.FC = () => {
     const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
     const [apiKeyModalProvider, setApiKeyModalProvider] = useState<'gemini' | 'openai'>('gemini');
     const [isGeneralDiscountModalOpen, setIsGeneralDiscountModalOpen] = useState(false);
+    const [isProposalExpensesModalOpen, setIsProposalExpensesModalOpen] = useState(false);
     const [isDuplicateAllModalOpen, setIsDuplicateAllModalOpen] = useState(false);
     const [isLocationImportModalOpen, setIsLocationImportModalOpen] = useState(false);
-    const [isServicoQrModalOpen, setIsServicoQrModalOpen] = useState(false);
     const [isDeleteProposalOptionModalOpen, setIsDeleteProposalOptionModalOpen] = useState(false);
     const [proposalOptionToDeleteId, setProposalOptionToDeleteId] = useState<number | null>(null);
     const [isDeletingProposalOption, setIsDeletingProposalOption] = useState(false);
@@ -271,7 +382,6 @@ const App: React.FC = () => {
     const [isGalleryOpen, setIsGalleryOpen] = useState(false);
     const [galleryImages, setGalleryImages] = useState<string[]>([]);
     const [galleryInitialIndex, setGalleryInitialIndex] = useState(0);
-    const [infoModalConfig, setInfoModalConfig] = useState<{ isOpen: boolean; title: string; message: string }>({ isOpen: false, title: '', message: '' });
     const [isSaveBeforePdfModalOpen, setIsSaveBeforePdfModalOpen] = useState(false);
     const [isExitConfirmModalOpen, setIsExitConfirmModalOpen] = useState(false);
 
@@ -291,7 +401,14 @@ const App: React.FC = () => {
 
         // Handle tab parameter from shortcuts
         const tabParam = urlParams.get('tab');
-        if (tabParam && ['client', 'films', 'settings', 'history', 'agenda', 'sales'].includes(tabParam)) {
+        const upgradeParam = urlParams.get('upgrade');
+
+        if (upgradeParam) {
+            setActiveTab('account');
+        } else if (
+            tabParam &&
+            ['dashboard', 'client', 'films', 'settings', 'history', 'agenda', 'sales', 'account'].includes(tabParam)
+        ) {
             setActiveTab(tabParam as ActiveTab);
         }
 
@@ -317,11 +434,153 @@ const App: React.FC = () => {
             }, 500);
         }
 
-        // Clear URL parameters after processing
-        if (urlParams.toString()) {
-            window.history.replaceState({}, '', window.location.pathname);
+        const consumedParams = ['tab', 'action', 'title', 'text', 'url'];
+        if (consumedParams.some((key) => urlParams.has(key))) {
+            const nextUrl = new URL(window.location.href);
+            consumedParams.forEach((key) => nextUrl.searchParams.delete(key));
+            window.history.replaceState(
+                {},
+                '',
+                `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`
+            );
         }
     }, []);
+
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const billingState = params.get('billing');
+        const moduleId = params.get('module_id');
+        const modeParam = params.get('mode');
+
+        if (!billingState) {
+            return;
+        }
+
+        const syncBillingState = async () => {
+            if (billingState === 'abacate-success') {
+                setBillingReturnState({
+                    status: 'waiting',
+                    mode: modeParam === 'subscription' ? 'subscription' : 'pix',
+                    moduleId,
+                    attempts: 0
+                });
+                setIsBillingReturnVisible(true);
+            } else if (billingState === 'abacate-cancelled') {
+                setBillingReturnState({
+                    status: 'cancelled',
+                    mode: modeParam === 'subscription' ? 'subscription' : 'pix',
+                    moduleId,
+                    attempts: 0
+                });
+                setIsBillingReturnVisible(true);
+            }
+
+            const nextUrl = new URL(window.location.href);
+            nextUrl.searchParams.delete('billing');
+            nextUrl.searchParams.delete('session_id');
+            nextUrl.searchParams.delete('module_id');
+            nextUrl.searchParams.delete('mode');
+            window.history.replaceState(
+                {},
+                '',
+                `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`
+            );
+        };
+
+        void syncBillingState();
+    }, []);
+
+    useEffect(() => {
+        if (!billingReturnState || billingReturnState.status !== 'waiting' || !billingReturnState.moduleId) {
+            return;
+        }
+
+        let cancelled = false;
+
+        const pollBillingActivation = async () => {
+            const maxAttempts = 8;
+
+            for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+                if (cancelled) {
+                    return;
+                }
+
+                setBillingReturnState((current) =>
+                    current && current.status === 'waiting'
+                        ? { ...current, attempts: attempt }
+                        : current
+                );
+
+                await refreshSubscription();
+                const latestInfo = await getSubscriptionInfo(true);
+
+                if (latestInfo.active_modules.includes(billingReturnState.moduleId!)) {
+                    if (!cancelled) {
+                        setBillingReturnState((current) =>
+                            current
+                                ? {
+                                      ...current,
+                                      status: 'confirmed'
+                                  }
+                                : current
+                        );
+                        showToast('Pagamento confirmado. O acesso ja foi liberado na sua conta.', {
+                            tone: 'success',
+                            duration: 2400
+                        });
+                    }
+                    return;
+                }
+
+                if (attempt < maxAttempts) {
+                    await new Promise((resolve) => window.setTimeout(resolve, 2500));
+                }
+            }
+
+            if (!cancelled) {
+                setBillingReturnState((current) =>
+                    current
+                        ? {
+                              ...current,
+                              status: 'timeout'
+                          }
+                        : current
+                );
+                showToast(
+                    'Recebemos o retorno do checkout, mas a confirmação ainda não chegou. Atualize a tela em instantes.',
+                    {
+                        tone: 'warning',
+                        duration: 3200
+                    }
+                );
+            }
+        };
+
+        void pollBillingActivation();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [billingReturnState?.status, billingReturnState?.moduleId, refreshSubscription, showToast]);
+
+    const handleCloseBillingReturn = useCallback(() => {
+        setIsBillingReturnVisible(false);
+        setBillingReturnState((current) =>
+            current?.status === 'waiting' ? current : null
+        );
+    }, []);
+
+    const billingReturnModuleName = useMemo(() => {
+        if (!billingReturnState?.moduleId) {
+            return 'seu modulo premium';
+        }
+
+        const matchedModule = subscriptionModules.find(
+            (module) => module.id === billingReturnState.moduleId
+        );
+
+        return matchedModule?.name || formatModuleIdLabel(billingReturnState.moduleId);
+    }, [billingReturnState?.moduleId, subscriptionModules]);
 
     const {
         loadClients,
@@ -329,7 +588,7 @@ const App: React.FC = () => {
         loadAllPdfs,
         loadAgendamentos
     } = useAppBootstrap({
-        authUserId: authUser?.id,
+        authUserId: needsOrganizationSetup ? undefined : authUser?.id,
         lastSelectedClientId: userInfo?.lastSelectedClientId,
         setIsLoading,
         setClients,
@@ -352,7 +611,10 @@ const App: React.FC = () => {
         isDirty,
         handleSaveChanges,
         handleMeasurementsChange,
+        handleMeasurementsChangeWithPersistence,
         handleGeneralDiscountChange,
+        handleProposalPricingModeChange,
+        handleProposalExpensesChange,
         createEmptyMeasurement,
         addMeasurement,
         duplicateActiveOption,
@@ -364,6 +626,19 @@ const App: React.FC = () => {
         selectedClientId,
         films,
         loadClients
+    });
+
+    const {
+        effectivePaymentConfig,
+        hasActiveOverride: hasActiveProposalPaymentOverride,
+        saveActiveOverride: saveProposalPaymentOverride,
+        clearActiveOverride: clearProposalPaymentOverride,
+        renameOverride: renameProposalPaymentOverride,
+        deleteOverride: deleteProposalPaymentOverride
+    } = useProposalPaymentOverrides({
+        selectedClientId,
+        activeOptionName: activeOption?.name || null,
+        userInfo
     });
 
     const {
@@ -400,22 +675,41 @@ const App: React.FC = () => {
     } = useMeasurementEditor({
         measurements,
         handleMeasurementsChange,
+        handleMeasurementsChangeWithPersistence,
         createEmptyMeasurement
     });
     const [isDeletingMeasurement, setIsDeletingMeasurement] = useState(false);
+
+    const handlePasteCopiedMeasurements = useCallback(async () => {
+        const pastedMeasurements = createPastedMeasurementsFromClipboard(measurements);
+
+        if (pastedMeasurements.length === 0) {
+            showToast('Nenhuma medida copiada para colar.', { tone: 'warning' });
+            return;
+        }
+
+        const nextMeasurements = [
+            ...measurements.map(measurement => ({ ...measurement, isNew: false })),
+            ...pastedMeasurements
+        ];
+
+        try {
+            await handleMeasurementsChangeWithPersistence(nextMeasurements);
+            showToast(`${pastedMeasurements.length} ${pastedMeasurements.length === 1 ? 'medida colada' : 'medidas coladas'} neste cliente.`, { tone: 'success' });
+        } catch (error) {
+            console.error('Erro ao colar medidas copiadas:', error);
+            showToast('Não foi possível colar as medidas copiadas.', { tone: 'error' });
+        }
+    }, [handleMeasurementsChangeWithPersistence, measurements, showToast]);
 
     const handleSwipeDirectionChange = useCallback((direction: 'left' | 'right' | null, distance: number) => {
         setSwipeDirection(direction);
         setSwipeDistance(distance);
     }, []);
 
-    const handleShowInfo = useCallback((message: string, title: string = "AtenÃ§Ã£o") => {
-        setInfoModalConfig({ isOpen: true, title, message });
-    }, []);
-
-    const handleCloseInfoModal = useCallback(() => {
-        setInfoModalConfig(prev => ({ ...prev, isOpen: false }));
-    }, []);
+    const handleShowInfo = useCallback((message: string, title: string = "Atenção") => {
+        showAlert({ title, message, tone: title.toLowerCase().includes('erro') ? 'error' : 'info' });
+    }, [showAlert]);
 
     // Intercepta o botão voltar do navegador/Android
     useEffect(() => {
@@ -430,7 +724,7 @@ const App: React.FC = () => {
             }
 
             // Se algum modal estiver aberto, não mostra confirmação de saída
-            if (isClientModalOpen || isFilmModalOpen || editingMeasurement ||
+            if (isClientModalOpen || isPaymentModalOpen || isProposalPaymentModalOpen || isProposalExpensesModalOpen || isFilmModalOpen || editingMeasurement ||
                 isFilmSelectionModalOpen || isGalleryOpen || schedulingInfo) {
                 return;
             }
@@ -448,7 +742,7 @@ const App: React.FC = () => {
                 window.history.pushState(null, '', window.location.pathname);
 
                 // Mostra um toast informando
-                handleShowInfo('Pressione voltar novamente para sair');
+                showToast('Pressione voltar novamente para sair', { tone: 'info', duration: 2000 });
 
                 // Reseta após 2 segundos
                 if (backButtonTimeout.current) {
@@ -471,8 +765,8 @@ const App: React.FC = () => {
                 clearTimeout(backButtonTimeout.current);
             }
         };
-    }, [numpadConfig.isOpen, isClientModalOpen, isFilmModalOpen, editingMeasurement,
-        isFilmSelectionModalOpen, isGalleryOpen, schedulingInfo, handleNumpadClose, handleShowInfo]);
+    }, [numpadConfig.isOpen, isClientModalOpen, isPaymentModalOpen, isProposalPaymentModalOpen, isProposalExpensesModalOpen, isFilmModalOpen, editingMeasurement,
+        isFilmSelectionModalOpen, isGalleryOpen, schedulingInfo, handleNumpadClose, showToast]);
 
     useEffect(() => {
         const mainEl = mainRef.current;
@@ -523,20 +817,33 @@ const App: React.FC = () => {
         setIsDeleteProposalOptionModalOpen(true);
     }, []);
 
+    const handleRenameProposalOption = useCallback((optionId: number, newName: string) => {
+        const optionToRename = proposalOptions.find(option => option.id === optionId);
+        renameProposalOption(optionId, newName);
+
+        if (selectedClientId && optionToRename && optionToRename.name !== newName) {
+            renameProposalPaymentOverride(selectedClientId, optionToRename.name, newName);
+        }
+    }, [proposalOptions, renameProposalOption, renameProposalPaymentOverride, selectedClientId]);
+
     const handleConfirmDeleteProposalOption = useCallback(() => {
         if (proposalOptionToDeleteId === null) return;
 
         setIsDeletingProposalOption(true);
         window.requestAnimationFrame(() => {
             try {
+                const optionToDelete = proposalOptions.find(option => option.id === proposalOptionToDeleteId);
                 deleteProposalOption(proposalOptionToDeleteId);
+                if (selectedClientId && optionToDelete) {
+                    deleteProposalPaymentOverride(selectedClientId, optionToDelete.name);
+                }
                 setIsDeleteProposalOptionModalOpen(false);
                 setProposalOptionToDeleteId(null);
             } finally {
                 setIsDeletingProposalOption(false);
             }
         });
-    }, [proposalOptionToDeleteId, deleteProposalOption]);
+    }, [proposalOptionToDeleteId, proposalOptions, deleteProposalOption, deleteProposalPaymentOverride, selectedClientId]);
 
     const handleConfirmClearAll = useCallback(() => {
         clearMeasurements();
@@ -645,11 +952,12 @@ const App: React.FC = () => {
     }, [selectedClientId, numpadConfig.isOpen, handleNumpadClose]);
 
     const handleSaveUserInfo = useCallback(async (info: UserInfo) => {
-        await db.saveUserInfo(info);
-        setUserInfo(info);
+        const nextUserInfo = { ...info, isFallback: false };
+        await db.saveUserInfo(nextUserInfo);
+        setUserInfo(nextUserInfo);
     }, []);
 
-    const handleSavePaymentMethods = useCallback(async (methods: PaymentMethods) => {
+    const handleSavePaymentMethods = useCallback(async (methods: PaymentMethods, _options?: { prazoPagamento: string }) => {
         if (userInfo) {
             // Usa a nova função que atualiza APENAS o payment_methods no banco
             // e retorna o userInfo completo atualizado, evitando perda de logo/assinatura
@@ -663,6 +971,19 @@ const App: React.FC = () => {
             setIsPaymentModalOpen(false);
         }
     }, [userInfo]);
+
+    const handleSaveProposalPaymentConfig = useCallback(async (methods: PaymentMethods, options?: { prazoPagamento: string }) => {
+        await saveProposalPaymentOverride({
+            paymentMethods: methods,
+            prazoPagamento: options?.prazoPagamento || ''
+        });
+        setIsProposalPaymentModalOpen(false);
+    }, [saveProposalPaymentOverride]);
+
+    const handleResetProposalPaymentConfig = useCallback(async () => {
+        await clearProposalPaymentOverride();
+        setIsProposalPaymentModalOpen(false);
+    }, [clearProposalPaymentOverride]);
 
     const {
         handleDownloadPdf,
@@ -678,6 +999,7 @@ const App: React.FC = () => {
         selectedClientId,
         userInfo,
         activeOption,
+        proposalPaymentConfig: effectivePaymentConfig,
         clients,
         setAllSavedPdfs,
         setPdfGenerationStatus,
@@ -749,7 +1071,7 @@ const App: React.FC = () => {
         try {
             const genAI = new GoogleGenerativeAI(userInfo!.aiConfig!.apiKey);
             const model = genAI.getGenerativeModel({
-                model: "gemini-2.0-flash",
+                model: GEMINI_TEXT_MODEL,
             });
 
             const prompt = `
@@ -772,7 +1094,7 @@ const App: React.FC = () => {
                 
                 ** Endereço:** Tente separar inteligentemente o logradouro, número, bairro e cidade se estiverem misturados.
                 
-                ** Regra para UF:** O campo UF deve conter APENAS a sigla do estado(2 letras). ** SE NÃO ENCONTRAR, RETORNE UMA STRING VAZIA "".JAMAIS RETORNE A PALAVRA "string".**
+                ** Regra para UF:** O campo UF deve conter APENAS a sigla do estado(2 letras). ** SE N?O ENCONTRAR, RETORNE UMA STRING VAZIA "".JAMAIS RETORNE A PALAVRA "string".**
 
             Responda APENAS com um objeto JSON válido, sem markdown, contendo os campos: nome, telefone, email, cpfCnpj, cep, logradouro, numero, complemento, bairro, cidade, uf.
             `;
@@ -830,6 +1152,238 @@ const App: React.FC = () => {
         showError("O preenchimento de dados do cliente com OpenAI ainda não está totalmente implementado. Por favor, use o Gemini ou preencha manualmente.");
         return null;
     };
+
+    const normalizeQuickProposalDimension = (value: string | number | undefined): string => {
+        if (value === undefined || value === null) return '';
+
+        const rawValue = String(value).trim().replace(/\s/g, '');
+        if (!rawValue) return '';
+
+        const numericValue = parseFloat(rawValue.replace(',', '.').replace(/[^\d.]/g, ''));
+        if (!Number.isFinite(numericValue) || numericValue <= 0) {
+            return rawValue.replace('.', ',');
+        }
+
+        const metersValue = numericValue > 20 ? numericValue / 100 : numericValue;
+        return metersValue.toFixed(2).replace('.', ',');
+    };
+
+    const buildQuickProposalClient = (clientData?: Partial<ExtractedClientData>): Omit<Client, 'id'> => ({
+        nome: clientData?.nome?.trim() || 'Cliente sem nome',
+        telefone: clientData?.telefone?.replace(/\D/g, '') || '',
+        email: clientData?.email?.trim() || '',
+        cpfCnpj: clientData?.cpfCnpj?.replace(/\D/g, '') || '',
+        cep: clientData?.cep?.replace(/\D/g, '') || '',
+        logradouro: clientData?.logradouro?.trim() || '',
+        numero: String(clientData?.numero || '').trim(),
+        complemento: clientData?.complemento?.trim() || '',
+        bairro: clientData?.bairro?.trim() || '',
+        cidade: clientData?.cidade?.trim() || '',
+        uf: clientData?.uf?.trim().slice(0, 2).toUpperCase() || '',
+        lastUpdated: new Date().toISOString()
+    });
+
+    const createQuickProposalMeasurements = (items: QuickProposalMeasurement[]): UIMeasurement[] => {
+        const highConfidenceThreshold = 0.85;
+        const suggestionConfidenceThreshold = 0.6;
+
+        return items
+            .map((item, index) => {
+                const largura = normalizeQuickProposalDimension(item.largura);
+                const altura = normalizeQuickProposalDimension(item.altura);
+                if (!largura || !altura) {
+                    return null;
+                }
+
+                const baseMeasurement: UIMeasurement = {
+                    ...createEmptyMeasurement(),
+                    id: Date.now() + index,
+                    ambiente: item.local || item.ambiente || 'Ambiente',
+                    largura,
+                    altura,
+                    quantidade: Math.max(1, Math.floor(Number(item.quantidade) || 1)),
+                    tipoAplicacao: item.tipoAplicacao || 'Desconhecido',
+                    observation: item.observacao || undefined,
+                    isNew: index === 0
+                };
+
+                if (!films.length || !item.peliculaDetectada) {
+                    return baseMeasurement;
+                }
+
+                const filmMatch = matchFilmFromExtractedText(item.peliculaDetectada, films);
+                if (filmMatch.matchedFilmName && filmMatch.confidence >= highConfidenceThreshold) {
+                    return {
+                        ...baseMeasurement,
+                        pelicula: filmMatch.matchedFilmName
+                    };
+                }
+
+                if (filmMatch.matchedFilmName && filmMatch.confidence >= suggestionConfidenceThreshold) {
+                    return {
+                        ...baseMeasurement,
+                        aiFilmSuggestion: {
+                            extractedText: filmMatch.extractedFilmText,
+                            suggestedFilm: filmMatch.matchedFilmName,
+                            confidence: filmMatch.confidence
+                        }
+                    };
+                }
+
+                return baseMeasurement;
+            })
+            .filter((measurement): measurement is UIMeasurement => Boolean(measurement));
+    };
+
+    const processQuickProposalWithGemini = async (
+        input: { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob }
+    ): Promise<QuickProposalExtraction> => {
+        if (!userInfo?.aiConfig?.apiKey) {
+            throw new Error("Chave de API do Gemini não configurada.");
+        }
+
+        const genAI = new GoogleGenerativeAI(userInfo.aiConfig.apiKey);
+        const model = genAI.getGenerativeModel({
+            model: GEMINI_TEXT_MODEL,
+            generationConfig: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: SchemaType.OBJECT,
+                    properties: {
+                        cliente: {
+                            type: SchemaType.OBJECT,
+                            properties: {
+                                nome: { type: SchemaType.STRING },
+                                telefone: { type: SchemaType.STRING },
+                                email: { type: SchemaType.STRING },
+                                cpfCnpj: { type: SchemaType.STRING },
+                                cep: { type: SchemaType.STRING },
+                                logradouro: { type: SchemaType.STRING },
+                                numero: { type: SchemaType.STRING },
+                                complemento: { type: SchemaType.STRING },
+                                bairro: { type: SchemaType.STRING },
+                                cidade: { type: SchemaType.STRING },
+                                uf: { type: SchemaType.STRING }
+                            }
+                        },
+                        medidas: {
+                            type: SchemaType.ARRAY,
+                            items: {
+                                type: SchemaType.OBJECT,
+                                properties: {
+                                    local: { type: SchemaType.STRING },
+                                    largura: { type: SchemaType.STRING },
+                                    altura: { type: SchemaType.STRING },
+                                    quantidade: { type: SchemaType.NUMBER },
+                                    peliculaDetectada: { type: SchemaType.STRING },
+                                    tipoAplicacao: { type: SchemaType.STRING },
+                                    observacao: { type: SchemaType.STRING }
+                                }
+                            }
+                        },
+                        observacoes: { type: SchemaType.STRING }
+                    },
+                    required: ['cliente', 'medidas']
+                }
+            }
+        });
+
+        const prompt = `Voce e um assistente para uma empresa de instalacao de peliculas em vidros.
+
+Extraia do conteudo uma proposta completa para revisao humana.
+
+Retorne APENAS JSON valido com:
+- cliente: nome, telefone, email, cpfCnpj, cep, logradouro, numero, complemento, bairro, cidade, uf.
+- medidas: lista com local, largura, altura, quantidade, peliculaDetectada, tipoAplicacao e observacao.
+- observacoes: texto curto com qualquer informacao util que nao coube nos campos.
+
+Regras:
+1. Telefone, CPF/CNPJ e CEP devem vir apenas com digitos.
+2. UF deve ter apenas 2 letras ou string vazia.
+3. Largura e altura devem estar em metros, como string com virgula e duas casas. Ex: "1,20".
+4. Se uma medida estiver em centimetros, converta para metros. Ex: 120 x 150 cm vira "1,20" x "1,50".
+5. Agrupe medidas identicas no mesmo local, somando quantidade.
+6. Nunca invente pelicula. Se nao estiver claro, use string vazia em peliculaDetectada.
+7. Se faltar nome do cliente, use "Cliente sem nome".
+8. Se nao houver medidas validas, retorne medidas como array vazio.`;
+
+        const parts: any[] = [prompt];
+
+        if (input.type === 'text') {
+            parts.push(input.data as string);
+        } else if (input.type === 'image') {
+            for (const file of input.data as File[]) {
+                const { mimeType, data } = await blobToBase64(file);
+                parts.push({ inlineData: { mimeType, data } });
+            }
+        } else if (input.type === 'audio') {
+            const { mimeType, data } = await blobToBase64(input.data as Blob);
+            parts.push({ inlineData: { mimeType, data } });
+        }
+
+        const result = await model.generateContent(parts);
+        const responseText = result.response.text();
+        const jsonText = extractFirstJsonObject(responseText);
+        if (!jsonText) {
+            throw new Error("A IA não retornou um JSON válido para a proposta.");
+        }
+
+        return JSON.parse(jsonText) as QuickProposalExtraction;
+    };
+
+    const handleProcessAIQuickProposalInput = useCallback(async (
+        input: { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob }
+    ) => {
+        if (!userInfo?.aiConfig?.apiKey || userInfo.aiConfig.provider !== 'gemini') {
+            handleShowInfo("A proposta rapida usa o Gemini. Configure o provedor e a chave de API na aba 'Empresa'.");
+            return;
+        }
+
+        setIsProcessingAI(true);
+        try {
+            const extracted = await processQuickProposalWithGemini(input);
+            const quickMeasurements = createQuickProposalMeasurements(extracted.medidas || []);
+
+            if (quickMeasurements.length === 0) {
+                handleShowInfo("Não foi possível encontrar medidas válidas para montar a proposta.");
+                return;
+            }
+
+            const savedClient = await db.saveClient(buildQuickProposalClient(extracted.cliente));
+            if (!savedClient.id) {
+                throw new Error("Não foi possível identificar o cliente salvo.");
+            }
+
+            const proposalOptionId = Date.now();
+            const proposalOption: ProposalOption = {
+                id: proposalOptionId,
+                name: 'Opcao 1',
+                measurements: quickMeasurements.map(({ isNew, ...measurement }) => measurement),
+                generalDiscount: { value: '', type: 'percentage', operation: 'discount', pricingMode: 'complete' }
+            };
+
+            await db.saveProposalOptions(savedClient.id, [proposalOption]);
+            await loadClients(savedClient.id);
+            setActiveTab('client');
+            setActiveOptionId(proposalOptionId);
+            setIsAIQuickProposalModalOpen(false);
+
+            const suggestionCount = quickMeasurements.filter(measurement => measurement.aiFilmSuggestion).length;
+            const suggestionText = suggestionCount > 0
+                ? ` ${suggestionCount} película(s) ficaram como sugestão para revisar.`
+                : '';
+            showToast(`Proposta criada para revisao com ${quickMeasurements.length} medida(s).${suggestionText}`, {
+                tone: 'success',
+                duration: 2800
+            });
+        } catch (error) {
+            console.error("Erro ao criar proposta rapida com IA:", error);
+            handleShowInfo(`Erro: ${error instanceof Error ? error.message : 'Tente novamente'}`);
+            throw error;
+        } finally {
+            setIsProcessingAI(false);
+        }
+    }, [userInfo, createEmptyMeasurement, films, loadClients, handleShowInfo, showToast]);
 
     const handleProcessAIClientInput = useCallback(async (input: { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob }) => {
         // Modo OCR Local - usa processamento local
@@ -981,9 +1535,9 @@ const App: React.FC = () => {
 
         try {
             const genAI = new GoogleGenerativeAI(userInfo.aiConfig.apiKey);
-            const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+            const model = genAI.getGenerativeModel({ model: GEMINI_TEXT_MODEL });
 
-            const prompt = `Você é um assistente especialista em extração de dados de películas automotivas (insulfilm). Sua tarefa é extrair o máximo de informações técnicas de películas a partir da entrada fornecida (texto ou imagem). Retorne APENAS um objeto JSON válido, sem markdown. Campos: nome, preco (apenas números), uv (%), ir (%), vtl (%), tser (%), espessura (micras), garantiaFabricante (anos), precoMetroLinear. Se algum campo não for encontrado, NÃO inclua no JSON.`;
+            const prompt = `Você é um assistente especialista em extração de dados de películas automotivas (insulfilm). Sua tarefa é extrair o máximo de informações técnicas de películas a partir da entrada fornecida (texto ou imagem). Retorne APENAS um objeto JSON válido, sem markdown. Campos: nome, preco (apenas números), uv (%), ir (%), vtl (%), tser (%), espessura (micras), garantiaFabricante (anos), precoMetroLinear. Se algum campo não for encontrado, N?O inclua no JSON.`;
 
             const parts: any[] = [prompt];
 
@@ -1030,7 +1584,7 @@ const App: React.FC = () => {
         try {
             const genAI = new GoogleGenerativeAI(userInfo!.aiConfig!.apiKey);
             const model = genAI.getGenerativeModel({
-                model: "gemini-2.0-flash",
+                model: GEMINI_TEXT_MODEL,
                 generationConfig: {
                     responseMimeType: "application/json",
                     responseSchema: {
@@ -1342,11 +1896,17 @@ const App: React.FC = () => {
     }, [pdfToDeleteId, loadAllPdfs, hasLoadedAgendamentos, loadAgendamentos, handleShowInfo]);
 
     const handleUpdatePdfStatus = useCallback(async (pdfId: number, status: SavedPDF['status']) => {
+        const currentPdf = allSavedPdfs.find(pdf => pdf.id === pdfId);
+
         // Atualiza estado imediatamente para refletir na UI sem esperar o banco
         setAllSavedPdfs((prev: SavedPDF[]) => prev.map(p => p.id === pdfId ? { ...p, status } : p));
         try {
-            const allPdfsFromDb = await db.getAllPDFs();
-            const pdfToUpdate = allPdfsFromDb.find(p => p.id === pdfId);
+            let pdfToUpdate = currentPdf;
+            if (!pdfToUpdate) {
+                const allPdfsFromDb = await db.getAllPDFs();
+                pdfToUpdate = allPdfsFromDb.find(p => p.id === pdfId);
+            }
+
             if (pdfToUpdate) {
                 await db.updatePDF({ ...pdfToUpdate, status });
             }
@@ -1355,7 +1915,7 @@ const App: React.FC = () => {
             handleShowInfo("Não foi possível atualizar o status do orçamento.");
             await loadAllPdfs(); // reverte em caso de erro
         }
-    }, [loadAllPdfs, handleShowInfo]);
+    }, [allSavedPdfs, loadAllPdfs, handleShowInfo]);
 
 
     const toggleFullScreen = useCallback(() => {
@@ -1376,9 +1936,8 @@ const App: React.FC = () => {
         }
 
         if (tab === 'qr_code') {
-            if (hasModule('qr_servicos')) {
-                setIsServicoQrModalOpen(true);
-            } else {
+            setActiveTab(tab);
+            if (!hasModule('qr_servicos')) {
                 setShowQrUpgradeModal(true);
             }
             return;
@@ -1428,23 +1987,30 @@ const App: React.FC = () => {
 
     const handleSaveApiKey = useCallback(async (apiKey: string) => {
         if (userInfo) {
-            const updatedUserInfo = {
-                ...userInfo,
-                aiConfig: {
-                    ...(userInfo.aiConfig || { provider: 'gemini' }),
-                    provider: apiKeyModalProvider,
-                    apiKey: apiKey,
-                }
+            const nextAiConfig = {
+                ...(userInfo.aiConfig || { provider: 'gemini' as const }),
+                provider: apiKeyModalProvider,
+                apiKey
             };
-            await handleSaveUserInfo(updatedUserInfo);
+            const updatedUserInfo = await db.updateAIConfigOnly(nextAiConfig);
+            if (updatedUserInfo) {
+                setUserInfo(updatedUserInfo);
+            } else {
+                setUserInfo({ ...userInfo, aiConfig: nextAiConfig, isFallback: false });
+            }
             setIsApiKeyModalOpen(false);
         }
-    }, [userInfo, handleSaveUserInfo, apiKeyModalProvider]);
+    }, [userInfo, apiKeyModalProvider]);
 
-    const handleSaveGeneralDiscount = useCallback((discount: { value: string; type: 'percentage' | 'fixed' }) => {
+    const handleSaveGeneralDiscount = useCallback((discount: ProposalDiscount) => {
         handleGeneralDiscountChange(discount);
         setIsGeneralDiscountModalOpen(false);
     }, [handleGeneralDiscountChange]);
+
+    const handleSaveProposalExpenses = useCallback((expenses: ProposalExpense[]) => {
+        handleProposalExpensesChange(expenses);
+        setIsProposalExpensesModalOpen(false);
+    }, [handleProposalExpensesChange]);
 
     const handleOpenGallery = useCallback((images: string[], initialIndex: number) => {
         setIsGalleryOpen(true);
@@ -1462,6 +2028,17 @@ const App: React.FC = () => {
         if (hasModule('ia_ocr')) {
             setIsClientModalOpen(false);
             setIsAIClientModalOpen(true);
+        } else {
+            setShowIaUpgradeModal(true);
+        }
+    }, [hasModule]);
+
+    const handleOpenAIQuickProposalModal = useCallback(() => {
+        if (hasModule('ia_ocr')) {
+            setIsClientModalOpen(false);
+            setIsAIClientModalOpen(false);
+            setIsAIMeasurementModalOpen(false);
+            setIsAIQuickProposalModalOpen(true);
         } else {
             setShowIaUpgradeModal(true);
         }
@@ -1486,7 +2063,7 @@ const App: React.FC = () => {
         setIsProcessingAI(true);
         try {
             const genAI = new GoogleGenerativeAI(userInfo.aiConfig.apiKey);
-            const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+            const model = genAI.getGenerativeModel({ model: GEMINI_TEXT_MODEL });
 
             const prompt = `Você é um assistente especialista em extração de medidas de janelas/vidros para instalação de películas.
 
@@ -1495,7 +2072,7 @@ Sua tarefa é extrair as medidas e retornar um array JSON.
 **REGRAS DE AGRUPAMENTO (CRÍTICO):**
 1. AGRUPE medidas idênticas (mesma largura, altura e local) em um único item.
 2. Se a entrada for "5 janelas de 1.20 x 2.10 na sala", retorne UM ÚNICO item com quantidade: 5.
-3. NÃO crie itens separados para a mesma medida repetida.
+3. N?O crie itens separados para a mesma medida repetida.
 
 **REGRAS DE AMBIENTE:**
 1. O campo "local" deve SEMPRE incluir o ambiente mencionado (Sala, Quarto, Cozinha, etc).
@@ -1559,7 +2136,7 @@ Se não conseguir extrair, retorne: []`;
 
             const extractedJson = extractFirstJsonArray(responseText);
             if (!extractedJson) {
-                handleShowInfo("NÃ£o foi possÃ­vel extrair medidas. Tente reformular.");
+                handleShowInfo("Não foi possível extrair medidas. Tente reformular.");
                 return;
             }
 
@@ -1652,9 +2229,13 @@ Se não conseguir extrair, retorne: []`;
         if (deferredPrompt) {
             promptInstall();
         } else {
-            alert("Para instalar, use o menu 'Compartilhar' do seu navegador e selecione 'Adicionar Ã  Tela de InÃ­cio'.");
+            showAlert({
+                title: 'Instalar aplicativo',
+                message: "Para instalar, use o menu 'Compartilhar' do seu navegador e selecione 'Adicionar ?  Tela de Início'.",
+                tone: 'info'
+            });
         }
-    }, [deferredPrompt, promptInstall]);
+    }, [deferredPrompt, promptInstall, showAlert]);
 
     const ClientViewSkeleton = () => (
         <div className="animate-pulse space-y-6">
@@ -1769,7 +2350,9 @@ Se não conseguir extrair, retorne: []`;
             initialEstoqueAction={initialEstoqueAction}
             selectedClientId={selectedClientId}
             measurements={measurements}
+            proposalOptions={proposalOptions}
             activeOptionId={activeOptionId}
+            pricingMode={generalDiscount.pricingMode === 'labor_only' ? 'labor_only' : 'complete'}
             totals={{ totalM2: totals.totalM2, totalQuantity: totals.totalQuantity }}
             numpadConfig={numpadConfig}
             swipeDirection={swipeDirection}
@@ -1794,9 +2377,22 @@ Se não conseguir extrair, retorne: []`;
             onDeleteFilm={handleRequestDeleteFilm}
             onOpenGallery={handleOpenGallery}
             onOpenClientModal={handleOpenClientModal}
+            onOpenAIQuickProposal={handleOpenAIQuickProposalModal}
+            onTabChange={handleTabChange}
+            onSelectOption={setActiveOptionId}
+            onRenameOption={handleRenameProposalOption}
+            onDeleteOption={handleRequestDeleteProposalOption}
+            onAddOption={addProposalOption}
+            onSelectPricingMode={handleProposalPricingModeChange}
+            onOpenProposalPaymentConfig={() => setIsProposalPaymentModalOpen(true)}
+            onOpenProposalExpenses={() => setIsProposalExpensesModalOpen(true)}
+            hasCustomProposalPaymentConfig={hasActiveProposalPaymentOverride}
+            hasActiveExpenses={totals.operationalExpenses > 0}
+            onSwipeDirectionChange={handleSwipeDirectionChange}
             onAddMeasurement={addMeasurement}
             onOpenLocationImport={() => setIsLocationImportModalOpen(true)}
             onMeasurementsChange={handleMeasurementsChange}
+            onPersistMeasurementsChange={handleMeasurementsChangeWithPersistence}
             onOpenFilmModal={handleOpenFilmModal}
             onOpenFilmSelectionModal={handleOpenFilmSelectionModal}
             onOpenClearAllModal={() => setIsClearAllModalOpen(true)}
@@ -1806,6 +2402,10 @@ Se não conseguir extrair, retorne: []`;
             onOpenDiscountModal={handleOpenDiscountModal}
             onDeleteMeasurement={handleDeleteMeasurementFromGroup}
             onDeleteMeasurementImmediate={handleImmediateDeleteMeasurement}
+            onPasteCopiedMeasurements={handlePasteCopiedMeasurements}
+            onTogglePin={handleToggleClientPin}
+            onAddNewClient={handleAddNewClientFromSelection}
+            isClientsLoading={isLoading}
         />
     );
 
@@ -1874,9 +2474,6 @@ Se não conseguir extrair, retorne: []`;
         handleRequestDeleteAgendamento,
         agendamentos,
         handleAddNewClientFromAgendamento,
-        infoModalConfig,
-        setInfoModalConfig,
-        handleCloseInfoModal,
         isSaveBeforePdfModalOpen,
         setIsSaveBeforePdfModalOpen,
         handleConfirmSaveBeforePdf,
@@ -1908,6 +2505,9 @@ Se não conseguir extrair, retorne: []`;
         handleClosePdfStatusModal,
         handleGoToHistoryFromPdf,
         isProcessingAI,
+        isAIQuickProposalModalOpen,
+        setIsAIQuickProposalModalOpen,
+        handleProcessAIQuickProposalInput,
         isAIClientModalOpen,
         setIsAIClientModalOpen,
         handleProcessAIClientInput,
@@ -1945,23 +2545,55 @@ Se não conseguir extrair, retorne: []`;
         handleCloseDiscountModal,
         handleSaveDiscount,
         editingMeasurementBasePrice,
+        isGeneralDiscountModalOpen,
+        setIsGeneralDiscountModalOpen,
+        handleSaveGeneralDiscount,
+        generalDiscount,
         onOpenLocationImport: () => setIsLocationImportModalOpen(true),
     };
 
+    const handleOrganizationSetupCompleted = useCallback(async (organizationName: string) => {
+        await refreshProfile();
+        showToast(`Empresa "${organizationName}" criada com sucesso.`, {
+            tone: 'success',
+            duration: 2200
+        });
+    }, [refreshProfile, showToast]);
+
+
+    const wideWorkspaceClass = ['dashboard', 'history', 'estoque', 'films', 'fornecedores', 'agenda', 'settings', 'qr_code', 'account'].includes(activeTab)
+        ? 'mx-auto w-full max-w-[1480px]'
+        : activeTab === 'client'
+            ? 'mx-auto w-full max-w-[1480px]'
+            : 'container mx-auto w-full max-w-2xl lg:max-w-5xl';
+
+    const useNativeSurface = ['dashboard', 'client', 'history', 'estoque', 'films', 'fornecedores', 'agenda', 'settings', 'qr_code', 'account'].includes(activeTab);
 
 
 
     return (
-        <div className="h-full font-roboto flex lg:flex-row flex-col overflow-hidden bg-slate-50 dark:bg-slate-950">
+        <div className="flex h-full flex-col overflow-hidden bg-[var(--app-bg)] font-sans lg:flex-row">
             <ProtectedRoute>
+                {needsOrganizationSetup ? (
+                    <OrganizationSetup
+                        initialEmail={authUser?.email || ''}
+                        initialOwnerName={
+                            authUser?.user_metadata?.full_name ||
+                            authUser?.user_metadata?.name ||
+                            ''
+                        }
+                        onCompleted={handleOrganizationSetupCompleted}
+                    />
+                ) : (
+                    <>
                 <DesktopSidebar activeTab={activeTab} onTabChange={handleTabChange} />
 
                 <div className="flex-grow flex flex-col min-w-0 h-full overflow-hidden">
                     <UpdateBanner />
 
-                    <main ref={mainRef} className="flex-grow overflow-y-auto pb-32 lg:pb-0 sm:pb-0 transition-colors duration-500 bg-slate-50 dark:bg-slate-950">
-                        <div className="sticky top-0 bg-slate-50/90 dark:bg-slate-950/90 backdrop-blur-md z-40 border-b border-slate-200/60 dark:border-slate-800/60">
-                            <div className="container mx-auto px-4 w-full max-w-2xl lg:max-w-5xl">
+                    <main ref={mainRef} className="flex-grow overflow-y-auto bg-[var(--app-bg)] pb-32 transition-colors duration-500 sm:pb-0 lg:pb-0">
+                        <div className="sticky top-0 z-40 border-b border-[var(--border-subtle)] bg-[color-mix(in_srgb,var(--app-bg)_88%,transparent)] backdrop-blur-md">
+                            <div className={`${wideWorkspaceClass} px-4`}>
                                 <div className="py-2 sm:py-3 lg:py-4">
                                     <Header
                                         activeTab={activeTab}
@@ -1971,8 +2603,11 @@ Se não conseguir extrair, retorne: []`;
                             </div>
                         </div>
 
-                        <div className="container mx-auto px-2 sm:px-4 lg:px-6 py-4 sm:py-6 w-full max-w-2xl lg:max-w-5xl">
-                            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200/60 dark:border-slate-800/60 p-4 sm:p-6">
+                        <div className={`${wideWorkspaceClass} px-2 py-4 sm:px-4 sm:py-6 lg:px-6`}>
+                            <div className={useNativeSurface
+                                ? 'bg-transparent p-0'
+                                : 'rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface)] p-4 shadow-[var(--shadow-soft)] sm:p-6'}
+                            >
                                 {deferredPrompt && !isInstalled && (
                                     <div className="mb-4 p-3 bg-blue-100 border border-blue-200 rounded-lg flex justify-between items-center">
                                         <p className="text-sm text-blue-800 font-medium">Instale o app para usar offline!</p>
@@ -2002,15 +2637,21 @@ Se não conseguir extrair, retorne: []`;
                                         onSelectClientClick={handleOpenClientSelectionModal}
                                         onAddClient={() => handleOpenClientModal('add')}
                                         onAddClientAI={handleOpenAIClientModal}
+                                        onOpenAIQuickProposal={handleOpenAIQuickProposalModal}
                                         onEditClient={() => handleOpenClientModal('edit')}
                                         onDeleteClient={handleDeleteClient}
                                         onSwipeLeft={goToNextClient}
                                         onSwipeRight={goToPrevClient}
-                                        onSelectOption={setActiveOptionId}
-                                        onRenameOption={renameProposalOption}
-                                        onDeleteOption={handleRequestDeleteProposalOption}
-                                        onAddOption={addProposalOption}
-                                        onSwipeDirectionChange={handleSwipeDirectionChange}
+                                         onSelectOption={setActiveOptionId}
+                                         onRenameOption={handleRenameProposalOption}
+                                         onDeleteOption={handleRequestDeleteProposalOption}
+                                         onAddOption={addProposalOption}
+                                         onSelectPricingMode={handleProposalPricingModeChange}
+                                         onOpenProposalPaymentConfig={() => setIsProposalPaymentModalOpen(true)}
+                                         onOpenProposalExpenses={() => setIsProposalExpensesModalOpen(true)}
+                                         hasCustomProposalPaymentConfig={hasActiveProposalPaymentOverride}
+                                         hasActiveExpenses={totals.operationalExpenses > 0}
+                                         onSwipeDirectionChange={handleSwipeDirectionChange}
                                         onOpenGeneralDiscountModal={() => setIsGeneralDiscountModalOpen(true)}
                                         onUpdateGeneralDiscount={handleGeneralDiscountChange}
                                         onAddMeasurement={addMeasurement}
@@ -2025,7 +2666,10 @@ Se não conseguir extrair, retorne: []`;
                                         }}
                                     />
                                 ) : ['history', 'agenda'].includes(activeTab) ? (
-                                    <div className="bg-blue-50 dark:bg-slate-900 -m-4 sm:-m-6 p-4 sm:p-6 rounded-2xl">
+                                    <div className={activeTab === 'history'
+                                        ? 'rounded-none bg-transparent'
+                                        : 'rounded-none bg-transparent'}
+                                    >
                                         <div id="contentContainer" className="w-full min-h-[300px] animate-fade-in">
                                             {tabContent}
                                         </div>
@@ -2042,10 +2686,44 @@ Se não conseguir extrair, retorne: []`;
                     </main>
 
 
-                    <ModalsContainer {...modalProps} />
-                    <CustomNumpad
-                        ref={numpadRef}
-                        isOpen={numpadConfig.isOpen}
+                      <ModalsContainer {...modalProps} />
+                      {billingReturnState && (
+                          <BillingReturnModal
+                              isOpen={isBillingReturnVisible}
+                              status={billingReturnState.status}
+                              mode={billingReturnState.mode}
+                              moduleName={billingReturnModuleName}
+                              attempts={billingReturnState.attempts}
+                              onClose={handleCloseBillingReturn}
+                          />
+                      )}
+                      {userInfo && selectedClientId && activeOption && (
+                          <PaymentMethodsModal
+                              isOpen={isProposalPaymentModalOpen}
+                              onClose={() => setIsProposalPaymentModalOpen(false)}
+                              onSave={handleSaveProposalPaymentConfig}
+                              onResetToDefault={hasActiveProposalPaymentOverride ? handleResetProposalPaymentConfig : undefined}
+                              paymentMethods={effectivePaymentConfig.paymentMethods}
+                              prazoPagamento={effectivePaymentConfig.prazoPagamento}
+                              showPrazoPagamentoField
+                              title="Pagamento desta proposta"
+                              description="Por padrão, o PDF usa as formas de pagamento da empresa. Aqui você pode personalizar apenas a proposta ativa sem alterar o cadastro geral."
+                              saveLabel="Salvar nesta proposta"
+                              resetLabel="Usar padrao da empresa"
+                          />
+                      )}
+                      {selectedClientId && activeOption && (
+                          <ProposalExpensesModal
+                              isOpen={isProposalExpensesModalOpen}
+                              onClose={() => setIsProposalExpensesModalOpen(false)}
+                              onSave={handleSaveProposalExpenses}
+                              expenses={generalDiscount.expenses || []}
+                              totals={totals}
+                          />
+                      )}
+                      <CustomNumpad
+                          ref={numpadRef}
+                          isOpen={numpadConfig.isOpen}
                         onInput={handleNumpadInput}
                         onDelete={handleNumpadDelete}
                         onDone={handleNumpadDone}
@@ -2080,31 +2758,19 @@ Se não conseguir extrair, retorne: []`;
                         />
                     )}
 
-                    <ServicoQrModal
-                        isOpen={isServicoQrModalOpen}
-                        onClose={() => setIsServicoQrModalOpen(false)}
-                        userInfo={userInfo}
-                        films={films}
-                        clients={clients}
-                        isClientsLoading={isLoading}
-                        onTogglePin={handleToggleClientPin}
-                        onAddNewClient={handleAddNewClientFromSelection}
-                    />
-
                     {/* Modal de Upgrade - QR Code Serviços */}
                     {showQrUpgradeModal && (
                         <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-                            <div className="bg-gray-900 border border-gray-700 rounded-2xl max-w-md w-full p-6 shadow-2xl">
-                                <UpgradePrompt
-                                    module={modules.find(m => m.id === 'qr_servicos')}
-                                    onUpgradeClick={() => {
-                                        setShowQrUpgradeModal(false);
-                                        setActiveTab('account');
-                                    }}
+                            <div className="max-w-2xl w-full">
+                                <PremiumFeatureSection
+                                    moduleId="qr_servicos"
+                                    title="QR Code de Servicos"
+                                    description="Ative o modulo premium para gerar QR, pagina publica e uma entrega mais profissional."
+                                    variant="inline"
                                 />
                                 <button
                                     onClick={() => setShowQrUpgradeModal(false)}
-                                    className="w-full mt-4 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+                                    className="w-full mt-4 rounded-2xl bg-slate-900 py-3 font-semibold text-white transition-colors hover:bg-slate-800"
                                 >
                                     Fechar
                                 </button>
@@ -2115,17 +2781,16 @@ Se não conseguir extrair, retorne: []`;
                     {/* Modal de Upgrade - IA/OCR */}
                     {showIaUpgradeModal && (
                         <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-                            <div className="bg-gray-900 border border-gray-700 rounded-2xl max-w-md w-full p-6 shadow-2xl">
-                                <UpgradePrompt
-                                    module={modules.find(m => m.id === 'ia_ocr')}
-                                    onUpgradeClick={() => {
-                                        setShowIaUpgradeModal(false);
-                                        setActiveTab('account');
-                                    }}
+                            <div className="max-w-2xl w-full">
+                                <PremiumFeatureSection
+                                    moduleId="ia_ocr"
+                                    title="Inteligencia Artificial"
+                                    description="Contrate a IA pelo mesmo modal premium e mantenha a experiencia mais clara para a equipe."
+                                    variant="inline"
                                 />
                                 <button
                                     onClick={() => setShowIaUpgradeModal(false)}
-                                    className="w-full mt-4 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+                                    className="w-full mt-4 rounded-2xl bg-slate-900 py-3 font-semibold text-white transition-colors hover:bg-slate-800"
                                 >
                                     Fechar
                                 </button>
@@ -2133,6 +2798,8 @@ Se não conseguir extrair, retorne: []`;
                         </div>
                     )}
                 </div>
+                    </>
+                )}
             </ProtectedRoute>
         </div>
     );

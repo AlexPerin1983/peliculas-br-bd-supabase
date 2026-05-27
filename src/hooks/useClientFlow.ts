@@ -2,7 +2,7 @@ import { Dispatch, SetStateAction, useCallback, useEffect, useMemo } from 'react
 import * as db from '../../services/db';
 import { Agendamento, Client, SavedPDF, SchedulingInfo, UserInfo } from '../../types';
 
-type SetActiveTab = Dispatch<SetStateAction<'client' | 'films' | 'settings' | 'history' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores'>>;
+type SetActiveTab = Dispatch<SetStateAction<'dashboard' | 'client' | 'films' | 'settings' | 'history' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores'>>;
 
 interface UseClientFlowParams {
     clients: Client[];
@@ -62,10 +62,10 @@ export function useClientFlow({
     handleShowInfo
 }: UseClientFlowParams) {
     useEffect(() => {
-        if (selectedClientId !== null && userInfo && userInfo.lastSelectedClientId !== selectedClientId) {
-            const updatedUserInfo = { ...userInfo, lastSelectedClientId: selectedClientId };
+        if (selectedClientId !== null && userInfo && !userInfo.isFallback && userInfo.lastSelectedClientId !== selectedClientId) {
+            const updatedUserInfo = { ...userInfo, lastSelectedClientId: selectedClientId, isFallback: false };
             setUserInfo(updatedUserInfo);
-            db.saveUserInfo(updatedUserInfo);
+            void db.updateLastSelectedClientIdOnly(selectedClientId);
         }
 
         setClientTransitionKey(previous => previous + 1);

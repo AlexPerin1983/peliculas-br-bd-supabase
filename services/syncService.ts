@@ -7,29 +7,35 @@ import {
     getFailedSyncItems,
     getFailedSyncCount,
     getPendingSyncCount,
+    markProposalOptionsAsSynced,
     markSyncItemError,
     markSyncItemPending,
     markAsSynced,
     LocalClient,
     LocalFilm,
     SyncQueueItem,
-    LocalUserInfo
+    LocalUserInfo,
+    LocalStandaloneExpense
 } from './offlineDb';
 import {
     deleteAgendamentoRemote,
     deleteClientRemote,
     deleteCustomFilmRemote,
+    deleteStandaloneExpenseRemote,
     saveAgendamentoRemote,
     saveClientRemote,
     saveCustomFilmRemote,
     savePDFRemote,
     saveProposalOptionsRemote,
+    saveStandaloneExpenseRemote,
     saveUserInfoRemote
 } from './supabaseDb';
 
 let isOnline = navigator.onLine;
 let syncInProgress = false;
+let syncRequestedWhileBusy = false;
 let syncListeners: ((status: SyncStatus) => void)[] = [];
+const POSTGRES_INTEGER_MAX = 2147483647;
 
 export interface SyncStatus {
     isOnline: boolean;
@@ -79,10 +85,322 @@ function isAuthError(error: unknown): boolean {
         || normalizedCode === 'PGRST303';
 }
 
+function isLegacyPdfBlobError(error: unknown): boolean {
+    const message = error instanceof Error
+        ? error.message
+        : typeof error === 'object' && error !== null && 'message' in error
+            ? String((error as { message?: unknown }).message || '')
+            : String(error || '');
+
+    const normalizedMessage = message.toLowerCase();
+    return normalizedMessage.includes('readasdataurl')
+        && normalizedMessage.includes('blob');
+}
+
+function hasPdfBlobPayload(pdfBlob: unknown): boolean {
+    return (typeof pdfBlob === 'string' && pdfBlob.length > 0)
+        || (typeof Blob !== 'undefined' && pdfBlob instanceof Blob);
+}
+
+function isPersistedIntegerId(value: unknown): value is number {
+    return typeof value === 'number'
+        && Number.isInteger(value)
+        && value > 0
+        && value <= POSTGRES_INTEGER_MAX;
+}
+
+function getPersistedIntegerId(...values: unknown[]): number | undefined {
+    return values.find(isPersistedIntegerId);
+}
+
+const getTemporaryPublicIdFromLocalId = (localId?: string): number | undefined => {
+    if (!localId) return undefined;
+
+    const timestamp = parseInt(localId.split('_')[1] || '', 10);
+    return Number.isFinite(timestamp) ? -timestamp : undefined;
+};
+
+async function findLocalClient(value: unknown, clientName?: string): Promise<LocalClient | undefined> {
+    if (!offlineDb.clients) {
+        return undefined;
+    }
+
+    if (value !== undefined && value !== null) {
+        const directRecord = await offlineDb.clients
+            .filter(client => (
+                client.id === value
+                || client._remoteId === value
+                || client._localId === value
+                || getTemporaryPublicIdFromLocalId(client._localId) === value
+            ))
+            .first();
+
+        if (directRecord) {
+            return directRecord;
+        }
+    }
+
+    const normalizedName = typeof clientName === 'string' ? clientName.trim().toLowerCase() : '';
+    if (!normalizedName) {
+        return undefined;
+    }
+
+    return await offlineDb.clients
+        .filter(client => client.nome?.trim().toLowerCase() === normalizedName)
+        .first();
+}
+
+async function ensureLocalClientSynced(localClient: LocalClient): Promise<number | undefined> {
+    const existingRemoteId = getPersistedIntegerId(localClient._remoteId, localClient.id);
+    if (existingRemoteId) {
+        return existingRemoteId;
+    }
+
+    const { _localId, _syncStatus, _lastModified, _syncedAt, _remoteId, id, ...clientRest } = localClient;
+    const savedClient = await saveClientRemote(clientRest);
+
+    if (_localId) {
+        await markAsSynced('clients', _localId, savedClient.id);
+    }
+
+    return savedClient.id;
+}
+
+async function resolveLocalRemoteId(
+    table: 'clients' | 'savedPdfs' | 'agendamentos' | 'proposalOptions',
+    value: unknown
+): Promise<number | undefined> {
+    if (isPersistedIntegerId(value)) {
+        return value;
+    }
+
+    if (value === undefined || value === null) {
+        return undefined;
+    }
+
+    const collection = table === 'clients'
+        ? offlineDb.clients
+        : table === 'savedPdfs'
+            ? offlineDb.savedPdfs
+            : table === 'agendamentos'
+                ? offlineDb.agendamentos
+                : offlineDb.proposalOptions;
+    const localRecord = await collection
+        .filter(item => (
+            item.id === value
+            || item._remoteId === value
+            || item._localId === value
+            || getTemporaryPublicIdFromLocalId(item._localId) === value
+        ))
+        .first();
+
+    if (isPersistedIntegerId(localRecord?._remoteId)) {
+        return localRecord._remoteId as number;
+    }
+
+    if (isPersistedIntegerId(localRecord?.id)) {
+        return localRecord.id as number;
+    }
+
+    return undefined;
+}
+
+async function resolveClientRemoteId(value: unknown, clientName?: string): Promise<number | undefined> {
+    const resolvedId = await resolveLocalRemoteId('clients', value);
+    if (resolvedId) {
+        return resolvedId;
+    }
+
+    const localRecord = await findLocalClient(value, clientName);
+    if (!localRecord) {
+        return undefined;
+    }
+
+    return ensureLocalClientSynced(localRecord);
+}
+
+async function normalizeAgendamentoReferences(agendamento: any): Promise<any> {
+    const payload = { ...agendamento };
+
+    if ('pdfId' in payload) {
+        const resolvedPdfId = await resolveLocalRemoteId('savedPdfs', payload.pdfId);
+        if (resolvedPdfId) {
+            payload.pdfId = resolvedPdfId;
+        } else {
+            delete payload.pdfId;
+        }
+    }
+
+    if ('clienteId' in payload) {
+        const resolvedClientId = await resolveClientRemoteId(payload.clienteId, payload.clienteNome || payload.clientName);
+        if (resolvedClientId) {
+            payload.clienteId = resolvedClientId;
+        } else {
+            delete payload.clienteId;
+        }
+    }
+
+    return payload;
+}
+
+async function normalizeSavedPdfReferences(pdf: any): Promise<any> {
+    const payload = { ...pdf };
+
+    if ('clienteId' in payload) {
+        const resolvedClientId = await resolveClientRemoteId(payload.clienteId, payload.clientName);
+        if (resolvedClientId) {
+            payload.clienteId = resolvedClientId;
+        } else if (!isPersistedIntegerId(payload.clienteId)) {
+            delete payload.clienteId;
+        }
+    }
+
+    if ('agendamentoId' in payload) {
+        const resolvedAgendamentoId = await resolveLocalRemoteId('agendamentos', payload.agendamentoId);
+        if (resolvedAgendamentoId) {
+            payload.agendamentoId = resolvedAgendamentoId;
+        } else if (!isPersistedIntegerId(payload.agendamentoId)) {
+            delete payload.agendamentoId;
+        }
+    }
+
+    if ('proposalOptionId' in payload) {
+        const resolvedProposalOptionId = await resolveLocalRemoteId('proposalOptions', payload.proposalOptionId);
+        if (resolvedProposalOptionId) {
+            payload.proposalOptionId = resolvedProposalOptionId;
+        } else if (!isPersistedIntegerId(payload.proposalOptionId)) {
+            delete payload.proposalOptionId;
+        }
+    }
+
+    return payload;
+}
+
+async function normalizeStandaloneExpenseReferences(expense: any): Promise<any> {
+    const payload = { ...expense };
+
+    if ('clientId' in payload && payload.clientId !== null) {
+        const resolvedClientId = await resolveClientRemoteId(payload.clientId);
+        if (resolvedClientId) {
+            payload.clientId = resolvedClientId;
+        } else if (!isPersistedIntegerId(payload.clientId)) {
+            payload.clientId = null;
+        }
+    }
+
+    if ('proposalId' in payload && payload.proposalId !== null) {
+        const resolvedProposalId = await resolveLocalRemoteId('savedPdfs', payload.proposalId);
+        if (resolvedProposalId) {
+            payload.proposalId = resolvedProposalId;
+        } else if (!isPersistedIntegerId(payload.proposalId)) {
+            payload.proposalId = null;
+        }
+    }
+
+    return payload;
+}
+
+async function findLocalSavedPdf(data: any) {
+    const localId = data?._localId;
+    if (localId) {
+        const localPdf = await offlineDb.savedPdfs.get(localId);
+        if (localPdf) {
+            return localPdf;
+        }
+    }
+
+    const remoteId = data?._remoteId ?? data?.id;
+    if (remoteId === undefined || remoteId === null) {
+        return undefined;
+    }
+
+    return await offlineDb.savedPdfs
+        .filter(pdf => pdf.id === remoteId || pdf._remoteId === remoteId)
+        .first();
+}
+
+async function resolveSavedPdfRemoteIdForSync(data: any, localPdf?: any): Promise<number | undefined> {
+    const directRemoteId = getPersistedIntegerId(data?._remoteId, data?.id, localPdf?._remoteId, localPdf?.id);
+    if (directRemoteId) {
+        return directRemoteId;
+    }
+
+    const temporaryId = [data?._remoteId, data?.id, localPdf?._remoteId, localPdf?.id]
+        .find(value => typeof value === 'number' && !isPersistedIntegerId(value));
+
+    if (temporaryId === undefined) {
+        return undefined;
+    }
+
+    const originalLocalPdf = await offlineDb.savedPdfs
+        .filter(pdf => {
+            const temporaryPublicId = getTemporaryPublicIdFromLocalId(pdf._localId);
+            return pdf.id === temporaryId
+                || pdf._remoteId === temporaryId
+                || temporaryPublicId === temporaryId
+                || (
+                    typeof temporaryId === 'number'
+                    && typeof temporaryPublicId === 'number'
+                    && Math.abs(temporaryPublicId) === Math.abs(temporaryId)
+                );
+        })
+        .first();
+
+    return getPersistedIntegerId(originalLocalPdf?._remoteId, originalLocalPdf?.id);
+}
+
+async function shouldDiscardLegacySavedPdfItem(item: SyncQueueItem): Promise<boolean> {
+    if (item.table !== 'savedPdfs') {
+        return false;
+    }
+
+    if (!(item.action === 'create' || item.action === 'update')) {
+        return false;
+    }
+
+    const localPdf = await findLocalSavedPdf(item.data);
+    const remoteId = item.data?._remoteId ?? item.data?.id ?? localPdf?._remoteId ?? localPdf?.id;
+    const queueHasBlob = hasPdfBlobPayload(item.data?.pdfBlob);
+    const localHasBlob = hasPdfBlobPayload(localPdf?.pdfBlob);
+    const referenceTime = item.lastAttemptAt ?? item.timestamp ?? 0;
+
+    if (!localPdf && !remoteId && !queueHasBlob) {
+        return true;
+    }
+
+    if (localPdf?._syncStatus === 'synced' && (localPdf._syncedAt ?? 0) >= referenceTime) {
+        return true;
+    }
+
+    if (item.action === 'update' && !remoteId && !localPdf) {
+        return true;
+    }
+
+    if (
+        item.action === 'update'
+        && !!remoteId
+        && isLegacyPdfBlobError(item.lastError)
+        && !queueHasBlob
+        && !localHasBlob
+    ) {
+        return true;
+    }
+
+    if (!queueHasBlob && !localHasBlob && !remoteId) {
+        return true;
+    }
+
+    return false;
+}
+
 export function initSyncService(): void {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
-    updatePendingCount();
+    void updatePendingCount().then(() => {
+        if (navigator.onLine && (currentStatus.pendingCount > 0 || currentStatus.failedCount > 0)) {
+            void syncAllPending();
+        }
+    });
 }
 
 function handleOnline(): void {
@@ -99,7 +417,12 @@ function handleOffline(): void {
 }
 
 export async function syncAllPending(): Promise<void> {
-    if (!isOnline || syncInProgress) {
+    if (!isOnline) {
+        return;
+    }
+
+    if (syncInProgress) {
+        syncRequestedWhileBusy = true;
         return;
     }
 
@@ -110,8 +433,18 @@ export async function syncAllPending(): Promise<void> {
 
     try {
         const queue = await offlineDb.syncQueue.orderBy('timestamp').toArray();
+        const sanitizedQueue: SyncQueueItem[] = [];
 
         for (const item of queue) {
+            if (item.id && await shouldDiscardLegacySavedPdfItem(item)) {
+                await offlineDb.syncQueue.delete(item.id);
+                continue;
+            }
+
+            sanitizedQueue.push(item);
+        }
+
+        for (const item of sanitizedQueue) {
             try {
                 if (item.status === 'error') {
                     await markSyncItemPending(item.id!);
@@ -138,6 +471,11 @@ export async function syncAllPending(): Promise<void> {
         syncInProgress = false;
         currentStatus.syncInProgress = false;
         notifyListeners();
+
+        if (syncRequestedWhileBusy && isOnline) {
+            syncRequestedWhileBusy = false;
+            void syncAllPending();
+        }
     }
 }
 
@@ -160,6 +498,9 @@ async function processQueueItem(item: SyncQueueItem): Promise<void> {
         case 'savedPdfs':
             await syncPdf(action, data);
             break;
+        case 'standaloneExpenses':
+            await syncStandaloneExpense(action, data);
+            break;
         case 'agendamentos':
             await syncAgendamento(action, data);
             break;
@@ -168,15 +509,24 @@ async function processQueueItem(item: SyncQueueItem): Promise<void> {
 
 async function syncClient(action: string, data: LocalClient): Promise<void> {
     const { _localId, _syncStatus, _lastModified, _syncedAt, _remoteId, id, ...clientRest } = data;
+    const localClient = await findLocalClient(_localId || _remoteId || id, clientRest.nome);
+    const remoteId = getPersistedIntegerId(_remoteId, id, localClient?._remoteId, localClient?.id);
 
     if (action === 'create') {
+        if (remoteId) {
+            if (_localId) {
+                await markAsSynced('clients', _localId, remoteId);
+            }
+            return;
+        }
+
         const result = await saveClientRemote(clientRest);
         await markAsSynced('clients', _localId!, result.id);
         return;
     }
 
     if (action === 'update') {
-        const updateId = _remoteId || id;
+        const updateId = remoteId;
         if (!updateId) throw new Error('ID do cliente nao encontrado para atualizacao');
 
         await saveClientRemote({ ...clientRest, id: updateId });
@@ -185,7 +535,7 @@ async function syncClient(action: string, data: LocalClient): Promise<void> {
     }
 
     if (action === 'delete') {
-        const deleteId = _remoteId || id;
+        const deleteId = remoteId;
         if (!deleteId) return;
         await deleteClientRemote(deleteId);
     }
@@ -218,30 +568,105 @@ async function syncUserInfo(data: LocalUserInfo): Promise<void> {
 
 async function syncProposalOptions(data: { clientId: number; options: any[] }): Promise<void> {
     const { clientId, options } = data;
-    await saveProposalOptionsRemote(clientId, options);
+    const remoteClientId = await resolveClientRemoteId(clientId);
+    if (!remoteClientId) {
+        throw new Error('ID do cliente nao encontrado para sincronizar opcoes da proposta');
+    }
+
+    await saveProposalOptionsRemote(remoteClientId, options);
+    await markProposalOptionsAsSynced(clientId);
 }
 
 async function syncPdf(action: string, data: any): Promise<void> {
     const { _localId, _syncStatus, _lastModified, _syncedAt, _remoteId, id, ...pdfRest } = data;
 
     if (action === 'create' || action === 'update') {
-        const savedPdf = await savePDFRemote(
-            action === 'update' && (_remoteId || id)
-                ? { ...pdfRest, id: _remoteId || id }
-                : pdfRest
-        );
+        const localPdf = await findLocalSavedPdf(data);
+        const remoteId = await resolveSavedPdfRemoteIdForSync(data, localPdf);
+        const normalizedPdfRest = await normalizeSavedPdfReferences({
+            ...pdfRest,
+            ...(!hasPdfBlobPayload(pdfRest.pdfBlob) && hasPdfBlobPayload(localPdf?.pdfBlob)
+                ? { pdfBlob: localPdf.pdfBlob }
+                : {})
+        });
+        const syncPdfPayload = action === 'update' && remoteId
+            ? { ...normalizedPdfRest, id: remoteId }
+            : normalizedPdfRest;
+
+        try {
+            const savedPdf = await savePDFRemote(syncPdfPayload);
+
+            if (_localId) {
+                await markAsSynced('savedPdfs', _localId, savedPdf.id);
+            }
+            return;
+        } catch (error) {
+            const legacyBlobError = isLegacyPdfBlobError(error);
+
+            if (legacyBlobError && action === 'update') {
+                const repairedPayload = {
+                    ...syncPdfPayload,
+                    pdfBlob: undefined
+                };
+
+                const savedPdf = await savePDFRemote(repairedPayload);
+                if (_localId) {
+                    await markAsSynced('savedPdfs', _localId, savedPdf.id);
+                }
+                return;
+            }
+
+            if (legacyBlobError && _localId) {
+                const localPdf = await offlineDb.savedPdfs.get(_localId);
+                const repairedBlob = localPdf?.pdfBlob;
+
+                if (repairedBlob && (typeof repairedBlob === 'string' || repairedBlob instanceof Blob)) {
+                    const savedPdf = await savePDFRemote({
+                        ...syncPdfPayload,
+                        pdfBlob: repairedBlob
+                    });
+
+                    await markAsSynced('savedPdfs', _localId, savedPdf.id);
+                    return;
+                }
+            }
+
+            throw error;
+        }
+    }
+}
+
+async function syncStandaloneExpense(action: string, data: LocalStandaloneExpense): Promise<void> {
+    const { _localId, _syncStatus, _lastModified, _syncedAt, _remoteId, id, ...expenseRest } = data;
+    const remoteId = getPersistedIntegerId(_remoteId, id);
+
+    if (action === 'create' || action === 'update') {
+        const normalizedExpenseRest = await normalizeStandaloneExpenseReferences(expenseRest);
+        const payload = action === 'update' && remoteId
+            ? { ...normalizedExpenseRest, id: remoteId }
+            : normalizedExpenseRest;
+        const savedExpense = await saveStandaloneExpenseRemote(payload);
 
         if (_localId) {
-            await markAsSynced('savedPdfs', _localId, savedPdf.id);
+            await markAsSynced('standaloneExpenses', _localId, savedExpense.id);
         }
+        return;
+    }
+
+    if (action === 'delete') {
+        const deleteId = remoteId;
+        if (!deleteId) return;
+        await deleteStandaloneExpenseRemote(deleteId);
     }
 }
 
 async function syncAgendamento(action: string, data: any): Promise<void> {
     const { _localId, _syncStatus, _lastModified, _syncedAt, _remoteId, id, ...agendamentoRest } = data;
+    const remoteId = getPersistedIntegerId(_remoteId, id);
 
-    if (action === 'create') {
-        const savedAgendamento = await saveAgendamentoRemote(agendamentoRest);
+    if (action === 'create' || (action === 'update' && !remoteId)) {
+        const agendamentoPayload = await normalizeAgendamentoReferences(agendamentoRest);
+        const savedAgendamento = await saveAgendamentoRemote(agendamentoPayload);
         if (_localId) {
             await markAsSynced('agendamentos', _localId, savedAgendamento.id);
         }
@@ -249,10 +674,11 @@ async function syncAgendamento(action: string, data: any): Promise<void> {
     }
 
     if (action === 'update') {
-        const updateId = _remoteId || id;
+        const updateId = remoteId;
         if (!updateId) throw new Error('ID do agendamento nao encontrado para atualizacao');
 
-        await saveAgendamentoRemote({ ...agendamentoRest, id: updateId });
+        const agendamentoPayload = await normalizeAgendamentoReferences(agendamentoRest);
+        await saveAgendamentoRemote({ ...agendamentoPayload, id: updateId });
         if (_localId) {
             await markAsSynced('agendamentos', _localId);
         }
@@ -260,7 +686,7 @@ async function syncAgendamento(action: string, data: any): Promise<void> {
     }
 
     if (action === 'delete') {
-        const deleteId = _remoteId || id;
+        const deleteId = remoteId;
         if (!deleteId) return;
         await deleteAgendamentoRemote(deleteId);
     }

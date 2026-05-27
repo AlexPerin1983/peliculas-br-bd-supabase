@@ -7,7 +7,7 @@
 Crie um arquivo `.env.local` na raiz do projeto com sua API Key do Resend:
 
 ```env
-RESEND_API_KEY=re_YzPRcM95_1QmrU1MQryq6_jaoZQEhT
+RESEND_API_KEY=your_resend_api_key_here
 ```
 
 ⚠️ **Importante**: Nunca commite o arquivo `.env.local` no Git. Ele já está no `.gitignore`.
@@ -26,7 +26,7 @@ Para usar em produção, você precisa:
 ### Importar o Serviço
 
 ```typescript
-import { emailService } from './services/emailService';
+import { sendWelcomeEmail, sendInviteEmail, sendPasswordResetEmail } from './services/emailHelper';
 ```
 
 ### 1. Email de Boas-Vindas
@@ -34,7 +34,7 @@ import { emailService } from './services/emailService';
 Envie quando um novo usuário se registrar:
 
 ```typescript
-const result = await emailService.sendWelcomeEmail(
+const result = await sendWelcomeEmail(
   'usuario@example.com',
   {
     userName: 'João Silva',
@@ -54,7 +54,7 @@ if (result.success) {
 Envie quando o usuário solicitar reset de senha:
 
 ```typescript
-const result = await emailService.sendPasswordResetEmail(
+const result = await sendPasswordResetEmail(
   'usuario@example.com',
   {
     userName: 'João Silva',
@@ -69,7 +69,7 @@ const result = await emailService.sendPasswordResetEmail(
 Envie quando convidar alguém para a organização:
 
 ```typescript
-const result = await emailService.sendInviteEmail(
+const result = await sendInviteEmail(
   'novousuario@example.com',
   {
     inviterName: 'Maria Santos',
@@ -84,12 +84,10 @@ const result = await emailService.sendInviteEmail(
 Para enviar emails customizados:
 
 ```typescript
-const result = await emailService.sendEmail({
-  to: 'usuario@example.com',
+const result = await sendCustomEmail('usuario@example.com', {
   subject: 'Assunto do Email',
   html: '<h1>Conteúdo HTML</h1>',
-  from: 'contato@peliculasbr.com.br', // opcional
-  replyTo: 'suporte@peliculasbr.com.br' // opcional
+  from: 'contato@peliculasbr.com.br',
 });
 ```
 
@@ -125,24 +123,9 @@ Configure webhooks no Supabase para disparar emails automaticamente:
 2. Crie um webhook para a tabela desejada
 3. Configure a URL da sua Edge Function
 
-### Opção 3: Chamar do Frontend (Desenvolvimento)
+### Opção 3: Chamar do Frontend via Edge Function
 
-Para testes, você pode chamar diretamente do frontend:
-
-```typescript
-// Após registro de usuário
-const { data: user } = await supabase.auth.signUp({
-  email: 'usuario@example.com',
-  password: 'senha123'
-})
-
-if (user) {
-  await emailService.sendWelcomeEmail(user.email, {
-    userName: user.user_metadata.name,
-    organizationName: 'Minha Organização'
-  })
-}
-```
+O frontend deve chamar apenas `emailHelper`, que por sua vez aciona a Edge Function `send-email`.
 
 ## Exemplos de Uso no Projeto
 
@@ -161,7 +144,7 @@ const handleRegister = async (email: string, password: string, name: string) => 
   
   if (data.user) {
     // Enviar email de boas-vindas
-    await emailService.sendWelcomeEmail(email, {
+    await sendWelcomeEmail(email, {
       userName: name,
       organizationName: 'Películas BR BD'
     })
@@ -183,7 +166,7 @@ export const sendInvite = async (email: string, inviteCode: string) => {
     .insert({ email, code: inviteCode })
   
   // Enviar email
-  await emailService.sendInviteEmail(email, {
+  await sendInviteEmail(email, {
     inviterName: currentUser.name,
     organizationName: organization.name,
     inviteLink: `https://peliculasbr.com.br/invite?code=${inviteCode}`
@@ -218,7 +201,7 @@ const handleResetPassword = async (email: string) => {
 ### Tratamento de Erros
 
 ```typescript
-const result = await emailService.sendWelcomeEmail(email, data)
+const result = await sendWelcomeEmail(email, data)
 
 if (!result.success) {
   // Log do erro

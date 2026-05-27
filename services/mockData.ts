@@ -7,10 +7,10 @@ export const mockUserInfo: UserInfo = {
     id: 'info',
     nome: 'Alex Renato Lacerda Perin',
     empresa: 'Películas Brasil',
-    telefone: '(83) 99301-5765',
+    telefone: '(11) 11111-1111',
     email: 'alexlacerdaperin@gmail.com',
     site: 'www.peliculasbrasil.com.br',
-    endereco: 'Wind Palace - Intermares',
+    endereco: '',
     cpfCnpj: '00.000.000/0000-00', // CNPJ genérico de 14 zeros, já mascarado
     logo: mockLogo,
     assinatura: '',
@@ -26,7 +26,7 @@ export const mockUserInfo: UserInfo = {
     workingHours: {
         start: '08:00',
         end: '18:00',
-        days: [1, 2, 3, 4, 5], // Monday to Friday
+        days: [0, 1, 2, 3, 4, 5, 6], // Sunday to Saturday
     },
     employees: [
         { id: 1, nome: 'Alex Renato Lacerda Perin' }
@@ -41,7 +41,8 @@ export const mockUserInfo: UserInfo = {
         tiktok: '',
         youtube: '',
         googleReviews: ''
-    }
+    },
+    isFallback: true
 };
 
 export const mockClients: Omit<Client, 'id'>[] = [];

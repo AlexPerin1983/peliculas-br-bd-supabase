@@ -10,6 +10,7 @@ import { Client, UserInfo } from '../../types';
 vi.mock('../../services/db', () => ({
   saveClient: vi.fn(),
   saveUserInfo: vi.fn(),
+  updateLastSelectedClientIdOnly: vi.fn(),
   deleteClient: vi.fn(),
   deleteProposalOptions: vi.fn(),
   getPDFsForClient: vi.fn(),

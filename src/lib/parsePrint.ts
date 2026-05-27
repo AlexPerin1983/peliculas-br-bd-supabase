@@ -34,7 +34,7 @@ interface Candidate {
 }
 
 // ============================================================================
-// NORMALIZAÇÃO DO TEXTO OCR
+// NORMALIZA??O DO TEXTO OCR
 // ============================================================================
 
 function normalizeOCRText(text: string): string {

@@ -27,6 +27,7 @@ interface PasswordResetEmailData {
 interface InviteEmailData {
     inviterName: string
     organizationName: string
+    organizationId: string
     inviteLink: string
 }
 
@@ -68,21 +69,9 @@ export async function sendPasswordResetEmail(
     to: string,
     data: PasswordResetEmailData
 ): Promise<EmailResponse> {
-    try {
-        const { data: result, error } = await supabase.functions.invoke('send-email', {
-            body: {
-                type: 'password-reset',
-                to,
-                data,
-            },
-        })
-
-        return result
-    } catch (error) {
-        return {
-            success: false,
-            error: error instanceof Error ? error.message : 'Erro desconhecido',
-        }
+    return {
+        success: false,
+        error: 'Use supabase.auth.resetPasswordForEmail para redefinicao de senha',
     }
 }
 

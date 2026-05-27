@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useFeedback } from '../src/contexts/FeedbackContext';
 
 const PwaDiagnostics: React.FC = () => {
+    const { confirm, showAlert } = useFeedback();
     const [diagnostics, setDiagnostics] = useState<{
         hasServiceWorker: boolean;
         swState: string;
@@ -31,7 +33,6 @@ const PwaDiagnostics: React.FC = () => {
                 hasIcons: false
             };
 
-            // Check Service Worker state
             if (results.hasServiceWorker) {
                 try {
                     const registration = await navigator.serviceWorker.getRegistration();
@@ -41,12 +42,11 @@ const PwaDiagnostics: React.FC = () => {
                     } else {
                         results.swState = 'not registered';
                     }
-                } catch (e) {
+                } catch (error) {
                     results.swState = 'error';
                 }
             }
 
-            // Check for manifest
             const manifestLink = document.querySelector('link[rel="manifest"]');
             if (manifestLink) {
                 results.manifestUrl = manifestLink.getAttribute('href') || '';
@@ -58,7 +58,7 @@ const PwaDiagnostics: React.FC = () => {
                         const manifest = await response.json();
                         results.hasIcons = manifest.icons && manifest.icons.length > 0;
                     }
-                } catch (e) {
+                } catch (error) {
                     results.hasManifest = false;
                 }
             }
@@ -68,12 +68,11 @@ const PwaDiagnostics: React.FC = () => {
 
         runDiagnostics();
 
-        // Listen for install prompt
         const handler = () => {
             setDiagnostics(prev => prev ? { ...prev, canInstall: true } : null);
         };
-        window.addEventListener('beforeinstallprompt', handler);
 
+        window.addEventListener('beforeinstallprompt', handler);
         return () => window.removeEventListener('beforeinstallprompt', handler);
     }, []);
 
@@ -87,11 +86,11 @@ const PwaDiagnostics: React.FC = () => {
     };
 
     if (!diagnostics) {
-        return <div className="text-sm text-slate-500">Carregando diagnóstico...</div>;
+        return <div className="text-sm text-slate-500">Carregando diagnostico...</div>;
     }
 
     const DiagnosticItem: React.FC<{ label: string; value: boolean | string; isGood?: boolean }> = ({ label, value, isGood }) => {
-        const displayValue = typeof value === 'boolean' ? (value ? '✓ Sim' : '✗ Não') : value;
+        const displayValue = typeof value === 'boolean' ? (value ? 'Sim' : 'Nao') : value;
         const color = typeof value === 'boolean'
             ? (value === isGood ? 'text-green-600' : 'text-red-600')
             : 'text-slate-700';
@@ -107,19 +106,25 @@ const PwaDiagnostics: React.FC = () => {
     const issues: string[] = [];
 
     if (!diagnostics.isHttps) issues.push('Requer HTTPS ou localhost');
-    if (!diagnostics.hasServiceWorker) issues.push('Service Worker não suportado');
-    if (diagnostics.swState !== 'activated') issues.push('Service Worker não está ativo');
-    if (!diagnostics.hasManifest) issues.push('Manifest.json não encontrado');
-    if (!diagnostics.hasIcons) issues.push('Ícones não configurados no manifest');
-    if (diagnostics.isInIframe) issues.push('Rodando em iframe (não pode instalar)');
+    if (!diagnostics.hasServiceWorker) issues.push('Service Worker nao suportado');
+    if (diagnostics.swState !== 'activated') issues.push('Service Worker nao esta ativo');
+    if (!diagnostics.hasManifest) issues.push('Manifest.json nao encontrado');
+    if (!diagnostics.hasIcons) issues.push('Icones nao configurados no manifest');
+    if (diagnostics.isInIframe) issues.push('Rodando em iframe (nao pode instalar)');
 
     const handleForceUpdate = async () => {
-        if (!confirm('Isso irá forçar a atualização do aplicativo. Seus dados salvos NÃO serão perdidos. Deseja continuar?')) {
+        const shouldForceUpdate = await confirm({
+            title: 'Forcar atualizacao',
+            message: 'Isso vai atualizar os arquivos do app sem apagar os dados salvos. Deseja continuar?',
+            confirmButtonText: 'Atualizar agora',
+            presentation: 'auto'
+        });
+
+        if (!shouldForceUpdate) {
             return;
         }
 
         try {
-            // 1. Unregister Service Worker
             if ('serviceWorker' in navigator) {
                 const registrations = await navigator.serviceWorker.getRegistrations();
                 for (const registration of registrations) {
@@ -127,17 +132,19 @@ const PwaDiagnostics: React.FC = () => {
                 }
             }
 
-            // 2. Clear Cache Storage (only caches, not localStorage/IndexedDB)
             if ('caches' in window) {
                 const keys = await caches.keys();
                 await Promise.all(keys.map(key => caches.delete(key)));
             }
 
-            // 3. Reload page
             window.location.reload();
         } catch (error) {
-            console.error('Erro ao forçar atualização:', error);
-            alert('Erro ao atualizar. Tente limpar o cache do navegador manualmente.');
+            console.error('Erro ao forcar atualizacao:', error);
+            showAlert({
+                title: 'Atualizacao nao concluida',
+                message: 'Nao foi possivel atualizar agora. Tente limpar o cache do navegador manualmente.',
+                tone: 'error'
+            });
         }
     };
 
@@ -145,7 +152,7 @@ const PwaDiagnostics: React.FC = () => {
         <div className="mt-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
             <h4 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
                 <i className="fas fa-stethoscope"></i>
-                Diagnóstico PWA <span className="text-xs font-normal text-slate-500">(v68)</span>
+                Diagnostico PWA <span className="text-xs font-normal text-slate-500">(v68)</span>
             </h4>
             <div className="space-y-1">
                 <DiagnosticItem label="Navegador" value={diagnostics.browser} />
@@ -154,36 +161,36 @@ const PwaDiagnostics: React.FC = () => {
                 <DiagnosticItem label="SW Status" value={diagnostics.swState} />
                 <DiagnosticItem label="SW Scope" value={diagnostics.swScope} />
                 <DiagnosticItem label="Manifest" value={diagnostics.hasManifest} isGood={true} />
-                <DiagnosticItem label="Ícones" value={diagnostics.hasIcons} isGood={true} />
+                <DiagnosticItem label="Icones" value={diagnostics.hasIcons} isGood={true} />
                 <DiagnosticItem label="Em Iframe" value={diagnostics.isInIframe} isGood={false} />
-                <DiagnosticItem label="Já Instalado" value={diagnostics.isStandalone} isGood={true} />
+                <DiagnosticItem label="Ja Instalado" value={diagnostics.isStandalone} isGood={true} />
                 <DiagnosticItem label="Pode Instalar" value={diagnostics.canInstall} isGood={true} />
             </div>
 
             {issues.length > 0 && (
                 <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-                    <p className="text-sm font-semibold text-red-800 mb-2">⚠️ Problemas Detectados:</p>
+                    <p className="text-sm font-semibold text-red-800 mb-2">Problemas detectados:</p>
                     <ul className="text-xs text-red-700 space-y-1 list-disc list-inside">
-                        {issues.map((issue, i) => <li key={i}>{issue}</li>)}
+                        {issues.map((issue, index) => <li key={index}>{issue}</li>)}
                     </ul>
                 </div>
             )}
 
             {diagnostics.browser === 'Safari' && !diagnostics.isStandalone && (
                 <div className="mt-3 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-800">
-                    ℹ️ Safari: Use Compartilhar → Adicionar à Tela de Início
+                    Safari: use Compartilhar e depois Adicionar a Tela de Inicio.
                 </div>
             )}
 
             {diagnostics.isInIframe && (
                 <div className="mt-3 p-2 bg-orange-50 border border-orange-200 rounded text-xs text-orange-800">
-                    🚫 PWAs não podem ser instalados de dentro de iframes. Abra em nova janela.
+                    PWAs nao podem ser instalados dentro de iframes. Abra em uma nova janela.
                 </div>
             )}
 
             {!diagnostics.hasIcons && diagnostics.hasManifest && (
                 <div className="mt-3 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-800">
-                    💡 Gere os ícones abrindo: <code className="bg-blue-100 px-1 rounded">/icon-generator.html</code>
+                    Gere os icones em <code className="bg-blue-100 px-1 rounded">/icon-generator.html</code>
                 </div>
             )}
 
@@ -193,10 +200,10 @@ const PwaDiagnostics: React.FC = () => {
                     className="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
                 >
                     <i className="fas fa-sync-alt"></i>
-                    Forçar Atualização (Manter Dados)
+                    Forcar Atualizacao (Manter Dados)
                 </button>
                 <p className="mt-2 text-xs text-slate-500 text-center">
-                    Use isso se o app estiver preso em uma versão antiga. Seus orçamentos salvos não serão apagados.
+                    Use isso se o app estiver preso em uma versao antiga. Seus orcamentos salvos nao serao apagados.
                 </p>
             </div>
         </div>

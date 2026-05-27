@@ -2,7 +2,8 @@ import { Dispatch, SetStateAction, useCallback, useEffect, useRef } from 'react'
 import { Agendamento, Client, Film, SavedPDF, UserInfo } from '../../types';
 import * as db from '../../services/db';
 import * as estoqueDb from '../../services/estoqueDb';
-import { initSyncService } from '../../services/syncService';
+import { initSyncService, subscribeSyncStatus } from '../../services/syncService';
+import { redirectToCanonicalHostIfNeeded } from '../lib/canonicalHost';
 
 interface UseAppBootstrapParams {
     authUserId?: string;
@@ -86,9 +87,56 @@ export function useAppBootstrap({
         setAgendamentos(data);
     }, [setAgendamentos]);
 
+    const refreshSharedData = useCallback(async () => {
+        await Promise.all([
+            loadClients(undefined, false),
+            loadAllPdfs(),
+            loadAgendamentos()
+        ]);
+    }, [loadAgendamentos, loadAllPdfs, loadClients]);
+
     useEffect(() => {
         initSyncService();
     }, []);
+
+    useEffect(() => {
+        if (!authUserId) return;
+
+        let wasSyncing = false;
+
+        return subscribeSyncStatus(status => {
+            const finishedCleanly = wasSyncing
+                && !status.syncInProgress
+                && status.pendingCount === 0
+                && status.failedCount === 0;
+
+            wasSyncing = status.syncInProgress;
+
+            if (finishedCleanly) {
+                void refreshSharedData();
+                void redirectToCanonicalHostIfNeeded();
+            }
+        });
+    }, [authUserId, refreshSharedData]);
+
+    useEffect(() => {
+        if (!authUserId) return;
+
+        const refreshOnFocus = () => {
+            if (document.visibilityState === 'hidden') return;
+
+            void refreshSharedData();
+            void redirectToCanonicalHostIfNeeded();
+        };
+
+        window.addEventListener('focus', refreshOnFocus);
+        document.addEventListener('visibilitychange', refreshOnFocus);
+
+        return () => {
+            window.removeEventListener('focus', refreshOnFocus);
+            document.removeEventListener('visibilitychange', refreshOnFocus);
+        };
+    }, [authUserId, refreshSharedData]);
 
     useEffect(() => {
         let isCancelled = false;

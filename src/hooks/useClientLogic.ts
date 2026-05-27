@@ -1,9 +1,12 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { Client, Measurement, UserInfo, Film, PaymentMethods, SavedPDF, Agendamento, ProposalOption, SchedulingInfo, ExtractedClientData, UIMeasurement } from '../../types';
+import { Client, Measurement, UserInfo, Film, PaymentMethods, SavedPDF, Agendamento, ProposalOption, SchedulingInfo, ExtractedClientData, UIMeasurement, ProposalDiscount } from '../../types';
 import * as db from '../../services/db';
 import { generatePDF, generateCombinedPDF } from '../../services/pdfGenerator';
 import { useAIProcessing } from './useAIProcessing';
 import { useNumpad } from './useNumpad';
+import { summarizeProposalExpenses } from '../lib/proposalExpenses';
+import { calculatePricingAreaM2 } from '../lib/pricingArea';
+import { calculateProposalAdjustmentAmounts } from '../lib/proposalAdjustments';
 
 interface UseClientLogicProps {
     userInfo: UserInfo | null;
@@ -98,7 +101,7 @@ export const useClientLogic = ({
     }, [proposalOptions, activeOptionId]);
 
     const measurements = useMemo(() => activeOption?.measurements || [], [activeOption]);
-    const generalDiscount = useMemo(() => activeOption?.generalDiscount || { value: '', type: 'percentage' as const }, [activeOption]);
+    const generalDiscount = useMemo(() => activeOption?.generalDiscount || { value: '', type: 'percentage' as const, operation: 'discount' as const, pricingMode: 'complete' as const, expenses: [] }, [activeOption]);
 
     const totals = useMemo(() => {
         let totalM2 = 0;
@@ -109,7 +112,7 @@ export const useClientLogic = ({
             const width = parseFloat(m.largura.replace(',', '.')) || 0;
             const height = parseFloat(m.altura.replace(',', '.')) || 0;
             const quantity = m.quantidade || 0;
-            const area = width * height * quantity;
+            const area = calculatePricingAreaM2(width, height, quantity);
             totalM2 += area;
             totalQuantity += quantity;
 
@@ -130,17 +133,39 @@ export const useClientLogic = ({
             }
         });
 
-        let finalTotal = subtotal;
-        if (generalDiscount.value) {
-            const discountValue = parseFloat(generalDiscount.value.replace(',', '.')) || 0;
-            if (generalDiscount.type === 'percentage') {
-                finalTotal -= finalTotal * (discountValue / 100);
-            } else {
-                finalTotal -= discountValue;
-            }
-        }
+        const {
+            generalDiscountAmount,
+            generalIncreaseAmount,
+            generalFinalDiscountAmount
+        } = calculateProposalAdjustmentAmounts(generalDiscount, subtotal);
 
-        return { totalM2, totalQuantity, subtotal, finalTotal };
+        const finalTotal = Math.max(0, subtotal + generalIncreaseAmount - generalFinalDiscountAmount);
+        const expenseSummary = summarizeProposalExpenses(generalDiscount.expenses);
+        const estimatedTotalCost = expenseSummary.total;
+        const estimatedProfit = finalTotal - estimatedTotalCost;
+
+        return {
+            totalM2,
+            totalQuantity,
+            subtotal,
+            totalItemDiscount: 0,
+            generalDiscountAmount,
+            generalIncreaseAmount,
+            generalFinalDiscountAmount,
+            finalTotal,
+            priceAfterItemDiscounts: subtotal,
+            totalLinearMeters: 0,
+            linearMeterCost: 0,
+            totalMaterial: subtotal,
+            totalLabor: 0,
+            operationalExpenses: expenseSummary.total,
+            expensesByCategory: expenseSummary.byCategory,
+            estimatedMaterialCost: 0,
+            estimatedTotalCost,
+            estimatedProfit,
+            estimatedMarginPercentage: finalTotal > 0 ? (estimatedProfit / finalTotal) * 100 : 0,
+            pricingMode: generalDiscount.pricingMode === 'labor_only' ? 'labor_only' as const : 'complete' as const
+        };
     }, [measurements, films, generalDiscount]);
 
     // --- Hooks ---
@@ -418,7 +443,7 @@ export const useClientLogic = ({
                 id: Date.now(),
                 name: 'Opção 1',
                 measurements: [],
-                generalDiscount: { value: '', type: 'percentage' }
+                generalDiscount: { value: '', type: 'percentage', operation: 'discount' }
             };
             setProposalOptions([defaultOption]);
             setActiveOptionId(defaultOption.id);
@@ -433,7 +458,7 @@ export const useClientLogic = ({
             id: Date.now(),
             name: `Opção ${proposalOptions.length + 1}`,
             measurements: [],
-            generalDiscount: { value: '', type: 'percentage' }
+            generalDiscount: { value: '', type: 'percentage', operation: 'discount' }
         };
         setProposalOptions(prev => [...prev, newOption]);
         setActiveOptionId(newOption.id);
@@ -454,7 +479,7 @@ export const useClientLogic = ({
                 id: Date.now(),
                 name: 'Opção 1',
                 measurements: [],
-                generalDiscount: { value: '', type: 'percentage' }
+                generalDiscount: { value: '', type: 'percentage', operation: 'discount' }
             };
             setProposalOptions([defaultOption]);
             setActiveOptionId(defaultOption.id);
@@ -648,16 +673,16 @@ export const useClientLogic = ({
         }
     }, [editingMeasurementForDiscount, activeOptionId]);
 
-    const handleGeneralDiscountChange = useCallback((discount: { value: string; type: 'percentage' | 'fixed' }) => {
+    const handleGeneralDiscountChange = useCallback((discount: ProposalDiscount) => {
         if (activeOptionId) {
             setProposalOptions(prev => prev.map(opt =>
-                opt.id === activeOptionId ? { ...opt, generalDiscount: discount } : opt
+                opt.id === activeOptionId ? { ...opt, generalDiscount: { ...opt.generalDiscount, ...discount } } : opt
             ));
             setIsDirty(true);
         }
     }, [activeOptionId]);
 
-    const handleSaveGeneralDiscount = useCallback((discount: { value: string; type: 'percentage' | 'fixed' }) => {
+    const handleSaveGeneralDiscount = useCallback((discount: ProposalDiscount) => {
         handleGeneralDiscountChange(discount);
         setIsGeneralDiscountModalOpen(false);
     }, [handleGeneralDiscountChange]);
@@ -811,9 +836,9 @@ export const useClientLogic = ({
 
     const handleSaveApiKey = useCallback((key: string, provider: 'gemini' | 'openai') => {
         if (userInfo) {
-            const updatedUserInfo = { ...userInfo, aiConfig: { apiKey: key, provider } };
-            setUserInfo(updatedUserInfo);
-            db.saveUserInfo(updatedUserInfo);
+            const nextAiConfig = { apiKey: key, provider } as UserInfo['aiConfig'];
+            setUserInfo({ ...userInfo, aiConfig: nextAiConfig, isFallback: false });
+            void db.updateAIConfigOnly(nextAiConfig);
         }
         setIsApiKeyModalOpen(false);
     }, [userInfo, setUserInfo]);
@@ -901,10 +926,10 @@ export const useClientLogic = ({
     }, [selectedClientId, loadProposalOptions]);
 
     useEffect(() => {
-        if (selectedClientId !== null && userInfo && userInfo.lastSelectedClientId !== selectedClientId) {
-            const updatedUserInfo = { ...userInfo, lastSelectedClientId: selectedClientId };
+        if (selectedClientId !== null && userInfo && !userInfo.isFallback && userInfo.lastSelectedClientId !== selectedClientId) {
+            const updatedUserInfo = { ...userInfo, lastSelectedClientId: selectedClientId, isFallback: false };
             setUserInfo(updatedUserInfo);
-            db.saveUserInfo(updatedUserInfo);
+            void db.updateLastSelectedClientIdOnly(selectedClientId);
         }
         setClientTransitionKey(prev => prev + 1);
     }, [selectedClientId, userInfo, setUserInfo]);

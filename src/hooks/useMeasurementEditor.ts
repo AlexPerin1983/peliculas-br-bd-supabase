@@ -12,6 +12,7 @@ export type NumpadConfig = {
 interface UseMeasurementEditorParams {
     measurements: UIMeasurement[];
     handleMeasurementsChange: (newMeasurements: UIMeasurement[]) => void;
+    handleMeasurementsChangeWithPersistence?: (newMeasurements: UIMeasurement[]) => Promise<void>;
     createEmptyMeasurement: () => Measurement;
 }
 
@@ -26,6 +27,7 @@ const CLOSED_NUMPAD: NumpadConfig = {
 export function useMeasurementEditor({
     measurements,
     handleMeasurementsChange,
+    handleMeasurementsChangeWithPersistence,
     createEmptyMeasurement
 }: UseMeasurementEditorParams) {
     const [editingMeasurement, setEditingMeasurement] = useState<UIMeasurement | null>(null);
@@ -36,6 +38,19 @@ export function useMeasurementEditor({
     const [deletedMeasurementIndex, setDeletedMeasurementIndex] = useState<number | null>(null);
     const [showUndoToast, setShowUndoToast] = useState(false);
     const [numpadConfig, setNumpadConfig] = useState<NumpadConfig>(CLOSED_NUMPAD);
+
+    const applyMeasurements = useCallback(async (nextMeasurements: UIMeasurement[]) => {
+        if (handleMeasurementsChangeWithPersistence) {
+            await handleMeasurementsChangeWithPersistence(nextMeasurements);
+            return;
+        }
+
+        handleMeasurementsChange(nextMeasurements);
+    }, [handleMeasurementsChange, handleMeasurementsChangeWithPersistence]);
+
+    const applyMeasurementsInBackground = useCallback((nextMeasurements: UIMeasurement[]) => {
+        void applyMeasurements(nextMeasurements);
+    }, [applyMeasurements]);
 
     const saveCurrentNumpadValue = useCallback((config: NumpadConfig, currentMeasurements: UIMeasurement[]) => {
         const { measurementId, field, currentValue } = config;
@@ -57,12 +72,10 @@ export function useMeasurementEditor({
     }, []);
 
     const handleNumpadClose = useCallback(() => {
-        setNumpadConfig(prev => {
-            const updatedMeasurements = saveCurrentNumpadValue(prev, measurements);
-            handleMeasurementsChange(updatedMeasurements);
-            return CLOSED_NUMPAD;
-        });
-    }, [measurements, handleMeasurementsChange, saveCurrentNumpadValue]);
+        const updatedMeasurements = saveCurrentNumpadValue(numpadConfig, measurements);
+        applyMeasurementsInBackground(updatedMeasurements);
+        setNumpadConfig(CLOSED_NUMPAD);
+    }, [numpadConfig, measurements, saveCurrentNumpadValue, applyMeasurementsInBackground]);
 
     const handleOpenNumpad = useCallback((measurementId: number, field: 'largura' | 'altura' | 'quantidade', currentValue: string | number) => {
         setNumpadConfig(prev => {
@@ -70,7 +83,7 @@ export function useMeasurementEditor({
 
             if (prev.isOpen && (prev.measurementId !== measurementId || prev.field !== field)) {
                 const updatedMeasurements = saveCurrentNumpadValue(prev, measurements);
-                handleMeasurementsChange(updatedMeasurements);
+                applyMeasurementsInBackground(updatedMeasurements);
             }
 
             if (isSameButton) {
@@ -88,7 +101,7 @@ export function useMeasurementEditor({
                 shouldClearOnNextInput: true
             };
         });
-    }, [measurements, handleMeasurementsChange, saveCurrentNumpadValue]);
+    }, [measurements, saveCurrentNumpadValue, applyMeasurementsInBackground]);
 
     const handleNumpadDone = useCallback(() => {
         const { measurementId, field, currentValue } = numpadConfig;
@@ -104,7 +117,7 @@ export function useMeasurementEditor({
         const updatedMeasurements = measurements.map(measurement =>
             measurement.id === measurementId ? { ...measurement, [field]: finalValue } : measurement
         );
-        handleMeasurementsChange(updatedMeasurements);
+        applyMeasurementsInBackground(updatedMeasurements);
 
         const fieldSequence: Array<'largura' | 'altura' | 'quantidade'> = ['largura', 'altura', 'quantidade'];
         const currentIndex = fieldSequence.indexOf(field);
@@ -126,7 +139,7 @@ export function useMeasurementEditor({
         }
 
         setNumpadConfig(CLOSED_NUMPAD);
-    }, [numpadConfig, measurements, handleMeasurementsChange]);
+    }, [numpadConfig, measurements, applyMeasurementsInBackground]);
 
     const handleNumpadInput = useCallback((value: string) => {
         setNumpadConfig(prev => {
@@ -150,7 +163,7 @@ export function useMeasurementEditor({
                 const measurementsWithSavedValue = measurements.map(measurement =>
                     measurement.id === prev.measurementId ? { ...measurement, [prev.field!]: finalValue } : measurement
                 );
-                handleMeasurementsChange(measurementsWithSavedValue);
+                applyMeasurementsInBackground(measurementsWithSavedValue);
 
                 const fieldSequence: Array<'largura' | 'altura' | 'quantidade'> = ['largura', 'altura', 'quantidade'];
                 const currentIndex = fieldSequence.indexOf(prev.field!);
@@ -175,7 +188,7 @@ export function useMeasurementEditor({
 
             return { ...prev, currentValue: newValue, shouldClearOnNextInput: false };
         });
-    }, [measurements, handleMeasurementsChange]);
+    }, [measurements, applyMeasurementsInBackground]);
 
     const handleNumpadDelete = useCallback(() => {
         setNumpadConfig(prev => ({
@@ -215,11 +228,11 @@ export function useMeasurementEditor({
         const finalMeasurements = [...measurementsWithSavedValue];
         finalMeasurements.splice(index + 1, 0, newMeasurement);
 
-        handleMeasurementsChange(finalMeasurements.map(measurement =>
+        applyMeasurementsInBackground(finalMeasurements.map(measurement =>
             measurement.id === newMeasurement.id ? measurement : { ...measurement, isNew: false }
         ));
         setNumpadConfig(CLOSED_NUMPAD);
-    }, [numpadConfig, measurements, handleMeasurementsChange]);
+    }, [numpadConfig, measurements, applyMeasurementsInBackground]);
 
     const handleNumpadClear = useCallback(() => {
         const { measurementId, field } = numpadConfig;
@@ -228,14 +241,14 @@ export function useMeasurementEditor({
         const updatedMeasurements = measurements.map(measurement =>
             measurement.id === measurementId ? { ...measurement, largura: '', altura: '', quantidade: 1 } : measurement
         );
-        handleMeasurementsChange(updatedMeasurements);
+        applyMeasurementsInBackground(updatedMeasurements);
 
         setNumpadConfig(prev => ({
             ...prev,
             currentValue: field === 'quantidade' ? '1' : '',
             shouldClearOnNextInput: true
         }));
-    }, [numpadConfig, measurements, handleMeasurementsChange]);
+    }, [numpadConfig, measurements, applyMeasurementsInBackground]);
 
     const handleNumpadAddGroup = useCallback(() => {
         const updatedMeasurements = saveCurrentNumpadValue(numpadConfig, measurements);
@@ -245,9 +258,9 @@ export function useMeasurementEditor({
             newMeasurement
         ];
 
-        handleMeasurementsChange(finalMeasurements);
+        applyMeasurementsInBackground(finalMeasurements);
         setNumpadConfig(CLOSED_NUMPAD);
-    }, [numpadConfig, measurements, createEmptyMeasurement, handleMeasurementsChange, saveCurrentNumpadValue]);
+    }, [numpadConfig, measurements, createEmptyMeasurement, saveCurrentNumpadValue, applyMeasurementsInBackground]);
 
     const handleOpenEditMeasurementModal = useCallback((measurement: UIMeasurement) => {
         if (numpadConfig.isOpen) {
@@ -269,20 +282,20 @@ export function useMeasurementEditor({
         const newMeasurements = measurements.map(measurement =>
             measurement.id === updatedMeasurement.id ? updatedMeasurement : measurement
         );
-        handleMeasurementsChange(newMeasurements);
-    }, [editingMeasurement, measurements, handleMeasurementsChange]);
+        applyMeasurementsInBackground(newMeasurements);
+    }, [editingMeasurement, measurements, applyMeasurementsInBackground]);
 
     const handleRequestDeleteMeasurement = useCallback((measurementId: number) => {
         handleCloseEditMeasurementModal();
         setMeasurementToDeleteId(measurementId);
     }, [handleCloseEditMeasurementModal]);
 
-    const handleConfirmDeleteIndividualMeasurement = useCallback(() => {
+    const handleConfirmDeleteIndividualMeasurement = useCallback(async () => {
         if (measurementToDeleteId === null) return;
 
-        handleMeasurementsChange(measurements.filter(measurement => measurement.id !== measurementToDeleteId));
+        await applyMeasurements(measurements.filter(measurement => measurement.id !== measurementToDeleteId));
         setMeasurementToDeleteId(null);
-    }, [measurementToDeleteId, measurements, handleMeasurementsChange]);
+    }, [measurementToDeleteId, measurements, applyMeasurements]);
 
     const handleDeleteMeasurementFromEditModal = useCallback(() => {
         if (editingMeasurement) {
@@ -294,7 +307,7 @@ export function useMeasurementEditor({
         handleRequestDeleteMeasurement(measurementId);
     }, [handleRequestDeleteMeasurement]);
 
-    const handleImmediateDeleteMeasurement = useCallback((measurementId: number) => {
+    const handleImmediateDeleteMeasurement = useCallback(async (measurementId: number) => {
         const measurementIndex = measurements.findIndex(measurement => measurement.id === measurementId);
         const measurement = measurements[measurementIndex];
 
@@ -305,21 +318,21 @@ export function useMeasurementEditor({
         setDeletedMeasurement(measurement);
         setDeletedMeasurementIndex(measurementIndex);
         setShowUndoToast(true);
-        handleMeasurementsChange(measurements.filter(item => item.id !== measurementId));
-    }, [measurements, handleMeasurementsChange]);
+        await applyMeasurements(measurements.filter(item => item.id !== measurementId));
+    }, [measurements, applyMeasurements]);
 
-    const handleUndoDelete = useCallback(() => {
+    const handleUndoDelete = useCallback(async () => {
         if (!deletedMeasurement || deletedMeasurementIndex === null) {
             return;
         }
 
         const newMeasurements = [...measurements];
         newMeasurements.splice(deletedMeasurementIndex, 0, deletedMeasurement);
-        handleMeasurementsChange(newMeasurements);
+        await applyMeasurements(newMeasurements);
         setDeletedMeasurement(null);
         setDeletedMeasurementIndex(null);
         setShowUndoToast(false);
-    }, [deletedMeasurement, deletedMeasurementIndex, measurements, handleMeasurementsChange]);
+    }, [deletedMeasurement, deletedMeasurementIndex, measurements, applyMeasurements]);
 
     const handleDismissUndo = useCallback(() => {
         setDeletedMeasurement(null);
@@ -346,9 +359,9 @@ export function useMeasurementEditor({
         const updatedMeasurements = measurements.map(measurement =>
             measurement.id === editingMeasurementForDiscount.id ? { ...measurement, discount } : measurement
         );
-        handleMeasurementsChange(updatedMeasurements);
+        applyMeasurementsInBackground(updatedMeasurements);
         handleCloseDiscountModal();
-    }, [editingMeasurementForDiscount, measurements, handleMeasurementsChange, handleCloseDiscountModal]);
+    }, [editingMeasurementForDiscount, measurements, applyMeasurementsInBackground, handleCloseDiscountModal]);
 
     return {
         numpadConfig,

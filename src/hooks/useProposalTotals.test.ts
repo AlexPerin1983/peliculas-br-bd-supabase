@@ -46,7 +46,8 @@ describe('useProposalTotals', () => {
         films,
         generalDiscount: {
           value: '20',
-          type: 'fixed'
+          type: 'fixed',
+          pricingMode: 'complete'
         }
       })
     );
@@ -62,6 +63,46 @@ describe('useProposalTotals', () => {
     expect(result.current.groupedTotals?.Blackout.totalM2).toBeCloseTo(4);
     expect(result.current.groupedTotals?.Blackout.totalMaterial).toBeCloseTo(400);
     expect(result.current.groupedTotals?.Blackout.totalLabor).toBeCloseTo(100);
+  });
+
+  it('usa a area exibida com duas casas para calcular material e mao de obra', () => {
+    const films: Film[] = [
+      {
+        nome: 'Carbono black',
+        preco: 130,
+        maoDeObra: 100
+      }
+    ];
+
+    const measurements: UIMeasurement[] = [
+      {
+        id: 1,
+        largura: '22,9113',
+        altura: '1',
+        quantidade: 1,
+        ambiente: 'Sala',
+        tipoAplicacao: 'Interna',
+        pelicula: 'Carbono black',
+        active: true
+      }
+    ];
+
+    const { result } = renderHook(() =>
+      useProposalTotals({
+        measurements,
+        films,
+        generalDiscount: {
+          value: '0',
+          type: 'percentage',
+          pricingMode: 'complete'
+        }
+      })
+    );
+
+    expect(result.current.totalM2).toBe(22.91);
+    expect(result.current.totalMaterial).toBeCloseTo(2978.3);
+    expect(result.current.totalLabor).toBeCloseTo(2291);
+    expect(result.current.groupedTotals?.['Carbono black'].totalMaterial).toBeCloseTo(2978.3);
   });
 
   it('nao deixa o total final ficar negativo com desconto fixo alto', () => {
@@ -91,12 +132,200 @@ describe('useProposalTotals', () => {
         films,
         generalDiscount: {
           value: '500',
-          type: 'fixed'
+          type: 'fixed',
+          pricingMode: 'complete'
         }
       })
     );
 
     expect(result.current.subtotal).toBeCloseTo(50);
     expect(result.current.finalTotal).toBe(0);
+  });
+
+  it('permite acrescimo geral em porcentagem e valor fixo', () => {
+    const films: Film[] = [
+      {
+        nome: 'Carbono',
+        preco: 100
+      }
+    ];
+
+    const measurements: UIMeasurement[] = [
+      {
+        id: 1,
+        largura: '1',
+        altura: '1',
+        quantidade: 2,
+        ambiente: 'Sala',
+        tipoAplicacao: 'Interna',
+        pelicula: 'Carbono',
+        active: true
+      }
+    ];
+
+    const percentageResult = renderHook(() =>
+      useProposalTotals({
+        measurements,
+        films,
+        generalDiscount: {
+          value: '10',
+          type: 'percentage',
+          operation: 'increase',
+          pricingMode: 'complete'
+        }
+      })
+    ).result;
+
+    expect(percentageResult.current.generalDiscountAmount).toBeCloseTo(20);
+    expect(percentageResult.current.finalTotal).toBeCloseTo(220);
+
+    const fixedResult = renderHook(() =>
+      useProposalTotals({
+        measurements,
+        films,
+        generalDiscount: {
+          value: '35',
+          type: 'fixed',
+          operation: 'increase',
+          pricingMode: 'complete'
+        }
+      })
+    ).result;
+
+    expect(fixedResult.current.generalDiscountAmount).toBeCloseTo(35);
+    expect(fixedResult.current.finalTotal).toBeCloseTo(235);
+  });
+
+  it('permite acrescimo embutido e desconto final na mesma proposta', () => {
+    const films: Film[] = [
+      {
+        nome: 'Carbono',
+        preco: 100
+      }
+    ];
+
+    const measurements: UIMeasurement[] = [
+      {
+        id: 1,
+        largura: '1',
+        altura: '1',
+        quantidade: 2,
+        ambiente: 'Sala',
+        tipoAplicacao: 'Interna',
+        pelicula: 'Carbono',
+        active: true
+      }
+    ];
+
+    const { result } = renderHook(() =>
+      useProposalTotals({
+        measurements,
+        films,
+        generalDiscount: {
+          value: '10',
+          type: 'fixed',
+          operation: 'discount',
+          increaseValue: '50',
+          increaseType: 'fixed',
+          discountValue: '10',
+          discountType: 'percentage',
+          pricingMode: 'complete'
+        }
+      })
+    );
+
+    expect(result.current.priceAfterItemDiscounts).toBeCloseTo(200);
+    expect(result.current.generalIncreaseAmount).toBeCloseTo(50);
+    expect(result.current.generalFinalDiscountAmount).toBeCloseTo(25);
+    expect(result.current.generalDiscountAmount).toBeCloseTo(25);
+    expect(result.current.finalTotal).toBeCloseTo(225);
+  });
+
+  it('usa apenas mao de obra quando a proposta esta nesse modo', () => {
+    const films: Film[] = [
+      {
+        nome: 'Nano',
+        preco: 120,
+        maoDeObra: 35,
+        precoMetroLinear: 25
+      }
+    ];
+
+    const measurements: UIMeasurement[] = [
+      {
+        id: 1,
+        largura: '2',
+        altura: '1',
+        quantidade: 1,
+        ambiente: 'Sala',
+        tipoAplicacao: 'Interna',
+        pelicula: 'Nano',
+        active: true
+      }
+    ];
+
+    const { result } = renderHook(() =>
+      useProposalTotals({
+        measurements,
+        films,
+        generalDiscount: {
+          value: '0',
+          type: 'percentage',
+          pricingMode: 'labor_only'
+        }
+      })
+    );
+
+    expect(result.current.pricingMode).toBe('labor_only');
+    expect(result.current.subtotal).toBeCloseTo(70);
+    expect(result.current.totalMaterial).toBe(0);
+    expect(result.current.totalLabor).toBeCloseTo(70);
+    expect(result.current.linearMeterCost).toBe(0);
+    expect(result.current.groupedTotals?.Nano.unitPriceMaterial).toBe(0);
+    expect(result.current.groupedTotals?.Nano.unitPriceLabor).toBe(35);
+  });
+
+  it('soma gastos internos e calcula resultado estimado da proposta', () => {
+    const films: Film[] = [
+      {
+        nome: 'Blackout',
+        preco: 100,
+        precoMetroLinear: 20
+      }
+    ];
+
+    const measurements: UIMeasurement[] = [
+      {
+        id: 1,
+        largura: '1',
+        altura: '1',
+        quantidade: 1,
+        ambiente: 'Sala',
+        tipoAplicacao: 'Interna',
+        pelicula: 'Blackout',
+        active: true
+      }
+    ];
+
+    const { result } = renderHook(() =>
+      useProposalTotals({
+        measurements,
+        films,
+        generalDiscount: {
+          value: '0',
+          type: 'percentage',
+          pricingMode: 'complete',
+          expenses: [
+            { id: 'traffic', category: 'paid_traffic', amount: '15,50' },
+            { id: 'transport', category: 'transport', amount: '10' }
+          ]
+        }
+      })
+    );
+
+    expect(result.current.operationalExpenses).toBeCloseTo(25.5);
+    expect(result.current.estimatedTotalCost).toBeGreaterThan(25.5);
+    expect(result.current.estimatedProfit).toBeCloseTo(result.current.finalTotal - result.current.estimatedTotalCost);
+    expect(result.current.expensesByCategory?.map(item => item.category)).toEqual(['paid_traffic', 'transport']);
   });
 });

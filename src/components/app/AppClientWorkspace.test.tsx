@@ -8,8 +8,19 @@ vi.mock('../../../components/ClientBar', () => ({
 }));
 
 vi.mock('../../../components/ProposalOptionsCarousel', () => ({
-  default: ({ onAddOption }: { onAddOption: () => void }) => (
-    <button onClick={onAddOption}>Add Option</button>
+  default: ({
+    onAddOption,
+    onOpenExpenses,
+    showOptionsStrip = true
+  }: {
+    onAddOption: () => void;
+    onOpenExpenses: () => void;
+    showOptionsStrip?: boolean;
+  }) => (
+    <>
+      {showOptionsStrip ? <button onClick={onAddOption}>Add Option</button> : null}
+      <button onClick={onOpenExpenses}>Open Expenses</button>
+    </>
   )
 }));
 
@@ -73,9 +84,21 @@ describe('AppClientWorkspace', () => {
       totalItemDiscount: 0,
       generalDiscountAmount: 0,
       finalTotal: 100,
-      totalQuantity: 2
+      totalQuantity: 2,
+      priceAfterItemDiscounts: 100,
+      totalLinearMeters: 0,
+      linearMeterCost: 0,
+      totalMaterial: 0,
+      totalLabor: 0,
+      operationalExpenses: 0,
+      expensesByCategory: [],
+      estimatedMaterialCost: 0,
+      estimatedTotalCost: 0,
+      estimatedProfit: 100,
+      estimatedMarginPercentage: 100,
+      pricingMode: 'complete'
     },
-    generalDiscount: { value: '0', type: 'percentage' as const },
+    generalDiscount: { value: '0', type: 'percentage' as const, pricingMode: 'complete' as const },
     content: <div>Workspace Content</div>,
     isGeneratingPdf: false,
     onSelectClientClick: vi.fn(),
@@ -89,6 +112,11 @@ describe('AppClientWorkspace', () => {
     onRenameOption: vi.fn(),
     onDeleteOption: vi.fn(),
     onAddOption: vi.fn(),
+    onSelectPricingMode: vi.fn(),
+    onOpenProposalPaymentConfig: vi.fn(),
+    onOpenProposalExpenses: vi.fn(),
+    hasCustomProposalPaymentConfig: false,
+    hasActiveExpenses: false,
     onSwipeDirectionChange: vi.fn(),
     onOpenGeneralDiscountModal: vi.fn(),
     onUpdateGeneralDiscount: vi.fn(),
@@ -122,6 +150,7 @@ describe('AppClientWorkspace', () => {
 
     fireEvent.click(screen.getByText('ClientBar Add'));
     fireEvent.click(screen.getByText('Add Option'));
+    fireEvent.click(screen.getAllByText('Open Expenses')[0]);
     fireEvent.click(screen.getByText('Desktop Add'));
     fireEvent.click(screen.getByText('Desktop Duplicate'));
     fireEvent.click(screen.getByText('Desktop PDF'));
@@ -131,6 +160,7 @@ describe('AppClientWorkspace', () => {
 
     expect(baseProps.onAddClient).toHaveBeenCalled();
     expect(baseProps.onAddOption).toHaveBeenCalled();
+    expect(baseProps.onOpenProposalExpenses).toHaveBeenCalled();
     expect(baseProps.onAddMeasurement).toHaveBeenCalledTimes(2);
     expect(baseProps.onDuplicateMeasurements).toHaveBeenCalledTimes(2);
     expect(baseProps.onGeneratePdf).toHaveBeenCalledTimes(2);

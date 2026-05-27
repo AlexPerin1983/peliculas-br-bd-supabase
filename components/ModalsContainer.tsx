@@ -6,17 +6,17 @@ import FilmModal from './modals/FilmModal';
 import ConfirmationModal from './modals/ConfirmationModal';
 import FilmSelectionModal from './modals/FilmSelectionModal';
 import EditMeasurementModal from './modals/EditMeasurementModal';
-import InfoModal from './modals/InfoModal';
 import AgendamentoModal from './modals/AgendamentoModal';
 import DiscountModal from './modals/DiscountModal';
 import GeneralDiscountModal from './modals/GeneralDiscountModal';
 import AIMeasurementModal from './modals/AIMeasurementModal';
 import AIClientModal from './modals/AIClientModal';
 import AIFilmModal from './modals/AIFilmModal';
+import AIQuickProposalModal from './modals/AIQuickProposalModal';
 import ApiKeyModal from './modals/ApiKeyModal';
 import PdfGenerationStatusModal from './modals/PdfGenerationStatusModal';
 import ImageGalleryModal from './modals/ImageGalleryModal';
-import { Client, Film, UserInfo, SavedPDF, Agendamento, ProposalOption, SchedulingInfo } from '../types';
+import { Client, Film, UserInfo, SavedPDF, Agendamento, ProposalOption, SchedulingInfo, ProposalDiscount } from '../types';
 
 type UIMeasurement = any; // Temporary - will be properly typed later
 
@@ -120,13 +120,21 @@ interface ModalsContainerProps {
     handleOpenFilmSelectionModal: (measurementId: number) => void;
     onOpenLocationImport: () => void;
     numpadConfig: any;
-    generalDiscount: { value: number; type: 'percentage' | 'value' };
+    generalDiscount: ProposalDiscount;
+    handleSaveGeneralDiscount: (discount: ProposalDiscount) => void;
+    isGeneralDiscountModalOpen: boolean;
+    setIsGeneralDiscountModalOpen: (value: boolean) => void;
 
     // AI Measurement Modal
     isAIMeasurementModalOpen: boolean;
     setIsAIMeasurementModalOpen: (value: boolean) => void;
     handleProcessAIMeasurementInput: (input: any) => Promise<void>;
     isProcessingAI: boolean;
+
+    // AI Quick Proposal Modal
+    isAIQuickProposalModalOpen: boolean;
+    setIsAIQuickProposalModalOpen: (value: boolean) => void;
+    handleProcessAIQuickProposalInput: (input: any) => Promise<void>;
 
     // AI Client Modal
     isAIClientModalOpen: boolean;
@@ -158,10 +166,6 @@ interface ModalsContainerProps {
     handleAddNewClientFromAgendamento: (clientName: string) => void;
     allSavedPdfs: SavedPDF[];
     agendamentos: Agendamento[];
-
-    // Info Modal
-    infoModalConfig: { isOpen: boolean; title: string; message: string };
-    setInfoModalConfig: (value: { isOpen: boolean; title: string; message: string }) => void;
 
     // Save Before PDF Modal
     isSaveBeforePdfModalOpen: boolean;
@@ -227,6 +231,7 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
                     isLoading={props.isLoading}
                     onAddNewClient={props.handleAddNewClientFromSelection}
                     onTogglePin={props.handleToggleClientPin}
+                    savedPdfs={props.allSavedPdfs}
                 />
             )}
 
@@ -334,16 +339,6 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
                     onAddNewClient={props.handleAddNewClientFromAgendamento}
                     userInfo={props.userInfo}
                     agendamentos={props.agendamentos}
-                />
-            )}
-
-            {/* Info Modal */}
-            {props.infoModalConfig.isOpen && (
-                <InfoModal
-                    isOpen={props.infoModalConfig.isOpen}
-                    onClose={() => props.setInfoModalConfig({ isOpen: false, title: '', message: '' })}
-                    title={props.infoModalConfig.title}
-                    message={props.infoModalConfig.message}
                 />
             )}
 
@@ -479,8 +474,10 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
                     isOpen={props.isGeneralDiscountModalOpen}
                     onClose={() => props.setIsGeneralDiscountModalOpen(false)}
                     onSave={props.handleSaveGeneralDiscount}
+                    initialDiscount={props.generalDiscount}
                     initialValue={props.generalDiscount.value}
                     initialType={props.generalDiscount.type}
+                    initialOperation={props.generalDiscount.operation}
                 />
             )}
 
@@ -490,6 +487,17 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
                     isOpen={props.isAIMeasurementModalOpen}
                     onClose={() => props.setIsAIMeasurementModalOpen(false)}
                     onProcess={props.handleProcessAIMeasurementInput}
+                    isProcessing={props.isProcessingAI}
+                    provider={props.userInfo?.aiConfig?.provider || 'gemini'}
+                />
+            )}
+
+            {/* AI Quick Proposal Modal */}
+            {props.isAIQuickProposalModalOpen && (
+                <AIQuickProposalModal
+                    isOpen={props.isAIQuickProposalModalOpen}
+                    onClose={() => props.setIsAIQuickProposalModalOpen(false)}
+                    onProcess={props.handleProcessAIQuickProposalInput}
                     isProcessing={props.isProcessingAI}
                     provider={props.userInfo?.aiConfig?.provider || 'gemini'}
                 />

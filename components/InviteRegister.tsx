@@ -156,7 +156,7 @@ const InviteRegister: React.FC = () => {
             }
 
             console.log('[InviteRegister] Usuário criado com sucesso:', authData?.user?.id);
-            console.log('[InviteRegister] Sessão retornada:', authData?.session ? 'SIM' : 'NÃO');
+            console.log('[InviteRegister] Sessão retornada:', authData?.session ? 'SIM' : 'N?O');
 
             // Salvar código para processar após login/confirmação
             if (code) {

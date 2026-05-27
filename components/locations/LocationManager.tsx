@@ -3,6 +3,7 @@ import { Location } from '../../types';
 import { locationService } from '../../services/locationService';
 import { useAuth } from '../../contexts/AuthContext';
 import { useError } from '../../src/contexts/ErrorContext';
+import { useFeedback } from '../../src/contexts/FeedbackContext';
 import { CardSkeleton } from '../ui/Skeleton';
 import LocationForm from './LocationForm';
 import LocationMeasurements from './LocationMeasurements';
@@ -10,6 +11,7 @@ import LocationMeasurements from './LocationMeasurements';
 const LocationManager: React.FC = () => {
     const { user } = useAuth();
     const { showError } = useError();
+    const { confirm } = useFeedback();
     const [locations, setLocations] = useState<Location[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
@@ -66,7 +68,16 @@ const LocationManager: React.FC = () => {
     };
 
     const handleDeleteLocation = async (id: number) => {
-        if (!window.confirm('Tem certeza que deseja excluir este local? Todas as medidas serão perdidas.')) return;
+        const confirmed = await confirm({
+            title: 'Excluir local',
+            message: 'Tem certeza que deseja excluir este local? Todas as medidas serao perdidas.',
+            confirmButtonText: 'Sim, excluir',
+            confirmButtonVariant: 'danger',
+            presentation: 'auto'
+        });
+
+        if (!confirmed) return;
+
         try {
             await locationService.deleteLocation(id);
             loadLocations();

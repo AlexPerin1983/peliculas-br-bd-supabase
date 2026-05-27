@@ -155,7 +155,7 @@ const FilmModal: React.FC<FilmModalProps> = ({
         const filesToProcess = Array.from(files).slice(0, MAX_IMAGES - currentImagesCount);
 
         if (filesToProcess.length === 0 && currentImagesCount >= MAX_IMAGES) {
-            setInfoModalConfig({ isOpen: true, message: `Voce ja atingiu o limite de ${MAX_IMAGES} imagens.` });
+            setInfoModalConfig({ isOpen: true, message: `Você já atingiu o limite de ${MAX_IMAGES} imagens.` });
             return;
         }
 
@@ -225,7 +225,7 @@ const FilmModal: React.FC<FilmModalProps> = ({
         try {
             await onSave({ ...formData, customFields: customFieldsWithMatchingMetadata }, film);
         } catch (err: any) {
-            setError(err.message || 'Erro ao salvar pelicula. Tente novamente.');
+            setError(err.message || 'Erro ao salvar película. Tente novamente.');
             setIsSaving(false);
         }
     };
@@ -323,7 +323,7 @@ const FilmModal: React.FC<FilmModalProps> = ({
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                             <Input
                                 id="preco"
-                                label="Preco por m2 (R$)"
+                                label="Preço por m² (R$)"
                                 type="number"
                                 value={formData.preco}
                                 onChange={handleChange}
@@ -334,7 +334,7 @@ const FilmModal: React.FC<FilmModalProps> = ({
                             />
                             <Input
                                 id="precoMetroLinear"
-                                label="Preco Metro Linear (R$)"
+                                label="Preço metro linear (R$)"
                                 type="number"
                                 value={formData.precoMetroLinear}
                                 onChange={handleChange}
@@ -344,7 +344,7 @@ const FilmModal: React.FC<FilmModalProps> = ({
                             />
                             <Input
                                 id="maoDeObra"
-                                label="Mao de Obra (R$)"
+                                label="Mão de obra (R$)"
                                 type="number"
                                 value={formData.maoDeObra}
                                 onChange={handleChange}
@@ -357,7 +357,7 @@ const FilmModal: React.FC<FilmModalProps> = ({
                         <div className="grid grid-cols-2 gap-4">
                             <Input
                                 id="garantiaFabricante"
-                                label="Garantia Fabricante (Anos)"
+                                label="Garantia fabricante (anos)"
                                 type="number"
                                 value={formData.garantiaFabricante}
                                 onChange={handleChange}
@@ -365,14 +365,16 @@ const FilmModal: React.FC<FilmModalProps> = ({
                                 min="0"
                             />
                             <Input
+                                as="select"
                                 id="garantiaMaoDeObra"
-                                label="Garantia Mao de Obra (Dias)"
-                                type="number"
+                                label="Garantia mão de obra (dias)"
                                 value={formData.garantiaMaoDeObra}
                                 onChange={handleChange}
-                                onFocus={handleFocus}
-                                min="0"
-                            />
+                            >
+                                <option value={30}>30 dias</option>
+                                <option value={60}>60 dias</option>
+                                <option value={90}>90 dias</option>
+                            </Input>
                         </div>
                     </div>
 

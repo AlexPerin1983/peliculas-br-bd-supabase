@@ -17,7 +17,9 @@ export default defineConfig({
     exclude: [
       'node_modules/**',
       'dist/**',
-      '.agent/**'
+      '.agent/**',
+      'tmp-*.spec.*',
+      'test-results/**'
     ],
     coverage: {
       provider: 'v8',

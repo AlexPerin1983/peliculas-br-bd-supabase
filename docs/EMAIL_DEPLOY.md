@@ -34,7 +34,7 @@ supabase login
 supabase link --project-ref seu-project-ref
 
 # Configurar secrets
-supabase secrets set RESEND_API_KEY=re_YzPRcM95_1QmrU1MQryq6_jaoZQEhT
+supabase secrets set RESEND_API_KEY=your_resend_api_key_here
 ```
 
 #### Localmente (para desenvolvimento)
@@ -42,7 +42,7 @@ supabase secrets set RESEND_API_KEY=re_YzPRcM95_1QmrU1MQryq6_jaoZQEhT
 Crie o arquivo `.env.local`:
 
 ```env
-RESEND_API_KEY=re_YzPRcM95_1QmrU1MQryq6_jaoZQEhT
+RESEND_API_KEY=your_resend_api_key_here
 ```
 
 ### 3. Aplicar Migration do Banco de Dados
@@ -121,7 +121,7 @@ supabase secrets list
 
 # Testar conexão com Resend
 curl -X POST 'https://api.resend.com/emails' \
-  -H 'Authorization: Bearer re_YzPRcM95_1QmrU1MQryq6_jaoZQEhT' \
+  -H 'Authorization: Bearer your_resend_api_key_here' \
   -H 'Content-Type: application/json' \
   -d '{
     "from": "onboarding@resend.dev",

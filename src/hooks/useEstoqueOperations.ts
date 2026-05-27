@@ -9,10 +9,18 @@ import {
     saveConsumo,
 } from '../../services/estoqueDb';
 import QRCode from 'qrcode';
+import {
+    formatMeterValue,
+    formatMetersFromCentimeters,
+    parseFlexibleCentimeterInput,
+    parseFlexibleMeterInput
+} from '../lib/estoqueDimensions';
+import { useFeedback } from '../contexts/FeedbackContext';
 
 type QrModalState = { type: 'bobina' | 'retalho'; item: Bobina | Retalho } | null;
 type StatusModalState = { type: 'bobina' | 'retalho'; item: Bobina | Retalho } | null;
 type DeleteConfirmState = { type: 'bobina' | 'retalho'; id: number } | null;
+const RETALHO_BATCH_MAX = 100;
 
 type FormState = {
     formFilmId: string;
@@ -25,6 +33,7 @@ type FormState = {
     formObservacao: string;
     formBobinaId: number | '';
     formDeduzirDaBobina: boolean;
+    formQuantidade: string;
 };
 
 type FormSetters = {
@@ -38,6 +47,7 @@ type FormSetters = {
     setFormObservacao: (value: string) => void;
     setFormBobinaId: (value: number | '') => void;
     setFormDeduzirDaBobina: (value: boolean) => void;
+    setFormQuantidade: (value: string) => void;
 };
 
 type UseEstoqueOperationsParams = {
@@ -71,6 +81,8 @@ export function useEstoqueOperations({
     loadData,
     qrCodeDataUrl,
 }: UseEstoqueOperationsParams) {
+    const { showAlert, showToast } = useFeedback();
+
     const resetForm = useCallback(() => {
         setters.setFormFilmId('');
         setters.setFormLargura('');
@@ -82,6 +94,7 @@ export function useEstoqueOperations({
         setters.setFormLocalizacao('');
         setters.setFormBobinaId('');
         setters.setFormDeduzirDaBobina(false);
+        setters.setFormQuantidade('1');
     }, [setters]);
 
     const generateQRCodeImage = useCallback(async (code: string) => {
@@ -156,8 +169,8 @@ export function useEstoqueOperations({
 
         const dimensoes = document.createElement('p');
         dimensoes.textContent = 'comprimentoTotalM' in item
-            ? `${item.larguraCm}cm x ${item.comprimentoTotalM}m`
-            : `${item.larguraCm}cm x ${(item as Retalho).comprimentoCm}cm`;
+            ? `${formatMetersFromCentimeters(item.larguraCm)}m x ${formatMeterValue(item.comprimentoTotalM)}m`
+            : `${formatMetersFromCentimeters(item.larguraCm)}m x ${formatMetersFromCentimeters((item as Retalho).comprimentoCm)}m`;
         dimensoes.style.fontSize = '14px';
         dimensoes.style.color = '#64748b';
         dimensoes.style.margin = '0';
@@ -198,11 +211,11 @@ export function useEstoqueOperations({
             link.click();
         } catch (err) {
             console.error('Erro ao gerar imagem:', err);
-            alert('Erro ao gerar imagem. Tente novamente.');
+            showToast('Erro ao gerar imagem. Tente novamente.', { tone: 'error' });
         } finally {
             setIsGenerating(false);
         }
-    }, [generateCleanLabelElement, qrCodeDataUrl, setIsGenerating, showQRModal]);
+    }, [generateCleanLabelElement, qrCodeDataUrl, setIsGenerating, showQRModal, showToast]);
 
     const handleSavePDF = useCallback(async () => {
         if (!showQRModal || !qrCodeDataUrl) return;
@@ -245,15 +258,15 @@ export function useEstoqueOperations({
             pdf.save(`qr-${showQRModal.type}-${showQRModal.item.codigoQr}.pdf`);
         } catch (err) {
             console.error('Erro ao gerar PDF:', err);
-            alert('Erro ao gerar PDF. Tente novamente.');
+            showToast('Erro ao gerar PDF. Tente novamente.', { tone: 'error' });
         } finally {
             setIsGenerating(false);
         }
-    }, [generateCleanLabelElement, qrCodeDataUrl, setIsGenerating, showQRModal]);
+    }, [generateCleanLabelElement, qrCodeDataUrl, setIsGenerating, showQRModal, showToast]);
 
     const handleAddBobina = useCallback(async () => {
         if (!form.formFilmId || !form.formLargura || !form.formComprimento) {
-            alert('Preencha os campos obrigatórios');
+            showToast('Preencha os campos obrigatorios.', { tone: 'warning' });
             return;
         }
 
@@ -261,9 +274,9 @@ export function useEstoqueOperations({
             const novaBobina: Omit<Bobina, 'id'> = {
                 filmId: form.formFilmId,
                 codigoQr: generateQRCode(),
-                larguraCm: parseFloat(form.formLargura),
-                comprimentoTotalM: parseFloat(form.formComprimento),
-                comprimentoRestanteM: parseFloat(form.formComprimento),
+                larguraCm: parseFlexibleCentimeterInput(form.formLargura),
+                comprimentoTotalM: parseFlexibleMeterInput(form.formComprimento),
+                comprimentoRestanteM: parseFlexibleMeterInput(form.formComprimento),
                 custoTotal: form.formCusto ? parseFloat(form.formCusto) : undefined,
                 fornecedor: form.formFornecedor || undefined,
                 lote: form.formLote || undefined,
@@ -278,59 +291,96 @@ export function useEstoqueOperations({
             setShowAddModal(false);
         } catch (error) {
             console.error('Erro ao salvar bobina:', error);
-            alert('Erro ao salvar bobina');
+            showToast('Erro ao salvar bobina.', { tone: 'error' });
         }
-    }, [form, loadData, resetForm, setShowAddModal]);
+    }, [form, loadData, resetForm, setShowAddModal, showToast]);
 
     const handleAddRetalho = useCallback(async () => {
         if (!form.formFilmId || !form.formLargura || !form.formComprimento) {
-            alert('Preencha os campos obrigatórios');
+            showToast('Preencha os campos obrigatorios.', { tone: 'warning' });
             return;
         }
 
         try {
-            const novoRetalho: Omit<Retalho, 'id'> = {
+            const quantidadeRetalhos = Number.parseInt(form.formQuantidade || '1', 10);
+
+            if (!Number.isFinite(quantidadeRetalhos) || quantidadeRetalhos < 1) {
+                showToast('Informe uma quantidade valida de retalhos.', { tone: 'warning' });
+                return;
+            }
+
+            if (quantidadeRetalhos > RETALHO_BATCH_MAX) {
+                showToast(`Cadastre no maximo ${RETALHO_BATCH_MAX} retalhos por vez.`, { tone: 'warning' });
+                return;
+            }
+
+            const larguraRetalhoCm = parseFlexibleCentimeterInput(form.formLargura);
+            const comprimentoRetalhoCm = parseFlexibleCentimeterInput(form.formComprimento);
+
+            if (!larguraRetalhoCm || !comprimentoRetalhoCm) {
+                showToast('Informe medidas validas para o retalho.', { tone: 'warning' });
+                return;
+            }
+
+            const buildObservacao = (index: number): string | undefined => {
+                const observacoes = [
+                    form.formObservacao || '',
+                    quantidadeRetalhos > 1 ? `Lote de ${quantidadeRetalhos} retalhos iguais (${index + 1}/${quantidadeRetalhos})` : ''
+                ].filter(Boolean);
+
+                return observacoes.length > 0 ? observacoes.join(' - ') : undefined;
+            };
+
+            const novosRetalhos = Array.from({ length: quantidadeRetalhos }, (_, index): Omit<Retalho, 'id'> => ({
                 filmId: form.formFilmId,
                 codigoQr: generateQRCode(),
-                larguraCm: parseFloat(form.formLargura),
-                comprimentoCm: parseFloat(form.formComprimento),
+                larguraCm: larguraRetalhoCm,
+                comprimentoCm: comprimentoRetalhoCm,
                 bobinaId: form.formBobinaId || undefined,
                 status: 'disponivel',
                 localizacao: form.formLocalizacao || undefined,
-                observacao: form.formObservacao || undefined,
-            };
+                observacao: buildObservacao(index),
+            }));
 
-            await saveRetalho(novoRetalho);
+            await Promise.all(novosRetalhos.map((retalho) => saveRetalho(retalho)));
 
             if (form.formDeduzirDaBobina && form.formBobinaId) {
-                const metrosRetalho = parseFloat(form.formComprimento) / 100;
+                const metrosRetalho = (comprimentoRetalhoCm / 100) * quantidadeRetalhos;
                 await saveConsumo({
                     bobinaId: form.formBobinaId,
                     metrosConsumidos: metrosRetalho,
-                    larguraCorteCm: parseFloat(form.formLargura),
-                    comprimentoCorteCm: parseFloat(form.formComprimento),
-                    areaM2: (parseFloat(form.formLargura) * parseFloat(form.formComprimento)) / 10000,
+                    larguraCorteCm: larguraRetalhoCm,
+                    comprimentoCorteCm: comprimentoRetalhoCm,
+                    areaM2: ((larguraRetalhoCm * comprimentoRetalhoCm) / 10000) * quantidadeRetalhos,
                     tipo: 'corte',
-                    observacao: `Retalho criado: ${form.formFilmId}`,
+                    observacao: quantidadeRetalhos > 1
+                        ? `${quantidadeRetalhos} retalhos criados: ${form.formFilmId}`
+                        : `Retalho criado: ${form.formFilmId}`,
                 });
             }
 
             await loadData();
             resetForm();
             setShowAddModal(false);
+            showToast(
+                quantidadeRetalhos > 1
+                    ? `${quantidadeRetalhos} retalhos adicionados ao estoque.`
+                    : 'Retalho adicionado ao estoque.',
+                { tone: 'success' }
+            );
         } catch (error) {
             console.error('Erro ao salvar retalho:', error);
-            alert('Erro ao salvar retalho');
+            showToast('Erro ao salvar retalho.', { tone: 'error' });
         }
-    }, [form, loadData, resetForm, setShowAddModal]);
+    }, [form, loadData, resetForm, setShowAddModal, showToast]);
 
     const handleDelete = useCallback((type: 'bobina' | 'retalho', id: number) => {
         if (!id) {
-            alert('Erro: ID do item não encontrado');
+            showToast('Erro: ID do item não encontrado.', { tone: 'error' });
             return;
         }
         setShowDeleteConfirm({ type, id });
-    }, [setShowDeleteConfirm]);
+    }, [setShowDeleteConfirm, showToast]);
 
     const handleConfirmDelete = useCallback(async () => {
         if (!showDeleteConfirm) return;
@@ -348,9 +398,13 @@ export function useEstoqueOperations({
         } catch (error: any) {
             console.error(`Erro ao excluir ${type}:`, error);
             const errorMessage = error?.message || 'Erro desconhecido';
-            alert(`Erro ao excluir ${type}:\n${errorMessage}`);
+            showAlert({
+                title: `Erro ao excluir ${type}`,
+                message: errorMessage,
+                tone: 'error'
+            });
         }
-    }, [loadData, setShowDeleteConfirm, showDeleteConfirm]);
+    }, [loadData, setShowDeleteConfirm, showAlert, showDeleteConfirm]);
 
     const handleChangeStatus = useCallback((type: 'bobina' | 'retalho', item: Bobina | Retalho) => {
         setShowStatusModal({ type, item });
@@ -371,22 +425,22 @@ export function useEstoqueOperations({
             setShowStatusModal(null);
         } catch (error: any) {
             console.error('Erro ao alterar status:', error);
-            alert('Erro ao alterar status');
+            showToast('Erro ao alterar status.', { tone: 'error' });
         }
-    }, [loadData, setShowStatusModal, showStatusModal]);
+    }, [loadData, setShowStatusModal, showStatusModal, showToast]);
 
     const getStatusOptions = useCallback((type: 'bobina' | 'retalho') => {
         return type === 'bobina'
             ? [
-                { value: 'ativa', label: 'Ativa', emoji: '🟢', color: '#22c55e' },
-                { value: 'finalizada', label: 'Finalizada', emoji: '🟡', color: '#f59e0b' },
-                { value: 'descartada', label: 'Descartada', emoji: '🔴', color: '#ef4444' },
+                { value: 'ativa', label: 'Ativa', emoji: 'A', color: '#22c55e' },
+                { value: 'finalizada', label: 'Finalizada', emoji: 'F', color: '#f59e0b' },
+                { value: 'descartada', label: 'Descartada', emoji: 'D', color: '#ef4444' },
             ]
             : [
-                { value: 'disponivel', label: 'Disponível', emoji: '🟢', color: '#22c55e' },
-                { value: 'reservado', label: 'Reservado', emoji: '🟡', color: '#f59e0b' },
-                { value: 'usado', label: 'Usado', emoji: '🟠', color: '#f97316' },
-                { value: 'descartado', label: 'Descartado', emoji: '🔴', color: '#ef4444' },
+                { value: 'disponivel', label: 'Disponivel', emoji: 'D', color: '#22c55e' },
+                { value: 'reservado', label: 'Reservado', emoji: 'R', color: '#f59e0b' },
+                { value: 'usado', label: 'Usado', emoji: 'U', color: '#f97316' },
+                { value: 'descartado', label: 'Descartado', emoji: 'X', color: '#ef4444' },
             ];
     }, []);
 
@@ -411,7 +465,7 @@ export function useEstoqueOperations({
             ativa: 'Ativa',
             finalizada: 'Finalizada',
             descartada: 'Descartada',
-            disponivel: 'Disponível',
+            disponivel: 'Disponivel',
             reservado: 'Reservado',
             usado: 'Usado',
             descartado: 'Descartado',

@@ -1,5 +1,5 @@
 // =====================================================
-// SYNC STATUS INDICATOR - Indicador visual de sincronizacao
+// SYNC STATUS INDICATOR - Indicador visual de sincronização
 // =====================================================
 
 import React, { useState, useEffect } from 'react';
@@ -9,6 +9,40 @@ import { Wifi, WifiOff, CloudOff, RefreshCw, Check, AlertCircle } from 'lucide-r
 interface SyncStatusIndicatorProps {
     showDetails?: boolean;
 }
+
+const formatSyncErrorMessage = (error: string | null | undefined): string | null => {
+    if (!error) return null;
+
+    const normalized = error.toLowerCase();
+
+    if (
+        normalized.includes('jwt expired')
+        || normalized.includes('unauthorized')
+        || normalized.includes('sessao expirada')
+        || normalized.includes('sessão expirada')
+    ) {
+        return 'Sessão expirada. Faça login novamente para continuar sincronizando.';
+    }
+
+    if (normalized.includes('falha de rede')) {
+        return 'Falha de rede. Verifique sua conexão e tente novamente.';
+    }
+
+    return error;
+};
+
+const formatSyncItemLabel = (table: string): string => {
+    const labels: Record<string, string> = {
+        clients: 'Clientes',
+        films: 'Películas',
+        savedPdfs: 'PDFs',
+        agendamentos: 'Agendamentos',
+        proposalOptions: 'Opções',
+        userInfo: 'Configurações'
+    };
+
+    return labels[table] || table;
+};
 
 const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({ showDetails = false }) => {
     const [status, setStatus] = useState<SyncStatus>({
@@ -31,7 +65,7 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({ showDetails =
         await forcSync();
     };
 
-    // Nao mostrar nada se esta online e nao tem pendentes
+    // Não mostrar nada se está online e não tem pendentes
     if (status.isOnline && status.pendingCount === 0 && status.failedCount === 0 && !showDetails) {
         return null;
     }
@@ -73,6 +107,8 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({ showDetails =
         return 'bg-green-100 dark:bg-green-900/30 border-green-300 dark:border-green-700';
     };
 
+    const friendlyError = formatSyncErrorMessage(status.error);
+
     return (
         <div className="relative">
             <button
@@ -87,7 +123,7 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({ showDetails =
                 <div className="absolute right-0 top-full mt-2 w-64 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 z-50">
                     <div className="space-y-3">
                         <div className="flex items-center justify-between">
-                            <span className="text-sm text-slate-600 dark:text-slate-400">Conexao</span>
+                            <span className="text-sm text-slate-600 dark:text-slate-400">Conexão</span>
                             <div className="flex items-center gap-2">
                                 {status.isOnline ? (
                                     <>
@@ -119,16 +155,16 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({ showDetails =
 
                         {status.lastSyncAt && (
                             <div className="flex items-center justify-between">
-                                <span className="text-sm text-slate-600 dark:text-slate-400">Ultima sync</span>
+                                <span className="text-sm text-slate-600 dark:text-slate-400">Última sync</span>
                                 <span className="text-sm text-slate-500">
                                     {new Date(status.lastSyncAt).toLocaleTimeString()}
                                 </span>
                             </div>
                         )}
 
-                        {status.error && (
+                        {friendlyError && (
                             <div className="p-2 bg-red-50 dark:bg-red-900/20 rounded-lg">
-                                <p className="text-xs text-red-600 dark:text-red-400">{status.error}</p>
+                                <p className="text-xs text-red-600 dark:text-red-400">{friendlyError}</p>
                             </div>
                         )}
 

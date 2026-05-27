@@ -1,11 +1,20 @@
-import { Client, UserInfo, Measurement, Film, SavedPDF, ProposalOption, Totals } from '../types';
+import { Client, UserInfo, Measurement, Film, ProposalPaymentConfig, ProposalPricingMode, SavedPDF, Totals } from '../types';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { calculatePricingAreaM2 } from '../src/lib/pricingArea';
+import { buildPdfAdjustmentDisplay, type PdfDisplayLineItem } from '../src/lib/pdfAdjustmentDisplay';
+import { calculateProposalAdjustmentAmounts } from '../src/lib/proposalAdjustments';
 
 // Define GeneralDiscount locally since it's not exported from types.ts
 interface GeneralDiscount {
     value: string | number;
     type: 'percentage' | 'fixed' | 'none';
+    operation?: 'discount' | 'increase';
+    discountValue?: string | number;
+    discountType?: 'percentage' | 'fixed' | 'none';
+    increaseValue?: string | number;
+    increaseType?: 'percentage' | 'fixed' | 'none';
+    pricingMode?: ProposalPricingMode;
 }
 
 const formatNumberBR = (number: number): string => {
@@ -34,9 +43,32 @@ const calculateTotalsFromSavedPDF = (pdf: SavedPDF): Totals => {
     const totalItemDiscount = (pdf as any).totalItemDiscount || 0;
     const generalDiscountAmount = pdf.generalDiscountAmount || 0;
     const finalTotal = pdf.totalPreco;
+    const hasExplicitAdjustment = pdf.generalDiscount?.discountValue !== undefined
+        || pdf.generalDiscount?.discountType !== undefined
+        || pdf.generalDiscount?.increaseValue !== undefined
+        || pdf.generalDiscount?.increaseType !== undefined;
+    const adjustmentBase = Math.max(0, subtotal - totalItemDiscount);
+    const calculatedAdjustments = hasExplicitAdjustment && adjustmentBase > 0
+        ? calculateProposalAdjustmentAmounts({
+            value: String(pdf.generalDiscount?.value ?? ''),
+            type: pdf.generalDiscount?.type === 'fixed' ? 'fixed' : 'percentage',
+            operation: pdf.generalDiscount?.operation === 'increase' ? 'increase' : 'discount',
+            discountValue: pdf.generalDiscount?.discountValue !== undefined ? String(pdf.generalDiscount.discountValue) : undefined,
+            discountType: pdf.generalDiscount?.discountType === 'fixed' ? 'fixed' : pdf.generalDiscount?.discountType === 'percentage' ? 'percentage' : undefined,
+            increaseValue: pdf.generalDiscount?.increaseValue !== undefined ? String(pdf.generalDiscount.increaseValue) : undefined,
+            increaseType: pdf.generalDiscount?.increaseType === 'percentage' ? 'percentage' : pdf.generalDiscount?.increaseType === 'fixed' ? 'fixed' : undefined,
+            pricingMode: pdf.generalDiscount?.pricingMode === 'labor_only' ? 'labor_only' : 'complete',
+        }, adjustmentBase)
+        : null;
+    const generalIncreaseAmount = calculatedAdjustments?.generalIncreaseAmount ?? (
+        pdf.generalDiscount?.operation === 'increase' ? generalDiscountAmount : 0
+    );
+    const generalFinalDiscountAmount = calculatedAdjustments?.generalFinalDiscountAmount ?? (
+        pdf.generalDiscount?.operation === 'discount' ? generalDiscountAmount : 0
+    );
 
-    // Se subtotal não estiver disponível, calcula a partir do finalTotal e descontos
-    const calculatedSubtotal = subtotal || (finalTotal + generalDiscountAmount + totalItemDiscount);
+    // Se subtotal não estiver disponível, calcula a partir do finalTotal e ajustes
+    const calculatedSubtotal = subtotal || (finalTotal - generalIncreaseAmount + generalFinalDiscountAmount + totalItemDiscount);
 
     // Recalcula priceAfterItemDiscounts para garantir consistência
     const priceAfterItemDiscounts = calculatedSubtotal - totalItemDiscount;
@@ -46,20 +78,29 @@ const calculateTotalsFromSavedPDF = (pdf: SavedPDF): Totals => {
         subtotal: calculatedSubtotal,
         totalItemDiscount,
         priceAfterItemDiscounts,
-        generalDiscountAmount,
+        generalDiscountAmount: generalFinalDiscountAmount > 0 ? generalFinalDiscountAmount : generalIncreaseAmount,
+        generalIncreaseAmount,
+        generalFinalDiscountAmount,
         finalTotal,
         totalQuantity: 0,
         totalLinearMeters: pdf.totalLinearMeters || 0,
         linearMeterCost: pdf.linearMeterCost || 0,
         totalMaterial: 0,
         totalLabor: 0,
+        operationalExpenses: 0,
+        expensesByCategory: [],
+        estimatedMaterialCost: 0,
+        estimatedTotalCost: 0,
+        estimatedProfit: finalTotal,
+        estimatedMarginPercentage: finalTotal > 0 ? 100 : 0,
+        pricingMode: pdf.generalDiscount?.pricingMode === 'labor_only' ? 'labor_only' : 'complete'
     };
 };
 
-export const generatePDF = async (client: Client, userInfo: UserInfo, measurements: Measurement[], allFilms: Film[], generalDiscount: GeneralDiscount, totals: Totals, proposalOptionName: string): Promise<Blob> => {
+export const generatePDF = async (client: Client, userInfo: UserInfo, measurements: Measurement[], allFilms: Film[], generalDiscount: GeneralDiscount, totals: Totals, proposalOptionName: string, paymentConfig?: ProposalPaymentConfig): Promise<Blob> => {
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
-    await renderPdfContent(doc, client, userInfo, [{ measurements, generalDiscount, totals, proposalOptionName }], allFilms, true);
+    await renderPdfContent(doc, client, userInfo, [{ measurements, generalDiscount, totals, proposalOptionName, paymentConfig }], allFilms, true);
 
     return doc.output('blob');
 };
@@ -72,8 +113,15 @@ export const generateCombinedPDF = async (client: Client, userInfo: UserInfo, sa
         generalDiscount: {
             value: pdf.generalDiscount?.value || '',
             type: pdf.generalDiscount?.type || 'none',
+            operation: pdf.generalDiscount?.operation === 'increase' ? 'increase' : 'discount',
+            discountValue: pdf.generalDiscount?.discountValue,
+            discountType: pdf.generalDiscount?.discountType,
+            increaseValue: pdf.generalDiscount?.increaseValue,
+            increaseType: pdf.generalDiscount?.increaseType,
+            pricingMode: pdf.generalDiscount?.pricingMode === 'labor_only' ? 'labor_only' : 'complete',
         } as GeneralDiscount,
         totals: calculateTotalsFromSavedPDF(pdf),
+        paymentConfig: undefined as ProposalPaymentConfig | undefined,
         proposalOptionName: pdf.proposalOptionName || 'Opção',
     }));
 
@@ -88,7 +136,7 @@ const renderPdfContent = async (
     doc: any,
     client: Client,
     userInfo: UserInfo,
-    optionsData: { measurements: Measurement[], generalDiscount: GeneralDiscount, totals: Totals, proposalOptionName: string }[],
+    optionsData: { measurements: Measurement[], generalDiscount: GeneralDiscount, totals: Totals, proposalOptionName: string, paymentConfig?: ProposalPaymentConfig }[],
     allFilms: Film[],
     includeCover: boolean,
     isCombined: boolean = false
@@ -306,7 +354,7 @@ const renderPdfContent = async (
             doc.setFont("helvetica", 'normal');
             doc.setFontSize(9);
 
-            // --- SEÇÃO DO CLIENTE REESTRUTURADA ---
+            // --- SE??O DO CLIENTE REESTRUTURADA ---
             let clientYPos = yPos;
             const clientInfoLineHeight = 4.5;
             const maxClientInfoWidth = (pageWidth / 2) - margin - 10;
@@ -350,7 +398,7 @@ const renderPdfContent = async (
                     clientYPos += clientInfoLineHeight;
                 }
             }
-            // --- FIM DA SEÇÃO DO CLIENTE ---
+            // --- FIM DA SE??O DO CLIENTE ---
 
             // Informações do usuário/empresa (lado direito)
             doc.setFontSize(9);
@@ -440,6 +488,18 @@ const renderPdfContent = async (
 
         for (const optionData of optionsData) {
             const { measurements, generalDiscount: optionGeneralDiscount, totals: optionTotals, proposalOptionName } = optionData;
+            const optionPricingMode = optionTotals.pricingMode === 'labor_only' ? 'labor_only' : 'complete';
+            const pdfDisplay = buildPdfAdjustmentDisplay({
+                measurements,
+                films: allFilms,
+                pricingMode: optionPricingMode,
+                generalAdjustment: optionGeneralDiscount,
+                totals: optionTotals
+            });
+            const displayLineItemsByMeasurement = new Map<Measurement, PdfDisplayLineItem>();
+            pdfDisplay.lineItems.forEach(item => {
+                displayLineItemsByMeasurement.set(item.measurement, item);
+            });
 
             // 1. Group measurements by film for this option
             const measurementsByFilm: { [key: string]: Measurement[] } = {};
@@ -452,7 +512,6 @@ const renderPdfContent = async (
 
             // 2. Render details for this option
             for (const filmName of Object.keys(measurementsByFilm)) {
-                const film = allFilms.find(f => f.nome === filmName);
                 const filmMeasurements = measurementsByFilm[filmName];
 
                 if (yPos > pageHeight - 60) await addNewPage();
@@ -463,23 +522,25 @@ const renderPdfContent = async (
                 safeText(`${proposalOptionName} - ${filmName}`, margin, yPos);
                 yPos += 8;
 
+                doc.setFont("helvetica", 'normal');
+                doc.setFontSize(8);
+                doc.setTextColor(...bodyText);
+                safeText(
+                    optionPricingMode === 'labor_only' ? 'Modalidade: Somente mão de obra' : 'Modalidade: Serviço completo',
+                    margin,
+                    yPos
+                );
+                yPos += 6;
+
                 const head = [['Item', 'Ambiente', 'Dimensões', 'Qtd', 'M²', 'Preço Unit.', 'Desconto', 'Preço Final']];
                 const body = filmMeasurements.map((m, i) => {
-                    const largura = parseFloat(String(m.largura).replace(',', '.')) || 0;
-                    const altura = parseFloat(String(m.altura).replace(',', '.')) || 0;
-                    const quantidade = parseInt(String(m.quantidade), 10) || 0;
-                    const m2 = largura * altura * quantidade;
-
-                    let pricePerM2 = 0;
-                    if (film) {
-                        if (film.preco > 0) {
-                            pricePerM2 = film.preco;
-                        } else if (film.maoDeObra && film.maoDeObra > 0) {
-                            pricePerM2 = film.maoDeObra;
-                        }
-                    }
-
-                    const basePrice = pricePerM2 * m2;
+                    const displayLineItem = displayLineItemsByMeasurement.get(m);
+                    const m2 = displayLineItem?.m2 ?? calculatePricingAreaM2(
+                        parseFloat(String(m.largura).replace(',', '.')) || 0,
+                        parseFloat(String(m.altura).replace(',', '.')) || 0,
+                        parseInt(String(m.quantidade), 10) || 0
+                    );
+                    const basePrice = displayLineItem?.displayBasePrice ?? 0;
 
                     let itemDiscountAmount = 0;
                     let discountDisplay = '-';
@@ -496,7 +557,7 @@ const renderPdfContent = async (
                             discountDisplay = `R$ ${formatNumberBR(discountValue)}`;
                         }
                     }
-                    const finalItemPrice = Math.max(0, basePrice - itemDiscountAmount);
+                    const finalItemPrice = displayLineItem?.displayFinalItemPrice ?? Math.max(0, basePrice - itemDiscountAmount);
 
                     return [
                         i + 1,
@@ -543,34 +604,46 @@ const renderPdfContent = async (
 
             const summaryYStart = yPos + 7;
             const summaryXAlign = pageWidth - margin;
+            const finalDiscountAmount = optionTotals.generalFinalDiscountAmount ?? (
+                optionGeneralDiscount?.operation === 'discount' ? optionTotals.generalDiscountAmount : 0
+            );
+            const shouldShowGeneralAdjustment = finalDiscountAmount > 0;
+            let summaryLineY = summaryYStart;
 
-            safeText(`Subtotal:`, margin, summaryYStart);
-            safeText(`R$ ${formatNumberBR(optionTotals.subtotal)}`, summaryXAlign, summaryYStart, { align: 'right' });
+            safeText(`Subtotal:`, margin, summaryLineY);
+            safeText(`R$ ${formatNumberBR(pdfDisplay.summarySubtotal)}`, summaryXAlign, summaryLineY, { align: 'right' });
 
-            safeText(`Descontos nos Itens:`, margin, summaryYStart + 7);
-            safeText(`- R$ ${formatNumberBR(optionTotals.totalItemDiscount)}`, summaryXAlign, summaryYStart + 7, { align: 'right' });
+            summaryLineY += 7;
+            safeText(`Descontos nos Itens:`, margin, summaryLineY);
+            safeText(`- R$ ${formatNumberBR(pdfDisplay.summaryItemDiscount)}`, summaryXAlign, summaryLineY, { align: 'right' });
 
-            safeText(`Desconto Geral:`, margin, summaryYStart + 14);
-            safeText(`- R$ ${formatNumberBR(optionTotals.generalDiscountAmount)}`, summaryXAlign, summaryYStart + 14, { align: 'right' });
+            if (shouldShowGeneralAdjustment) {
+                summaryLineY += 7;
+                const isGeneralIncrease = false;
+                safeText(`${isGeneralIncrease ? 'Acréscimo Geral' : 'Desconto Geral'}:`, margin, summaryLineY);
+                safeText(`${isGeneralIncrease ? '+' : '-'} R$ ${formatNumberBR(optionTotals.generalDiscountAmount)}`, summaryXAlign, summaryLineY, { align: 'right' });
+            }
 
             doc.setDrawColor(...colors.primary);
             doc.setLineWidth(0.2);
-            doc.line(margin, summaryYStart + 18, pageWidth - margin, summaryYStart + 18);
+            const dividerY = summaryLineY + 4;
+            doc.line(margin, dividerY, pageWidth - margin, dividerY);
 
             doc.setFont("helvetica", 'bold');
             doc.setFontSize(12);
             doc.setTextColor(...colors.primary);
-            safeText(`Valor Final da Opção:`, margin, summaryYStart + 25);
-            safeText(`R$ ${formatNumberBR(optionTotals.finalTotal)}`, summaryXAlign, summaryYStart + 25, { align: 'right' });
+            const finalTotalY = dividerY + 8;
+            safeText(`Valor Final da Opção:`, margin, finalTotalY);
+            safeText(`R$ ${formatNumberBR(pdfDisplay.summaryFinalTotal)}`, summaryXAlign, finalTotalY, { align: 'right' });
 
-            yPos = summaryYStart + 35;
+            yPos = finalTotalY + 10;
             doc.setTextColor(...bodyText);
 
             // 4. Acumular totais combinados (Ainda precisamos disso para o cálculo de pagamento, mas não para o display)
             grandTotalCombined += optionTotals.finalTotal;
             totalM2Combined += optionTotals.totalM2;
             totalItemDiscountCombined += optionTotals.totalItemDiscount;
-            totalGeneralDiscountCombined += optionTotals.generalDiscountAmount;
+            totalGeneralDiscountCombined += finalDiscountAmount;
             subtotalCombined += optionTotals.subtotal;
 
             if (isCombined && optionsData.indexOf(optionData) < optionsData.length - 1) {
@@ -605,6 +678,7 @@ const renderPdfContent = async (
         // --- Garantias e Especificações (Baseado em todas as opções) ---
 
         const allFilmsUsed = optionsData.flatMap(opt => opt.measurements.map(m => m.pelicula));
+        const hasCompletePricingOption = optionsData.some(opt => opt.totals.pricingMode !== 'labor_only');
         const uniqueFilmNames = Array.from(new Set(allFilmsUsed));
 
         await addSectionTitle("Garantias");
@@ -616,23 +690,27 @@ const renderPdfContent = async (
                 safeText(filmName, margin, yPos);
                 yPos += 6;
                 doc.setFont("helvetica", 'normal');
-                safeText(`  - Garantia Fabricante: ${film.garantiaFabricante || 'N/A'} anos`, margin, yPos);
-                yPos += 6;
+                if (hasCompletePricingOption) {
+                    safeText(`  - Garantia Fabricante: ${film.garantiaFabricante || 'N/A'} anos`, margin, yPos);
+                    yPos += 6;
+                }
                 safeText(`  - Garantia Mão de Obra: ${film.garantiaMaoDeObra || 'N/A'} dias`, margin, yPos);
                 yPos += 8;
             }
         }
 
-        const filmsWithTechData = uniqueFilmNames
-            .map(filmName => allFilms.find(f => f.nome === filmName))
-            .filter((film): film is Film => !!film && (
-                (typeof film.uv === 'number' && film.uv > 0) ||
-                (typeof film.ir === 'number' && film.ir > 0) ||
-                (typeof film.vtl === 'number' && film.vtl > 0) ||
-                (typeof film.tser === 'number' && film.tser > 0) ||
-                (typeof film.espessura === 'number' && film.espessura > 0) ||
-                (!!film.customFields && Object.keys(film.customFields).length > 0)
-            ));
+        const filmsWithTechData = hasCompletePricingOption
+            ? uniqueFilmNames
+                .map(filmName => allFilms.find(f => f.nome === filmName))
+                .filter((film): film is Film => !!film && (
+                    (typeof film.uv === 'number' && film.uv > 0) ||
+                    (typeof film.ir === 'number' && film.ir > 0) ||
+                    (typeof film.vtl === 'number' && film.vtl > 0) ||
+                    (typeof film.tser === 'number' && film.tser > 0) ||
+                    (typeof film.espessura === 'number' && film.espessura > 0) ||
+                    (!!film.customFields && Object.keys(film.customFields).length > 0)
+                ))
+            : [];
 
         if (filmsWithTechData.length > 0) {
             await addSectionTitle("Especificações Técnicas");
@@ -680,6 +758,10 @@ const renderPdfContent = async (
         const SPACING_AFTER_PAYMENTS = 7;
         const SIGNATURE_HEIGHT = 35;
         const PAGE_BOTTOM_MARGIN = 25;
+        const basePaymentConfig: ProposalPaymentConfig = {
+            paymentMethods: userInfo.payment_methods || [],
+            prazoPagamento: userInfo.prazoPagamento || ''
+        };
 
         const calculateParceladoSemJuros = (total: number, parcelas_max?: number | null) => {
             if (!parcelas_max || parcelas_max === 0) return 0;
@@ -698,9 +780,9 @@ const renderPdfContent = async (
         };
 
         // Função para gerar linhas de pagamento para um valor
-        const generatePaymentForTotal = (total: number): string[] => {
+        const generatePaymentForTotal = (total: number, paymentMethods: ProposalPaymentConfig['paymentMethods']): string[] => {
             const lines: string[] = [];
-            userInfo.payment_methods?.filter(m => m.ativo).forEach(method => {
+            paymentMethods?.filter(m => m.ativo).forEach(method => {
                 switch (method.tipo) {
                     case 'pix':
                         lines.push(`  • Pix: R$ ${formatNumberBR(total)}`);
@@ -730,13 +812,15 @@ const renderPdfContent = async (
         if (isCombined && optionsData.length > 1) {
             // PDF Combinado: mostrar formas de pagamento para cada opção
             optionsData.forEach((opt, idx) => {
+                const optionPaymentConfig = opt.paymentConfig || basePaymentConfig;
                 if (idx > 0) paymentLines.push('');
                 paymentLines.push(`Opção: ${opt.proposalOptionName}`);
                 paymentLines.push(`Valor Total: R$ ${formatNumberBR(opt.totals.finalTotal)}`);
-                paymentLines.push(...generatePaymentForTotal(opt.totals.finalTotal));
+                paymentLines.push(...generatePaymentForTotal(opt.totals.finalTotal, optionPaymentConfig.paymentMethods));
             });
             // Chave Pix uma vez no final
-            const pix = userInfo.payment_methods?.find(m => m.ativo && m.tipo === 'pix');
+            const combinedPaymentConfig = optionsData[0]?.paymentConfig || basePaymentConfig;
+            const pix = combinedPaymentConfig.paymentMethods?.find(m => m.ativo && m.tipo === 'pix');
             if (pix) {
                 paymentLines.push('');
                 if (pix.chave_pix) {
@@ -750,12 +834,13 @@ const renderPdfContent = async (
                 }
                 if (pix.nome_responsavel_pix) paymentLines.push(`Nome: ${pix.nome_responsavel_pix}`);
             }
-            const obs = userInfo.payment_methods?.find(m => m.ativo && m.tipo === 'observacao');
+            const obs = combinedPaymentConfig.paymentMethods?.find(m => m.ativo && m.tipo === 'observacao');
             if (obs?.texto) paymentLines.push(`• Observação: ${obs.texto}`);
         } else {
             // PDF único
             const finalTotalForPayment = optionsData[0].totals.finalTotal;
-            userInfo.payment_methods?.filter(m => m.ativo).forEach(method => {
+            const singlePaymentConfig = optionsData[0].paymentConfig || basePaymentConfig;
+            singlePaymentConfig.paymentMethods?.filter(m => m.ativo).forEach(method => {
                 switch (method.tipo) {
                     case 'pix':
                         paymentLines.push(`• Pix: R$ ${formatNumberBR(finalTotalForPayment)}`);
@@ -797,8 +882,9 @@ const renderPdfContent = async (
 
         const validityDays = userInfo.proposalValidityDays || 60;
         const conditions: string[] = [];
-        if (userInfo.prazoPagamento) {
-            conditions.push(`Prazo de Pagamento: ${userInfo.prazoPagamento}`);
+        const resolvedPrazoPagamento = (optionsData[0]?.paymentConfig || basePaymentConfig).prazoPagamento;
+        if (resolvedPrazoPagamento) {
+            conditions.push(`Prazo de Pagamento: ${resolvedPrazoPagamento}`);
         }
         conditions.push(
             "Prazo de Instalação: A ser definido em comum acordo.",

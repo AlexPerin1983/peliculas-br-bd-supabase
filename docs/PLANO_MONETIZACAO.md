@@ -1,266 +1,282 @@
-# 💎 Plano de Monetização - Películas BR
+# Plano de Monetizacao - Peliculas BR
 
-## Resumo Executivo
+## Objetivo
 
-**30 Funcionalidades** organizadas em **3 níveis de acesso**:
-- 🆓 **GRATUITO** - Funcionalidades básicas com limites
-- 💎 **MÓDULOS PRO** - Funcionalidades avançadas individuais (R$ 39,00/6 meses cada)
-- 👑 **PLANO COMPLETO** - Tudo liberado com desconto (R$ 199,00/6 meses)
+Transformar o Peliculas BR em um SaaS freemium para instaladores, lojas e equipes de aplicacao de peliculas.
 
----
+O produto ja tem base para isso:
 
-## 🆓 PLANO GRATUITO
+- plano gratuito com limites
+- bloqueio por modulos premium
+- pagina de assinatura
+- ativacao por PIX
+- modulos com alto valor percebido
 
-### Limites
-| Recurso | Limite | Renovação |
-|---------|--------|-----------|
-| 👥 Clientes | 10 cadastros | Fixo |
-| 🎬 Películas | 5 cadastros | Fixo |
-| 📄 PDFs/Orçamentos | 10/mês | Mensal |
-| 📅 Agendamentos | 5/mês | Mensal |
+## Regra Comercial Principal
 
-### ✅ Funcionalidades Incluídas (GRÁTIS)
+Nao vale a pena cobrar por "update" como se fosse manutencao ou correcao.
 
-| # | Funcionalidade | Descrição |
-|---|----------------|-----------|
-| 1 | 📐 **Plano de Corte BÁSICO** | Visualização sem otimização avançada |
-| 2 | 📄 **Geração de PDF** | Limitado a 10/mês |
-| 3 | 📊 **Múltiplas Opções** | 1 opção por orçamento |
-| 4 | 💰 **Descontos** | Por item e geral |
-| 5 | 📚 **Histórico** | Últimos 20 orçamentos |
-| 6 | 📤 **Compartilhamento** | WhatsApp, E-mail, Download |
-| 7 | 👤 **Gestão de Clientes** | Limitado a 10 |
-| 8 | 📍 **Busca de CEP** | ViaCEP integrado |
-| 9 | 🎨 **Catálogo de Películas** | Limitado a 5 |
-| 10 | 📍 **Base Compartilhada** | Apenas visualizar (não adicionar) |
-| 11 | 🗓️ **Agenda BÁSICA** | Limitado a 5/mês |
-| 12 | 📶 **PWA Offline** | Funciona sem internet |
-| 13 | 🔄 **Sincronização** | Multi-dispositivo |
-| 14 | ⚙️ **Config. Básicas** | Dados da empresa |
+O que devemos vender:
 
----
+- acesso a recursos premium
+- ganho de tempo
+- ganho de margem
+- ganho de controle operacional
+- acesso continuo aos novos updates premium
 
-## 💎 MÓDULOS PRO (R$ 39,00 cada / 6 meses)
+O que deve continuar gratis para todos:
 
-### Módulo 1: 📦 ESTOQUE
-**Verificação:** `hasModule('estoque')` / `canUseEstoque`
+- correcao de bugs importantes
+- estabilidade
+- melhorias basicas de uso
+- seguranca
 
-| Funcionalidade | Disponível no FREE? |
-|----------------|---------------------|
-| 📦 Aba "Estoque" no menu | ❌ Bloqueada |
-| 📦 Cadastro de Bobinas | ❌ Bloqueado |
-| 📦 Cadastro de Retalhos | ❌ Bloqueado |
-| 🔲 QR Code de Estoque | ❌ Bloqueado |
-| 📊 Catálogo Público de Estoque | ❌ Bloqueado |
-| 📊 Estatísticas de Estoque | ❌ Bloqueado |
+O que deve ficar no pago:
 
----
+- novas automacoes premium
+- IA e OCR avancados
+- corte inteligente e economia de material
+- estoque e retalhos
+- QR de servicos e pos-venda
+- marca propria
+- equipe e permissoes
+- recursos novos liberados primeiro para assinantes
 
-### Módulo 2: 🔗 QR CODE DE SERVIÇOS
-**Verificação:** `hasModule('qr_servicos')` / `canUseQrServicos`
+## Estrategia Recomendada de Oferta
 
-| Funcionalidade | Disponível no FREE? |
-|----------------|---------------------|
-| 🔗 Aba "QR Code" no menu | ❌ Bloqueada |
-| 🔗 Registro de Serviço | ❌ Bloqueado |
-| 🎫 Etiqueta QR para Impressão | ❌ Bloqueado |
-| 🌐 Página Pública do Serviço | ❌ Bloqueado |
-| 📲 Captação via QR | ❌ Bloqueado |
+### 1. Plano Gratuito
 
----
+O plano gratuito precisa ser util, mas nao pode ser suficiente para rodar a operacao inteira por muito tempo.
 
-### Módulo 3: 👥 GESTÃO DE EQUIPE
-**Verificação:** `hasModule('colaboradores')` / `canUseColaboradores`
+Sugestao de posicionamento:
 
-| Funcionalidade | Disponível no FREE? |
-|----------------|---------------------|
-| 👥 Convidar Colaboradores | ❌ Bloqueado |
-| 📧 Convites por E-mail | ❌ Bloqueado |
-| 🔐 Níveis de Acesso | ❌ Bloqueado |
-| 👥 Múltiplos Membros | ❌ Bloqueado |
+- ideal para conhecer o sistema
+- ideal para autonomo em fase inicial
+- suficiente para gerar os primeiros resultados
+- insuficiente para escalar sem upgrade
 
----
+Limites atuais que fazem sentido para o launch:
 
-### Módulo 4: 🧠 EXTRAÇÃO COM IA
-**Verificação:** `hasModule('ia_ocr')` / `canUseIA`
+- 10 clientes
+- 5 peliculas cadastradas
+- 10 PDFs por mes
+- 5 agendamentos por mes
 
-| Funcionalidade | Disponível no FREE? |
-|----------------|---------------------|
-| 🤖 Medição por IA | ❌ Bloqueada |
-| 📱 Cadastro de Clientes via IA | ❌ Bloqueada |
-| 🎬 Cadastro de Películas via IA | ❌ Bloqueada |
-| 🔊 Entrada por Voz | ❌ Bloqueada |
-| 📸 OCR de Imagens | ❌ Bloqueado |
+O que fica no gratis:
 
-**Nota:** OCR Local (Tesseract) pode ser liberado no FREE como alternativa limitada.
+- cadastro basico de clientes
+- cadastro basico de peliculas
+- PDF de orcamento
+- agenda basica
+- historico basico
+- compartilhamento
+- funcionamento offline
+- sincronizacao
+- visualizacao simples do fluxo de corte
 
----
+### 2. Modulos Premium
 
-### Módulo 5: 🎨 MARCA PRÓPRIA
-**Verificação:** `hasModule('personalizacao')` / `canCustomize`
+Os modulos premium funcionam bem como "porta de entrada" para quem sente uma dor muito especifica.
 
-| Funcionalidade | Disponível no FREE? |
-|----------------|---------------------|
-| 🖼️ Logo Personalizado | ❌ Bloqueado |
-| 🎨 Cores da Marca | ❌ Bloqueado |
-| ✍️ Assinatura Digital | ❌ Bloqueada |
-| 🔗 Redes Sociais nos PDFs | ❌ Bloqueado |
+Modulos com melhor potencial de venda:
 
----
+- `estoque`
+- `corte_inteligente`
+- `ia_ocr`
+- `qr_servicos`
+- `colaboradores`
+- `personalizacao`
+- `ilimitado`
+- `locais_global`
 
-### Módulo 6: ♾️ SEM LIMITES
-**Verificação:** `hasModule('ilimitado')` / `isUnlimited`
+Melhor leitura comercial por modulo:
 
-| Funcionalidade | Limite FREE | Com Módulo |
-|----------------|-------------|------------|
-| 👥 Clientes | 10 | ♾️ Ilimitado |
-| 🎬 Películas | 5 | ♾️ Ilimitado |
-| 📄 PDFs/mês | 10 | ♾️ Ilimitado |
-| 📅 Agendamentos/mês | 5 | ♾️ Ilimitado |
-| 📊 Histórico | 20 últimos | ♾️ Ilimitado |
-| 📊 Opções por orçamento | 1 | ♾️ Ilimitado |
+- Estoque: "pare de perder dinheiro com bobina e retalho"
+- Corte inteligente: "reduza desperdicio e proteja sua margem"
+- IA/OCR: "faca orcamentos em segundos"
+- QR servicos: "entregue garantia profissional e gere recompra"
+- Colaboradores: "tenha controle de quem faz o que"
+- Personalizacao: "pareca uma empresa premium"
+- Sem limites: "cresca sem travar o fluxo"
+- Locais PRO: "aproveite inteligencia acumulada do seu catalogo"
 
----
+### 3. Plano Completo
 
-### Módulo 7: 📍 LOCAIS GLOBAIS PRO
-**Verificação:** `hasModule('locais_global')` / `canAddLocais`
+O Plano Completo deve ser a principal oferta publica.
 
-| Funcionalidade | Disponível no FREE? |
-|----------------|---------------------|
-| 👁️ Visualizar Medidas | ✅ Liberado |
-| 📍 Adicionar Novos Locais | ❌ Bloqueado |
-| ✏️ Editar Medidas Existentes | ❌ Bloqueado |
-| 📤 Exportar Medidas | ❌ Bloqueado |
+Os modulos devem existir:
 
----
+- para capturar usuarios sensiveis a preco
+- para monetrizar dores pontuais
+- como ancoragem de valor
 
-### Módulo 8: ✂️ CORTE INTELIGENTE
-**Verificação:** `hasModule('corte_inteligente')` / `canUseCorteInteligente`
+Mas o objetivo comercial deve ser empurrar a maior parte das vendas para o pacote completo.
 
-| Funcionalidade | Disponível no FREE? |
-|----------------|---------------------|
-| 📐 Plano de Corte Básico | ✅ Liberado |
-| 🧠 Otimização Profunda | ❌ Bloqueado |
-| 🔄 Rotação Automática | ❌ Bloqueado |
-| 📊 Histórico de Versões | ❌ Bloqueado |
-| 💰 Cálculo de Custo | ❌ Bloqueado |
-| 📊 Estatísticas Avançadas | ❌ Bloqueado |
+## Recomendacao de Precificacao
 
----
+O modelo atual esta barato demais quando aparece como "R$ 39 por 6 meses". Isso reduz percepcao de valor e aperta a margem.
 
-## 👑 PLANO COMPLETO (TUDO LIBERADO)
+Sugestao simples para lancamento:
 
-### Precificação
+### Plano Gratuito
 
-| Opção | Valor | Economia | Módulos |
-|-------|-------|----------|---------|
-| **Todos os 8 módulos separados** | R$ 312,00 | - | 8 x R$ 39,00 |
-| 👑 **PLANO COMPLETO** | **R$ 199,00** | 36% OFF | Todos os 8 |
+- Gratis
 
-### O que inclui
+### Modulos Avulsos
 
-| Módulo | Valor Avulso | No Plano Completo |
-|--------|--------------|-------------------|
-| 📦 Estoque | R$ 39,00 | ✅ Incluído |
-| 🔗 QR Serviços | R$ 39,00 | ✅ Incluído |
-| 👥 Equipe | R$ 39,00 | ✅ Incluído |
-| 🧠 IA/OCR | R$ 39,00 | ✅ Incluído |
-| 🎨 Marca Própria | R$ 39,00 | ✅ Incluído |
-| ♾️ Sem Limites | R$ 39,00 | ✅ Incluído |
-| 📍 Locais PRO | R$ 39,00 | ✅ Incluído |
-| ✂️ Corte Inteligente | R$ 39,00 | ✅ Incluído |
-| **TOTAL** | R$ 312,00 | **R$ 199,00** |
+- `personalizacao` e `locais_global`: R$ 19/mes
+- `qr_servicos`, `estoque`, `colaboradores`, `ilimitado`: R$ 39/mes
+- `ia_ocr` e `corte_inteligente`: R$ 49/mes
 
----
+### Plano Completo
 
-## 📊 Tabela de Comparação Final
+- R$ 99/mes
+- ou R$ 997/ano
 
-| Funcionalidade | 🆓 FREE | 💎 PRO (Módulo) | 👑 COMPLETO |
-|----------------|---------|-----------------|-------------|
-| **Clientes** | 10 | ♾️ (ilimitado) | ♾️ |
-| **Películas** | 5 | ♾️ (ilimitado) | ♾️ |
-| **PDFs/mês** | 10 | ♾️ (ilimitado) | ♾️ |
-| **Agendamentos/mês** | 5 | ♾️ (ilimitado) | ♾️ |
-| **Plano de Corte** | Básico | ✂️ Avançado | ✅ |
-| **PDF Profissional** | ✅ | ✅ | ✅ |
-| **Múltiplas Opções** | 1 | ♾️ (ilimitado) | ♾️ |
-| **Estoque** | ❌ | 📦 | ✅ |
-| **QR Serviços** | ❌ | 🔗 | ✅ |
-| **Equipe** | ❌ | 👥 | ✅ |
-| **IA/OCR** | ❌ | 🧠 | ✅ |
-| **Personalização** | ❌ | 🎨 | ✅ |
-| **Locais PRO** | Ver | 📍 | ✅ |
-| **PWA Offline** | ✅ | ✅ | ✅ |
-| **Sincronização** | ✅ | ✅ | ✅ |
-| **PREÇO** | Grátis | R$ 39/módulo | **R$ 199** |
-| **Validade** | - | 6 meses | 6 meses |
+Regra de desconto:
 
----
+- anual com 2 meses gratis
+- promocao de lancamento por tempo limitado
+- nunca deixar o completo muito proximo do preco de 2 modulos
 
-## 🔧 Implementação Técnica
+## Como Vender "Updates Premium"
 
-### Hooks de Verificação
+Em vez de dizer "cobramos por updates", a mensagem deve ser:
 
-```typescript
-// SubscriptionContext.tsx
-const { 
-    hasModule,           // Verificar módulo específico
-    isLimitReached,      // Verificar se atingiu limite
-    canUseEstoque,       // Atalho para hasModule('estoque')
-    canUseQrServicos,    // Atalho para hasModule('qr_servicos')
-    canUseColaboradores, // Atalho para hasModule('colaboradores')
-    canUseIA,            // Atalho para hasModule('ia_ocr')
-    canCustomize,        // Atalho para hasModule('personalizacao')
-    canAddLocais,        // Atalho para hasModule('locais_global')
-    canUseCorteInteligente, // Atalho para hasModule('corte_inteligente')
-    isUnlimited          // Atalho para hasModule('ilimitado')
-} = useSubscription();
-```
+"Assinantes recebem acesso continuo aos recursos premium atuais e aos novos recursos premium que forem lancados."
 
-### Padrão de Bloqueio
+Isso comunica evolucao sem parecer que o produto gratuito foi abandonado.
 
-```typescript
-// Bloquear aba no menu
-{canUseEstoque && <TabButton tabId="estoque" ... />}
+## O Que Entra em Cada Camada
 
-// Bloquear botão com modal de upgrade
-<button onClick={() => canUseIA ? processWithAI() : showUpgradeModal('ia_ocr')}>
-    {canUseIA ? 'Usar IA' : '🔒 Usar IA (PRO)'}
-</button>
+### Gratis
 
-// Verificar limite antes de ação
-if (isLimitReached('clients', clientCount)) {
-    showUpgradeModal('ilimitado');
-    return;
-}
-```
+- uso limitado
+- fluxo manual
+- recursos essenciais
+- prova de valor do sistema
 
----
+### Pago por Modulo
 
-## 📈 SQL para Atualizar Plano Completo
+- destrava uma dor especifica
+- ideal para compra por necessidade imediata
+- entrada de baixo atrito
 
-```sql
--- Adicionar módulo "plano_completo" com todos os módulos
-INSERT INTO subscription_modules (id, name, description, price_monthly, validity_months, icon, features, sort_order) VALUES
-('plano_completo', 'Plano Completo', 'Todos os módulos PRO com 36% de desconto', 199.00, 6, 'Crown', 
-'["estoque", "qr_servicos", "colaboradores", "ia_ocr", "personalizacao", "ilimitado", "locais_global", "corte_inteligente"]', 0)
-ON CONFLICT (id) DO UPDATE SET
-    price_monthly = 199.00,
-    validity_months = 6,
-    features = EXCLUDED.features;
-```
+### Completo
 
----
+- tudo liberado
+- prioridade em updates premium
+- melhor custo-beneficio
+- oferta principal na pagina de precos
 
-## 🎯 Próximos Passos
+## Ordem de Prioridade de Venda
 
-1. [ ] Criar função `activatePlanComplete()` que ativa todos os 8 módulos
-2. [ ] Adicionar indicador de limite na tela (ex: "3/10 clientes")
-3. [ ] Bloquear abas PRO no Header
-4. [ ] Criar modal de upgrade bonito
-5. [ ] Adicionar página de planos/preços
-6. [ ] Configurar PIX para pagamento
+1. Plano Completo
+2. Modulos com ROI direto: estoque, corte inteligente, IA
+3. Modulos complementares: QR, equipe, personalizacao
+4. Modulos menores: locais global
 
----
+## Gatilhos de Conversao Dentro do Produto
 
-> 💡 **Resumo:** Modelo freemium com 14 funcionalidades grátis + 8 módulos pagos de R$ 39,00 cada + plano completo por R$ 199,00 (36% de desconto). Validade de 6 meses para todos os módulos pagos.
+As melhores ofertas aparecem quando o usuario sente a dor.
+
+Momentos ideais:
+
+- ao atingir limite de clientes, filmes, PDFs ou agendamentos
+- ao clicar em um recurso bloqueado
+- apos gerar alguns PDFs com sucesso
+- apos usar corte basico e ver potencial de economia
+- apos tentar cadastrar medidas por print, voz ou foto
+- apos perceber crescimento da equipe ou do estoque
+
+Mensagem ideal de upgrade:
+
+- mostrar o beneficio
+- mostrar o retorno financeiro
+- mostrar o que ele perde sem ativar
+- oferecer CTA unico e direto
+
+## Tese de Marketing
+
+O Peliculas BR nao vende "software".
+
+O Peliculas BR vende:
+
+- menos desperdicio
+- mais velocidade para orcar
+- mais profissionalismo na apresentacao
+- mais controle da operacao
+- mais chance de fechar e vender de novo
+
+## Riscos do Modelo Atual
+
+### 1. Inconsistencia de precos
+
+Hoje os documentos e o SQL mostram logicas diferentes de preco e validade. Isso precisa virar uma regra unica antes de anunciar.
+
+### 2. Mensagem confusa sobre mensal x semestral
+
+O usuario precisa entender em 3 segundos se esta pagando por mes, semestre ou ano.
+
+### 3. Modulos demais para a pagina principal
+
+Na pagina publica, mostrar 8 modulos de cara pode confundir. Melhor vender:
+
+- Gratis
+- Completo
+- Modulos avulsos como alternativa
+
+### 4. Preco baixo demais
+
+Preco muito baixo transmite ferramenta fraca, dificulta suporte e inviabiliza crescimento.
+
+## Plano de Lancamento em 3 Etapas
+
+### Etapa 1 - Monetizar com o que ja existe
+
+- manter plano gratuito
+- destacar Plano Completo
+- manter modulos avulsos
+- vender manualmente via PIX
+
+### Etapa 2 - Melhorar conversao
+
+- pagina de precos mais clara
+- copy de upgrade dentro do app
+- trial curto do completo
+- prova social e casos reais
+
+### Etapa 3 - Escalar receita
+
+- recorrencia automatica
+- campanhas de reativacao
+- upsell de IA e equipe
+- onboarding por nicho
+
+## Metricas que Importam
+
+- percentual de usuarios gratuitos que geram 1 PDF
+- percentual de usuarios que batem limite
+- taxa de clique em upgrade
+- taxa de conversao para primeiro pagamento
+- ticket medio por cliente
+- cancelamento
+- receita mensal recorrente
+
+## Decisao Recomendada Agora
+
+Se a prioridade e comecar a monetizar rapido, a melhor decisao e:
+
+- manter o plano gratuito como amostra forte
+- vender o Plano Completo como oferta principal
+- usar os modulos como add-ons e porta de entrada
+- prometer updates premium continuos para assinantes
+- nao vender bugfix como produto
+
+## Proximos Passos
+
+1. Definir uma tabela final de precos sem contradicoes
+2. Ajustar a copy da pagina de assinatura para focar resultado
+3. Criar pagina publica de precos com 3 blocos: Gratis, Completo, Modulos
+4. Inserir gatilhos de upgrade em limites e recursos bloqueados
+5. Rodar 10 a 20 vendas piloto com abordagem manual

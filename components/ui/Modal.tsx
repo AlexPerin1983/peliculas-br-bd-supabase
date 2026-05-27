@@ -1,4 +1,5 @@
 import React, { ReactNode } from 'react';
+import { X } from 'lucide-react';
 
 interface ModalProps {
     isOpen: boolean;
@@ -14,19 +15,27 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, footer,
     if (!isOpen) return null;
 
     return (
-        <div className={`fixed inset-0 bg-black/60 flex items-center justify-center transition-opacity duration-300 ease-in-out z-[10000] p-4 ${wrapperClassName || ''}`}>
-            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl transform transition-transform duration-300 ease-in-out max-w-lg w-full mx-4 sm:mx-0 scale-100 flex flex-col">
-                <div className="flex justify-between items-center p-4 border-b border-slate-200 dark:border-slate-700">
-                    <h2 className="text-xl font-semibold text-slate-800 dark:text-white flex-grow min-w-0">{title}</h2>
-                    <button onClick={onClose} disabled={disableClose} className="text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 focus:outline-none h-8 w-8 rounded-full flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-700 flex-shrink-0 ml-2 disabled:opacity-50 disabled:cursor-not-allowed">
-                        <i className="fas fa-times"></i>
+        <div className={`fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/68 p-4 backdrop-blur-md transition-opacity duration-300 ease-in-out ${wrapperClassName || ''}`}>
+            <div className="flex max-h-[90vh] w-full max-w-xl scale-100 transform flex-col overflow-hidden rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface)] shadow-[var(--shadow-elevated)] transition-transform duration-300 ease-in-out sm:mx-0">
+                <div className="flex items-start justify-between gap-4 border-b border-[var(--border-subtle)] bg-[var(--surface-raised)] px-5 py-4">
+                    <div className="min-w-0">
+                        <p className="ui-kicker">Configurar</p>
+                        <h2 className="mt-1 min-w-0 flex-grow text-xl font-bold leading-tight tracking-[-0.02em] text-[var(--text-strong)]">{title}</h2>
+                    </div>
+                    <button
+                        onClick={onClose}
+                        disabled={disableClose}
+                        className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-muted)] shadow-[var(--shadow-hairline)] transition-colors hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)] disabled:cursor-not-allowed disabled:opacity-50"
+                        aria-label="Fechar"
+                    >
+                        <X className="h-4 w-4" aria-hidden="true" />
                     </button>
                 </div>
-                <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto text-slate-700 dark:text-slate-300">
+                <div className="max-h-[70vh] space-y-6 overflow-y-auto bg-[var(--surface)] p-5 text-[var(--text-body)]">
                     {children}
                 </div>
                 {footer && (
-                    <div className="flex justify-end items-center p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 space-x-3 rounded-b-lg">
+                    <div className="flex flex-wrap items-center justify-end gap-3 border-t border-[var(--border-subtle)] bg-[var(--surface-muted)] p-4">
                         {footer}
                     </div>
                 )}

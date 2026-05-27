@@ -1,7 +1,7 @@
 // Service Worker com Auto-Atualização
 // ========================================
 // VERSÃO: Mude este número para forçar atualização nos clientes
-const SW_VERSION = 'v2.0.0';
+const SW_VERSION = 'v2.3.3';
 const CACHE_NAME = `peliculas-br-bd-${SW_VERSION}`;
 
 // Lista de recursos essenciais para cache offline
@@ -138,6 +138,124 @@ self.addEventListener('message', (event) => {
                 break;
         }
     }
+});
+
+function getNotificationUrl(data) {
+    if (data && typeof data.url === 'string' && data.url.startsWith('/')) {
+        return data.url;
+    }
+
+    return '/?tab=agenda';
+}
+
+function getReceipt(data) {
+    const receipt = data && data.receipt;
+    if (!receipt || typeof receipt !== 'object') return null;
+    if (typeof receipt.url !== 'string') return null;
+    if (typeof receipt.kind !== 'string') return null;
+    if (typeof receipt.id !== 'string') return null;
+    if (typeof receipt.token !== 'string') return null;
+
+    return receipt;
+}
+
+async function recordPushReceipt(data, stage, error) {
+    const receipt = getReceipt(data);
+    if (!receipt) return;
+
+    try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 5000);
+
+        await fetch(receipt.url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                kind: receipt.kind,
+                id: receipt.id,
+                token: receipt.token,
+                stage,
+                error: error ? String(error).slice(0, 500) : null,
+            }),
+            signal: controller.signal,
+        });
+
+        clearTimeout(timeout);
+    } catch (receiptError) {
+        console.warn(`[SW ${SW_VERSION}] Falha ao registrar recibo de push:`, receiptError);
+    }
+}
+
+self.addEventListener('push', (event) => {
+    let payload = {};
+
+    try {
+        payload = event.data ? event.data.json() : {};
+    } catch (_error) {
+        payload = {};
+    }
+
+    const title = payload.title || 'Agenda';
+    const options = {
+        body: payload.body || 'Voce tem um atendimento agendado.',
+        icon: payload.icon || '/icon-192x192.png',
+        badge: payload.badge || '/icon-192x192.png',
+        tag: payload.tag || 'agenda-reminder',
+        renotify: true,
+        silent: false,
+        timestamp: payload.timestamp || Date.now(),
+        vibrate: payload.vibrate || [180, 80, 180],
+        requireInteraction: Boolean(payload.requireInteraction),
+        data: {
+            url: getNotificationUrl(payload),
+            agendamentoId: payload.agendamentoId || null,
+            receipt: getReceipt(payload),
+        },
+        actions: [
+            {
+                action: 'open-agenda',
+                title: 'Abrir agenda',
+            },
+        ],
+    };
+
+    event.waitUntil((async () => {
+        await recordPushReceipt(payload, 'received');
+
+        try {
+            await self.registration.showNotification(title, options);
+            await recordPushReceipt(payload, 'shown');
+        } catch (error) {
+            await recordPushReceipt(payload, 'show_failed', error && error.message ? error.message : error);
+            throw error;
+        }
+    })());
+});
+
+self.addEventListener('notificationclick', (event) => {
+    event.notification.close();
+
+    const urlToOpen = new URL(getNotificationUrl(event.notification.data || {}), self.location.origin).href;
+
+    event.waitUntil(
+        Promise.all([
+            recordPushReceipt(event.notification.data || {}, 'clicked'),
+            self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+            for (const client of clients) {
+                if ('focus' in client) {
+                    client.navigate(urlToOpen);
+                    return client.focus();
+                }
+            }
+
+            if (self.clients.openWindow) {
+                return self.clients.openWindow(urlToOpen);
+            }
+
+            return undefined;
+            })
+        ])
+    );
 });
 
 console.log(`[SW ${SW_VERSION}] Service Worker carregado`);

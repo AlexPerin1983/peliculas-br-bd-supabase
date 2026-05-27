@@ -18,10 +18,10 @@ const mockedDb = vi.mocked(db);
 
 describe('sanitizeForFilename', () => {
   it('remove caracteres invalidos e normaliza padroes corrompidos', () => {
-    const sanitizedOption = sanitizeForFilename('OpÃ§Ã£o: Janela/Quarto?');
+    const sanitizedOption = sanitizeForFilename('Opção: Janela/Quarto?');
     expect(sanitizedOption).toContain('JanelaQuarto');
     expect(sanitizedOption).not.toMatch(/[<>:"/\\|?*]/);
-    const sanitized = sanitizeForFilename('OpÃƒÂ§ÃƒÂ£o*Teste');
+    const sanitized = sanitizeForFilename('Opção*Teste');
     expect(sanitized).not.toMatch(/[<>:"/\\|?*]/);
     expect(sanitized).toContain('Teste');
   });
@@ -52,7 +52,7 @@ describe('usePdfActions', () => {
     id: 5,
     name: 'Opcao 1',
     measurements: [],
-    generalDiscount: { value: '0', type: 'percentage' }
+    generalDiscount: { value: '0', type: 'percentage', pricingMode: 'complete' }
   };
 
   const films: Film[] = [
@@ -70,7 +70,14 @@ describe('usePdfActions', () => {
     totalLinearMeters: 0,
     linearMeterCost: 0,
     totalMaterial: 200,
-    totalLabor: 0
+    totalLabor: 0,
+    operationalExpenses: 0,
+    expensesByCategory: [],
+    estimatedMaterialCost: 0,
+    estimatedTotalCost: 0,
+    estimatedProfit: 190,
+    estimatedMarginPercentage: 100,
+    pricingMode: 'complete'
   };
 
   const measurements: UIMeasurement[] = [
@@ -116,12 +123,13 @@ describe('usePdfActions', () => {
       usePdfActions({
         measurements,
         films,
-        generalDiscount: { value: '10', type: 'fixed' },
+        generalDiscount: { value: '10', type: 'fixed', pricingMode: 'complete' },
         totals,
         selectedClient,
         selectedClientId: selectedClient.id ?? null,
         userInfo,
         activeOption,
+        proposalPaymentConfig: { paymentMethods: [], prazoPagamento: '' },
         clients: [selectedClient],
         setAllSavedPdfs: vi.fn(),
         setPdfGenerationStatus: vi.fn(),
@@ -174,6 +182,16 @@ describe('usePdfActions', () => {
 
     expect(pdfModule.generatePDF).toHaveBeenCalled();
     expect(mockedDb.savePDF).toHaveBeenCalled();
+    expect(mockedDb.savePDF).toHaveBeenCalledWith(expect.objectContaining({
+      generalDiscount: expect.objectContaining({
+        pricingMode: 'complete',
+        operation: 'discount',
+        expenseSnapshot: expect.objectContaining({
+          operationalExpenses: 0,
+          estimatedProfit: 190
+        })
+      })
+    }));
     expect(setPdfGenerationStatus).toHaveBeenCalledWith('generating');
     expect(setPdfGenerationStatus).toHaveBeenCalledWith('success');
     expect(anchor.click).toHaveBeenCalled();

@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Film, Measurement, ProposalOption, UIMeasurement } from '../../types';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Film, Measurement, ProposalDiscount, ProposalExpense, ProposalOption, ProposalPricingMode, UIMeasurement } from '../../types';
 import * as db from '../../services/db';
+import { normalizeProposalExpenses } from '../lib/proposalExpenses';
 
-type DiscountType = { value: string; type: 'percentage' | 'fixed' };
+type DiscountType = ProposalDiscount;
 
 interface UseProposalEditorParams {
     selectedClientId: number | null;
@@ -10,7 +11,68 @@ interface UseProposalEditorParams {
     loadClients: (clientIdToSelect?: number, shouldReorder?: boolean) => Promise<void>;
 }
 
-const EMPTY_GENERAL_DISCOUNT: DiscountType = { value: '', type: 'percentage' };
+const EMPTY_GENERAL_DISCOUNT: DiscountType = { value: '', type: 'percentage', operation: 'discount', pricingMode: 'complete' };
+
+const normalizeDiscountValue = (value: unknown): string => {
+    if (typeof value === 'string') {
+        return value;
+    }
+
+    if (typeof value === 'number' && Number.isFinite(value)) {
+        return String(value);
+    }
+
+    return '';
+};
+
+const normalizeGeneralDiscount = (
+    discount?: Partial<DiscountType> | null,
+    fallback?: Partial<DiscountType> | null
+): DiscountType => {
+    const value = normalizeDiscountValue(discount?.value ?? fallback?.value);
+    const type = discount?.type === 'fixed' || discount?.type === 'percentage'
+        ? discount.type
+        : fallback?.type === 'fixed'
+            ? 'fixed'
+            : 'percentage';
+    const operation = discount?.operation === 'increase' || discount?.operation === 'discount'
+        ? discount.operation
+        : fallback?.operation === 'increase'
+            ? 'increase'
+            : 'discount';
+    const discountValue = normalizeDiscountValue(
+        discount?.discountValue ?? fallback?.discountValue ?? (operation === 'discount' ? value : '')
+    );
+    const increaseValue = normalizeDiscountValue(
+        discount?.increaseValue ?? fallback?.increaseValue ?? (operation === 'increase' ? value : '')
+    );
+
+    return {
+        value,
+        type,
+        operation,
+        discountValue,
+        discountType: discount?.discountType === 'fixed' || discount?.discountType === 'percentage'
+        ? discount.discountType
+        : fallback?.discountType === 'fixed'
+            ? 'fixed'
+            : 'percentage',
+        increaseValue,
+        increaseType: discount?.increaseType === 'fixed' || discount?.increaseType === 'percentage'
+            ? discount.increaseType
+            : fallback?.increaseType === 'percentage'
+                ? 'percentage'
+                : operation === 'increase'
+                    ? type
+                    : 'fixed',
+        pricingMode: discount?.pricingMode === 'labor_only' || discount?.pricingMode === 'complete'
+            ? discount.pricingMode
+            : fallback?.pricingMode === 'labor_only'
+                ? 'labor_only'
+                : 'complete',
+        expenses: normalizeProposalExpenses(discount?.expenses ?? fallback?.expenses)
+    };
+};
 
 const createDefaultOption = (): ProposalOption => ({
     id: Date.now(),
@@ -27,6 +89,11 @@ export function useProposalEditor({
     const [proposalOptions, setProposalOptions] = useState<ProposalOption[]>([]);
     const [activeOptionId, setActiveOptionId] = useState<number | null>(null);
     const [isDirty, setIsDirty] = useState(false);
+    const proposalOptionsRef = useRef<ProposalOption[]>([]);
+
+    useEffect(() => {
+        proposalOptionsRef.current = proposalOptions;
+    }, [proposalOptions]);
 
     useEffect(() => {
         let isCancelled = false;
@@ -52,7 +119,10 @@ export function useProposalEditor({
                 setProposalOptions([defaultOption]);
                 setActiveOptionId(defaultOption.id);
             } else {
-                setProposalOptions(savedOptions);
+                setProposalOptions(savedOptions.map(option => ({
+                    ...option,
+                    generalDiscount: normalizeGeneralDiscount(option.generalDiscount)
+                })));
                 setActiveOptionId(savedOptions[0].id);
             }
             setIsDirty(false);
@@ -70,27 +140,17 @@ export function useProposalEditor({
     }, [proposalOptions, activeOptionId]);
 
     const measurements = activeOption?.measurements || [];
-    const generalDiscount = activeOption?.generalDiscount || EMPTY_GENERAL_DISCOUNT;
+    const generalDiscount = normalizeGeneralDiscount(activeOption?.generalDiscount);
 
     const handleSaveChanges = useCallback(async () => {
-        if (selectedClientId && proposalOptions.length > 0) {
-            await db.saveProposalOptions(selectedClientId, proposalOptions);
+        const currentProposalOptions = proposalOptionsRef.current;
+
+        if (selectedClientId && currentProposalOptions.length > 0) {
+            await db.saveProposalOptions(selectedClientId, currentProposalOptions);
             setIsDirty(false);
-            await loadClients(selectedClientId);
+            await loadClients(selectedClientId, false);
         }
-    }, [selectedClientId, proposalOptions, loadClients]);
-
-    useEffect(() => {
-        if (!isDirty) {
-            return;
-        }
-
-        const timerId = setTimeout(() => {
-            handleSaveChanges();
-        }, 1500);
-
-        return () => clearTimeout(timerId);
-    }, [proposalOptions, isDirty, handleSaveChanges]);
+    }, [selectedClientId, loadClients]);
 
     const updateActiveOption = useCallback((updater: (option: ProposalOption) => ProposalOption) => {
         if (!activeOptionId) {
@@ -117,8 +177,64 @@ export function useProposalEditor({
         updateActiveOption(option => ({ ...option, measurements: newMeasurements }));
     }, [updateActiveOption]);
 
+    const handleMeasurementsChangeWithPersistence = useCallback(async (newMeasurements: UIMeasurement[]) => {
+        if (!selectedClientId || !activeOptionId) {
+            handleMeasurementsChange(newMeasurements);
+            return;
+        }
+
+        const updatedProposalOptions = proposalOptionsRef.current.map(option =>
+            option.id === activeOptionId
+                ? { ...option, measurements: newMeasurements }
+                : option
+        );
+
+        setProposalOptions(updatedProposalOptions);
+        proposalOptionsRef.current = updatedProposalOptions;
+        setIsDirty(false);
+
+        await db.saveProposalOptions(selectedClientId, updatedProposalOptions);
+        setIsDirty(false);
+        await loadClients(selectedClientId, false);
+    }, [selectedClientId, activeOptionId, loadClients, handleMeasurementsChange]);
+
+    useEffect(() => {
+        if (!isDirty) {
+            return;
+        }
+
+        const timerId = setTimeout(() => {
+            handleSaveChanges();
+        }, 1500);
+
+        return () => clearTimeout(timerId);
+    }, [proposalOptions, isDirty, handleSaveChanges]);
+
     const handleGeneralDiscountChange = useCallback((discount: DiscountType) => {
-        updateActiveOption(option => ({ ...option, generalDiscount: discount }));
+        updateActiveOption(option => ({
+            ...option,
+            generalDiscount: normalizeGeneralDiscount(discount, option.generalDiscount)
+        }));
+    }, [updateActiveOption]);
+
+    const handleProposalPricingModeChange = useCallback((pricingMode: ProposalPricingMode) => {
+        updateActiveOption(option => ({
+            ...option,
+            generalDiscount: normalizeGeneralDiscount({
+                ...option.generalDiscount,
+                pricingMode
+            }, option.generalDiscount)
+        }));
+    }, [updateActiveOption]);
+
+    const handleProposalExpensesChange = useCallback((expenses: ProposalExpense[]) => {
+        updateActiveOption(option => ({
+            ...option,
+            generalDiscount: normalizeGeneralDiscount({
+                ...option.generalDiscount,
+                expenses
+            }, option.generalDiscount)
+        }));
     }, [updateActiveOption]);
 
     const createEmptyMeasurement = useCallback((): Measurement => ({
@@ -156,7 +272,10 @@ export function useProposalEditor({
                 id: Date.now() + index,
                 isNew: false
             })),
-            generalDiscount: { ...activeOption.generalDiscount }
+            generalDiscount: {
+                ...activeOption.generalDiscount,
+                expenses: normalizeProposalExpenses(activeOption.generalDiscount.expenses)
+            }
         };
 
         setProposalOptions(currentOptions => [...currentOptions, newOption]);
@@ -218,7 +337,10 @@ export function useProposalEditor({
         isDirty,
         handleSaveChanges,
         handleMeasurementsChange,
+        handleMeasurementsChangeWithPersistence,
         handleGeneralDiscountChange,
+        handleProposalPricingModeChange,
+        handleProposalExpensesChange,
         createEmptyMeasurement,
         addMeasurement,
         duplicateActiveOption,

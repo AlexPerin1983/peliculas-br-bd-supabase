@@ -30,11 +30,8 @@ export const AVAILABLE_MODULES = [
     { id: 'pacote_completo', name: 'Pacote Completo (todos)', price: 149 },
 ];
 
-const ADMIN_EMAILS = ['windowfilm.br@gmail.com', 'windowfilm.app@gmail.com'];
-
 export const isUserAdmin = (profile: Profile): boolean => {
-    const isAdminByEmail = profile.email && ADMIN_EMAILS.includes(profile.email.toLowerCase());
-    return isAdminByEmail || profile.role === 'admin';
+    return profile.role === 'admin';
 };
 
 export const useAdminUsers = (enabled: boolean) => {
@@ -63,33 +60,42 @@ export const useAdminUsers = (enabled: boolean) => {
                         let orgData = null;
 
                         if (targetOrgId) {
-                            const { data } = await supabase
+                            const { data, error } = await supabase
                                 .from('organizations')
                                 .select('id, name')
                                 .eq('id', targetOrgId)
-                                .single();
+                                .maybeSingle();
+                            if (error) throw error;
                             orgData = data;
                         } else {
-                            const { data } = await supabase
+                            const { data, error } = await supabase
                                 .from('organizations')
                                 .select('id, name')
                                 .eq('owner_id', profile.id)
-                                .single();
+                                .maybeSingle();
+                            if (error) throw error;
                             orgData = data;
                         }
 
                         if (orgData) {
-                            const { data: subData } = await supabase
+                            const { data: subData, error: subError } = await supabase
                                 .from('subscriptions')
                                 .select('id, active_modules')
                                 .eq('organization_id', orgData.id)
-                                .single();
+                                .maybeSingle();
 
-                            const { data: activationsData } = await supabase
-                                .from('module_activations')
-                                .select('module_id, expires_at, status')
-                                .eq('subscription_id', subData?.id)
-                                .eq('status', 'active');
+                            if (subError) throw subError;
+
+                            let activationsData = null;
+                            if (subData?.id) {
+                                const { data, error } = await supabase
+                                    .from('module_activations')
+                                    .select('module_id, expires_at, status')
+                                    .eq('subscription_id', subData.id)
+                                    .eq('status', 'active');
+                                if (error) throw error;
+                                activationsData = data;
+                            }
 
                             return {
                                 ...profile,
@@ -170,7 +176,7 @@ export const useAdminUsers = (enabled: boolean) => {
                 .from('subscriptions')
                 .select('id')
                 .eq('organization_id', orgId)
-                .single();
+                .maybeSingle();
 
             if (subError || !subData) {
                 const { data: newSub, error: createError } = await supabase

@@ -9,6 +9,10 @@ export default {
     darkMode: 'class',
     theme: {
         extend: {
+            fontFamily: {
+                sans: ['Manrope', 'system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'sans-serif'],
+                display: ['"Space Grotesk"', 'Manrope', 'system-ui', 'sans-serif'],
+            },
             colors: {
                 slate: {
                     850: '#1e293b', // Custom dark slate

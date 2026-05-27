@@ -38,7 +38,7 @@ const PwaQrCode: React.FC<PwaQrCodeProps> = ({ appUrl }) => {
                     Como Instalar
                 </h4>
                 <ol className="list-decimal list-inside text-sm text-blue-700 space-y-1">
-                    <li>Escaneie o QR Code acima com a câmera do seu celular.</li>
+                    <li>Escaneie o QR Code acima com a c?mera do seu celular.</li>
                     <li>O navegador abrirá o aplicativo.</li>
                     <li>
                         **No Android/Chrome:** Clique no botão "Instalar" ou use o menu (⋮) e selecione "Instalar aplicativo".

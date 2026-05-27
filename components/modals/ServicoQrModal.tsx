@@ -183,7 +183,7 @@ const ServicoQrModal: React.FC<ServicoQrModalProps> = ({
                         box-sizing: border-box;
                     }
                     body {
-                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                        font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
                         display: flex;
                         justify-content: center;
                         padding: 20px;

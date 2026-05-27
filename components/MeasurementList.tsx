@@ -1,8 +1,47 @@
 ﻿import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { MobileActionsDrawer } from './MobileActionsDrawer';
-import { Measurement, Film, UIMeasurement } from '../types';
+import { CheckSquare, ChevronDown, ChevronUp, ClipboardPaste, Copy, Layers3, Trash2, X } from 'lucide-react';
+import { useMemo } from 'react';
+import { Measurement, Film, ProposalPricingMode, Retalho, UIMeasurement } from '../types';
 import MeasurementGroup from './MeasurementGroup';
 import ConfirmationModal from './modals/ConfirmationModal';
+import RetalhoSuggestionModal from './modals/RetalhoSuggestionModal';
+import { deleteConsumo, deleteRetalho, getAllRetalhos, saveConsumo, saveRetalho } from '../services/estoqueDb';
+import { getCompatibleRetalhosForMeasurement } from '../src/lib/retalhoMatching';
+import { RetalhoConsumptionPlan, planRetalhoConsumption } from '../src/lib/retalhoConsumption';
+import { useFeedback } from '../src/contexts/FeedbackContext';
+import {
+    copyMeasurementsToMeasurementClipboard,
+    createPastedMeasurementsFromClipboard,
+    getMeasurementClipboardCount
+} from '../src/lib/measurementClipboard';
+
+const TOUCH_NUMPAD_MEDIA_QUERY = '(max-width: 767px)';
+
+const shouldUseTouchNumpad = () =>
+    typeof window !== 'undefined' && window.matchMedia(TOUCH_NUMPAD_MEDIA_QUERY).matches;
+
+const useTouchNumpadPreference = () => {
+    const [useTouchNumpad, setUseTouchNumpad] = useState(shouldUseTouchNumpad);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') {
+            return;
+        }
+
+        const mediaQuery = window.matchMedia(TOUCH_NUMPAD_MEDIA_QUERY);
+        const syncTouchNumpad = () => setUseTouchNumpad(mediaQuery.matches);
+
+        syncTouchNumpad();
+        mediaQuery.addEventListener('change', syncTouchNumpad);
+
+        return () => {
+            mediaQuery.removeEventListener('change', syncTouchNumpad);
+        };
+    }, []);
+
+    return useTouchNumpad;
+};
 
 type NumpadConfig = {
     isOpen: boolean;
@@ -15,6 +54,7 @@ interface MeasurementListProps {
     measurements: UIMeasurement[];
     films: Film[];
     onMeasurementsChange: (measurements: UIMeasurement[]) => void;
+    onPersistMeasurementsChange?: (measurements: UIMeasurement[]) => Promise<void>;
     onOpenFilmModal: (film: Film | null) => void;
     onOpenFilmSelectionModal: (measurementId: number) => void;
     onOpenClearAllModal: () => void;
@@ -29,15 +69,19 @@ interface MeasurementListProps {
     swipeDistance?: number;
     totalM2: number;
     totalQuantity: number;
+    pricingMode: ProposalPricingMode;
     clientId?: number;
     optionId?: number;
     onDeleteMeasurementImmediate: (id: number) => void;
+    onPasteCopiedMeasurements?: () => void | Promise<void>;
+    proposalOptionsSlot?: React.ReactNode;
 }
 
 const MeasurementList: React.FC<MeasurementListProps> = ({
     measurements,
     films,
     onMeasurementsChange,
+    onPersistMeasurementsChange,
     onOpenClearAllModal,
     onOpenApplyFilmToAllModal,
     numpadConfig,
@@ -51,8 +95,14 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
     swipeDistance = 0,
     totalM2,
     totalQuantity,
-    onOpenFilmSelectionModal
+    pricingMode,
+    clientId,
+    onOpenFilmSelectionModal,
+    onPasteCopiedMeasurements,
+    proposalOptionsSlot
 }) => {
+    const { showToast } = useFeedback();
+    const useTouchNumpad = useTouchNumpadPreference();
     const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
     const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
     const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -62,12 +112,39 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
     const [swipedItemId, setSwipedItemId] = useState<number | null>(null);
     const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const [availableRetalhos, setAvailableRetalhos] = useState<Retalho[]>([]);
+    const [isLoadingRetalhos, setIsLoadingRetalhos] = useState(false);
+    const [retalhoMeasurementId, setRetalhoMeasurementId] = useState<number | null>(null);
+    const [consumingRetalhoId, setConsumingRetalhoId] = useState<number | null>(null);
+    const formattedTotalM2 = totalM2.toFixed(2).replace('.', ',');
 
     const scrollVelocityRef = useRef(0);
     const animationFrameRef = useRef<number | null>(null);
     const listContainerRef = useRef<HTMLDivElement>(null);
     const actionsMenuRef = useRef<HTMLDivElement>(null);
     const firstNewMeasurementRef = useRef<number | null>(null);
+    const copiedMeasurementsCount = getMeasurementClipboardCount();
+
+    const applyMeasurements = useCallback(async (nextMeasurements: UIMeasurement[]) => {
+        if (onPersistMeasurementsChange) {
+            await onPersistMeasurementsChange(nextMeasurements);
+            return;
+        }
+
+        onMeasurementsChange(nextMeasurements);
+    }, [onMeasurementsChange, onPersistMeasurementsChange]);
+
+    const loadRetalhos = useCallback(async () => {
+        setIsLoadingRetalhos(true);
+        try {
+            const allRetalhos = await getAllRetalhos();
+            setAvailableRetalhos(allRetalhos.filter(retalho => retalho.status === 'disponivel'));
+        } catch (error) {
+            console.error('Erro ao carregar retalhos compatíveis:', error);
+        } finally {
+            setIsLoadingRetalhos(false);
+        }
+    }, []);
 
     useEffect(() => {
         if (measurements.length > 0) {
@@ -79,15 +156,24 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
     }, [measurements]);
 
     useEffect(() => {
+        void loadRetalhos();
+    }, [loadRetalhos]);
+
+    useEffect(() => {
         if (firstNewMeasurementRef.current !== null) {
-            const element = listContainerRef.current?.querySelector(`[data-measurement-id='${firstNewMeasurementRef.current}'][inputmode='decimal']`);
+            const element = listContainerRef.current?.querySelector<HTMLElement>(`[data-measurement-id='${firstNewMeasurementRef.current}'] [data-measurement-field='largura']`);
             if (element) {
-                onOpenNumpad(firstNewMeasurementRef.current, 'largura', '');
-                onMeasurementsChange(measurements.map(m => m.id === firstNewMeasurementRef.current ? { ...m, isNew: false } : m));
+                if (useTouchNumpad) {
+                    onOpenNumpad(firstNewMeasurementRef.current, 'largura', '');
+                } else {
+                    element.focus();
+                }
+
+                void applyMeasurements(measurements.map(m => m.id === firstNewMeasurementRef.current ? { ...m, isNew: false } : m));
                 firstNewMeasurementRef.current = null;
             }
         }
-    }, [measurements, onMeasurementsChange, onOpenNumpad]);
+    }, [measurements, onOpenNumpad, applyMeasurements, useTouchNumpad]);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -102,6 +188,37 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
             document.removeEventListener('mousedown', handleClickOutside);
         };
     }, [isActionsMenuOpen]);
+
+    const compatibleRetalhosByMeasurement = useMemo(() => {
+        const compatibilities = new Map<number, Retalho[]>();
+
+        measurements.forEach(measurement => {
+            if (measurement.estoqueUso?.retalhoId) {
+                compatibilities.set(measurement.id, []);
+                return;
+            }
+
+            compatibilities.set(
+                measurement.id,
+                getCompatibleRetalhosForMeasurement(measurement, availableRetalhos)
+            );
+        });
+
+        return compatibilities;
+    }, [measurements, availableRetalhos]);
+
+    const selectedMeasurementForRetalho = useMemo(
+        () => measurements.find(measurement => measurement.id === retalhoMeasurementId) || null,
+        [measurements, retalhoMeasurementId]
+    );
+
+    const selectedMeasurementRetalhos = useMemo(() => {
+        if (!selectedMeasurementForRetalho) {
+            return [];
+        }
+
+        return compatibleRetalhosByMeasurement.get(selectedMeasurementForRetalho.id) || [];
+    }, [selectedMeasurementForRetalho, compatibleRetalhosByMeasurement]);
 
     const scrollLoop = useCallback(() => {
         const mainContainer = document.querySelector('main');
@@ -158,9 +275,54 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
         }
     };
 
+    const handleCopySelected = useCallback(() => {
+        const selectedMeasurements = measurements.filter(measurement => selectedIds.has(measurement.id));
+
+        if (selectedMeasurements.length === 0) {
+            return;
+        }
+
+        try {
+            const payload = copyMeasurementsToMeasurementClipboard(selectedMeasurements);
+            const count = payload.measurements.length;
+            showToast(`${count} ${count === 1 ? 'medida copiada' : 'medidas copiadas'}. Abra outro cliente e use Acoes > Colar.`, { tone: 'success' });
+            handleCancelSelectionMode();
+        } catch (error) {
+            console.error('Erro ao copiar medidas:', error);
+            showToast('Não foi possível copiar as medidas selecionadas.', { tone: 'error' });
+        }
+    }, [handleCancelSelectionMode, measurements, selectedIds, showToast]);
+
+    const handlePasteCopiedMeasurements = useCallback(async () => {
+        if (onPasteCopiedMeasurements) {
+            await onPasteCopiedMeasurements();
+            return;
+        }
+
+        const pastedMeasurements = createPastedMeasurementsFromClipboard(measurements);
+
+        if (pastedMeasurements.length === 0) {
+            showToast('Nenhuma medida copiada para colar.', { tone: 'warning' });
+            return;
+        }
+
+        const nextMeasurements = [
+            ...measurements.map(measurement => ({ ...measurement, isNew: false })),
+            ...pastedMeasurements
+        ];
+
+        try {
+            await applyMeasurements(nextMeasurements);
+            showToast(`${pastedMeasurements.length} ${pastedMeasurements.length === 1 ? 'medida colada' : 'medidas coladas'} neste cliente.`, { tone: 'success' });
+        } catch (error) {
+            console.error('Erro ao colar medidas:', error);
+            showToast('Não foi possível colar as medidas copiadas.', { tone: 'error' });
+        }
+    }, [applyMeasurements, measurements, onPasteCopiedMeasurements, showToast]);
+
     const handleConfirmDeleteSelected = () => {
         const newMeasurements = measurements.filter(m => !selectedIds.has(m.id));
-        onMeasurementsChange(newMeasurements);
+        void applyMeasurements(newMeasurements);
         handleCancelSelectionMode();
         setIsDeleteSelectedModalOpen(false);
     };
@@ -226,7 +388,7 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
             const newMeasurements = [...measurements];
             const [draggedItem] = newMeasurements.splice(draggedIndex, 1);
             newMeasurements.splice(dragOverIdx, 0, draggedItem);
-            onMeasurementsChange(newMeasurements);
+            void applyMeasurements(newMeasurements);
         }
         setDraggedIndex(null);
         setDragOverIdx(null);
@@ -234,7 +396,7 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
 
     const updateMeasurement = (id: number, updatedMeasurement: Partial<Measurement>) => {
         const newMeasurements = measurements.map(m => m.id === id ? { ...m, ...updatedMeasurement } : m);
-        onMeasurementsChange(newMeasurements);
+        void applyMeasurements(newMeasurements);
     };
 
     const duplicateMeasurement = (id: number) => {
@@ -251,7 +413,7 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
             newMeasurements.splice(index + 1, 0, newMeasurement);
 
             const finalMeasurements = newMeasurements.map(m => m.id === newMeasurement.id ? { ...m, isNew: true } : { ...m, isNew: false });
-            onMeasurementsChange(finalMeasurements);
+            void applyMeasurements(finalMeasurements);
         }
     };
 
@@ -259,21 +421,173 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
         setSwipedItemId(id);
     }, []);
 
+    const handleOpenRetalhoSuggestions = useCallback((measurementId: number) => {
+        setRetalhoMeasurementId(measurementId);
+        void loadRetalhos();
+    }, [loadRetalhos]);
+
+    const handleCloseRetalhoSuggestions = useCallback(() => {
+        if (consumingRetalhoId !== null) {
+            return;
+        }
+
+        setRetalhoMeasurementId(null);
+    }, [consumingRetalhoId]);
+
+    const handleUseRetalho = useCallback(async (retalho: Retalho, selectedPlan: RetalhoConsumptionPlan) => {
+        if (!selectedMeasurementForRetalho || !retalho.id) {
+            return;
+        }
+
+        const now = new Date().toISOString();
+        setConsumingRetalhoId(retalho.id);
+
+        const consumptionPlan = planRetalhoConsumption(
+            selectedMeasurementForRetalho,
+            retalho,
+            selectedPlan.orientation
+        );
+
+        if (!consumptionPlan) {
+            setConsumingRetalhoId(null);
+            showToast('A orientação escolhida não cabe mais neste retalho.', { tone: 'warning' });
+            return;
+        }
+
+        const estoqueUso = {
+            tipo: 'retalho' as const,
+            retalhoId: retalho.id,
+            filmId: retalho.filmId,
+            larguraCm: consumptionPlan.appliedWidthCm,
+            comprimentoCm: consumptionPlan.appliedLengthCm,
+            orientacao: consumptionPlan.orientation,
+            codigoQr: retalho.codigoQr,
+            localizacao: retalho.localizacao,
+            consumidoEm: now
+        };
+
+        const selectedIndex = measurements.findIndex(item => item.id === selectedMeasurementForRetalho.id);
+
+        if (selectedIndex === -1) {
+            setConsumingRetalhoId(null);
+            return;
+        }
+
+        const updatedMeasurements = [...measurements];
+        const selectedMeasurement = updatedMeasurements[selectedIndex];
+
+        if (selectedMeasurement.quantidade > 1) {
+            updatedMeasurements[selectedIndex] = {
+                ...selectedMeasurement,
+                quantidade: selectedMeasurement.quantidade - 1
+            };
+
+            updatedMeasurements.splice(selectedIndex + 1, 0, {
+                ...selectedMeasurement,
+                id: Date.now(),
+                quantidade: 1,
+                estoqueUso
+            });
+        } else {
+            updatedMeasurements[selectedIndex] = {
+                ...selectedMeasurement,
+                estoqueUso
+            };
+        }
+
+        let savedConsumoId: number | undefined;
+        let retalhoWasConsumed = false;
+        let leftoverRetalho: Retalho | null = null;
+
+        try {
+            await applyMeasurements(updatedMeasurements);
+
+            await saveRetalho({
+                ...retalho,
+                status: 'usado',
+                dataUtilizacao: now
+            });
+            retalhoWasConsumed = true;
+
+            if (consumptionPlan.hasReusableLeftover) {
+                leftoverRetalho = await saveRetalho({
+                    bobinaId: retalho.bobinaId,
+                    filmId: retalho.filmId,
+                    codigoQr: '',
+                    larguraCm: consumptionPlan.leftoverWidthCm,
+                    comprimentoCm: consumptionPlan.leftoverLengthCm,
+                    status: 'disponivel',
+                    localizacao: retalho.localizacao,
+                    observacao: `Sobra gerada automaticamente do retalho #${retalho.id} após aplicar ${selectedMeasurementForRetalho.largura} x ${selectedMeasurementForRetalho.altura} m com corte ${consumptionPlan.orientationLabel}`
+                });
+            }
+
+                const savedConsumo = await saveConsumo({
+                    retalhoId: retalho.id,
+                    clientId,
+                    metrosConsumidos: consumptionPlan.appliedLengthCm / 100,
+                    larguraCorteCm: consumptionPlan.appliedWidthCm,
+                    comprimentoCorteCm: consumptionPlan.appliedLengthCm,
+                    areaM2: consumptionPlan.appliedAreaM2,
+                    tipo: 'corte',
+                    observacao: `Retalho aplicado na medida ${selectedMeasurementForRetalho.largura} x ${selectedMeasurementForRetalho.altura} (${selectedMeasurementForRetalho.pelicula}) - corte ${consumptionPlan.orientationLabel}`
+                });
+            savedConsumoId = savedConsumo.id;
+            setAvailableRetalhos(current => {
+                const nextRetalhos = current.filter(item => item.id !== retalho.id);
+
+                if (leftoverRetalho) {
+                    nextRetalhos.unshift(leftoverRetalho);
+                }
+
+                return nextRetalhos;
+            });
+            setRetalhoMeasurementId(null);
+        } catch (error) {
+            if (savedConsumoId) {
+                await deleteConsumo(savedConsumoId).catch(rollbackError => {
+                    console.error('Erro ao desfazer consumo de retalho:', rollbackError);
+                });
+            }
+
+            if (leftoverRetalho?.id) {
+                await deleteRetalho(leftoverRetalho.id).catch(rollbackError => {
+                    console.error('Erro ao desfazer sobra criada automaticamente:', rollbackError);
+                });
+            }
+
+            if (retalhoWasConsumed) {
+                await saveRetalho(retalho).catch(rollbackError => {
+                    console.error('Erro ao restaurar status do retalho:', rollbackError);
+                });
+            }
+
+            await applyMeasurements(measurements).catch(rollbackError => {
+                console.error('Erro ao restaurar vínculo da medida após falha:', rollbackError);
+            });
+
+            console.error('Erro ao consumir retalho:', error);
+            showToast('Não foi possível consumir o retalho selecionado.', { tone: 'error' });
+        } finally {
+            setConsumingRetalhoId(null);
+        }
+    }, [selectedMeasurementForRetalho, clientId, measurements, onMeasurementsChange, onPersistMeasurementsChange, showToast]);
+
     const ActionMenuItem: React.FC<{
         onClick: () => void;
-        icon: string;
+        icon: React.ReactNode;
         label: string;
         isDestructive?: boolean;
     }> = ({ onClick, icon, label, isDestructive = false }) => (
         <li>
             <button
                 onClick={() => { onClick(); setIsActionsMenuOpen(false); }}
-                className={`flex items-center w-full px-3 py-2 text-sm rounded-md ${isDestructive
+                className={`flex items-center w-full gap-3 rounded-[var(--radius-control)] px-3 py-2 text-sm font-semibold transition-colors ${isDestructive
                     ? 'text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-700'
-                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white'
+                    : 'text-[var(--text-body)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)]'
                     } `}
             >
-                <i className={`${icon} mr-3 h-5 w-5 ${isDestructive ? 'text-red-400' : 'text-slate-400'} `}></i>
+                <span className={`inline-flex h-4 w-4 items-center justify-center ${isDestructive ? 'text-red-400' : 'text-[var(--text-muted)]'} `}>{icon}</span>
                 {label}
             </button>
         </li>
@@ -292,9 +606,9 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
 
     return (
         <>
-            <div className="my-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+            <div className="relative z-50 my-3 rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface-raised)] p-3 shadow-[var(--shadow-soft)] sm:my-4 sm:p-4">
                 {isSelectionMode ? (
-                    <div className="flex justify-between items-center px-2 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                    <div className="flex flex-wrap justify-between items-center gap-2">
                         <div className="flex items-center gap-3">
                             <input
                                 type="checkbox"
@@ -303,82 +617,166 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
                                 onChange={handleToggleSelectAll}
                                 aria-label="Selecionar todas as medidas"
                             />
-                            <span className="text-sm font-semibold text-slate-800 dark:text-white">
+                            <span className="text-sm font-semibold text-[var(--text-strong)]">
                                 {selectedIds.size} / {measurements.length} selecionadas
                             </span>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <button onClick={handleCancelSelectionMode} className="text-sm text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-md px-3 py-1.5 transition-colors duration-200">
-                                Cancelar
+                        <div className="flex items-center gap-1.5">
+                            <button
+                                onClick={handleCancelSelectionMode}
+                                className="h-10 w-10 inline-flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--surface-muted)] rounded-[var(--radius-control)] transition-colors duration-200"
+                                aria-label="Cancelar seleção"
+                                title="Cancelar seleção"
+                            >
+                                <X className="h-4 w-4" aria-hidden="true" />
+                            </button>
+                            <button
+                                onClick={handleCopySelected}
+                                className="h-10 w-10 inline-flex items-center justify-center text-white bg-[var(--brand-primary)] hover:bg-[var(--brand-primary-strong)] rounded-[var(--radius-control)] transition-colors duration-200 disabled:bg-blue-300 disabled:cursor-not-allowed"
+                                disabled={selectedIds.size === 0}
+                                aria-label="Copiar medidas selecionadas"
+                                title="Copiar medidas selecionadas"
+                            >
+                                <Copy className="h-4 w-4" aria-hidden="true" />
                             </button>
                             <button
                                 onClick={handleDeleteSelected}
-                                className="text-sm text-white bg-red-600 hover:bg-red-700 rounded-md px-3 py-1.5 transition-colors duration-200 flex items-center gap-2 disabled:bg-red-400 disabled:cursor-not-allowed"
+                                className="h-10 w-10 inline-flex items-center justify-center text-white bg-red-600 hover:bg-red-700 rounded-[var(--radius-control)] transition-colors duration-200 disabled:bg-red-400 disabled:cursor-not-allowed"
                                 disabled={selectedIds.size === 0}
+                                aria-label="Excluir medidas selecionadas"
+                                title="Excluir medidas selecionadas"
                             >
-                                <i className="fas fa-trash-alt"></i>
-                                Excluir
+                                <Trash2 className="h-4 w-4" aria-hidden="true" />
                             </button>
                         </div>
                     </div>
                 ) : (
-                    <div className="flex justify-between items-center">
-                        <div className="flex items-center gap-4">
-                            <span title="Quantidade de Medidas (Grupos e Total de Vidros)" className="text-sm font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 px-3 py-2 rounded-lg">
-                                QM: {measurements.length} ({totalQuantity})
-                            </span>
-                            <span title="Total de Metros Quadrados" className="text-sm font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 px-3 py-2 rounded-lg">
-                                M²: {totalM2.toFixed(2).replace('.', ',')}
-                            </span>
-                        </div>
-                        <div className="relative" ref={actionsMenuRef}>
-                            <button
-                                onClick={() => setIsActionsMenuOpen(prev => !prev)}
-                                className="hidden sm:flex text-sm font-semibold text-slate-700 dark:text-slate-200 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 rounded-lg px-4 py-2 transition-colors duration-200 items-center gap-2"
-                            >
-                                Ações
-                                <i className={`fas fa-chevron-down text-xs transition-transform duration-200 ${isActionsMenuOpen ? 'rotate-180' : ''}`}></i>
-                            </button>
-
+                    <>
+                    <div className="sm:hidden">
+                        <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                                <p className="ui-kicker">Mapa</p>
+                                <h3 className="mt-0.5 truncate text-[17px] font-black leading-tight text-[var(--text-strong)]">Medidas</h3>
+                            </div>
                             <button
                                 onClick={() => setIsMobileMenuOpen(true)}
-                                className="flex sm:hidden text-sm font-semibold text-slate-700 dark:text-slate-200 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 rounded-lg px-4 py-2 transition-colors duration-200 items-center gap-2"
+                                className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] px-3 text-sm font-semibold text-[var(--text-body)] transition-colors hover:bg-[var(--surface-muted)]"
                             >
-                                Ações
-                                <i className="fas fa-chevron-up text-xs"></i>
+                                Acoes
+                                <ChevronUp className="h-4 w-4" aria-hidden="true" />
                             </button>
+                        </div>
 
-                            {isActionsMenuOpen && (
-                                <div className="hidden sm:block absolute right-0 mt-2 w-56 origin-top-right bg-white dark:bg-slate-800 rounded-md shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-20 p-1">
+                        <div className="mt-3 grid grid-cols-3 gap-2">
+                            <div className="rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] px-2.5 py-2">
+                                <span className="block text-[9px] font-black uppercase tracking-[0.12em] text-[var(--text-soft)]">Grupos</span>
+                                <span className="mt-0.5 block text-sm font-black leading-tight text-[var(--text-strong)]">
+                                    {measurements.length}
+                                </span>
+                            </div>
+                            <div className="rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] px-2.5 py-2">
+                                <span className="block text-[9px] font-black uppercase tracking-[0.12em] text-[var(--text-soft)]">Pecas</span>
+                                <span className="mt-0.5 block text-sm font-black leading-tight text-[var(--text-strong)]">
+                                    {totalQuantity}
+                                </span>
+                            </div>
+                            <div className="rounded-[var(--radius-control)] border border-blue-500/30 bg-blue-500/10 px-2.5 py-2">
+                                <span className="block text-[9px] font-black uppercase tracking-[0.12em] text-blue-600 dark:text-blue-300">Area</span>
+                                <span className="mt-0.5 block truncate text-sm font-black leading-tight text-[var(--text-strong)]">
+                                    {formattedTotalM2} m2
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="hidden flex-col gap-3 sm:flex sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0">
+                            <p className="ui-kicker">Mapa de medidas</p>
+                            <div className="mt-1 flex flex-wrap items-end gap-x-3 gap-y-1">
+                                <h3 className="text-lg font-bold leading-tight text-[var(--text-strong)]">Medidas da proposta</h3>
+                                <span className="text-sm font-semibold text-[var(--text-muted)]">
+                                    {measurements.length} grupo{measurements.length === 1 ? '' : 's'} - {totalQuantity} peca{totalQuantity === 1 ? '' : 's'} - {formattedTotalM2} m2
+                                </span>
+                            </div>
+                        </div>
+                        <div className="flex items-center justify-between gap-2 sm:justify-end">
+                            <div className="flex items-center gap-2">
+                                <span title="Quantidade de Medidas" className="text-sm font-semibold text-[var(--text-body)] bg-[var(--surface-muted)] border border-[var(--border-subtle)] px-3 py-2 rounded-[var(--radius-control)]">
+                                    {measurements.length} itens
+                                </span>
+                                <span title="Total de Metros Quadrados" className="text-sm font-semibold text-[var(--text-body)] bg-[var(--surface-muted)] border border-[var(--border-subtle)] px-3 py-2 rounded-[var(--radius-control)]">
+                                    {formattedTotalM2} m2
+                                </span>
+                            </div>
+                            <div className="relative z-[60]" ref={actionsMenuRef}>
+                                <button
+                                    onClick={() => setIsActionsMenuOpen(prev => !prev)}
+                                    className="flex text-sm font-semibold text-[var(--text-body)] bg-[var(--surface)] border border-[var(--border-subtle)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)] rounded-[var(--radius-control)] px-4 py-2 transition-colors duration-200 items-center gap-2"
+                                >
+                                    Acoes
+                                    <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${isActionsMenuOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
+                                </button>
+
+                                {isActionsMenuOpen && (
+                                <div className="absolute right-0 z-[120] mt-2 w-60 origin-top-right rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface)] p-1.5 shadow-[var(--shadow-elevated)] focus:outline-none">
                                     <ul className="space-y-1">
+                                        {copiedMeasurementsCount > 0 && (
+                                            <ActionMenuItem
+                                                onClick={() => { void handlePasteCopiedMeasurements(); }}
+                                                icon={<ClipboardPaste className="h-4 w-4" aria-hidden="true" />}
+                                                label={`Colar ${copiedMeasurementsCount === 1 ? 'Medida' : 'Medidas'}`}
+                                            />
+                                        )}
                                         <ActionMenuItem
                                             onClick={handleEnterSelectionMode}
-                                            icon="far fa-check-square"
+                                            icon={<CheckSquare className="h-4 w-4" aria-hidden="true" />}
                                             label="Selecionar"
                                         />
                                         <ActionMenuItem
                                             onClick={onOpenApplyFilmToAllModal}
-                                            icon="fas fa-layer-group"
+                                            icon={<Layers3 className="h-4 w-4" aria-hidden="true" />}
                                             label="Aplicar a Todos"
                                         />
                                         <div className="h-px bg-slate-100 dark:bg-slate-700 my-1"></div>
                                         <ActionMenuItem
                                             onClick={onOpenClearAllModal}
-                                            icon="fas fa-trash-alt"
+                                            icon={<Trash2 className="h-4 w-4" aria-hidden="true" />}
                                             label="Excluir Todas"
                                             isDestructive
                                         />
                                     </ul>
                                 </div>
-                            )}
+                                )}
+                            </div>
+                        </div>
+                    </div>
 
-                            <MobileActionsDrawer
-                                open={isMobileMenuOpen}
-                                onOpenChange={setIsMobileMenuOpen}
-                                title="Ações da Lista"
-                                description="Gerencie suas medidas em lote"
-                            >
+                    <MobileActionsDrawer
+                        open={isMobileMenuOpen}
+                        onOpenChange={setIsMobileMenuOpen}
+                        title="Acoes da Lista"
+                        description="Gerencie suas medidas em lote"
+                    >
                                 <div className="space-y-2">
+                                    {copiedMeasurementsCount > 0 && (
+                                        <button
+                                            onClick={() => {
+                                                void handlePasteCopiedMeasurements();
+                                                setIsMobileMenuOpen(false);
+                                            }}
+                                            className="w-full flex items-center gap-4 px-4 py-4 text-left transition-colors active:bg-slate-100 dark:active:bg-slate-700 rounded-xl text-slate-700 dark:text-slate-200"
+                                        >
+                                            <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 bg-blue-50 dark:bg-blue-900/20">
+                                                <i className="fas fa-paste text-lg text-blue-600 dark:text-blue-300"></i>
+                                            </div>
+                                            <div className="flex-1">
+                                                <span className="font-semibold block text-base">Colar Medidas</span>
+                                                <span className="text-xs text-slate-500 dark:text-slate-400 block mt-0.5">{copiedMeasurementsCount} {copiedMeasurementsCount === 1 ? 'medida copiada' : 'medidas copiadas'}</span>
+                                            </div>
+                                            <i className="fas fa-chevron-right text-slate-300 text-xs"></i>
+                                        </button>
+                                    )}
+
                                     <button
                                         onClick={() => {
                                             handleEnterSelectionMode();
@@ -391,7 +789,7 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
                                         </div>
                                         <div className="flex-1">
                                             <span className="font-semibold block text-base">Selecionar Medidas</span>
-                                            <span className="text-xs text-slate-500 dark:text-slate-400 block mt-0.5">Apagar ou editar múltiplos itens</span>
+                                            <span className="text-xs text-slate-500 dark:text-slate-400 block mt-0.5">Copiar, apagar ou editar multiplos itens</span>
                                         </div>
                                         <i className="fas fa-chevron-right text-slate-300 text-xs"></i>
                                     </button>
@@ -432,16 +830,21 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
                                         <i className="fas fa-chevron-right text-slate-300 text-xs"></i>
                                     </button>
                                 </div>
-                            </MobileActionsDrawer>
-                        </div>
-                    </div>
+                    </MobileActionsDrawer>
+                    </>
                 )}
             </div>
+
+            {proposalOptionsSlot && !isSelectionMode ? (
+                <div className="relative z-40 -mt-2 mb-3">
+                    {proposalOptionsSlot}
+                </div>
+            ) : null}
 
             <div
                 onDragOver={handleDragOver}
                 ref={listContainerRef}
-                className={getAnimationClass()}
+                className={`relative z-0 ${getAnimationClass()}`}
                 style={getAnimationStyle()}
             >
                 {measurements.map((measurement, index) => (
@@ -450,6 +853,7 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
                         <MeasurementGroup
                             measurement={measurement}
                             films={films}
+                            pricingMode={pricingMode}
                             onUpdate={(updated) => updateMeasurement(measurement.id, updated)}
                             onDelete={() => onDeleteMeasurement(measurement.id)}
                             onDeleteImmediate={() => onDeleteMeasurementImmediate(measurement.id)}
@@ -466,10 +870,14 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
                             onToggleSelection={handleToggleSelection}
                             numpadConfig={numpadConfig}
                             onOpenNumpad={onOpenNumpad}
+                            useTouchNumpad={useTouchNumpad}
                             isActive={measurement.id === activeMeasurementId}
                             swipedItemId={swipedItemId}
                             onSetSwipedItem={handleSetSwipedItem}
                             onOpenDiscountModal={onOpenDiscountModal}
+                            compatibleRetalhosCount={(compatibleRetalhosByMeasurement.get(measurement.id) || []).length}
+                            isCheckingEstoque={isLoadingRetalhos}
+                            onOpenRetalhoSuggestions={handleOpenRetalhoSuggestions}
                         />
                     </React.Fragment>
                 ))}
@@ -488,6 +896,16 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
                     confirmButtonVariant="danger"
                 />
             )}
+
+            <RetalhoSuggestionModal
+                isOpen={retalhoMeasurementId !== null}
+                measurement={selectedMeasurementForRetalho}
+                retalhos={selectedMeasurementRetalhos}
+                loading={isLoadingRetalhos}
+                consumingRetalhoId={consumingRetalhoId}
+                onClose={handleCloseRetalhoSuggestions}
+                onConfirm={handleUseRetalho}
+            />
 
       <style>{`
 @keyframes carousel-left {

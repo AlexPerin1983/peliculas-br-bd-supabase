@@ -51,20 +51,92 @@ export interface Measurement {
     locked?: boolean;
     locationId?: number;
     locationName?: string;
+    estoqueUso?: MeasurementEstoqueUso;
 }
 
 export interface UIMeasurement extends Measurement {
     isNew?: boolean;
 }
 
+export type ProposalPricingMode = 'complete' | 'labor_only';
+
+export type ProposalExpenseCategory = 'paid_traffic' | 'transport' | 'food' | 'tools' | 'material' | 'other';
+
+export interface ProposalFuelExpenseDetails {
+    fuelPricePerLiter?: string | number;
+    consumptionKmPerLiter?: string | number;
+    distanceKm?: string | number;
+    calculatedAmount?: string | number;
+}
+
+export interface ProposalExpense {
+    id: string;
+    category: ProposalExpenseCategory;
+    amount: string | number;
+    description?: string;
+    fuelDetails?: ProposalFuelExpenseDetails;
+}
+
+export interface StandaloneExpense {
+    id?: number;
+    date: string;
+    category: ProposalExpenseCategory;
+    amount: string | number;
+    description: string;
+    paymentMethod?: string;
+    clientId?: number | null;
+    proposalId?: number | null;
+    createdAt?: string;
+    updatedAt?: string;
+}
+
+export interface ProposalExpenseCategoryTotal {
+    category: ProposalExpenseCategory;
+    label: string;
+    total: number;
+}
+
+export interface ProposalExpenseSnapshot {
+    operationalExpenses: number;
+    estimatedMaterialCost: number;
+    estimatedTotalCost: number;
+    estimatedProfit: number;
+    estimatedMarginPercentage: number;
+    expensesByCategory?: ProposalExpenseCategoryTotal[];
+}
+
+export type ProposalAdjustmentOperation = 'discount' | 'increase';
+
+export interface ProposalDiscount {
+    value: string;
+    type: 'percentage' | 'fixed';
+    operation?: ProposalAdjustmentOperation;
+    discountValue?: string;
+    discountType?: 'percentage' | 'fixed';
+    increaseValue?: string;
+    increaseType?: 'percentage' | 'fixed';
+    pricingMode?: ProposalPricingMode;
+    expenses?: ProposalExpense[];
+}
+
+export interface SavedProposalDiscount {
+    value: number | string;
+    type: 'percentage' | 'fixed' | 'none';
+    operation?: ProposalAdjustmentOperation;
+    discountValue?: number | string;
+    discountType?: 'percentage' | 'fixed' | 'none';
+    increaseValue?: number | string;
+    increaseType?: 'percentage' | 'fixed' | 'none';
+    pricingMode?: ProposalPricingMode;
+    expenses?: ProposalExpense[];
+    expenseSnapshot?: ProposalExpenseSnapshot;
+}
+
 export interface ProposalOption {
     id: number;
     name: string;
     measurements: Measurement[];
-    generalDiscount: {
-        value: string;
-        type: 'percentage' | 'fixed';
-    };
+    generalDiscount: ProposalDiscount;
 }
 
 export interface Film {
@@ -100,6 +172,11 @@ export interface PaymentMethod {
 }
 
 export type PaymentMethods = PaymentMethod[];
+
+export interface ProposalPaymentConfig {
+    paymentMethods: PaymentMethods;
+    prazoPagamento: string;
+}
 
 export interface Employee {
     id: number;
@@ -144,6 +221,7 @@ export interface UserInfo {
     };
     organizationId?: string;
     isOwner?: boolean;
+    isFallback?: boolean;
 }
 
 export interface Agendamento {
@@ -161,6 +239,8 @@ export interface Totals {
     subtotal: number;
     totalItemDiscount: number;
     generalDiscountAmount: number;
+    generalIncreaseAmount?: number;
+    generalFinalDiscountAmount?: number;
     finalTotal: number;
     totalQuantity: number;
     priceAfterItemDiscounts: number;
@@ -168,6 +248,13 @@ export interface Totals {
     linearMeterCost: number;
     totalMaterial: number;
     totalLabor: number;
+    operationalExpenses: number;
+    expensesByCategory?: ProposalExpenseCategoryTotal[];
+    estimatedMaterialCost: number;
+    estimatedTotalCost: number;
+    estimatedProfit: number;
+    estimatedMarginPercentage: number;
+    pricingMode: ProposalPricingMode;
     groupedTotals?: {
         [filmName: string]: {
             filmName: string;
@@ -193,10 +280,7 @@ export interface SavedPDF {
     totalM2: number;
     subtotal?: number;
     generalDiscountAmount?: number;
-    generalDiscount?: {
-        value: number | string;
-        type: 'percentage' | 'fixed' | 'none';
-    };
+    generalDiscount?: SavedProposalDiscount;
     pdfBlob?: Blob;
     nomeArquivo: string;
     measurements?: Measurement[];
@@ -291,6 +375,18 @@ export interface Retalho {
     status: 'disponivel' | 'reservado' | 'usado' | 'descartado';
     localizacao?: string; // Onde está armazenado
     observacao?: string;
+}
+
+export interface MeasurementEstoqueUso {
+    tipo: 'retalho';
+    retalhoId: number;
+    filmId: string;
+    larguraCm: number;
+    comprimentoCm: number;
+    orientacao?: 'original' | 'rotated';
+    codigoQr: string;
+    localizacao?: string;
+    consumidoEm: string;
 }
 
 export interface Consumo {

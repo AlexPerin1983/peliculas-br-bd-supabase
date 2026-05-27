@@ -3,6 +3,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { UserInfo, Film } from '../../types';
 import { performOCR } from '../lib/ocr';
 import { extractClientFromOCR, extractMeasurementsFromOCR } from '../lib/parsePrint';
+import { GEMINI_TEXT_MODEL } from '../lib/geminiModel';
 
 // Interface para dados extraídos de clientes (copiada do App.tsx)
 interface ExtractedClientData {
@@ -51,7 +52,7 @@ export const useAIProcessing = (
 
         try {
             const genAI = new GoogleGenerativeAI(userInfo.aiConfig.apiKey);
-            const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+            const model = genAI.getGenerativeModel({ model: GEMINI_TEXT_MODEL });
 
             const prompt = `
                 Você é um assistente especialista em extração de dados de clientes.Sua tarefa é extrair o máximo de informações de contato, endereço completo(incluindo CEP, logradouro, número, bairro, cidade e UF) e documento(CPF ou CNPJ) de um cliente a partir da entrada fornecida(texto, imagem ou áudio).
@@ -73,7 +74,7 @@ export const useAIProcessing = (
                 
                 ** Endereço:** Tente separar inteligentemente o logradouro, número, bairro e cidade se estiverem misturados.
                 
-                ** Regra para UF:** O campo UF deve conter APENAS a sigla do estado(2 letras). ** SE NÃO ENCONTRAR, RETORNE UMA STRING VAZIA "".JAMAIS RETORNE A PALAVRA "string".**
+                ** Regra para UF:** O campo UF deve conter APENAS a sigla do estado(2 letras). ** SE N?O ENCONTRAR, RETORNE UMA STRING VAZIA "".JAMAIS RETORNE A PALAVRA "string".**
 
             Responda APENAS com um objeto JSON válido, sem markdown, contendo os campos: nome, telefone, email, cpfCnpj, cep, logradouro, numero, complemento, bairro, cidade, uf.
             `;
@@ -290,9 +291,9 @@ export const useAIProcessing = (
 
         try {
             const genAI = new GoogleGenerativeAI(userInfo.aiConfig.apiKey);
-            const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+            const model = genAI.getGenerativeModel({ model: GEMINI_TEXT_MODEL });
 
-            const prompt = `Você é um assistente especialista em extração de dados de películas automotivas (insulfilm). Sua tarefa é extrair o máximo de informações técnicas de películas a partir da entrada fornecida (texto ou imagem). Retorne APENAS um objeto JSON válido, sem markdown. Campos: nome, preco (apenas números), uv (%), ir (%), vtl (%), tser (%), espessura (micras), garantiaFabricante (anos), precoMetroLinear. Se algum campo não for encontrado, NÃO inclua no JSON.`;
+            const prompt = `Você é um assistente especialista em extração de dados de películas automotivas (insulfilm). Sua tarefa é extrair o máximo de informações técnicas de películas a partir da entrada fornecida (texto ou imagem). Retorne APENAS um objeto JSON válido, sem markdown. Campos: nome, preco (apenas números), uv (%), ir (%), vtl (%), tser (%), espessura (micras), garantiaFabricante (anos), precoMetroLinear. Se algum campo não for encontrado, N?O inclua no JSON.`;
 
             const parts: any[] = [prompt];
 
@@ -388,7 +389,7 @@ export const useAIProcessing = (
 
         try {
             const genAI = new GoogleGenerativeAI(userInfo.aiConfig.apiKey);
-            const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+            const model = genAI.getGenerativeModel({ model: GEMINI_TEXT_MODEL });
 
             const prompt = `Você é um assistente especialista em extração de medidas de janelas/vidros para instalação de películas automotivas (insulfilm).
 

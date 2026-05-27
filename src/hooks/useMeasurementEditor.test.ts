@@ -109,7 +109,7 @@ describe('useMeasurementEditor', () => {
     expect(result.current.numpadConfig.isOpen).toBe(false);
   });
 
-  it('remove uma medida e permite desfazer apos rerender do estado externo', () => {
+  it('remove uma medida e permite desfazer apos rerender do estado externo', async () => {
     const handleMeasurementsChange = vi.fn();
     const measurements = [
       measurement,
@@ -128,8 +128,8 @@ describe('useMeasurementEditor', () => {
       }
     );
 
-    act(() => {
-      result.current.handleImmediateDeleteMeasurement(1);
+    await act(async () => {
+      await result.current.handleImmediateDeleteMeasurement(1);
     });
 
     expect(handleMeasurementsChange).toHaveBeenCalledWith([
@@ -141,8 +141,8 @@ describe('useMeasurementEditor', () => {
       currentMeasurements: [{ ...measurement, id: 2, ambiente: 'Quarto' }]
     });
 
-    act(() => {
-      result.current.handleUndoDelete();
+    await act(async () => {
+      await result.current.handleUndoDelete();
     });
 
     expect(handleMeasurementsChange).toHaveBeenLastCalledWith([

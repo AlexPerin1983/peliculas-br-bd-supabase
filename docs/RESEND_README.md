@@ -27,12 +27,12 @@ A API Key que aparece na sua imagem já está no código de exemplo, mas você p
 
 1. **Criar arquivo `.env.local`** na raiz do projeto:
    ```env
-   RESEND_API_KEY=re_YzPRcM95_1QmrU1MQryq6_jaoZQEhT
+   RESEND_API_KEY=your_resend_api_key_here
    ```
 
 2. **Configurar no Supabase** (para produção):
    ```bash
-   supabase secrets set RESEND_API_KEY=re_YzPRcM95_1QmrU1MQryq6_jaoZQEhT
+   supabase secrets set RESEND_API_KEY=your_resend_api_key_here
    ```
 
 ### 2. Verificar Domínio no Resend

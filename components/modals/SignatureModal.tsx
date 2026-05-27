@@ -1,6 +1,6 @@
-
 import React, { useRef, useEffect, useState, MouseEvent, TouchEvent } from 'react';
 import Modal from '../ui/Modal';
+import { useFeedback } from '../../src/contexts/FeedbackContext';
 
 interface SignatureModalProps {
     isOpen: boolean;
@@ -9,6 +9,7 @@ interface SignatureModalProps {
 }
 
 const SignatureModal: React.FC<SignatureModalProps> = ({ isOpen, onClose, onSave }) => {
+    const { showToast } = useFeedback();
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [isDrawing, setIsDrawing] = useState(false);
 
@@ -20,7 +21,6 @@ const SignatureModal: React.FC<SignatureModalProps> = ({ isOpen, onClose, onSave
         if (isOpen) {
             const canvas = canvasRef.current;
             if (canvas) {
-                // Adjust for device pixel ratio for sharper lines
                 const ratio = Math.max(window.devicePixelRatio || 1, 1);
                 const parentWidth = canvas.offsetWidth;
                 const parentHeight = canvas.offsetHeight;
@@ -50,7 +50,7 @@ const SignatureModal: React.FC<SignatureModalProps> = ({ isOpen, onClose, onSave
 
         return {
             x: clientX - rect.left,
-            y: clientY - rect.top,
+            y: clientY - rect.top
         };
     };
 
@@ -95,7 +95,7 @@ const SignatureModal: React.FC<SignatureModalProps> = ({ isOpen, onClose, onSave
                 const pixelBuffer = new Uint32Array(context.getImageData(0, 0, canvas.width, canvas.height).data.buffer);
                 const isEmpty = !pixelBuffer.some(color => color !== 0);
                 if (isEmpty) {
-                    alert("Por favor, faça uma assinatura antes de salvar.");
+                    showToast('Faca uma assinatura antes de salvar.', { tone: 'warning' });
                     return;
                 }
             }

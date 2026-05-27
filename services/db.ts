@@ -23,6 +23,8 @@ export {
     getUserInfo,
     saveUserInfo,
     updatePaymentMethodsOnly,
+    updateAIConfigOnly,
+    updateLastSelectedClientIdOnly,
 
     // Custom Film functions
     getAllCustomFilms,
@@ -36,6 +38,11 @@ export {
     getPDFsForClient,
     getPDFBlob,
     deletePDF,
+
+    // Standalone Expense functions
+    getAllStandaloneExpenses,
+    saveStandaloneExpense,
+    deleteStandaloneExpense,
 
     // Agendamento functions
     getAllAgendamentos,

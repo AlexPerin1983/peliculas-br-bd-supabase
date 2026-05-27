@@ -58,21 +58,21 @@ export const AdminUsers: React.FC = () => {
                         <ContentState
                             compact
                             iconClassName="fas fa-users"
-                            title="Carregando usuários"
-                            description="Buscando perfis, organizações e módulos ativos."
+                            title="Carregando usuarios"
+                            description="Buscando perfis e acessos."
                         />
                     ) : profiles.length === 0 ? (
                         <ContentState
                             compact
                             iconClassName="fas fa-users-slash"
-                            title="Nenhum usuário encontrado"
-                            description="Quando novos usuários forem criados, eles aparecerão aqui para gestão administrativa."
+                            title="Nenhum usuario ainda"
+                            description="Os usuarios cadastrados aparecem aqui."
                         />
                     ) : (
                         profiles.map(profile => {
                             const isExpanded = expandedUser === profile.id;
                             const activeModulesCount = profile.subscription?.active_modules?.length || 0;
-                            const hasFullPackage = isModuleActive(profile, 'ilimitado');
+                            const hasFullPackage = isModuleActive(profile, 'pacote_completo') || isModuleActive(profile, 'ilimitado');
                             const isProfileAdmin = isUserAdmin(profile);
 
                             return (

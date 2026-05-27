@@ -15,7 +15,8 @@ export interface SubscriptionModule {
     features: string[];
     is_active: boolean;
     sort_order: number;
-    validity_months?: number; // Período de validade em meses (ex: 6 para semestral)
+    validity_months?: number;
+    abacate_subscription_product_id?: string | null;
 }
 
 export interface SubscriptionLimits {
@@ -35,6 +36,10 @@ export interface ModuleDetail {
     status: 'pending' | 'active' | 'expired' | 'cancelled';
     expires_at: string | null;
     days_remaining: number | null;
+    cancel_at_period_end?: boolean;
+    payment_provider?: string | null;
+    billing_cycle?: 'monthly' | 'semiannual' | 'yearly' | null;
+    is_recurring?: boolean;
 }
 
 export interface SubscriptionInfo {
@@ -44,6 +49,7 @@ export interface SubscriptionInfo {
     usage: SubscriptionUsage;
     usage_resets_at: string;
     trial_ends_at: string | null;
+    abacate_customer_id?: string | null;
     modules_detail: ModuleDetail[] | null;
 }
 
@@ -58,10 +64,14 @@ export interface ModuleActivation {
     payment_amount: number;
     payment_reference: string | null;
     payment_confirmed_at: string | null;
-    billing_cycle: 'monthly' | 'yearly' | null;
+    billing_cycle: 'monthly' | 'semiannual' | 'yearly' | null;
+    cancel_at_period_end?: boolean;
+    cancellation_requested_at?: string | null;
+    payment_provider?: string | null;
+    external_subscription_id?: string | null;
+    is_recurring?: boolean;
 }
 
-// Limites padrão do plano gratuito
 export const FREE_PLAN_LIMITS: SubscriptionLimits = {
     max_clients: 10,
     max_films: 5,
@@ -69,18 +79,10 @@ export const FREE_PLAN_LIMITS: SubscriptionLimits = {
     max_agendamentos_month: 5
 };
 
-// Cache local para evitar muitas chamadas ao banco
 let cachedSubscriptionInfo: SubscriptionInfo | null = null;
-let cacheTimestamp: number = 0;
-const CACHE_DURATION_MS = 5 * 60 * 1000; // 5 minutos
+let cacheTimestamp = 0;
+const CACHE_DURATION_MS = 5 * 60 * 1000;
 
-// ============================================
-// FUNÇÕES DO SERVIÇO
-// ============================================
-
-/**
- * Busca todos os módulos disponíveis para compra
- */
 export async function getAvailableModules(): Promise<SubscriptionModule[]> {
     const { data, error } = await supabase
         .from('subscription_modules')
@@ -89,41 +91,39 @@ export async function getAvailableModules(): Promise<SubscriptionModule[]> {
         .order('sort_order', { ascending: true });
 
     if (error) {
-        console.error('Erro ao buscar módulos:', error);
+        console.error('Erro ao buscar modulos:', error);
         return [];
     }
 
-    return data.map(m => ({
-        ...m,
-        features: m.features || []
+    return data.map((module) => ({
+        ...module,
+        features: module.features || []
     }));
 }
 
-/**
- * Busca informações da assinatura da organização do usuário logado
- */
 export async function getSubscriptionInfo(forceRefresh = false): Promise<SubscriptionInfo> {
-    // Verificar cache
-    if (!forceRefresh && cachedSubscriptionInfo && (Date.now() - cacheTimestamp < CACHE_DURATION_MS)) {
+    if (
+        !forceRefresh &&
+        cachedSubscriptionInfo &&
+        Date.now() - cacheTimestamp < CACHE_DURATION_MS
+    ) {
         return cachedSubscriptionInfo;
     }
 
-    // Buscar organization_id do usuário atual
     const organizationId = await getEffectiveOrganizationId();
     if (!organizationId) {
         return getDefaultSubscriptionInfo();
     }
 
-    // Chamar função RPC que retorna todas as infos
-    const { data, error } = await supabase
-        .rpc('get_subscription_info', { p_organization_id: organizationId });
+    const { data, error } = await supabase.rpc('get_subscription_info', {
+        p_organization_id: organizationId
+    });
 
     if (error) {
         console.error('Erro ao buscar subscription info:', error);
         return getDefaultSubscriptionInfo();
     }
 
-    // Atualizar cache
     cachedSubscriptionInfo = data as SubscriptionInfo;
     cacheTimestamp = Date.now();
 
@@ -138,25 +138,22 @@ function getDefaultSubscriptionInfo(): SubscriptionInfo {
         usage: { pdfs_generated: 0, agendamentos_created: 0 },
         usage_resets_at: new Date().toISOString(),
         trial_ends_at: null,
+        abacate_customer_id: null,
         modules_detail: null
     };
 }
 
-/**
- * Verifica se um módulo específico está ativo
- */
 export async function isModuleActive(moduleId: string): Promise<boolean> {
     const info = await getSubscriptionInfo();
     return info.active_modules.includes(moduleId);
 }
 
-/**
- * Verifica se atingiu o limite de um recurso
- */
-export async function hasReachedLimit(resource: 'clients' | 'films' | 'pdfs' | 'agendamentos', currentCount: number): Promise<boolean> {
+export async function hasReachedLimit(
+    resource: 'clients' | 'films' | 'pdfs' | 'agendamentos',
+    currentCount: number
+): Promise<boolean> {
     const info = await getSubscriptionInfo();
 
-    // Se tem módulo 'ilimitado', nunca atinge limite
     if (info.active_modules.includes('ilimitado')) {
         return false;
     }
@@ -175,16 +172,12 @@ export async function hasReachedLimit(resource: 'clients' | 'films' | 'pdfs' | '
     }
 }
 
-/**
- * Incrementa contador de uso (para PDFs e agendamentos)
- */
 export async function incrementUsage(resource: 'pdfs' | 'agendamentos'): Promise<void> {
     const organizationId = await getEffectiveOrganizationId();
     if (!organizationId) return;
 
     const field = resource === 'pdfs' ? 'pdfs_generated' : 'agendamentos_created';
 
-    // Atualizar usando JSONB
     const { error } = await supabase.rpc('increment_subscription_usage', {
         p_organization_id: organizationId,
         p_field: field
@@ -194,28 +187,23 @@ export async function incrementUsage(resource: 'pdfs' | 'agendamentos'): Promise
         console.error('Erro ao incrementar uso:', error);
     }
 
-    // Invalidar cache
     cachedSubscriptionInfo = null;
 }
 
-/**
- * Solicita ativação de um módulo (cria registro pendente)
- */
 export async function requestModuleActivation(
     moduleId: string,
     billingCycle: 'monthly' | 'yearly' = 'monthly'
 ): Promise<{ success: boolean; activationId?: string; error?: string }> {
     const userId = await getCurrentUserId();
     if (!userId) {
-        return { success: false, error: 'Usuário não autenticado' };
+        return { success: false, error: 'Usuario nao autenticado' };
     }
 
     const organizationId = await getEffectiveOrganizationId();
     if (!organizationId) {
-        return { success: false, error: 'Organização não encontrada' };
+        return { success: false, error: 'Organizacao nao encontrada' };
     }
 
-    // Buscar subscription
     const { data: subscription } = await supabase
         .from('subscriptions')
         .select('id')
@@ -223,10 +211,9 @@ export async function requestModuleActivation(
         .single();
 
     if (!subscription) {
-        return { success: false, error: 'Assinatura não encontrada' };
+        return { success: false, error: 'Assinatura nao encontrada' };
     }
 
-    // Buscar preço do módulo
     const { data: module } = await supabase
         .from('subscription_modules')
         .select('price_monthly, price_yearly')
@@ -234,39 +221,55 @@ export async function requestModuleActivation(
         .single();
 
     if (!module) {
-        return { success: false, error: 'Módulo não encontrado' };
+        return { success: false, error: 'Modulo nao encontrado' };
     }
 
-    const price = billingCycle === 'yearly' ? (module.price_yearly || module.price_monthly * 12) : module.price_monthly;
+    const price =
+        billingCycle === 'yearly'
+            ? module.price_yearly || module.price_monthly * 12
+            : module.price_monthly;
 
-    // Criar ativação pendente
+    const { data: existingPendingActivation, error: pendingError } = await supabase
+        .from('module_activations')
+        .select('id')
+        .eq('subscription_id', subscription.id)
+        .eq('module_id', moduleId)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+    if (pendingError) {
+        console.error('Erro ao buscar ativacao pendente:', pendingError);
+        return { success: false, error: pendingError.message };
+    }
+
+    if (existingPendingActivation?.id) {
+        return { success: true, activationId: existingPendingActivation.id };
+    }
+
     const { data: activation, error } = await supabase
         .from('module_activations')
-        .upsert({
+        .insert({
             subscription_id: subscription.id,
             module_id: moduleId,
             status: 'pending',
             payment_method: 'pix',
             payment_amount: price,
+            payment_provider: 'manual',
             billing_cycle: billingCycle
-        }, {
-            onConflict: 'subscription_id,module_id',
-            ignoreDuplicates: false
         })
         .select('id')
         .single();
 
     if (error) {
-        console.error('Erro ao criar ativação:', error);
+        console.error('Erro ao criar ativacao:', error);
         return { success: false, error: error.message };
     }
 
     return { success: true, activationId: activation?.id };
 }
 
-/**
- * Busca ativações pendentes (para o admin aprovar)
- */
 export async function getPendingActivations(): Promise<ModuleActivation[]> {
     const { data, error } = await supabase
         .from('module_activations')
@@ -282,56 +285,41 @@ export async function getPendingActivations(): Promise<ModuleActivation[]> {
         .order('created_at', { ascending: false });
 
     if (error) {
-        console.error('Erro ao buscar ativações pendentes:', error);
+        console.error('Erro ao buscar ativacoes pendentes:', error);
         return [];
     }
 
     return data || [];
 }
 
-/**
- * Confirma ativação de módulo (apenas admin)
- */
 export async function confirmModuleActivation(
     subscriptionId: string,
     moduleId: string,
-    months: number = 1,
+    months = 1,
     paymentReference?: string
 ): Promise<{ success: boolean; error?: string }> {
-    const { data, error } = await supabase.rpc('activate_module', {
+    const { error } = await supabase.rpc('activate_module', {
         p_subscription_id: subscriptionId,
         p_module_id: moduleId,
         p_months: months,
-        p_payment_amount: null, // Usar preço padrão
+        p_payment_amount: null,
         p_payment_reference: paymentReference || null
     });
 
     if (error) {
-        console.error('Erro ao confirmar ativação:', error);
+        console.error('Erro ao confirmar ativacao:', error);
         return { success: false, error: error.message };
     }
 
-    // Invalidar cache
     cachedSubscriptionInfo = null;
-
     return { success: true };
 }
 
-/**
- * Limpa o cache (usar após mudanças na assinatura)
- */
 export function clearSubscriptionCache(): void {
     cachedSubscriptionInfo = null;
     cacheTimestamp = 0;
 }
 
-// ============================================
-// HOOKS DE VERIFICAÇÃO RÁPIDA
-// ============================================
-
-/**
- * Verifica múltiplas permissões de uma vez
- */
 export async function checkPermissions(): Promise<{
     canAddClient: boolean;
     canAddFilm: boolean;
@@ -351,9 +339,12 @@ export async function checkPermissions(): Promise<{
     const hasFullPack = info.active_modules.includes('pacote_completo');
 
     return {
-        canAddClient: isUnlimited || hasFullPack || true, // Precisará verificar contagem real
+        canAddClient: isUnlimited || hasFullPack || true,
         canAddFilm: isUnlimited || hasFullPack || true,
-        canGeneratePdf: isUnlimited || hasFullPack || info.usage.pdfs_generated < info.limits.max_pdfs_month,
+        canGeneratePdf:
+            isUnlimited ||
+            hasFullPack ||
+            info.usage.pdfs_generated < info.limits.max_pdfs_month,
         canUseEstoque: hasFullPack || info.active_modules.includes('estoque'),
         canUseQrServicos: hasFullPack || info.active_modules.includes('qr_servicos'),
         canUseColaboradores: hasFullPack || info.active_modules.includes('colaboradores'),

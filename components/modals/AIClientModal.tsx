@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, FormEvent, DragEvent } from 'react';
 import Modal from '../ui/Modal';
+import { useFeedback } from '../../src/contexts/FeedbackContext';
 
 interface AIClientModalProps {
     isOpen: boolean;
@@ -10,6 +11,7 @@ interface AIClientModalProps {
 }
 
 const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProcess, isProcessing, provider }) => {
+    const { showAlert, showToast } = useFeedback();
     const [activeTab, setActiveTab] = useState<'text' | 'image' | 'audio'>('text');
     const [text, setText] = useState('');
     const [imageFiles, setImageFiles] = useState<File[]>([]);
@@ -22,17 +24,15 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<Blob[]>([]);
 
-    // Estados para feedback de processamento melhorado
     const [processingStage, setProcessingStage] = useState<'idle' | 'analyzing' | 'extracting' | 'filling' | 'error'>('idle');
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
     const MAX_IMAGES = 1;
 
-    // Mensagens de status para cada etapa
     const processingMessages: Record<string, string> = {
         analyzing: 'Analisando dados do cliente...',
         extracting: 'Extraindo informações...',
-        filling: 'Preenchendo campos...',
+        filling: 'Preenchendo campos...'
     };
 
     const stopRecordingCleanup = () => {
@@ -62,8 +62,7 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
             stopRecordingCleanup();
             imagePreviews.forEach(url => URL.revokeObjectURL(url));
             if (audioUrl) URL.revokeObjectURL(audioUrl);
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        };
     }, [imagePreviews, audioUrl]);
 
     useEffect(() => {
@@ -71,10 +70,8 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
             resetState();
             setActiveTab('text');
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen]);
 
-    // Simula progressão de etapas durante processamento
     useEffect(() => {
         if (isProcessing && processingStage === 'idle') {
             setProcessingStage('analyzing');
@@ -93,7 +90,7 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
     const handleTabChange = (tab: 'text' | 'image' | 'audio') => {
         resetState();
         setActiveTab(tab);
-    }
+    };
 
     const handleImageFiles = (files: FileList | null) => {
         if (!files) return;
@@ -104,14 +101,14 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
             if (imageFiles.length + newFiles.length >= MAX_IMAGES) {
-                alert(`Você pode enviar no máximo ${MAX_IMAGES} ${MAX_IMAGES > 1 ? 'imagens' : 'imagem'}.`);
+                showToast(`Você pode enviar no máximo ${MAX_IMAGES} ${MAX_IMAGES > 1 ? 'imagens' : 'imagem'}.`, { tone: 'warning' });
                 break;
             }
             if (file && file.type.startsWith('image/')) {
                 newFiles.push(file);
                 newPreviews.push(URL.createObjectURL(file));
-            } else {
-                alert(`O arquivo "${file.name}" não é uma imagem válida.`);
+            } else if (file) {
+                showToast(`O arquivo "${file.name}" não é uma imagem válida.`, { tone: 'error' });
             }
         }
 
@@ -157,14 +154,18 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
             mediaRecorderRef.current.start();
             setIsRecording(true);
         } catch (err) {
-            console.error("Error accessing microphone:", err);
-            alert("Não foi possível acessar o microfone. Verifique as permissões do seu navegador.");
+            console.error('Error accessing microphone:', err);
+            showAlert({
+                title: 'Microfone indisponivel',
+                message: 'Não foi possível acessar o microfone. Verifique as permissões do seu navegador.',
+                tone: 'error'
+            });
             setIsRecording(false);
         }
     };
 
     const stopRecording = () => {
-        if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
             mediaRecorderRef.current.stop();
         }
         setIsRecording(false);
@@ -172,7 +173,7 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
-        if (isProcessing) return; // Evita duplo clique
+        if (isProcessing) return;
 
         let processData: { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob } | null = null;
         switch (activeTab) {
@@ -197,7 +198,7 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
                 setErrorMessage(err?.message || 'Erro ao processar. Tente novamente.');
             }
         } else {
-            alert("Forneça um conteúdo para processar.");
+            showToast('Forneca um conteudo para processar.', { tone: 'warning' });
         }
     };
 
@@ -206,7 +207,10 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
         setErrorMessage(null);
     };
 
-    const isProcessable = (activeTab === 'text' && !!text.trim()) || (activeTab === 'image' && imageFiles.length > 0) || (activeTab === 'audio' && !!audioBlob);
+    const isProcessable =
+        (activeTab === 'text' && !!text.trim()) ||
+        (activeTab === 'image' && imageFiles.length > 0) ||
+        (activeTab === 'audio' && !!audioBlob);
 
     const footer = (
         <>
@@ -236,7 +240,7 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
         </>
     );
 
-    const TabButton: React.FC<{ tab: 'text' | 'image' | 'audio', icon: string, children: React.ReactNode }> = ({ tab, icon, children }) => (
+    const TabButton: React.FC<{ tab: 'text' | 'image' | 'audio'; icon: string; children: React.ReactNode }> = ({ tab, icon, children }) => (
         <button
             type="button"
             onClick={() => handleTabChange(tab)}
@@ -255,18 +259,16 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
                     <TabButton tab="text" icon="fas fa-font">Texto</TabButton>
                     <TabButton tab="image" icon="fas fa-image">Imagem</TabButton>
                     {provider === 'gemini' && (
-                        <TabButton tab="audio" icon="fas fa-microphone">Áudio</TabButton>
+                        <TabButton tab="audio" icon="fas fa-microphone">Audio</TabButton>
                     )}
                 </div>
 
                 <div className="relative min-h-[250px] flex flex-col justify-center items-center">
-                    {/* Overlay de processamento */}
                     {isProcessing && (
                         <div
                             className="absolute inset-0 bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm flex flex-col items-center justify-center z-10 rounded-lg"
                             aria-live="polite"
                         >
-                            {/* Barra de progresso indeterminada */}
                             <div className="w-full h-1 bg-slate-200 dark:bg-slate-700 overflow-hidden absolute top-0 rounded-t-lg">
                                 <div className="h-full bg-blue-500 animate-indeterminate-progress"></div>
                             </div>
@@ -280,7 +282,6 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
                         </div>
                     )}
 
-                    {/* Estado de erro */}
                     {processingStage === 'error' && !isProcessing && (
                         <div className="absolute inset-0 bg-white/95 dark:bg-slate-900/95 flex flex-col items-center justify-center z-10 rounded-lg p-4">
                             <i className="fas fa-exclamation-circle text-4xl text-red-500 mb-4"></i>
@@ -301,7 +302,7 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
                     {activeTab === 'text' && (
                         <>
                             <p className="text-xs text-slate-500 dark:text-slate-400 mb-2 self-start">
-                                Ex: <span className="italic">João da Silva, telefone 11 99999-8888, email joao@email.com, Rua das Flores 123, São Paulo - SP, CEP 01234-567</span>
+                                Ex: <span className="italic">Joao da Silva, telefone 11 99999-8888, email joao@email.com, Rua das Flores 123, Sao Paulo - SP, CEP 01234-567</span>
                             </p>
                             <textarea
                                 value={text}
@@ -387,7 +388,7 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
                                     <i className="fas fa-microphone-alt text-3xl text-red-500 mb-3 animate-pulse"></i>
                                     <p className="text-slate-600 mb-4">Gravando... fale os dados do cliente.</p>
                                     <button type="button" onClick={stopRecording} className="px-6 py-2 bg-red-600 text-white rounded-full font-semibold shadow-md">
-                                        Parar Gravação
+                                        Parar gravação
                                     </button>
                                 </>
                             ) : (
@@ -395,7 +396,7 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
                                     <i className="fas fa-microphone text-3xl text-slate-400 mb-3"></i>
                                     <p className="text-slate-600 mb-4">Clique no botão para começar a gravar o áudio com os dados do cliente.</p>
                                     <button type="button" onClick={startRecording} disabled={isProcessing} className="px-6 py-2 bg-slate-800 dark:bg-slate-700 text-white rounded-full font-semibold shadow-md hover:bg-slate-700 dark:hover:bg-slate-600">
-                                        Iniciar Gravação
+                                        Iniciar gravação
                                     </button>
                                 </>
                             )}

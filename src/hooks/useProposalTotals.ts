@@ -1,11 +1,11 @@
 import { useMemo } from 'react';
-import { Film, Measurement, Totals, UIMeasurement } from '../../types';
+import { Film, Measurement, ProposalDiscount, Totals, UIMeasurement } from '../../types';
 import { CuttingOptimizer } from '../../utils/CuttingOptimizer';
+import { summarizeProposalExpenses } from '../lib/proposalExpenses';
+import { calculatePricingAreaM2 } from '../lib/pricingArea';
+import { calculateProposalAdjustmentAmounts } from '../lib/proposalAdjustments';
 
-type DiscountType = {
-    value: string;
-    type: 'percentage' | 'fixed';
-};
+type DiscountType = ProposalDiscount;
 
 interface UseProposalTotalsParams {
     measurements: UIMeasurement[];
@@ -20,6 +20,7 @@ export function useProposalTotals({
 }: UseProposalTotalsParams) {
     return useMemo<Totals>(() => {
         const groupedTotals: { [key: string]: any } = {};
+        const pricingMode = generalDiscount.pricingMode === 'labor_only' ? 'labor_only' : 'complete';
 
         const result = measurements.reduce((acc, measurement) => {
             if (!measurement.active) {
@@ -29,12 +30,14 @@ export function useProposalTotals({
             const largura = parseFloat(measurement.largura.replace(',', '.')) || 0;
             const altura = parseFloat(measurement.altura.replace(',', '.')) || 0;
             const quantidade = parseInt(String(measurement.quantidade), 10) || 0;
-            const m2 = largura * altura * quantidade;
+            const m2 = calculatePricingAreaM2(largura, altura, quantidade);
             const film = films.find(item => item.nome === measurement.pelicula);
 
             let pricePerM2 = 0;
             if (film) {
-                if (film.preco > 0) {
+                if (pricingMode === 'labor_only') {
+                    pricePerM2 = film.maoDeObra || 0;
+                } else if (film.preco > 0) {
                     pricePerM2 = film.preco;
                 } else if (film.maoDeObra && film.maoDeObra > 0) {
                     pricePerM2 = film.maoDeObra;
@@ -42,7 +45,7 @@ export function useProposalTotals({
             }
 
             const basePrice = pricePerM2 * m2;
-            const materialPrice = (film?.preco || 0) * m2;
+            const materialPrice = pricingMode === 'labor_only' ? 0 : (film?.preco || 0) * m2;
             const laborPrice = (film?.maoDeObra || 0) * m2;
 
             let itemDiscountAmount = 0;
@@ -73,9 +76,9 @@ export function useProposalTotals({
                     totalMaterial: 0,
                     totalLabor: 0,
                     totalLinearMeterCost: 0,
-                    unitPriceMaterial: film?.preco || 0,
+                    unitPriceMaterial: pricingMode === 'labor_only' ? 0 : (film?.preco || 0),
                     unitPriceLabor: film?.maoDeObra || 0,
-                    unitPriceLinearMeter: film?.precoMetroLinear || 0
+                    unitPriceLinearMeter: pricingMode === 'labor_only' ? 0 : (film?.precoMetroLinear || 0)
                 };
             }
 
@@ -94,17 +97,16 @@ export function useProposalTotals({
             totalLabor: 0
         });
 
-        let generalDiscountAmount = 0;
-        const discountInputValue = parseFloat(String(generalDiscount.value).replace(',', '.')) || 0;
-        if (discountInputValue > 0) {
-            if (generalDiscount.type === 'percentage') {
-                generalDiscountAmount = result.priceAfterItemDiscounts * (discountInputValue / 100);
-            } else if (generalDiscount.type === 'fixed') {
-                generalDiscountAmount = discountInputValue;
-            }
-        }
+        const {
+            generalDiscountAmount,
+            generalIncreaseAmount,
+            generalFinalDiscountAmount
+        } = calculateProposalAdjustmentAmounts(generalDiscount, result.priceAfterItemDiscounts);
 
-        const finalTotal = Math.max(0, result.priceAfterItemDiscounts - generalDiscountAmount);
+        const finalTotal = Math.max(
+            0,
+            result.priceAfterItemDiscounts + generalIncreaseAmount - generalFinalDiscountAmount
+        );
 
         const groupedByFilm: { [key: string]: Measurement[] } = {};
         measurements.filter(measurement => measurement.active).forEach(measurement => {
@@ -144,7 +146,7 @@ export function useProposalTotals({
 
             if (groupedTotals[filmName]) {
                 groupedTotals[filmName].totalLinearMeters = linearMeters;
-                if (film?.precoMetroLinear) {
+                if (pricingMode !== 'labor_only' && film?.precoMetroLinear) {
                     const cost = linearMeters * film.precoMetroLinear;
                     linearMeterCost += cost;
                     groupedTotals[filmName].totalLinearMeterCost = cost;
@@ -152,12 +154,27 @@ export function useProposalTotals({
             }
         });
 
+        const expenseSummary = summarizeProposalExpenses(generalDiscount.expenses);
+        const estimatedMaterialCost = pricingMode === 'labor_only' ? 0 : linearMeterCost;
+        const estimatedTotalCost = estimatedMaterialCost + expenseSummary.total;
+        const estimatedProfit = finalTotal - estimatedTotalCost;
+        const estimatedMarginPercentage = finalTotal > 0 ? (estimatedProfit / finalTotal) * 100 : 0;
+
         return {
             ...result,
             generalDiscountAmount,
+            generalIncreaseAmount,
+            generalFinalDiscountAmount,
             finalTotal,
             totalLinearMeters,
             linearMeterCost,
+            operationalExpenses: expenseSummary.total,
+            expensesByCategory: expenseSummary.byCategory,
+            estimatedMaterialCost,
+            estimatedTotalCost,
+            estimatedProfit,
+            estimatedMarginPercentage,
+            pricingMode,
             groupedTotals
         };
     }, [measurements, films, generalDiscount]);

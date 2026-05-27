@@ -7,6 +7,7 @@ import * as db from '../../services/db';
 vi.mock('../../services/db', () => ({
   saveClient: vi.fn(),
   saveUserInfo: vi.fn(),
+  updateLastSelectedClientIdOnly: vi.fn(),
   deleteClient: vi.fn(),
   deleteProposalOptions: vi.fn(),
   getPDFsForClient: vi.fn(),
@@ -221,5 +222,51 @@ describe('useClientFlow', () => {
       pinnedAt: expect.any(Number)
     });
     expect(loadClients).toHaveBeenCalled();
+  });
+
+  it('atualiza lastSelectedClientId com patch pontual sem sobrescrever userInfo inteiro', () => {
+    const setUserInfo = vi.fn();
+
+    buildHook({
+      selectedClientId: 9,
+      userInfo: {
+        ...userInfo,
+        lastSelectedClientId: 1,
+        logo: 'logo-existente',
+        assinatura: 'assinatura-existente',
+        aiConfig: { provider: 'gemini', apiKey: 'abc' },
+        isFallback: false
+      },
+      setUserInfo
+    });
+
+    expect(setUserInfo).toHaveBeenCalledWith({
+      ...userInfo,
+      lastSelectedClientId: 9,
+      logo: 'logo-existente',
+      assinatura: 'assinatura-existente',
+      aiConfig: { provider: 'gemini', apiKey: 'abc' },
+      isFallback: false
+    });
+    expect(mockedDb.updateLastSelectedClientIdOnly).toHaveBeenCalledWith(9);
+    expect(mockedDb.saveUserInfo).not.toHaveBeenCalled();
+  });
+
+  it('nao autosalva lastSelectedClientId quando userInfo veio de fallback', () => {
+    const setUserInfo = vi.fn();
+
+    buildHook({
+      selectedClientId: 9,
+      userInfo: {
+        ...userInfo,
+        lastSelectedClientId: 1,
+        isFallback: true
+      },
+      setUserInfo
+    });
+
+    expect(setUserInfo).not.toHaveBeenCalled();
+    expect(mockedDb.updateLastSelectedClientIdOnly).not.toHaveBeenCalled();
+    expect(mockedDb.saveUserInfo).not.toHaveBeenCalled();
   });
 });

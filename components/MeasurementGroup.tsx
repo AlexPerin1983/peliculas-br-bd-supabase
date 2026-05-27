@@ -1,15 +1,18 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Measurement, Film } from '../types';
+import { Measurement, Film, ProposalPricingMode } from '../types';
 import { AMBIENTES, TIPOS_APLICACAO } from '../constants';
 import DynamicSelector from './ui/DynamicSelector';
 import Tooltip from './ui/Tooltip';
+import { calculatePricingAreaM2 } from '../src/lib/pricingArea';
 
 type UIMeasurement = Measurement & { isNew?: boolean };
+type EditableMeasurementField = 'largura' | 'altura' | 'quantidade';
+type DesktopDraftValues = Record<EditableMeasurementField, string>;
 
 type NumpadConfig = {
     isOpen: boolean;
     measurementId: number | null;
-    field: 'largura' | 'altura' | 'quantidade' | null;
+    field: EditableMeasurementField | null;
     currentValue: string;
     shouldClearOnNextInput: boolean;
 };
@@ -17,6 +20,7 @@ type NumpadConfig = {
 interface MeasurementGroupProps {
     measurement: UIMeasurement;
     films: Film[];
+    pricingMode: ProposalPricingMode;
     onUpdate: (updatedMeasurement: Partial<Measurement>) => void;
     onDelete: () => void;
     onDeleteImmediate: () => void;
@@ -33,17 +37,22 @@ interface MeasurementGroupProps {
     isSelected: boolean;
     onToggleSelection: (id: number, index: number, isShiftKey: boolean) => void;
     numpadConfig: NumpadConfig;
-    onOpenNumpad: (measurementId: number, field: 'largura' | 'altura' | 'quantidade', currentValue: string | number) => void;
+    onOpenNumpad: (measurementId: number, field: EditableMeasurementField, currentValue: string | number) => void;
+    useTouchNumpad?: boolean;
     isActive: boolean;
     swipedItemId: number | null;
     onSetSwipedItem: (id: number | null) => void;
     isModalMode?: boolean;
+    compatibleRetalhosCount?: number;
+    isCheckingEstoque?: boolean;
+    onOpenRetalhoSuggestions?: (measurementId: number) => void;
 }
 const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
 const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
     measurement,
     films,
+    pricingMode,
     onUpdate,
     onDelete,
     onDeleteImmediate,
@@ -61,12 +70,21 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
     onToggleSelection,
     numpadConfig,
     onOpenNumpad,
+    useTouchNumpad = true,
     isActive,
     swipedItemId,
     onSetSwipedItem,
-    isModalMode = false
+    isModalMode = false,
+    compatibleRetalhosCount = 0,
+    isCheckingEstoque = false,
+    onOpenRetalhoSuggestions
 }) => {
     const groupRef = useRef<HTMLDivElement>(null);
+    const [desktopDraftValues, setDesktopDraftValues] = useState<DesktopDraftValues>({
+        largura: String(measurement.largura ?? ''),
+        altura: String(measurement.altura ?? ''),
+        quantidade: String(measurement.quantidade ?? '')
+    });
 
     const [translateX, setTranslateX] = useState(0);
     const touchStartX = useRef(0);
@@ -75,6 +93,7 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
     const gestureDirection = useRef<'horizontal' | 'vertical' | null>(null);
     const currentTranslateX = useRef(0);
     const swipeableRef = useRef<HTMLDivElement>(null);
+    const skipNextDesktopCommitRef = useRef(false);
 
     // New Physics & Thresholds
     // New Physics & Thresholds
@@ -294,6 +313,58 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
         onUpdate({ [field]: value });
     };
 
+    useEffect(() => {
+        setDesktopDraftValues({
+            largura: String(measurement.largura ?? ''),
+            altura: String(measurement.altura ?? ''),
+            quantidade: String(measurement.quantidade ?? '')
+        });
+    }, [measurement.id, measurement.largura, measurement.altura, measurement.quantidade]);
+
+    const sanitizeDecimalInput = (rawValue: string) => {
+        const cleanedValue = rawValue
+            .replace(/\./g, ',')
+            .replace(/[^\d,]/g, '');
+        const [integerPart, ...decimalParts] = cleanedValue.split(',');
+
+        if (decimalParts.length === 0) {
+            return integerPart;
+        }
+
+        return `${integerPart},${decimalParts.join('')}`;
+    };
+
+    const sanitizeDesktopInput = (field: EditableMeasurementField, rawValue: string) => {
+        if (field === 'quantidade') {
+            return rawValue.replace(/\D/g, '');
+        }
+
+        return sanitizeDecimalInput(rawValue);
+    };
+
+    const commitDesktopInput = (field: EditableMeasurementField, rawValue: string) => {
+        if (field === 'quantidade') {
+            const quantity = parseInt(rawValue, 10) || 1;
+            setDesktopDraftValues(prev => ({ ...prev, quantidade: String(quantity) }));
+            handleInputChange(field, quantity);
+            return;
+        }
+
+        const sanitizedValue = sanitizeDecimalInput(rawValue);
+        let finalValue = sanitizedValue;
+
+        if (finalValue.startsWith(',')) {
+            finalValue = `0${finalValue}`;
+        }
+
+        if (finalValue.endsWith(',')) {
+            finalValue = finalValue.slice(0, -1);
+        }
+
+        setDesktopDraftValues(prev => ({ ...prev, [field]: finalValue }));
+        handleInputChange(field, finalValue);
+    };
+
     const handleApplySuggestedFilm = (e: React.MouseEvent<HTMLButtonElement>) => {
         e.stopPropagation();
         if (!measurement.aiFilmSuggestion?.suggestedFilm) return;
@@ -325,19 +396,32 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
 
     const isEditingThisMeasurement = numpadConfig.isOpen && numpadConfig.measurementId === measurement.id;
 
+    const desktopValueFor = (field: EditableMeasurementField, value: string | number) =>
+        useTouchNumpad ? String(value) : (desktopDraftValues[field] ?? '');
+
+    const parseDecimalValue = (value: string) => {
+        const parsedValue = parseFloat((value || '0').replace(',', '.'));
+        return Number.isFinite(parsedValue) ? parsedValue : 0;
+    };
+
+    const parseQuantityValue = (value: string) => {
+        const parsedValue = parseInt(value || '0', 10);
+        return Number.isFinite(parsedValue) ? parsedValue : 0;
+    };
+
     const larguraNum = isEditingThisMeasurement && numpadConfig.field === 'largura'
-        ? parseFloat((numpadConfig.currentValue || '0').replace(',', '.'))
-        : parseFloat((String(measurement.largura) || '0').replace(',', '.'));
+        ? parseDecimalValue(numpadConfig.currentValue || '0')
+        : parseDecimalValue(desktopValueFor('largura', measurement.largura));
 
     const alturaNum = isEditingThisMeasurement && numpadConfig.field === 'altura'
-        ? parseFloat((numpadConfig.currentValue || '0').replace(',', '.'))
-        : parseFloat((String(measurement.altura) || '0').replace(',', '.'));
+        ? parseDecimalValue(numpadConfig.currentValue || '0')
+        : parseDecimalValue(desktopValueFor('altura', measurement.altura));
 
     const quantidadeNum = isEditingThisMeasurement && numpadConfig.field === 'quantidade'
-        ? parseInt(numpadConfig.currentValue || '0', 10)
-        : measurement.quantidade || 0;
+        ? parseQuantityValue(numpadConfig.currentValue || '0')
+        : parseQuantityValue(desktopValueFor('quantidade', measurement.quantidade));
 
-    const m2 = larguraNum * alturaNum * quantidadeNum;
+    const m2 = calculatePricingAreaM2(larguraNum, alturaNum, quantidadeNum);
 
     const selectedFilm = films.find(f => f.nome === measurement.pelicula);
 
@@ -346,7 +430,10 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
         let label = 'Preço';
 
         if (selectedFilm) {
-            if (selectedFilm.preco > 0) {
+            if (pricingMode === 'labor_only') {
+                pricePerM2 = selectedFilm.maoDeObra || 0;
+                label = 'Mão de Obra';
+            } else if (selectedFilm.preco > 0) {
                 pricePerM2 = selectedFilm.preco;
                 label = 'Preço';
             } else if (selectedFilm.maoDeObra && selectedFilm.maoDeObra > 0) {
@@ -370,12 +457,17 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
             }
         }
         return { basePrice: price, finalPrice: Math.max(0, final), priceLabel: label };
-    }, [m2, selectedFilm, measurement.discount]);
+    }, [m2, selectedFilm, measurement.discount, pricingMode]);
 
     const hasDiscount = (parseFloat(String(measurement.discount?.value || '0').replace(',', '.'))) > 0;
 
     // --- Lógica para exibir o ambiente (AJUSTADA) ---
     const displayFilmName = measurement.pelicula || 'Nenhuma';
+    const hasEstoqueUsage = Boolean(measurement.estoqueUso?.retalhoId);
+    const shouldShowRetalhoAction = !isModalMode
+        && !hasEstoqueUsage
+        && compatibleRetalhosCount > 0
+        && typeof onOpenRetalhoSuggestions === 'function';
 
     const displayAmbiente = useMemo(() => {
         const ambiente = measurement.ambiente;
@@ -390,39 +482,75 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
 
     const combinedDisplay = `${displayFilmName}${displayAmbiente}`;
     // --- Fim da Lógica para exibir o ambiente ---
-
-
     // Mantendo o padding principal e espaçamento interno compactos
     // Removendo p-2 e substituindo por py-2 e px-3 para manter o espaçamento interno mínimo
-    const baseClasses = `border rounded-lg py-2 px-3 space-y-1.5 bg-white dark:bg-slate-800 transition-shadow, transform`;
+    const baseClasses = `border rounded-[var(--radius-card)] py-3 px-3 space-y-2 bg-[var(--surface)] shadow-[var(--shadow-hairline)] transition-shadow, transform`;
     const selectionClasses = isSelectionMode
-        ? `cursor-pointer ${isSelected ? 'border-blue-500 bg-blue-50/70 dark:bg-blue-900/30 ring-1 ring-blue-500' : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50/80 dark:hover:bg-slate-700/50'}`
-        : 'border-slate-200 dark:border-slate-700';
+        ? `cursor-pointer ${isSelected ? 'border-[var(--brand-primary)] bg-[var(--brand-primary-soft)] ring-1 ring-[var(--brand-primary)]' : 'border-[var(--border-subtle)] hover:bg-[var(--surface-muted)]'}`
+        : 'border-[var(--border-subtle)]';
 
     // Inputs numéricos: text-sm e py-2
-    const inputBaseClasses = "w-full text-center py-2 px-1.5 rounded-lg border text-sm transition-colors duration-200";
+    const inputBaseClasses = "w-full text-center py-2 px-1.5 rounded-[var(--radius-control)] border text-sm transition-colors duration-200";
 
     const isDraggable = !isSelectionMode && translateX === 0 && !isModalMode;
 
-    const NumberInputButton: React.FC<{
-        field: 'largura' | 'altura' | 'quantidade';
-        placeholder: string;
-        value: string | number;
-    }> = ({ field, placeholder, value }) => {
+    const renderNumberInput = (field: EditableMeasurementField, placeholder: string, value: string | number) => {
         const isEditing = isEditingThisMeasurement && numpadConfig.field === field;
         const isSelectedForReplacement = isEditing && numpadConfig.shouldClearOnNextInput;
         const displayValue = isEditing ? numpadConfig.currentValue : String(value);
 
         const getButtonClasses = () => {
-            let classes = `${inputBaseClasses} bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 border-slate-300 dark:border-slate-600 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none`;
+            let classes = `${inputBaseClasses} bg-[var(--surface-muted)] text-[var(--text-strong)] border-[var(--border-subtle)] placeholder:text-[var(--text-soft)] focus:outline-none`;
             if (isEditing) {
                 classes += ' border-2 border-blue-500';
             }
             if (!measurement.active) {
-                classes += ' bg-slate-200 dark:bg-slate-900 text-slate-500 dark:text-slate-600 border-slate-300 dark:border-slate-700 cursor-not-allowed';
+                classes += ' bg-[var(--surface-muted)] text-[var(--text-soft)] border-[var(--border-subtle)] cursor-not-allowed opacity-60';
             }
             return classes;
         };
+
+        if (!useTouchNumpad) {
+            const draftValue = desktopDraftValues[field] ?? '';
+
+            return (
+                <input
+                    type="text"
+                    data-measurement-field={field}
+                    inputMode={field === 'quantidade' ? 'numeric' : 'decimal'}
+                    value={draftValue}
+                    placeholder={placeholder}
+                    disabled={!measurement.active || isSelectionMode}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => {
+                        const nextValue = sanitizeDesktopInput(field, e.target.value);
+                        setDesktopDraftValues(prev => ({ ...prev, [field]: nextValue }));
+                    }}
+                    onBlur={(e) => {
+                        if (skipNextDesktopCommitRef.current) {
+                            skipNextDesktopCommitRef.current = false;
+                            return;
+                        }
+
+                        commitDesktopInput(field, e.currentTarget.value);
+                    }}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            e.currentTarget.blur();
+                        }
+
+                        if (e.key === 'Escape') {
+                            skipNextDesktopCommitRef.current = true;
+                            setDesktopDraftValues(prev => ({ ...prev, [field]: String(value ?? '') }));
+                            e.currentTarget.blur();
+                        }
+                    }}
+                    className={`${getButtonClasses()} relative z-50`}
+                    aria-label={`${placeholder} da medida ${measurement.id}`}
+                />
+            );
+        }
 
         const renderContent = () => {
             // Usando text-sm para o conteúdo
@@ -452,6 +580,8 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
             <div
                 role="button"
                 data-numpad-input="true"
+                data-measurement-field={field}
+                inputMode={field === 'quantidade' ? 'numeric' : 'decimal'}
                 tabIndex={measurement.active ? 0 : -1}
                 onClick={(e) => {
                     e.stopPropagation();
@@ -584,6 +714,34 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
                                 <div className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400 tracking-wider">Película</div>
                                 <div className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate leading-tight">{combinedDisplay}</div>
                             </div>
+                            <div className="mt-2 flex flex-wrap items-center gap-2">
+                                {hasEstoqueUsage && measurement.estoqueUso && (
+                                    <div className="inline-flex items-center gap-2 rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+                                        <i className="fas fa-check-circle"></i>
+                                        Retalho #{measurement.estoqueUso.retalhoId} aplicado
+                                    </div>
+                                )}
+                                {!hasEstoqueUsage && isCheckingEstoque && measurement.pelicula && (
+                                    <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                                        <i className="fas fa-spinner fa-spin"></i>
+                                        Consultando estoque
+                                    </div>
+                                )}
+                                {shouldShowRetalhoAction && (
+                                    <button
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            onOpenRetalhoSuggestions?.(measurement.id);
+                                        }}
+                                        className="inline-flex items-center gap-2 rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-700 transition-colors hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:hover:bg-amber-900/50"
+                                    >
+                                        <i className="fas fa-cut"></i>
+                                        {compatibleRetalhosCount} retalho{compatibleRetalhosCount > 1 ? 's' : ''} no estoque
+                                        {measurement.quantidade > 1 ? ' para 1 peça' : ''}
+                                    </button>
+                                )}
+                            </div>
                             {measurement.aiFilmSuggestion && measurement.aiFilmSuggestion.suggestedFilm !== measurement.pelicula && (
                                 <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-left shadow-sm dark:border-amber-900/60 dark:bg-amber-950/30">
                                     <div className="flex items-start justify-between gap-2">
@@ -622,12 +780,6 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
                             )}
                         </div>
 
-                        {/* Center: Swipe Hint Icon */}
-                        <div className="flex items-center justify-center px-2 opacity-30">
-                            <i className="fas fa-arrows-left-right text-xs text-slate-400 dark:text-slate-500"></i>
-                        </div>
-
-                        {/* Right Side: Price & Options Menu */}
                         <div className="flex items-center relative z-50">
                             <Tooltip text={hasDiscount ? 'Editar Desconto' : 'Aplicar Desconto'}>
                                 <div
@@ -706,10 +858,10 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
                         )}
 
                         <div className="grid grid-cols-4 gap-2 flex-grow">
-                            <NumberInputButton field="largura" placeholder="L" value={measurement.largura} />
-                            <NumberInputButton field="altura" placeholder="A" value={measurement.altura} />
-                            <NumberInputButton field="quantidade" placeholder="Qtd" value={measurement.quantidade} />
-                            <div className={`${inputBaseClasses} bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 font-medium border-slate-300 dark:border-slate-600 cursor-default flex items-center justify-center`}>
+                            {renderNumberInput('largura', 'L', measurement.largura)}
+                            {renderNumberInput('altura', 'A', measurement.altura)}
+                            {renderNumberInput('quantidade', 'Qtd', measurement.quantidade)}
+                            <div className={`${inputBaseClasses} bg-[var(--surface-muted)] text-[var(--text-strong)] font-medium border-[var(--border-subtle)] cursor-default flex items-center justify-center`}>
                                 {m2 > 0 ? m2.toFixed(2).replace('.', ',') : ''}
                             </div>
                         </div>

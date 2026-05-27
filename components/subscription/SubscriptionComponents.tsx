@@ -1,11 +1,25 @@
-import React from 'react';
-import { Lock, Crown, ArrowRight, X } from 'lucide-react';
+﻿import React from 'react';
+import ReactDOM from 'react-dom';
+import {
+    Lock,
+    Crown,
+    ArrowRight,
+    X,
+    CreditCard,
+    Sparkles,
+    CheckCircle2,
+    QrCode
+} from 'lucide-react';
 import { useSubscription } from '../../contexts/SubscriptionContext';
 import { SubscriptionModule } from '../../services/subscriptionService';
+import {
+    createAbacatePixCheckoutForModule,
+    createAbacateSubscriptionCheckoutForModule
+} from '../../services/abacateBillingService';
 
 // ============================================
 // COMPONENTE: FeatureGate
-// Bloqueia conteúdo se o módulo não estiver ativo
+// Bloqueia conteÃºdo se o mÃ³dulo nÃ£o estiver ativo
 // ============================================
 
 interface FeatureGateProps {
@@ -49,7 +63,7 @@ export function FeatureGate({
 
 // ============================================
 // COMPONENTE: UpgradePrompt
-// Exibe mensagem de upgrade com preço
+// Exibe mensagem de upgrade com preÃ§o
 // ============================================
 
 interface UpgradePromptProps {
@@ -66,46 +80,46 @@ export function UpgradePrompt({ module, onUpgradeClick, compact = false }: Upgra
                 <span>Recurso PRO</span>
                 {module && (
                     <span className="text-amber-400 font-semibold">
-                        R$ {module.price_monthly.toFixed(2)}/{module.validity_months || 1}{(module.validity_months || 1) > 1 ? 'M' : 'mês'}
+                        R$ {module.price_monthly.toFixed(2)}/{module.validity_months || 1}{(module.validity_months || 1) > 1 ? 'M' : 'mÃªs'}
                     </span>
                 )}
             </div>
         );
     }
 
-    // Benefícios específicos por módulo
+    // BenefÃ­cios especÃ­ficos por mÃ³dulo
     const moduleBenefits: Record<string, { icon: string, benefit: string }> = {
         'qr_servicos': {
-            icon: '📱',
-            benefit: 'Seus clientes visualizam o serviço realizado escaneando o QR Code'
+            icon: 'ðŸ“±',
+            benefit: 'Seus clientes visualizam o serviÃ§o realizado escaneando o QR Code'
         },
         'ia_ocr': {
-            icon: '⚡',
-            benefit: 'Economize horas digitando: extraia dados de fotos e áudio automaticamente'
+            icon: 'âš¡',
+            benefit: 'Economize horas digitando: extraia dados de fotos e Ã¡udio automaticamente'
         },
         'estoque': {
-            icon: '📦',
-            benefit: 'Controle bobinas, retalhos e nunca mais perca dinheiro com desperdício'
+            icon: 'ðŸ“¦',
+            benefit: 'Controle bobinas, retalhos e nunca mais perca dinheiro com desperdÃ­cio'
         },
         'corte_inteligente': {
-            icon: '✂️',
-            benefit: 'Reduza até 30% o desperdício com otimização inteligente de cortes'
+            icon: 'âœ‚ï¸',
+            benefit: 'Reduza atÃ© 30% o desperdÃ­cio com otimizaÃ§Ã£o inteligente de cortes'
         },
         'colaboradores': {
-            icon: '👥',
+            icon: 'ðŸ‘¥',
             benefit: 'Gerencie sua equipe e acompanhe o trabalho de cada colaborador'
         },
         'personalizacao': {
-            icon: '🎨',
+            icon: 'ðŸŽ¨',
             benefit: 'Deixe suas propostas com a cara da sua empresa'
         },
         'ilimitado': {
-            icon: '∞',
-            benefit: 'Trabalhe sem limites: clientes, películas e propostas ilimitados'
+            icon: 'âˆž',
+            benefit: 'Trabalhe sem limites: clientes, pelÃ­culas e propostas ilimitados'
         },
         'locais_global': {
-            icon: '🏢',
-            benefit: 'Adicione locais à base global e economize tempo em futuros orçamentos'
+            icon: 'ðŸ¢',
+            benefit: 'Adicione locais Ã  base global e economize tempo em futuros orÃ§amentos'
         }
     };
 
@@ -122,7 +136,7 @@ export function UpgradePrompt({ module, onUpgradeClick, compact = false }: Upgra
                 {module?.name || 'Recurso Premium'}
             </h3>
 
-            {/* Benefício específico do módulo */}
+            {/* BenefÃ­cio especÃ­fico do mÃ³dulo */}
             {customBenefit && (
                 <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg max-w-md">
                     <p className="text-blue-300 text-center text-sm flex items-center gap-2 justify-center">
@@ -133,7 +147,7 @@ export function UpgradePrompt({ module, onUpgradeClick, compact = false }: Upgra
             )}
 
             <p className="text-gray-400 text-center mb-4 max-w-md text-sm">
-                {module?.description || 'Este recurso está disponível no plano PRO.'}
+                {module?.description || 'Este recurso estÃ¡ disponÃ­vel no plano PRO.'}
             </p>
 
             {module && (
@@ -142,7 +156,7 @@ export function UpgradePrompt({ module, onUpgradeClick, compact = false }: Upgra
                         R$ {module.price_monthly.toFixed(2)}
                     </span>
                     <span className="text-gray-400">
-                        /{module.validity_months || 1} {(module.validity_months || 1) > 1 ? 'meses' : 'mês'}
+                        /{module.validity_months || 1} {(module.validity_months || 1) > 1 ? 'meses' : 'mÃªs'}
                     </span>
                 </div>
             )}
@@ -150,8 +164,8 @@ export function UpgradePrompt({ module, onUpgradeClick, compact = false }: Upgra
             {/* Garantia de 7 dias */}
             <div className="mb-6 px-4 py-2 bg-green-500/10 border border-green-500/30 rounded-lg">
                 <p className="text-green-300 text-sm font-medium flex items-center gap-2">
-                    <span>🛡️</span>
-                    <span>Garantia de 7 dias • Reembolso total se não gostar</span>
+                    <span>ðŸ›¡ï¸</span>
+                    <span>Garantia de 7 dias â€¢ Reembolso total se nÃ£o gostar</span>
                 </p>
             </div>
 
@@ -176,7 +190,7 @@ export function UpgradePrompt({ module, onUpgradeClick, compact = false }: Upgra
             </button>
 
             <p className="text-gray-500 text-xs mt-3 text-center">
-                Sem risco • Cancele quando quiser
+                Sem risco â€¢ Cancele quando quiser
             </p>
         </div>
     );
@@ -184,7 +198,7 @@ export function UpgradePrompt({ module, onUpgradeClick, compact = false }: Upgra
 
 // ============================================
 // COMPONENTE: LimitWarning
-// Aviso quando está perto do limite
+// Aviso quando estÃ¡ perto do limite
 // ============================================
 
 interface LimitWarningProps {
@@ -195,7 +209,7 @@ interface LimitWarningProps {
 
 const resourceNames: Record<string, string> = {
     clients: 'clientes',
-    films: 'películas',
+    films: 'pelÃ­culas',
     pdfs: 'propostas',
     agendamentos: 'agendamentos'
 };
@@ -220,7 +234,7 @@ export function LimitWarning({ resource, currentCount, onUpgradeClick }: LimitWa
                         Limite de {resourceName} atingido
                     </p>
                     <p className="text-red-400/70 text-sm">
-                        Ative o módulo "Sem Limites" para adicionar mais.
+                        Ative o mÃ³dulo "Sem Limites" para adicionar mais.
                     </p>
                 </div>
                 {onUpgradeClick && (
@@ -235,12 +249,12 @@ export function LimitWarning({ resource, currentCount, onUpgradeClick }: LimitWa
         );
     }
 
-    // Aviso quando está chegando perto
+    // Aviso quando estÃ¡ chegando perto
     return (
         <div className="flex items-center gap-3 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
             <Crown className="w-4 h-4 text-amber-400 flex-shrink-0" />
             <p className="text-amber-300 text-sm">
-                Você tem <span className="font-bold">{remaining}</span> {resourceName} restantes no plano gratuito.
+                VocÃª tem <span className="font-bold">{remaining}</span> {resourceName} restantes no plano gratuito.
             </p>
         </div>
     );
@@ -248,7 +262,7 @@ export function LimitWarning({ resource, currentCount, onUpgradeClick }: LimitWa
 
 // ============================================
 // COMPONENTE: ModuleCard
-// Card para exibir um módulo na lista
+// Card para exibir um mÃ³dulo na lista
 // ============================================
 
 interface ModuleCardProps {
@@ -296,7 +310,7 @@ export function ModuleCard({ module, isActive = false, expiresAt, onActivate }: 
 
                     {expiresAt && isActive && (
                         <p className="text-green-400/70 text-xs mb-3">
-                            Válido até {new Date(expiresAt).toLocaleDateString('pt-BR')}
+                            VÃ¡lido atÃ© {new Date(expiresAt).toLocaleDateString('pt-BR')}
                         </p>
                     )}
                 </div>
@@ -306,7 +320,7 @@ export function ModuleCard({ module, isActive = false, expiresAt, onActivate }: 
                         R$ {module.price_monthly.toFixed(2)}
                     </div>
                     <div className="text-gray-500 text-xs">
-                        /{module.validity_months || 1} {(module.validity_months || 1) > 1 ? 'meses' : 'mês'}
+                        /{module.validity_months || 1} {(module.validity_months || 1) > 1 ? 'meses' : 'mÃªs'}
                     </div>
 
                     {!isActive && onActivate && (
@@ -359,7 +373,7 @@ export function UsageBar({ label, current, max, color = 'blue' }: UsageBarProps)
                 <span className="text-gray-400">{label}</span>
                 <span className="text-gray-300">
                     {isUnlimited ? (
-                        <span className="text-green-400">∞ Ilimitado</span>
+                        <span className="text-green-400">âˆž Ilimitado</span>
                     ) : (
                         <>{current} / {max}</>
                     )}
@@ -377,7 +391,7 @@ export function UsageBar({ label, current, max, color = 'blue' }: UsageBarProps)
 
 // ============================================
 // COMPONENTE: LockedScreen
-// Tela de bloqueio para abas/páginas inteiras
+// Tela de bloqueio para abas/pÃ¡ginas inteiras
 // ============================================
 
 interface LockedScreenProps {
@@ -400,54 +414,54 @@ export function LockedScreen({
     const { modules } = useSubscription();
     const module = modules.find(m => m.id === moduleId);
 
-    // Benefícios visuais por módulo
+    // BenefÃ­cios visuais por mÃ³dulo
     const moduleVisuals: Record<string, {
         emoji: string;
         benefits: string[];
         gradient: string;
     }> = {
         'estoque': {
-            emoji: '📦',
+            emoji: 'ðŸ“¦',
             benefits: [
                 'Cadastre e controle suas bobinas',
                 'Gerencie retalhos e sobras',
                 'QR Code para rastreamento',
-                'Estatísticas de consumo'
+                'EstatÃ­sticas de consumo'
             ],
             gradient: 'from-blue-600 to-cyan-600'
         },
         'qr_servicos': {
-            emoji: '🔗',
+            emoji: 'ðŸ”—',
             benefits: [
-                'Crie QR Codes únicos por serviço',
-                'Página pública de garantia',
-                'Cliente escaneia e vê detalhes',
-                'Marketing passivo automático'
+                'Crie QR Codes Ãºnicos por serviÃ§o',
+                'PÃ¡gina pÃºblica de garantia',
+                'Cliente escaneia e vÃª detalhes',
+                'Marketing passivo automÃ¡tico'
             ],
             gradient: 'from-purple-600 to-pink-600'
         },
         'colaboradores': {
-            emoji: '👥',
+            emoji: 'ðŸ‘¥',
             benefits: [
                 'Convide colaboradores por e-mail',
-                'Defina níveis de acesso',
-                'Gerencie permissões',
+                'Defina nÃ­veis de acesso',
+                'Gerencie permissÃµes',
                 'Veja atividades da equipe'
             ],
             gradient: 'from-teal-600 to-green-600'
         },
         'ia_ocr': {
-            emoji: '🧠',
+            emoji: 'ðŸ§ ',
             benefits: [
                 'Cadastre clientes por foto/voz',
                 'Extraia medidas de imagens',
-                'Economize horas de digitação',
-                'Precisão de 95%+'
+                'Economize horas de digitaÃ§Ã£o',
+                'PrecisÃ£o de 95%+'
             ],
             gradient: 'from-violet-600 to-purple-600'
         },
         'personalizacao': {
-            emoji: '🎨',
+            emoji: 'ðŸŽ¨',
             benefits: [
                 'Logo da sua empresa nos PDFs',
                 'Cores personalizadas',
@@ -457,39 +471,39 @@ export function LockedScreen({
             gradient: 'from-orange-600 to-red-600'
         },
         'ilimitado': {
-            emoji: '♾️',
+            emoji: 'â™¾ï¸',
             benefits: [
                 'Clientes ilimitados',
-                'Películas ilimitadas',
-                'PDFs ilimitados por mês',
+                'PelÃ­culas ilimitadas',
+                'PDFs ilimitados por mÃªs',
                 'Agendamentos ilimitados'
             ],
             gradient: 'from-amber-600 to-yellow-500'
         },
         'locais_global': {
-            emoji: '📍',
+            emoji: 'ðŸ“',
             benefits: [
-                'Adicione novos locais à base',
+                'Adicione novos locais Ã  base',
                 'Edite medidas existentes',
                 'Compartilhe com a comunidade',
-                'Economize tempo em futuros orçamentos'
+                'Economize tempo em futuros orÃ§amentos'
             ],
             gradient: 'from-green-600 to-lime-600'
         },
         'corte_inteligente': {
-            emoji: '✂️',
+            emoji: 'âœ‚ï¸',
             benefits: [
-                'Otimização profunda de cortes',
-                'Reduza até 30% o desperdício',
-                'Histórico de versões',
-                'Cálculo de custo automático'
+                'OtimizaÃ§Ã£o profunda de cortes',
+                'Reduza atÃ© 30% o desperdÃ­cio',
+                'HistÃ³rico de versÃµes',
+                'CÃ¡lculo de custo automÃ¡tico'
             ],
             gradient: 'from-rose-600 to-pink-600'
         }
     };
 
     const visuals = moduleVisuals[moduleId] || {
-        emoji: '🔒',
+        emoji: 'ðŸ”’',
         benefits: ['Funcionalidade premium'],
         gradient: 'from-gray-600 to-gray-700'
     };
@@ -512,19 +526,19 @@ export function LockedScreen({
                 <span className="text-5xl">{visuals.emoji}</span>
             </div>
 
-            {/* Título */}
+            {/* TÃ­tulo */}
             <h2 className="text-2xl font-bold text-white mb-2 text-center">
                 {title || module?.name || 'Recurso PRO'}
             </h2>
 
-            {/* Descrição */}
+            {/* DescriÃ§Ã£o */}
             <p className="text-gray-400 text-center max-w-md mb-6">
-                {description || module?.description || 'Esta funcionalidade está disponível no plano PRO.'}
+                {description || module?.description || 'Esta funcionalidade estÃ¡ disponÃ­vel no plano PRO.'}
             </p>
 
-            {/* Benefícios */}
+            {/* BenefÃ­cios */}
             <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5 mb-6 max-w-md w-full">
-                <h3 className="text-white font-semibold mb-4 text-center">O que você ganha:</h3>
+                <h3 className="text-white font-semibold mb-4 text-center">O que vocÃª ganha:</h3>
                 <ul className="space-y-3">
                     {visuals.benefits.map((benefit, idx) => (
                         <li key={idx} className="flex items-center gap-3 text-gray-300">
@@ -537,7 +551,7 @@ export function LockedScreen({
                 </ul>
             </div>
 
-            {/* Preço e CTA */}
+            {/* PreÃ§o e CTA */}
             <div className="text-center mb-6">
                 <div className="flex items-baseline justify-center gap-2 mb-2">
                     <span className="text-4xl font-bold text-white">
@@ -548,12 +562,12 @@ export function LockedScreen({
                     </span>
                 </div>
                 <p className="text-green-400 text-sm flex items-center justify-center gap-1">
-                    <span>🛡️</span>
+                    <span>ðŸ›¡ï¸</span>
                     <span>Garantia de 7 dias ou seu dinheiro de volta</span>
                 </p>
             </div>
 
-            {/* Botão de ativar */}
+            {/* BotÃ£o de ativar */}
             <button
                 onClick={onUpgradeClick}
                 className={`w-full max-w-md flex items-center justify-center gap-3 px-8 py-4 bg-gradient-to-r ${visuals.gradient} hover:opacity-90 text-white font-bold rounded-xl transition-all shadow-lg text-lg`}
@@ -566,7 +580,7 @@ export function LockedScreen({
             {/* Plano completo */}
             <div className="mt-6 p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg max-w-md w-full">
                 <p className="text-amber-300 text-center text-sm">
-                    💎 <strong>Dica:</strong> Ative o <strong>Plano Completo</strong> por R$ 199,00 e ganhe todos os 8 módulos com 36% de desconto!
+                    ðŸ’Ž <strong>Dica:</strong> Ative o <strong>Plano Completo</strong> por R$ 199,00 e ganhe todos os 8 mÃ³dulos com 36% de desconto!
                 </p>
             </div>
         </div>
@@ -575,7 +589,7 @@ export function LockedScreen({
 
 // ============================================
 // COMPONENTE: ProBadge
-// Badge "PRO" para marcar botões/features
+// Badge "PRO" para marcar botÃµes/features
 // ============================================
 
 interface ProBadgeProps {
@@ -600,7 +614,7 @@ export function ProBadge({ size = 'sm', className = '' }: ProBadgeProps) {
 
 // ============================================
 // COMPONENTE: ProButton
-// Botão que mostra badge PRO se não tiver acesso
+// BotÃ£o que mostra badge PRO se nÃ£o tiver acesso
 // ============================================
 
 interface ProButtonProps {
@@ -688,7 +702,7 @@ export function LimitCounter({ resource, currentCount, showLabel = true }: Limit
 }
 
 // ============================================
-// UTILITÁRIOS
+// UTILITÃRIOS
 // ============================================
 
 function formatFeatureName(feature: string): string {
@@ -697,7 +711,7 @@ function formatFeatureName(feature: string): string {
         .replace(/\b\w/g, l => l.toUpperCase());
 }
 
-// Map de ícones - adicione mais conforme necessário
+// Map de Ã­cones - adicione mais conforme necessÃ¡rio
 import * as Icons from 'lucide-react';
 
 function getIconComponent(iconName: string): React.ComponentType<{ className?: string }> {
@@ -719,127 +733,194 @@ function getIconComponent(iconName: string): React.ComponentType<{ className?: s
 
 // ============================================
 // MODAL: ActivateModuleModal
-// Modal para solicitar ativação de módulo
+// MODAL: ActivateModuleModal
+// Modal para solicitar ativacao de modulo
 // ============================================
 
 interface ActivateModuleModalProps {
     isOpen: boolean;
     onClose: () => void;
     module: SubscriptionModule;
-    onConfirm: (billingCycle: 'monthly' | 'yearly') => void;
+    onConfirm?: (billingCycle: 'monthly' | 'semiannual' | 'yearly') => void;
     pixKey?: string;
 }
 
 export function ActivateModuleModal({
     isOpen,
     onClose,
-    module,
-    onConfirm,
-    pixKey = 'sua-chave-pix@email.com'
+    module
 }: ActivateModuleModalProps) {
-    const [billingCycle, setBillingCycle] = React.useState<'monthly' | 'yearly'>('monthly');
-    const [copied, setCopied] = React.useState(false);
+    const [billingAction, setBillingAction] = React.useState<string | null>(null);
 
     if (!isOpen) return null;
 
-    const price = billingCycle === 'yearly'
-        ? (module.price_yearly || module.price_monthly * 10)
-        : module.price_monthly;
+    const price = module.price_monthly;
 
-    const discount = billingCycle === 'yearly'
-        ? Math.round((1 - (module.price_yearly || 0) / (module.price_monthly * 12)) * 100)
-        : 0;
+    const handlePixCheckout = async () => {
+        setBillingAction('pix');
 
-    const handleCopyPix = () => {
-        navigator.clipboard.writeText(pixKey);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+        try {
+            const result = await createAbacatePixCheckoutForModule(module.id);
+            if (!result.success) {
+                throw new Error(result.error);
+            }
+
+            window.location.assign(result.url);
+        } catch (error) {
+            console.error('Erro ao abrir checkout Pix:', error);
+            setBillingAction(null);
+        }
     };
 
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-            <div className="bg-gray-900 border border-gray-700 rounded-2xl max-w-lg w-full p-6 shadow-2xl">
-                <div className="flex justify-between items-start mb-6">
-                    <div>
-                        <h2 className="text-xl font-bold text-white">Ativar {module.name}</h2>
-                        <p className="text-gray-400 text-sm mt-1">{module.description}</p>
-                    </div>
-                    <button onClick={onClose} className="text-gray-500 hover:text-gray-300">
-                        <X className="w-6 h-6" />
-                    </button>
-                </div>
+    const handleSubscriptionCheckout = async () => {
+        if (!module.abacate_subscription_product_id) {
+            return;
+        }
 
-                {/* Preço do módulo */}
-                <div className="bg-gray-800 rounded-lg p-6 mb-6 border border-gray-700">
-                    <div className="text-center">
-                        <div className="text-3xl font-bold text-white mb-2">
-                            R$ {module.price_monthly.toFixed(2)}
-                        </div>
-                        <div className="text-gray-400">
-                            por {module.validity_months || 6} meses
-                        </div>
-                        <div className="mt-3 text-sm text-green-400 flex items-center justify-center gap-1">
-                            <span>🛡️</span>
-                            <span>Garantia de 7 dias</span>
-                        </div>
-                    </div>
-                </div>
+        setBillingAction('subscription');
 
-                {/* Total */}
-                <div className="bg-gray-800 rounded-lg p-4 mb-6">
-                    <div className="flex justify-between items-center">
-                        <span className="text-gray-400">Total a pagar:</span>
-                        <span className="text-2xl font-bold text-white">R$ {price.toFixed(2)}</span>
-                    </div>
-                </div>
+        try {
+            const result = await createAbacateSubscriptionCheckoutForModule(module.id);
+            if (!result.success) {
+                throw new Error(result.error);
+            }
 
-                {/* Instruções PIX */}
-                <div className="bg-gradient-to-br from-gray-800 to-gray-800/50 border border-gray-700 rounded-lg p-4 mb-6">
-                    <h3 className="text-white font-semibold mb-3 flex items-center gap-2">
-                        <span className="text-2xl">💳</span> Pagamento via PIX
-                    </h3>
+            window.location.assign(result.url);
+        } catch (error) {
+            console.error('Erro ao abrir assinatura recorrente:', error);
+            setBillingAction(null);
+        }
+    };
 
-                    <div className="space-y-3">
-                        <div className="flex items-center gap-3 p-3 bg-gray-900/50 rounded-lg">
-                            <div className="flex-1 font-mono text-sm text-gray-300 break-all">
-                                {pixKey}
+    const modalContent = (
+        <div className="fixed inset-0 z-[12000] overflow-y-auto bg-slate-950/70 p-3 pt-[max(12px,env(safe-area-inset-top))] backdrop-blur-sm sm:p-4">
+            <div className="flex min-h-[100dvh] items-start justify-center py-3 sm:min-h-full sm:items-center sm:py-0">
+                <div className="flex max-h-[calc(100dvh-24px)] w-full max-w-lg flex-col overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-[0_24px_100px_rgba(15,23,42,0.24)] dark:border-slate-700 dark:bg-slate-900 sm:max-h-[calc(100dvh-32px)] sm:rounded-[28px]">
+                    <div className="shrink-0 border-b border-slate-200 bg-gradient-to-r from-slate-50 via-white to-slate-50 px-4 py-4 dark:border-slate-800 dark:from-slate-900 dark:via-slate-900 dark:to-slate-950 sm:px-6 sm:py-5">
+                        <div className="flex items-start gap-3 sm:gap-4">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-900 text-white shadow-lg shadow-slate-900/10 dark:bg-white dark:text-slate-900 sm:h-11 sm:w-11">
+                                <CreditCard className="h-4 w-4 sm:h-5 sm:w-5" />
                             </div>
-                            <button
-                                onClick={handleCopyPix}
-                                className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${copied
-                                    ? 'bg-green-500/20 text-green-400'
-                                    : 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30'
-                                    }`}
-                            >
-                                {copied ? '✓ Copiado!' : 'Copiar'}
+
+                            <div className="min-w-0 flex-1">
+                                <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-300">
+                                    <Crown className="h-3.5 w-3.5" />
+                                    Premium
+                                </div>
+                                <h2 className="text-lg font-bold leading-tight tracking-tight text-slate-900 dark:text-white sm:text-2xl">
+                                    Ativar {module.name}
+                                </h2>
+                                <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500 dark:text-slate-400">
+                                    {module.description}
+                                </p>
+                            </div>
+
+                            <button onClick={onClose} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white/80 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200" aria-label="Fechar modal">
+                                <X className="h-5 w-5" />
                             </button>
                         </div>
-
-                        <ol className="text-sm text-gray-400 space-y-1">
-                            <li>1. Copie a chave PIX acima</li>
-                            <li>2. Faça o pagamento no seu banco</li>
-                            <li>3. Clique em "Confirmar Pagamento"</li>
-                            <li>4. Aguarde a ativação (até 24h úteis)</li>
-                        </ol>
                     </div>
-                </div>
 
-                {/* Botões */}
-                <div className="flex gap-3">
-                    <button
-                        onClick={onClose}
-                        className="flex-1 py-3 px-4 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
-                    >
-                        Cancelar
-                    </button>
-                    <button
-                        onClick={() => onConfirm(billingCycle)}
-                        className="flex-1 py-3 px-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white font-semibold rounded-lg transition-all"
-                    >
-                        Confirmar Pagamento
-                    </button>
+                    <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6">
+                        <div className="space-y-4">
+                            <div className="rounded-[22px] border border-slate-200 bg-slate-50/90 p-3.5 shadow-sm shadow-slate-950/5 dark:border-slate-800 dark:bg-slate-950/60 sm:p-4">
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                                    <div>
+                                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                                            Plano selecionado
+                                        </p>
+                                        <div className="mt-2 flex items-end gap-2">
+                                            <span className="text-2xl font-black tracking-tight text-slate-900 dark:text-white sm:text-3xl">
+                                                R$ {price.toFixed(2).replace('.', ',')}
+                                            </span>
+                                            <span className="pb-1 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400 sm:text-sm">
+                                                / 6 meses
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex flex-wrap gap-2 sm:flex-col sm:items-end">
+                                        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-300 sm:px-4 sm:py-3 sm:text-sm">
+                                            Acesso liberado na hora
+                                        </div>
+                                        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-300 sm:px-4 sm:py-3 sm:text-sm">
+                                            7 dias de garantia
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="rounded-[22px] border border-slate-200 bg-white p-3.5 shadow-sm shadow-slate-950/5 dark:border-slate-800 dark:bg-slate-900 sm:p-4">
+                                <div className="mb-3 flex items-center gap-2 text-slate-900 dark:text-white sm:mb-4">
+                                    <Sparkles className="h-4 w-4 text-indigo-500" />
+                                    <h3 className="text-sm font-semibold sm:text-base">
+                                        O que voce libera com este plano
+                                    </h3>
+                                </div>
+
+                                <div className="grid gap-2 sm:grid-cols-2 sm:gap-3">
+                                    {(module.features?.slice(0, 4) || [
+                                        'Liberacao imediata apos confirmacao',
+                                        'Acesso premium para sua equipe',
+                                        'Checkout e cobranca organizados',
+                                        'Suporte para evoluir depois'
+                                    ]).map((feature) => (
+                                        <div
+                                            key={feature}
+                                            className="flex items-start gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-950/50 sm:gap-3 sm:py-3"
+                                        >
+                                            <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-300">
+                                                <CheckCircle2 className="h-3.5 w-3.5" />
+                                            </div>
+                                            <p className="text-sm leading-5 text-slate-600 dark:text-slate-300">
+                                                {feature.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())}
+                                            </p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="rounded-[24px] border border-blue-200 bg-blue-50/85 p-3.5 shadow-sm shadow-blue-950/5 dark:border-blue-900/40 dark:bg-blue-950/20 sm:p-4">
+                                <div className="space-y-3">
+                                    <button
+                                        onClick={handlePixCheckout}
+                                        disabled={billingAction === 'pix'}
+                                        className="flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60 sm:text-base"
+                                    >
+                                        <QrCode className="h-4 w-4" />
+                                        {billingAction === 'pix'
+                                            ? 'Abrindo Pix...'
+                                            : 'Comprar 6 meses no Pix'}
+                                    </button>
+
+                                    {module.abacate_subscription_product_id ? (
+                                        <button
+                                            onClick={handleSubscriptionCheckout}
+                                            disabled={billingAction === 'subscription'}
+                                            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-900 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:hover:bg-slate-900 sm:text-base"
+                                        >
+                                            <CreditCard className="h-4 w-4" />
+                                            {billingAction === 'subscription'
+                                                ? 'Abrindo assinatura...'
+                                                : 'Assinar com renovacao a cada 6 meses'}
+                                        </button>
+                                    ) : (
+                                        <div className="rounded-2xl border border-dashed border-blue-300 bg-white/80 px-4 py-3 text-sm text-slate-600 dark:border-blue-900/40 dark:bg-slate-950/30 dark:text-slate-300">
+                                            Assinatura recorrente indisponivel ate configurar o produto de 6 meses no AbacatePay.
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     );
+
+    if (typeof document === 'undefined') {
+        return modalContent;
+    }
+
+    return ReactDOM.createPortal(modalContent, document.body);
 }

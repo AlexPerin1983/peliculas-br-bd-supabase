@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, FormEvent, DragEvent } from 'react';
 import Modal from '../ui/Modal';
+import { useFeedback } from '../../src/contexts/FeedbackContext';
 
 interface AIFilmModalProps {
     isOpen: boolean;
@@ -10,29 +11,26 @@ interface AIFilmModalProps {
 }
 
 const AIFilmModal: React.FC<AIFilmModalProps> = ({ isOpen, onClose, onProcess, isProcessing, provider }) => {
+    const { showAlert, showToast } = useFeedback();
     const [activeTab, setActiveTab] = useState<'text' | 'image' | 'audio'>('text');
     const [text, setText] = useState('');
     const [imageFiles, setImageFiles] = useState<File[]>([]);
     const [imagePreviews, setImagePreviews] = useState<string[]>([]);
     const [isDragging, setIsDragging] = useState(false);
-
     const [isRecording, setIsRecording] = useState(false);
     const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
     const [audioUrl, setAudioUrl] = useState<string | null>(null);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<Blob[]>([]);
-
-    // Estados para feedback de processamento melhorado
     const [processingStage, setProcessingStage] = useState<'idle' | 'analyzing' | 'extracting' | 'filling' | 'error'>('idle');
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
     const MAX_IMAGES = 1;
 
-    // Mensagens de status para cada etapa
     const processingMessages: Record<string, string> = {
         analyzing: 'Analisando dados da película...',
-        extracting: 'Extraindo especificações...',
-        filling: 'Preenchendo campos...',
+        extracting: 'Extraindo especificacoes...',
+        filling: 'Preenchendo campos...'
     };
 
     const stopRecordingCleanup = () => {
@@ -62,8 +60,7 @@ const AIFilmModal: React.FC<AIFilmModalProps> = ({ isOpen, onClose, onProcess, i
             stopRecordingCleanup();
             imagePreviews.forEach(url => URL.revokeObjectURL(url));
             if (audioUrl) URL.revokeObjectURL(audioUrl);
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        };
     }, [imagePreviews, audioUrl]);
 
     useEffect(() => {
@@ -71,10 +68,8 @@ const AIFilmModal: React.FC<AIFilmModalProps> = ({ isOpen, onClose, onProcess, i
             resetState();
             setActiveTab('text');
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen]);
 
-    // Simula progressão de etapas durante processamento
     useEffect(() => {
         if (isProcessing && processingStage === 'idle') {
             setProcessingStage('analyzing');
@@ -93,7 +88,7 @@ const AIFilmModal: React.FC<AIFilmModalProps> = ({ isOpen, onClose, onProcess, i
     const handleTabChange = (tab: 'text' | 'image' | 'audio') => {
         resetState();
         setActiveTab(tab);
-    }
+    };
 
     const handleImageFiles = (files: FileList | null) => {
         if (!files) return;
@@ -104,14 +99,14 @@ const AIFilmModal: React.FC<AIFilmModalProps> = ({ isOpen, onClose, onProcess, i
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
             if (imageFiles.length + newFiles.length >= MAX_IMAGES) {
-                alert(`Você pode enviar no máximo ${MAX_IMAGES} ${MAX_IMAGES > 1 ? 'imagens' : 'imagem'}.`);
+                showToast('Você pode enviar no máximo 1 imagem.', { tone: 'warning' });
                 break;
             }
             if (file && file.type.startsWith('image/')) {
                 newFiles.push(file);
                 newPreviews.push(URL.createObjectURL(file));
-            } else {
-                alert(`O arquivo "${file.name}" não é uma imagem válida.`);
+            } else if (file) {
+                showToast(`O arquivo "${file.name}" não é uma imagem válida.`, { tone: 'error' });
             }
         }
 
@@ -157,14 +152,18 @@ const AIFilmModal: React.FC<AIFilmModalProps> = ({ isOpen, onClose, onProcess, i
             mediaRecorderRef.current.start();
             setIsRecording(true);
         } catch (err) {
-            console.error("Error accessing microphone:", err);
-            alert("Não foi possível acessar o microfone. Verifique as permissões do seu navegador.");
+            console.error('Error accessing microphone:', err);
+            showAlert({
+                title: 'Microfone indisponivel',
+                message: 'Não foi possível acessar o microfone. Verifique as permissões do seu navegador.',
+                tone: 'error'
+            });
             setIsRecording(false);
         }
     };
 
     const stopRecording = () => {
-        if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
             mediaRecorderRef.current.stop();
         }
         setIsRecording(false);
@@ -172,7 +171,7 @@ const AIFilmModal: React.FC<AIFilmModalProps> = ({ isOpen, onClose, onProcess, i
 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
-        if (isProcessing) return; // Evita duplo clique
+        if (isProcessing) return;
 
         let processData: { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob } | null = null;
         switch (activeTab) {
@@ -197,7 +196,7 @@ const AIFilmModal: React.FC<AIFilmModalProps> = ({ isOpen, onClose, onProcess, i
                 setErrorMessage(err?.message || 'Erro ao processar. Tente novamente.');
             }
         } else {
-            alert("Forneça um conteúdo para processar.");
+            showToast('Forneca um conteudo para processar.', { tone: 'warning' });
         }
     };
 
@@ -210,88 +209,48 @@ const AIFilmModal: React.FC<AIFilmModalProps> = ({ isOpen, onClose, onProcess, i
 
     const footer = (
         <>
-            <button
-                onClick={onClose}
-                className="px-4 py-2 text-sm font-semibold rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 dark:text-slate-300 disabled:opacity-50"
-                disabled={isProcessing}
-            >
+            <button onClick={onClose} className="px-4 py-2 text-sm font-semibold rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 dark:text-slate-300 disabled:opacity-50" disabled={isProcessing}>
                 Cancelar
             </button>
-            <button
-                type="submit"
-                form="aiFilmForm"
-                className="px-4 py-2 bg-slate-800 dark:bg-slate-700 text-white text-sm font-semibold rounded-md hover:bg-slate-700 dark:hover:bg-slate-600 min-w-[140px] disabled:bg-slate-500 disabled:cursor-wait flex items-center justify-center gap-2"
-                disabled={isProcessing || !isProcessable}
-                aria-busy={isProcessing}
-            >
-                {isProcessing ? (
-                    <>
-                        <i className="fas fa-spinner fa-spin"></i>
-                        <span>Processando...</span>
-                    </>
-                ) : (
-                    'Processar'
-                )}
+            <button type="submit" form="aiFilmForm" className="px-4 py-2 bg-slate-800 dark:bg-slate-700 text-white text-sm font-semibold rounded-md hover:bg-slate-700 dark:hover:bg-slate-600 min-w-[140px] disabled:bg-slate-500 disabled:cursor-wait flex items-center justify-center gap-2" disabled={isProcessing || !isProcessable} aria-busy={isProcessing}>
+                {isProcessing ? <><i className="fas fa-spinner fa-spin"></i><span>Processando...</span></> : 'Processar'}
             </button>
         </>
     );
 
-    const TabButton: React.FC<{ tab: 'text' | 'image' | 'audio', icon: string, children: React.ReactNode }> = ({ tab, icon, children }) => (
-        <button
-            type="button"
-            onClick={() => handleTabChange(tab)}
-            disabled={isProcessing}
-            className={`flex-1 px-3 py-2 text-sm font-semibold rounded-md transition-colors duration-200 flex items-center justify-center gap-2 ${activeTab === tab ? 'bg-slate-800 dark:bg-slate-700 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
-        >
+    const TabButton: React.FC<{ tab: 'text' | 'image' | 'audio'; icon: string; children: React.ReactNode }> = ({ tab, icon, children }) => (
+        <button type="button" onClick={() => handleTabChange(tab)} disabled={isProcessing} className={`flex-1 px-3 py-2 text-sm font-semibold rounded-md transition-colors duration-200 flex items-center justify-center gap-2 ${activeTab === tab ? 'bg-slate-800 dark:bg-slate-700 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`}>
             <i className={icon}></i>
             {children}
         </button>
     );
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title="Preencher Película com IA" footer={footer}>
+        <Modal isOpen={isOpen} onClose={onClose} title="Preencher Pelicula com IA" footer={footer}>
             <form id="aiFilmForm" onSubmit={handleSubmit} className="space-y-4" aria-busy={isProcessing}>
                 <div className="flex space-x-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-lg">
                     <TabButton tab="text" icon="fas fa-font">Texto</TabButton>
                     <TabButton tab="image" icon="fas fa-image">Imagem</TabButton>
-                    {provider === 'gemini' && (
-                        <TabButton tab="audio" icon="fas fa-microphone">Áudio</TabButton>
-                    )}
+                    {provider === 'gemini' && <TabButton tab="audio" icon="fas fa-microphone">Audio</TabButton>}
                 </div>
 
                 <div className="relative min-h-[250px] flex flex-col justify-center items-center">
-                    {/* Overlay de processamento */}
                     {isProcessing && (
-                        <div
-                            className="absolute inset-0 bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm flex flex-col items-center justify-center z-10 rounded-lg"
-                            aria-live="polite"
-                        >
-                            {/* Barra de progresso indeterminada */}
+                        <div className="absolute inset-0 bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm flex flex-col items-center justify-center z-10 rounded-lg" aria-live="polite">
                             <div className="w-full h-1 bg-slate-200 dark:bg-slate-700 overflow-hidden absolute top-0 rounded-t-lg">
                                 <div className="h-full bg-blue-500 animate-indeterminate-progress"></div>
                             </div>
                             <i className="fas fa-robot text-4xl text-blue-500 dark:text-blue-400 mb-4 animate-pulse"></i>
-                            <p className="text-slate-700 dark:text-slate-200 font-medium text-lg">
-                                {processingMessages[processingStage] || 'Processando...'}
-                            </p>
-                            <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
-                                Isso pode levar alguns segundos
-                            </p>
+                            <p className="text-slate-700 dark:text-slate-200 font-medium text-lg">{processingMessages[processingStage] || 'Processando...'}</p>
+                            <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">Isso pode levar alguns segundos</p>
                         </div>
                     )}
 
-                    {/* Estado de erro */}
                     {processingStage === 'error' && !isProcessing && (
                         <div className="absolute inset-0 bg-white/95 dark:bg-slate-900/95 flex flex-col items-center justify-center z-10 rounded-lg p-4">
                             <i className="fas fa-exclamation-circle text-4xl text-red-500 mb-4"></i>
-                            <p className="text-red-700 dark:text-red-300 font-medium text-center mb-4">
-                                {errorMessage || 'Erro ao processar. Tente novamente.'}
-                            </p>
-                            <button
-                                type="button"
-                                onClick={handleRetry}
-                                className="px-4 py-2 bg-slate-800 dark:bg-slate-700 text-white rounded-md hover:bg-slate-700 dark:hover:bg-slate-600 flex items-center gap-2"
-                            >
+                            <p className="text-red-700 dark:text-red-300 font-medium text-center mb-4">{errorMessage || 'Erro ao processar. Tente novamente.'}</p>
+                            <button type="button" onClick={handleRetry} className="px-4 py-2 bg-slate-800 dark:bg-slate-700 text-white rounded-md hover:bg-slate-700 dark:hover:bg-slate-600 flex items-center gap-2">
                                 <i className="fas fa-redo"></i>
                                 Tentar novamente
                             </button>
@@ -300,18 +259,11 @@ const AIFilmModal: React.FC<AIFilmModalProps> = ({ isOpen, onClose, onProcess, i
 
                     {activeTab === 'text' && (
                         <>
-                            <p className="text-xs text-slate-500 dark:text-slate-400 mb-2 self-start">
-                                Ex: <span className="italic">Película G5, preço 100 reais o metro, bloqueia 99% UV e 50% calor.</span>
-                            </p>
-                            <textarea
-                                value={text}
-                                onChange={(e) => setText(e.target.value)}
-                                placeholder="Descreva ou cole as informações da película aqui..."
-                                className="w-full h-48 p-2 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:ring-slate-500 focus:border-slate-500 sm:text-sm"
-                                disabled={isProcessing}
-                            />
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mb-2 self-start">Ex: <span className="italic">Película G5, preço 100 reais o metro, bloqueia 99% UV e 50% calor.</span></p>
+                            <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Descreva ou cole as informações da película aqui..." className="w-full h-48 p-2 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:ring-slate-500 focus:border-slate-500 sm:text-sm" disabled={isProcessing} />
                         </>
                     )}
+
                     {activeTab === 'image' && (
                         <div className="w-full text-center flex flex-col items-center justify-center">
                             {imagePreviews.length > 0 && (
@@ -320,13 +272,7 @@ const AIFilmModal: React.FC<AIFilmModalProps> = ({ isOpen, onClose, onProcess, i
                                         {imagePreviews.map((previewUrl, index) => (
                                             <div key={index} className="relative group aspect-video">
                                                 <img src={previewUrl} alt={`Preview ${index + 1}`} className="w-full h-full object-contain rounded-md border border-slate-200" />
-                                                <button
-                                                    type="button"
-                                                    onClick={() => removeImage(index)}
-                                                    disabled={isProcessing}
-                                                    className="absolute top-1 right-1 h-6 w-6 bg-black/60 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                                                    aria-label={`Remover imagem ${index + 1}`}
-                                                >
+                                                <button type="button" onClick={() => removeImage(index)} disabled={isProcessing} className="absolute top-1 right-1 h-6 w-6 bg-black/60 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity" aria-label={`Remover imagem ${index + 1}`}>
                                                     <i className="fas fa-times text-xs"></i>
                                                 </button>
                                             </div>
@@ -337,44 +283,26 @@ const AIFilmModal: React.FC<AIFilmModalProps> = ({ isOpen, onClose, onProcess, i
 
                             {imageFiles.length < MAX_IMAGES && (
                                 <>
-                                    <div
-                                        onDragEnter={(e) => handleDragEvent(e, true)}
-                                        onDragLeave={(e) => handleDragEvent(e, false)}
-                                        onDragOver={(e) => handleDragEvent(e, true)}
-                                        onDrop={handleDrop}
-                                        className={`w-full p-6 border-2 border-dashed rounded-lg transition-colors ${isDragging ? 'border-slate-500 bg-slate-100 dark:bg-slate-800' : 'border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800'} ${isProcessing ? 'cursor-not-allowed' : 'cursor-pointer'}`}
-                                    >
+                                    <div onDragEnter={(e) => handleDragEvent(e, true)} onDragLeave={(e) => handleDragEvent(e, false)} onDragOver={(e) => handleDragEvent(e, true)} onDrop={handleDrop} className={`w-full p-6 border-2 border-dashed rounded-lg transition-colors ${isDragging ? 'border-slate-500 bg-slate-100 dark:bg-slate-800' : 'border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800'} ${isProcessing ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
                                         <label htmlFor="image-upload" className={isProcessing ? 'cursor-not-allowed' : 'cursor-pointer'}>
                                             <i className="fas fa-cloud-upload-alt text-3xl text-slate-400 mb-2"></i>
                                             <p className="text-slate-600 dark:text-slate-400 text-sm">Arraste e solte uma imagem aqui, ou <span className="font-semibold text-slate-800 dark:text-slate-200">clique para selecionar</span>.</p>
-                                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                                                Pode ser um print de catálogo ou foto da embalagem.
-                                            </p>
+                                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Pode ser um print de catálogo ou foto da embalagem.</p>
                                         </label>
                                     </div>
                                     <div className="mt-3 flex gap-2 justify-center">
-                                        <label
-                                            htmlFor="camera-capture"
-                                            className={`px-4 py-2 bg-slate-700 dark:bg-slate-600 text-white text-sm font-semibold rounded-md hover:bg-slate-600 dark:hover:bg-slate-500 transition-colors flex items-center gap-2 ${isProcessing ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-                                        >
+                                        <label htmlFor="camera-capture" className={`px-4 py-2 bg-slate-700 dark:bg-slate-600 text-white text-sm font-semibold rounded-md hover:bg-slate-600 dark:hover:bg-slate-500 transition-colors flex items-center gap-2 ${isProcessing ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
                                             <i className="fas fa-camera"></i>
                                             Tirar Foto
                                         </label>
                                     </div>
-                                    <input
-                                        type="file"
-                                        accept="image/*"
-                                        capture="environment"
-                                        onChange={(e) => handleImageFiles(e.target.files)}
-                                        className="hidden"
-                                        id="camera-capture"
-                                        disabled={isProcessing || imageFiles.length >= MAX_IMAGES}
-                                    />
+                                    <input type="file" accept="image/*" capture="environment" onChange={(e) => handleImageFiles(e.target.files)} className="hidden" id="camera-capture" disabled={isProcessing || imageFiles.length >= MAX_IMAGES} />
                                 </>
                             )}
                             <input type="file" accept="image/*" onChange={(e) => handleImageFiles(e.target.files)} className="hidden" id="image-upload" disabled={isProcessing || imageFiles.length >= MAX_IMAGES} multiple />
                         </div>
                     )}
+
                     {activeTab === 'audio' && (
                         <div className="w-full flex flex-col items-center justify-center text-center">
                             {audioUrl ? (
@@ -386,17 +314,13 @@ const AIFilmModal: React.FC<AIFilmModalProps> = ({ isOpen, onClose, onProcess, i
                                 <>
                                     <i className="fas fa-microphone-alt text-3xl text-red-500 mb-3 animate-pulse"></i>
                                     <p className="text-slate-600 mb-4">Gravando... fale os dados da película.</p>
-                                    <button type="button" onClick={stopRecording} className="px-6 py-2 bg-red-600 text-white rounded-full font-semibold shadow-md">
-                                        Parar Gravação
-                                    </button>
+                                    <button type="button" onClick={stopRecording} className="px-6 py-2 bg-red-600 text-white rounded-full font-semibold shadow-md">Parar gravação</button>
                                 </>
                             ) : (
                                 <>
                                     <i className="fas fa-microphone text-3xl text-slate-400 mb-3"></i>
                                     <p className="text-slate-600 mb-4">Clique no botão para começar a gravar o áudio com os dados da película.</p>
-                                    <button type="button" onClick={startRecording} disabled={isProcessing} className="px-6 py-2 bg-slate-800 dark:bg-slate-700 text-white rounded-full font-semibold shadow-md hover:bg-slate-700 dark:hover:bg-slate-600">
-                                        Iniciar Gravação
-                                    </button>
+                                    <button type="button" onClick={startRecording} disabled={isProcessing} className="px-6 py-2 bg-slate-800 dark:bg-slate-700 text-white rounded-full font-semibold shadow-md hover:bg-slate-700 dark:hover:bg-slate-600">Iniciar gravação</button>
                                 </>
                             )}
                         </div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Client } from '../../types';
+import { Client, SavedPDF } from '../../types';
 import ActionButton from '../ui/ActionButton';
 import ContentState from '../ui/ContentState';
 import { ListSkeleton } from '../ui/Skeleton';
@@ -20,9 +20,10 @@ const useDebounce = (value: string, delay: number) => {
 // Componente para item de cliente com long press para fixar
 const ClientItem: React.FC<{
     client: Client;
+    isConverted: boolean;
     onSelect: (id: number) => void;
     onTogglePin: (id: number) => void;
-}> = ({ client, onSelect, onTogglePin }) => {
+}> = ({ client, isConverted, onSelect, onTogglePin }) => {
     const [isPressing, setIsPressing] = useState(false);
     const longPressTimer = useRef<NodeJS.Timeout | null>(null);
     const touchStartTime = useRef<number>(0);
@@ -103,21 +104,30 @@ const ClientItem: React.FC<{
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
             onTouchCancel={handleTouchCancel}
-            className={`w-full text-left p-4 bg-white dark:bg-slate-800 border rounded-lg shadow-sm transition-all duration-150 flex items-center justify-between ${isPressing
-                ? 'scale-95 bg-slate-100 dark:bg-slate-700 border-slate-300 dark:border-slate-600'
-                : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'
+            className={`w-full text-left px-4 py-3.5 bg-white/96 dark:bg-slate-800 border rounded-[18px] shadow-[0_10px_24px_rgba(15,23,42,0.05)] transition-all duration-150 flex items-center justify-between gap-3 ${isPressing
+                ? 'scale-[0.985] bg-slate-50 dark:bg-slate-700 border-slate-300 dark:border-slate-600'
+                : 'border-slate-200 dark:border-slate-700 hover:bg-white dark:hover:bg-slate-700'
                 } ${client.pinned ? 'border-l-4 border-l-blue-500' : ''}`}
         >
-            <div className="flex-grow">
-                <div className="flex items-center gap-2">
-                    {client.pinned && (
-                        <i className="fas fa-thumbtack text-blue-500 text-sm"></i>
+            <div className="min-w-0 flex-grow">
+                <div className="flex min-w-0 items-center gap-2">
+                    {isConverted && (
+                        <span
+                            className="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-400 shadow-[0_0_0_3px_rgba(52,211,153,0.14)]"
+                            title="Cliente convertido"
+                            aria-label="Cliente convertido"
+                        />
                     )}
-                    <p className="font-semibold text-slate-800 dark:text-slate-200">{client.nome}</p>
+                    {client.pinned && (
+                        <i className="fas fa-thumbtack text-[11px] text-blue-500"></i>
+                    )}
+                    <p className="truncate text-[14px] font-semibold tracking-[-0.02em] text-slate-800 dark:text-slate-200">{client.nome}</p>
                 </div>
-                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{client.telefone || 'Sem telefone'}</p>
+                <p className="mt-1 truncate text-[12px] text-slate-500 dark:text-slate-400">{client.telefone || 'Sem telefone'}</p>
             </div>
-            <i className="fas fa-chevron-right text-slate-400"></i>
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-50 text-slate-400 dark:bg-slate-700">
+                <i className="fas fa-chevron-right text-[10px]"></i>
+            </span>
         </button>
     );
 };
@@ -133,6 +143,7 @@ interface ClientSelectionModalProps {
     isLoading: boolean;
     onAddNewClient: (clientName: string) => void;
     onTogglePin: (id: number) => void; // Nova prop para fixar/desfixar
+    savedPdfs?: SavedPDF[];
 }
 
 const ClientSelectionModal: React.FC<ClientSelectionModalProps> = ({
@@ -142,7 +153,8 @@ const ClientSelectionModal: React.FC<ClientSelectionModalProps> = ({
     onClientSelect,
     isLoading,
     onAddNewClient,
-    onTogglePin
+    onTogglePin,
+    savedPdfs = []
 }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const debouncedSearchTerm = useDebounce(searchTerm, 200);
@@ -191,6 +203,14 @@ const ClientSelectionModal: React.FC<ClientSelectionModalProps> = ({
         });
     }, [clients, debouncedSearchTerm, isLoading]);
 
+    const convertedClientIds = useMemo(() => {
+        return new Set(
+            savedPdfs
+                .filter(pdf => pdf.status === 'approved')
+                .map(pdf => pdf.clienteId)
+        );
+    }, [savedPdfs]);
+
     const displayedClients = useMemo(() => {
         return filteredClients.slice(0, visibleCount);
     }, [filteredClients, visibleCount]);
@@ -220,44 +240,60 @@ const ClientSelectionModal: React.FC<ClientSelectionModalProps> = ({
     };
 
     return (
-        <div className="fixed inset-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm z-50 flex flex-col animate-fade-in">
-            {/* Header */}
-            <div className="flex-shrink-0 p-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 sticky top-0">
-                <div className="flex items-center justify-between gap-4 max-w-3xl mx-auto">
-                    <h2 className="text-xl font-bold text-slate-800 dark:text-slate-200">Selecionar Cliente</h2>
-                    <button onClick={onClose} className="text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white h-10 w-10 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800">
-                        <i className="fas fa-times text-xl"></i>
-                    </button>
-                </div>
-                <div className="mt-4 max-w-3xl mx-auto relative">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                        <i className="fas fa-search text-slate-400 text-lg"></i>
-                    </div>
-                    <input
-                        ref={inputRef}
-                        type="text"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        placeholder="Buscar pelo nome do cliente..."
-                        className="w-full pl-12 pr-10 py-4 rounded-xl border-none bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 shadow-inner focus:ring-2 focus:ring-slate-500 transition-all text-base"
-                        disabled={isLoading}
-                    />
-                    {searchTerm && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-white/94 dark:bg-slate-900/95 backdrop-blur-md animate-fade-in">
+            <div className="sticky top-0 z-10 flex-shrink-0 border-b border-slate-200/80 bg-white/94 p-3.5 backdrop-blur dark:border-slate-700 dark:bg-slate-900/94">
+                <div className="mx-auto max-w-3xl">
+                    <div className="flex items-center gap-3">
                         <button
-                            type="button"
-                            onClick={handleClearSearch}
-                            className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-                            aria-label="Limpar busca"
+                            onClick={onClose}
+                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition-colors hover:border-slate-300 hover:text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:text-white"
                         >
-                            <i className="fas fa-times-circle text-lg"></i>
+                            <i className="fas fa-arrow-left text-[14px]"></i>
                         </button>
-                    )}
+
+                        <div className="min-w-0 flex-1">
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
+                                Clientes
+                            </p>
+                            <h2 className="truncate text-[1.15rem] font-semibold tracking-[-0.03em] text-slate-800 dark:text-slate-100">
+                                Buscar cliente
+                            </h2>
+                        </div>
+
+                        <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                            {filteredClients.length}
+                        </span>
+                    </div>
+
+                    <div className="relative mt-3">
+                        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
+                            <i className="fas fa-search text-[12px] text-slate-400"></i>
+                        </div>
+                        <input
+                            ref={inputRef}
+                            type="text"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            placeholder="Buscar pelo nome do cliente..."
+                            className="h-11 w-full rounded-[16px] border border-slate-200 bg-slate-50/90 pl-10 pr-10 text-[14px] text-slate-800 shadow-sm outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:focus:bg-slate-800"
+                            disabled={isLoading}
+                        />
+                        {searchTerm && (
+                            <button
+                                type="button"
+                                onClick={handleClearSearch}
+                                className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                                aria-label="Limpar busca"
+                            >
+                                <i className="fas fa-times-circle text-[14px]"></i>
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
 
-            {/* Content */}
             <div className="flex-grow overflow-y-auto p-4">
-                <div className="max-w-3xl mx-auto space-y-2">
+                <div className="max-w-3xl mx-auto space-y-2.5">
                     {isLoading ? (
                         <ListSkeleton count={6} />
                     ) : (
@@ -267,6 +303,7 @@ const ClientSelectionModal: React.FC<ClientSelectionModalProps> = ({
                                 <ClientItem
                                     key={client.id}
                                     client={client}
+                                    isConverted={Boolean(client.id && convertedClientIds.has(client.id))}
                                     onSelect={handleSelectClient}
                                     onTogglePin={onTogglePin}
                                 />
@@ -288,8 +325,8 @@ const ClientSelectionModal: React.FC<ClientSelectionModalProps> = ({
                                     compact
                                     iconClassName="fas fa-search"
                                     title="Nenhum cliente encontrado"
-                                    description={`Tente outro nome ou adicione "${debouncedSearchTerm}" como novo cliente.`}
-                                    actionLabel={`Adicionar "${debouncedSearchTerm}"`}
+                                    description="Tente outro nome."
+                                    actionLabel="Adicionar cliente"
                                     actionIconClassName="fas fa-plus"
                                     onAction={handleAddNew}
                                 />
@@ -298,9 +335,9 @@ const ClientSelectionModal: React.FC<ClientSelectionModalProps> = ({
                                 <ContentState
                                     compact
                                     iconClassName="fas fa-user-plus"
-                                    title="Nenhum cliente cadastrado"
-                                    description="Adicione seu primeiro cliente para começar um novo atendimento."
-                                    actionLabel="Adicionar Novo Cliente"
+                                    title="Adicione seu primeiro cliente"
+                                    description="Cadastre um cliente para começar um novo atendimento."
+                                    actionLabel="Adicionar cliente"
                                     actionIconClassName="fas fa-plus"
                                     onAction={handleAddNewEmpty}
                                 />
@@ -310,13 +347,12 @@ const ClientSelectionModal: React.FC<ClientSelectionModalProps> = ({
                 </div>
             </div>
 
-            {/* Footer */}
-            <div className="flex-shrink-0 p-4 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 sticky bottom-0">
+            <div className="flex-shrink-0 border-t border-slate-200/80 bg-white/94 p-4 backdrop-blur dark:border-slate-700 dark:bg-slate-900/94 sticky bottom-0">
                 <div className="max-w-3xl mx-auto">
                     <ActionButton
                         onClick={handleAddNewEmpty}
                         className="w-full"
-                        size="lg"
+                        size="md"
                         iconClassName="fas fa-plus"
                         disabled={isLoading}
                     >

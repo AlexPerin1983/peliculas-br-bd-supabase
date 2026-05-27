@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { ProposalOption, Measurement } from '../../types';
+import { ProposalOption, Measurement, ProposalDiscount } from '../../types';
 import * as db from '../../services/db';
 
 export const useProposalOptions = (selectedClientId: number | null) => {
@@ -17,7 +17,7 @@ export const useProposalOptions = (selectedClientId: number | null) => {
                         id: Date.now(),
                         name: 'Opção 1',
                         measurements: [],
-                        generalDiscount: { value: '', type: 'percentage' }
+                        generalDiscount: { value: '', type: 'percentage', operation: 'discount' }
                     };
                     setProposalOptions([defaultOption]);
                     setActiveOptionId(defaultOption.id);
@@ -63,12 +63,12 @@ export const useProposalOptions = (selectedClientId: number | null) => {
         setIsDirty(true);
     }, [activeOptionId]);
 
-    const updateGeneralDiscount = useCallback((discount: { value: string; type: 'percentage' | 'fixed' }) => {
+    const updateGeneralDiscount = useCallback((discount: ProposalDiscount) => {
         if (!activeOptionId) return;
         
         setProposalOptions(prev => prev.map(opt =>
             opt.id === activeOptionId
-                ? { ...opt, generalDiscount: discount }
+                ? { ...opt, generalDiscount: { ...opt.generalDiscount, ...discount } }
                 : opt
         ));
         setIsDirty(true);
@@ -79,7 +79,7 @@ export const useProposalOptions = (selectedClientId: number | null) => {
             id: Date.now(),
             name: `Opção ${proposalOptions.length + 1}`,
             measurements: [],
-            generalDiscount: { value: '', type: 'percentage' }
+            generalDiscount: { value: '', type: 'percentage', operation: 'discount' }
         };
         
         setProposalOptions(prev => [...prev, newOption]);

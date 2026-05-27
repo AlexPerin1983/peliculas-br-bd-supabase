@@ -5,6 +5,7 @@ import ActionButton from '../ui/ActionButton';
 import Input from '../ui/Input';
 import SearchableSelect from '../ui/SearchableSelect';
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
+import { GEMINI_TEXT_MODEL } from '../../src/lib/geminiModel';
 
 interface AgendamentoModalProps {
     isOpen: boolean;
@@ -45,6 +46,37 @@ const formatClientAddress = (client: Client): string => {
         client.uf
     ];
     return parts.filter(Boolean).join(', ');
+};
+
+const timeToMinutes = (value: string): number => {
+    const [hours = '0', minutes = '0'] = value.split(':');
+    return Number(hours) * 60 + Number(minutes);
+};
+
+const isWithinWorkingHours = (
+    startTime: string,
+    endTime: string,
+    scheduleStart: string,
+    scheduleEnd: string
+): boolean => {
+    const appointmentStart = timeToMinutes(startTime);
+    const appointmentEnd = timeToMinutes(endTime);
+    const workingStart = timeToMinutes(scheduleStart);
+    let workingEnd = timeToMinutes(scheduleEnd);
+
+    if (workingEnd <= workingStart) {
+        workingEnd += 24 * 60;
+    }
+
+    return appointmentStart >= workingStart && appointmentEnd <= workingEnd;
+};
+
+const getWorkingEndLabel = (scheduleStart: string, scheduleEnd: string): string => {
+    if (timeToMinutes(scheduleEnd) <= timeToMinutes(scheduleStart)) {
+        return `${scheduleEnd} (meia-noite)`;
+    }
+
+    return scheduleEnd;
 };
 
 const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, onSave, onDelete, schedulingInfo, clients, onAddNewClient, userInfo, agendamentos }) => {
@@ -161,7 +193,7 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
 
             const genAI = new GoogleGenerativeAI(userInfo.aiConfig.apiKey);
             const model = genAI.getGenerativeModel({
-                model: "gemini-2.0-flash",
+                model: GEMINI_TEXT_MODEL,
                 generationConfig: {
                     responseMimeType: "application/json",
                     responseSchema: {
@@ -244,8 +276,8 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
 
         const scheduleStart = userInfo.workingHours.start;
         const scheduleEnd = userInfo.workingHours.end;
-        if (startTime < scheduleStart || endTime > scheduleEnd) {
-            setValidationError(`O horário deve ser entre ${scheduleStart} e ${scheduleEnd}.`);
+        if (!isWithinWorkingHours(startTime, endTime, scheduleStart, scheduleEnd)) {
+            setValidationError(`O horário deve ser entre ${scheduleStart} e ${getWorkingEndLabel(scheduleStart, scheduleEnd)}.`);
             return;
         }
 

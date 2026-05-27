@@ -6,6 +6,7 @@ import Accordion from '../ui/Accordion';
 import LocationSearchInput from '../ui/LocationSearchInput';
 import { locationService } from '../../services/locationService';
 import { useAuth } from '../../contexts/AuthContext';
+import { calculatePricingAreaM2 } from '../../src/lib/pricingArea';
 
 type UIMeasurement = Measurement & { isNew?: boolean };
 
@@ -181,7 +182,7 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
     const larguraNum = parseFloat(String(localMeasurement.largura || '0').replace(',', '.'));
     const alturaNum = parseFloat(String(localMeasurement.altura || '0').replace(',', '.'));
     const quantidadeNum = Number(localMeasurement.quantidade) || 0;
-    const m2 = larguraNum * alturaNum * quantidadeNum;
+    const m2 = calculatePricingAreaM2(larguraNum, alturaNum, quantidadeNum);
     const selectedFilm = films.find(f => f.nome === localMeasurement.pelicula);
 
     const pricePerM2 = useMemo(() => {
@@ -231,22 +232,25 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
         </div>
     );
 
-    const inputClasses = "w-full text-center p-2.5 rounded-lg border text-base transition-colors duration-200 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 focus:border-slate-500";
-    const inputErrorClasses = "w-full text-center p-2.5 rounded-lg border-2 text-base transition-colors duration-200 bg-red-50 dark:bg-red-900/20 text-slate-800 dark:text-slate-200 border-red-500 dark:border-red-400 focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500";
+    const inputClasses = "w-full text-center p-2.5 rounded-[var(--radius-control)] border text-base font-bold transition-colors duration-200 bg-[var(--surface-muted)] text-[var(--text-strong)] placeholder:text-[var(--text-soft)] border-[var(--border-subtle)] focus:outline-none focus:border-[var(--brand-primary)] focus:bg-[var(--surface)] focus:ring-4 focus:ring-blue-500/10";
+    const inputErrorClasses = "w-full text-center p-2.5 rounded-[var(--radius-control)] border-2 text-base font-bold transition-colors duration-200 bg-red-50 text-[var(--text-strong)] border-red-500 focus:outline-none focus:ring-4 focus:ring-red-500/10 focus:border-red-500";
 
     return (
-        <div className="fixed inset-0 bg-white dark:bg-slate-900 z-50 flex flex-col animate-fade-in">
-            <header className="flex-shrink-0 p-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 sticky top-0 z-40">
-                <div className="flex items-center justify-between gap-4 max-w-3xl mx-auto">
-                    <h2 className="text-xl font-bold text-slate-800 dark:text-slate-200">Editar Medida</h2>
-                    <button onClick={onClose} className="text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white h-10 w-10 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800">
+        <div className="fixed inset-0 z-50 flex flex-col bg-[var(--app-bg)] animate-fade-in">
+            <header className="sticky top-0 z-40 flex-shrink-0 border-b border-[var(--border-subtle)] bg-[color-mix(in_srgb,var(--app-bg)_88%,transparent)] p-4 backdrop-blur-md">
+                <div className="mx-auto flex max-w-3xl items-center justify-between gap-4">
+                    <div>
+                        <p className="ui-kicker">Detalhe da proposta</p>
+                        <h2 className="mt-1 text-xl font-bold text-[var(--text-strong)]">Editar medida</h2>
+                    </div>
+                    <button onClick={onClose} className="flex h-10 w-10 items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-muted)] shadow-[var(--shadow-hairline)] transition-colors hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)]">
                         <i className="fas fa-times text-xl"></i>
                     </button>
                 </div>
             </header>
 
-            <main className="flex-grow overflow-y-auto p-4 bg-slate-50 dark:bg-slate-900">
-                <fieldset disabled={isSaving} className="max-w-xl mx-auto space-y-4 pb-24">
+            <main className="flex-grow overflow-y-auto bg-[var(--app-bg)] p-4">
+                <fieldset disabled={isSaving} className="mx-auto max-w-2xl space-y-4 pb-24">
 
                     {/* Seção 1: Medidas */}
                     <Accordion title="Medidas e Quantidade" defaultOpen={true}>
@@ -453,13 +457,13 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
             </main>
 
             {!isLocationFormOpen && (
-                <footer className="flex-shrink-0 p-3 border-t border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm fixed bottom-0 left-0 right-0 z-30">
-                    <div className="max-w-xl mx-auto flex items-center justify-between gap-2 sm:gap-3">
-                        <button onClick={handleDeleteClick} className="px-4 py-2.5 text-sm font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors flex-1 text-center">Excluir</button>
+                <footer className="fixed bottom-0 left-0 right-0 z-30 flex-shrink-0 border-t border-[var(--border-subtle)] bg-[color-mix(in_srgb,var(--app-bg)_88%,transparent)] p-3 backdrop-blur-md">
+                    <div className="mx-auto flex max-w-2xl items-center justify-between gap-2 sm:gap-3">
+                        <button onClick={handleDeleteClick} className="flex-1 rounded-[var(--radius-control)] bg-red-50 px-4 py-2.5 text-center text-sm font-semibold text-red-600 transition-colors hover:bg-red-100">Excluir</button>
                         <button
                             onClick={handleSave}
                             disabled={isSaving || isSavingToGlobal}
-                            className="px-4 py-2.5 text-sm font-semibold text-white bg-slate-800 dark:bg-slate-700 hover:bg-slate-700 dark:hover:bg-slate-600 rounded-lg transition-colors flex-1 text-center disabled:opacity-70 disabled:cursor-wait flex items-center justify-center gap-2"
+                            className="flex flex-1 items-center justify-center gap-2 rounded-[var(--radius-control)] bg-slate-950 px-4 py-2.5 text-center text-sm font-semibold text-white transition-colors hover:bg-slate-800 disabled:cursor-wait disabled:opacity-70 dark:bg-slate-100 dark:text-slate-950 dark:hover:bg-white"
                         >
                             {isSaving || isSavingToGlobal ? (
                                 <><i className="fas fa-spinner fa-spin"></i> Salvando...</>

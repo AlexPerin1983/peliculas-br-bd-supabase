@@ -6,10 +6,73 @@
 // 2. Tenta sincronizar com Supabase em background
 // 3. Carrega do Supabase quando online, do local quando offline
 
-import { Client, Measurement, UserInfo, Film, PaymentMethods, SavedPDF, Agendamento, ProposalOption } from '../types';
+import { Client, Measurement, UserInfo, Film, PaymentMethods, SavedPDF, Agendamento, ProposalOption, StandaloneExpense } from '../types';
 import * as supabaseDb from './supabaseDb';
 import * as offlineDb from './offlineDb';
 import { isOnlineNow, syncAllPending } from './syncService';
+
+const POSTGRES_INTEGER_MAX = 2147483647;
+
+const isPersistedIntegerId = (value: unknown): value is number => (
+    typeof value === 'number'
+    && Number.isInteger(value)
+    && value > 0
+    && value <= POSTGRES_INTEGER_MAX
+);
+
+const getTemporaryPublicIdFromLocalId = (localId?: string): number | undefined => {
+    if (!localId) return undefined;
+
+    const timestamp = parseInt(localId.split('_')[1] || '', 10);
+    return Number.isFinite(timestamp) ? -Math.abs(timestamp) : undefined;
+};
+
+const getPublicClientId = (localClient: offlineDb.LocalClient): number | undefined => {
+    if (isPersistedIntegerId(localClient._remoteId)) {
+        return localClient._remoteId;
+    }
+
+    if (isPersistedIntegerId(localClient.id)) {
+        return localClient.id;
+    }
+
+    return getTemporaryPublicIdFromLocalId(localClient._localId);
+};
+
+const stripUserInfoSyncMetadata = (localUserInfo: offlineDb.LocalUserInfo): UserInfo => {
+    const { _localId, _syncStatus, _lastModified, _syncedAt, _remoteId, ...userInfo } = localUserInfo;
+    return userInfo;
+};
+
+const cacheUserInfoLocally = async (userInfo: UserInfo, localId: string = 'current_user') => {
+    if (userInfo.isFallback) {
+        return;
+    }
+
+    await offlineDb.offlineDb.userInfo.put({
+        ...userInfo,
+        _localId: localId,
+        _syncStatus: 'synced',
+        _lastModified: Date.now()
+    });
+};
+
+const patchUserInfoLocally = async (patch: Partial<Pick<UserInfo, 'payment_methods' | 'aiConfig' | 'lastSelectedClientId'>>): Promise<UserInfo | null> => {
+    const localUserInfo = await offlineDb.getUserInfoLocal();
+
+    if (!localUserInfo || localUserInfo.isFallback) {
+        return null;
+    }
+
+    const updatedLocal = {
+        ...localUserInfo,
+        ...patch,
+        isFallback: false
+    };
+
+    await offlineDb.saveUserInfoLocal(updatedLocal);
+    return stripUserInfoSyncMetadata(updatedLocal);
+};
 
 // =====================================================
 // CLIENTES
@@ -52,24 +115,22 @@ export async function getAllClients(): Promise<Client[]> {
             const pendingNotInSupabase = pendingClients
                 .filter(c => {
                     // Se tem _remoteId e já está no Supabase, não incluir (evita duplicata)
-                    if (c._remoteId && supabaseIds.has(c._remoteId as number)) {
+                    const remoteId = isPersistedIntegerId(c._remoteId)
+                        ? c._remoteId
+                        : isPersistedIntegerId(c.id)
+                            ? c.id
+                            : undefined;
+                    if (remoteId && supabaseIds.has(remoteId)) {
                         return false;
                     }
                     // Se tem id do cliente e já está no Supabase, não incluir (evita duplicata de updates)
-                    if (c.id && supabaseIds.has(c.id)) {
-                        return false;
-                    }
                     // Se não tem nenhum dos dois, é um cliente novo não sincronizado
                     return true;
                 })
                 .map(localClient => {
                     const { _localId, _syncStatus, _lastModified, _syncedAt, _remoteId, ...client } = localClient;
                     // Garantir ID consistente
-                    let clientId = _remoteId as number || client.id;
-                    if (!clientId && _localId) {
-                        const parts = _localId.split('_');
-                        clientId = parseInt(parts[1]) || Date.now();
-                    }
+                    const clientId = getPublicClientId(localClient);
                     return { ...client, id: clientId };
                 });
 
@@ -86,11 +147,7 @@ export async function getAllClients(): Promise<Client[]> {
                 const { _localId, _syncStatus, _lastModified, _syncedAt, _remoteId, ...client } = localClient;
 
                 // Garantir ID consistente: usa _remoteId se existe, senão extrai do _localId
-                let clientId = _remoteId as number || client.id;
-                if (!clientId && _localId) {
-                    const parts = _localId.split('_');
-                    clientId = parseInt(parts[1]) || Date.now();
-                }
+                const clientId = getPublicClientId(localClient);
 
                 return { ...client, id: clientId };
             });
@@ -104,11 +161,7 @@ export async function getAllClients(): Promise<Client[]> {
         // Mapear com ID consistente
         return localClients.map(localClient => {
             const { _localId, _syncStatus, _lastModified, _syncedAt, _remoteId, ...client } = localClient;
-            let clientId = _remoteId as number || client.id;
-            if (!clientId && _localId) {
-                const parts = _localId.split('_');
-                clientId = parseInt(parts[1]) || Date.now();
-            }
+            const clientId = getPublicClientId(localClient);
             return { ...client, id: clientId };
         });
     }
@@ -139,8 +192,11 @@ export async function saveClient(client: Omit<Client, 'id'> | Client): Promise<C
 
     // Gerar ID temporário baseado no _localId para consistência
     // Extrai o timestamp do _localId (formato: local_TIMESTAMP_RANDOM)
-    const localIdParts = localClient._localId?.split('_') || [];
-    const tempId = localClient._remoteId as number || localClient.id || parseInt(localIdParts[1]) || Date.now();
+    const tempId = getPublicClientId(localClient) ?? -Date.now();
+
+    if (!isPersistedIntegerId(localClient.id) && localClient._localId) {
+        await offlineDb.offlineDb.clients.update(localClient._localId, { id: tempId });
+    }
 
     return {
         ...client,
@@ -193,7 +249,7 @@ export async function getAllCustomFilms(): Promise<Film[]> {
             // Isso garante que edições apareçam imediatamente na UI
             const pendingFilmNames = new Set(pendingFilms.map(f => f.nome));
 
-            // Filmes do Supabase que NÃO foram editados localmente
+            // Filmes do Supabase que N?O foram editados localmente
             const supabaseFilmsNotEdited = supabaseFilms.filter(f => !pendingFilmNames.has(f.nome));
 
             // Converter filmes pendentes para o formato correto
@@ -241,13 +297,12 @@ export async function deleteCustomFilm(filmName: string): Promise<void> {
 
 export async function getUserInfo(): Promise<UserInfo | null> {
     try {
-        // 1. Tentar carregar do cache local primeiro (instantâneo)
+        // 1. Tentar carregar do cache local primeiro (instant?neo)
         const localUserInfo = await offlineDb.getUserInfoLocal();
         let result: UserInfo | null = null;
 
         if (localUserInfo) {
-            const { _localId, _syncStatus, _lastModified, _syncedAt, _remoteId, ...userInfo } = localUserInfo;
-            result = userInfo;
+            result = stripUserInfoSyncMetadata(localUserInfo);
         }
 
         // 2. Se estiver online, atualizar em background ou se não tiver local
@@ -256,12 +311,7 @@ export async function getUserInfo(): Promise<UserInfo | null> {
                 // Se não tem local, precisamos esperar o Supabase
                 const userInfo = await supabaseDb.getUserInfo();
                 if (userInfo) {
-                    await offlineDb.offlineDb.userInfo.put({
-                        ...userInfo,
-                        _localId: 'current_user',
-                        _syncStatus: 'synced',
-                        _lastModified: Date.now()
-                    });
+                    await cacheUserInfoLocally(userInfo);
                 }
                 return userInfo;
             } else {
@@ -271,13 +321,8 @@ export async function getUserInfo(): Promise<UserInfo | null> {
                     supabaseDb.getUserInfo().then(async (userInfo) => {
                         // Só atualiza se o dado remoto for válido e diferente do mock inicial
                         // para evitar "resetar" os dados do usuário para o mock por erro de rede
-                        if (userInfo && userInfo.nome !== 'Empresa Exemplo') {
-                            await offlineDb.offlineDb.userInfo.put({
-                                ...userInfo,
-                                _localId: localUserInfo._localId || 'current_user',
-                                _syncStatus: 'synced',
-                                _lastModified: Date.now()
-                            });
+                        if (userInfo) {
+                            await cacheUserInfoLocally(userInfo, localUserInfo._localId || 'current_user');
                         }
                     }).catch(err => console.error('[OfflineFirst] Erro ao atualizar userInfo em background:', err));
                 }
@@ -291,15 +336,14 @@ export async function getUserInfo(): Promise<UserInfo | null> {
         console.error('[OfflineFirst] Erro ao buscar userInfo, usando cache local:', error);
         const localUserInfo = await offlineDb.getUserInfoLocal();
         if (localUserInfo) {
-            const { _localId, _syncStatus, _lastModified, _syncedAt, _remoteId, ...userInfo } = localUserInfo;
-            return userInfo;
+            return stripUserInfoSyncMetadata(localUserInfo);
         }
         return null;
     }
 }
 
 export async function saveUserInfo(userInfo: UserInfo): Promise<void> {
-    await offlineDb.saveUserInfoLocal(userInfo);
+    await offlineDb.saveUserInfoLocal({ ...userInfo, isFallback: false });
 
     if (isOnlineNow()) {
         syncAllPending().catch(console.error);
@@ -312,35 +356,51 @@ export async function updatePaymentMethodsOnly(paymentMethods: any[]): Promise<U
     try {
         if (isOnlineNow()) {
             // Atualiza apenas payment_methods no banco
-            await supabaseDb.updatePaymentMethodsOnly(paymentMethods);
-
-            // Recarrega o userInfo completo e atualizado do banco
-            const updatedUserInfo = await supabaseDb.getUserInfo();
-
-            // Atualiza o cache local com os dados mais recentes
+            const updatedUserInfo = await supabaseDb.updatePaymentMethodsOnly(paymentMethods);
             if (updatedUserInfo) {
-                await offlineDb.offlineDb.userInfo.put({
-                    ...updatedUserInfo,
-                    _localId: 'current_user',
-                    _syncStatus: 'synced',
-                    _lastModified: Date.now()
-                });
+                await cacheUserInfoLocally(updatedUserInfo);
             }
 
             return updatedUserInfo;
         } else {
-            // Offline: atualiza localmente
-            const localUserInfo = await offlineDb.getUserInfoLocal();
-            if (localUserInfo) {
-                const updatedLocal = { ...localUserInfo, payment_methods: paymentMethods };
-                await offlineDb.saveUserInfoLocal(updatedLocal);
-                const { _localId, _syncStatus, _lastModified, _syncedAt, _remoteId, ...userInfo } = updatedLocal;
-                return userInfo;
-            }
-            return null;
+            return await patchUserInfoLocally({ payment_methods: paymentMethods });
         }
     } catch (error) {
         console.error('[OfflineFirst] Erro ao atualizar payment_methods:', error);
+        throw error;
+    }
+}
+
+export async function updateAIConfigOnly(aiConfig: UserInfo['aiConfig']): Promise<UserInfo | null> {
+    try {
+        if (isOnlineNow()) {
+            const updatedUserInfo = await supabaseDb.updateAIConfigOnly(aiConfig);
+            if (updatedUserInfo) {
+                await cacheUserInfoLocally(updatedUserInfo);
+            }
+            return updatedUserInfo;
+        }
+
+        return await patchUserInfoLocally({ aiConfig });
+    } catch (error) {
+        console.error('[OfflineFirst] Erro ao atualizar aiConfig:', error);
+        throw error;
+    }
+}
+
+export async function updateLastSelectedClientIdOnly(lastSelectedClientId: UserInfo['lastSelectedClientId']): Promise<UserInfo | null> {
+    try {
+        if (isOnlineNow()) {
+            const updatedUserInfo = await supabaseDb.updateLastSelectedClientIdOnly(lastSelectedClientId);
+            if (updatedUserInfo) {
+                await cacheUserInfoLocally(updatedUserInfo);
+            }
+            return updatedUserInfo;
+        }
+
+        return await patchUserInfoLocally({ lastSelectedClientId });
+    } catch (error) {
+        console.error('[OfflineFirst] Erro ao atualizar lastSelectedClientId:', error);
         throw error;
     }
 }
@@ -351,24 +411,26 @@ export async function updatePaymentMethodsOnly(paymentMethods: any[]): Promise<U
 
 export async function getProposalOptions(clientId: number): Promise<ProposalOption[]> {
     try {
+        const localOptions = await offlineDb.getProposalOptionsLocal(clientId);
+        const normalizedLocalOptions = localOptions.map(({ _localId, _syncStatus, _lastModified, _syncedAt, _remoteId, clientId: cId, ...option }) => option);
+
         if (isOnlineNow()) {
+            const hasUnsyncedLocalChanges = localOptions.some(option =>
+                option._syncStatus === 'pending' || option._syncStatus === 'error'
+            );
+
+            if (hasUnsyncedLocalChanges) {
+                syncAllPending().catch(err => console.error('[OfflineFirst] Erro ao sincronizar proposal options pendentes:', err));
+                return normalizedLocalOptions;
+            }
+
             const options = await supabaseDb.getProposalOptions(clientId);
 
-            // Atualizar cache local
-            for (const option of options) {
-                await offlineDb.offlineDb.proposalOptions.put({
-                    ...option,
-                    clientId,
-                    _localId: `remote_${option.id}`,
-                    _syncStatus: 'synced',
-                    _lastModified: Date.now()
-                });
-            }
+            await offlineDb.replaceProposalOptionsCache(clientId, options, 'synced');
 
             return options;
         } else {
-            const localOptions = await offlineDb.getProposalOptionsLocal(clientId);
-            return localOptions.map(({ _localId, _syncStatus, _lastModified, _syncedAt, _remoteId, clientId: cId, ...option }) => option);
+            return normalizedLocalOptions;
         }
     } catch (error) {
         console.error('[OfflineFirst] Erro ao buscar proposal options, usando cache local:', error);
@@ -401,33 +463,67 @@ export async function deleteProposalOptions(clientId: number): Promise<void> {
 // PDFs
 // =====================================================
 
+const getPublicPdfId = (localPdf: offlineDb.LocalSavedPDF): number | undefined => {
+    const remoteId = localPdf._remoteId;
+    if (isPersistedIntegerId(remoteId)) {
+        return remoteId;
+    }
+
+    if (isPersistedIntegerId(localPdf.id)) {
+        return localPdf.id;
+    }
+
+    return getTemporaryPublicIdFromLocalId(localPdf._localId);
+};
+
+const stripPdfSyncMetadata = (localPdf: offlineDb.LocalSavedPDF): SavedPDF => {
+    const { _localId, _syncStatus, _lastModified, _syncedAt, _remoteId, ...pdf } = localPdf;
+    return { ...pdf, id: getPublicPdfId(localPdf) };
+};
+
+const sortPdfsByDateDesc = (pdfs: SavedPDF[]): SavedPDF[] => (
+    [...pdfs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+);
+
+const mergeUnsyncedLocalPdfs = (remotePdfs: SavedPDF[], localPdfs: offlineDb.LocalSavedPDF[]): SavedPDF[] => {
+    const unsyncedLocalPdfs = localPdfs.filter(pdf => (
+        pdf._syncStatus === 'pending' || pdf._syncStatus === 'error'
+    ));
+
+    if (unsyncedLocalPdfs.length === 0) {
+        return remotePdfs;
+    }
+
+    const localPublicPdfs = unsyncedLocalPdfs.map(stripPdfSyncMetadata);
+    const locallyChangedRemoteIds = new Set(
+        unsyncedLocalPdfs
+            .map(pdf => typeof pdf._remoteId === 'number' ? pdf._remoteId : pdf.id)
+            .filter(isPersistedIntegerId)
+    );
+
+    const remotePdfsWithoutLocalChanges = remotePdfs.filter(pdf => (
+        !pdf.id || !locallyChangedRemoteIds.has(pdf.id)
+    ));
+
+    syncAllPending().catch(err => console.error('[OfflineFirst] Erro ao sincronizar PDFs pendentes:', err));
+
+    return sortPdfsByDateDesc([...localPublicPdfs, ...remotePdfsWithoutLocalChanges]);
+};
+
 export async function getAllPDFs(): Promise<SavedPDF[]> {
     try {
         if (isOnlineNow()) {
-            return await supabaseDb.getAllPDFs();
-        } else {
+            const remotePdfs = await supabaseDb.getAllPDFs();
             const localPdfs = await offlineDb.getAllPdfsLocal();
-            // Garantir que cada PDF tenha um ID (necessário para seleção na UI)
-            return localPdfs.map(({ _localId, _syncStatus, _lastModified, _syncedAt, _remoteId, ...pdf }) => {
-                // Se não tem ID, gera um ID temporário negativo baseado no _localId
-                let finalId = _remoteId as number || pdf.id;
-                if (!finalId && _localId) {
-                    const timestamp = parseInt(_localId.split('_')[1] || String(Date.now()));
-                    finalId = -timestamp;
-                }
-                return { ...pdf, id: finalId };
-            });
+            return mergeUnsyncedLocalPdfs(remotePdfs, localPdfs);
         }
+
+        const localPdfs = await offlineDb.getAllPdfsLocal();
+        // Garantir que cada PDF tenha um ID (necessário para seleção na UI)
+        return localPdfs.map(stripPdfSyncMetadata);
     } catch (error) {
         const localPdfs = await offlineDb.getAllPdfsLocal();
-        return localPdfs.map(({ _localId, _syncStatus, _lastModified, _syncedAt, _remoteId, ...pdf }) => {
-            let finalId = _remoteId as number || pdf.id;
-            if (!finalId && _localId) {
-                const timestamp = parseInt(_localId.split('_')[1] || String(Date.now()));
-                finalId = -timestamp;
-            }
-            return { ...pdf, id: finalId };
-        });
+        return localPdfs.map(stripPdfSyncMetadata);
     }
 }
 
@@ -440,11 +536,14 @@ export async function savePDF(pdf: SavedPDF): Promise<SavedPDF> {
 
     // Garantir que o PDF retornado tenha um ID (necessário para seleção na UI)
     // Usa _remoteId, ou pdf.id original, ou gera um ID temporário baseado no timestamp do _localId
-    let finalId = localPdf._remoteId as number || pdf.id;
+    let finalId = isPersistedIntegerId(localPdf._remoteId)
+        ? localPdf._remoteId
+        : isPersistedIntegerId(pdf.id)
+            ? pdf.id
+            : undefined;
     if (!finalId && localPdf._localId) {
         // Gera um ID temporário negativo (para diferenciar de IDs reais que são positivos)
-        const timestamp = parseInt(localPdf._localId.split('_')[1] || String(Date.now()));
-        finalId = -timestamp; // ID negativo para identificar como local
+        finalId = getTemporaryPublicIdFromLocalId(localPdf._localId) ?? -Date.now();
     }
 
     return { ...pdf, id: finalId };
@@ -486,31 +585,194 @@ export async function deletePDF(pdfId: number): Promise<void> {
 }
 
 // =====================================================
+// DESPESAS AVULSAS
+// =====================================================
+
+const stripStandaloneExpenseSyncMetadata = (localExpense: offlineDb.LocalStandaloneExpense): StandaloneExpense => {
+    const { _localId, _syncStatus, _lastModified, _syncedAt, _remoteId, ...expense } = localExpense;
+    const publicId = isPersistedIntegerId(_remoteId)
+        ? _remoteId
+        : isPersistedIntegerId(expense.id)
+            ? expense.id
+            : getTemporaryPublicIdFromLocalId(_localId);
+    return { ...expense, id: publicId };
+};
+
+export async function getAllStandaloneExpenses(): Promise<StandaloneExpense[]> {
+    try {
+        const localExpenses = await offlineDb.getAllStandaloneExpensesLocal();
+        const pendingExpenses = localExpenses.filter(expense => expense._syncStatus === 'pending');
+
+        if (isOnlineNow()) {
+            if (pendingExpenses.length > 0) {
+                syncAllPending().catch(err => console.error('[OfflineFirst] Erro na sincronizacao de despesas:', err));
+            }
+
+            const remoteExpenses = await supabaseDb.getAllStandaloneExpenses();
+            const now = Date.now();
+            const remoteExpensesToCache = remoteExpenses.map(expense => ({
+                ...expense,
+                _localId: `remote_expense_${expense.id}`,
+                _syncStatus: 'synced' as const,
+                _lastModified: now,
+                _syncedAt: now,
+                _remoteId: expense.id
+            }));
+
+            if (remoteExpensesToCache.length > 0) {
+                await offlineDb.offlineDb.standaloneExpenses.bulkPut(remoteExpensesToCache);
+            }
+
+            const remoteIds = new Set(remoteExpenses.map(expense => expense.id).filter(Boolean));
+            const pendingNotInRemote = pendingExpenses
+                .filter(expense => {
+                    const remoteId = isPersistedIntegerId(expense._remoteId)
+                        ? expense._remoteId
+                        : isPersistedIntegerId(expense.id)
+                            ? expense.id
+                            : undefined;
+                    return !remoteId || !remoteIds.has(remoteId);
+                })
+                .map(stripStandaloneExpenseSyncMetadata);
+
+            return [...remoteExpenses, ...pendingNotInRemote].sort((a, b) =>
+                (new Date(b.date).getTime() || 0) - (new Date(a.date).getTime() || 0)
+            );
+        }
+
+        return localExpenses.map(stripStandaloneExpenseSyncMetadata);
+    } catch (error) {
+        console.error('[OfflineFirst] Erro ao buscar despesas avulsas, usando cache local:', error);
+        const localExpenses = await offlineDb.getAllStandaloneExpensesLocal();
+        return localExpenses.map(stripStandaloneExpenseSyncMetadata);
+    }
+}
+
+export async function saveStandaloneExpense(expense: StandaloneExpense): Promise<StandaloneExpense> {
+    if (isOnlineNow()) {
+        try {
+            const savedExpense = await supabaseDb.saveStandaloneExpense(expense);
+            await offlineDb.offlineDb.standaloneExpenses.put({
+                ...savedExpense,
+                _localId: `remote_expense_${savedExpense.id}`,
+                _syncStatus: 'synced',
+                _lastModified: Date.now(),
+                _syncedAt: Date.now(),
+                _remoteId: savedExpense.id
+            });
+            return savedExpense;
+        } catch (error) {
+            console.error('[OfflineFirst] Erro ao salvar despesa no Supabase, salvando localmente:', error);
+        }
+    }
+
+    const localExpense = await offlineDb.saveStandaloneExpenseLocal(expense);
+    const tempId = isPersistedIntegerId(localExpense._remoteId)
+        ? localExpense._remoteId
+        : isPersistedIntegerId(localExpense.id)
+            ? localExpense.id
+            : getTemporaryPublicIdFromLocalId(localExpense._localId) ?? -Date.now();
+
+    if (!localExpense.id && localExpense._localId) {
+        await offlineDb.offlineDb.standaloneExpenses.update(localExpense._localId, { id: tempId });
+    }
+
+    return {
+        ...stripStandaloneExpenseSyncMetadata(localExpense),
+        id: tempId
+    };
+}
+
+export async function deleteStandaloneExpense(expenseId: number): Promise<void> {
+    await offlineDb.deleteStandaloneExpenseLocal(expenseId);
+
+    if (isOnlineNow()) {
+        syncAllPending().catch(console.error);
+    }
+}
+
+// =====================================================
 // AGENDAMENTOS
 // =====================================================
 
+const stripAgendamentoSyncMetadata = (localAgendamento: offlineDb.LocalAgendamento): Agendamento => {
+    const { _localId, _syncStatus, _lastModified, _syncedAt, _remoteId, ...agendamento } = localAgendamento;
+    const publicId = isPersistedIntegerId(_remoteId)
+        ? _remoteId
+        : isPersistedIntegerId(agendamento.id)
+            ? agendamento.id
+            : getTemporaryPublicIdFromLocalId(_localId);
+    return { ...agendamento, id: publicId };
+};
+
 export async function getAllAgendamentos(): Promise<Agendamento[]> {
     try {
+        const localAgendamentos = await offlineDb.getAllAgendamentosLocal();
+        const pendingAgendamentos = localAgendamentos.filter(agendamento => agendamento._syncStatus === 'pending');
+
         if (isOnlineNow()) {
-            return await supabaseDb.getAllAgendamentos();
-        } else {
-            const localAgendamentos = await offlineDb.getAllAgendamentosLocal();
-            return localAgendamentos.map(({ _localId, _syncStatus, _lastModified, _syncedAt, _remoteId, ...agendamento }) => agendamento);
+            if (pendingAgendamentos.length > 0) {
+                syncAllPending().catch(err => console.error('[OfflineFirst] Erro na sincronizacao de agendamentos:', err));
+            }
+
+            const remoteAgendamentos = await supabaseDb.getAllAgendamentos();
+            const remoteIds = new Set(remoteAgendamentos.map(agendamento => agendamento.id).filter(Boolean));
+            const pendingNotInRemote = pendingAgendamentos
+                .filter(agendamento => {
+                    const remoteId = isPersistedIntegerId(agendamento._remoteId)
+                        ? agendamento._remoteId
+                        : isPersistedIntegerId(agendamento.id)
+                            ? agendamento.id
+                            : undefined;
+                    return !remoteId || !remoteIds.has(remoteId);
+                })
+                .map(stripAgendamentoSyncMetadata);
+
+            return [...remoteAgendamentos, ...pendingNotInRemote];
         }
+
+        return localAgendamentos.map(stripAgendamentoSyncMetadata);
     } catch (error) {
         const localAgendamentos = await offlineDb.getAllAgendamentosLocal();
-        return localAgendamentos.map(({ _localId, _syncStatus, _lastModified, _syncedAt, _remoteId, ...agendamento }) => agendamento);
+        return localAgendamentos.map(stripAgendamentoSyncMetadata);
     }
 }
 
 export async function saveAgendamento(agendamento: Agendamento): Promise<Agendamento> {
+    if (isOnlineNow()) {
+        try {
+            const savedAgendamento = await supabaseDb.saveAgendamento(agendamento);
+            await offlineDb.offlineDb.agendamentos.put({
+                ...savedAgendamento,
+                _localId: `remote_agendamento_${savedAgendamento.id}`,
+                _syncStatus: 'synced',
+                _lastModified: Date.now(),
+                _syncedAt: Date.now(),
+                _remoteId: savedAgendamento.id
+            });
+            return savedAgendamento;
+        } catch (error) {
+            console.error('[OfflineFirst] Erro ao salvar agendamento no Supabase, salvando localmente:', error);
+        }
+    }
+
     const localAgendamento = await offlineDb.saveAgendamentoLocal(agendamento);
 
     if (isOnlineNow()) {
         syncAllPending().catch(console.error);
     }
 
-    return { ...agendamento, id: localAgendamento._remoteId as number || agendamento.id };
+    const tempId = isPersistedIntegerId(localAgendamento._remoteId)
+        ? localAgendamento._remoteId
+        : isPersistedIntegerId(agendamento.id)
+            ? agendamento.id
+            : getTemporaryPublicIdFromLocalId(localAgendamento._localId) ?? -Date.now();
+
+    if (!localAgendamento.id && localAgendamento._localId) {
+        await offlineDb.offlineDb.agendamentos.update(localAgendamento._localId, { id: tempId });
+    }
+
+    return { ...agendamento, id: tempId };
 }
 
 export async function deleteAgendamento(agendamentoId: number): Promise<void> {
@@ -543,7 +805,7 @@ export async function deleteMeasurements(clientId: number): Promise<void> {
 }
 
 // =====================================================
-// MIGRAÇÃO
+// MIGRA??O
 // =====================================================
 
 export async function migratePDFsWithProposalOptionId(): Promise<{ updated: number; skipped: number; errors: number }> {

@@ -13,10 +13,11 @@ export const supabase = createClient(
     supabaseAnonKey,
     {
         auth: {
-            persistSession: true,      // Persiste a sessão no localStorage
-            autoRefreshToken: true,    // Auto-refresh do token antes de expirar
-            detectSessionInUrl: true,  // Detecta sessão na URL (para OAuth)
-            storageKey: 'peliculas-br-bd-auth', // Chave única para este projeto (v2)
+            persistSession: true,
+            autoRefreshToken: true,
+            detectSessionInUrl: true,
+            // Nova storage key para invalidar tokens locais gerados antes da rotacao das chaves.
+            storageKey: 'peliculas-br-bd-auth-v4',
         }
     }
 );

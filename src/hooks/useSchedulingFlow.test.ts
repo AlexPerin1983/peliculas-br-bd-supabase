@@ -162,7 +162,7 @@ describe('useSchedulingFlow', () => {
       })
     ).rejects.toThrow('falha ao salvar');
 
-    expect(handleShowInfo).toHaveBeenCalledWith('Nao foi possivel salvar o agendamento. Tente novamente.');
+    expect(handleShowInfo).toHaveBeenCalledWith('Não foi possível salvar o agendamento. Tente novamente.');
   });
 
   it('informa erro quando excluir agendamento falha e limpa selecao', async () => {
@@ -182,7 +182,7 @@ describe('useSchedulingFlow', () => {
       await result.current.handleConfirmDeleteAgendamento();
     });
 
-    expect(handleShowInfo).toHaveBeenCalledWith('Nao foi possivel excluir o agendamento. Tente novamente.');
+    expect(handleShowInfo).toHaveBeenCalledWith('Não foi possível excluir o agendamento. Tente novamente.');
     expect(setAgendamentoToDelete).toHaveBeenCalledWith(null);
   });
 });

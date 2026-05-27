@@ -1,10 +1,31 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Bobina, Retalho } from '../../types';
+
+const ESTOQUE_VIEW_MODE_STORAGE_KEY = 'estoque-view-mode';
+
+const getInitialViewMode = (): 'grid' | 'list' => {
+    if (typeof window === 'undefined') return 'list';
+
+    const storedViewMode = window.localStorage.getItem(ESTOQUE_VIEW_MODE_STORAGE_KEY);
+    if (storedViewMode === 'grid' || storedViewMode === 'list') {
+        return storedViewMode;
+    }
+
+    return window.matchMedia('(min-width: 1024px)').matches ? 'grid' : 'list';
+};
 
 export function useEstoqueFilters(bobinas: Bobina[], retalhos: Retalho[]) {
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>('todos');
-    const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+    const [viewMode, setViewModeState] = useState<'grid' | 'list'>(getInitialViewMode);
+
+    const setViewMode = useCallback((mode: 'grid' | 'list') => {
+        setViewModeState(mode);
+
+        if (typeof window !== 'undefined') {
+            window.localStorage.setItem(ESTOQUE_VIEW_MODE_STORAGE_KEY, mode);
+        }
+    }, []);
 
     const filteredBobinas = useMemo(() => {
         return bobinas.filter(b => {

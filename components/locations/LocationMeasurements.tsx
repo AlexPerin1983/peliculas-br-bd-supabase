@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Location, LocationMeasurement } from '../../types';
 import { locationService } from '../../services/locationService';
 import { useError } from '../../src/contexts/ErrorContext';
+import { useFeedback } from '../../src/contexts/FeedbackContext';
 
 interface LocationMeasurementsProps {
     location: Location;
@@ -10,6 +11,7 @@ interface LocationMeasurementsProps {
 
 const LocationMeasurements: React.FC<LocationMeasurementsProps> = ({ location, onBack }) => {
     const { showError } = useError();
+    const { confirm } = useFeedback();
     const [measurements, setMeasurements] = useState<LocationMeasurement[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [editingId, setEditingId] = useState<number | null>(null);
@@ -34,7 +36,7 @@ const LocationMeasurements: React.FC<LocationMeasurementsProps> = ({ location, o
     }, [loadMeasurements]);
 
     const handleAddNew = () => {
-        setEditingId(-1); // -1 indicates new item
+        setEditingId(-1);
         setEditForm({
             name: '',
             largura: '',
@@ -77,7 +79,16 @@ const LocationMeasurements: React.FC<LocationMeasurementsProps> = ({ location, o
     };
 
     const handleDelete = async (id: number) => {
-        if (!window.confirm('Tem certeza que deseja excluir esta medida?')) return;
+        const confirmed = await confirm({
+            title: 'Excluir medida',
+            message: 'Tem certeza que deseja excluir esta medida?',
+            confirmButtonText: 'Sim, excluir',
+            confirmButtonVariant: 'danger',
+            presentation: 'auto'
+        });
+
+        if (!confirmed) return;
+
         try {
             await locationService.deleteMeasurement(id);
             loadMeasurements();
@@ -95,26 +106,19 @@ const LocationMeasurements: React.FC<LocationMeasurementsProps> = ({ location, o
     return (
         <div className="space-y-6">
             <div className="flex items-center gap-4">
-                <button
-                    onClick={onBack}
-                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full text-gray-600 dark:text-gray-300"
-                >
+                <button onClick={onBack} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full text-gray-600 dark:text-gray-300">
                     <i className="fas fa-arrow-left text-xl"></i>
                 </button>
                 <div>
                     <h2 className="text-xl font-bold text-gray-900 dark:text-white">{location.name}</h2>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Gerenciar Medidas Padrão</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Gerenciar Medidas Padrao</p>
                 </div>
             </div>
 
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
                 <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900/50">
                     <h3 className="font-medium text-gray-700 dark:text-gray-300">Lista de Medidas</h3>
-                    <button
-                        onClick={handleAddNew}
-                        disabled={editingId !== null}
-                        className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50"
-                    >
+                    <button onClick={handleAddNew} disabled={editingId !== null} className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50">
                         <i className="fas fa-plus"></i>
                         Adicionar
                     </button>
@@ -128,58 +132,19 @@ const LocationMeasurements: React.FC<LocationMeasurementsProps> = ({ location, o
                                 <th className="px-4 py-3 font-medium w-24">Largura</th>
                                 <th className="px-4 py-3 font-medium w-24">Altura</th>
                                 <th className="px-4 py-3 font-medium w-16">Qtd</th>
-                                <th className="px-4 py-3 font-medium w-24">Ações</th>
+                                <th className="px-4 py-3 font-medium w-24">Acoes</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                             {editingId === -1 && (
                                 <tr className="bg-blue-50 dark:bg-blue-900/20">
                                     <td className="px-4 py-3">
-                                        <input
-                                            type="text"
-                                            name="name"
-                                            value={editForm.name || ''}
-                                            onChange={handleChange}
-                                            placeholder="Nome (ex: Sala)"
-                                            className="w-full p-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
-                                            autoFocus
-                                        />
-                                        <input
-                                            type="text"
-                                            name="ambiente"
-                                            value={editForm.ambiente || ''}
-                                            onChange={handleChange}
-                                            placeholder="Ambiente"
-                                            className="w-full p-1 mt-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-xs"
-                                        />
+                                        <input type="text" name="name" value={editForm.name || ''} onChange={handleChange} placeholder="Nome (ex: Sala)" className="w-full p-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800" autoFocus />
+                                        <input type="text" name="ambiente" value={editForm.ambiente || ''} onChange={handleChange} placeholder="Ambiente" className="w-full p-1 mt-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-xs" />
                                     </td>
-                                    <td className="px-4 py-3">
-                                        <input
-                                            type="text"
-                                            name="largura"
-                                            value={editForm.largura || ''}
-                                            onChange={handleChange}
-                                            className="w-full p-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
-                                        />
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        <input
-                                            type="text"
-                                            name="altura"
-                                            value={editForm.altura || ''}
-                                            onChange={handleChange}
-                                            className="w-full p-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
-                                        />
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        <input
-                                            type="number"
-                                            name="quantidade"
-                                            value={editForm.quantidade || 1}
-                                            onChange={handleChange}
-                                            className="w-full p-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
-                                        />
-                                    </td>
+                                    <td className="px-4 py-3"><input type="text" name="largura" value={editForm.largura || ''} onChange={handleChange} className="w-full p-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800" /></td>
+                                    <td className="px-4 py-3"><input type="text" name="altura" value={editForm.altura || ''} onChange={handleChange} className="w-full p-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800" /></td>
+                                    <td className="px-4 py-3"><input type="number" name="quantidade" value={editForm.quantidade || 1} onChange={handleChange} className="w-full p-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800" /></td>
                                     <td className="px-4 py-3">
                                         <div className="flex gap-2">
                                             <button onClick={handleSave} className="text-green-600 hover:bg-green-100 p-1 rounded"><i className="fas fa-save"></i></button>
@@ -194,48 +159,12 @@ const LocationMeasurements: React.FC<LocationMeasurementsProps> = ({ location, o
                                     {editingId === m.id ? (
                                         <>
                                             <td className="px-4 py-3">
-                                                <input
-                                                    type="text"
-                                                    name="name"
-                                                    value={editForm.name || ''}
-                                                    onChange={handleChange}
-                                                    className="w-full p-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
-                                                />
-                                                <input
-                                                    type="text"
-                                                    name="ambiente"
-                                                    value={editForm.ambiente || ''}
-                                                    onChange={handleChange}
-                                                    className="w-full p-1 mt-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-xs"
-                                                />
+                                                <input type="text" name="name" value={editForm.name || ''} onChange={handleChange} className="w-full p-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800" />
+                                                <input type="text" name="ambiente" value={editForm.ambiente || ''} onChange={handleChange} className="w-full p-1 mt-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-xs" />
                                             </td>
-                                            <td className="px-4 py-3">
-                                                <input
-                                                    type="text"
-                                                    name="largura"
-                                                    value={editForm.largura || ''}
-                                                    onChange={handleChange}
-                                                    className="w-full p-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
-                                                />
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <input
-                                                    type="text"
-                                                    name="altura"
-                                                    value={editForm.altura || ''}
-                                                    onChange={handleChange}
-                                                    className="w-full p-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
-                                                />
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <input
-                                                    type="number"
-                                                    name="quantidade"
-                                                    value={editForm.quantidade || 1}
-                                                    onChange={handleChange}
-                                                    className="w-full p-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
-                                                />
-                                            </td>
+                                            <td className="px-4 py-3"><input type="text" name="largura" value={editForm.largura || ''} onChange={handleChange} className="w-full p-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800" /></td>
+                                            <td className="px-4 py-3"><input type="text" name="altura" value={editForm.altura || ''} onChange={handleChange} className="w-full p-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800" /></td>
+                                            <td className="px-4 py-3"><input type="number" name="quantidade" value={editForm.quantidade || 1} onChange={handleChange} className="w-full p-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800" /></td>
                                             <td className="px-4 py-3">
                                                 <div className="flex gap-2">
                                                     <button onClick={handleSave} className="text-green-600 hover:bg-green-100 p-1 rounded"><i className="fas fa-save"></i></button>

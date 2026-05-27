@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Bobina, Retalho, Film } from '../../types';
 import {
     getAllBobinas,
@@ -75,7 +75,7 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
         try {
             if (!isInitial) setLoading(true);
 
-            // Se jÃ¡ temos filmes iniciais, nÃ£o precisamos buscar novamente no carregamento inicial
+            // Se já temos filmes iniciais, não precisamos buscar novamente no carregamento inicial
             const shouldFetchFilms = isInitial ? (films.length === 0) : true;
 
             const [bobinasData, retalhosData, statsData, filmsData] = await Promise.all([
@@ -147,47 +147,57 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
         return <EstoqueSkeleton />;
     }
 
+    const activePanel = activeTab === 'bobinas' ? (
+        <EstoqueBobinasPanel
+            viewMode={viewMode}
+            filteredBobinas={filteredBobinas}
+            onShowQR={handleShowQR}
+            onChangeStatus={handleChangeStatus}
+            onDelete={handleDelete}
+            getStatusLabel={getStatusLabel}
+            getStatusColor={getStatusColor}
+        />
+    ) : (
+        <EstoqueRetalhosPanel
+            viewMode={viewMode}
+            filteredRetalhos={filteredRetalhos}
+            onShowQR={handleShowQR}
+            onChangeStatus={handleChangeStatus}
+            onDelete={handleDelete}
+            getStatusLabel={getStatusLabel}
+            getStatusColor={getStatusColor}
+        />
+    );
+
     return (
-        <div className="estoque-view">
-            {stats && <EstoqueStatsBar stats={stats} />}
-
-            <EstoqueTopControls
-                activeTab={activeTab}
-                bobinasCount={bobinas.length}
-                retalhosCount={retalhos.length}
-                onChangeTab={setActiveTab}
-                onAdd={() => setShowAddModal(true)}
-                searchTerm={searchTerm}
-                onSearchChange={setSearchTerm}
-                statusFilter={statusFilter}
-                onStatusFilterChange={setStatusFilter}
-                viewMode={viewMode}
-                onViewModeChange={setViewMode}
-                onScan={() => setShowScannerModal(true)}
-            />
-            {activeTab === 'bobinas' && (
-                <EstoqueBobinasPanel
+        <div className="estoque-view flex flex-col gap-5">
+            <div className="order-1 sm:order-2">
+                <EstoqueTopControls
+                    activeTab={activeTab}
+                    bobinasCount={bobinas.length}
+                    retalhosCount={retalhos.length}
+                    visibleCount={activeTab === 'bobinas' ? filteredBobinas.length : filteredRetalhos.length}
+                    onChangeTab={setActiveTab}
+                    onAdd={() => setShowAddModal(true)}
+                    searchTerm={searchTerm}
+                    onSearchChange={setSearchTerm}
+                    statusFilter={statusFilter}
+                    onStatusFilterChange={setStatusFilter}
                     viewMode={viewMode}
-                    filteredBobinas={filteredBobinas}
-                    onShowQR={handleShowQR}
-                    onChangeStatus={handleChangeStatus}
-                    onDelete={handleDelete}
-                    getStatusLabel={getStatusLabel}
-                    getStatusColor={getStatusColor}
+                    onViewModeChange={setViewMode}
+                    onScan={() => setShowScannerModal(true)}
                 />
-            )}
+            </div>
 
-            {activeTab === 'retalhos' && (
-                <EstoqueRetalhosPanel
-                    viewMode={viewMode}
-                    filteredRetalhos={filteredRetalhos}
-                    onShowQR={handleShowQR}
-                    onChangeStatus={handleChangeStatus}
-                    onDelete={handleDelete}
-                    getStatusLabel={getStatusLabel}
-                    getStatusColor={getStatusColor}
-                />
-            )}
+            <div className="order-2 sm:order-3">
+                {activePanel}
+            </div>
+
+            {stats ? (
+                <div className="order-3 sm:order-1">
+                    <EstoqueStatsBar stats={stats} />
+                </div>
+            ) : null}
 
 
             <EstoqueAddModal
@@ -217,6 +227,8 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
                 setFormBobinaId={setters.setFormBobinaId}
                 formDeduzirDaBobina={form.formDeduzirDaBobina}
                 setFormDeduzirDaBobina={setters.setFormDeduzirDaBobina}
+                formQuantidade={form.formQuantidade}
+                setFormQuantidade={setters.setFormQuantidade}
             />
 
             <EstoqueQrModal
@@ -263,10 +275,10 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
 
             <style>{`
                 .estoque-view {
-                    padding: 1rem;
-                    max-width: 1200px;
+                    padding: 0;
+                    max-width: 1400px;
                     margin: 0 auto;
-                    padding-bottom: 80px;
+                    padding-bottom: 32px;
                 }
 
                 /* Stats Bar - Layout Horizontal Moderno */
@@ -367,7 +379,7 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
                     font-weight: 500;
                 }
 
-                /* Header com Tabs e BotÃ£o */
+                /* Header com Tabs e Botão */
                 .estoque-header {
                     display: flex;
                     align-items: center;
@@ -431,7 +443,7 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
                     background: var(--bg-secondary);
                 }
 
-                /* BotÃ£o Principal Add */
+                /* Botão Principal Add */
                 .btn-add-primary {
                     display: flex;
                     align-items: center;
@@ -512,7 +524,7 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
                     border-color: rgba(59, 130, 246, 0.2);
                 }
 
-                /* === Novo Design: Header em Linha Ãšnica === */
+                /* === Novo Design: Header em Linha Única === */
                 .card-header-row {
                     display: flex;
                     align-items: center;
@@ -576,7 +588,7 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
                     height: 16px;
                 }
 
-                /* LocalizaÃ§Ã£o como linha separada */
+                /* Localização como linha separada */
                 .card-location-row {
                     padding: 0.5rem 1.25rem;
                     font-size: 0.85rem;
@@ -590,7 +602,7 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
                     padding: 1.25rem;
                 }
 
-                /* MÃ©trica Principal */
+                /* Métrica Principal */
                 .main-metric {
                     text-align: center;
                     margin-bottom: 1rem;
@@ -650,7 +662,7 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
                     font-weight: 500;
                 }
 
-                /* Chips de InformaÃ§Ãµes */
+                /* Chips de Informações */
                 .info-chips {
                     display: flex;
                     flex-wrap: wrap;
@@ -680,7 +692,7 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
                     font-weight: 400;
                 }
 
-                /* === Footer com BotÃ£o PrimÃ¡rio === */
+                /* === Footer com Botão Primário === */
                 .card-footer {
                     padding: 1rem 1.25rem;
                     border-top: 1px solid var(--border-color);
@@ -742,7 +754,7 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
                     padding: 1.25rem;
                 }
 
-                /* Grid de MÃ©tricas Redesenhado */
+                /* Grid de Métricas Redesenhado */
                 .info-grid {
                     display: grid;
                     grid-template-columns: repeat(4, 1fr);
@@ -769,7 +781,7 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
                     font-weight: 400;
                 }
 
-                /* Hero Metric - MÃ©trica Principal em Destaque */
+                /* Hero Metric - Métrica Principal em Destaque */
                 .hero-metric {
                     text-align: center;
                     padding: 1rem 0;
@@ -829,7 +841,7 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
                     font-weight: 500;
                 }
 
-                /* MÃ©tricas SecundÃ¡rias em Chips */
+                /* Métricas Secundárias em Chips */
                 .secondary-metrics {
                     display: flex;
                     flex-wrap: wrap;
@@ -1411,7 +1423,7 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
                         padding: 0.875rem;
                     }
                     
-                    /* FAB posiÃ§Ã£o ajustada */
+                    /* FAB posição ajustada */
                     .fab-scan {
                         bottom: 16px;
                         right: 16px;
@@ -1466,7 +1478,7 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
                         height: 18px;
                     }
                     
-                    /* Legacy - grid de mÃ©tricas 2x2 */
+                    /* Legacy - grid de métricas 2x2 */
                     .info-grid {
                         grid-template-columns: repeat(2, 1fr);
                         gap: 0.75rem;
@@ -1503,7 +1515,7 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
                         height: 14px;
                     }
 
-                    /* LocalizaÃ§Ã£o mais compacta */
+                    /* Localização mais compacta */
                     .card-location-row {
                         padding: 0.4rem 1rem;
                         font-size: 0.75rem;
@@ -1514,7 +1526,7 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
                         padding: 1rem;
                     }
 
-                    /* MÃ©trica principal menor */
+                    /* Métrica principal menor */
                     .metric-value {
                         font-size: 1.75rem;
                     }
@@ -1553,7 +1565,7 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
                         font-size: 0.65rem;
                     }
 
-                    /* Footer e botÃ£o primÃ¡rio */
+                    /* Footer e botão primário */
                     .card-footer {
                         padding: 0.75rem 1rem;
                     }

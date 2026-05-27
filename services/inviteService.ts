@@ -208,7 +208,8 @@ export async function sendInviteEmailToUser(
     email: string,
     inviteCode: string,
     inviterName: string,
-    organizationName: string
+    organizationName: string,
+    organizationId: string
 ): Promise<{ success: boolean; error?: string }> {
     try {
 
@@ -217,6 +218,7 @@ export async function sendInviteEmailToUser(
         const result = await sendInviteEmail(email, {
             inviterName,
             organizationName,
+            organizationId,
             inviteLink,
         });
 

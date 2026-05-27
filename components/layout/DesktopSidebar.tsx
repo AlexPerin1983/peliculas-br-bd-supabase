@@ -1,99 +1,249 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+    Boxes,
+    CalendarDays,
+    CircleUserRound,
+    History,
+    Layers3,
+    LayoutDashboard,
+    Loader2,
+    LogOut,
+    LucideIcon,
+    PanelLeftClose,
+    PanelLeftOpen,
+    QrCode,
+    Settings,
+    ShieldUser,
+    Truck,
+    UsersRound
+} from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import SyncStatusIndicator from '../SyncStatusIndicator';
+import ThemeToggle from '../ui/ThemeToggle';
 
-type ActiveTab = 'client' | 'films' | 'settings' | 'history' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores';
+type ActiveTab = 'dashboard' | 'client' | 'films' | 'settings' | 'history' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores';
 
 interface DesktopSidebarProps {
     activeTab: ActiveTab;
     onTabChange: (tab: ActiveTab) => void;
 }
 
+interface NavItemConfig {
+    tabId: ActiveTab;
+    icon: LucideIcon;
+    label: string;
+}
+
+const MAIN_NAV: NavItemConfig[] = [
+    { tabId: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+    { tabId: 'client', icon: UsersRound, label: 'Clientes' },
+    { tabId: 'films', icon: Layers3, label: 'Películas' },
+    { tabId: 'estoque', icon: Boxes, label: 'Estoque' },
+    { tabId: 'qr_code', icon: QrCode, label: 'QR Code' },
+    { tabId: 'agenda', icon: CalendarDays, label: 'Agenda' },
+    { tabId: 'history', icon: History, label: 'Histórico' },
+    { tabId: 'fornecedores', icon: Truck, label: 'Fornecedores' }
+];
+
+const SIDEBAR_COLLAPSED_KEY = 'peliculas-br-sidebar-collapsed';
+
 const DesktopSidebar: React.FC<DesktopSidebarProps> = ({ activeTab, onTabChange }) => {
-    const { isAdmin, user } = useAuth();
+    const { isAdmin, user, signOut } = useAuth();
+    const [isSigningOut, setIsSigningOut] = useState(false);
+    const [isCollapsed, setIsCollapsed] = useState(() => {
+        try {
+            return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true';
+        } catch {
+            return false;
+        }
+    });
+
+    useEffect(() => {
+        try {
+            localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(isCollapsed));
+        } catch {
+            // Mantém o estado apenas em memória se o navegador bloquear storage.
+        }
+    }, [isCollapsed]);
 
     const initials = (user?.email || 'U')
         .split('@')[0]
         .slice(0, 2)
         .toUpperCase();
 
-    const NavItem: React.FC<{ tabId: ActiveTab; icon: string; label: string }> = ({ tabId, icon, label }) => {
+    const userName = user?.email?.split('@')[0] || 'Usuário';
+
+    const systemNav: NavItemConfig[] = useMemo(
+        () => [
+            ...(isAdmin ? [{ tabId: 'admin' as ActiveTab, icon: ShieldUser, label: 'Admin' }] : []),
+            { tabId: 'settings', icon: Settings, label: 'Configurações' },
+            { tabId: 'account', icon: CircleUserRound, label: 'Minha Conta' }
+        ],
+        [isAdmin]
+    );
+
+    const handleSignOut = async () => {
+        if (isSigningOut) return;
+
+        setIsSigningOut(true);
+        try {
+            await signOut();
+        } finally {
+            setIsSigningOut(false);
+        }
+    };
+
+    const renderSectionLabel = (label: string) => (
+        isCollapsed ? (
+            <div className="mx-auto my-2 h-px w-8 bg-[var(--border-subtle)] dark:bg-white/10" aria-hidden="true" />
+        ) : (
+            <p className="ui-kicker mb-2 px-3 text-[var(--text-soft)] dark:text-slate-500">{label}</p>
+        )
+    );
+
+    const NavItem: React.FC<NavItemConfig> = ({ tabId, icon: Icon, label }) => {
         const isActive = activeTab === tabId;
+
         return (
             <button
+                type="button"
                 onClick={() => onTabChange(tabId)}
-                className={`
-                    w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group relative
-                    ${isActive
-                        ? 'bg-white/10 text-white'
-                        : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
-                    }
-                `}
+                aria-label={label}
+                title={isCollapsed ? label : undefined}
+                className={[
+                    'group relative flex h-10 w-full items-center rounded-[var(--radius-control)] text-left transition-colors duration-200',
+                    isCollapsed ? 'justify-center px-0' : 'gap-3 px-3',
+                    isActive
+                        ? 'border border-[var(--border-subtle)] bg-[var(--brand-primary-soft)] text-[var(--brand-primary)] shadow-[var(--shadow-hairline)] dark:border-white/10 dark:bg-white/[0.075] dark:text-white'
+                        : 'border border-transparent text-[var(--text-muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)] dark:text-slate-400 dark:hover:bg-white/[0.055] dark:hover:text-slate-100'
+                ].join(' ')}
             >
-                {isActive && (
-                    <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-blue-400 rounded-r-full" />
-                )}
-                <i className={`${icon} w-5 text-center text-sm transition-colors ${isActive ? 'text-blue-400' : 'text-slate-500 group-hover:text-slate-300'}`}></i>
-                <span className={`font-semibold text-sm ${isActive ? 'text-white' : ''}`}>{label}</span>
-                {isActive && (
-                    <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-400" />
-                )}
+                {isActive ? (
+                    <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-r-full bg-[var(--brand-primary)] dark:bg-blue-300" />
+                ) : null}
+
+                <Icon
+                    className={`h-4 w-4 shrink-0 transition-colors ${
+                        isActive
+                            ? 'text-[var(--brand-primary)] dark:text-blue-300'
+                            : 'text-[var(--text-soft)] group-hover:text-[var(--text-strong)] dark:text-slate-500 dark:group-hover:text-slate-300'
+                    }`}
+                    aria-hidden="true"
+                />
+
+                {!isCollapsed ? (
+                    <>
+                        <span className="min-w-0 flex-1 truncate text-sm font-semibold">{label}</span>
+                        {isActive ? <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--brand-primary)] dark:bg-blue-300" /> : null}
+                    </>
+                ) : null}
             </button>
         );
     };
 
-    return (
-        <aside className="hidden lg:flex flex-col w-60 h-screen sticky top-0 bg-slate-900 border-r border-slate-800 transition-colors duration-500">
+    const CollapseIcon = isCollapsed ? PanelLeftOpen : PanelLeftClose;
 
-            {/* Logo */}
-            <div className="px-5 py-6 border-b border-slate-800">
-                <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shadow-lg shadow-blue-900/50 flex-shrink-0">
-                        <i className="fas fa-layer-group text-white text-sm"></i>
+    return (
+        <aside
+            className={[
+                'sticky top-0 hidden h-screen shrink-0 flex-col overflow-hidden border-r border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-body)] shadow-[var(--shadow-hairline)] transition-[width,background-color,border-color] duration-300 lg:flex dark:bg-[#07111f] dark:text-white',
+                isCollapsed ? 'w-[76px]' : 'w-64'
+            ].join(' ')}
+        >
+            <div className={`${isCollapsed ? 'px-3 py-4' : 'px-4 py-4'} border-b border-[var(--border-subtle)] dark:border-white/10`}>
+                <div className={`flex items-center ${isCollapsed ? 'flex-col gap-3' : 'justify-between gap-3'}`}>
+                    <div className={`flex min-w-0 items-center ${isCollapsed ? 'justify-center' : 'gap-2.5'}`}>
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-[var(--brand-primary)] text-white shadow-[0_12px_24px_rgba(21,94,239,0.24)]">
+                            <Layers3 className="h-4 w-4" aria-hidden="true" />
+                        </div>
+                        {!isCollapsed ? (
+                            <h1 className="truncate text-lg font-semibold tracking-normal text-[var(--text-strong)] dark:text-white">
+                                Películas<span className="text-[var(--brand-primary)] dark:text-blue-300">BR</span>
+                            </h1>
+                        ) : null}
                     </div>
-                    <h1 className="text-lg font-bold text-white tracking-tight">
-                        Películas<span className="text-blue-400">BR</span>
-                    </h1>
+
+                    <button
+                        type="button"
+                        onClick={() => setIsCollapsed(current => !current)}
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-muted)] shadow-[var(--shadow-hairline)] transition-all duration-200 hover:bg-[var(--surface)] hover:text-[var(--brand-primary)] dark:border-white/10 dark:bg-white/[0.045] dark:text-slate-400 dark:hover:bg-white/[0.08] dark:hover:text-blue-200"
+                        aria-label={isCollapsed ? 'Expandir menu lateral' : 'Recolher menu lateral'}
+                        title={isCollapsed ? 'Expandir menu lateral' : 'Recolher menu lateral'}
+                    >
+                        <CollapseIcon className="h-4 w-4" aria-hidden="true" />
+                    </button>
                 </div>
             </div>
 
-            {/* Nav */}
-            <nav className="flex-grow px-3 py-4 space-y-0.5 overflow-y-auto">
-                <p className="px-3 text-[10px] font-bold text-slate-600 uppercase tracking-widest mb-2">Principal</p>
-                <NavItem tabId="client"   icon="fas fa-user-friends"  label="Clientes"   />
-                <NavItem tabId="films"    icon="fas fa-layer-group"   label="Películas"  />
-                <NavItem tabId="estoque"  icon="fas fa-boxes"         label="Estoque"    />
-                <NavItem tabId="qr_code"  icon="fas fa-qrcode"        label="QR Code"    />
-                <NavItem tabId="agenda"   icon="fas fa-calendar-alt"  label="Agenda"     />
-                <NavItem tabId="history"      icon="fas fa-history"       label="Histórico"    />
-                <NavItem tabId="fornecedores" icon="fas fa-truck"          label="Fornecedores" />
+            <nav className={`${isCollapsed ? 'px-3' : 'px-3'} flex-grow space-y-1 overflow-y-auto py-4`}>
+                {renderSectionLabel('Principal')}
+                {MAIN_NAV.map(item => (
+                    <NavItem key={item.tabId} {...item} />
+                ))}
 
-                <div className="pt-4 mt-2 border-t border-slate-800 space-y-0.5">
-                    <p className="px-3 text-[10px] font-bold text-slate-600 uppercase tracking-widest mb-2">Sistema</p>
-                    {isAdmin && <NavItem tabId="admin"    icon="fas fa-user-shield"  label="Admin"         />}
-                    <NavItem tabId="settings" icon="fas fa-cog"          label="Configurações" />
-                    <NavItem tabId="account"  icon="fas fa-user-circle"  label="Minha Conta"   />
+                <div className="mt-3 space-y-1 border-t border-[var(--border-subtle)] pt-3 dark:border-white/10">
+                    {renderSectionLabel('Sistema')}
+                    {systemNav.map(item => (
+                        <NavItem key={item.tabId} {...item} />
+                    ))}
                 </div>
             </nav>
 
-            {/* Footer */}
-            <div className="px-4 py-4 border-t border-slate-800 space-y-3">
-                <div className="flex items-center justify-between px-1">
-                    <SyncStatusIndicator />
-                </div>
+            <div className={`${isCollapsed ? 'items-center px-3' : 'px-4'} flex flex-col gap-3 border-t border-[var(--border-subtle)] py-4 dark:border-white/10`}>
+                <ThemeToggle variant="sidebar" compact={isCollapsed} />
 
-                <div className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition-colors cursor-default">
-                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center text-white text-xs font-bold flex-shrink-0 shadow-lg shadow-blue-900/40">
+                {!isCollapsed ? (
+                    <div className="flex items-center justify-between px-1">
+                        <SyncStatusIndicator />
+                    </div>
+                ) : null}
+
+                <div
+                    className={[
+                        'flex cursor-default items-center rounded-[var(--radius-control)] transition-colors hover:bg-[var(--surface-muted)] dark:hover:bg-white/[0.055]',
+                        isCollapsed ? 'h-10 w-10 justify-center p-0' : 'w-full gap-3 p-2'
+                    ].join(' ')}
+                    title={user?.email || userName}
+                >
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-[var(--brand-primary)] text-xs font-bold text-white shadow-[0_10px_22px_rgba(37,99,235,0.22)]">
                         {initials}
                     </div>
-                    <div className="flex-grow min-w-0">
-                        <p className="text-sm font-semibold text-white truncate leading-tight">
-                            {user?.email?.split('@')[0] || 'Usuário'}
-                        </p>
-                        <p className="text-[10px] text-slate-500 truncate mt-0.5">
-                            {user?.email || ''}
-                        </p>
-                    </div>
+                    {!isCollapsed ? (
+                        <div className="min-w-0 flex-grow">
+                            <p className="truncate text-sm font-semibold leading-tight text-[var(--text-strong)] dark:text-white">
+                                {userName}
+                            </p>
+                            <p className="mt-0.5 truncate text-[10px] text-[var(--text-muted)] dark:text-slate-500">
+                                {user?.email || ''}
+                            </p>
+                        </div>
+                    ) : null}
+                </div>
+
+                <div className={`${isCollapsed ? 'w-10' : 'w-full'} border-t border-[var(--border-subtle)] pt-3 dark:border-white/10`}>
+                    <button
+                        type="button"
+                        onClick={handleSignOut}
+                        disabled={isSigningOut}
+                        aria-label="Sair da aplicação"
+                        title={isCollapsed ? 'Sair da aplicação' : undefined}
+                        className={[
+                            'group flex h-10 w-full items-center rounded-[var(--radius-control)] border border-transparent text-[var(--text-muted)] transition-all duration-200 hover:border-red-200 hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-60 dark:text-slate-400 dark:hover:border-red-400/20 dark:hover:bg-red-500/10 dark:hover:text-red-200',
+                            isCollapsed ? 'justify-center px-0' : 'gap-3 px-3'
+                        ].join(' ')}
+                    >
+                        {isSigningOut ? (
+                            <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden="true" />
+                        ) : (
+                            <LogOut className="h-4 w-4 shrink-0 text-[var(--text-soft)] transition-colors group-hover:text-red-700 dark:text-slate-500 dark:group-hover:text-red-200" aria-hidden="true" />
+                        )}
+
+                        {!isCollapsed ? (
+                            <span className="min-w-0 flex-1 truncate text-left text-sm font-semibold">
+                                {isSigningOut ? 'Saindo...' : 'Sair'}
+                            </span>
+                        ) : null}
+                    </button>
                 </div>
             </div>
         </aside>

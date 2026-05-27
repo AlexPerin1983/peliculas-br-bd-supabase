@@ -12,6 +12,8 @@ interface UserModalProps {
     onOpenPaymentMethods: () => void;
 }
 
+const DEFAULT_WORKING_DAYS = [0, 1, 2, 3, 4, 5, 6];
+
 const applyPhoneMask = (value: string) => {
     if (!value) return "";
     let digitsOnly = value.replace(/\D/g, "");
@@ -155,7 +157,7 @@ const UserModal: React.FC<UserModalProps> = ({ isOpen, onClose, onSave, userInfo
         setFormData(prev => ({
             ...prev,
             workingHours: {
-                ...(prev.workingHours || { start: '08:00', end: '18:00', days: [1, 2, 3, 4, 5] }),
+                ...(prev.workingHours || { start: '08:00', end: '18:00', days: DEFAULT_WORKING_DAYS }),
                 [field]: value,
             }
         }));

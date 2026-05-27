@@ -1,7 +1,7 @@
 // Supabase Database Service
 // Migração do IndexedDB para Supabase
 import { supabase } from './supabaseClient';
-import { Client, Measurement, UserInfo, Film, SavedPDF, Agendamento, ProposalOption } from '../types';
+import { Client, Measurement, UserInfo, Film, SavedPDF, Agendamento, ProposalOption, StandaloneExpense } from '../types';
 import { mockUserInfo } from './mockData';
 import {
     getCurrentUserId as getSessionUserId,
@@ -257,12 +257,12 @@ export const deleteProposalOptions = async (clientId: number): Promise<void> => 
 
 export const getUserInfo = async (): Promise<UserInfo> => {
     const userId = await getCurrentUserId();
-    if (!userId) return mockUserInfo;
+    if (!userId) return { ...mockUserInfo, isFallback: true };
 
     // Sempre buscar os dados do OWNER para garantir consistência na empresa
     const targetUserId = await getOwnerUserId();
 
-    if (!targetUserId) return mockUserInfo;
+    if (!targetUserId) return { ...mockUserInfo, isFallback: true };
 
 
     // Buscar user_info do owner (ou do próprio usuário se for owner)
@@ -270,22 +270,27 @@ export const getUserInfo = async (): Promise<UserInfo> => {
         .from('user_info')
         .select('*')
         .eq('user_id', targetUserId)
-        .single();
+        .maybeSingle();
 
-    if (error || !data) {
+    if (error) {
+        console.error('Error fetching user info:', error);
+        return { ...mockUserInfo, isFallback: true };
+    }
+
+    if (!data) {
         // Return mock data if no user info exists
-        return mockUserInfo;
+        return { ...mockUserInfo, isFallback: true };
     }
 
     const userInfo: UserInfo = {
         id: 'info',
-        nome: data.nome || mockUserInfo.nome,
-        empresa: data.empresa || mockUserInfo.empresa,
-        telefone: data.telefone || mockUserInfo.telefone,
-        email: data.email || mockUserInfo.email,
-        endereco: data.endereco || mockUserInfo.endereco,
-        cpfCnpj: data.cpf_cnpj || mockUserInfo.cpfCnpj,
-        site: data.site,
+        nome: data.nome ?? '',
+        empresa: data.empresa ?? '',
+        telefone: data.telefone ?? '',
+        email: data.email ?? '',
+        endereco: data.endereco ?? '',
+        cpfCnpj: data.cpf_cnpj ?? '',
+        site: data.site ?? '',
         logo: data.logo,
         assinatura: data.assinatura,
         cores: data.cores || mockUserInfo.cores,
@@ -296,10 +301,11 @@ export const getUserInfo = async (): Promise<UserInfo> => {
         employees: data.employees,
         aiConfig: data.ai_config || mockUserInfo.aiConfig,
         lastSelectedClientId: data.last_selected_client_id,
-        socialLinks: data.social_links
+        socialLinks: data.social_links,
+        isFallback: false
     };
 
-    return { ...mockUserInfo, ...userInfo };
+    return { ...mockUserInfo, ...userInfo, isFallback: false };
 };
 
 export const saveUserInfo = async (userInfo: UserInfo): Promise<UserInfo> => {
@@ -331,19 +337,34 @@ export const saveUserInfo = async (userInfo: UserInfo): Promise<UserInfo> => {
         social_links: userInfo.socialLinks
     };
 
-    const { data, error } = await supabase
+    const { error } = await supabase
         .from('user_info')
         .upsert(userInfoData, { onConflict: 'user_id' })
-        .select()
-        .single();
+        .select();
 
     if (error) throw error;
-    return userInfo;
+    return { ...userInfo, isFallback: false };
+};
+
+const patchUserInfoFields = async (patch: Record<string, unknown>): Promise<UserInfo | null> => {
+    const userId = await getCurrentUserId();
+    if (!userId) throw new Error('User not authenticated');
+
+    const targetUserId = await getOwnerUserId() || userId;
+
+    const { error } = await supabase
+        .from('user_info')
+        .upsert({ user_id: targetUserId, ...patch }, { onConflict: 'user_id' });
+
+    if (error) throw error;
+
+    return await getUserInfo();
 };
 
 // Atualiza APENAS o campo payment_methods sem sobrescrever outros campos
 export const updatePaymentMethodsOnly = async (paymentMethods: any[]): Promise<UserInfo | null> => {
     const userId = await getCurrentUserId();
+    return await patchUserInfoFields({ payment_methods: paymentMethods });
     if (!userId) throw new Error('User not authenticated');
 
     // Se o usuário faz parte de uma organização, atualizar na linha do OWNER
@@ -358,6 +379,14 @@ export const updatePaymentMethodsOnly = async (paymentMethods: any[]): Promise<U
 
     // Retornar o userInfo completo atualizado
     return await getUserInfo();
+};
+
+export const updateAIConfigOnly = async (aiConfig: UserInfo['aiConfig']): Promise<UserInfo | null> => {
+    return await patchUserInfoFields({ ai_config: aiConfig ?? null });
+};
+
+export const updateLastSelectedClientIdOnly = async (lastSelectedClientId: UserInfo['lastSelectedClientId']): Promise<UserInfo | null> => {
+    return await patchUserInfoFields({ last_selected_client_id: lastSelectedClientId ?? null });
 };
 
 // ============================================
@@ -453,8 +482,13 @@ export const savePDF = async (pdfData: Omit<SavedPDF, 'id'>): Promise<SavedPDF> 
     const userId = await getCurrentUserId();
     if (!userId) throw new Error('User not authenticated');
 
+    const normalizedPdfBlob = normalizePdfBlobInput(pdfData.pdfBlob);
+    if (!normalizedPdfBlob) {
+        throw new Error('PDF sem arquivo valido para upload.');
+    }
+
     // Convert Blob to base64
-    const blobBase64 = await blobToBase64(pdfData.pdfBlob);
+    const blobBase64 = await blobToBase64(normalizedPdfBlob);
 
     const pdfRow = {
         user_id: userId,
@@ -490,8 +524,6 @@ export const updatePDF = async (pdfData: SavedPDF): Promise<SavedPDF> => {
     const userId = await getCurrentUserId();
     if (!userId) throw new Error('User not authenticated');
 
-    const blobBase64 = await blobToBase64(pdfData.pdfBlob);
-
     const pdfRow = {
         client_id: pdfData.clienteId,
         client_name: pdfData.clientName,
@@ -502,7 +534,6 @@ export const updatePDF = async (pdfData: SavedPDF): Promise<SavedPDF> => {
         subtotal: pdfData.subtotal,
         general_discount_amount: pdfData.generalDiscountAmount,
         general_discount: pdfData.generalDiscount,
-        pdf_blob: blobBase64,
         nome_arquivo: pdfData.nomeArquivo,
         measurements: pdfData.measurements,
         status: pdfData.status,
@@ -510,6 +541,11 @@ export const updatePDF = async (pdfData: SavedPDF): Promise<SavedPDF> => {
         proposal_option_name: pdfData.proposalOptionName,
         proposal_option_id: pdfData.proposalOptionId
     };
+
+    const normalizedPdfBlob = normalizePdfBlobInput(pdfData.pdfBlob);
+    if (normalizedPdfBlob) {
+        (pdfRow as typeof pdfRow & { pdf_blob: string }).pdf_blob = await blobToBase64(normalizedPdfBlob);
+    }
 
     const { data, error } = await supabase
         .from('saved_pdfs')
@@ -528,7 +564,7 @@ export const getAllPDFs = async (): Promise<SavedPDF[]> => {
     if (!userId) return [];
 
     // RLS controla acesso por organização
-    // NÃO buscamos o pdf_blob aqui para performance
+    // N?O buscamos o pdf_blob aqui para performance
     const { data, error } = await supabase
         .from('saved_pdfs')
         .select('id, client_id, client_name, date, expiration_date, total_preco, total_m2, subtotal, general_discount_amount, general_discount, nome_arquivo, measurements, status, agendamento_id, proposal_option_name, proposal_option_id')
@@ -602,6 +638,98 @@ export const deletePDF = async (id: number): Promise<void> => {
     if (error) throw error;
 };
 
+// ============================================
+// STANDALONE EXPENSE FUNCTIONS
+// ============================================
+
+const mapRowToStandaloneExpense = (row: any): StandaloneExpense => ({
+    id: row.id,
+    date: row.expense_date || row.date,
+    category: row.category || 'other',
+    amount: typeof row.amount === 'number' ? row.amount : Number(row.amount || 0),
+    description: row.description || '',
+    paymentMethod: row.payment_method || '',
+    clientId: row.client_id ?? null,
+    proposalId: row.proposal_id ?? null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+});
+
+const buildStandaloneExpenseRow = async (expense: StandaloneExpense) => {
+    const userId = await getCurrentUserId();
+    if (!userId) throw new Error('User not authenticated');
+    const orgId = await getEffectiveOrganizationId();
+    const amount = typeof expense.amount === 'number'
+        ? expense.amount
+        : Number(String(expense.amount || '').replace(/\./g, '').replace(',', '.').replace(/[^0-9.-]/g, ''));
+
+    return {
+        user_id: userId,
+        organization_id: orgId,
+        expense_date: expense.date,
+        category: expense.category,
+        amount: Number.isFinite(amount) ? amount : 0,
+        description: expense.description || '',
+        payment_method: expense.paymentMethod || null,
+        client_id: expense.clientId || null,
+        proposal_id: expense.proposalId || null
+    };
+};
+
+export const getAllStandaloneExpenses = async (): Promise<StandaloneExpense[]> => {
+    const userId = await getCurrentUserId();
+    if (!userId) return [];
+
+    const { data, error } = await supabase
+        .from('standalone_expenses')
+        .select('*')
+        .order('expense_date', { ascending: false });
+
+    if (error) {
+        console.error('Error fetching standalone expenses:', error);
+        throw error;
+    }
+
+    return (data || []).map(mapRowToStandaloneExpense);
+};
+
+export const saveStandaloneExpense = async (expense: StandaloneExpense): Promise<StandaloneExpense> => {
+    const row = await buildStandaloneExpenseRow(expense);
+
+    if (expense.id) {
+        const { data, error } = await supabase
+            .from('standalone_expenses')
+            .update(row)
+            .eq('id', expense.id)
+            .select()
+            .single();
+
+        if (error) throw error;
+        return mapRowToStandaloneExpense(data);
+    }
+
+    const { data, error } = await supabase
+        .from('standalone_expenses')
+        .insert(row)
+        .select()
+        .single();
+
+    if (error) throw error;
+    return mapRowToStandaloneExpense(data);
+};
+
+export const deleteStandaloneExpense = async (id: number): Promise<void> => {
+    const userId = await getCurrentUserId();
+    if (!userId) throw new Error('User not authenticated');
+
+    const { error } = await supabase
+        .from('standalone_expenses')
+        .delete()
+        .eq('id', id);
+
+    if (error) throw error;
+};
+
 // Helper functions for PDF blob handling
 const blobToBase64 = (blob: Blob): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -656,22 +784,28 @@ export const getAllAgendamentos = async (): Promise<Agendamento[]> => {
     const { data, error } = await supabase
         .from('agendamentos')
         .select('*')
-        .order('start_time', { ascending: true });
+        .order('start', { ascending: true });
+
+    if (error && isAgendamentoModernColumnError(error)) {
+        const { data: legacyData, error: legacyError } = await supabase
+            .from('agendamentos')
+            .select('*')
+            .order('start_time', { ascending: true });
+
+        if (legacyError) {
+            console.error('Error fetching agendamentos:', legacyError);
+            return [];
+        }
+
+        return (legacyData || []).map(mapRowToAgendamento);
+    }
 
     if (error) {
         console.error('Error fetching agendamentos:', error);
         return [];
     }
 
-    return (data || []).map(row => ({
-        id: row.id,
-        pdfId: row.pdf_id,
-        clienteId: row.client_id,
-        clienteNome: row.client_name,
-        start: row.start_time,
-        end: row.end_time,
-        notes: row.notes
-    }));
+    return (data || []).map(mapRowToAgendamento);
 };
 
 export const saveAgendamento = async (agendamento: Agendamento | Omit<Agendamento, 'id'>): Promise<Agendamento> => {
@@ -679,6 +813,15 @@ export const saveAgendamento = async (agendamento: Agendamento | Omit<Agendament
     if (!userId) throw new Error('User not authenticated');
 
     const agendamentoData = {
+        user_id: userId,
+        pdf_id: agendamento.pdfId,
+        client_id: agendamento.clienteId,
+        client_name: agendamento.clienteNome,
+        start: agendamento.start,
+        end: agendamento.end,
+        notes: agendamento.notes
+    };
+    const legacyAgendamentoData = {
         user_id: userId,
         pdf_id: agendamento.pdfId,
         client_id: agendamento.clienteId,
@@ -697,6 +840,18 @@ export const saveAgendamento = async (agendamento: Agendamento | Omit<Agendament
             .select()
             .single();
 
+        if (error && isAgendamentoModernColumnError(error)) {
+            const { data: legacyData, error: legacyError } = await supabase
+                .from('agendamentos')
+                .update(legacyAgendamentoData)
+                .eq('id', agendamento.id)
+                .select()
+                .single();
+
+            if (legacyError) throw legacyError;
+            return mapRowToAgendamento(legacyData);
+        }
+
         if (error) throw error;
         return mapRowToAgendamento(data);
     } else {
@@ -705,6 +860,17 @@ export const saveAgendamento = async (agendamento: Agendamento | Omit<Agendament
             .insert(agendamentoData)
             .select()
             .single();
+
+        if (error && isAgendamentoModernColumnError(error)) {
+            const { data: legacyData, error: legacyError } = await supabase
+                .from('agendamentos')
+                .insert(legacyAgendamentoData)
+                .select()
+                .single();
+
+            if (legacyError) throw legacyError;
+            return mapRowToAgendamento(legacyData);
+        }
 
         if (error) throw error;
         return mapRowToAgendamento(data);
@@ -744,10 +910,30 @@ const mapRowToAgendamento = (row: any): Agendamento => ({
     pdfId: row.pdf_id,
     clienteId: row.client_id,
     clienteNome: row.client_name,
-    start: row.start_time,
-    end: row.end_time,
+    start: row.start ?? row.start_time,
+    end: row.end ?? row.end_time,
     notes: row.notes
 });
+
+const isAgendamentoModernColumnError = (error: unknown): boolean => {
+    const details = [
+        (error as { message?: string })?.message,
+        (error as { details?: string })?.details,
+        (error as { hint?: string })?.hint,
+        (error as { code?: string })?.code
+    ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+    return Boolean(details)
+        && (details.includes('start') || details.includes('end'))
+        && (
+            details.includes('column')
+            || details.includes('schema cache')
+            || details.includes('could not find')
+        );
+};
 
 // ============================================
 // MEASUREMENTS FUNCTIONS (deprecated - use proposal options)
@@ -771,13 +957,25 @@ export const saveMeasurements = async (clientId: number, medidas: Measurement[])
             id: 1,
             name: 'Opção 1',
             measurements: medidas,
-            generalDiscount: { value: '0', type: 'percentage' }
+            generalDiscount: { value: '0', type: 'percentage', operation: 'discount' }
         }]);
     }
 };
 
 export const deleteMeasurements = async (clientId: number): Promise<void> => {
     await deleteProposalOptions(clientId);
+};
+
+const normalizePdfBlobInput = (pdfBlob: unknown): Blob | undefined => {
+    if (pdfBlob instanceof Blob) {
+        return pdfBlob;
+    }
+
+    if (typeof pdfBlob === 'string' && pdfBlob.startsWith('data:')) {
+        return base64ToBlob(pdfBlob);
+    }
+
+    return undefined;
 };
 
 // ============================================
@@ -809,15 +1007,21 @@ export async function deleteCustomFilmRemote(filmName: string): Promise<void> {
 }
 
 export async function savePDFRemote(pdfData: Omit<SavedPDF, 'id'> | SavedPDF): Promise<SavedPDF> {
-    const normalizedPdfBlob = typeof pdfData.pdfBlob === 'string'
-        ? base64ToBlob(pdfData.pdfBlob)
-        : pdfData.pdfBlob;
+    const normalizedPdfBlob = normalizePdfBlobInput(pdfData.pdfBlob);
 
     if ('id' in pdfData && pdfData.id) {
         return updatePDF({ ...pdfData, pdfBlob: normalizedPdfBlob });
     }
 
     return savePDF({ ...pdfData, pdfBlob: normalizedPdfBlob });
+}
+
+export async function saveStandaloneExpenseRemote(expense: StandaloneExpense): Promise<StandaloneExpense> {
+    return saveStandaloneExpense(expense);
+}
+
+export async function deleteStandaloneExpenseRemote(id: number): Promise<void> {
+    return deleteStandaloneExpense(id);
 }
 
 export async function saveAgendamentoRemote(agendamento: Agendamento | Omit<Agendamento, 'id'>): Promise<Agendamento> {

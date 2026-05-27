@@ -202,7 +202,7 @@ Atenciosamente.`
         }
     };
 
-    // Cores dinâmicas da empresa
+    // Cores din?micas da empresa
     const primaryColor = data?.empresa_cores?.primaria || '#3b82f6';
     const secondaryColor = data?.empresa_cores?.secundaria || '#1e40af';
 
@@ -400,7 +400,7 @@ Atenciosamente.`
                         </section>
                     )}
 
-                    {/* ========== BLOCO DE PADRONIZAÇÃO ========== */}
+                    {/* ========== BLOCO DE PADRONIZA??O ========== */}
                     <section className="standardization-zone">
                         <div className="standardization-card">
                             <div className="standardization-icon">
@@ -422,7 +422,7 @@ Atenciosamente.`
                         </div>
                     </section>
 
-                    {/* ========== CTA - AÇÃO COMERCIAL ========== */}
+                    {/* ========== CTA - A??O COMERCIAL ========== */}
                     <section className="cta-zone">
                         <div className="cta-header">
                             <h4>Precisa expandir ou manter o padrão?</h4>

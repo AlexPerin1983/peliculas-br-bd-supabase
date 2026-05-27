@@ -14,25 +14,21 @@ export interface SessionScope {
     isAdmin: boolean;
 }
 
-export const ADMIN_EMAILS = ['windowfilm.br@gmail.com', 'windowfilm.app@gmail.com'];
-
-export function isPrivilegedAdminEmail(email?: string | null): boolean {
-    return !!email && ADMIN_EMAILS.includes(email.toLowerCase());
-}
-
 function isSessionExpired(session: Session | null): boolean {
     if (!session?.expires_at) return false;
-    return (session.expires_at * 1000) <= Date.now();
+    return session.expires_at * 1000 <= Date.now();
 }
 
 function shouldRefreshSession(session: Session | null): boolean {
     if (!session?.expires_at) return false;
     const expiresAtMs = session.expires_at * 1000;
-    return (expiresAtMs - Date.now()) < 60_000;
+    return expiresAtMs - Date.now() < 60_000;
 }
 
 export async function getCurrentSession(): Promise<Session | null> {
-    const { data: { session } } = await supabase.auth.getSession();
+    const {
+        data: { session }
+    } = await supabase.auth.getSession();
 
     if (!session) {
         return null;
@@ -57,7 +53,9 @@ export async function getCurrentUser(): Promise<User | null> {
     const session = await getCurrentSession();
     if (session?.user) return session.user;
 
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+        data: { user }
+    } = await supabase.auth.getUser();
     return user ?? null;
 }
 
@@ -101,6 +99,21 @@ export async function ensureProfile(userId: string, email: string): Promise<Prof
     return data;
 }
 
+async function getOrganizationOwnerId(organizationId: string): Promise<string | null> {
+    const { data, error } = await supabase
+        .from('organizations')
+        .select('owner_id')
+        .eq('id', organizationId)
+        .maybeSingle();
+
+    if (error) {
+        console.error('[sessionScope] Error fetching organization owner:', error);
+        return null;
+    }
+
+    return data?.owner_id ?? null;
+}
+
 export async function getOrganizationMember(profile: Profile): Promise<OrganizationMember | null> {
     if (!profile.organization_id) return null;
 
@@ -109,14 +122,34 @@ export async function getOrganizationMember(profile: Profile): Promise<Organizat
         .select('*')
         .eq('organization_id', profile.organization_id)
         .eq('user_id', profile.id)
-        .single();
+        .maybeSingle();
 
     if (error) {
-        console.error('[sessionScope] Error fetching organization member:', error);
+        if (error.code !== 'PGRST116') {
+            console.error('[sessionScope] Error fetching organization member:', error);
+        }
         return null;
     }
 
-    return data;
+    if (data) {
+        return data;
+    }
+
+    const ownerId = await getOrganizationOwnerId(profile.organization_id);
+    if (ownerId === profile.id) {
+        return {
+            id: `owner-fallback-${profile.organization_id}-${profile.id}`,
+            organization_id: profile.organization_id,
+            user_id: profile.id,
+            email: profile.email,
+            role: 'owner',
+            status: 'active',
+            invited_at: new Date(0).toISOString(),
+            joined_at: new Date(0).toISOString()
+        };
+    }
+
+    return null;
 }
 
 export async function getEffectiveOrganizationId(): Promise<string | null> {
@@ -134,23 +167,16 @@ export async function getEffectiveOwnerUserId(): Promise<string | null> {
     const organizationId = await getEffectiveOrganizationId();
     if (!organizationId) return userId;
 
-    const { data: org, error } = await supabase
-        .from('organizations')
-        .select('owner_id')
-        .eq('id', organizationId)
-        .single();
-
-    if (error) {
-        console.error('[sessionScope] Error fetching owner user id:', error);
-        return userId;
-    }
-
-    return org?.owner_id || userId;
+    const ownerId = await getOrganizationOwnerId(organizationId);
+    return ownerId || userId;
 }
 
-export async function getSessionScope(options?: { ensureProfile?: boolean; email?: string }): Promise<SessionScope> {
+export async function getSessionScope(options?: {
+    ensureProfile?: boolean;
+    email?: string;
+}): Promise<SessionScope> {
     const session = await getCurrentSession();
-    const user = session?.user ?? await getCurrentUser();
+    const user = session?.user ?? (await getCurrentUser());
 
     if (!user) {
         return {
@@ -166,9 +192,10 @@ export async function getSessionScope(options?: { ensureProfile?: boolean; email
         };
     }
 
-    const profile = options?.ensureProfile && (options.email || user.email)
-        ? await ensureProfile(user.id, options.email || user.email || '')
-        : await getProfile(user.id);
+    const profile =
+        options?.ensureProfile && (options.email || user.email)
+            ? await ensureProfile(user.id, options.email || user.email || '')
+            : await getProfile(user.id);
     const member = profile ? await getOrganizationMember(profile) : null;
     const ownerUserId = profile?.organization_id ? await getEffectiveOwnerUserId() : user.id;
 
@@ -181,6 +208,6 @@ export async function getSessionScope(options?: { ensureProfile?: boolean; email
         ownerUserId,
         memberStatus: (member?.status as 'pending' | 'active' | 'blocked' | null) ?? null,
         isOwner: member?.role === 'owner',
-        isAdmin: isPrivilegedAdminEmail(user.email) || profile?.role === 'admin'
+        isAdmin: profile?.role === 'admin'
     };
 }

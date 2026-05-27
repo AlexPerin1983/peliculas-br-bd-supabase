@@ -172,10 +172,10 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ onMemberCountChange }) 
             {/* Lista de membros */}
             <div className="space-y-3">
                 {loading ? (
-                    <div className="p-4 text-center text-slate-500">Carregando...</div>
+                    <div className="p-4 text-center text-slate-500">Carregando equipe...</div>
                 ) : members.length === 0 ? (
                     <div className="p-4 text-center text-slate-500 dark:text-slate-400">
-                        Nenhum colaborador ainda. Gere um QR Code na seção abaixo para convidar.
+                        Nenhum colaborador ainda.
                     </div>
                 ) : (
                     members.map(member => (
@@ -227,13 +227,6 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ onMemberCountChange }) 
                     ))
                 )}
             </div>
-
-            {/* Dica para convidar via QR Code */}
-            {canManageTeam && members.length <= 1 && (
-                <p className="text-xs text-slate-500 dark:text-slate-400 text-center py-2">
-                    <span className="font-medium">Dica:</span> Use a seção "Convite para Colaboradores" abaixo para gerar um QR Code de acesso.
-                </p>
-            )}
         </div>
     );
 };
