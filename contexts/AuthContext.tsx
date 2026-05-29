@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../services/supabaseClient';
 import { Profile } from '../types';
@@ -26,6 +26,61 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const AUTH_REQUEST_TIMEOUT_MS = 18_000;
 const AUTH_CONNECTION_ERROR_MESSAGE = 'Nao foi possivel conectar ao servidor agora. Tente novamente em instantes.';
+
+// Deve ser igual ao storageKey configurado em services/supabaseClient.ts
+const AUTH_SESSION_STORAGE_KEY = 'peliculas-br-bd-auth-v4';
+// Cache local do "escopo" do usuario (perfil + papel) para reabertura instantanea.
+const AUTH_SCOPE_CACHE_KEY = 'peliculas-br-bd-auth-scope-v1';
+
+interface CachedScope {
+    profile: Profile | null;
+    memberStatus: 'pending' | 'active' | 'blocked' | null;
+    memberRole: 'owner' | 'admin' | 'member' | null;
+    isOwner: boolean;
+}
+
+// Le a sessao persistida pelo Supabase de forma sincrona, para que a primeira
+// renderizacao ja tenha a sessao e nao mostre a tela de login por um instante.
+const readPersistedSession = (): Session | null => {
+    try {
+        const raw = localStorage.getItem(AUTH_SESSION_STORAGE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        const candidate = parsed?.currentSession ?? parsed?.session ?? parsed;
+        if (candidate && candidate.access_token && candidate.user) {
+            return candidate as Session;
+        }
+        return null;
+    } catch {
+        return null;
+    }
+};
+
+const readCachedScope = (): CachedScope | null => {
+    try {
+        const raw = localStorage.getItem(AUTH_SCOPE_CACHE_KEY);
+        if (!raw) return null;
+        return JSON.parse(raw) as CachedScope;
+    } catch {
+        return null;
+    }
+};
+
+const writeCachedScope = (scope: CachedScope): void => {
+    try {
+        localStorage.setItem(AUTH_SCOPE_CACHE_KEY, JSON.stringify(scope));
+    } catch {
+        // localStorage indisponivel: ignora, apenas perde a reabertura instantanea.
+    }
+};
+
+const clearCachedScope = (): void => {
+    try {
+        localStorage.removeItem(AUTH_SCOPE_CACHE_KEY);
+    } catch {
+        // ignora
+    }
+};
 
 const withTimeout = async <T,>(promise: Promise<T>, label: string): Promise<T> => {
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -62,22 +117,38 @@ const hasRecoveryContextInUrl = (hasSession: boolean = false) => {
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const [session, setSession] = useState<Session | null>(null);
-    const [user, setUser] = useState<User | null>(null);
-    const [profile, setProfile] = useState<Profile | null>(null);
-    const [memberStatus, setMemberStatus] = useState<'pending' | 'active' | 'blocked' | null>(null);
-    const [memberRole, setMemberRole] = useState<'owner' | 'admin' | 'member' | null>(null);
-    const [isOwner, setIsOwner] = useState(false);
-    const [loading, setLoading] = useState(true);
+    // Hidratacao sincrona a partir do cache local: se o usuario ja estava logado,
+    // reabrimos direto na interface, sem a tela "Conectando sua conta".
+    const initialSession = readPersistedSession();
+    const initialScope = readCachedScope();
+    const canHydrate = Boolean(initialSession && initialScope);
+
+    const [session, setSession] = useState<Session | null>(initialSession);
+    const [user, setUser] = useState<User | null>(initialSession?.user ?? null);
+    const [profile, setProfile] = useState<Profile | null>(initialScope?.profile ?? null);
+    const [memberStatus, setMemberStatus] = useState<'pending' | 'active' | 'blocked' | null>(initialScope?.memberStatus ?? null);
+    const [memberRole, setMemberRole] = useState<'owner' | 'admin' | 'member' | null>(initialScope?.memberRole ?? null);
+    const [isOwner, setIsOwner] = useState(initialScope?.isOwner ?? false);
+    // So bloqueia com o spinner quando nao temos dados em cache para mostrar.
+    const [loading, setLoading] = useState(!canHydrate);
     const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
     const [connectionError, setConnectionError] = useState<string | null>(null);
     const [connectionRetryKey, setConnectionRetryKey] = useState(0);
+
+    // Indica se ja temos dados utilizaveis do usuario (perfil) para decidir se a
+    // revalidacao em segundo plano deve ou nao re-bloquear a interface.
+    const hasUsableScopeRef = useRef<boolean>(Boolean(initialScope?.profile));
 
     useEffect(() => {
         let isMounted = true;
 
         const loadInitialSession = async () => {
-            setLoading(true);
+            // Quando ja temos dados em cache, revalidamos em segundo plano sem
+            // bloquear a interface (sem mostrar "Conectando sua conta").
+            const silentBoot = hasUsableScopeRef.current;
+            if (!silentBoot) {
+                setLoading(true);
+            }
             setConnectionError(null);
 
             try {
@@ -92,12 +163,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 setUser(session?.user ?? null);
                 setIsPasswordRecovery(hasRecoveryContextInUrl(!!session));
                 if (session?.user) {
-                    fetchProfile(session.user.id, session.user.email!);
+                    fetchProfile(session.user.id, session.user.email!, { silent: silentBoot });
                 } else {
+                    clearCachedScope();
+                    hasUsableScopeRef.current = false;
+                    setProfile(null);
+                    setMemberStatus(null);
+                    setMemberRole(null);
+                    setIsOwner(false);
                     setLoading(false);
                 }
             } catch (error) {
                 if (!isMounted) return;
+                // Se temos dados em cache, mantemos o app utilizavel offline em vez
+                // de jogar o usuario para a tela de erro de conexao.
+                if (silentBoot) {
+                    console.warn('[AuthContext] Revalidacao em segundo plano falhou; usando cache local:', error);
+                    setLoading(false);
+                    return;
+                }
                 console.error('[AuthContext] Error loading session:', error);
                 setSession(null);
                 setUser(null);
@@ -123,10 +207,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setSession(session);
             setUser(session?.user ?? null);
             if (session?.user) {
-                setLoading(true);
                 setConnectionError(null);
-                fetchProfile(session.user.id, session.user.email!);
+                // Eventos como TOKEN_REFRESHED/SIGNED_IN disparam ao reabrir o app.
+                // Se ja temos perfil, atualizamos em segundo plano sem re-bloquear
+                // a interface com a tela "Conectando sua conta".
+                const silent = hasUsableScopeRef.current;
+                if (!silent) {
+                    setLoading(true);
+                }
+                fetchProfile(session.user.id, session.user.email!, { silent });
             } else {
+                clearCachedScope();
+                hasUsableScopeRef.current = false;
                 setProfile(null);
                 setMemberStatus(null);
                 setMemberRole(null);
@@ -142,24 +234,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
     }, [connectionRetryKey]);
 
-    const fetchProfile = async (_userId: string, email: string) => {
+    const fetchProfile = async (_userId: string, email: string, options?: { silent?: boolean }) => {
+        const silent = options?.silent ?? false;
         try {
             const scope = await withTimeout(
                 getSessionScope({ ensureProfile: true, email }),
                 'auth_profile'
             );
+            const nextMemberRole = scope.member?.role ?? null;
             setProfile(scope.profile);
             setMemberStatus(scope.memberStatus);
-            setMemberRole(scope.member?.role ?? null);
+            setMemberRole(nextMemberRole);
             setIsOwner(scope.isOwner);
             setConnectionError(null);
+            hasUsableScopeRef.current = Boolean(scope.profile);
+            if (scope.profile) {
+                writeCachedScope({
+                    profile: scope.profile,
+                    memberStatus: scope.memberStatus,
+                    memberRole: nextMemberRole,
+                    isOwner: scope.isOwner
+                });
+            } else {
+                clearCachedScope();
+            }
         } catch (error) {
             console.error('Error fetching profile:', error);
-            setProfile(null);
-            setMemberStatus(null);
-            setMemberRole(null);
-            setIsOwner(false);
-            setConnectionError(AUTH_CONNECTION_ERROR_MESSAGE);
+            // Numa atualizacao silenciosa (app ja aberto com dados em cache),
+            // preservamos o que ja esta na tela em vez de derrubar a sessao.
+            if (silent) {
+                console.warn('[AuthContext] Mantendo perfil em cache apos falha de revalidacao.');
+            } else {
+                setProfile(null);
+                setMemberStatus(null);
+                setMemberRole(null);
+                setIsOwner(false);
+                setConnectionError(AUTH_CONNECTION_ERROR_MESSAGE);
+            }
         } finally {
             setLoading(false);
         }
@@ -173,6 +284,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const signOut = async () => {
         await supabase.auth.signOut();
+        clearCachedScope();
+        hasUsableScopeRef.current = false;
         setProfile(null);
         setSession(null);
         setUser(null);

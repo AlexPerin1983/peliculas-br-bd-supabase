@@ -245,7 +245,13 @@ const App: React.FC = () => {
 
     const [isLoading, setIsLoading] = useState(true);
     const [clients, setClients] = useState<Client[]>([]);
-    const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
+    const [selectedClientId, setSelectedClientId] = useState<number | null>(() => {
+        // Restauracao instantanea do cliente selecionado (espelho local do valor
+        // que tambem fica salvo no Supabase em UserInfo.lastSelectedClientId).
+        const saved = localStorage.getItem('peliculas-br-selected-client-id');
+        const parsed = saved ? Number(saved) : NaN;
+        return Number.isFinite(parsed) ? parsed : null;
+    });
     const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
     const [films, setFilms] = useState<Film[]>([]);
     const [allSavedPdfs, setAllSavedPdfs] = useState<SavedPDF[]>([]);
@@ -264,6 +270,15 @@ const App: React.FC = () => {
     useEffect(() => {
         localStorage.setItem('peliculas-br-active-tab', activeTab);
     }, [activeTab]);
+
+    // Persist selected client to localStorage para reabrir no mesmo cliente.
+    useEffect(() => {
+        if (selectedClientId == null) {
+            localStorage.removeItem('peliculas-br-selected-client-id');
+        } else {
+            localStorage.setItem('peliculas-br-selected-client-id', String(selectedClientId));
+        }
+    }, [selectedClientId]);
     const [hasLoadedHistory, setHasLoadedHistory] = useState(false);
     const [hasLoadedAgendamentos, setHasLoadedAgendamentos] = useState(false);
     const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
@@ -392,6 +407,75 @@ const App: React.FC = () => {
     const numpadRef = useRef<HTMLDivElement>(null);
     const backButtonPressedOnce = useRef(false);
     const backButtonTimeout = useRef<NodeJS.Timeout | null>(null);
+
+    // Salva/restaura a posicao de rolagem por aba, para reabrir exatamente no
+    // mesmo ponto mesmo que o sistema descarte o app em segundo plano.
+    useEffect(() => {
+        const el = mainRef.current;
+        if (!el) return;
+
+        const STORAGE_KEY = 'peliculas-br-scroll-pos';
+        const readMap = (): Record<string, number> => {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                return raw ? (JSON.parse(raw) as Record<string, number>) : {};
+            } catch {
+                return {};
+            }
+        };
+        const writeScroll = (value: number) => {
+            try {
+                const map = readMap();
+                map[activeTab] = value;
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(map));
+            } catch {
+                // ignora
+            }
+        };
+
+        // Restaura a posicao salva, tentando por alguns frames ate o conteudo
+        // assincrono crescer o suficiente.
+        const target = readMap()[activeTab] ?? 0;
+        let attempts = 0;
+        let rafId = 0;
+        const tryRestore = () => {
+            const current = mainRef.current;
+            if (!current) return;
+            current.scrollTop = target;
+            attempts += 1;
+            if (attempts < 10 && Math.abs(current.scrollTop - target) > 2) {
+                rafId = requestAnimationFrame(tryRestore);
+            }
+        };
+        if (target > 0) {
+            rafId = requestAnimationFrame(tryRestore);
+        }
+
+        let ticking = false;
+        const onScroll = () => {
+            if (ticking) return;
+            ticking = true;
+            requestAnimationFrame(() => {
+                ticking = false;
+                if (mainRef.current) writeScroll(mainRef.current.scrollTop);
+            });
+        };
+        const onPersist = () => {
+            if (mainRef.current) writeScroll(mainRef.current.scrollTop);
+        };
+
+        el.addEventListener('scroll', onScroll, { passive: true });
+        window.addEventListener('pagehide', onPersist);
+        document.addEventListener('visibilitychange', onPersist);
+
+        return () => {
+            cancelAnimationFrame(rafId);
+            el.removeEventListener('scroll', onScroll);
+            window.removeEventListener('pagehide', onPersist);
+            document.removeEventListener('visibilitychange', onPersist);
+            onPersist();
+        };
+    }, [activeTab]);
 
 
 
