@@ -122,19 +122,32 @@ export function useAppBootstrap({
     useEffect(() => {
         if (!authUserId) return;
 
-        const refreshOnFocus = () => {
-            if (document.visibilityState === 'hidden') return;
+        // Só atualiza os dados se o app ficou em segundo plano por um tempo
+        // relevante. Minimizar e voltar rapidamente mantém o contexto atual
+        // (sem recarregar nem resetar a tela). A verificação de host canônico
+        // já acontece no startup e ao fim de uma sincronização, então não é
+        // repetida aqui para evitar reloads desnecessários ao voltar ao foco.
+        const MIN_BACKGROUND_MS = 60_000;
+        let hiddenAt: number | null = null;
+
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'hidden') {
+                hiddenAt = Date.now();
+                return;
+            }
+
+            const backgroundedMs = hiddenAt ? Date.now() - hiddenAt : 0;
+            hiddenAt = null;
+
+            if (backgroundedMs < MIN_BACKGROUND_MS) return;
 
             void refreshSharedData();
-            void redirectToCanonicalHostIfNeeded();
         };
 
-        window.addEventListener('focus', refreshOnFocus);
-        document.addEventListener('visibilitychange', refreshOnFocus);
+        document.addEventListener('visibilitychange', handleVisibilityChange);
 
         return () => {
-            window.removeEventListener('focus', refreshOnFocus);
-            document.removeEventListener('visibilitychange', refreshOnFocus);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
     }, [authUserId, refreshSharedData]);
 
