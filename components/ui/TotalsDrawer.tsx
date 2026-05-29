@@ -24,6 +24,82 @@ const formatNumberBR = (number: number) => {
     }).format(number);
 };
 
+interface AdjustmentInputState {
+    value: string;
+    type: 'percentage' | 'fixed';
+}
+
+interface AdjustmentCardProps {
+    kind: 'discount' | 'increase';
+    title: string;
+    description: string;
+    amount: number;
+    tone: 'blue' | 'emerald';
+    input: AdjustmentInputState;
+    onUpdate: (input: Partial<AdjustmentInputState>) => void;
+}
+
+// Definido no nível do módulo (e não dentro de TotalsDrawer) para manter uma
+// identidade de componente estável. Se ficasse aninhado, cada digitação
+// recriaria a função, remontaria o <input> e fecharia o teclado no celular.
+const AdjustmentCard: React.FC<AdjustmentCardProps> = ({
+    kind,
+    title,
+    description,
+    amount,
+    tone,
+    input,
+    onUpdate,
+}) => {
+    const isPercentage = input.type === 'percentage';
+    const sign = kind === 'increase' ? '+' : '-';
+    const toneClasses = tone === 'blue'
+        ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300'
+        : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300';
+
+    return (
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/60">
+            <div className="mb-3 flex items-start justify-between gap-3">
+                <div>
+                    <div className="flex items-center gap-2 text-sm font-black text-slate-900 dark:text-white">
+                        {kind === 'increase'
+                            ? <PlusCircle className="h-4 w-4 text-blue-500" aria-hidden="true" />
+                            : <MinusCircle className="h-4 w-4 text-emerald-500" aria-hidden="true" />
+                        }
+                        <span>{title}</span>
+                    </div>
+                    <p className="mt-1 text-xs leading-snug text-slate-500 dark:text-slate-400">{description}</p>
+                </div>
+                {amount > 0 && (
+                    <span className={`rounded-full px-2 py-1 text-xs font-bold ${toneClasses}`}>
+                        {sign}{formatNumberBR(amount)}
+                    </span>
+                )}
+            </div>
+
+            <div className="flex gap-2">
+                <button
+                    type="button"
+                    onClick={() => onUpdate({ type: isPercentage ? 'fixed' : 'percentage' })}
+                    className="flex h-11 min-w-[72px] items-center justify-center gap-2 rounded-xl bg-slate-900 px-3 text-sm font-bold text-white transition-all active:scale-95 dark:bg-slate-100 dark:text-slate-950"
+                    aria-label={`Alternar ${title}`}
+                >
+                    {isPercentage ? <Percent className="h-4 w-4" aria-hidden="true" /> : <CircleDollarSign className="h-4 w-4" aria-hidden="true" />}
+                    <span>{isPercentage ? '%' : 'R$'}</span>
+                </button>
+                <input
+                    type="text"
+                    inputMode="decimal"
+                    value={input.value}
+                    onChange={(event) => onUpdate({ value: normalizeAdjustmentInputValue(event.target.value) })}
+                    placeholder={isPercentage ? '0' : '0,00'}
+                    className="h-11 min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-4 text-right text-lg font-bold text-slate-900 outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                />
+            </div>
+        </div>
+    );
+};
+
 export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
     isOpen,
     onClose,
@@ -51,69 +127,6 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
 
     const toggleGroup = (filmName: string) => {
         setOpenGroup(openGroup === filmName ? null : filmName);
-    };
-
-    const AdjustmentCard = ({
-        kind,
-        title,
-        description,
-        amount,
-        tone
-    }: {
-        kind: 'discount' | 'increase';
-        title: string;
-        description: string;
-        amount: number;
-        tone: 'blue' | 'emerald';
-    }) => {
-        const input = adjustmentInputs[kind];
-        const isPercentage = input.type === 'percentage';
-        const sign = kind === 'increase' ? '+' : '-';
-        const toneClasses = tone === 'blue'
-            ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300'
-            : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300';
-
-        return (
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/60">
-                <div className="mb-3 flex items-start justify-between gap-3">
-                    <div>
-                        <div className="flex items-center gap-2 text-sm font-black text-slate-900 dark:text-white">
-                            {kind === 'increase'
-                                ? <PlusCircle className="h-4 w-4 text-blue-500" aria-hidden="true" />
-                                : <MinusCircle className="h-4 w-4 text-emerald-500" aria-hidden="true" />
-                            }
-                            <span>{title}</span>
-                        </div>
-                        <p className="mt-1 text-xs leading-snug text-slate-500 dark:text-slate-400">{description}</p>
-                    </div>
-                    {amount > 0 && (
-                        <span className={`rounded-full px-2 py-1 text-xs font-bold ${toneClasses}`}>
-                            {sign}{formatNumberBR(amount)}
-                        </span>
-                    )}
-                </div>
-
-                <div className="flex gap-2">
-                    <button
-                        type="button"
-                        onClick={() => updateAdjustment(kind, { type: isPercentage ? 'fixed' : 'percentage' })}
-                        className="flex h-11 min-w-[72px] items-center justify-center gap-2 rounded-xl bg-slate-900 px-3 text-sm font-bold text-white transition-all active:scale-95 dark:bg-slate-100 dark:text-slate-950"
-                        aria-label={`Alternar ${title}`}
-                    >
-                        {isPercentage ? <Percent className="h-4 w-4" aria-hidden="true" /> : <CircleDollarSign className="h-4 w-4" aria-hidden="true" />}
-                        <span>{isPercentage ? '%' : 'R$'}</span>
-                    </button>
-                    <input
-                        type="text"
-                        inputMode="decimal"
-                        value={input.value}
-                        onChange={(event) => updateAdjustment(kind, { value: normalizeAdjustmentInputValue(event.target.value) })}
-                        placeholder={isPercentage ? '0' : '0,00'}
-                        className="h-11 min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-4 text-right text-lg font-bold text-slate-900 outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
-                    />
-                </div>
-            </div>
-        );
     };
 
     return (
@@ -271,6 +284,8 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                                     description="Infla o m² no PDF sem mostrar uma linha separada."
                                     amount={hiddenIncreaseAmount}
                                     tone="blue"
+                                    input={adjustmentInputs.increase}
+                                    onUpdate={(input) => updateAdjustment('increase', input)}
                                 />
                                 <AdjustmentCard
                                     kind="discount"
@@ -278,6 +293,8 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                                     description="Aplica desconto depois do acréscimo embutido."
                                     amount={finalDiscountAmount}
                                     tone="emerald"
+                                    input={adjustmentInputs.discount}
+                                    onUpdate={(input) => updateAdjustment('discount', input)}
                                 />
 
                                 {totals.totalItemDiscount > 0 && (

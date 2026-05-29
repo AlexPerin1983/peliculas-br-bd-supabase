@@ -10,9 +10,13 @@ export interface AgendaPushState {
     permission: NotificationPermission | 'unsupported';
     hasPublicKey: boolean;
     subscribed: boolean;
+    reminderMinutes: number;
     dailySummaryEnabled: boolean;
     dailySummaryTime: string;
 }
+
+export const MIN_REMINDER_MINUTES = 1;
+export const MAX_REMINDER_MINUTES = 10080;
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
     const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
@@ -69,6 +73,8 @@ async function persistSubscription(subscription: PushSubscription, enabled: bool
         throw new Error('Faça login para ativar os alertas da agenda.');
     }
 
+    // reminder_minutes is intentionally omitted so toggling alerts never resets
+    // a previously chosen reminder time (new rows fall back to the DB default).
     const { error } = await supabase
         .from('agenda_push_subscriptions')
         .upsert(
@@ -78,7 +84,6 @@ async function persistSubscription(subscription: PushSubscription, enabled: bool
                 p256dh,
                 auth,
                 enabled,
-                reminder_minutes: DEFAULT_REMINDER_MINUTES,
                 user_agent: navigator.userAgent,
                 last_seen_at: new Date().toISOString(),
             },
@@ -90,8 +95,9 @@ async function persistSubscription(subscription: PushSubscription, enabled: bool
     }
 }
 
-async function getStoredSubscriptionPreferences(subscription: PushSubscription | null): Promise<Pick<AgendaPushState, 'dailySummaryEnabled' | 'dailySummaryTime'>> {
+async function getStoredSubscriptionPreferences(subscription: PushSubscription | null): Promise<Pick<AgendaPushState, 'reminderMinutes' | 'dailySummaryEnabled' | 'dailySummaryTime'>> {
     const defaults = {
+        reminderMinutes: DEFAULT_REMINDER_MINUTES,
         dailySummaryEnabled: false,
         dailySummaryTime: DEFAULT_DAILY_SUMMARY_TIME,
     };
@@ -100,13 +106,16 @@ async function getStoredSubscriptionPreferences(subscription: PushSubscription |
 
     const { data, error } = await supabase
         .from('agenda_push_subscriptions')
-        .select('daily_summary_enabled,daily_summary_time')
+        .select('reminder_minutes,daily_summary_enabled,daily_summary_time')
         .eq('endpoint', subscription.endpoint)
         .maybeSingle();
 
     if (error || !data) return defaults;
 
     return {
+        reminderMinutes: Number.isFinite(Number(data.reminder_minutes))
+            ? Number(data.reminder_minutes)
+            : DEFAULT_REMINDER_MINUTES,
         dailySummaryEnabled: Boolean(data.daily_summary_enabled),
         dailySummaryTime: typeof data.daily_summary_time === 'string'
             ? data.daily_summary_time.slice(0, 5)
@@ -134,6 +143,7 @@ export async function getAgendaPushState(): Promise<AgendaPushState> {
             permission: 'unsupported',
             hasPublicKey: Boolean(VAPID_PUBLIC_KEY),
             subscribed: false,
+            reminderMinutes: DEFAULT_REMINDER_MINUTES,
             dailySummaryEnabled: false,
             dailySummaryTime: DEFAULT_DAILY_SUMMARY_TIME,
         };
@@ -182,6 +192,32 @@ export async function disableAgendaPushNotifications(): Promise<AgendaPushState>
     if (subscription) {
         await persistSubscription(subscription, false);
         await subscription.unsubscribe();
+    }
+
+    return getAgendaPushState();
+}
+
+export async function updateAgendaPushReminderMinutes(minutes: number): Promise<AgendaPushState> {
+    const subscription = await getCurrentPushSubscription();
+    if (!subscription) {
+        throw new Error('Ative os alertas da agenda antes de escolher o tempo.');
+    }
+
+    const normalizedMinutes = Math.round(Number(minutes));
+    if (!Number.isFinite(normalizedMinutes) || normalizedMinutes < MIN_REMINDER_MINUTES || normalizedMinutes > MAX_REMINDER_MINUTES) {
+        throw new Error('Escolha um tempo de antecedencia valido.');
+    }
+
+    const { error } = await supabase
+        .from('agenda_push_subscriptions')
+        .update({
+            reminder_minutes: normalizedMinutes,
+            last_seen_at: new Date().toISOString(),
+        })
+        .eq('endpoint', subscription.endpoint);
+
+    if (error) {
+        throw new Error(error.message || 'Nao foi possivel salvar o tempo de antecedencia.');
     }
 
     return getAgendaPushState();

@@ -24,10 +24,13 @@ const RECEIPT_URL = 'https://avlefzsipbqvollukgyt.supabase.co/functions/v1/agend
 interface AgendamentoReminder {
   id: number;
   user_id: string;
+  client_id?: number | null;
   client_name: string;
   start: string;
   end?: string | null;
   notes?: string | null;
+  address?: string | null;
+  maps_url?: string | null;
 }
 
 interface ProfileScope {
@@ -146,15 +149,82 @@ function getEndValue(row: Record<string, unknown>): string | null {
   return typeof value === 'string' ? value : null;
 }
 
+function getClientId(row: Record<string, unknown>): number | null {
+  const value = row.client_id ?? row.cliente_id;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function normalizeAgendamento(row: Record<string, unknown>): AgendamentoReminder {
   return {
     id: Number(row.id),
     user_id: String(row.user_id),
+    client_id: getClientId(row),
     client_name: String(row.client_name || 'Cliente'),
     start: getStartValue(row),
     end: getEndValue(row),
     notes: typeof row.notes === 'string' ? row.notes : null,
   };
+}
+
+function formatClientAddress(row: Record<string, unknown>): string {
+  const get = (key: string) => {
+    const value = row[key];
+    return typeof value === 'string' ? value.trim() : '';
+  };
+
+  const structured = [
+    get('logradouro'),
+    get('numero'),
+    get('complemento'),
+    get('bairro'),
+    get('cidade'),
+    get('uf'),
+    get('cep'),
+  ].filter(Boolean).join(', ');
+
+  return structured || get('endereco');
+}
+
+function buildMapsUrl(address: string): string {
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}&travelmode=driving`;
+}
+
+async function attachClientAddresses(
+  adminClient: ReturnType<typeof createSupabaseAdminClient>,
+  agendamentos: AgendamentoReminder[],
+): Promise<void> {
+  const clientIds = [...new Set(
+    agendamentos
+      .map((agendamento) => agendamento.client_id)
+      .filter((id): id is number => typeof id === 'number' && Number.isFinite(id)),
+  )];
+
+  if (clientIds.length === 0) return;
+
+  const { data, error } = await adminClient
+    .from('clients')
+    .select('id,logradouro,numero,complemento,bairro,cidade,uf,cep')
+    .in('id', clientIds);
+
+  if (error || !data) return;
+
+  const addressById = new Map<number, string>();
+  (data as Record<string, unknown>[]).forEach((row) => {
+    const id = Number(row.id);
+    if (Number.isFinite(id)) {
+      addressById.set(id, formatClientAddress(row));
+    }
+  });
+
+  agendamentos.forEach((agendamento) => {
+    if (typeof agendamento.client_id !== 'number') return;
+    const address = addressById.get(agendamento.client_id);
+    if (address) {
+      agendamento.address = address;
+      agendamento.maps_url = buildMapsUrl(address);
+    }
+  });
 }
 
 function isModernColumnError(error: unknown): boolean {
@@ -186,7 +256,7 @@ async function fetchAgendamentosInRange(
 
   const modernQuery = await adminClient
     .from('agendamentos')
-    .select('id,user_id,client_name,start,end,notes')
+    .select('id,user_id,client_id,client_name,start,end,notes')
     .gte('start', fromIso)
     .lte('start', horizonIso)
     .order('start', { ascending: true })
@@ -205,7 +275,7 @@ async function fetchAgendamentosInRange(
 
   const legacyQuery = await adminClient
     .from('agendamentos')
-    .select('id,user_id,client_name,start_time,end_time,notes')
+    .select('id,user_id,client_id,client_name,start_time,end_time,notes')
     .gte('start_time', fromIso)
     .lte('start_time', horizonIso)
     .order('start_time', { ascending: true })
@@ -291,6 +361,23 @@ async function fetchSubscriptions(
   return [...byId.values()];
 }
 
+async function fetchMaxReminderMinutes(
+  adminClient: ReturnType<typeof createSupabaseAdminClient>,
+): Promise<number> {
+  const { data, error } = await adminClient
+    .from('agenda_push_subscriptions')
+    .select('reminder_minutes')
+    .eq('enabled', true)
+    .order('reminder_minutes', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data) return DEFAULT_REMINDER_MINUTES;
+
+  const value = Number(data.reminder_minutes);
+  return Number.isFinite(value) && value > 0 ? value : DEFAULT_REMINDER_MINUTES;
+}
+
 async function fetchDailySummarySubscriptions(
   adminClient: ReturnType<typeof createSupabaseAdminClient>,
 ): Promise<PushSubscriptionRecord[]> {
@@ -316,6 +403,18 @@ function shouldNotify(nowMs: number, agendamento: AgendamentoReminder, subscript
     && reminderAtMs <= nowMs;
 }
 
+function formatReminderLead(reminderMinutes: number): string {
+  if (reminderMinutes % 1440 === 0) {
+    const days = reminderMinutes / 1440;
+    return days === 1 ? 'em 1 dia' : `em ${days} dias`;
+  }
+  if (reminderMinutes % 60 === 0) {
+    const hours = reminderMinutes / 60;
+    return hours === 1 ? 'em 1 hora' : `em ${hours} horas`;
+  }
+  return `em ${reminderMinutes} min`;
+}
+
 function createPayload(
   agendamento: AgendamentoReminder,
   reminderMinutes: number,
@@ -328,18 +427,34 @@ function createPayload(
     timeZone: TIME_ZONE,
   }).format(startDate);
 
+  const lead = formatReminderLead(reminderMinutes);
+  const bodyLines = [`Atendimento as ${startTime} (${lead}).`];
+  if (agendamento.address) {
+    bodyLines.push(`Local: ${agendamento.address}`);
+  }
+
+  const actions: Array<{ action: string; title: string }> = [
+    { action: 'open-agenda', title: 'Abrir agenda' },
+  ];
+  if (agendamento.maps_url) {
+    actions.push({ action: 'navigate', title: 'Como chegar' });
+  }
+
   return JSON.stringify({
     title: `Agenda: ${agendamento.client_name}`,
-    body: `Atendimento as ${startTime}. Toque para abrir a agenda.`,
+    body: bodyLines.join('\n'),
     icon: '/icon-192x192.png',
     badge: '/icon-192x192.png',
     tag: `agenda-${agendamento.id}-${reminderMinutes}`,
     url: AGENDA_URL,
+    mapsUrl: agendamento.maps_url || null,
+    address: agendamento.address || null,
+    actions,
     agendamentoId: agendamento.id,
     timestamp: Date.now(),
     vibrate: [180, 80, 180],
     receipt: receipt ? { ...receipt, url: RECEIPT_URL } : null,
-    requireInteraction: false,
+    requireInteraction: Boolean(agendamento.maps_url),
   });
 }
 
@@ -502,6 +617,65 @@ function createTestPayload(): string {
     vibrate: [180, 80, 180],
     requireInteraction: false,
   });
+}
+
+function createReminderTestPayload(agendamento: AgendamentoReminder): string {
+  const startTime = new Intl.DateTimeFormat('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: TIME_ZONE,
+  }).format(new Date(agendamento.start));
+
+  const bodyLines = [`Proximo: ${agendamento.client_name} as ${startTime}.`];
+  if (agendamento.address) {
+    bodyLines.push(`Local: ${agendamento.address}`);
+    bodyLines.push('Toque em "Como chegar" para testar a navegacao.');
+  }
+
+  const actions: Array<{ action: string; title: string }> = [
+    { action: 'open-agenda', title: 'Abrir agenda' },
+  ];
+  if (agendamento.maps_url) {
+    actions.push({ action: 'navigate', title: 'Como chegar' });
+  }
+
+  return JSON.stringify({
+    title: 'Teste dos alertas da agenda',
+    body: bodyLines.join('\n'),
+    icon: '/icon-192x192.png',
+    badge: '/icon-192x192.png',
+    tag: `agenda-test-${Date.now()}`,
+    url: AGENDA_URL,
+    mapsUrl: agendamento.maps_url || null,
+    address: agendamento.address || null,
+    actions,
+    timestamp: Date.now(),
+    vibrate: [180, 80, 180],
+    requireInteraction: Boolean(agendamento.maps_url),
+  });
+}
+
+async function findNextTestAgendamento(
+  adminClient: ReturnType<typeof createSupabaseAdminClient>,
+  userId: string,
+  organizationId: string | null,
+): Promise<AgendamentoReminder | null> {
+  const now = new Date();
+  const horizon = new Date(now.getTime() + (30 * 24 * 60 * 60_000));
+  const agendamentos = await fetchAgendamentosInRange(adminClient, now, horizon);
+  const profileIds = uniqueValues([userId, ...agendamentos.map((a) => a.user_id)]);
+  const profiles = await fetchProfiles(adminClient, profileIds);
+  const scoped = agendamentos.filter((a) => (
+    a.user_id === userId ||
+    (organizationId && profiles.get(a.user_id)?.organization_id === organizationId)
+  ));
+
+  if (scoped.length === 0) return null;
+
+  await attachClientAddresses(adminClient, scoped);
+
+  // Prefere o proximo agendamento que tenha endereco (para testar a navegacao).
+  return scoped.find((a) => Boolean(a.address)) ?? scoped[0];
 }
 
 async function registerPendingDelivery(
@@ -678,12 +852,19 @@ async function handleTestRequest(req: Request): Promise<Response> {
     organizationId ? [organizationId] : [],
   );
 
+  // Usa o proximo agendamento real (com endereco, se houver) para que o teste
+  // mostre exatamente como sera o alerta, incluindo o botao "Como chegar".
+  const nextAgendamento = await findNextTestAgendamento(adminClient, userId, organizationId);
+  const payload = nextAgendamento
+    ? createReminderTestPayload(nextAgendamento)
+    : createTestPayload();
+
   let sent = 0;
   let failed = 0;
 
   for (const subscription of subscriptions) {
     try {
-      await sendPushToSubscription(subscription, createTestPayload());
+      await sendPushToSubscription(subscription, payload);
       sent += 1;
     } catch (error) {
       await disableExpiredSubscription(adminClient, subscription, error);
@@ -697,6 +878,7 @@ async function handleTestRequest(req: Request): Promise<Response> {
     sent,
     failed,
     subscriptions: subscriptions.length,
+    hasAddress: Boolean(nextAgendamento?.address),
     error: sent > 0 ? null : 'Nenhum dispositivo ativo recebeu o teste',
   }, sent > 0 ? 200 : 400);
 }
@@ -856,8 +1038,10 @@ serve(async (req) => {
 
     const adminClient = createSupabaseAdminClient();
     const now = new Date();
-    const horizon = new Date(now.getTime() + ((DEFAULT_REMINDER_MINUTES + CRON_DRIFT_MINUTES) * 60_000));
+    const maxReminderMinutes = await fetchMaxReminderMinutes(adminClient);
+    const horizon = new Date(now.getTime() + ((maxReminderMinutes + CRON_DRIFT_MINUTES) * 60_000));
     const agendamentos = await fetchUpcomingAgendamentos(adminClient, now, horizon);
+    await attachClientAddresses(adminClient, agendamentos);
 
     const userIds = uniqueValues(agendamentos.map((agendamento) => agendamento.user_id));
     const profiles = await fetchProfiles(adminClient, userIds);

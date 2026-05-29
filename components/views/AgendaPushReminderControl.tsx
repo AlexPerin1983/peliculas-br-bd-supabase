@@ -7,7 +7,31 @@ import {
     sendAgendaPushDailySummaryTest,
     sendAgendaPushTest,
     updateAgendaPushDailySummary,
+    updateAgendaPushReminderMinutes,
 } from '../../services/agendaPushNotifications';
+
+const REMINDER_OPTIONS: { value: number; label: string }[] = [
+    { value: 10, label: '10 minutos antes' },
+    { value: 15, label: '15 minutos antes' },
+    { value: 30, label: '30 minutos antes' },
+    { value: 45, label: '45 minutos antes' },
+    { value: 60, label: '1 hora antes' },
+    { value: 120, label: '2 horas antes' },
+    { value: 180, label: '3 horas antes' },
+    { value: 1440, label: '1 dia antes' },
+];
+
+const formatReminderLabel = (minutes: number): string => {
+    if (minutes % 1440 === 0) {
+        const days = minutes / 1440;
+        return days === 1 ? '1 dia antes' : `${days} dias antes`;
+    }
+    if (minutes % 60 === 0) {
+        const hours = minutes / 60;
+        return hours === 1 ? '1h antes' : `${hours}h antes`;
+    }
+    return `${minutes}min antes`;
+};
 
 const getStatusText = (state: AgendaPushState | null, errorMessage: string | null, successMessage: string | null) => {
     if (errorMessage) return errorMessage;
@@ -16,15 +40,16 @@ const getStatusText = (state: AgendaPushState | null, errorMessage: string | nul
     if (!state.supported) return 'Indisponivel neste navegador';
     if (!state.hasPublicKey) return 'Configuracao pendente';
     if (state.permission === 'denied') return 'Bloqueado no navegador';
-    if (state.subscribed && state.dailySummaryEnabled) return `Ativo + resumo ${state.dailySummaryTime}`;
-    if (state.subscribed) return 'Ativo 30min antes';
+    if (state.subscribed && state.dailySummaryEnabled) return `Ativo ${formatReminderLabel(state.reminderMinutes)} + resumo ${state.dailySummaryTime}`;
+    if (state.subscribed) return `Ativo ${formatReminderLabel(state.reminderMinutes)}`;
     return 'Desativado';
 };
 
 const AgendaPushReminderControl: React.FC = () => {
     const [state, setState] = useState<AgendaPushState | null>(null);
-    const [busyAction, setBusyAction] = useState<'toggle' | 'test' | 'summary' | 'summaryTest' | null>(null);
+    const [busyAction, setBusyAction] = useState<'toggle' | 'test' | 'reminder' | 'summary' | 'summaryTest' | null>(null);
     const [summaryTime, setSummaryTime] = useState('18:00');
+    const [reminderMinutes, setReminderMinutes] = useState(30);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -46,6 +71,12 @@ const AgendaPushReminderControl: React.FC = () => {
         }
     }, [state?.dailySummaryTime]);
 
+    useEffect(() => {
+        if (typeof state?.reminderMinutes === 'number') {
+            setReminderMinutes(state.reminderMinutes);
+        }
+    }, [state?.reminderMinutes]);
+
     const handleToggle = async () => {
         setBusyAction('toggle');
         setErrorMessage(null);
@@ -56,7 +87,7 @@ const AgendaPushReminderControl: React.FC = () => {
                 ? await disableAgendaPushNotifications()
                 : await enableAgendaPushNotifications();
             setState(nextState);
-            setSuccessMessage(nextState.subscribed ? 'Ativo 30min antes' : 'Alertas desativados');
+            setSuccessMessage(nextState.subscribed ? `Ativo ${formatReminderLabel(nextState.reminderMinutes)}` : 'Alertas desativados');
         } catch (error) {
             setErrorMessage(error instanceof Error ? error.message : 'Nao foi possivel atualizar alertas.');
             await refreshState();
@@ -75,6 +106,24 @@ const AgendaPushReminderControl: React.FC = () => {
             setSuccessMessage('Teste enviado para este celular');
         } catch (error) {
             setErrorMessage(error instanceof Error ? error.message : 'Nao foi possivel enviar o teste.');
+        } finally {
+            setBusyAction(null);
+        }
+    };
+
+    const handleReminderSave = async (minutes: number) => {
+        setReminderMinutes(minutes);
+        setBusyAction('reminder');
+        setErrorMessage(null);
+        setSuccessMessage(null);
+
+        try {
+            const nextState = await updateAgendaPushReminderMinutes(minutes);
+            setState(nextState);
+            setSuccessMessage(`Alertas ${formatReminderLabel(nextState.reminderMinutes)}`);
+        } catch (error) {
+            setErrorMessage(error instanceof Error ? error.message : 'Nao foi possivel salvar o tempo.');
+            await refreshState();
         } finally {
             setBusyAction(null);
         }
@@ -155,6 +204,37 @@ const AgendaPushReminderControl: React.FC = () => {
                     </button>
                 </div>
             </div>
+
+            {isEnabled ? (
+                <div className="flex flex-col gap-2 border-t border-[var(--border-subtle)] px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                        <p className="text-xs font-black uppercase text-[var(--text-muted)]">Antecedencia do alerta</p>
+                        <p className="text-xs font-semibold text-[var(--text-muted)]">
+                            Quando avisar antes de cada atendimento
+                        </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                        <select
+                            value={reminderMinutes}
+                            onChange={(event) => handleReminderSave(Number(event.target.value))}
+                            disabled={isActionDisabled}
+                            className="h-9 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] px-2 text-sm font-black text-[var(--text-strong)] outline-none focus:border-[var(--brand-primary)] disabled:cursor-not-allowed disabled:opacity-55"
+                            aria-label="Tempo de antecedencia do alerta"
+                        >
+                            {REMINDER_OPTIONS.some((option) => option.value === reminderMinutes)
+                                ? null
+                                : <option value={reminderMinutes}>{formatReminderLabel(reminderMinutes)}</option>}
+                            {REMINDER_OPTIONS.map((option) => (
+                                <option key={option.value} value={option.value}>{option.label}</option>
+                            ))}
+                        </select>
+                        {busyAction === 'reminder' ? (
+                            <span className="text-xs font-bold text-[var(--text-muted)]">...</span>
+                        ) : null}
+                    </div>
+                </div>
+            ) : null}
 
             {isEnabled ? (
                 <div className="flex flex-col gap-2 border-t border-[var(--border-subtle)] px-3 py-3 sm:flex-row sm:items-center sm:justify-between">

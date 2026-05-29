@@ -1,7 +1,7 @@
 // Service Worker com Auto-Atualização
 // ========================================
 // VERSÃO: Mude este número para forçar atualização nos clientes
-const SW_VERSION = 'v2.3.3';
+const SW_VERSION = 'v2.4.1';
 const CACHE_NAME = `peliculas-br-bd-${SW_VERSION}`;
 
 // Lista de recursos essenciais para cache offline
@@ -21,9 +21,10 @@ self.addEventListener('install', (event) => {
                 return cache.addAll(ESSENTIAL_CACHE);
             })
             .then(() => {
-                console.log(`[SW ${SW_VERSION}] Ativando imediatamente (skipWaiting)`);
-                // CRÍTICO: Força a ativação imediata sem esperar
-                return self.skipWaiting();
+                // NÃO força skipWaiting aqui. O novo Service Worker fica em "waiting"
+                // até o usuário clicar em "Atualizar Agora" no banner (SKIP_WAITING).
+                // Isso evita ativação automática + reload em loop.
+                console.log(`[SW ${SW_VERSION}] Instalado e aguardando ativação pelo usuário`);
             })
     );
 });
@@ -148,6 +149,24 @@ function getNotificationUrl(data) {
     return '/?tab=agenda';
 }
 
+function getMapsUrl(data) {
+    if (data && typeof data.mapsUrl === 'string' && /^https:\/\/www\.google\.com\/maps\//.test(data.mapsUrl)) {
+        return data.mapsUrl;
+    }
+
+    return null;
+}
+
+function getNotificationActions(payload) {
+    if (Array.isArray(payload.actions)) {
+        return payload.actions
+            .filter((action) => action && typeof action.action === 'string' && typeof action.title === 'string')
+            .slice(0, 2);
+    }
+
+    return [{ action: 'open-agenda', title: 'Abrir agenda' }];
+}
+
 function getReceipt(data) {
     const receipt = data && data.receipt;
     if (!receipt || typeof receipt !== 'object') return null;
@@ -208,15 +227,11 @@ self.addEventListener('push', (event) => {
         requireInteraction: Boolean(payload.requireInteraction),
         data: {
             url: getNotificationUrl(payload),
+            mapsUrl: getMapsUrl(payload),
             agendamentoId: payload.agendamentoId || null,
             receipt: getReceipt(payload),
         },
-        actions: [
-            {
-                action: 'open-agenda',
-                title: 'Abrir agenda',
-            },
-        ],
+        actions: getNotificationActions(payload),
     };
 
     event.waitUntil((async () => {
@@ -235,11 +250,25 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
     event.notification.close();
 
-    const urlToOpen = new URL(getNotificationUrl(event.notification.data || {}), self.location.origin).href;
+    const data = event.notification.data || {};
+    const mapsUrl = getMapsUrl(data);
+
+    // Botao "Como chegar": abre o Google Maps em uma nova aba.
+    if (event.action === 'navigate' && mapsUrl) {
+        event.waitUntil(
+            Promise.all([
+                recordPushReceipt(data, 'clicked'),
+                self.clients.openWindow ? self.clients.openWindow(mapsUrl) : Promise.resolve(),
+            ])
+        );
+        return;
+    }
+
+    const urlToOpen = new URL(getNotificationUrl(data), self.location.origin).href;
 
     event.waitUntil(
         Promise.all([
-            recordPushReceipt(event.notification.data || {}, 'clicked'),
+            recordPushReceipt(data, 'clicked'),
             self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
             for (const client of clients) {
                 if ('focus' in client) {

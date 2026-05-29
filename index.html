@@ -123,12 +123,11 @@
 
               if (newWorker) {
                 newWorker.addEventListener('statechange', () => {
-                  // When the new service worker is installed and waiting
+                  // Quando o novo SW estiver instalado e houver um controlador atual,
+                  // apenas notifica o usuário. NÃO ativamos automaticamente (sem
+                  // SKIP_WAITING aqui) para evitar reload em loop. A ativação acontece
+                  // quando o usuário clica em "Atualizar Agora" no banner.
                   if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                    // Send skip waiting message
-                    newWorker.postMessage({ type: 'SKIP_WAITING' });
-
-                    // Show notification to user (optional)
                     if (window.showUpdateNotification) {
                       window.showUpdateNotification();
                     }
@@ -136,11 +135,6 @@
                 });
               }
             });
-
-            // Check if there's a waiting service worker
-            if (registration.waiting) {
-              registration.waiting.postMessage({ type: 'SKIP_WAITING' });
-            }
           })
           .catch(error => {
             console.error('❌ Falha ao registrar Service Worker:', error);

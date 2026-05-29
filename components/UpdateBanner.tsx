@@ -89,19 +89,8 @@ const UpdateBanner: React.FC<UpdateBannerProps> = ({ onDismiss }) => {
         };
     }, [checkForUpdates, isLocalDev]);
 
-    useEffect(() => {
-        if (isLocalDev || !('serviceWorker' in navigator)) return;
-
-        const handleControllerChange = () => {
-            window.location.reload();
-        };
-
-        navigator.serviceWorker.addEventListener('controllerchange', handleControllerChange);
-
-        return () => {
-            navigator.serviceWorker.removeEventListener('controllerchange', handleControllerChange);
-        };
-    }, [isLocalDev]);
+    // O reload em 'controllerchange' é tratado uma única vez no index.html
+    // (com guarda anti-loop). Não duplicamos aqui para evitar reloads repetidos.
 
     const handleDismiss = () => {
         setShowBanner(false);
