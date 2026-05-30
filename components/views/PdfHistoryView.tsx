@@ -2974,6 +2974,7 @@ const PdfHistoryItem: React.FC<{
     const [copiedMessageKey, setCopiedMessageKey] = useState<string | null>(null);
     const [isMessagesExpanded, setIsMessagesExpanded] = useState(false);
     const [selectedMessageIndex, setSelectedMessageIndex] = useState(0);
+    const [isEditingMessage, setIsEditingMessage] = useState(false);
     const [whatsAppMessage, setWhatsAppMessage] = useState<string | null>(null);
 
     const handleActionClick = (status: SavedPDF['status']) => {
@@ -3305,7 +3306,7 @@ const PdfHistoryItem: React.FC<{
                                                     <button
                                                         key={`${pdf.id}-message-pill-${idx}`}
                                                         type="button"
-                                                        onClick={() => setSelectedMessageIndex(idx)}
+                                                        onClick={() => { setSelectedMessageIndex(idx); setIsEditingMessage(false); }}
                                                         aria-pressed={idx === safeIndex}
                                                         aria-label={`Mensagem ${idx + 1}`}
                                                         className={`h-7 min-w-[1.75rem] rounded-full px-2.5 text-[12px] font-semibold tabular-nums transition-colors ${
@@ -3327,6 +3328,19 @@ const PdfHistoryItem: React.FC<{
                                                 <div className="flex items-center gap-1.5">
                                                     <button
                                                         type="button"
+                                                        onClick={() => setIsEditingMessage(current => !current)}
+                                                        aria-label={isEditingMessage ? `Concluir edição da mensagem ${safeIndex + 1}` : `Editar mensagem ${safeIndex + 1}`}
+                                                        aria-pressed={isEditingMessage}
+                                                        className={`inline-flex h-8 w-8 items-center justify-center rounded-full border transition-colors ${
+                                                            isEditingMessage
+                                                                ? 'border-amber-300 bg-amber-100 text-amber-700 dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-300'
+                                                                : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300'
+                                                        }`}
+                                                    >
+                                                        <i className={`${isEditingMessage ? 'fas fa-check' : 'fas fa-pen'} text-[12px]`} aria-hidden="true"></i>
+                                                    </button>
+                                                    <button
+                                                        type="button"
                                                         onClick={() => handleOpenWhatsApp(message)}
                                                         aria-label={`Enviar mensagem ${safeIndex + 1} pelo WhatsApp`}
                                                         className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 transition-colors hover:bg-emerald-100 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-300"
@@ -3343,25 +3357,32 @@ const PdfHistoryItem: React.FC<{
                                                     </button>
                                                 </div>
                                             </div>
-                                            <label className="mt-2 block">
-                                                <span className="sr-only">Editar mensagem {safeIndex + 1}</span>
-                                                <textarea
-                                                    value={message}
-                                                    ref={(el) => {
-                                                        if (el) {
-                                                            el.style.height = 'auto';
-                                                            el.style.height = `${el.scrollHeight}px`;
-                                                        }
-                                                    }}
-                                                    onChange={(event) => {
-                                                        handleReadyMessageChange(safeIndex, event.target.value);
-                                                        event.target.style.height = 'auto';
-                                                        event.target.style.height = `${event.target.scrollHeight}px`;
-                                                    }}
-                                                    rows={2}
-                                                    className="w-full resize-none overflow-hidden rounded-[12px] border border-slate-100 bg-slate-50/80 p-2.5 text-[13px] leading-6 text-slate-700 outline-none transition focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800/80 dark:bg-slate-900/60 dark:text-slate-300 dark:focus:border-blue-800 dark:focus:bg-slate-950/70"
-                                                />
-                                            </label>
+                                            {isEditingMessage ? (
+                                                <label className="mt-2 block">
+                                                    <span className="sr-only">Editar mensagem {safeIndex + 1}</span>
+                                                    <textarea
+                                                        value={message}
+                                                        autoFocus
+                                                        ref={(el) => {
+                                                            if (el) {
+                                                                el.style.height = 'auto';
+                                                                el.style.height = `${el.scrollHeight}px`;
+                                                            }
+                                                        }}
+                                                        onChange={(event) => {
+                                                            handleReadyMessageChange(safeIndex, event.target.value);
+                                                            event.target.style.height = 'auto';
+                                                            event.target.style.height = `${event.target.scrollHeight}px`;
+                                                        }}
+                                                        rows={3}
+                                                        className="block w-full resize-none overflow-hidden rounded-[12px] border border-blue-300 bg-white p-2.5 text-[13px] leading-6 text-slate-700 outline-none transition focus:ring-4 focus:ring-blue-500/10 dark:border-blue-800 dark:bg-slate-950/70 dark:text-slate-200"
+                                                    />
+                                                </label>
+                                            ) : (
+                                                <p className="mt-2 whitespace-pre-wrap break-words rounded-[12px] border border-slate-100 bg-slate-50/80 p-2.5 text-[13px] leading-6 text-slate-700 dark:border-slate-800/80 dark:bg-slate-900/60 dark:text-slate-300">
+                                                    {message}
+                                                </p>
+                                            )}
                                         </div>
                                     </div>
                                 );
@@ -3379,6 +3400,132 @@ const PdfHistoryItem: React.FC<{
         </div>
     );
 });
+
+
+/**
+ * Pager horizontal controlado para o modal de opções no mobile.
+ *
+ * Em vez de depender de CSS scroll-snap (que conflita com o scroll vertical
+ * das páginas), este componente controla a posição por transform e usa uma
+ * "trava de eixo": no início do toque decide se o gesto é horizontal (trocar
+ * de opção) ou vertical (rolar o conteúdo da opção). Cada página tem seu
+ * próprio scroll vertical nativo. As setas/bolinhas controlam via prop `index`.
+ */
+const OptionsPager: React.FC<{
+    count: number;
+    index: number;
+    onIndexChange: (index: number) => void;
+    renderItem: (index: number) => React.ReactNode;
+}> = ({ count, index, onIndexChange, renderItem }) => {
+    const viewportRef = useRef<HTMLDivElement>(null);
+    const [width, setWidth] = useState(0);
+    const [dragX, setDragX] = useState(0);
+    const [animating, setAnimating] = useState(true);
+    const gesture = useRef<{ startX: number; startY: number; axis: null | 'x' | 'y'; active: boolean }>({
+        startX: 0,
+        startY: 0,
+        axis: null,
+        active: false,
+    });
+
+    useEffect(() => {
+        const vp = viewportRef.current;
+        if (!vp) return;
+        const measure = () => setWidth(vp.clientWidth);
+        measure();
+        const ro = new ResizeObserver(measure);
+        ro.observe(vp);
+        return () => ro.disconnect();
+    }, []);
+
+    useEffect(() => {
+        const vp = viewportRef.current;
+        if (!vp) return;
+
+        const onStart = (event: TouchEvent) => {
+            if (event.touches.length !== 1) return;
+            const touch = event.touches[0];
+            gesture.current = { startX: touch.clientX, startY: touch.clientY, axis: null, active: true };
+            setAnimating(false);
+        };
+
+        const onMove = (event: TouchEvent) => {
+            const g = gesture.current;
+            if (!g.active || event.touches.length !== 1) return;
+            const touch = event.touches[0];
+            const dx = touch.clientX - g.startX;
+            const dy = touch.clientY - g.startY;
+            if (g.axis === null && (Math.abs(dx) > 6 || Math.abs(dy) > 6)) {
+                g.axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+            }
+            if (g.axis === 'x') {
+                event.preventDefault();
+                let offset = dx;
+                if ((index === 0 && dx > 0) || (index === count - 1 && dx < 0)) {
+                    offset = dx * 0.35; // resistência nas bordas
+                }
+                setDragX(offset);
+            }
+        };
+
+        const onEnd = () => {
+            const g = gesture.current;
+            if (!g.active) return;
+            const wasHorizontal = g.axis === 'x';
+            g.active = false;
+            g.axis = null;
+            setAnimating(true);
+            if (wasHorizontal) {
+                const w = vp.clientWidth || 1;
+                setDragX(current => {
+                    const threshold = w * 0.18;
+                    let next = index;
+                    if (current <= -threshold && index < count - 1) next = index + 1;
+                    else if (current >= threshold && index > 0) next = index - 1;
+                    if (next !== index) onIndexChange(next);
+                    return 0;
+                });
+            } else {
+                setDragX(0);
+            }
+        };
+
+        vp.addEventListener('touchstart', onStart, { passive: true });
+        vp.addEventListener('touchmove', onMove, { passive: false });
+        vp.addEventListener('touchend', onEnd, { passive: true });
+        vp.addEventListener('touchcancel', onEnd, { passive: true });
+        return () => {
+            vp.removeEventListener('touchstart', onStart);
+            vp.removeEventListener('touchmove', onMove);
+            vp.removeEventListener('touchend', onEnd);
+            vp.removeEventListener('touchcancel', onEnd);
+        };
+    }, [index, count, onIndexChange]);
+
+    const translate = -(index * width) + dragX;
+
+    return (
+        <div ref={viewportRef} className="absolute inset-0 overflow-hidden" style={{ touchAction: 'pan-y' }}>
+            <div
+                className="flex h-full"
+                style={{
+                    transform: `translate3d(${translate}px, 0, 0)`,
+                    transition: animating ? 'transform 280ms cubic-bezier(0.22, 0.61, 0.36, 1)' : 'none',
+                }}
+            >
+                {Array.from({ length: count }).map((_, i) => (
+                    <div
+                        key={i}
+                        className="h-full shrink-0 overflow-y-auto overscroll-contain p-4"
+                        style={{ width: width || '100%' }}
+                    >
+                        {renderItem(i)}
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
 
 
 const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendamentos, films, googleReviewsLink, onDelete, onDownload, onUpdateStatus, onSchedule, onGenerateCombinedPdf, onNavigateToOption }) => {
@@ -4669,25 +4816,33 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
                         </div>
 
                         <div className="relative min-h-0 flex-1 overflow-hidden">
-                            <div key={groupPdfs[current].id} className="absolute inset-0 overflow-y-auto overscroll-contain p-4">
-                                <PdfHistoryItem
-                                    pdf={groupPdfs[current]}
-                                    client={client}
-                                    agendamento={agendamentosByPdfId[groupPdfs[current].id!]}
-                                    onDownload={onDownload}
-                                    onDelete={onDelete}
-                                    onUpdateStatus={onUpdateStatus}
-                                    onSchedule={onSchedule}
-                                    films={films}
-                                    messageTemplates={messageTemplates}
-                                    googleReviewsLink={googleReviewsLink}
-                                    isSelected={selectedPdfIds.has(groupPdfs[current].id!)}
-                                    onToggleSelect={handleToggleSelect}
-                                    onNavigateToOption={onNavigateToOption}
-                                    isFunnelReference={funnelSummary.opportunities.some(opportunity => opportunity.referencePdf.id === groupPdfs[current].id)}
-                                    onSetFunnelReference={handleSetFunnelReference}
-                                />
-                            </div>
+                            <OptionsPager
+                                count={total}
+                                index={current}
+                                onIndexChange={goToOption}
+                                renderItem={(i) => {
+                                    const pdf = groupPdfs[i];
+                                    return (
+                                        <PdfHistoryItem
+                                            pdf={pdf}
+                                            client={client}
+                                            agendamento={agendamentosByPdfId[pdf.id!]}
+                                            onDownload={onDownload}
+                                            onDelete={onDelete}
+                                            onUpdateStatus={onUpdateStatus}
+                                            onSchedule={onSchedule}
+                                            films={films}
+                                            messageTemplates={messageTemplates}
+                                            googleReviewsLink={googleReviewsLink}
+                                            isSelected={selectedPdfIds.has(pdf.id!)}
+                                            onToggleSelect={handleToggleSelect}
+                                            onNavigateToOption={onNavigateToOption}
+                                            isFunnelReference={funnelSummary.opportunities.some(opportunity => opportunity.referencePdf.id === pdf.id)}
+                                            onSetFunnelReference={handleSetFunnelReference}
+                                        />
+                                    );
+                                }}
+                            />
 
                             {total > 1 && current > 0 && (
                                 <button
