@@ -2526,6 +2526,7 @@ Se não conseguir extrair, retorne: []`;
         isClientSelectionModalOpen,
         setIsClientSelectionModalOpen,
         clients,
+        allSavedPdfs,
         setSelectedClientId,
         isLoading,
         handleAddNewClientFromSelection,

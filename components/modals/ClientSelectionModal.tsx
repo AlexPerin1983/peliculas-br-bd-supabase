@@ -17,13 +17,20 @@ const useDebounce = (value: string, delay: number) => {
     return debouncedValue;
 };
 
+interface ClientStats {
+    count: number;
+    hasPending: boolean;
+    hasExpired: boolean;
+    isConverted: boolean;
+}
+
 // Componente para item de cliente com long press para fixar
 const ClientItem: React.FC<{
     client: Client;
-    isConverted: boolean;
+    stats: ClientStats;
     onSelect: (id: number) => void;
     onTogglePin: (id: number) => void;
-}> = ({ client, isConverted, onSelect, onTogglePin }) => {
+}> = ({ client, stats, onSelect, onTogglePin }) => {
     const [isPressing, setIsPressing] = useState(false);
     const longPressTimer = useRef<NodeJS.Timeout | null>(null);
     const touchStartTime = useRef<number>(0);
@@ -111,19 +118,40 @@ const ClientItem: React.FC<{
         >
             <div className="min-w-0 flex-grow">
                 <div className="flex min-w-0 items-center gap-2">
-                    {isConverted && (
-                        <span
-                            className="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-400 shadow-[0_0_0_3px_rgba(52,211,153,0.14)]"
-                            title="Cliente convertido"
-                            aria-label="Cliente convertido"
-                        />
-                    )}
                     {client.pinned && (
                         <i className="fas fa-thumbtack text-[11px] text-blue-500"></i>
                     )}
                     <p className="truncate text-[14px] font-semibold tracking-[-0.02em] text-slate-800 dark:text-slate-200">{client.nome}</p>
                 </div>
                 <p className="mt-1 truncate text-[12px] text-slate-500 dark:text-slate-400">{client.telefone || 'Sem telefone'}</p>
+                {(stats.isConverted || stats.hasPending || stats.hasExpired || stats.count > 0) && (
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                        {stats.isConverted && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300">
+                                <i className="fas fa-circle-check text-[9px]"></i>
+                                Fechado
+                            </span>
+                        )}
+                        {stats.hasPending && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-600 dark:bg-amber-500/15 dark:text-amber-300">
+                                <i className="fas fa-clock text-[9px]"></i>
+                                Pendente
+                            </span>
+                        )}
+                        {stats.hasExpired && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-600 dark:bg-rose-500/15 dark:text-rose-300">
+                                <i className="fas fa-circle-exclamation text-[9px]"></i>
+                                Vencida
+                            </span>
+                        )}
+                        {stats.count > 0 && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500 dark:bg-slate-700 dark:text-slate-300">
+                                <i className="fas fa-file-lines text-[9px]"></i>
+                                {stats.count} {stats.count === 1 ? 'orçamento' : 'orçamentos'}
+                            </span>
+                        )}
+                    </div>
+                )}
             </div>
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-50 text-slate-400 dark:bg-slate-700">
                 <i className="fas fa-chevron-right text-[10px]"></i>
@@ -203,13 +231,38 @@ const ClientSelectionModal: React.FC<ClientSelectionModalProps> = ({
         });
     }, [clients, debouncedSearchTerm, isLoading]);
 
-    const convertedClientIds = useMemo(() => {
-        return new Set(
-            savedPdfs
-                .filter(pdf => pdf.status === 'approved')
-                .map(pdf => pdf.clienteId)
-        );
+    const clientStatsMap = useMemo(() => {
+        const map = new Map<number, ClientStats>();
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+
+        for (const pdf of savedPdfs) {
+            const id = pdf.clienteId;
+            if (id == null) continue;
+
+            const stats = map.get(id) ?? { count: 0, hasPending: false, hasExpired: false, isConverted: false };
+            stats.count += 1;
+
+            const status = pdf.status || 'pending';
+            if (status === 'approved') {
+                stats.isConverted = true;
+            } else {
+                const exp = pdf.expirationDate ? new Date(pdf.expirationDate) : null;
+                const isExpired = exp && !Number.isNaN(exp.getTime())
+                    && new Date(exp).setHours(0, 0, 0, 0) < todayStart.getTime();
+                if (isExpired) {
+                    stats.hasExpired = true;
+                } else {
+                    stats.hasPending = true;
+                }
+            }
+
+            map.set(id, stats);
+        }
+        return map;
     }, [savedPdfs]);
+
+    const emptyStats = useMemo<ClientStats>(() => ({ count: 0, hasPending: false, hasExpired: false, isConverted: false }), []);
 
     const displayedClients = useMemo(() => {
         return filteredClients.slice(0, visibleCount);
@@ -303,7 +356,7 @@ const ClientSelectionModal: React.FC<ClientSelectionModalProps> = ({
                                 <ClientItem
                                     key={client.id}
                                     client={client}
-                                    isConverted={Boolean(client.id && convertedClientIds.has(client.id))}
+                                    stats={(client.id != null && clientStatsMap.get(client.id)) || emptyStats}
                                     onSelect={handleSelectClient}
                                     onTogglePin={onTogglePin}
                                 />
