@@ -59,6 +59,7 @@ type HistoryPeriodKey =
 type DateRange = { start: Date; end: Date };
 
 const HISTORY_FOCUS_FILTER_KEY = 'peliculas-br-history-focus-filter';
+const HISTORY_FOCUS_CLIENT_KEY = 'peliculas-br-history-focus-client';
 
 const HISTORY_FOCUS_FILTER_LABELS: Record<HistoryFocusFilter, string> = {
     all: 'Todos',
@@ -127,6 +128,16 @@ const readInitialHistoryFocusFilter = (): HistoryFocusFilter => {
     return stored === 'pending' || stored === 'approved' || stored === 'revised' || stored === 'expenses' || stored === 'expired'
         ? stored
         : 'all';
+};
+
+const readInitialHistoryFocusClient = (): number | null => {
+    if (typeof window === 'undefined') return null;
+
+    const stored = window.localStorage.getItem(HISTORY_FOCUS_CLIENT_KEY);
+    window.localStorage.removeItem(HISTORY_FOCUS_CLIENT_KEY);
+
+    const parsed = stored ? Number(stored) : NaN;
+    return Number.isFinite(parsed) ? parsed : null;
 };
 
 const isExpiredOpenPdf = (pdf: SavedPDF) => {
@@ -2645,6 +2656,16 @@ const MonthlyExpenseSummaryCard: React.FC<{
     isExpanded,
     onToggleExpanded,
 }) => {
+    // No mobile o detalhe abre em modal de tela cheia; trava o scroll do body enquanto aberto.
+    useEffect(() => {
+        if (!isExpanded) return;
+        const isMobile = typeof window !== 'undefined' && !window.matchMedia('(min-width: 640px)').matches;
+        if (!isMobile) return;
+        const original = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => { document.body.style.overflow = original; };
+    }, [isExpanded]);
+
     if (!selectedSummary) return null;
 
     const hasCategoryExpenses = selectedSummary.expensesByCategory.length > 0;
@@ -2710,13 +2731,26 @@ const MonthlyExpenseSummaryCard: React.FC<{
     const summaryHeader = (
         <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
             <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                    <span className="ui-kicker">Resumo do periodo</span>
-                    <span className="inline-flex items-center rounded-full bg-[var(--surface-muted)] px-2.5 py-1 text-[10px] font-bold text-[var(--text-muted)]">
-                        {selectedSummary.opportunityCount} oportunidade{selectedSummary.opportunityCount === 1 ? '' : 's'}
+                {/* No mobile recolhido vira barra fina e tocavel (titulo + Resultado + seta). No desktop nao e clicavel. */}
+                <button
+                    type="button"
+                    onClick={onToggleExpanded}
+                    className="flex w-full items-center justify-between gap-2 text-left sm:pointer-events-none sm:w-auto sm:justify-start"
+                >
+                    <span className="flex min-w-0 flex-wrap items-center gap-2">
+                        <span className="ui-kicker">Resumo do periodo</span>
+                        <span className="inline-flex items-center rounded-full bg-[var(--surface-muted)] px-2.5 py-1 text-[10px] font-bold text-[var(--text-muted)]">
+                            {selectedSummary.opportunityCount} oportunidade{selectedSummary.opportunityCount === 1 ? '' : 's'}
+                        </span>
                     </span>
-                </div>
-                <div className="mt-3 grid grid-cols-3 gap-2 sm:max-w-[560px]">
+                    <span className="flex shrink-0 items-center gap-2 sm:hidden">
+                        <span className={`truncate text-sm font-bold ${resultTone}`}>
+                            {formatNumberBR(selectedSummary.estimatedProfit)}
+                        </span>
+                        <ChevronRight className="h-4 w-4 text-[var(--text-muted)]" aria-hidden="true" />
+                    </span>
+                </button>
+                <div className="mt-3 hidden grid-cols-3 gap-2 sm:grid sm:max-w-[560px]">
                     {compactStats.map(stat => (
                         <div key={stat.label} className="min-w-0 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] px-3 py-2">
                             <p className="truncate text-[10px] font-bold uppercase text-[var(--text-soft)]">{stat.label}</p>
@@ -2726,7 +2760,7 @@ const MonthlyExpenseSummaryCard: React.FC<{
                 </div>
             </div>
 
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center xl:justify-end">
+            <div className="hidden flex-col gap-2 sm:flex sm:flex-row sm:items-center xl:justify-end">
                 <div className="hidden sm:block">
                     {periodControl}
                 </div>
@@ -2743,19 +2777,7 @@ const MonthlyExpenseSummaryCard: React.FC<{
         </div>
     );
 
-    if (!isExpanded) {
-        return (
-            <section className="ui-card overflow-visible p-3 sm:p-4">
-                {summaryHeader}
-            </section>
-        );
-    }
-
-    return (
-        <section className="space-y-3 overflow-visible">
-            <div className="ui-card overflow-visible p-3 sm:p-4">
-                {summaryHeader}
-            </div>
+    const expandedDetails = (
             <div className="space-y-3">
             <div className="grid min-w-0 grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-5">
                 {statCards.map(({ label, value, hint, icon: Icon, tone }) => (
@@ -2889,6 +2911,44 @@ const MonthlyExpenseSummaryCard: React.FC<{
                 </div>
             </div>
             </div>
+    );
+
+    return (
+        <section className="space-y-3 overflow-visible">
+            <div className="ui-card overflow-visible p-3 sm:p-4">
+                {summaryHeader}
+            </div>
+
+            {isExpanded ? (
+                <div className="hidden sm:block sm:space-y-3">
+                    {expandedDetails}
+                </div>
+            ) : null}
+
+            {isExpanded ? createPortal(
+                <div className="fixed inset-0 z-[60] flex flex-col bg-[var(--surface)] sm:hidden">
+                    <header className="flex items-center gap-3 border-b border-[var(--border-subtle)] px-4 py-3">
+                        <button
+                            type="button"
+                            onClick={onToggleExpanded}
+                            aria-label="Fechar resumo do periodo"
+                            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-muted)] transition-colors hover:text-[var(--text-strong)]"
+                        >
+                            <i className="fas fa-arrow-left text-[13px]" aria-hidden="true"></i>
+                        </button>
+                        <div className="min-w-0">
+                            <p className="ui-kicker">Resumo do periodo</p>
+                            <p className="truncate text-sm font-bold text-[var(--text-strong)]">
+                                {selectedSummary.opportunityCount} oportunidade{selectedSummary.opportunityCount === 1 ? '' : 's'}
+                            </p>
+                        </div>
+                    </header>
+                    <div className="flex-1 overflow-y-auto p-4">
+                        {expandedDetails}
+                    </div>
+                </div>,
+                document.body
+            ) : null}
         </section>
     );
 };
@@ -2904,121 +2964,19 @@ const PdfHistoryItem: React.FC<{
     films: Film[];
     messageTemplates: string[];
     googleReviewsLink?: string;
-    swipedItemId: number | null;
-    onSetSwipedItem: (id: number | null) => void;
     isSelected: boolean;
     onToggleSelect: (id: number) => void;
     onNavigateToOption: (clientId: number, optionId: number) => void;
     isFunnelReference: boolean;
     onSetFunnelReference: (pdf: SavedPDF) => void;
-}> = React.memo(({ pdf, client, agendamento, onDownload, onDelete, onUpdateStatus, onSchedule, films, messageTemplates, googleReviewsLink, swipedItemId, onSetSwipedItem, isSelected, onToggleSelect, onNavigateToOption, isFunnelReference, onSetFunnelReference }) => {
+}> = React.memo(({ pdf, client, agendamento, onDownload, onDelete, onUpdateStatus, onSchedule, films, messageTemplates, googleReviewsLink, isSelected, onToggleSelect, onNavigateToOption, isFunnelReference, onSetFunnelReference }) => {
     const { showToast } = useFeedback();
-    const [translateX, setTranslateX] = useState(0);
     const [copiedMessageKey, setCopiedMessageKey] = useState<string | null>(null);
     const [isMessagesExpanded, setIsMessagesExpanded] = useState(false);
     const [whatsAppMessage, setWhatsAppMessage] = useState<string | null>(null);
-    const touchStartX = useRef(0);
-    const touchStartY = useRef(0);
-    const isDraggingCard = useRef(false);
-    const gestureDirection = useRef<'horizontal' | 'vertical' | null>(null);
-    const swipeableRef = useRef<HTMLDivElement>(null);
-    const currentTranslateX = useRef(0);
-    const ACTION_WIDTH_LEFT = 100;
-    const ACTION_WIDTH_RIGHT = 100;
-
-    useEffect(() => {
-        if (swipedItemId !== pdf.id && swipeableRef.current) {
-            swipeableRef.current.style.transition = 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)';
-            swipeableRef.current.style.transform = `translateX(0px)`;
-            currentTranslateX.current = 0;
-            setTranslateX(0);
-        }
-    }, [swipedItemId, pdf.id]);
-
-    const handleTouchStart = (e: React.TouchEvent) => {
-        if (swipedItemId && swipedItemId !== pdf.id) {
-            onSetSwipedItem(null);
-        }
-        isDraggingCard.current = true;
-        gestureDirection.current = null;
-        touchStartX.current = e.touches[0].clientX;
-        touchStartY.current = e.touches[0].clientY;
-        if (swipeableRef.current) {
-            swipeableRef.current.style.transition = 'none';
-        }
-    };
-
-    const handleTouchMove = (e: React.TouchEvent) => {
-        if (!isDraggingCard.current || !swipeableRef.current) return;
-        const deltaX = e.touches[0].clientX - touchStartX.current;
-        const deltaY = e.touches[0].clientY - touchStartY.current;
-
-        if (gestureDirection.current === null) {
-            if (Math.abs(deltaX) > 10 || Math.abs(deltaY) > 10) {
-                gestureDirection.current = Math.abs(deltaX) > Math.abs(deltaY) ? 'horizontal' : 'vertical';
-            }
-        }
-
-        if (gestureDirection.current === 'vertical') return;
-
-        if (e.cancelable) e.preventDefault();
-
-        const newTranslateX = currentTranslateX.current + deltaX;
-        let finalTranslateX = newTranslateX;
-
-        if (newTranslateX > ACTION_WIDTH_RIGHT) {
-            const overflow = newTranslateX - ACTION_WIDTH_RIGHT;
-            finalTranslateX = ACTION_WIDTH_RIGHT + Math.pow(overflow, 0.7);
-        } else if (newTranslateX < -ACTION_WIDTH_LEFT) {
-            const overflow = -newTranslateX - ACTION_WIDTH_LEFT;
-            finalTranslateX = -ACTION_WIDTH_LEFT - Math.pow(overflow, 0.7);
-        }
-        swipeableRef.current.style.transform = `translateX(${finalTranslateX}px)`;
-    };
-
-    const handleTouchEnd = () => {
-        if (!isDraggingCard.current || !swipeableRef.current) return;
-        isDraggingCard.current = false;
-
-        if (gestureDirection.current === 'vertical') {
-            gestureDirection.current = null;
-            return;
-        }
-        gestureDirection.current = null;
-
-        const transformValue = swipeableRef.current.style.transform;
-        const matrix = new DOMMatrix(transformValue);
-        const currentX = matrix.m41;
-
-        swipeableRef.current.style.transition = 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)';
-
-        if (currentX > ACTION_WIDTH_RIGHT / 2) {
-            swipeableRef.current.style.transform = `translateX(${ACTION_WIDTH_RIGHT}px)`;
-            currentTranslateX.current = ACTION_WIDTH_RIGHT;
-            setTranslateX(ACTION_WIDTH_RIGHT);
-            onSetSwipedItem(pdf.id!);
-        } else if (currentX < -ACTION_WIDTH_LEFT / 2) {
-            swipeableRef.current.style.transform = `translateX(-${ACTION_WIDTH_LEFT}px)`;
-            currentTranslateX.current = -ACTION_WIDTH_LEFT;
-            setTranslateX(-ACTION_WIDTH_LEFT);
-            onSetSwipedItem(pdf.id!);
-        } else {
-            swipeableRef.current.style.transform = `translateX(0px)`;
-            currentTranslateX.current = 0;
-            setTranslateX(0);
-            if (swipedItemId === pdf.id) onSetSwipedItem(null);
-        }
-    };
 
     const handleActionClick = (status: SavedPDF['status']) => {
         onUpdateStatus(pdf.id!, status);
-        if (swipeableRef.current) {
-            swipeableRef.current.style.transition = 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)';
-            swipeableRef.current.style.transform = `translateX(0px)`;
-        }
-        currentTranslateX.current = 0;
-        setTranslateX(0);
-        onSetSwipedItem(null);
     };
 
     const StatusBadge: React.FC<{ status?: SavedPDF['status'] }> = ({ status = 'pending' }) => {
@@ -3099,36 +3057,9 @@ const PdfHistoryItem: React.FC<{
     }, [normalizedPhone, showToast]);
 
     return (
-        <div className="relative overflow-hidden rounded-[var(--radius-panel)] bg-[var(--surface-muted)] ring-1 ring-[var(--border-subtle)]">
-            {/* Background Actions */}
-            <div className="absolute inset-0 flex justify-between items-stretch">
-                <button
-                    onClick={() => handleActionClick('revised')}
-                    className="flex flex-shrink-0 flex-col items-center justify-center rounded-l-[12px] bg-amber-400 text-white transition-colors hover:bg-amber-500"
-                    style={{ width: `${ACTION_WIDTH_RIGHT}px` }}
-                >
-                    <i className="fas fa-eye text-xl"></i>
-                    <span className="text-xs mt-1 font-semibold">Revisar</span>
-                </button>
-                <button
-                    onClick={() => handleActionClick('approved')}
-                    className="flex flex-shrink-0 flex-col items-center justify-center rounded-r-[12px] bg-emerald-500 text-white transition-colors hover:bg-emerald-600"
-                    style={{ width: `${ACTION_WIDTH_LEFT}px` }}
-                >
-                    <i className="fas fa-check text-xl"></i>
-                    <span className="text-xs mt-1 font-semibold">Aprovado</span>
-                </button>
-            </div>
-
-            {/* Foreground Content */}
-            <div
-                ref={swipeableRef}
-                onTouchStart={handleTouchStart}
-                onTouchMove={handleTouchMove}
-                onTouchEnd={handleTouchEnd}
-                style={{ touchAction: 'pan-y' }}
-                className="relative z-10 w-full"
-            >
+        <div className="relative h-full overflow-hidden rounded-[var(--radius-panel)] bg-[var(--surface-muted)] ring-1 ring-[var(--border-subtle)]">
+            {/* Conteúdo do card */}
+            <div className="relative z-10 h-full w-full">
                 {/* Status accent bar */}
                 <div className={`absolute bottom-0 left-0 top-0 z-20 w-[3px] rounded-l-[12px] ${
                     pdf.status === 'approved' ? 'bg-emerald-500' :
@@ -3217,6 +3148,36 @@ const PdfHistoryItem: React.FC<{
                                 Marcar principal
                             </button>
                         )}
+                    </div>
+
+                    {/* Ações rápidas de status (substituem o antigo swipe) */}
+                    <div className="mt-2.5 flex items-center gap-1.5">
+                        <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleActionClick(pdf.status === 'revised' ? 'pending' : 'revised'); }}
+                            aria-pressed={pdf.status === 'revised'}
+                            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold transition-colors ${
+                                pdf.status === 'revised'
+                                    ? 'bg-amber-400 text-white shadow-sm'
+                                    : 'border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300 dark:hover:bg-amber-900/40'
+                            }`}
+                        >
+                            <i className="fas fa-eye text-[10px]" aria-hidden="true" />
+                            Revisar
+                        </button>
+                        <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleActionClick(pdf.status === 'approved' ? 'pending' : 'approved'); }}
+                            aria-pressed={pdf.status === 'approved'}
+                            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold transition-colors ${
+                                pdf.status === 'approved'
+                                    ? 'bg-emerald-500 text-white shadow-sm'
+                                    : 'border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-300 dark:hover:bg-emerald-900/40'
+                            }`}
+                        >
+                            <i className="fas fa-check text-[10px]" aria-hidden="true" />
+                            Aprovado
+                        </button>
                     </div>
 
                     {/* Row 3: filmes */}
@@ -3397,8 +3358,13 @@ const PdfHistoryItem: React.FC<{
 
 const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendamentos, films, googleReviewsLink, onDelete, onDownload, onUpdateStatus, onSchedule, onGenerateCombinedPdf, onNavigateToOption }) => {
     const { showToast } = useFeedback();
-    const [swipedItemId, setSwipedItemId] = useState<number | null>(null);
-    const [expandedClientId, setExpandedClientId] = useState<number | null>(null);
+    const [pendingFocusClientId] = useState<number | null>(() => readInitialHistoryFocusClient());
+    const [expandedClientId, setExpandedClientId] = useState<number | null>(pendingFocusClientId);
+    const [highlightedClientId, setHighlightedClientId] = useState<number | null>(pendingFocusClientId);
+    const clientGroupRefs = useRef(new Map<number, HTMLDivElement>());
+    const [optionsModalClientId, setOptionsModalClientId] = useState<number | null>(null);
+    const [optionsModalIndex, setOptionsModalIndex] = useState(0);
+    const optionsScrollRef = useRef<HTMLDivElement>(null);
     const [selectedPdfIds, setSelectedPdfIds] = useState<Set<number>>(() => readSelectedCombinedPdfIds());
     const [focusFilter, setFocusFilter] = useState<HistoryFocusFilter>(() => readInitialHistoryFocusFilter());
     const [period, setPeriod] = useState<HistoryPeriodKey>('month');
@@ -3663,9 +3629,59 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
     };
 
     const handleToggleExpand = (clientId: number) => {
-        setExpandedClientId(prev => prev === clientId ? null : clientId);
-        setSwipedItemId(null); // Fecha qualquer item que esteja swiped ao expandir/recolher
+        const isDesktop = typeof window !== 'undefined' && window.matchMedia('(min-width: 640px)').matches;
+        if (isDesktop) {
+            setExpandedClientId(prev => prev === clientId ? null : clientId);
+            return;
+        }
+        setOptionsModalIndex(0);
+        setOptionsModalClientId(clientId);
     };
+
+    const closeOptionsModal = useCallback(() => {
+        setOptionsModalClientId(null);
+        setOptionsModalIndex(0);
+    }, []);
+
+    const goToOption = useCallback((index: number) => {
+        const el = optionsScrollRef.current;
+        if (el) {
+            el.scrollTo({ left: index * el.clientWidth, behavior: 'smooth' });
+        }
+        setOptionsModalIndex(index);
+    }, []);
+
+    const handleOptionsScroll = useCallback(() => {
+        const el = optionsScrollRef.current;
+        if (!el || el.clientWidth === 0) return;
+        const index = Math.round(el.scrollLeft / el.clientWidth);
+        setOptionsModalIndex(prev => (prev === index ? prev : index));
+    }, []);
+
+    useEffect(() => {
+        if (optionsModalClientId == null) return;
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') closeOptionsModal();
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => {
+            document.body.style.overflow = previousOverflow;
+            window.removeEventListener('keydown', onKeyDown);
+        };
+    }, [optionsModalClientId, closeOptionsModal]);
+
+    // Ao chegar do orçamento recém-gerado, rola até o cliente e o destaca brevemente
+    useEffect(() => {
+        if (pendingFocusClientId == null) return;
+
+        const node = clientGroupRefs.current.get(pendingFocusClientId);
+        node?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+        const timeout = window.setTimeout(() => setHighlightedClientId(null), 2400);
+        return () => window.clearTimeout(timeout);
+    }, [pendingFocusClientId]);
 
     const handleToggleSelect = (pdfId: number) => {
         setSelectedPdfIds(prev => {
@@ -3683,6 +3699,12 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
             saveSelectedCombinedPdfIds(newSet);
             return newSet;
         });
+    };
+
+    const handleClearSelection = () => {
+        const empty = new Set<number>();
+        setSelectedPdfIds(empty);
+        saveSelectedCombinedPdfIds(empty);
     };
 
     const selectedPdfs = useMemo(() => {
@@ -3906,6 +3928,7 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
     }> = React.memo(({ group }) => {
         const { client, pdfs } = group;
         const isExpanded = expandedClientId === client.id;
+        const isHighlighted = highlightedClientId === client.id;
         const hasSelectedInGroup = pdfs.some(p => selectedPdfIds.has(p.id!));
         const totalPdfs = pdfs.length;
         const latestPdf = pdfs[0];
@@ -3922,7 +3945,15 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
         });
 
         return (
-            <div className={`overflow-hidden border-b border-[var(--border-subtle)] bg-[var(--surface)] transition-all duration-300 last:border-b-0 sm:rounded-[var(--radius-panel)] sm:border sm:shadow-[var(--shadow-hairline)] sm:hover:-translate-y-0.5 sm:hover:border-[var(--border-strong)] ${hasSelectedInGroup ? 'sm:border-[var(--brand-primary)] sm:ring-2 sm:ring-blue-500/15' : 'sm:border-[var(--border-subtle)]'}`}>
+            <div
+                ref={(node) => {
+                    if (node) {
+                        clientGroupRefs.current.set(client.id!, node);
+                    } else {
+                        clientGroupRefs.current.delete(client.id!);
+                    }
+                }}
+                className={`overflow-hidden border-b border-[var(--border-subtle)] bg-[var(--surface)] transition-all duration-300 last:border-b-0 sm:rounded-[var(--radius-panel)] sm:border sm:shadow-[var(--shadow-hairline)] sm:hover:-translate-y-0.5 sm:hover:border-[var(--border-strong)] ${isHighlighted ? 'ring-2 ring-blue-500 ring-offset-2 ring-offset-[var(--surface)] sm:!border-[var(--brand-primary)]' : ''} ${hasSelectedInGroup ? 'sm:border-[var(--brand-primary)] sm:ring-2 sm:ring-blue-500/15' : 'sm:border-[var(--border-subtle)]'}`}>
                 <button
                     onClick={() => handleToggleExpand(client.id!)}
                     className="w-full px-3 py-2.5 text-left transition-colors duration-200 hover:bg-[var(--surface-muted)] sm:px-4 sm:py-3"
@@ -3974,7 +4005,7 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
                     </div>
                 </button>
 
-                <div className={`overflow-hidden transition-all duration-300 ${isExpanded ? 'max-h-[2200px] opacity-100' : 'max-h-0 opacity-0'}`}>
+                <div className={`hidden overflow-hidden transition-all duration-300 sm:block ${isExpanded ? 'max-h-[2200px] opacity-100' : 'max-h-0 opacity-0'}`}>
                     <div className="space-y-2.5 border-t border-slate-100 bg-slate-50/70 p-3 dark:border-slate-800 dark:bg-slate-950/40 sm:space-y-3 sm:p-4 sm:pt-3">
                         <div className="flex flex-wrap items-center gap-2">
                             <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold ${status.tone.chipClassName}`}>
@@ -3999,28 +4030,32 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
                             ) : null}
                         </div>
 
-                        {pdfs.map(pdf => (
-                            <PdfHistoryItem
-                                key={pdf.id}
-                                pdf={pdf}
-                                client={client}
-                                agendamento={agendamentosByPdfId[pdf.id!]}
-                                onDownload={onDownload}
-                                onDelete={onDelete}
-                                onUpdateStatus={onUpdateStatus}
-                                onSchedule={onSchedule}
-                                films={films}
-                                messageTemplates={messageTemplates}
-                                googleReviewsLink={googleReviewsLink}
-                                swipedItemId={swipedItemId}
-                                onSetSwipedItem={setSwipedItemId}
-                                isSelected={selectedPdfIds.has(pdf.id!)}
-                                onToggleSelect={handleToggleSelect}
-                                onNavigateToOption={onNavigateToOption}
-                                isFunnelReference={clientFunnelSummary.opportunities.some(opportunity => opportunity.referencePdf.id === pdf.id)}
-                                onSetFunnelReference={handleSetFunnelReference}
-                            />
-                        ))}
+                        <div className="-mx-3 flex snap-x snap-mandatory gap-3 overflow-x-auto px-3 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:flex-col sm:gap-3 sm:overflow-visible sm:px-0 sm:pb-0">
+                            {pdfs.map(pdf => (
+                                <div
+                                    key={pdf.id}
+                                    className={`${totalPdfs > 1 ? 'w-[85%]' : 'w-full'} shrink-0 snap-start sm:w-full sm:shrink`}
+                                >
+                                    <PdfHistoryItem
+                                        pdf={pdf}
+                                        client={client}
+                                        agendamento={agendamentosByPdfId[pdf.id!]}
+                                        onDownload={onDownload}
+                                        onDelete={onDelete}
+                                        onUpdateStatus={onUpdateStatus}
+                                        onSchedule={onSchedule}
+                                        films={films}
+                                        messageTemplates={messageTemplates}
+                                        googleReviewsLink={googleReviewsLink}
+                                        isSelected={selectedPdfIds.has(pdf.id!)}
+                                        onToggleSelect={handleToggleSelect}
+                                        onNavigateToOption={onNavigateToOption}
+                                        isFunnelReference={clientFunnelSummary.opportunities.some(opportunity => opportunity.referencePdf.id === pdf.id)}
+                                        onSetFunnelReference={handleSetFunnelReference}
+                                    />
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -4041,7 +4076,6 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
     const resetHistoryViewport = useCallback(() => {
         setVisibleCount(10);
         setExpandedClientId(null);
-        setSwipedItemId(null);
     }, []);
 
     const syncDesktopDraftFromPeriod = useCallback((nextPeriod: HistoryPeriodKey) => {
@@ -4285,7 +4319,7 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
             />
 
             {pdfs.length > 0 ? (
-                <section className="rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface)] p-2 shadow-[var(--shadow-hairline)] sm:p-4">
+                <section className="border-0 bg-transparent p-0 shadow-none sm:rounded-[var(--radius-panel)] sm:border sm:border-[var(--border-subtle)] sm:bg-[var(--surface)] sm:p-4 sm:shadow-[var(--shadow-hairline)]">
                     <div className="flex flex-col gap-2 sm:gap-3 xl:flex-row xl:items-center xl:justify-between">
                         <div className="hidden min-w-0 items-center gap-3 sm:flex">
                             <div className="ui-icon-frame h-10 w-10 shrink-0">
@@ -4380,12 +4414,25 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
                 <div className="relative mb-3 rounded-[14px] border border-slate-200/80 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="min-w-0 flex-1 space-y-3">
-                            <p className="text-sm font-semibold tracking-[-0.02em] text-slate-900 dark:text-slate-50">
-                                {selectedPdfs.length} orçamento{selectedPdfs.length > 1 ? 's' : ''} selecionado{selectedPdfs.length > 1 ? 's' : ''}
-                            </p>
-                            <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-                                Combine apenas PDFs do mesmo cliente.
-                            </p>
+                            <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                    <p className="text-sm font-semibold tracking-[-0.02em] text-slate-900 dark:text-slate-50">
+                                        {selectedPdfs.length} orçamento{selectedPdfs.length > 1 ? 's' : ''} selecionado{selectedPdfs.length > 1 ? 's' : ''}
+                                    </p>
+                                    <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+                                        Combine apenas PDFs do mesmo cliente.
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={handleClearSelection}
+                                    aria-label="Limpar seleção"
+                                    className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 text-[11px] font-semibold text-slate-500 transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:border-rose-900/50 dark:hover:bg-rose-950/30 dark:hover:text-rose-300"
+                                >
+                                    <i className="fas fa-times text-[11px]" aria-hidden="true"></i>
+                                    Limpar
+                                </button>
+                            </div>
                             {selectedPdfs.length < 2 ? (
                                 <p className="rounded-[12px] border border-blue-100 bg-blue-50/80 px-3 py-2 text-[11px] leading-5 text-blue-900 dark:border-blue-900/50 dark:bg-blue-950/20 dark:text-blue-100">
                                     Selecione mais um orçamento do mesmo cliente para gerar o PDF combinado e ver as mensagens sugeridas.
@@ -4567,6 +4614,109 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
                     ))}
                 </div>
             </Modal>
+
+            {/* Modal de opções (mobile) — navegação por setas, deslize e pontinhos */}
+            {optionsModalClientId != null && (() => {
+                const group = filteredGroupedHistory.find(item => item.client.id === optionsModalClientId);
+                if (!group) return null;
+                const { client, pdfs: groupPdfs } = group;
+                const funnelSummary = buildFunnelTotals(groupPdfs, funnelReferencePdfIds);
+                const total = groupPdfs.length;
+                const current = Math.min(Math.max(optionsModalIndex, 0), total - 1);
+
+                return createPortal(
+                    <div className="fixed inset-0 z-[60] flex flex-col bg-[var(--surface)] sm:hidden">
+                        <div className="flex items-center gap-3 border-b border-[var(--border-subtle)] px-4 py-3">
+                            <button
+                                type="button"
+                                onClick={closeOptionsModal}
+                                aria-label="Fechar"
+                                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-[var(--surface-muted)] dark:text-slate-300"
+                            >
+                                <i className="fas fa-arrow-left text-base" aria-hidden="true" />
+                            </button>
+                            <div className="min-w-0 flex-1">
+                                <p className="truncate text-[15px] font-semibold leading-tight tracking-[-0.02em] text-slate-900 dark:text-slate-50">
+                                    {client.nome}
+                                </p>
+                                <p className="text-[11px] font-medium text-slate-400">
+                                    {total} {total === 1 ? 'opção' : 'opções'}
+                                </p>
+                            </div>
+                            <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold tabular-nums text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                                {current + 1}/{total}
+                            </span>
+                        </div>
+
+                        <div className="relative flex-1 overflow-hidden">
+                            <div
+                                ref={optionsScrollRef}
+                                onScroll={handleOptionsScroll}
+                                className="flex h-full snap-x snap-mandatory overflow-x-auto overflow-y-hidden [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                            >
+                                {groupPdfs.map(pdf => (
+                                    <div key={pdf.id} className="h-full w-full shrink-0 snap-center overflow-y-auto p-4">
+                                        <PdfHistoryItem
+                                            pdf={pdf}
+                                            client={client}
+                                            agendamento={agendamentosByPdfId[pdf.id!]}
+                                            onDownload={onDownload}
+                                            onDelete={onDelete}
+                                            onUpdateStatus={onUpdateStatus}
+                                            onSchedule={onSchedule}
+                                            films={films}
+                                            messageTemplates={messageTemplates}
+                                            googleReviewsLink={googleReviewsLink}
+                                            isSelected={selectedPdfIds.has(pdf.id!)}
+                                            onToggleSelect={handleToggleSelect}
+                                            onNavigateToOption={onNavigateToOption}
+                                            isFunnelReference={funnelSummary.opportunities.some(opportunity => opportunity.referencePdf.id === pdf.id)}
+                                            onSetFunnelReference={handleSetFunnelReference}
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+
+                            {total > 1 && current > 0 && (
+                                <button
+                                    type="button"
+                                    onClick={() => goToOption(current - 1)}
+                                    aria-label="Opção anterior"
+                                    className="absolute left-2 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-700 shadow-md ring-1 ring-black/5 backdrop-blur transition-colors hover:bg-white dark:bg-slate-800/90 dark:text-slate-100 dark:ring-white/10"
+                                >
+                                    <i className="fas fa-chevron-left" aria-hidden="true" />
+                                </button>
+                            )}
+                            {total > 1 && current < total - 1 && (
+                                <button
+                                    type="button"
+                                    onClick={() => goToOption(current + 1)}
+                                    aria-label="Próxima opção"
+                                    className="absolute right-2 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-700 shadow-md ring-1 ring-black/5 backdrop-blur transition-colors hover:bg-white dark:bg-slate-800/90 dark:text-slate-100 dark:ring-white/10"
+                                >
+                                    <i className="fas fa-chevron-right" aria-hidden="true" />
+                                </button>
+                            )}
+                        </div>
+
+                        {total > 1 && (
+                            <div className="flex items-center justify-center gap-2 border-t border-[var(--border-subtle)] px-4 py-3">
+                                {groupPdfs.map((pdf, index) => (
+                                    <button
+                                        key={pdf.id}
+                                        type="button"
+                                        onClick={() => goToOption(index)}
+                                        aria-label={`Ir para opção ${index + 1}`}
+                                        aria-current={index === current}
+                                        className={`h-2 rounded-full transition-all ${index === current ? 'w-5 bg-slate-800 dark:bg-slate-100' : 'w-2 bg-slate-300 dark:bg-slate-600'}`}
+                                    />
+                                ))}
+                            </div>
+                        )}
+                    </div>,
+                    document.body
+                );
+            })()}
         </div>
     );
 };

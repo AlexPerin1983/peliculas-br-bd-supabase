@@ -187,6 +187,9 @@ export function usePdfActions({
             const savedPdf = await db.savePDF(pdfToSave);
             downloadBlob(pdfBlob, filename);
             setAllSavedPdfs(previous => [savedPdf, ...previous]);
+            if (typeof window !== 'undefined' && selectedClientId != null) {
+                window.localStorage.setItem('peliculas-br-history-focus-client', String(selectedClientId));
+            }
             setPdfGenerationStatus('success');
         } catch (error) {
             console.error('Erro ao gerar ou salvar PDF:', error);
