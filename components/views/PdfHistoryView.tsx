@@ -2969,7 +2969,8 @@ const PdfHistoryItem: React.FC<{
     onNavigateToOption: (clientId: number, optionId: number) => void;
     isFunnelReference: boolean;
     onSetFunnelReference: (pdf: SavedPDF) => void;
-}> = React.memo(({ pdf, client, agendamento, onDownload, onDelete, onUpdateStatus, onSchedule, films, messageTemplates, googleReviewsLink, isSelected, onToggleSelect, onNavigateToOption, isFunnelReference, onSetFunnelReference }) => {
+    fitContent?: boolean;
+}> = React.memo(({ pdf, client, agendamento, onDownload, onDelete, onUpdateStatus, onSchedule, films, messageTemplates, googleReviewsLink, isSelected, onToggleSelect, onNavigateToOption, isFunnelReference, onSetFunnelReference, fitContent = false }) => {
     const { showToast } = useFeedback();
     const [copiedMessageKey, setCopiedMessageKey] = useState<string | null>(null);
     const [isMessagesExpanded, setIsMessagesExpanded] = useState(false);
@@ -3059,9 +3060,9 @@ const PdfHistoryItem: React.FC<{
     }, [normalizedPhone, showToast]);
 
     return (
-        <div className="relative h-full overflow-hidden rounded-[var(--radius-panel)] bg-[var(--surface-muted)] ring-1 ring-[var(--border-subtle)]">
+        <div className={`relative overflow-hidden rounded-[var(--radius-panel)] bg-[var(--surface-muted)] ring-1 ring-[var(--border-subtle)] ${fitContent ? '' : 'h-full'}`}>
             {/* Conteúdo do card */}
-            <div className="relative z-10 h-full w-full">
+            <div className={`relative z-10 w-full ${fitContent ? '' : 'h-full'}`}>
                 {/* Status accent bar */}
                 <div className={`absolute bottom-0 left-0 top-0 z-20 w-[3px] rounded-l-[12px] ${
                     pdf.status === 'approved' ? 'bg-emerald-500' :
@@ -4839,6 +4840,7 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
                                             onNavigateToOption={onNavigateToOption}
                                             isFunnelReference={funnelSummary.opportunities.some(opportunity => opportunity.referencePdf.id === pdf.id)}
                                             onSetFunnelReference={handleSetFunnelReference}
+                                            fitContent
                                         />
                                     );
                                 }}
