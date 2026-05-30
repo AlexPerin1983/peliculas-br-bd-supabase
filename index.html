@@ -69,17 +69,32 @@
   </noscript>
   <div id="root" class="h-full"></div>
   <script>
-    if ('serviceWorker' in navigator && ['localhost', '127.0.0.1'].includes(window.location.hostname)) {
+    window.__isLocalDevHost = (function () {
+      var h = window.location.hostname;
+      return h === 'localhost'
+        || h === '127.0.0.1'
+        || h === '0.0.0.0'
+        || /\.local$/.test(h)
+        || /^10\./.test(h)
+        || /^192\.168\./.test(h)
+        || /^172\.(1[6-9]|2\d|3[01])\./.test(h);
+    })();
+    if ('serviceWorker' in navigator && window.__isLocalDevHost) {
       navigator.serviceWorker.getRegistrations()
         .then((registrations) => Promise.all(registrations.map((registration) => registration.unregister())))
         .catch((error) => console.warn('Falha ao desregistrar Service Workers locais:', error));
+      if ('caches' in window) {
+        caches.keys()
+          .then((names) => Promise.all(names.map((name) => caches.delete(name))))
+          .catch(() => {});
+      }
     }
   </script>
   <script type="module" src="/index.tsx"></script>
   <script>
     // Service Worker Registration with Auto-Update
     if ('serviceWorker' in navigator) {
-      const isLocalDev = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+      const isLocalDev = window.__isLocalDevHost === true;
       let refreshing = false;
 
       // Listen for controlling service worker change

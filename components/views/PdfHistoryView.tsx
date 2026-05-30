@@ -2973,6 +2973,7 @@ const PdfHistoryItem: React.FC<{
     const { showToast } = useFeedback();
     const [copiedMessageKey, setCopiedMessageKey] = useState<string | null>(null);
     const [isMessagesExpanded, setIsMessagesExpanded] = useState(false);
+    const [selectedMessageIndex, setSelectedMessageIndex] = useState(0);
     const [whatsAppMessage, setWhatsAppMessage] = useState<string | null>(null);
 
     const handleActionClick = (status: SavedPDF['status']) => {
@@ -3293,49 +3294,78 @@ const PdfHistoryItem: React.FC<{
                                     {isMessagesExpanded ? 'Recolher' : 'Ver mensagens'}
                                 </ActionButton>
                             </div>
-                            {isMessagesExpanded && (
-                                <div className="divide-y divide-slate-200/70 overflow-hidden rounded-[16px] border border-slate-200/80 bg-white/90 dark:divide-slate-800 dark:border-slate-700 dark:bg-slate-950/25">
-                                    {editableMessages.map((message, index) => (
-                                        <div
-                                            key={`${pdf.id}-message-${index}`}
-                                            className="p-3"
-                                        >
+                            {isMessagesExpanded && editableMessages.length > 0 && (() => {
+                                const safeIndex = Math.min(Math.max(selectedMessageIndex, 0), editableMessages.length - 1);
+                                const message = editableMessages[safeIndex];
+                                return (
+                                    <div className="space-y-2.5">
+                                        {editableMessages.length > 1 && (
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {editableMessages.map((_, idx) => (
+                                                    <button
+                                                        key={`${pdf.id}-message-pill-${idx}`}
+                                                        type="button"
+                                                        onClick={() => setSelectedMessageIndex(idx)}
+                                                        aria-pressed={idx === safeIndex}
+                                                        aria-label={`Mensagem ${idx + 1}`}
+                                                        className={`h-7 min-w-[1.75rem] rounded-full px-2.5 text-[12px] font-semibold tabular-nums transition-colors ${
+                                                            idx === safeIndex
+                                                                ? 'bg-blue-600 text-white shadow-sm'
+                                                                : 'border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800'
+                                                        }`}
+                                                    >
+                                                        {idx + 1}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                        <div className="rounded-[16px] border border-slate-200/80 bg-white/90 p-3 dark:border-slate-700 dark:bg-slate-950/25">
                                             <div className="flex items-center justify-between gap-2">
                                                 <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">
-                                                    Mensagem {index + 1}
+                                                    Mensagem {safeIndex + 1} de {editableMessages.length}
                                                 </p>
                                                 <div className="flex items-center gap-1.5">
                                                     <button
                                                         type="button"
                                                         onClick={() => handleOpenWhatsApp(message)}
-                                                        aria-label={`Enviar mensagem ${index + 1} pelo WhatsApp`}
+                                                        aria-label={`Enviar mensagem ${safeIndex + 1} pelo WhatsApp`}
                                                         className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 transition-colors hover:bg-emerald-100 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-300"
                                                     >
                                                         <i className="fab fa-whatsapp text-[13px]" aria-hidden="true"></i>
                                                     </button>
                                                     <button
                                                         type="button"
-                                                        onClick={() => handleCopyMessage(message, `template-${index}`)}
-                                                        aria-label={`Copiar mensagem ${index + 1}`}
+                                                        onClick={() => handleCopyMessage(message, `template-${safeIndex}`)}
+                                                        aria-label={`Copiar mensagem ${safeIndex + 1}`}
                                                         className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-blue-200 bg-blue-50 text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-300"
                                                     >
-                                                        <i className={`${copiedMessageKey === `template-${index}` ? 'fas fa-check' : 'fas fa-copy'} text-[12px]`} aria-hidden="true"></i>
+                                                        <i className={`${copiedMessageKey === `template-${safeIndex}` ? 'fas fa-check' : 'fas fa-copy'} text-[12px]`} aria-hidden="true"></i>
                                                     </button>
                                                 </div>
                                             </div>
                                             <label className="mt-2 block">
-                                                <span className="sr-only">Editar mensagem {index + 1}</span>
+                                                <span className="sr-only">Editar mensagem {safeIndex + 1}</span>
                                                 <textarea
                                                     value={message}
-                                                    onChange={(event) => handleReadyMessageChange(index, event.target.value)}
-                                                    rows={Math.max(3, Math.ceil(message.length / 48))}
-                                                    className="w-full resize-y rounded-[12px] border border-slate-100 bg-slate-50/80 p-2.5 text-[13px] leading-6 text-slate-700 outline-none transition focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800/80 dark:bg-slate-900/60 dark:text-slate-300 dark:focus:border-blue-800 dark:focus:bg-slate-950/70"
+                                                    ref={(el) => {
+                                                        if (el) {
+                                                            el.style.height = 'auto';
+                                                            el.style.height = `${el.scrollHeight}px`;
+                                                        }
+                                                    }}
+                                                    onChange={(event) => {
+                                                        handleReadyMessageChange(safeIndex, event.target.value);
+                                                        event.target.style.height = 'auto';
+                                                        event.target.style.height = `${event.target.scrollHeight}px`;
+                                                    }}
+                                                    rows={2}
+                                                    className="w-full resize-none overflow-hidden rounded-[12px] border border-slate-100 bg-slate-50/80 p-2.5 text-[13px] leading-6 text-slate-700 outline-none transition focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800/80 dark:bg-slate-900/60 dark:text-slate-300 dark:focus:border-blue-800 dark:focus:bg-slate-950/70"
                                                 />
                                             </label>
                                         </div>
-                                    ))}
-                                </div>
-                            )}
+                                    </div>
+                                );
+                            })()}
                         </div>
                     </div>
                 </div>
@@ -3359,7 +3389,6 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
     const clientGroupRefs = useRef(new Map<number, HTMLDivElement>());
     const [optionsModalClientId, setOptionsModalClientId] = useState<number | null>(null);
     const [optionsModalIndex, setOptionsModalIndex] = useState(0);
-    const optionsScrollRef = useRef<HTMLDivElement>(null);
     const [selectedPdfIds, setSelectedPdfIds] = useState<Set<number>>(() => readSelectedCombinedPdfIds());
     const [focusFilter, setFocusFilter] = useState<HistoryFocusFilter>(() => readInitialHistoryFocusFilter());
     const [period, setPeriod] = useState<HistoryPeriodKey>('month');
@@ -3639,18 +3668,7 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
     }, []);
 
     const goToOption = useCallback((index: number) => {
-        const el = optionsScrollRef.current;
-        if (el) {
-            el.scrollTo({ left: index * el.clientWidth, behavior: 'smooth' });
-        }
         setOptionsModalIndex(index);
-    }, []);
-
-    const handleOptionsScroll = useCallback(() => {
-        const el = optionsScrollRef.current;
-        if (!el || el.clientWidth === 0) return;
-        const index = Math.round(el.scrollLeft / el.clientWidth);
-        setOptionsModalIndex(prev => (prev === index ? prev : index));
     }, []);
 
     useEffect(() => {
@@ -4650,33 +4668,25 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
                             </span>
                         </div>
 
-                        <div className="relative flex-1 overflow-hidden">
-                            <div
-                                ref={optionsScrollRef}
-                                onScroll={handleOptionsScroll}
-                                className="flex h-full snap-x snap-mandatory overflow-x-auto overflow-y-hidden [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-                            >
-                                {groupPdfs.map(pdf => (
-                                    <div key={pdf.id} className="h-full w-full shrink-0 snap-center overflow-y-auto p-4">
-                                        <PdfHistoryItem
-                                            pdf={pdf}
-                                            client={client}
-                                            agendamento={agendamentosByPdfId[pdf.id!]}
-                                            onDownload={onDownload}
-                                            onDelete={onDelete}
-                                            onUpdateStatus={onUpdateStatus}
-                                            onSchedule={onSchedule}
-                                            films={films}
-                                            messageTemplates={messageTemplates}
-                                            googleReviewsLink={googleReviewsLink}
-                                            isSelected={selectedPdfIds.has(pdf.id!)}
-                                            onToggleSelect={handleToggleSelect}
-                                            onNavigateToOption={onNavigateToOption}
-                                            isFunnelReference={funnelSummary.opportunities.some(opportunity => opportunity.referencePdf.id === pdf.id)}
-                                            onSetFunnelReference={handleSetFunnelReference}
-                                        />
-                                    </div>
-                                ))}
+                        <div className="relative min-h-0 flex-1 overflow-hidden">
+                            <div key={groupPdfs[current].id} className="absolute inset-0 overflow-y-auto overscroll-contain p-4">
+                                <PdfHistoryItem
+                                    pdf={groupPdfs[current]}
+                                    client={client}
+                                    agendamento={agendamentosByPdfId[groupPdfs[current].id!]}
+                                    onDownload={onDownload}
+                                    onDelete={onDelete}
+                                    onUpdateStatus={onUpdateStatus}
+                                    onSchedule={onSchedule}
+                                    films={films}
+                                    messageTemplates={messageTemplates}
+                                    googleReviewsLink={googleReviewsLink}
+                                    isSelected={selectedPdfIds.has(groupPdfs[current].id!)}
+                                    onToggleSelect={handleToggleSelect}
+                                    onNavigateToOption={onNavigateToOption}
+                                    isFunnelReference={funnelSummary.opportunities.some(opportunity => opportunity.referencePdf.id === groupPdfs[current].id)}
+                                    onSetFunnelReference={handleSetFunnelReference}
+                                />
                             </div>
 
                             {total > 1 && current > 0 && (
