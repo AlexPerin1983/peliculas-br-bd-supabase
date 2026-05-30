@@ -56,6 +56,7 @@ export interface Measurement {
 
 export interface UIMeasurement extends Measurement {
     isNew?: boolean;
+    focusField?: 'largura' | 'altura' | 'quantidade';
 }
 
 export type ProposalPricingMode = 'complete' | 'labor_only';

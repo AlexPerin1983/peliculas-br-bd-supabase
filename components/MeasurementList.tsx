@@ -161,15 +161,18 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
 
     useEffect(() => {
         if (firstNewMeasurementRef.current !== null) {
-            const element = listContainerRef.current?.querySelector<HTMLElement>(`[data-measurement-id='${firstNewMeasurementRef.current}'] [data-measurement-field='largura']`);
+            const targetMeasurement = measurements.find(m => m.id === firstNewMeasurementRef.current);
+            const focusField = targetMeasurement?.focusField ?? 'largura';
+            const element = listContainerRef.current?.querySelector<HTMLElement>(`[data-measurement-id='${firstNewMeasurementRef.current}'] [data-measurement-field='${focusField}']`);
             if (element) {
                 if (useTouchNumpad) {
-                    onOpenNumpad(firstNewMeasurementRef.current, 'largura', '');
+                    const initialValue = focusField === 'largura' ? '' : (targetMeasurement?.[focusField] ?? '');
+                    onOpenNumpad(firstNewMeasurementRef.current, focusField, initialValue);
                 } else {
                     element.focus();
                 }
 
-                void applyMeasurements(measurements.map(m => m.id === firstNewMeasurementRef.current ? { ...m, isNew: false } : m));
+                void applyMeasurements(measurements.map(m => m.id === firstNewMeasurementRef.current ? { ...m, isNew: false, focusField: undefined } : m));
                 firstNewMeasurementRef.current = null;
             }
         }
@@ -412,7 +415,7 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
             const newMeasurements = [...measurements];
             newMeasurements.splice(index + 1, 0, newMeasurement);
 
-            const finalMeasurements = newMeasurements.map(m => m.id === newMeasurement.id ? { ...m, isNew: true } : { ...m, isNew: false });
+            const finalMeasurements = newMeasurements.map(m => m.id === newMeasurement.id ? { ...m, isNew: true, focusField: 'quantidade' as const } : { ...m, isNew: false });
             void applyMeasurements(finalMeasurements);
         }
     };
