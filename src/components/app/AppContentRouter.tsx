@@ -65,6 +65,7 @@ interface AppContentRouterProps {
     onOpenGallery: (images: string[], initialIndex: number) => void;
     onOpenClientModal: (mode: 'add' | 'edit') => void;
     onOpenAIQuickProposal: () => void;
+    onCreateProposal: () => void;
     onTabChange: (tab: ActiveTab) => void;
     onSelectOption: (optionId: number) => void;
     onRenameOption: (optionId: number, newName: string) => void;
@@ -137,6 +138,7 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
     onOpenGallery,
     onOpenClientModal,
     onOpenAIQuickProposal,
+    onCreateProposal,
     onTabChange,
     onSelectOption,
     onRenameOption,
@@ -234,6 +236,7 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
                 onTabChange={onTabChange}
                 onOpenAIQuickProposal={onOpenAIQuickProposal}
                 onOpenClientModal={onOpenClientModal}
+                onCreateProposal={onCreateProposal}
             />,
             defaultLoadingView
         );

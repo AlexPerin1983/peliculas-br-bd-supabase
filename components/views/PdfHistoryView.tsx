@@ -3294,49 +3294,44 @@ const PdfHistoryItem: React.FC<{
                                 </ActionButton>
                             </div>
                             {isMessagesExpanded && (
-                                <div className="space-y-3">
+                                <div className="divide-y divide-slate-200/70 overflow-hidden rounded-[16px] border border-slate-200/80 bg-white/90 dark:divide-slate-800 dark:border-slate-700 dark:bg-slate-950/25">
                                     {editableMessages.map((message, index) => (
                                         <div
                                             key={`${pdf.id}-message-${index}`}
-                                            className="rounded-[20px] border border-slate-200/80 bg-white/90 p-3.5 shadow-[0_8px_18px_rgba(15,23,42,0.04)] dark:border-slate-700 dark:bg-slate-950/25"
+                                            className="p-3"
                                         >
-                                            <div className="flex items-center justify-between gap-3">
-                                                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">
                                                     Mensagem {index + 1}
                                                 </p>
-                                                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-300">
-                                                    Pronta para enviar
-                                                </span>
+                                                <div className="flex items-center gap-1.5">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleOpenWhatsApp(message)}
+                                                        aria-label={`Enviar mensagem ${index + 1} pelo WhatsApp`}
+                                                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 transition-colors hover:bg-emerald-100 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-300"
+                                                    >
+                                                        <i className="fab fa-whatsapp text-[13px]" aria-hidden="true"></i>
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleCopyMessage(message, `template-${index}`)}
+                                                        aria-label={`Copiar mensagem ${index + 1}`}
+                                                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-blue-200 bg-blue-50 text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-300"
+                                                    >
+                                                        <i className={`${copiedMessageKey === `template-${index}` ? 'fas fa-check' : 'fas fa-copy'} text-[12px]`} aria-hidden="true"></i>
+                                                    </button>
+                                                </div>
                                             </div>
-                                            <label className="mt-3 block">
+                                            <label className="mt-2 block">
                                                 <span className="sr-only">Editar mensagem {index + 1}</span>
                                                 <textarea
                                                     value={message}
                                                     onChange={(event) => handleReadyMessageChange(index, event.target.value)}
-                                                    rows={Math.max(4, Math.ceil(message.length / 54))}
-                                                    className="min-h-[112px] w-full resize-y rounded-[16px] border border-slate-100 bg-slate-50/80 p-3 text-sm leading-6 text-slate-700 outline-none transition focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800/80 dark:bg-slate-900/60 dark:text-slate-300 dark:focus:border-blue-800 dark:focus:bg-slate-950/70"
+                                                    rows={Math.max(3, Math.ceil(message.length / 48))}
+                                                    className="w-full resize-y rounded-[12px] border border-slate-100 bg-slate-50/80 p-2.5 text-[13px] leading-6 text-slate-700 outline-none transition focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800/80 dark:bg-slate-900/60 dark:text-slate-300 dark:focus:border-blue-800 dark:focus:bg-slate-950/70"
                                                 />
                                             </label>
-                                            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                                                <ActionButton
-                                                    onClick={() => handleOpenWhatsApp(message)}
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    iconClassName="fab fa-whatsapp"
-                                                    className="w-full justify-center"
-                                                >
-                                                    WhatsApp
-                                                </ActionButton>
-                                                <ActionButton
-                                                    onClick={() => handleCopyMessage(message, `template-${index}`)}
-                                                    variant={copiedMessageKey === `template-${index}` ? 'secondary' : 'primary'}
-                                                    size="sm"
-                                                    iconClassName={copiedMessageKey === `template-${index}` ? 'fas fa-check' : 'fas fa-copy'}
-                                                    className="w-full justify-center"
-                                                >
-                                                    {copiedMessageKey === `template-${index}` ? 'Copiado' : 'Copiar texto'}
-                                                </ActionButton>
-                                            </div>
                                         </div>
                                     ))}
                                 </div>
@@ -3672,12 +3667,19 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
         };
     }, [optionsModalClientId, closeOptionsModal]);
 
-    // Ao chegar do orçamento recém-gerado, rola até o cliente e o destaca brevemente
+    // Ao chegar do orçamento recém-gerado, rola até o cliente e o destaca brevemente.
+    // No mobile, abre direto o modal de opções do cliente para já gerenciar a proposta.
     useEffect(() => {
         if (pendingFocusClientId == null) return;
 
         const node = clientGroupRefs.current.get(pendingFocusClientId);
         node?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+        const isMobile = typeof window !== 'undefined' && !window.matchMedia('(min-width: 640px)').matches;
+        if (isMobile) {
+            setOptionsModalIndex(0);
+            setOptionsModalClientId(pendingFocusClientId);
+        }
 
         const timeout = window.setTimeout(() => setHighlightedClientId(null), 2400);
         return () => window.clearTimeout(timeout);

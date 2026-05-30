@@ -21,6 +21,8 @@ type ActiveTab =
 interface HeaderProps {
     activeTab: ActiveTab;
     onTabChange: (tab: ActiveTab) => void;
+    onGoBack?: () => void;
+    canGoBack?: boolean;
 }
 
 interface NavItem {
@@ -64,7 +66,7 @@ type MenuRenderState = 'closed' | 'opening' | 'open' | 'closing';
 const SWIPE_CLOSE_THRESHOLD = 72;
 const MAX_SWIPE_TRANSLATE = 240;
 
-const Header: React.FC<HeaderProps> = ({ activeTab, onTabChange }) => {
+const Header: React.FC<HeaderProps> = ({ activeTab, onTabChange, onGoBack, canGoBack = false }) => {
     const { isAdmin, user, signOut } = useAuth();
     const [menuState, setMenuState] = useState<MenuRenderState>('closed');
     const [dragOffsetX, setDragOffsetX] = useState(0);
@@ -332,6 +334,15 @@ const Header: React.FC<HeaderProps> = ({ activeTab, onTabChange }) => {
         <>
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
+                    {canGoBack && onGoBack ? (
+                        <button
+                            onClick={onGoBack}
+                            aria-label="Voltar para a tela anterior"
+                            className="lg:hidden flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200/70 bg-white/80 text-slate-700 shadow-sm shadow-slate-200/60 transition-all duration-200 hover:border-slate-300 hover:bg-white active:scale-95 dark:border-slate-800 dark:bg-slate-900/80 dark:text-slate-200 dark:shadow-black/20"
+                        >
+                            <i className="fas fa-arrow-left text-base" />
+                        </button>
+                    ) : null}
                     <button
                         onClick={openMenu}
                         aria-label="Abrir menu"

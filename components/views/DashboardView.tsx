@@ -59,6 +59,7 @@ interface DashboardViewProps {
     onTabChange: (tab: ActiveTab) => void;
     onOpenAIQuickProposal: () => void;
     onOpenClientModal: (mode: 'add' | 'edit') => void;
+    onCreateProposal?: () => void;
 }
 
 const DESKTOP_PERIOD_OPTIONS: { key: PeriodKey; label: string }[] = [
@@ -685,7 +686,8 @@ const DashboardView: React.FC<DashboardViewProps> = ({
     films,
     onTabChange,
     onOpenAIQuickProposal,
-    onOpenClientModal
+    onOpenClientModal,
+    onCreateProposal
 }) => {
     const [period, setPeriod] = useState<PeriodKey>('today');
     const [customStartDate, setCustomStartDate] = useState(() => toDateInputValue(addDays(new Date(), -6)));
@@ -1160,7 +1162,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
     };
 
     return (
-        <div className="w-full max-w-full space-y-5 overflow-x-hidden">
+        <div className="w-full max-w-full space-y-5 overflow-x-hidden pb-28 sm:pb-0">
             <div className="flex min-w-0 flex-col gap-3 sm:gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div className="min-w-0">
                     <div className="flex min-w-0 items-center justify-between gap-3 sm:block">
@@ -1713,6 +1715,64 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                     onClick={() => onTabChange('qr_code')}
                     tone="cyan"
                 />
+            </div>
+
+            <DashboardMobileFooter
+                onCreateProposal={() => (onCreateProposal ? onCreateProposal() : onTabChange('client'))}
+                onAddClient={() => onOpenClientModal('add')}
+                onOpenAIQuickProposal={onOpenAIQuickProposal}
+                onOpenAgenda={() => onTabChange('agenda')}
+                onOpenHistory={() => onTabChange('history')}
+            />
+        </div>
+    );
+};
+
+const DashboardMobileFooter: React.FC<{
+    onCreateProposal: () => void;
+    onAddClient: () => void;
+    onOpenAIQuickProposal: () => void;
+    onOpenAgenda: () => void;
+    onOpenHistory: () => void;
+}> = ({ onCreateProposal, onAddClient, onOpenAIQuickProposal, onOpenAgenda, onOpenHistory }) => {
+    const FooterButton: React.FC<{ onClick: () => void; label: string; icon: string }> = ({ onClick, label, icon }) => (
+        <button
+            onClick={onClick}
+            aria-label={label}
+            className="flex flex-col items-center justify-center transition-all duration-300 w-16 h-14 rounded-xl group text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800"
+        >
+            <i className={`${icon} text-lg transition-transform duration-300 group-active:scale-90`}></i>
+            <span className="text-[9px] mt-1 font-bold uppercase tracking-wider">{label}</span>
+        </button>
+    );
+
+    return (
+        <div
+            className="sm:hidden fixed left-4 right-4 z-40"
+            style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)' }}
+        >
+            <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.15)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-white/20 dark:border-slate-800/50 rounded-2xl px-2 py-2">
+                <div className="flex justify-between items-center relative">
+                    <div className="flex gap-1">
+                        <FooterButton onClick={onAddClient} label="Cliente" icon="fas fa-user-plus" />
+                        <FooterButton onClick={onOpenAIQuickProposal} label="IA" icon="fas fa-robot" />
+                    </div>
+
+                    <div className="absolute left-1/2 -translate-x-1/2 -top-12">
+                        <button
+                            onClick={onCreateProposal}
+                            aria-label="Criar proposta"
+                            className="w-16 h-16 bg-gradient-to-br from-slate-800 to-slate-950 dark:from-slate-700 dark:to-slate-900 text-white rounded-2xl flex items-center justify-center shadow-[0_8px_20px_rgba(0,0,0,0.3)] hover:shadow-[0_12px_24px_rgba(0,0,0,0.4)] transition-all duration-300 transform hover:-translate-y-1 active:scale-95 border-4 border-white dark:border-slate-900"
+                        >
+                            <i className="fas fa-plus text-2xl"></i>
+                        </button>
+                    </div>
+
+                    <div className="flex gap-1">
+                        <FooterButton onClick={onOpenAgenda} label="Agenda" icon="fas fa-calendar-day" />
+                        <FooterButton onClick={onOpenHistory} label="Histórico" icon="fas fa-clock-rotate-left" />
+                    </div>
+                </div>
             </div>
         </div>
     );

@@ -265,6 +265,8 @@ const App: React.FC = () => {
     });
     const [billingReturnState, setBillingReturnState] = useState<BillingReturnState | null>(null);
     const [isBillingReturnVisible, setIsBillingReturnVisible] = useState(false);
+    // Pilha de abas visitadas para o botao "voltar" estilo navegacao nativa.
+    const [tabHistory, setTabHistory] = useState<ActiveTab[]>([]);
 
     // Persist active tab to localStorage
     useEffect(() => {
@@ -2019,16 +2021,30 @@ Regras:
             handleNumpadClose();
         }
 
-        if (tab === 'qr_code') {
-            setActiveTab(tab);
-            if (!hasModule('qr_servicos')) {
-                setShowQrUpgradeModal(true);
+        setActiveTab(prev => {
+            if (tab !== prev) {
+                // Empilha a aba atual para permitir voltar; evita repetir o topo.
+                setTabHistory(history => (history[history.length - 1] === prev ? history : [...history, prev]));
             }
-            return;
-        }
+            return tab;
+        });
 
-        setActiveTab(tab);
+        if (tab === 'qr_code' && !hasModule('qr_servicos')) {
+            setShowQrUpgradeModal(true);
+        }
     }, [numpadConfig.isOpen, handleNumpadClose, hasModule]);
+
+    const handleGoBack = useCallback(() => {
+        if (numpadConfig.isOpen) {
+            handleNumpadClose();
+        }
+        setTabHistory(history => {
+            if (history.length === 0) return history;
+            const previous = history[history.length - 1];
+            setActiveTab(previous);
+            return history.slice(0, -1);
+        });
+    }, [numpadConfig.isOpen, handleNumpadClose]);
 
     const handleOpenFilmSelectionModal = useCallback((measurementId: number) => {
         if (numpadConfig.isOpen) {
@@ -2462,6 +2478,7 @@ Se não conseguir extrair, retorne: []`;
             onOpenGallery={handleOpenGallery}
             onOpenClientModal={handleOpenClientModal}
             onOpenAIQuickProposal={handleOpenAIQuickProposalModal}
+            onCreateProposal={handleOpenClientSelectionModal}
             onTabChange={handleTabChange}
             onSelectOption={setActiveOptionId}
             onRenameOption={handleRenameProposalOption}
@@ -2682,6 +2699,8 @@ Se não conseguir extrair, retorne: []`;
                                     <Header
                                         activeTab={activeTab}
                                         onTabChange={handleTabChange}
+                                        onGoBack={handleGoBack}
+                                        canGoBack={tabHistory.length > 0}
                                     />
                                 </div>
                             </div>
