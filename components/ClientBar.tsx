@@ -334,6 +334,17 @@ const ClientBar: React.FC<ClientBarProps> = ({
                                 </div>
                             </button>
                             <button
+                                type="button"
+                                onClick={(event) => {
+                                    event.stopPropagation();
+                                    onAddClient();
+                                }}
+                                className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-[var(--brand-primary)] text-white shadow-[0_10px_18px_rgba(21,94,239,0.18)] transition-colors hover:bg-[var(--brand-primary-strong)] focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                                aria-label="Cadastrar novo cliente"
+                            >
+                                <UserPlus className="h-5 w-5" aria-hidden="true" />
+                            </button>
+                            <button
                                 ref={menuButtonRef}
                                 type="button"
                                 onClick={(event) => {

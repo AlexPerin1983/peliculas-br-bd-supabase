@@ -314,6 +314,12 @@ export interface ExtractedClientData {
     uf?: string;
 }
 
+export interface AIInput {
+    text?: string;
+    images?: File[];
+    audio?: Blob;
+}
+
 export interface Profile {
     id: string;
     email: string;

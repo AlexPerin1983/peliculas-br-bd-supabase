@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense, useRef } from 'react';
 import './src/estoque-dark-mode.css';
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
-import { Client, Measurement, UserInfo, Film, PaymentMethods, SavedPDF, Agendamento, SchedulingInfo, ExtractedClientData, UIMeasurement, ProposalExpense, ProposalOption, ProposalDiscount } from './types';
+import { Client, Measurement, UserInfo, Film, PaymentMethods, SavedPDF, Agendamento, SchedulingInfo, ExtractedClientData, UIMeasurement, ProposalExpense, ProposalOption, ProposalDiscount, AIInput } from './types';
 import { CuttingOptimizer } from './utils/CuttingOptimizer';
 import * as db from './services/db';
 import { supabase } from './services/supabaseClient';
@@ -1149,7 +1149,7 @@ const App: React.FC = () => {
         });
     };
 
-    const processClientDataWithGemini = async (input: { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob }): Promise<ExtractedClientData | null> => {
+    const processClientDataWithGemini = async (input: AIInput): Promise<ExtractedClientData | null> => {
         if (!userInfo?.aiConfig?.apiKey) {
             throw new Error("Chave de API do Gemini não configurada.");
         }
@@ -1187,15 +1187,17 @@ const App: React.FC = () => {
 
             const parts: any[] = [prompt];
 
-            if (input.type === 'text') {
-                parts.push(input.data as string);
-            } else if (input.type === 'image') {
-                for (const file of input.data as File[]) {
+            if (input.text && input.text.trim()) {
+                parts.push(input.text);
+            }
+            if (input.images && input.images.length > 0) {
+                for (const file of input.images) {
                     const { mimeType, data } = await blobToBase64(file);
                     parts.push({ inlineData: { mimeType, data } });
                 }
-            } else if (input.type === 'audio') {
-                const { mimeType, data } = await blobToBase64(input.data as Blob);
+            }
+            if (input.audio) {
+                const { mimeType, data } = await blobToBase64(input.audio);
                 parts.push({ inlineData: { mimeType, data } });
             }
 
@@ -1232,11 +1234,6 @@ const App: React.FC = () => {
             console.error("Erro ao processar dados do cliente com Gemini:", error);
             throw error; // Re-throw para ser capturado pelo handleProcessAIClientInput
         }
-    };
-
-    const processClientDataWithOpenAI = async (input: { type: 'text' | 'image'; data: string | File[] }): Promise<ExtractedClientData | null> => {
-        showError("O preenchimento de dados do cliente com OpenAI ainda não está totalmente implementado. Por favor, use o Gemini ou preencha manualmente.");
-        return null;
     };
 
     const normalizeQuickProposalDimension = (value: string | number | undefined): string => {
@@ -1471,75 +1468,30 @@ Regras:
         }
     }, [userInfo, createEmptyMeasurement, films, loadClients, handleShowInfo, showToast]);
 
-    const handleProcessAIClientInput = useCallback(async (input: { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob }) => {
-        // Modo OCR Local - usa processamento local
-        if (userInfo?.aiConfig?.provider === 'local_ocr') {
-            if (input.type === 'audio') {
-                showError("O modo OCR Local não suporta áudio. Por favor, envie uma imagem ou texto.");
-                return;
-            }
-
-            setIsProcessingAI(true);
-            try {
-                let text = '';
-
-                if (input.type === 'text') {
-                    text = input.data as string;
-                } else {
-                    const files = input.data as File[];
-                    if (!files || files.length === 0) {
-                        throw new Error("Nenhuma imagem fornecida.");
-                    }
-                    const { performOCR } = await import('./src/lib/ocr');
-                    const ocrResult = await performOCR(files[0]);
-                    text = ocrResult.text;
-                }
-
-                const { extractClientFromOCR } = await import('./src/lib/parsePrint');
-                const extractedData = extractClientFromOCR(text, 100);
-
-                if (extractedData) {
-                    setAiClientData(extractedData);
-                    setIsAIClientModalOpen(false);
-                    setIsClientModalOpen(true);
-                } else {
-                    showError("Não foi possível extrair dados do cliente. Tente reformular a entrada.");
-                }
-            } catch (error) {
-                console.error("Erro ao processar cliente com OCR local:", error);
-                showError(`Erro no OCR: ${error instanceof Error ? error.message : String(error)}`);
-            } finally {
-                setIsProcessingAI(false);
-            }
+    const handleProcessAIClientInput = useCallback(async (input: AIInput) => {
+        if (!userInfo?.aiConfig?.apiKey) {
+            showError("Por favor, configure sua chave de API do Google Gemini na aba 'Empresa' para usar esta funcionalidade.");
             return;
         }
 
-        // Modo Gemini/OpenAI - requer API key
-        if (!userInfo?.aiConfig?.apiKey || !userInfo?.aiConfig?.provider) {
-            showError("Por favor, configure seu provedor e chave de API na aba 'Empresa' para usar esta funcionalidade.");
+        const hasContent = (input.text && input.text.trim()) || (input.images && input.images.length > 0) || !!input.audio;
+        if (!hasContent) {
+            showError("Adicione texto, imagem ou áudio para extrair os dados do cliente.");
             return;
         }
 
         setIsProcessingAI(true);
-        let extractedData: ExtractedClientData | null = null;
 
         try {
-            if (userInfo.aiConfig.provider === 'gemini') {
-                extractedData = await processClientDataWithGemini(input);
-            } else if (userInfo.aiConfig.provider === 'openai') {
-                if (input.type === 'audio') {
-                    showError("O provedor OpenAI não suporta entrada de áudio para esta funcionalidade.");
-                    return;
-                }
-                extractedData = await processClientDataWithOpenAI(input as { type: 'text' | 'image'; data: string | File[] });
-            }
+            const extractedData = await processClientDataWithGemini(input);
 
             if (extractedData) {
                 setAiClientData(extractedData);
                 setIsAIClientModalOpen(false);
                 setIsClientModalOpen(true);
+            } else {
+                showError("Não foi possível extrair dados do cliente. Tente reformular a entrada.");
             }
-
         } catch (error) {
             console.error("Erro ao processar dados do cliente com IA:", error);
             showError(`Ocorreu um erro com a IA: ${error instanceof Error ? error.message : String(error)} `);

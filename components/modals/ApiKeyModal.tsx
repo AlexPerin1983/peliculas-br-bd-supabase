@@ -8,10 +8,10 @@ interface ApiKeyModalProps {
     onClose: () => void;
     onSave: (apiKey: string) => Promise<void>;
     currentApiKey?: string;
-    provider: 'gemini' | 'openai';
+    provider?: 'gemini';
 }
 
-const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onSave, currentApiKey, provider }) => {
+const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onSave, currentApiKey, provider = 'gemini' }) => {
     const [apiKey, setApiKey] = useState(currentApiKey || '');
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -42,10 +42,6 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onSave, curr
         gemini: {
             name: 'Google Gemini',
             url: 'https://aistudio.google.com/app/apikey',
-        },
-        openai: {
-            name: 'OpenAI',
-            url: 'https://platform.openai.com/api-keys',
         }
     };
     const currentProvider = providerInfo[provider];

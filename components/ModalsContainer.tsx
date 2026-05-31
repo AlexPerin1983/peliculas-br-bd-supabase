@@ -149,7 +149,7 @@ interface ModalsContainerProps {
     isApiKeyModalOpen: boolean;
     setIsApiKeyModalOpen: (value: boolean) => void;
     handleSaveApiKey: (key: string) => void;
-    apiKeyModalProvider: 'gemini' | 'openai';
+    apiKeyModalProvider: 'gemini';
 
     // Image Gallery Modal
     isGalleryOpen: boolean;

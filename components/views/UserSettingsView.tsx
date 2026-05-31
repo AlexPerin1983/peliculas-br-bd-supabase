@@ -16,7 +16,7 @@ interface UserSettingsViewProps {
     userInfo: UserInfo;
     onSave: (userInfo: UserInfo) => void;
     onOpenPaymentMethods: () => void;
-    onOpenApiKeyModal: (provider: 'gemini' | 'openai' | 'local_ocr') => void;
+    onOpenApiKeyModal: (provider: 'gemini') => void;
     isPwaInstalled: boolean;
     onPromptPwaInstall: () => void;
 }
@@ -845,32 +845,15 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({
 
                         <div>
                             <label className={labelClass}>Provedor de IA</label>
-                            <div className="grid grid-cols-2 gap-2 mt-2">
-                                {[
-                                    { id: 'gemini', label: 'Google Gemini' },
-                                    { id: 'openai', label: 'OpenAI' }
-                                ].map((provider) => {
-                                    const isSelected = formData.aiConfig?.provider === provider.id || formData.aiConfig?.provider === 'google-gemini' && provider.id === 'gemini';
-                                    return (
-                                        <button
-                                            key={provider.id}
-                                            type="button"
-                                            onClick={() => setFormData(prev => ({ ...prev, aiConfig: { ...(prev.aiConfig || { apiKey: '' }), provider: provider.id as any } }))}
-                                            className={`rounded-[var(--radius-control)] border px-4 py-3 text-sm font-semibold transition-all duration-200 ${isSelected
-                                                ? 'border-[var(--brand-primary)] bg-[var(--brand-primary)] text-white shadow-[0_10px_20px_rgba(21,94,239,0.16)]'
-                                                : 'border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-muted)] hover:bg-[var(--surface)] hover:text-[var(--text-strong)]'
-                                                }`}
-                                        >
-                                            {provider.label}
-                                        </button>
-                                    );
-                                })}
+                            <div className="mt-2 flex items-center gap-3 rounded-[var(--radius-control)] border border-[var(--brand-primary)] bg-[var(--brand-primary)] px-4 py-3 text-sm font-semibold text-white shadow-[0_10px_20px_rgba(21,94,239,0.16)]">
+                                <Bot className="h-4 w-4" aria-hidden="true" />
+                                Google Gemini
                             </div>
                         </div>
 
                         <button
                             type="button"
-                            onClick={() => onOpenApiKeyModal(formData.aiConfig?.provider || 'gemini')}
+                            onClick={() => onOpenApiKeyModal('gemini')}
                             className={`${primaryButtonClassName} w-full`}
                         >
                             <KeyRound className="h-4 w-4" aria-hidden="true" />

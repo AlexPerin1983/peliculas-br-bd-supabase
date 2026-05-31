@@ -141,21 +141,29 @@ export const useAIProcessing = (
             return result || null;
         }
 
-        // Para imagem, executa OCR
+        // Para imagem, executa OCR em todas as imagens fornecidas
         const files = input.data as File[];
         if (!files || files.length === 0) {
             throw new Error("Nenhuma imagem fornecida.");
         }
 
         setOcrProgress(0);
-        const ocrResult = await performOCR(files[0], (progress) => {
-            setOcrProgress(progress);
-        });
+        let combinedText = '';
+        let totalConfidence = 0;
+        for (let i = 0; i < files.length; i++) {
+            const ocrResult = await performOCR(files[i], (progress) => {
+                // Progresso agregado entre as imagens
+                setOcrProgress(Math.round(((i + progress / 100) / files.length) * 100));
+            });
+            combinedText += (combinedText ? '\n' : '') + ocrResult.text;
+            totalConfidence += ocrResult.confidence;
+        }
 
-        console.log("[OCR Local] Texto extraído:", ocrResult.text);
-        console.log("[OCR Local] Confiança:", ocrResult.confidence);
+        const avgConfidence = totalConfidence / files.length;
+        console.log("[OCR Local] Texto extraído:", combinedText);
+        console.log("[OCR Local] Confiança média:", avgConfidence);
 
-        const result = extractClientFromOCR(ocrResult.text, ocrResult.confidence);
+        const result = extractClientFromOCR(combinedText, avgConfidence);
         return result || null;
     };
 
