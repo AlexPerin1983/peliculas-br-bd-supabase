@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef, FormEvent, DragEvent } from 'react';
 import Modal from '../ui/Modal';
 import { useFeedback } from '../../src/contexts/FeedbackContext';
+import { AIInput } from '../../types';
 
 interface AIFilmModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onProcess: (input: { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob }) => Promise<void>;
+    onProcess: (input: AIInput) => Promise<void>;
     isProcessing: boolean;
     provider: 'gemini' | 'openai';
 }
@@ -25,7 +26,7 @@ const AIFilmModal: React.FC<AIFilmModalProps> = ({ isOpen, onClose, onProcess, i
     const [processingStage, setProcessingStage] = useState<'idle' | 'analyzing' | 'extracting' | 'filling' | 'error'>('idle');
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-    const MAX_IMAGES = 1;
+    const MAX_IMAGES = 5;
 
     const processingMessages: Record<string, string> = {
         analyzing: 'Analisando dados da película...',
@@ -86,7 +87,6 @@ const AIFilmModal: React.FC<AIFilmModalProps> = ({ isOpen, onClose, onProcess, i
     }, [isProcessing, processingStage]);
 
     const handleTabChange = (tab: 'text' | 'image' | 'audio') => {
-        resetState();
         setActiveTab(tab);
     };
 
@@ -99,7 +99,7 @@ const AIFilmModal: React.FC<AIFilmModalProps> = ({ isOpen, onClose, onProcess, i
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
             if (imageFiles.length + newFiles.length >= MAX_IMAGES) {
-                showToast('Você pode enviar no máximo 1 imagem.', { tone: 'warning' });
+                showToast(`Você pode enviar no máximo ${MAX_IMAGES} ${MAX_IMAGES > 1 ? 'imagens' : 'imagem'}.`, { tone: 'warning' });
                 break;
             }
             if (file && file.type.startsWith('image/')) {
@@ -173,30 +173,26 @@ const AIFilmModal: React.FC<AIFilmModalProps> = ({ isOpen, onClose, onProcess, i
         e.preventDefault();
         if (isProcessing) return;
 
-        let processData: { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob } | null = null;
-        switch (activeTab) {
-            case 'text':
-                if (text.trim()) processData = { type: 'text', data: text };
-                break;
-            case 'image':
-                if (imageFiles.length > 0) processData = { type: 'image', data: imageFiles };
-                break;
-            case 'audio':
-                if (audioBlob) processData = { type: 'audio', data: audioBlob };
-                break;
+        const hasContent = !!text.trim() || imageFiles.length > 0 || !!audioBlob;
+        if (!hasContent) {
+            showToast('Forneca um conteudo para processar.', { tone: 'warning' });
+            return;
         }
 
-        if (processData) {
-            setProcessingStage('analyzing');
-            setErrorMessage(null);
-            try {
-                await onProcess(processData);
-            } catch (err: any) {
-                setProcessingStage('error');
-                setErrorMessage(err?.message || 'Erro ao processar. Tente novamente.');
-            }
-        } else {
-            showToast('Forneca um conteudo para processar.', { tone: 'warning' });
+        // Extração mesclada: envia texto + imagens + áudio juntos numa única chamada.
+        const processData: AIInput = {
+            text: text.trim() ? text : undefined,
+            images: imageFiles.length > 0 ? imageFiles : undefined,
+            audio: audioBlob || undefined,
+        };
+
+        setProcessingStage('analyzing');
+        setErrorMessage(null);
+        try {
+            await onProcess(processData);
+        } catch (err: any) {
+            setProcessingStage('error');
+            setErrorMessage(err?.message || 'Erro ao processar. Tente novamente.');
         }
     };
 
@@ -205,7 +201,7 @@ const AIFilmModal: React.FC<AIFilmModalProps> = ({ isOpen, onClose, onProcess, i
         setErrorMessage(null);
     };
 
-    const isProcessable = (activeTab === 'text' && !!text.trim()) || (activeTab === 'image' && imageFiles.length > 0) || (activeTab === 'audio' && !!audioBlob);
+    const isProcessable = !!text.trim() || imageFiles.length > 0 || !!audioBlob;
 
     const footer = (
         <>

@@ -1,16 +1,17 @@
 import React, { DragEvent, FormEvent, useEffect, useRef, useState } from 'react';
 import Modal from '../ui/Modal';
 import { useFeedback } from '../../src/contexts/FeedbackContext';
+import { AIInput } from '../../types';
 
 interface AIQuickProposalModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onProcess: (input: { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob }) => Promise<void>;
+    onProcess: (input: AIInput) => Promise<void>;
     isProcessing: boolean;
     provider: 'gemini' | 'openai' | 'local_ocr';
 }
 
-const MAX_IMAGES = 3;
+const MAX_IMAGES = 5;
 
 const AIQuickProposalModal: React.FC<AIQuickProposalModalProps> = ({
     isOpen,
@@ -92,7 +93,6 @@ const AIQuickProposalModal: React.FC<AIQuickProposalModalProps> = ({
     }, [isProcessing, processingStage]);
 
     const handleTabChange = (tab: 'text' | 'image' | 'audio') => {
-        resetState();
         setActiveTab(tab);
     };
 
@@ -181,20 +181,18 @@ const AIQuickProposalModal: React.FC<AIQuickProposalModalProps> = ({
         event.preventDefault();
         if (isProcessing) return;
 
-        let processData: { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob } | null = null;
-
-        if (activeTab === 'text' && text.trim()) {
-            processData = { type: 'text', data: text };
-        } else if (activeTab === 'image' && imageFiles.length > 0) {
-            processData = { type: 'image', data: imageFiles };
-        } else if (activeTab === 'audio' && audioBlob) {
-            processData = { type: 'audio', data: audioBlob };
-        }
-
-        if (!processData) {
+        const hasContent = !!text.trim() || imageFiles.length > 0 || !!audioBlob;
+        if (!hasContent) {
             showToast('Forneça um conteúdo para criar a proposta.', { tone: 'warning' });
             return;
         }
+
+        // Extração mesclada: envia texto + imagens + áudio juntos numa única chamada.
+        const processData: AIInput = {
+            text: text.trim() ? text : undefined,
+            images: imageFiles.length > 0 ? imageFiles : undefined,
+            audio: audioBlob || undefined,
+        };
 
         setProcessingStage('analyzing');
         setErrorMessage(null);
@@ -206,10 +204,7 @@ const AIQuickProposalModal: React.FC<AIQuickProposalModalProps> = ({
         }
     };
 
-    const isProcessable =
-        (activeTab === 'text' && !!text.trim()) ||
-        (activeTab === 'image' && imageFiles.length > 0) ||
-        (activeTab === 'audio' && !!audioBlob);
+    const isProcessable = !!text.trim() || imageFiles.length > 0 || !!audioBlob;
 
     const footer = (
         <>
@@ -351,6 +346,15 @@ const AIQuickProposalModal: React.FC<AIQuickProposalModalProps> = ({
                                     </label>
                                 </div>
                             )}
+                            {imageFiles.length < MAX_IMAGES && (
+                                <div className="mt-3 flex gap-2 justify-center">
+                                    <label htmlFor="quick-proposal-camera-capture" className={`px-4 py-2 bg-slate-700 dark:bg-slate-600 text-white text-sm font-semibold rounded-md hover:bg-slate-600 dark:hover:bg-slate-500 transition-colors flex items-center gap-2 ${isProcessing ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
+                                        <i className="fas fa-camera"></i>
+                                        Tirar Foto
+                                    </label>
+                                </div>
+                            )}
+                            <input type="file" accept="image/*" capture="environment" onChange={(event) => handleImageFiles(event.target.files)} className="hidden" id="quick-proposal-camera-capture" disabled={isProcessing || imageFiles.length >= MAX_IMAGES} />
                             <input type="file" accept="image/*" onChange={(event) => handleImageFiles(event.target.files)} className="hidden" id="quick-proposal-image-upload" disabled={isProcessing || imageFiles.length >= MAX_IMAGES} multiple />
                         </div>
                     )}

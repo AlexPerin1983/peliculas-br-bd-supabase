@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef, FormEvent, DragEvent } from 'react';
 import Modal from '../ui/Modal';
 import { useFeedback } from '../../src/contexts/FeedbackContext';
+import { AIInput } from '../../types';
 
 interface AIMeasurementModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onProcess: (input: { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob }) => Promise<void>;
+    onProcess: (input: AIInput) => Promise<void>;
     isProcessing: boolean;
     provider: 'gemini' | 'openai';
 }
@@ -25,7 +26,7 @@ const AIMeasurementModal: React.FC<AIMeasurementModalProps> = ({ isOpen, onClose
     const [processingStage, setProcessingStage] = useState<'idle' | 'analyzing' | 'extracting' | 'filling' | 'error'>('idle');
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-    const MAX_IMAGES = 3;
+    const MAX_IMAGES = 5;
 
     const processingMessages: Record<string, string> = {
         analyzing: 'Analisando dados...',
@@ -86,7 +87,6 @@ const AIMeasurementModal: React.FC<AIMeasurementModalProps> = ({ isOpen, onClose
     }, [isProcessing, processingStage]);
 
     const handleTabChange = (tab: 'text' | 'image' | 'audio') => {
-        resetState();
         setActiveTab(tab);
     };
 
@@ -173,30 +173,26 @@ const AIMeasurementModal: React.FC<AIMeasurementModalProps> = ({ isOpen, onClose
         e.preventDefault();
         if (isProcessing) return;
 
-        let processData: { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob } | null = null;
-        switch (activeTab) {
-            case 'text':
-                if (text.trim()) processData = { type: 'text', data: text };
-                break;
-            case 'image':
-                if (imageFiles.length > 0) processData = { type: 'image', data: imageFiles };
-                break;
-            case 'audio':
-                if (audioBlob) processData = { type: 'audio', data: audioBlob };
-                break;
+        const hasContent = !!text.trim() || imageFiles.length > 0 || !!audioBlob;
+        if (!hasContent) {
+            showToast('Forneca um conteudo para processar.', { tone: 'warning' });
+            return;
         }
 
-        if (processData) {
-            setProcessingStage('analyzing');
-            setErrorMessage(null);
-            try {
-                await onProcess(processData);
-            } catch (err: any) {
-                setProcessingStage('error');
-                setErrorMessage(err?.message || 'Erro ao processar. Tente novamente.');
-            }
-        } else {
-            showToast('Forneca um conteudo para processar.', { tone: 'warning' });
+        // Extração mesclada: envia texto + imagens + áudio juntos numa única chamada.
+        const processData: AIInput = {
+            text: text.trim() ? text : undefined,
+            images: imageFiles.length > 0 ? imageFiles : undefined,
+            audio: audioBlob || undefined,
+        };
+
+        setProcessingStage('analyzing');
+        setErrorMessage(null);
+        try {
+            await onProcess(processData);
+        } catch (err: any) {
+            setProcessingStage('error');
+            setErrorMessage(err?.message || 'Erro ao processar. Tente novamente.');
         }
     };
 
@@ -205,7 +201,7 @@ const AIMeasurementModal: React.FC<AIMeasurementModalProps> = ({ isOpen, onClose
         setErrorMessage(null);
     };
 
-    const isProcessable = (activeTab === 'text' && !!text.trim()) || (activeTab === 'image' && imageFiles.length > 0) || (activeTab === 'audio' && !!audioBlob);
+    const isProcessable = !!text.trim() || imageFiles.length > 0 || !!audioBlob;
 
     const footer = (
         <>
@@ -291,6 +287,15 @@ const AIMeasurementModal: React.FC<AIMeasurementModalProps> = ({ isOpen, onClose
                                     </label>
                                 </div>
                             )}
+                            {imageFiles.length < MAX_IMAGES && (
+                                <div className="mt-3 flex gap-2 justify-center">
+                                    <label htmlFor="measurement-camera-capture" className={`px-4 py-2 bg-slate-700 dark:bg-slate-600 text-white text-sm font-semibold rounded-md hover:bg-slate-600 dark:hover:bg-slate-500 transition-colors flex items-center gap-2 ${isProcessing ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
+                                        <i className="fas fa-camera"></i>
+                                        Tirar Foto
+                                    </label>
+                                </div>
+                            )}
+                            <input type="file" accept="image/*" capture="environment" onChange={(e) => handleImageFiles(e.target.files)} className="hidden" id="measurement-camera-capture" disabled={isProcessing || imageFiles.length >= MAX_IMAGES} />
                             <input type="file" accept="image/*" onChange={(e) => handleImageFiles(e.target.files)} className="hidden" id="image-upload" disabled={isProcessing || imageFiles.length >= MAX_IMAGES} multiple />
                         </div>
                     )}

@@ -1319,7 +1319,7 @@ const App: React.FC = () => {
     };
 
     const processQuickProposalWithGemini = async (
-        input: { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob }
+        input: AIInput
     ): Promise<QuickProposalExtraction> => {
         if (!userInfo?.aiConfig?.apiKey) {
             throw new Error("Chave de API do Gemini não configurada.");
@@ -1392,15 +1392,17 @@ Regras:
 
         const parts: any[] = [prompt];
 
-        if (input.type === 'text') {
-            parts.push(input.data as string);
-        } else if (input.type === 'image') {
-            for (const file of input.data as File[]) {
+        if (input.text && input.text.trim()) {
+            parts.push(input.text);
+        }
+        if (input.images && input.images.length > 0) {
+            for (const file of input.images) {
                 const { mimeType, data } = await blobToBase64(file);
                 parts.push({ inlineData: { mimeType, data } });
             }
-        } else if (input.type === 'audio') {
-            const { mimeType, data } = await blobToBase64(input.data as Blob);
+        }
+        if (input.audio) {
+            const { mimeType, data } = await blobToBase64(input.audio);
             parts.push({ inlineData: { mimeType, data } });
         }
 
@@ -1414,9 +1416,7 @@ Regras:
         return JSON.parse(jsonText) as QuickProposalExtraction;
     };
 
-    const handleProcessAIQuickProposalInput = useCallback(async (
-        input: { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob }
-    ) => {
+    const handleProcessAIQuickProposalInput = useCallback(async (input: AIInput) => {
         if (!userInfo?.aiConfig?.apiKey || userInfo.aiConfig.provider !== 'gemini') {
             handleShowInfo("A proposta rapida usa o Gemini. Configure o provedor e a chave de API na aba 'Empresa'.");
             return;
@@ -1500,72 +1500,15 @@ Regras:
         }
     }, [userInfo, showError]);
 
-    const handleProcessAIFilmInput = useCallback(async (input: { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob }) => {
-        // Modo OCR Local - usa processamento local para película
-        if (userInfo?.aiConfig?.provider === 'local_ocr') {
-            if (input.type === 'audio') {
-                showError("O modo OCR Local não suporta áudio. Por favor, envie uma imagem ou texto.");
-                return;
-            }
-
-            setIsProcessingAI(true);
-            try {
-                let text = '';
-
-                if (input.type === 'text') {
-                    text = input.data as string;
-                } else {
-                    const files = input.data as File[];
-                    if (!files || files.length === 0) {
-                        throw new Error("Nenhuma imagem fornecida.");
-                    }
-                    const { performOCR } = await import('./src/lib/ocr');
-                    const ocrResult = await performOCR(files[0]);
-                    text = ocrResult.text;
-                }
-
-                // Parser simples para dados de película
-                const filmData: Partial<Film> = {};
-                const lines = text.split('\n').filter(l => l.trim().length > 2);
-                if (lines.length > 0) {
-                    filmData.nome = lines[0].trim();
-                }
-
-                const uvMatch = text.match(/UV[:\s]*([\d,\.]+)\s*%?/i);
-                if (uvMatch) filmData.uv = parseFloat(uvMatch[1].replace(',', '.'));
-
-                const irMatch = text.match(/IR[:\s]*([\d,\.]+)\s*%?/i);
-                if (irMatch) filmData.ir = parseFloat(irMatch[1].replace(',', '.'));
-
-                const vtlMatch = text.match(/VTL[:\s]*([\d,\.]+)\s*%?/i);
-                if (vtlMatch) filmData.vtl = parseFloat(vtlMatch[1].replace(',', '.'));
-
-                const tserMatch = text.match(/TSER[:\s]*([\d,\.]+)\s*%?/i);
-                if (tserMatch) filmData.tser = parseFloat(tserMatch[1].replace(',', '.'));
-
-                const precoMatch = text.match(/(?:pre[çc]o|valor|R\$)[:\s]*([\d,\.]+)/i);
-                if (precoMatch) filmData.preco = parseFloat(precoMatch[1].replace(',', '.'));
-
-                if (Object.keys(filmData).length > 0) {
-                    setAiFilmData(filmData);
-                    setIsAIFilmModalOpen(false);
-                    setNewFilmName(filmData.nome || '');
-                    setIsFilmModalOpen(true);
-                } else {
-                    showError("Não foi possível extrair dados da película. Tente reformular a entrada.");
-                }
-            } catch (error) {
-                console.error("Erro ao processar película com OCR local:", error);
-                showError(`Erro no OCR: ${error instanceof Error ? error.message : String(error)}`);
-            } finally {
-                setIsProcessingAI(false);
-            }
+    const handleProcessAIFilmInput = useCallback(async (input: AIInput) => {
+        if (!userInfo?.aiConfig?.apiKey) {
+            showError("Por favor, configure sua chave de API do Google Gemini na aba 'Empresa' para usar esta funcionalidade.");
             return;
         }
 
-        // Modo Gemini/OpenAI - requer API key
-        if (!userInfo?.aiConfig?.apiKey || !userInfo?.aiConfig?.provider) {
-            showError("Por favor, configure seu provedor e chave de API na aba 'Empresa' para usar esta funcionalidade.");
+        const hasContent = (input.text && input.text.trim()) || (input.images && input.images.length > 0) || !!input.audio;
+        if (!hasContent) {
+            showError("Adicione texto, imagem ou áudio para extrair os dados da película.");
             return;
         }
 
@@ -1575,26 +1518,22 @@ Regras:
             const genAI = new GoogleGenerativeAI(userInfo.aiConfig.apiKey);
             const model = genAI.getGenerativeModel({ model: GEMINI_TEXT_MODEL });
 
-            const prompt = `Você é um assistente especialista em extração de dados de películas automotivas (insulfilm). Sua tarefa é extrair o máximo de informações técnicas de películas a partir da entrada fornecida (texto ou imagem). Retorne APENAS um objeto JSON válido, sem markdown. Campos: nome, preco (apenas números), uv (%), ir (%), vtl (%), tser (%), espessura (micras), garantiaFabricante (anos), precoMetroLinear. Se algum campo não for encontrado, N?O inclua no JSON.`;
+            const prompt = `Você é um assistente especialista em extração de dados de películas automotivas (insulfilm). Sua tarefa é extrair o máximo de informações técnicas de películas a partir da entrada fornecida (texto, imagem ou áudio). Retorne APENAS um objeto JSON válido, sem markdown. Campos: nome, preco (apenas números), uv (%), ir (%), vtl (%), tser (%), espessura (micras), garantiaFabricante (anos), precoMetroLinear. Se algum campo não for encontrado, N?O inclua no JSON.`;
 
             const parts: any[] = [prompt];
 
-            if (input.type === 'text') {
-                parts.push(input.data as string);
-            } else if (input.type === 'image') {
-                for (const file of input.data as File[]) {
-                    const reader = new FileReader();
-                    const base64Promise = new Promise<string>((resolve) => {
-                        reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
-                        reader.readAsDataURL(file);
-                    });
-                    const base64Data = await base64Promise;
-                    parts.push({ inlineData: { mimeType: file.type, data: base64Data } });
+            if (input.text && input.text.trim()) {
+                parts.push(input.text);
+            }
+            if (input.images && input.images.length > 0) {
+                for (const file of input.images) {
+                    const { mimeType, data } = await blobToBase64(file);
+                    parts.push({ inlineData: { mimeType, data } });
                 }
-            } else {
-                showError("Entrada de áudio ainda não é suportada para películas.");
-                setIsProcessingAI(false);
-                return;
+            }
+            if (input.audio) {
+                const { mimeType, data } = await blobToBase64(input.audio);
+                parts.push({ inlineData: { mimeType, data } });
             }
 
             const result = await model.generateContent(parts);
@@ -2104,11 +2043,15 @@ Regras:
         }
     }, [hasModule]);
 
-    const handleProcessAIMeasurementInput = useCallback(async (
-        input: { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob }
-    ) => {
+    const handleProcessAIMeasurementInput = useCallback(async (input: AIInput) => {
         if (!userInfo?.aiConfig?.apiKey) {
             handleShowInfo("Por favor, configure sua chave de API na aba 'Empresa' para usar esta funcionalidade.");
+            return;
+        }
+
+        const hasContent = (input.text && input.text.trim()) || (input.images && input.images.length > 0) || !!input.audio;
+        if (!hasContent) {
+            handleShowInfo("Adicione texto, imagem ou áudio para extrair as medidas.");
             return;
         }
 
@@ -2154,33 +2097,18 @@ Se não conseguir extrair, retorne: []`;
 
             const parts: any[] = [prompt];
 
-            if (input.type === 'text') {
-                parts.push(input.data as string);
-            } else if (input.type === 'image') {
-                for (const file of input.data as File[]) {
-                    const reader = new FileReader();
-                    const base64Promise = new Promise<string>((resolve) => {
-                        reader.onloadend = () => {
-                            const base64 = (reader.result as string).split(',')[1];
-                            resolve(base64);
-                        };
-                        reader.readAsDataURL(file);
-                    });
-                    const base64Data = await base64Promise;
-                    parts.push({ inlineData: { mimeType: file.type, data: base64Data } });
+            if (input.text && input.text.trim()) {
+                parts.push(input.text);
+            }
+            if (input.images && input.images.length > 0) {
+                for (const file of input.images) {
+                    const { mimeType, data } = await blobToBase64(file);
+                    parts.push({ inlineData: { mimeType, data } });
                 }
-            } else if (input.type === 'audio') {
-                const blob = input.data as Blob;
-                const reader = new FileReader();
-                const base64Promise = new Promise<string>((resolve) => {
-                    reader.onloadend = () => {
-                        const base64 = (reader.result as string).split(',')[1];
-                        resolve(base64);
-                    };
-                    reader.readAsDataURL(blob);
-                });
-                const base64Data = await base64Promise;
-                parts.push({ inlineData: { mimeType: blob.type, data: base64Data } });
+            }
+            if (input.audio) {
+                const { mimeType, data } = await blobToBase64(input.audio);
+                parts.push({ inlineData: { mimeType, data } });
             }
 
             const result = await model.generateContent(parts);
