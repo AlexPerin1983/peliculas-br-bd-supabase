@@ -2078,7 +2078,7 @@ const HistoryPeriodPicker: React.FC<{
                     <div
                         role="dialog"
                         aria-label="Filtro de data do historico"
-                        className="absolute left-0 top-[calc(100%+10px)] z-50 grid w-[min(920px,calc(100vw-2rem))] grid-cols-1 overflow-hidden rounded-[16px] border border-slate-200 bg-white text-slate-950 shadow-2xl dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50 sm:grid-cols-[260px_minmax(0,1fr)]"
+                        className="absolute right-0 top-[calc(100%+10px)] z-50 grid w-[min(920px,calc(100vw-2rem))] grid-cols-1 overflow-hidden rounded-[16px] border border-slate-200 bg-white text-slate-950 shadow-2xl dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50 sm:grid-cols-[260px_minmax(0,1fr)]"
                     >
                         <div className="border-b border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-950 sm:border-b-0 sm:border-r">
                             {HISTORY_PERIOD_OPTIONS.map(option => {

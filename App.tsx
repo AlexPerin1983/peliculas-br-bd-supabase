@@ -974,6 +974,7 @@ const App: React.FC = () => {
         handleCloseAgendamentoModal,
         handleSaveAgendamento,
         handleUpdateAgendamentoServiceStatus,
+        handleContinueAgendamento,
         handleRequestDeleteAgendamento,
         handleConfirmDeleteAgendamento,
         handleCreateNewAgendamento,
@@ -2399,6 +2400,7 @@ Se não conseguir extrair, retorne: []`;
             onNavigateToOption={handleNavigateToOption}
             onEditAgendamento={handleEditAgendamento}
             onUpdateAgendamentoServiceStatus={handleUpdateAgendamentoServiceStatus}
+            onContinueAgendamento={handleContinueAgendamento}
             onCreateNewAgendamento={handleCreateNewAgendamento}
             onAddFilm={() => handleOpenFilmModal(null)}
             onEditFilm={handleOpenFilmModal}

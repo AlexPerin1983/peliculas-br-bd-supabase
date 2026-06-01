@@ -4,6 +4,7 @@ import {
     AlertTriangle,
     ArrowRight,
     CalendarDays,
+    Car,
     Check,
     CheckCircle2,
     ChevronDown,
@@ -15,6 +16,8 @@ import {
     FileText,
     Gauge,
     Layers3,
+    Megaphone,
+    Package,
     Pencil,
     PieChart,
     Plus,
@@ -23,9 +26,11 @@ import {
     Trash2,
     TrendingUp,
     UsersRound,
+    UtensilsCrossed,
     WalletCards,
     Wrench,
-    X
+    X,
+    type LucideIcon
 } from 'lucide-react';
 import { Agendamento, Client, Film, ProposalExpenseCategory, SavedPDF, StandaloneExpense } from '../../types';
 import { getAllServicosPrestados, ServicoPrestado } from '../../services/servicosService';
@@ -117,6 +122,15 @@ const EXPENSE_CATEGORY_LABELS: Record<ProposalExpenseCategory, string> = {
     tools: 'Ferramentas',
     material: 'Material',
     other: 'Outros'
+};
+
+const EXPENSE_CATEGORY_ICONS: Record<ProposalExpenseCategory, { Icon: LucideIcon; className: string }> = {
+    paid_traffic: { Icon: Megaphone, className: 'bg-blue-50 text-blue-600 dark:bg-blue-400/10 dark:text-blue-200' },
+    transport: { Icon: Car, className: 'bg-cyan-50 text-cyan-600 dark:bg-cyan-400/10 dark:text-cyan-200' },
+    food: { Icon: UtensilsCrossed, className: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-400/10 dark:text-emerald-200' },
+    tools: { Icon: Wrench, className: 'bg-orange-50 text-orange-600 dark:bg-orange-400/10 dark:text-orange-200' },
+    material: { Icon: Package, className: 'bg-amber-50 text-amber-600 dark:bg-amber-400/10 dark:text-amber-200' },
+    other: { Icon: ReceiptText, className: 'bg-slate-100 text-slate-600 dark:bg-slate-700/40 dark:text-slate-200' }
 };
 
 const STATUS_CONFIG: Record<NonNullable<SavedPDF['status']>, { label: string; className: string; dot: string }> = {
@@ -1541,10 +1555,12 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                             <div className="space-y-2">
                                 {periodStandaloneExpenses.slice(0, 4).map(expense => {
                                     const clientName = expense.clientId ? clientsById.get(expense.clientId)?.nome : '';
+                                    const categoryIcon = EXPENSE_CATEGORY_ICONS[expense.category] || EXPENSE_CATEGORY_ICONS.other;
+                                    const CategoryIcon = categoryIcon.Icon;
                                     return (
                                         <div key={expense.id || `${expense.date}-${expense.description}`} className="flex min-w-0 items-center gap-2 rounded-[var(--radius-card)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-2">
-                                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-amber-50 text-amber-600 dark:bg-amber-400/10 dark:text-amber-200">
-                                                <ReceiptText className="h-4 w-4" aria-hidden="true" />
+                                            <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-control)] ${categoryIcon.className}`}>
+                                                <CategoryIcon className="h-4 w-4" aria-hidden="true" />
                                             </div>
                                             <div className="min-w-0 flex-1">
                                                 <p className="truncate text-xs font-bold text-[var(--text-strong)]">{expense.description || EXPENSE_CATEGORY_LABELS[expense.category]}</p>

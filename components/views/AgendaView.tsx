@@ -10,6 +10,7 @@ interface AgendaViewProps {
     clients: Client[];
     onEditAgendamento: (agendamento: Agendamento) => void;
     onUpdateServiceStatus: (agendamento: Agendamento, serviceStatus: AgendamentoServiceStatus) => void;
+    onContinueAgendamento: (agendamento: Agendamento) => void;
     onCreateNewAgendamento: (date: Date) => void;
 }
 
@@ -29,6 +30,11 @@ const SERVICE_STATUS_META: Record<AgendamentoServiceStatus, {
         text: 'Concluído',
         iconClassName: 'fas fa-check-circle',
         badgeClasses: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/35 dark:text-emerald-200',
+    },
+    partial: {
+        text: 'Parcial — continua',
+        iconClassName: 'fas fa-hourglass-half',
+        badgeClasses: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/35 dark:text-indigo-200',
     },
     cancelled: {
         text: 'Cancelado',
@@ -191,7 +197,8 @@ const AppointmentCard: React.FC<{
     client?: Client;
     onEdit: (agendamento: Agendamento) => void;
     onUpdateServiceStatus: (agendamento: Agendamento, serviceStatus: AgendamentoServiceStatus) => void;
-}> = ({ agendamento, client, onEdit, onUpdateServiceStatus }) => {
+    onContinueAgendamento: (agendamento: Agendamento) => void;
+}> = ({ agendamento, client, onEdit, onUpdateServiceStatus, onContinueAgendamento }) => {
     const status = agendamento.status || 'pending';
     const meta = STATUS_META[status] || STATUS_META.pending;
     const serviceStatus = agendamento.serviceStatus || 'scheduled';
@@ -287,6 +294,14 @@ const AppointmentCard: React.FC<{
                             <span className="truncate">Cancelado</span>
                         </button>
                     </div>
+                    <button
+                        type="button"
+                        onClick={() => onContinueAgendamento(agendamento)}
+                        className="mt-2 inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-[var(--radius-control)] border border-indigo-300 bg-indigo-100 px-2 text-xs font-bold text-indigo-800 transition-colors hover:bg-indigo-200 dark:border-indigo-800/70 dark:bg-indigo-950/40 dark:text-indigo-200"
+                    >
+                        <i className="fas fa-hourglass-half text-[11px]" aria-hidden="true"></i>
+                        <span className="truncate">Não terminou? Continuar outro dia</span>
+                    </button>
                 </div>
             ) : null}
 
@@ -396,7 +411,7 @@ const AgendaQuickButton: React.FC<{
 
 const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
 
-const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, onEditAgendamento, onUpdateServiceStatus, onCreateNewAgendamento }) => {
+const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, onEditAgendamento, onUpdateServiceStatus, onContinueAgendamento, onCreateNewAgendamento }) => {
     const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState(new Date());
 
@@ -640,7 +655,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                         <div className="space-y-3">
                             {selectedDayAgendamentos.map((agendamento) => {
                                 const client = clientsById.get(agendamento.clienteId);
-                                return <AppointmentCard key={agendamento.id} agendamento={agendamento} client={client} onEdit={onEditAgendamento} onUpdateServiceStatus={onUpdateServiceStatus} />;
+                                return <AppointmentCard key={agendamento.id} agendamento={agendamento} client={client} onEdit={onEditAgendamento} onUpdateServiceStatus={onUpdateServiceStatus} onContinueAgendamento={onContinueAgendamento} />;
                             })}
                         </div>
                     ) : (
@@ -750,7 +765,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                         <div className="space-y-3">
                             {selectedDayAgendamentos.map((agendamento) => {
                                 const client = clientsById.get(agendamento.clienteId);
-                                return <AppointmentCard key={agendamento.id} agendamento={agendamento} client={client} onEdit={onEditAgendamento} onUpdateServiceStatus={onUpdateServiceStatus} />;
+                                return <AppointmentCard key={agendamento.id} agendamento={agendamento} client={client} onEdit={onEditAgendamento} onUpdateServiceStatus={onUpdateServiceStatus} onContinueAgendamento={onContinueAgendamento} />;
                             })}
                         </div>
                     ) : (

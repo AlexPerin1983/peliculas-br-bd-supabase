@@ -43,6 +43,7 @@ const SERVICE_STATUS_OPTIONS: {
 }[] = [
     { value: 'scheduled', label: 'Agendado', iconClassName: 'far fa-clock', activeClasses: 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-200' },
     { value: 'completed', label: 'Concluído', iconClassName: 'fas fa-check-circle', activeClasses: 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200' },
+    { value: 'partial', label: 'Parcial', iconClassName: 'fas fa-hourglass-half', activeClasses: 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-200' },
     { value: 'cancelled', label: 'Cancelado', iconClassName: 'fas fa-ban', activeClasses: 'border-rose-500 bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-200' },
     { value: 'no_show', label: 'Não compareceu', iconClassName: 'fas fa-user-slash', activeClasses: 'border-amber-500 bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-200' },
 ];

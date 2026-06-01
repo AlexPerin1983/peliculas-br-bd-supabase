@@ -113,6 +113,31 @@ export function useSchedulingFlow({
         }
     }, [agendamentoToDelete, handleShowInfo, loadAgendamentos, loadAllPdfs, setAgendamentoToDelete, setAgendamentos, setAllSavedPdfs]);
 
+    const handleContinueAgendamento = useCallback((agendamento: Agendamento) => {
+        // Marca o atendimento de hoje como parcial (some o aviso de encerramento)
+        // e abre um novo agendamento de continuacao para o dia seguinte.
+        void handleUpdateAgendamentoServiceStatus(agendamento, 'partial');
+
+        const continuationStart = new Date();
+        continuationStart.setDate(continuationStart.getDate() + 1);
+        continuationStart.setHours(9, 0, 0, 0);
+
+        const originDate = new Date(agendamento.start).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+        const continuationNote = `Continuação do atendimento de ${originDate}.`;
+        const notes = agendamento.notes ? `${continuationNote}\n\n${agendamento.notes}` : continuationNote;
+
+        // Continuacao nao herda o pdfId para nao reapontar o orcamento (evita
+        // desvincular o agendamento original do orcamento).
+        handleOpenAgendamentoModal({
+            agendamento: {
+                clienteId: agendamento.clienteId,
+                clienteNome: agendamento.clienteNome,
+                start: continuationStart.toISOString(),
+                notes,
+            }
+        });
+    }, [handleOpenAgendamentoModal, handleUpdateAgendamentoServiceStatus]);
+
     const handleCreateNewAgendamento = useCallback((date: Date) => {
         const startDate = new Date(date);
         startDate.setHours(9, 0, 0, 0);
@@ -139,6 +164,7 @@ export function useSchedulingFlow({
         handleCloseAgendamentoModal,
         handleSaveAgendamento,
         handleUpdateAgendamentoServiceStatus,
+        handleContinueAgendamento,
         handleRequestDeleteAgendamento,
         handleConfirmDeleteAgendamento,
         handleCreateNewAgendamento,

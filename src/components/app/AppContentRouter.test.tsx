@@ -52,6 +52,7 @@ describe('AppContentRouter', () => {
     onNavigateToOption: vi.fn(),
     onEditAgendamento: vi.fn(),
     onUpdateAgendamentoServiceStatus: vi.fn(),
+    onContinueAgendamento: vi.fn(),
     onCreateNewAgendamento: vi.fn(),
     onAddFilm: vi.fn(),
     onEditFilm: vi.fn(),

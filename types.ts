@@ -225,7 +225,7 @@ export interface UserInfo {
     isFallback?: boolean;
 }
 
-export type AgendamentoServiceStatus = 'scheduled' | 'completed' | 'cancelled' | 'no_show';
+export type AgendamentoServiceStatus = 'scheduled' | 'completed' | 'partial' | 'cancelled' | 'no_show';
 
 export interface Agendamento {
     id?: number;
