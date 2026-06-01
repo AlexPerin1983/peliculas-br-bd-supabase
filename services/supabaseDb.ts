@@ -812,6 +812,7 @@ export const saveAgendamento = async (agendamento: Agendamento | Omit<Agendament
     const userId = await getCurrentUserId();
     if (!userId) throw new Error('User not authenticated');
 
+    const serviceStatus = agendamento.serviceStatus || 'scheduled';
     const agendamentoData = {
         user_id: userId,
         pdf_id: agendamento.pdfId,
@@ -819,7 +820,8 @@ export const saveAgendamento = async (agendamento: Agendamento | Omit<Agendament
         client_name: agendamento.clienteNome,
         start: agendamento.start,
         end: agendamento.end,
-        notes: agendamento.notes
+        notes: agendamento.notes,
+        service_status: serviceStatus
     };
     const legacyAgendamentoData = {
         user_id: userId,
@@ -830,51 +832,35 @@ export const saveAgendamento = async (agendamento: Agendamento | Omit<Agendament
         end_time: agendamento.end,
         notes: agendamento.notes
     };
+    // Remove a coluna service_status caso a migração ainda não tenha sido aplicada.
+    const stripServiceStatus = <T extends { service_status?: unknown }>(payload: T) => {
+        const { service_status, ...rest } = payload;
+        return rest;
+    };
 
-    if ('id' in agendamento && agendamento.id) {
-        // RLS controla acesso por organização - não filtrar por user_id
-        const { data, error } = await supabase
-            .from('agendamentos')
-            .update(agendamentoData)
-            .eq('id', agendamento.id)
-            .select()
-            .single();
+    const id = 'id' in agendamento && agendamento.id ? agendamento.id : undefined;
 
-        if (error && isAgendamentoModernColumnError(error)) {
-            const { data: legacyData, error: legacyError } = await supabase
-                .from('agendamentos')
-                .update(legacyAgendamentoData)
-                .eq('id', agendamento.id)
-                .select()
-                .single();
+    const runQuery = (payload: Record<string, unknown>) => {
+        const table = supabase.from('agendamentos');
+        return id
+            ? table.update(payload).eq('id', id).select().single()
+            : table.insert(payload).select().single();
+    };
 
-            if (legacyError) throw legacyError;
-            return mapRowToAgendamento(legacyData);
-        }
+    let { data, error } = await runQuery(agendamentoData);
 
-        if (error) throw error;
-        return mapRowToAgendamento(data);
-    } else {
-        const { data, error } = await supabase
-            .from('agendamentos')
-            .insert(agendamentoData)
-            .select()
-            .single();
-
-        if (error && isAgendamentoModernColumnError(error)) {
-            const { data: legacyData, error: legacyError } = await supabase
-                .from('agendamentos')
-                .insert(legacyAgendamentoData)
-                .select()
-                .single();
-
-            if (legacyError) throw legacyError;
-            return mapRowToAgendamento(legacyData);
-        }
-
-        if (error) throw error;
-        return mapRowToAgendamento(data);
+    if (error && isServiceStatusColumnError(error)) {
+        ({ data, error } = await runQuery(stripServiceStatus(agendamentoData)));
     }
+
+    if (error && isAgendamentoModernColumnError(error)) {
+        const { data: legacyData, error: legacyError } = await runQuery(legacyAgendamentoData);
+        if (legacyError) throw legacyError;
+        return mapRowToAgendamento(legacyData);
+    }
+
+    if (error) throw error;
+    return mapRowToAgendamento(data);
 };
 
 export const deleteAgendamento = async (id: number): Promise<void> => {
@@ -912,8 +898,28 @@ const mapRowToAgendamento = (row: any): Agendamento => ({
     clienteNome: row.client_name,
     start: row.start ?? row.start_time,
     end: row.end ?? row.end_time,
-    notes: row.notes
+    notes: row.notes,
+    serviceStatus: row.service_status || 'scheduled'
 });
+
+const isServiceStatusColumnError = (error: unknown): boolean => {
+    const details = [
+        (error as { message?: string })?.message,
+        (error as { details?: string })?.details,
+        (error as { hint?: string })?.hint,
+        (error as { code?: string })?.code
+    ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+    return details.includes('service_status')
+        && (
+            details.includes('column')
+            || details.includes('schema cache')
+            || details.includes('could not find')
+        );
+};
 
 const isAgendamentoModernColumnError = (error: unknown): boolean => {
     const details = [

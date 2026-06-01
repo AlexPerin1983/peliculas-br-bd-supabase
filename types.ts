@@ -225,6 +225,8 @@ export interface UserInfo {
     isFallback?: boolean;
 }
 
+export type AgendamentoServiceStatus = 'scheduled' | 'completed' | 'cancelled' | 'no_show';
+
 export interface Agendamento {
     id?: number;
     pdfId?: number;
@@ -233,6 +235,7 @@ export interface Agendamento {
     start: string; // ISO string for date and time
     end: string;   // ISO string for date and time
     notes?: string;
+    serviceStatus?: AgendamentoServiceStatus; // status operacional do atendimento (separado do status comercial do orçamento)
 }
 
 export interface Totals {

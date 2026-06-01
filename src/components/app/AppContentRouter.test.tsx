@@ -51,6 +51,7 @@ describe('AppContentRouter', () => {
     onGenerateCombinedPdf: vi.fn(),
     onNavigateToOption: vi.fn(),
     onEditAgendamento: vi.fn(),
+    onUpdateAgendamentoServiceStatus: vi.fn(),
     onCreateNewAgendamento: vi.fn(),
     onAddFilm: vi.fn(),
     onEditFilm: vi.fn(),

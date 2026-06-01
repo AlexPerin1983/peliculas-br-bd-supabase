@@ -1,5 +1,5 @@
 import React, { useState, useEffect, FormEvent } from 'react';
-import { Agendamento, Client, UserInfo, SavedPDF, SchedulingInfo } from '../../types';
+import { Agendamento, AgendamentoServiceStatus, Client, UserInfo, SavedPDF, SchedulingInfo } from '../../types';
 import Modal from '../ui/Modal';
 import ActionButton from '../ui/ActionButton';
 import Input from '../ui/Input';
@@ -34,6 +34,18 @@ const StatusBadge: React.FC<{ status?: SavedPDF['status'] }> = ({ status = 'pend
     const { text, classes } = statusInfo[status];
     return <span className={`px-2 py-1 text-xs font-semibold rounded-full ${classes}`}>{text}</span>;
 };
+
+const SERVICE_STATUS_OPTIONS: {
+    value: AgendamentoServiceStatus;
+    label: string;
+    iconClassName: string;
+    activeClasses: string;
+}[] = [
+    { value: 'scheduled', label: 'Agendado', iconClassName: 'far fa-clock', activeClasses: 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-200' },
+    { value: 'completed', label: 'Concluído', iconClassName: 'fas fa-check-circle', activeClasses: 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200' },
+    { value: 'cancelled', label: 'Cancelado', iconClassName: 'fas fa-ban', activeClasses: 'border-rose-500 bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-200' },
+    { value: 'no_show', label: 'Não compareceu', iconClassName: 'fas fa-user-slash', activeClasses: 'border-amber-500 bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-200' },
+];
 
 const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
@@ -90,6 +102,7 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
     const [startTime, setStartTime] = useState('09:00');
     const [endTime, setEndTime] = useState('11:00');
     const [notes, setNotes] = useState('');
+    const [serviceStatus, setServiceStatus] = useState<AgendamentoServiceStatus>('scheduled');
     const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
     const [validationError, setValidationError] = useState<string | null>(null);
     const [isSuggesting, setIsSuggesting] = useState(false);
@@ -103,6 +116,7 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
             setIsSaving(false);
             const initialClientId = agendamento?.clienteId || pdf?.clienteId || null;
             setSelectedClientId(initialClientId);
+            setServiceStatus(agendamento?.serviceStatus || 'scheduled');
 
             if (isEditing && agendamento?.start && agendamento?.end) {
                 const startDate = new Date(agendamento.start);
@@ -300,6 +314,7 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
             end: endDateTime.toISOString(),
             notes: notes,
             pdfId: pdf?.id || agendamento?.pdfId,
+            serviceStatus,
         };
 
         if (isEditing) {
@@ -517,6 +532,29 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                         <Input id="startTime" label="Início" type="time" value={startTime} onChange={(e) => setStartTime((e.target as HTMLInputElement).value)} required className={inputClassName} />
                         <Input id="endTime" label="Término" type="time" value={endTime} onChange={(e) => setEndTime((e.target as HTMLInputElement).value)} required className={inputClassName} />
                     </div>
+
+                    {isEditing && (
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Status do atendimento</label>
+                            <div className="grid grid-cols-2 gap-2">
+                                {SERVICE_STATUS_OPTIONS.map((option) => {
+                                    const isActive = serviceStatus === option.value;
+                                    return (
+                                        <button
+                                            key={option.value}
+                                            type="button"
+                                            onClick={() => setServiceStatus(option.value)}
+                                            aria-pressed={isActive}
+                                            className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors ${isActive ? option.activeClasses : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-700/50 dark:text-slate-300 dark:hover:bg-slate-700'}`}
+                                        >
+                                            <i className={`${option.iconClassName} text-xs`} aria-hidden="true"></i>
+                                            {option.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
 
                     <Input
                         as="textarea"

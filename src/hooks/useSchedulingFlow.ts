@@ -1,6 +1,6 @@
 import { Dispatch, SetStateAction, useCallback } from 'react';
 import * as db from '../../services/db';
-import { Agendamento, SavedPDF, SchedulingInfo } from '../../types';
+import { Agendamento, AgendamentoServiceStatus, SavedPDF, SchedulingInfo } from '../../types';
 
 type SetActiveTab = Dispatch<SetStateAction<'dashboard' | 'client' | 'films' | 'settings' | 'history' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores'>>;
 
@@ -61,6 +61,26 @@ export function useSchedulingFlow({
         }
     }, [handleCloseAgendamentoModal, handleShowInfo, loadAgendamentos, loadAllPdfs]);
 
+    const handleUpdateAgendamentoServiceStatus = useCallback(async (agendamento: Agendamento, serviceStatus: AgendamentoServiceStatus) => {
+        if (agendamento.serviceStatus === serviceStatus) return;
+
+        const previous = agendamento.serviceStatus;
+        // Atualização otimista para feedback imediato na agenda.
+        setAgendamentos(current => current.map(item => (
+            item.id === agendamento.id ? { ...item, serviceStatus } : item
+        )));
+
+        try {
+            await db.saveAgendamento({ ...agendamento, serviceStatus });
+        } catch (error) {
+            console.error('Erro ao atualizar status do agendamento:', error);
+            setAgendamentos(current => current.map(item => (
+                item.id === agendamento.id ? { ...item, serviceStatus: previous } : item
+            )));
+            handleShowInfo('Não foi possível atualizar o status do agendamento. Tente novamente.');
+        }
+    }, [handleShowInfo, setAgendamentos]);
+
     const handleRequestDeleteAgendamento = useCallback((agendamento: Agendamento) => {
         handleCloseAgendamentoModal();
         setAgendamentoToDelete(agendamento);
@@ -118,6 +138,7 @@ export function useSchedulingFlow({
         handleOpenAgendamentoModal,
         handleCloseAgendamentoModal,
         handleSaveAgendamento,
+        handleUpdateAgendamentoServiceStatus,
         handleRequestDeleteAgendamento,
         handleConfirmDeleteAgendamento,
         handleCreateNewAgendamento,

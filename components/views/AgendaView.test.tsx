@@ -31,6 +31,7 @@ const renderAgenda = (clients: Client[] = [clientWithAddress], agendamentos: Age
         pdfs={[]}
         clients={clients}
         onEditAgendamento={vi.fn()}
+        onUpdateServiceStatus={vi.fn()}
         onCreateNewAgendamento={vi.fn()}
     />
 );

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense, useRef } from 'react';
 import './src/estoque-dark-mode.css';
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
-import { Client, Measurement, UserInfo, Film, PaymentMethods, SavedPDF, Agendamento, SchedulingInfo, ExtractedClientData, UIMeasurement, ProposalExpense, ProposalOption, ProposalDiscount, AIInput } from './types';
+import { Client, Measurement, UserInfo, Film, PaymentMethods, SavedPDF, Agendamento, AgendamentoServiceStatus, SchedulingInfo, ExtractedClientData, UIMeasurement, ProposalExpense, ProposalOption, ProposalDiscount, AIInput } from './types';
 import { CuttingOptimizer } from './utils/CuttingOptimizer';
 import * as db from './services/db';
 import { supabase } from './services/supabaseClient';
@@ -256,6 +256,8 @@ const App: React.FC = () => {
     const [films, setFilms] = useState<Film[]>([]);
     const [allSavedPdfs, setAllSavedPdfs] = useState<SavedPDF[]>([]);
     const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
+    // Marcacao de status operacional vinda de uma notificacao push (deep link/acao).
+    const [pendingServiceStatusMark, setPendingServiceStatusMark] = useState<{ id: number; status: AgendamentoServiceStatus } | null>(null);
     const [activeTab, setActiveTab] = useState<ActiveTab>(() => {
         const saved = localStorage.getItem('peliculas-br-active-tab');
         if (saved && ['dashboard', 'client', 'films', 'settings', 'history', 'agenda', 'sales', 'admin', 'account', 'estoque', 'qr_code', 'fornecedores'].includes(saved)) {
@@ -520,7 +522,19 @@ const App: React.FC = () => {
             }, 500);
         }
 
-        const consumedParams = ['tab', 'action', 'title', 'text', 'url'];
+        // Deep link da notificacao "atendimento encerrado": marca o status operacional.
+        const markAgendamentoParam = urlParams.get('markAgendamento');
+        const serviceStatusParam = urlParams.get('serviceStatus');
+        if (markAgendamentoParam) {
+            const agendamentoId = Number(markAgendamentoParam);
+            const validStatuses: AgendamentoServiceStatus[] = ['completed', 'cancelled', 'no_show'];
+            setActiveTab('agenda');
+            if (Number.isFinite(agendamentoId) && validStatuses.includes(serviceStatusParam as AgendamentoServiceStatus)) {
+                setPendingServiceStatusMark({ id: agendamentoId, status: serviceStatusParam as AgendamentoServiceStatus });
+            }
+        }
+
+        const consumedParams = ['tab', 'action', 'title', 'text', 'url', 'markAgendamento', 'serviceStatus'];
         if (consumedParams.some((key) => urlParams.has(key))) {
             const nextUrl = new URL(window.location.href);
             consumedParams.forEach((key) => nextUrl.searchParams.delete(key));
@@ -959,6 +973,7 @@ const App: React.FC = () => {
         handleOpenAgendamentoModal,
         handleCloseAgendamentoModal,
         handleSaveAgendamento,
+        handleUpdateAgendamentoServiceStatus,
         handleRequestDeleteAgendamento,
         handleConfirmDeleteAgendamento,
         handleCreateNewAgendamento,
@@ -977,6 +992,38 @@ const App: React.FC = () => {
         loadAllPdfs,
         handleShowInfo
     });
+
+    // Escuta o service worker para aplicar o status quando o app ja esta aberto
+    // e o usuario toca em um botao da notificacao de encerramento.
+    useEffect(() => {
+        if (!('serviceWorker' in navigator)) return;
+
+        const handleSwMessage = (event: MessageEvent) => {
+            const data = event.data;
+            if (!data || data.type !== 'MARK_SERVICE_STATUS') return;
+
+            const agendamentoId = Number(data.agendamentoId);
+            const validStatuses: AgendamentoServiceStatus[] = ['completed', 'cancelled', 'no_show'];
+            if (Number.isFinite(agendamentoId) && validStatuses.includes(data.serviceStatus)) {
+                setActiveTab('agenda');
+                setPendingServiceStatusMark({ id: agendamentoId, status: data.serviceStatus });
+            }
+        };
+
+        navigator.serviceWorker.addEventListener('message', handleSwMessage);
+        return () => navigator.serviceWorker.removeEventListener('message', handleSwMessage);
+    }, []);
+
+    // Aplica a marcacao pendente assim que o agendamento alvo estiver carregado.
+    useEffect(() => {
+        if (!pendingServiceStatusMark) return;
+
+        const target = agendamentos.find(item => item.id === pendingServiceStatusMark.id);
+        if (!target) return;
+
+        void handleUpdateAgendamentoServiceStatus(target, pendingServiceStatusMark.status);
+        setPendingServiceStatusMark(null);
+    }, [pendingServiceStatusMark, agendamentos, handleUpdateAgendamentoServiceStatus]);
 
     const handleConfirmDeleteAgendamentoWithFeedback = useCallback(async () => {
         setIsDeletingAgendamento(true);
@@ -2351,6 +2398,7 @@ Se não conseguir extrair, retorne: []`;
             onGenerateCombinedPdf={handleGenerateCombinedPdf}
             onNavigateToOption={handleNavigateToOption}
             onEditAgendamento={handleEditAgendamento}
+            onUpdateAgendamentoServiceStatus={handleUpdateAgendamentoServiceStatus}
             onCreateNewAgendamento={handleCreateNewAgendamento}
             onAddFilm={() => handleOpenFilmModal(null)}
             onEditFilm={handleOpenFilmModal}

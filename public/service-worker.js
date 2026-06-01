@@ -1,7 +1,7 @@
 // Service Worker com Auto-Atualização
 // ========================================
 // VERSÃO: Mude este número para forçar atualização nos clientes
-const SW_VERSION = 'v2.4.1';
+const SW_VERSION = 'v2.5.0';
 const CACHE_NAME = `peliculas-br-bd-${SW_VERSION}`;
 
 // Lista de recursos essenciais para cache offline
@@ -247,11 +247,54 @@ self.addEventListener('push', (event) => {
     })());
 });
 
+// Mapeia os botoes de acao do alerta de encerramento para o status operacional.
+const SERVICE_STATUS_ACTIONS = {
+    'mark-completed': 'completed',
+    'mark-cancelled': 'cancelled',
+    'mark-no-show': 'no_show',
+};
+
 self.addEventListener('notificationclick', (event) => {
     event.notification.close();
 
     const data = event.notification.data || {};
     const mapsUrl = getMapsUrl(data);
+
+    // Botoes de status do alerta "atendimento encerrado": marca direto e abre o app.
+    const serviceStatus = SERVICE_STATUS_ACTIONS[event.action];
+    if (serviceStatus && data.agendamentoId) {
+        const statusUrl = new URL(getNotificationUrl(data), self.location.origin);
+        statusUrl.searchParams.set('markAgendamento', String(data.agendamentoId));
+        statusUrl.searchParams.set('serviceStatus', serviceStatus);
+        const statusHref = statusUrl.href;
+
+        event.waitUntil(
+            Promise.all([
+                recordPushReceipt(data, 'clicked'),
+                self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+                    for (const client of clients) {
+                        if ('focus' in client) {
+                            // App ja aberto: aplica na hora via mensagem.
+                            client.postMessage({
+                                type: 'MARK_SERVICE_STATUS',
+                                agendamentoId: data.agendamentoId,
+                                serviceStatus,
+                            });
+                            client.navigate(statusHref);
+                            return client.focus();
+                        }
+                    }
+
+                    if (self.clients.openWindow) {
+                        return self.clients.openWindow(statusHref);
+                    }
+
+                    return undefined;
+                }),
+            ])
+        );
+        return;
+    }
 
     // Botao "Como chegar": abre o Google Maps em uma nova aba.
     if (event.action === 'navigate' && mapsUrl) {

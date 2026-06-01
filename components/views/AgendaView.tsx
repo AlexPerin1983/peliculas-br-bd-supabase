@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Agendamento, Client, SavedPDF } from '../../types';
+import { Agendamento, AgendamentoServiceStatus, Client, SavedPDF } from '../../types';
 import ActionButton from '../ui/ActionButton';
 import ContentState from '../ui/ContentState';
 import AgendaPushReminderControl from './AgendaPushReminderControl';
@@ -9,10 +9,48 @@ interface AgendaViewProps {
     pdfs: SavedPDF[];
     clients: Client[];
     onEditAgendamento: (agendamento: Agendamento) => void;
+    onUpdateServiceStatus: (agendamento: Agendamento, serviceStatus: AgendamentoServiceStatus) => void;
     onCreateNewAgendamento: (date: Date) => void;
 }
 
 type AgendamentoWithStatus = Agendamento & { status?: SavedPDF['status'] };
+
+const SERVICE_STATUS_META: Record<AgendamentoServiceStatus, {
+    text: string;
+    iconClassName: string;
+    badgeClasses: string;
+}> = {
+    scheduled: {
+        text: 'Agendado',
+        iconClassName: 'far fa-clock',
+        badgeClasses: 'bg-blue-100 text-blue-800 dark:bg-blue-950/35 dark:text-blue-200',
+    },
+    completed: {
+        text: 'Concluído',
+        iconClassName: 'fas fa-check-circle',
+        badgeClasses: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/35 dark:text-emerald-200',
+    },
+    cancelled: {
+        text: 'Cancelado',
+        iconClassName: 'fas fa-ban',
+        badgeClasses: 'bg-rose-100 text-rose-800 dark:bg-rose-950/35 dark:text-rose-200',
+    },
+    no_show: {
+        text: 'Não compareceu',
+        iconClassName: 'fas fa-user-slash',
+        badgeClasses: 'bg-amber-100 text-amber-800 dark:bg-amber-950/35 dark:text-amber-200',
+    },
+};
+
+const ServiceStatusBadge: React.FC<{ status: AgendamentoServiceStatus }> = ({ status }) => {
+    const meta = SERVICE_STATUS_META[status];
+    return (
+        <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-xs font-semibold ${meta.badgeClasses}`}>
+            <i className={`${meta.iconClassName} text-[10px]`} aria-hidden="true"></i>
+            {meta.text}
+        </span>
+    );
+};
 
 const STATUS_META: Record<NonNullable<SavedPDF['status']>, {
     text: string;
@@ -152,9 +190,13 @@ const AppointmentCard: React.FC<{
     agendamento: AgendamentoWithStatus;
     client?: Client;
     onEdit: (agendamento: Agendamento) => void;
-}> = ({ agendamento, client, onEdit }) => {
+    onUpdateServiceStatus: (agendamento: Agendamento, serviceStatus: AgendamentoServiceStatus) => void;
+}> = ({ agendamento, client, onEdit, onUpdateServiceStatus }) => {
     const status = agendamento.status || 'pending';
     const meta = STATUS_META[status] || STATUS_META.pending;
+    const serviceStatus = agendamento.serviceStatus || 'scheduled';
+    const hasEnded = new Date(agendamento.end).getTime() < Date.now();
+    const showEndedPrompt = serviceStatus === 'scheduled' && hasEnded;
     const bairro = client?.bairro;
     const clientAddress = formatFullAddress(client);
     const telUrl = getTelUrl(client?.telefone);
@@ -187,6 +229,7 @@ const AppointmentCard: React.FC<{
                                 </p>
                                 <div className="mt-2 flex flex-wrap items-center gap-2">
                                     <StatusBadge status={status} />
+                                    {serviceStatus !== 'scheduled' ? <ServiceStatusBadge status={serviceStatus} /> : null}
                                     <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--surface-muted)] px-2 py-1 text-xs font-bold text-[var(--text-muted)]">
                                         <i className="far fa-clock text-[10px]" aria-hidden="true"></i>
                                         {duration}
@@ -211,6 +254,41 @@ const AppointmentCard: React.FC<{
                     <i className="fas fa-chevron-right mt-1 shrink-0 text-slate-400 transition-transform group-hover:translate-x-0.5"></i>
                 </div>
             </button>
+
+            {showEndedPrompt ? (
+                <div className="border-t border-amber-200 bg-amber-50 p-3 dark:border-amber-900/50 dark:bg-amber-950/20">
+                    <p className="mb-2 flex items-center gap-1.5 text-xs font-bold text-amber-800 dark:text-amber-200">
+                        <i className="fas fa-circle-exclamation text-[11px]" aria-hidden="true"></i>
+                        Horário encerrado — como foi o atendimento?
+                    </p>
+                    <div className="grid grid-cols-3 gap-2">
+                        <button
+                            type="button"
+                            onClick={() => onUpdateServiceStatus(agendamento, 'completed')}
+                            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[var(--radius-control)] border border-emerald-300 bg-emerald-100 px-2 text-xs font-bold text-emerald-800 transition-colors hover:bg-emerald-200 dark:border-emerald-800/70 dark:bg-emerald-950/40 dark:text-emerald-200"
+                        >
+                            <i className="fas fa-check text-[11px]" aria-hidden="true"></i>
+                            <span className="truncate">Concluído</span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => onUpdateServiceStatus(agendamento, 'no_show')}
+                            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[var(--radius-control)] border border-amber-300 bg-white px-2 text-xs font-bold text-amber-800 transition-colors hover:bg-amber-100 dark:border-amber-800/70 dark:bg-slate-800 dark:text-amber-200"
+                        >
+                            <i className="fas fa-user-slash text-[11px]" aria-hidden="true"></i>
+                            <span className="truncate">Faltou</span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => onUpdateServiceStatus(agendamento, 'cancelled')}
+                            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[var(--radius-control)] border border-rose-300 bg-white px-2 text-xs font-bold text-rose-800 transition-colors hover:bg-rose-100 dark:border-rose-800/70 dark:bg-slate-800 dark:text-rose-200"
+                        >
+                            <i className="fas fa-ban text-[11px]" aria-hidden="true"></i>
+                            <span className="truncate">Cancelado</span>
+                        </button>
+                    </div>
+                </div>
+            ) : null}
 
             {hasActions ? (
                 <div className="grid grid-cols-2 gap-2 border-t border-[var(--border-subtle)] bg-[color-mix(in_srgb,var(--surface-muted)_60%,transparent)] p-2 sm:grid-cols-3">
@@ -318,7 +396,7 @@ const AgendaQuickButton: React.FC<{
 
 const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
 
-const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, onEditAgendamento, onCreateNewAgendamento }) => {
+const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, onEditAgendamento, onUpdateServiceStatus, onCreateNewAgendamento }) => {
     const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState(new Date());
 
@@ -562,7 +640,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                         <div className="space-y-3">
                             {selectedDayAgendamentos.map((agendamento) => {
                                 const client = clientsById.get(agendamento.clienteId);
-                                return <AppointmentCard key={agendamento.id} agendamento={agendamento} client={client} onEdit={onEditAgendamento} />;
+                                return <AppointmentCard key={agendamento.id} agendamento={agendamento} client={client} onEdit={onEditAgendamento} onUpdateServiceStatus={onUpdateServiceStatus} />;
                             })}
                         </div>
                     ) : (
@@ -672,7 +750,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                         <div className="space-y-3">
                             {selectedDayAgendamentos.map((agendamento) => {
                                 const client = clientsById.get(agendamento.clienteId);
-                                return <AppointmentCard key={agendamento.id} agendamento={agendamento} client={client} onEdit={onEditAgendamento} />;
+                                return <AppointmentCard key={agendamento.id} agendamento={agendamento} client={client} onEdit={onEditAgendamento} onUpdateServiceStatus={onUpdateServiceStatus} />;
                             })}
                         </div>
                     ) : (

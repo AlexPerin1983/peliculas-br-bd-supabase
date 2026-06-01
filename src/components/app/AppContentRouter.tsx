@@ -1,6 +1,6 @@
 import React, { ReactNode, Suspense, lazy } from 'react';
 import { Bolt, ClipboardPaste, Plus, Ruler, Sparkles, UserCheck, Users } from 'lucide-react';
-import { Client, Film, Agendamento, ProposalOption, ProposalPricingMode, SavedPDF, UserInfo, UIMeasurement } from '../../../types';
+import { Client, Film, Agendamento, AgendamentoServiceStatus, ProposalOption, ProposalPricingMode, SavedPDF, UserInfo, UIMeasurement } from '../../../types';
 import MeasurementList from '../../../components/MeasurementList';
 import ProposalOptionsCarousel from '../../../components/ProposalOptionsCarousel';
 import { FeatureGate } from '../../../components/subscription/SubscriptionComponents';
@@ -58,6 +58,7 @@ interface AppContentRouterProps {
     onGenerateCombinedPdf: (clientId: number) => Promise<void>;
     onNavigateToOption: (clientId: number, optionId: number) => void;
     onEditAgendamento: (agendamento: Agendamento) => void;
+    onUpdateAgendamentoServiceStatus: (agendamento: Agendamento, serviceStatus: AgendamentoServiceStatus) => void;
     onCreateNewAgendamento: (date: Date) => void;
     onAddFilm: () => void;
     onEditFilm: (film: Film | null) => void;
@@ -131,6 +132,7 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
     onGenerateCombinedPdf,
     onNavigateToOption,
     onEditAgendamento,
+    onUpdateAgendamentoServiceStatus,
     onCreateNewAgendamento,
     onAddFilm,
     onEditFilm,
@@ -268,6 +270,7 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
                 pdfs={allSavedPdfs}
                 clients={clients}
                 onEditAgendamento={onEditAgendamento}
+                onUpdateServiceStatus={onUpdateAgendamentoServiceStatus}
                 onCreateNewAgendamento={onCreateNewAgendamento}
             />,
             defaultLoadingView

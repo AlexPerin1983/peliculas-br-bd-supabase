@@ -17,6 +17,12 @@ const corsHeaders = {
 const DEFAULT_REMINDER_MINUTES = 30;
 const CRON_DRIFT_MINUTES = 5;
 const LATE_REMINDER_GRACE_MINUTES = 10;
+// Sentinela usado na coluna reminder_minutes de agenda_push_deliveries para
+// deduplicar o alerta de "atendimento encerrado" (um por agendamento/inscricao).
+const ENDED_NOTIFICATION_SENTINEL = -1;
+// So notifica atendimentos que terminaram dentro desta janela, evitando
+// disparar alertas para agendamentos antigos no primeiro ciclo apos o deploy.
+const ENDED_LOOKBACK_MINUTES = 60;
 const AGENDA_URL = '/?tab=agenda';
 const TIME_ZONE = 'America/Sao_Paulo';
 const RECEIPT_URL = 'https://avlefzsipbqvollukgyt.supabase.co/functions/v1/agenda-push-receipts';
@@ -245,6 +251,24 @@ function isModernColumnError(error: unknown): boolean {
   );
 }
 
+function isServiceStatusColumnError(error: unknown): boolean {
+  const message = [
+    (error as { message?: string })?.message,
+    (error as { details?: string })?.details,
+    (error as { hint?: string })?.hint,
+    (error as { code?: string })?.code,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  return message.includes('service_status') && (
+    message.includes('column') ||
+    message.includes('schema cache') ||
+    message.includes('could not find')
+  );
+}
+
 async function fetchAgendamentosInRange(
   adminClient: ReturnType<typeof createSupabaseAdminClient>,
   from: Date,
@@ -305,6 +329,44 @@ async function fetchUpcomingAgendamentos(
   const lowerBound = new Date(now.getTime() - (LATE_REMINDER_GRACE_MINUTES * 60_000));
 
   return fetchAgendamentosInRange(adminClient, lowerBound, horizon);
+}
+
+// Busca atendimentos cujo horario final ja passou (dentro da janela de
+// lookback) e que continuam com status operacional "scheduled".
+async function fetchEndedAgendamentos(
+  adminClient: ReturnType<typeof createSupabaseAdminClient>,
+  now: Date,
+): Promise<AgendamentoReminder[]> {
+  const lowerIso = new Date(now.getTime() - (ENDED_LOOKBACK_MINUTES * 60_000)).toISOString();
+  const upperIso = now.toISOString();
+  const byId = new Map<number, AgendamentoReminder>();
+
+  const query = await adminClient
+    .from('agendamentos')
+    .select('id,user_id,client_id,client_name,start,end,notes,service_status')
+    .gte('end', lowerIso)
+    .lte('end', upperIso)
+    .eq('service_status', 'scheduled')
+    .order('end', { ascending: true })
+    .limit(200);
+
+  if (query.error) {
+    // Se as colunas modernas ou service_status ainda nao existirem, apenas
+    // ignora o alerta de encerramento em vez de quebrar o ciclo.
+    if (isModernColumnError(query.error) || isServiceStatusColumnError(query.error)) {
+      return [];
+    }
+    throw query.error;
+  }
+
+  (query.data || []).forEach((row: Record<string, unknown>) => {
+    const agendamento = normalizeAgendamento(row);
+    if (Number.isFinite(agendamento.id) && agendamento.end) {
+      byId.set(agendamento.id, agendamento);
+    }
+  });
+
+  return [...byId.values()];
 }
 
 function uniqueValues(values: Array<string | null | undefined>): string[] {
@@ -456,6 +518,96 @@ function createPayload(
     receipt: receipt ? { ...receipt, url: RECEIPT_URL } : null,
     requireInteraction: Boolean(agendamento.maps_url),
   });
+}
+
+function createEndedPayload(
+  agendamento: AgendamentoReminder,
+  receipt?: PushReceiptTarget,
+): string {
+  const endReference = agendamento.end || agendamento.start;
+  const endTime = new Intl.DateTimeFormat('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: TIME_ZONE,
+  }).format(new Date(endReference));
+
+  return JSON.stringify({
+    title: `Atendimento encerrado: ${agendamento.client_name}`,
+    body: `Terminou as ${endTime}. Como foi? Marque o resultado.`,
+    icon: '/icon-192x192.png',
+    badge: '/icon-192x192.png',
+    tag: `agenda-ended-${agendamento.id}`,
+    // Toque no corpo abre a agenda ja focada no atendimento para marcar o status.
+    url: `${AGENDA_URL}&markAgendamento=${agendamento.id}`,
+    actions: [
+      { action: 'mark-completed', title: 'Concluido' },
+      { action: 'mark-cancelled', title: 'Cancelado' },
+    ],
+    agendamentoId: agendamento.id,
+    timestamp: Date.now(),
+    vibrate: [200, 100, 200],
+    receipt: receipt ? { ...receipt, url: RECEIPT_URL } : null,
+    requireInteraction: true,
+  });
+}
+
+async function processEndedNotifications(
+  adminClient: ReturnType<typeof createSupabaseAdminClient>,
+  now: Date,
+): Promise<{ checked: number; sent: number; skipped: number; failed: number }> {
+  const agendamentos = await fetchEndedAgendamentos(adminClient, now);
+
+  if (agendamentos.length === 0) {
+    return { checked: 0, sent: 0, skipped: 0, failed: 0 };
+  }
+
+  const userIds = uniqueValues(agendamentos.map((agendamento) => agendamento.user_id));
+  const profiles = await fetchProfiles(adminClient, userIds);
+  const organizationIds = uniqueValues(userIds.map((userId) => profiles.get(userId)?.organization_id ?? null));
+  const subscriptions = await fetchSubscriptions(adminClient, userIds, organizationIds);
+
+  let sent = 0;
+  let skipped = 0;
+  let failed = 0;
+
+  for (const agendamento of agendamentos) {
+    const organizationId = profiles.get(agendamento.user_id)?.organization_id ?? null;
+    const scopedSubscriptions = subscriptions.filter((subscription) => (
+      subscription.user_id === agendamento.user_id ||
+      (organizationId && subscription.organization_id === organizationId)
+    ));
+
+    for (const subscription of scopedSubscriptions) {
+      const deliveryReceipt = await registerPendingDelivery(
+        adminClient,
+        agendamento.id,
+        subscription.id,
+        ENDED_NOTIFICATION_SENTINEL,
+      );
+
+      if (!deliveryReceipt) {
+        skipped += 1;
+        continue;
+      }
+
+      try {
+        await sendPushToSubscription(subscription, createEndedPayload(agendamento, {
+          kind: 'reminder',
+          id: deliveryReceipt.id,
+          token: deliveryReceipt.token,
+        }));
+        await markDeliverySent(adminClient, deliveryReceipt.id);
+        sent += 1;
+      } catch (error) {
+        await markDeliveryFailed(adminClient, deliveryReceipt.id, error);
+        await disableExpiredSubscription(adminClient, subscription, error);
+        failed += 1;
+        console.error('[agenda-push-reminders] falha ao enviar alerta de encerramento:', error);
+      }
+    }
+  }
+
+  return { checked: agendamentos.length, sent, skipped, failed };
 }
 
 function getTimeZoneParts(date: Date): Record<string, number> {
@@ -1101,6 +1253,7 @@ serve(async (req) => {
     }
 
     const dailySummary = await processDailySummaries(adminClient, now);
+    const endedNotifications = await processEndedNotifications(adminClient, now);
 
     return jsonResponse({
       success: true,
@@ -1112,6 +1265,10 @@ serve(async (req) => {
       dailySummarySent: dailySummary.sent,
       dailySummarySkipped: dailySummary.skipped,
       dailySummaryFailed: dailySummary.failed,
+      endedChecked: endedNotifications.checked,
+      endedSent: endedNotifications.sent,
+      endedSkipped: endedNotifications.skipped,
+      endedFailed: endedNotifications.failed,
     });
   } catch (error) {
     console.error('[agenda-push-reminders] erro:', error);
