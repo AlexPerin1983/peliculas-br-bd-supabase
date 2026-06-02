@@ -87,7 +87,18 @@ export function useAppBootstrap({
         setAgendamentos(data);
     }, [setAgendamentos]);
 
-    const refreshSharedData = useCallback(async () => {
+    // Coalesce refetches próximos (foco + fim de sync podem disparar juntos)
+    // para reduzir egress no Supabase Free.
+    const lastRefreshAtRef = useRef(0);
+    const MIN_REFRESH_INTERVAL_MS = 30_000;
+
+    const refreshSharedData = useCallback(async (options?: { force?: boolean }) => {
+        const now = Date.now();
+        if (!options?.force && now - lastRefreshAtRef.current < MIN_REFRESH_INTERVAL_MS) {
+            return;
+        }
+        lastRefreshAtRef.current = now;
+
         await Promise.all([
             loadClients(undefined, false),
             loadAllPdfs(),
@@ -127,7 +138,7 @@ export function useAppBootstrap({
         // (sem recarregar nem resetar a tela). A verificação de host canônico
         // já acontece no startup e ao fim de uma sincronização, então não é
         // repetida aqui para evitar reloads desnecessários ao voltar ao foco.
-        const MIN_BACKGROUND_MS = 60_000;
+        const MIN_BACKGROUND_MS = 5 * 60_000;
         let hiddenAt: number | null = null;
 
         const handleVisibilityChange = () => {

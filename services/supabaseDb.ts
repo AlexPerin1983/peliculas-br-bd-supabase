@@ -599,9 +599,10 @@ export const getPDFsForClient = async (clientId: number): Promise<SavedPDF[]> =>
     if (!userId) return [];
 
     // RLS controla acesso por organização
+    // N?O buscamos o pdf_blob aqui para reduzir egress (blob sob demanda via getPDFBlob)
     const { data, error } = await supabase
         .from('saved_pdfs')
-        .select('*')
+        .select('id, client_id, client_name, date, expiration_date, total_preco, total_m2, subtotal, general_discount_amount, general_discount, nome_arquivo, measurements, status, agendamento_id, proposal_option_name, proposal_option_id')
         .eq('client_id', clientId)
         .order('date', { ascending: false });
 

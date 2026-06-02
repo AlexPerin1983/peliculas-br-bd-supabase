@@ -37,6 +37,13 @@ let syncRequestedWhileBusy = false;
 let syncListeners: ((status: SyncStatus) => void)[] = [];
 const POSTGRES_INTEGER_MAX = 2147483647;
 
+// Backoff exponencial para evitar tempestade de retries quando o backend
+// está lento/indisponível (cada falha adia a próxima tentativa automática).
+let consecutiveSyncFailures = 0;
+let nextSyncAllowedAt = 0;
+const SYNC_BACKOFF_BASE_MS = 5_000;
+const SYNC_BACKOFF_MAX_MS = 5 * 60_000;
+
 export interface SyncStatus {
     isOnline: boolean;
     pendingCount: number;
@@ -406,8 +413,11 @@ export function initSyncService(): void {
 function handleOnline(): void {
     isOnline = true;
     currentStatus.isOnline = true;
+    // Volta de conexão: zera o backoff e força uma tentativa imediata.
+    consecutiveSyncFailures = 0;
+    nextSyncAllowedAt = 0;
     notifyListeners();
-    syncAllPending();
+    syncAllPending({ force: true });
 }
 
 function handleOffline(): void {
@@ -416,13 +426,19 @@ function handleOffline(): void {
     notifyListeners();
 }
 
-export async function syncAllPending(): Promise<void> {
+export async function syncAllPending(options?: { force?: boolean }): Promise<void> {
     if (!isOnline) {
         return;
     }
 
     if (syncInProgress) {
         syncRequestedWhileBusy = true;
+        return;
+    }
+
+    // Respeita o backoff após falhas consecutivas, exceto quando forçado
+    // (ex.: volta de conexão ou retry manual do usuário).
+    if (!options?.force && nextSyncAllowedAt > Date.now()) {
         return;
     }
 
@@ -470,6 +486,21 @@ export async function syncAllPending(): Promise<void> {
     } finally {
         syncInProgress = false;
         currentStatus.syncInProgress = false;
+
+        if (currentStatus.error) {
+            // Falhou: agenda próxima tentativa com backoff exponencial.
+            consecutiveSyncFailures += 1;
+            const delay = Math.min(
+                SYNC_BACKOFF_BASE_MS * 2 ** (consecutiveSyncFailures - 1),
+                SYNC_BACKOFF_MAX_MS
+            );
+            nextSyncAllowedAt = Date.now() + delay;
+        } else {
+            // Sucesso: limpa o backoff.
+            consecutiveSyncFailures = 0;
+            nextSyncAllowedAt = 0;
+        }
+
         notifyListeners();
 
         if (syncRequestedWhileBusy && isOnline) {
@@ -721,7 +752,10 @@ export function isOnlineNow(): boolean {
 }
 
 export async function forcSync(): Promise<void> {
-    await syncAllPending();
+    // Retry manual do usuário: ignora o backoff.
+    consecutiveSyncFailures = 0;
+    nextSyncAllowedAt = 0;
+    await syncAllPending({ force: true });
 }
 
 export async function clearSyncQueue(): Promise<number> {
