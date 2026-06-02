@@ -53,6 +53,7 @@ describe('AppContentRouter', () => {
     onEditAgendamento: vi.fn(),
     onUpdateAgendamentoServiceStatus: vi.fn(),
     onContinueAgendamento: vi.fn(),
+    onRescheduleAgendamento: vi.fn(),
     onCreateNewAgendamento: vi.fn(),
     onAddFilm: vi.fn(),
     onEditFilm: vi.fn(),

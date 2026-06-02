@@ -979,6 +979,7 @@ const App: React.FC = () => {
         handleConfirmDeleteAgendamento,
         handleCreateNewAgendamento,
         handleEditAgendamento,
+        handleRescheduleAgendamento,
         handleGoToHistoryFromPdf
     } = useSchedulingFlow({
         allSavedPdfs,
@@ -2401,6 +2402,7 @@ Se não conseguir extrair, retorne: []`;
             onEditAgendamento={handleEditAgendamento}
             onUpdateAgendamentoServiceStatus={handleUpdateAgendamentoServiceStatus}
             onContinueAgendamento={handleContinueAgendamento}
+            onRescheduleAgendamento={handleRescheduleAgendamento}
             onCreateNewAgendamento={handleCreateNewAgendamento}
             onAddFilm={() => handleOpenFilmModal(null)}
             onEditFilm={handleOpenFilmModal}

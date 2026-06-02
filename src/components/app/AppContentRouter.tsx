@@ -60,6 +60,7 @@ interface AppContentRouterProps {
     onEditAgendamento: (agendamento: Agendamento) => void;
     onUpdateAgendamentoServiceStatus: (agendamento: Agendamento, serviceStatus: AgendamentoServiceStatus) => void;
     onContinueAgendamento: (agendamento: Agendamento) => void;
+    onRescheduleAgendamento: (agendamento: Agendamento) => void;
     onCreateNewAgendamento: (date: Date) => void;
     onAddFilm: () => void;
     onEditFilm: (film: Film | null) => void;
@@ -135,6 +136,7 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
     onEditAgendamento,
     onUpdateAgendamentoServiceStatus,
     onContinueAgendamento,
+    onRescheduleAgendamento,
     onCreateNewAgendamento,
     onAddFilm,
     onEditFilm,
@@ -274,6 +276,7 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
                 onEditAgendamento={onEditAgendamento}
                 onUpdateServiceStatus={onUpdateAgendamentoServiceStatus}
                 onContinueAgendamento={onContinueAgendamento}
+                onRescheduleAgendamento={onRescheduleAgendamento}
                 onCreateNewAgendamento={onCreateNewAgendamento}
             />,
             defaultLoadingView

@@ -154,6 +154,14 @@ export function useSchedulingFlow({
         setSchedulingInfo({ agendamento, pdf });
     }, [allSavedPdfs, setSchedulingInfo]);
 
+    const handleRescheduleAgendamento = useCallback((agendamento: Agendamento) => {
+        // Reabre um atendimento cancelado/não comparecido: volta o status para
+        // "agendado" e abre o modal mantendo o mesmo registro (e o orçamento
+        // vinculado) para o usuário escolher a nova data/hora.
+        const pdf = allSavedPdfs.find(item => item.id === agendamento.pdfId);
+        setSchedulingInfo({ agendamento: { ...agendamento, serviceStatus: 'scheduled' }, pdf });
+    }, [allSavedPdfs, setSchedulingInfo]);
+
     const handleGoToHistoryFromPdf = useCallback(() => {
         setPdfGenerationStatus('idle');
         setActiveTab('history');
@@ -169,6 +177,7 @@ export function useSchedulingFlow({
         handleConfirmDeleteAgendamento,
         handleCreateNewAgendamento,
         handleEditAgendamento,
+        handleRescheduleAgendamento,
         handleGoToHistoryFromPdf
     };
 }

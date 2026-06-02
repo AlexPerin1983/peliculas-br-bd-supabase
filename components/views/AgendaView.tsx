@@ -11,6 +11,7 @@ interface AgendaViewProps {
     onEditAgendamento: (agendamento: Agendamento) => void;
     onUpdateServiceStatus: (agendamento: Agendamento, serviceStatus: AgendamentoServiceStatus) => void;
     onContinueAgendamento: (agendamento: Agendamento) => void;
+    onRescheduleAgendamento: (agendamento: Agendamento) => void;
     onCreateNewAgendamento: (date: Date) => void;
 }
 
@@ -82,12 +83,6 @@ const STATUS_META: Record<NonNullable<SavedPDF['status']>, {
         dotClasses: 'bg-slate-400',
         railClasses: 'bg-slate-300 dark:bg-slate-600',
     },
-};
-
-const StatusBadge: React.FC<{ status?: SavedPDF['status'] }> = ({ status = 'pending' }) => {
-    const meta = STATUS_META[status] || STATUS_META.pending;
-
-    return <span className={`rounded-full px-2 py-1 text-xs font-semibold ${meta.badgeClasses}`}>{meta.text}</span>;
 };
 
 const getStatusColor = (status?: SavedPDF['status']) => {
@@ -198,7 +193,8 @@ const AppointmentCard: React.FC<{
     onEdit: (agendamento: Agendamento) => void;
     onUpdateServiceStatus: (agendamento: Agendamento, serviceStatus: AgendamentoServiceStatus) => void;
     onContinueAgendamento: (agendamento: Agendamento) => void;
-}> = ({ agendamento, client, onEdit, onUpdateServiceStatus, onContinueAgendamento }) => {
+    onReschedule: (agendamento: Agendamento) => void;
+}> = ({ agendamento, client, onEdit, onUpdateServiceStatus, onContinueAgendamento, onReschedule }) => {
     const status = agendamento.status || 'pending';
     const meta = STATUS_META[status] || STATUS_META.pending;
     const serviceStatus = agendamento.serviceStatus || 'scheduled';
@@ -235,7 +231,6 @@ const AppointmentCard: React.FC<{
                                     {agendamento.clienteNome}
                                 </p>
                                 <div className="mt-2 flex flex-wrap items-center gap-2">
-                                    <StatusBadge status={status} />
                                     {serviceStatus !== 'scheduled' ? <ServiceStatusBadge status={serviceStatus} /> : null}
                                     <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--surface-muted)] px-2 py-1 text-xs font-bold text-[var(--text-muted)]">
                                         <i className="far fa-clock text-[10px]" aria-hidden="true"></i>
@@ -301,6 +296,19 @@ const AppointmentCard: React.FC<{
                     >
                         <i className="fas fa-hourglass-half text-[11px]" aria-hidden="true"></i>
                         <span className="truncate">Não terminou? Continuar outro dia</span>
+                    </button>
+                </div>
+            ) : null}
+
+            {serviceStatus === 'cancelled' || serviceStatus === 'no_show' ? (
+                <div className="border-t border-[var(--border-subtle)] bg-[color-mix(in_srgb,var(--surface-muted)_60%,transparent)] p-2">
+                    <button
+                        type="button"
+                        onClick={() => onReschedule(agendamento)}
+                        className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-[var(--radius-control)] border border-indigo-300 bg-indigo-100 px-2 text-xs font-bold text-indigo-800 transition-colors hover:bg-indigo-200 dark:border-indigo-800/70 dark:bg-indigo-950/40 dark:text-indigo-200"
+                    >
+                        <i className="fas fa-rotate-right text-[11px]" aria-hidden="true"></i>
+                        <span className="truncate">Reagendar para outra data</span>
                     </button>
                 </div>
             ) : null}
@@ -411,7 +419,7 @@ const AgendaQuickButton: React.FC<{
 
 const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
 
-const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, onEditAgendamento, onUpdateServiceStatus, onContinueAgendamento, onCreateNewAgendamento }) => {
+const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, onEditAgendamento, onUpdateServiceStatus, onContinueAgendamento, onRescheduleAgendamento, onCreateNewAgendamento }) => {
     const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState(new Date());
 
@@ -655,7 +663,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                         <div className="space-y-3">
                             {selectedDayAgendamentos.map((agendamento) => {
                                 const client = clientsById.get(agendamento.clienteId);
-                                return <AppointmentCard key={agendamento.id} agendamento={agendamento} client={client} onEdit={onEditAgendamento} onUpdateServiceStatus={onUpdateServiceStatus} onContinueAgendamento={onContinueAgendamento} />;
+                                return <AppointmentCard key={agendamento.id} agendamento={agendamento} client={client} onEdit={onEditAgendamento} onUpdateServiceStatus={onUpdateServiceStatus} onContinueAgendamento={onContinueAgendamento} onReschedule={onRescheduleAgendamento} />;
                             })}
                         </div>
                     ) : (
@@ -765,7 +773,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                         <div className="space-y-3">
                             {selectedDayAgendamentos.map((agendamento) => {
                                 const client = clientsById.get(agendamento.clienteId);
-                                return <AppointmentCard key={agendamento.id} agendamento={agendamento} client={client} onEdit={onEditAgendamento} onUpdateServiceStatus={onUpdateServiceStatus} onContinueAgendamento={onContinueAgendamento} />;
+                                return <AppointmentCard key={agendamento.id} agendamento={agendamento} client={client} onEdit={onEditAgendamento} onUpdateServiceStatus={onUpdateServiceStatus} onContinueAgendamento={onContinueAgendamento} onReschedule={onRescheduleAgendamento} />;
                             })}
                         </div>
                     ) : (

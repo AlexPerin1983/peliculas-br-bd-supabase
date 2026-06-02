@@ -1,4 +1,4 @@
-import React, { useState, useEffect, FormEvent } from 'react';
+import React, { useState, useEffect, useMemo, FormEvent } from 'react';
 import { Agendamento, AgendamentoServiceStatus, Client, UserInfo, SavedPDF, SchedulingInfo } from '../../types';
 import Modal from '../ui/Modal';
 import ActionButton from '../ui/ActionButton';
@@ -143,6 +143,32 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
             }
         }
     }, [isOpen, agendamento, pdf, isEditing]);
+
+    // Disponibilidade ao vivo: quantos colaboradores ficam livres no horário escolhido.
+    // Usado para avisar antes de salvar (ex.: reagendar/continuar num dia já cheio).
+    const availability = useMemo(() => {
+        const employeesCount = userInfo?.employees?.length ?? 0;
+        if (employeesCount === 0 || !date || !startTime || !endTime) return null;
+
+        const [year, month, day] = date.split('-').map(Number);
+        const [startHours, startMinutes] = startTime.split(':').map(Number);
+        const [endHours, endMinutes] = endTime.split(':').map(Number);
+        if ([year, month, day, startHours, startMinutes, endHours, endMinutes].some(Number.isNaN)) return null;
+
+        const startDateTime = new Date(year, month - 1, day, startHours, startMinutes);
+        const endDateTime = new Date(year, month - 1, day, endHours, endMinutes);
+        if (startDateTime >= endDateTime) return null;
+
+        const busy = agendamentos.filter(ag => {
+            if (isEditing && ag.id === agendamento?.id) return false;
+            if (ag.serviceStatus === 'cancelled' || ag.serviceStatus === 'no_show') return false;
+            const existingStart = new Date(ag.start);
+            const existingEnd = new Date(ag.end);
+            return startDateTime < existingEnd && endDateTime > existingStart;
+        }).length;
+
+        return { employeesCount, busy, free: employeesCount - busy };
+    }, [agendamentos, date, startTime, endTime, isEditing, agendamento?.id, userInfo?.employees]);
 
     const handleAISuggestion = async () => {
         setIsSuggesting(true);
@@ -298,6 +324,8 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
 
         const conflictingAppointments = agendamentos.filter(ag => {
             if (isEditing && ag.id === agendamento?.id) return false;
+            // Cancelados / não comparecidos não ocupam colaborador, então liberam o horário.
+            if (ag.serviceStatus === 'cancelled' || ag.serviceStatus === 'no_show') return false;
             const existingStart = new Date(ag.start);
             const existingEnd = new Date(ag.end);
             return startDateTime < existingEnd && endDateTime > existingStart;
@@ -533,6 +561,20 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                         <Input id="startTime" label="Início" type="time" value={startTime} onChange={(e) => setStartTime((e.target as HTMLInputElement).value)} required className={inputClassName} />
                         <Input id="endTime" label="Término" type="time" value={endTime} onChange={(e) => setEndTime((e.target as HTMLInputElement).value)} required className={inputClassName} />
                     </div>
+
+                    {availability && (
+                        availability.free <= 0 ? (
+                            <div className="flex items-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-200">
+                                <i className="fas fa-triangle-exclamation" aria-hidden="true"></i>
+                                <span>Horário cheio — todos os {availability.employeesCount} colaborador(es) já estão ocupados. Escolha outro horário.</span>
+                            </div>
+                        ) : (
+                            <div className="flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-200">
+                                <i className="fas fa-user-check" aria-hidden="true"></i>
+                                <span>{availability.free} de {availability.employeesCount} colaborador(es) livre(s) neste horário.</span>
+                            </div>
+                        )
+                    )}
 
                     {isEditing && (
                         <div>
