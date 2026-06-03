@@ -487,8 +487,8 @@ export const savePDF = async (pdfData: Omit<SavedPDF, 'id'>): Promise<SavedPDF> 
         throw new Error('PDF sem arquivo valido para upload.');
     }
 
-    // Convert Blob to base64
-    const blobBase64 = await blobToBase64(normalizedPdfBlob);
+    // Sobe o arquivo para o Storage (não guardamos mais base64 no banco)
+    const pdfPath = await uploadPdfToStorage(normalizedPdfBlob);
 
     const pdfRow = {
         user_id: userId,
@@ -501,7 +501,7 @@ export const savePDF = async (pdfData: Omit<SavedPDF, 'id'>): Promise<SavedPDF> 
         subtotal: pdfData.subtotal,
         general_discount_amount: pdfData.generalDiscountAmount,
         general_discount: pdfData.generalDiscount,
-        pdf_blob: blobBase64,
+        pdf_path: pdfPath,
         nome_arquivo: pdfData.nomeArquivo,
         measurements: pdfData.measurements,
         status: pdfData.status || 'pending',
@@ -516,8 +516,15 @@ export const savePDF = async (pdfData: Omit<SavedPDF, 'id'>): Promise<SavedPDF> 
         .select()
         .single();
 
-    if (error) throw error;
-    return await mapRowToPDF(data);
+    if (error) {
+        // Rollback: remove o arquivo órfão do Storage se o insert falhar
+        await removePdfFromStorage(pdfPath);
+        throw error;
+    }
+
+    const mapped = await mapRowToPDF(data);
+    mapped.pdfBlob = normalizedPdfBlob;
+    return mapped;
 };
 
 export const updatePDF = async (pdfData: SavedPDF): Promise<SavedPDF> => {
@@ -544,7 +551,10 @@ export const updatePDF = async (pdfData: SavedPDF): Promise<SavedPDF> => {
 
     const normalizedPdfBlob = normalizePdfBlobInput(pdfData.pdfBlob);
     if (normalizedPdfBlob) {
-        (pdfRow as typeof pdfRow & { pdf_blob: string }).pdf_blob = await blobToBase64(normalizedPdfBlob);
+        const pdfPath = await uploadPdfToStorage(normalizedPdfBlob);
+        (pdfRow as typeof pdfRow & { pdf_path: string; pdf_blob: string | null }).pdf_path = pdfPath;
+        // Limpa o base64 legado para liberar espaço no banco
+        (pdfRow as typeof pdfRow & { pdf_path: string; pdf_blob: string | null }).pdf_blob = null;
     }
 
     const { data, error } = await supabase
@@ -556,7 +566,12 @@ export const updatePDF = async (pdfData: SavedPDF): Promise<SavedPDF> => {
         .single();
 
     if (error) throw error;
-    return await mapRowToPDF(data);
+
+    const mapped = await mapRowToPDF(data);
+    if (normalizedPdfBlob) {
+        mapped.pdfBlob = normalizedPdfBlob;
+    }
+    return mapped;
 };
 
 export const getAllPDFs = async (): Promise<SavedPDF[]> => {
@@ -582,16 +597,26 @@ export const getAllPDFs = async (): Promise<SavedPDF[]> => {
 export const getPDFBlob = async (id: number): Promise<Blob | null> => {
     const { data, error } = await supabase
         .from('saved_pdfs')
-        .select('pdf_blob')
+        .select('pdf_path, pdf_blob')
         .eq('id', id)
         .single();
 
-    if (error || !data?.pdf_blob) {
+    if (error || !data) {
         console.error('Error fetching PDF blob:', error);
         return null;
     }
 
-    return base64ToBlob(data.pdf_blob);
+    // Novo caminho: arquivo no Storage
+    if (data.pdf_path) {
+        return await downloadPdfFromStorage(data.pdf_path);
+    }
+
+    // Fallback: registros antigos ainda em base64 no banco
+    if (data.pdf_blob) {
+        return base64ToBlob(data.pdf_blob);
+    }
+
+    return null;
 };
 
 export const getPDFsForClient = async (clientId: number): Promise<SavedPDF[]> => {
@@ -623,7 +648,7 @@ export const deletePDF = async (id: number): Promise<void> => {
     // First get the PDF to check for agendamento
     const { data: pdf } = await supabase
         .from('saved_pdfs')
-        .select('agendamento_id')
+        .select('agendamento_id, pdf_path')
         .eq('id', id)
         .single();
 
@@ -637,6 +662,11 @@ export const deletePDF = async (id: number): Promise<void> => {
         .eq('id', id);
 
     if (error) throw error;
+
+    // Remove o arquivo do Storage após apagar a linha
+    if (pdf?.pdf_path) {
+        await removePdfFromStorage(pdf.pdf_path);
+    }
 };
 
 // ============================================
@@ -732,15 +762,6 @@ export const deleteStandaloneExpense = async (id: number): Promise<void> => {
 };
 
 // Helper functions for PDF blob handling
-const blobToBase64 = (blob: Blob): Promise<string> => {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-    });
-};
-
 const base64ToBlob = (base64: string): Blob => {
     const parts = base64.split(',');
     const mime = parts[0].match(/:(.*?);/)?.[1] || 'application/pdf';
@@ -751,6 +772,60 @@ const base64ToBlob = (base64: string): Blob => {
         u8arr[n] = bstr.charCodeAt(n);
     }
     return new Blob([u8arr], { type: mime });
+};
+
+// ============================================
+// PDF STORAGE HELPERS (Supabase Storage)
+// PDFs deixam de ser guardados como base64 no banco e passam a viver
+// no bucket privado "pdfs". A coluna pdf_blob fica apenas como fallback
+// de leitura para registros antigos ainda não migrados.
+// ============================================
+const PDF_BUCKET = 'pdfs';
+
+const getPdfStoragePrefix = async (): Promise<string> => {
+    const ownerId = await getEffectiveOwnerUserId();
+    if (ownerId) return ownerId;
+    const userId = await getCurrentUserId();
+    if (userId) return userId;
+    throw new Error('Não foi possível determinar a pasta de armazenamento do PDF.');
+};
+
+const generatePdfStorageName = (): string => {
+    const cryptoObj = globalThis.crypto;
+    const uuid = typeof cryptoObj?.randomUUID === 'function'
+        ? cryptoObj.randomUUID()
+        : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    return `${uuid}.pdf`;
+};
+
+const uploadPdfToStorage = async (blob: Blob): Promise<string> => {
+    const prefix = await getPdfStoragePrefix();
+    const path = `${prefix}/${generatePdfStorageName()}`;
+    const { error } = await supabase.storage
+        .from(PDF_BUCKET)
+        .upload(path, blob, {
+            contentType: blob.type || 'application/pdf',
+            upsert: false
+        });
+
+    if (error) throw error;
+    return path;
+};
+
+const downloadPdfFromStorage = async (path: string): Promise<Blob | null> => {
+    const { data, error } = await supabase.storage.from(PDF_BUCKET).download(path);
+    if (error || !data) {
+        console.error('Error downloading PDF from storage:', error);
+        return null;
+    }
+    return data;
+};
+
+const removePdfFromStorage = async (path: string): Promise<void> => {
+    const { error } = await supabase.storage.from(PDF_BUCKET).remove([path]);
+    if (error) {
+        console.error('Error removing PDF from storage:', error);
+    }
 };
 
 const mapRowToPDF = async (row: any): Promise<SavedPDF> => ({
