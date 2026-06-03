@@ -213,22 +213,29 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSave, mode
             let cepToSearch: string | undefined;
 
             if (aiData) {
-                // Aplica os dados da IA, garantindo que os campos de endereço sejam strings vazias se nulos
+                // Mescla: a IA só preenche o campo quando o valor atual está vazio.
+                // No cadastro novo, todos os campos partem vazios (comporta-se como antes);
+                // na edição, preserva o que o cliente já tem e completa as lacunas.
+                const pick = (current: string | undefined, incoming: string | undefined) =>
+                    (current || '').trim() !== '' ? (current as string) : (incoming || '');
+
                 finalFormState = {
                     ...initialFormState,
-                    ...aiData,
-                    // Reaplicar máscaras nos dados da IA, pois a IA retorna apenas dígitos
-                    telefone: applyPhoneMask(aiData.telefone || ''),
-                    cpfCnpj: applyCpfCnpjMask(aiData.cpfCnpj || ''),
-                    cep: applyCepMask(aiData.cep || ''),
-                    logradouro: aiData.logradouro || '',
-                    numero: aiData.numero || '',
-                    complemento: aiData.complemento || '',
-                    bairro: aiData.bairro || '',
-                    cidade: aiData.cidade || '',
-                    uf: aiData.uf || '',
+                    nome: pick(initialFormState.nome, aiData.nome),
+                    // A IA retorna apenas dígitos, então mascaramos antes de mesclar
+                    telefone: pick(initialFormState.telefone, applyPhoneMask(aiData.telefone || '')),
+                    email: pick(initialFormState.email, aiData.email),
+                    cpfCnpj: pick(initialFormState.cpfCnpj, applyCpfCnpjMask(aiData.cpfCnpj || '')),
+                    cep: pick(initialFormState.cep, applyCepMask(aiData.cep || '')),
+                    logradouro: pick(initialFormState.logradouro, aiData.logradouro),
+                    numero: pick(initialFormState.numero, aiData.numero),
+                    complemento: pick(initialFormState.complemento, aiData.complemento),
+                    bairro: pick(initialFormState.bairro, aiData.bairro),
+                    cidade: pick(initialFormState.cidade, aiData.cidade),
+                    uf: pick(initialFormState.uf, aiData.uf),
                 };
-                cepToSearch = aiData.cep;
+                // Só busca o CEP da IA se o cliente ainda não tinha CEP
+                cepToSearch = (initialFormState.cep || '').trim() === '' ? aiData.cep : undefined;
             }
 
             setFormData(finalFormState);
@@ -267,9 +274,9 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSave, mode
     const modalTitle = (
         <div className="flex justify-between items-center w-full">
             <h2 className="text-xl font-semibold text-slate-800 dark:text-white">
-                {mode === 'add' ? (aiData ? 'Confirmar Dados da IA' : 'Adicionar Novo Cliente') : 'Editar Cliente'}
+                {aiData ? 'Confirmar Dados da IA' : (mode === 'add' ? 'Adicionar Novo Cliente' : 'Editar Cliente')}
             </h2>
-            {mode === 'add' && !aiData && (
+            {!aiData && (
                 <Tooltip text="Preencher com IA">
                     <button
                         type="button"

@@ -819,10 +819,14 @@ export const useClientLogic = ({
             setAiClientData(data);
             setIsAIClientModalOpen(false);
             setIsClientModalOpen(true);
-            setClientModalMode('add'); // Or edit?
-            if (data.nome) setNewClientName(data.nome);
+            // Mantém o modo atual: se a IA foi acionada editando um cliente existente,
+            // continua em 'edit' (a mescla preenche só os campos vazios). Caso contrário, 'add'.
+            if (!(clientModalMode === 'edit' && selectedClientId)) {
+                setClientModalMode('add');
+                if (data.nome) setNewClientName(data.nome);
+            }
         }
-    }, [processClientWithAI]);
+    }, [processClientWithAI, clientModalMode, selectedClientId]);
 
     const handleProcessAIFilmInput = useCallback(async (input: { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob }) => {
         const data = await processFilmWithAI(input);
