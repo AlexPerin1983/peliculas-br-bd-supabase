@@ -1738,7 +1738,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                 onAddClient={() => onOpenClientModal('add')}
                 onOpenAIQuickProposal={onOpenAIQuickProposal}
                 onOpenAgenda={() => onTabChange('agenda')}
-                onOpenHistory={() => onTabChange('history')}
+                onOpenExpense={() => setIsStandaloneExpenseModalOpen(true)}
             />
         </div>
     );
@@ -1749,8 +1749,8 @@ const DashboardMobileFooter: React.FC<{
     onAddClient: () => void;
     onOpenAIQuickProposal: () => void;
     onOpenAgenda: () => void;
-    onOpenHistory: () => void;
-}> = ({ onCreateProposal, onAddClient, onOpenAIQuickProposal, onOpenAgenda, onOpenHistory }) => {
+    onOpenExpense: () => void;
+}> = ({ onCreateProposal, onAddClient, onOpenAIQuickProposal, onOpenAgenda, onOpenExpense }) => {
     const FooterButton: React.FC<{ onClick: () => void; label: string; icon: string }> = ({ onClick, label, icon }) => (
         <button
             onClick={onClick}
@@ -1786,7 +1786,7 @@ const DashboardMobileFooter: React.FC<{
 
                     <div className="flex gap-1">
                         <FooterButton onClick={onOpenAgenda} label="Agenda" icon="fas fa-calendar-day" />
-                        <FooterButton onClick={onOpenHistory} label="Histórico" icon="fas fa-clock-rotate-left" />
+                        <FooterButton onClick={onOpenExpense} label="Despesa" icon="fas fa-receipt" />
                     </div>
                 </div>
             </div>
