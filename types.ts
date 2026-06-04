@@ -236,6 +236,7 @@ export interface Agendamento {
     end: string;   // ISO string for date and time
     notes?: string;
     serviceStatus?: AgendamentoServiceStatus; // status operacional do atendimento (separado do status comercial do orçamento)
+    valorFinal?: number; // valor final cobrado no atendimento (usado quando não há orçamento vinculado para entrar no resultado financeiro)
 }
 
 export interface Totals {

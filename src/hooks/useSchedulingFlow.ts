@@ -83,17 +83,24 @@ export function useSchedulingFlow({
 
     const handleCompleteAgendamentoWithValue = useCallback(async (agendamento: Agendamento, finalValue: number) => {
         const previousStatus = agendamento.serviceStatus;
-        // Conclui o atendimento de forma otimista.
-        setAgendamentos(current => current.map(item => (
-            item.id === agendamento.id ? { ...item, serviceStatus: 'completed' } : item
-        )));
+        const previousValorFinal = agendamento.valorFinal;
 
         const linkedPdf = agendamento.pdfId ? allSavedPdfs.find(pdf => pdf.id === agendamento.pdfId) : undefined;
-        const shouldUpdateValue = Boolean(
-            linkedPdf && Number.isFinite(finalValue) && finalValue > 0 && finalValue !== linkedPdf.totalPreco
-        );
+        const hasValidValue = Number.isFinite(finalValue) && finalValue > 0;
+        // Com orcamento vinculado: o valor sobrescreve o orcamento.
+        const shouldUpdatePdf = Boolean(linkedPdf && hasValidValue && finalValue !== linkedPdf!.totalPreco);
+        // Sem orcamento vinculado: o valor fica guardado no proprio agendamento
+        // para entrar no resultado financeiro como servico avulso.
+        const shouldStoreValorFinal = !linkedPdf && hasValidValue && finalValue !== agendamento.valorFinal;
 
-        if (shouldUpdateValue && linkedPdf) {
+        const nextValorFinal = shouldStoreValorFinal ? finalValue : agendamento.valorFinal;
+
+        // Conclui o atendimento de forma otimista (status + valor avulso).
+        setAgendamentos(current => current.map(item => (
+            item.id === agendamento.id ? { ...item, serviceStatus: 'completed', valorFinal: nextValorFinal } : item
+        )));
+
+        if (shouldUpdatePdf && linkedPdf) {
             // Sobrescreve o valor do orcamento vinculado com o valor final do servico.
             setAllSavedPdfs(previous => previous.map(pdf => (
                 pdf.id === linkedPdf.id ? { ...pdf, totalPreco: finalValue } : pdf
@@ -101,16 +108,16 @@ export function useSchedulingFlow({
         }
 
         try {
-            await db.saveAgendamento({ ...agendamento, serviceStatus: 'completed' });
-            if (shouldUpdateValue && linkedPdf) {
+            await db.saveAgendamento({ ...agendamento, serviceStatus: 'completed', valorFinal: nextValorFinal });
+            if (shouldUpdatePdf && linkedPdf) {
                 await db.updatePDF({ ...linkedPdf, totalPreco: finalValue });
             }
         } catch (error) {
             console.error('Erro ao concluir atendimento com valor final:', error);
             setAgendamentos(current => current.map(item => (
-                item.id === agendamento.id ? { ...item, serviceStatus: previousStatus } : item
+                item.id === agendamento.id ? { ...item, serviceStatus: previousStatus, valorFinal: previousValorFinal } : item
             )));
-            if (shouldUpdateValue && linkedPdf) {
+            if (shouldUpdatePdf && linkedPdf) {
                 setAllSavedPdfs(previous => previous.map(pdf => (
                     pdf.id === linkedPdf.id ? { ...pdf, totalPreco: linkedPdf.totalPreco } : pdf
                 )));

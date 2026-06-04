@@ -210,13 +210,18 @@ const AppointmentCard: React.FC<{
     const [isConfirmingValue, setIsConfirmingValue] = useState(false);
     const [finalValueInput, setFinalValueInput] = useState('');
 
+    // Valor exibido/editado: vem do orcamento vinculado ou, sem orcamento, do
+    // valor avulso guardado no proprio agendamento.
+    const currentValue = linkedPdf ? linkedPdf.totalPreco : agendamento.valorFinal;
+    const hasCurrentValue = typeof currentValue === 'number' && Number.isFinite(currentValue);
+
+    const openValuePanel = () => {
+        setFinalValueInput(hasCurrentValue ? formatCurrencyBR(currentValue!) : '');
+        setIsConfirmingValue(true);
+    };
+
     const handleCompleteClick = () => {
-        if (linkedPdf) {
-            setFinalValueInput(formatCurrencyBR(linkedPdf.totalPreco));
-            setIsConfirmingValue(true);
-        } else {
-            onUpdateServiceStatus(agendamento, 'completed');
-        }
+        openValuePanel();
     };
 
     const handleConfirmValue = () => {
@@ -224,6 +229,58 @@ const AppointmentCard: React.FC<{
         onCompleteWithValue(agendamento, parsed);
         setIsConfirmingValue(false);
     };
+
+    const handleEditValueClick = () => {
+        openValuePanel();
+    };
+
+    const isCompleted = serviceStatus === 'completed';
+
+    const valueConfirmationPanel = (
+        <div>
+            <p className="mb-2 flex items-center gap-1.5 text-xs font-bold text-emerald-800 dark:text-emerald-200">
+                <i className="fas fa-circle-check text-[11px]" aria-hidden="true"></i>
+                Valor final do serviço
+            </p>
+            <p className="mb-2 text-[11px] leading-4 text-[var(--text-muted)]">
+                {linkedPdf
+                    ? 'Confirme ou ajuste o valor cobrado (acréscimos ou descontos feitos na hora). Ele substituirá o valor do orçamento.'
+                    : 'Informe o valor cobrado neste atendimento. Ele entra no seu resultado financeiro.'}
+            </p>
+            <div className="flex items-center gap-2">
+                <div className="flex h-10 flex-1 items-center gap-1.5 rounded-[var(--radius-control)] border border-emerald-300 bg-white px-3 dark:border-emerald-800/70 dark:bg-slate-800">
+                    <span className="text-sm font-bold text-slate-500 dark:text-slate-400">R$</span>
+                    <input
+                        type="text"
+                        inputMode="decimal"
+                        value={finalValueInput}
+                        autoFocus
+                        onChange={(e) => setFinalValueInput(e.target.value)}
+                        className="w-full bg-transparent text-base font-bold text-[var(--text-strong)] outline-none"
+                        placeholder="0,00"
+                    />
+                </div>
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+                <button
+                    type="button"
+                    onClick={() => setIsConfirmingValue(false)}
+                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[var(--radius-control)] border border-slate-300 bg-white px-2 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
+                >
+                    <span className="truncate">Cancelar</span>
+                </button>
+                <button
+                    type="button"
+                    onClick={handleConfirmValue}
+                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[var(--radius-control)] border border-emerald-300 bg-emerald-100 px-2 text-xs font-bold text-emerald-800 transition-colors hover:bg-emerald-200 dark:border-emerald-800/70 dark:bg-emerald-950/40 dark:text-emerald-200"
+                >
+                    <i className="fas fa-check text-[11px]" aria-hidden="true"></i>
+                    <span className="truncate">{isCompleted ? 'Salvar valor' : 'Confirmar conclusão'}</span>
+                </button>
+            </div>
+        </div>
+    );
+
     const bairro = client?.bairro;
     const clientAddress = formatFullAddress(client);
     const telUrl = getTelUrl(client?.telefone);
@@ -284,46 +341,7 @@ const AppointmentCard: React.FC<{
             {showEndedPrompt ? (
                 <div className="border-t border-amber-200 bg-amber-50 p-3 dark:border-amber-900/50 dark:bg-amber-950/20">
                     {isConfirmingValue ? (
-                        <div>
-                            <p className="mb-2 flex items-center gap-1.5 text-xs font-bold text-emerald-800 dark:text-emerald-200">
-                                <i className="fas fa-circle-check text-[11px]" aria-hidden="true"></i>
-                                Valor final do serviço
-                            </p>
-                            <p className="mb-2 text-[11px] leading-4 text-amber-800/80 dark:text-amber-200/70">
-                                Confirme ou ajuste o valor cobrado (acréscimos ou descontos feitos na hora). Ele substituirá o valor do orçamento.
-                            </p>
-                            <div className="flex items-center gap-2">
-                                <div className="flex h-10 flex-1 items-center gap-1.5 rounded-[var(--radius-control)] border border-emerald-300 bg-white px-3 dark:border-emerald-800/70 dark:bg-slate-800">
-                                    <span className="text-sm font-bold text-slate-500 dark:text-slate-400">R$</span>
-                                    <input
-                                        type="text"
-                                        inputMode="decimal"
-                                        value={finalValueInput}
-                                        autoFocus
-                                        onChange={(e) => setFinalValueInput(e.target.value)}
-                                        className="w-full bg-transparent text-base font-bold text-[var(--text-strong)] outline-none"
-                                        placeholder="0,00"
-                                    />
-                                </div>
-                            </div>
-                            <div className="mt-2 grid grid-cols-2 gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => setIsConfirmingValue(false)}
-                                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[var(--radius-control)] border border-slate-300 bg-white px-2 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
-                                >
-                                    <span className="truncate">Cancelar</span>
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={handleConfirmValue}
-                                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[var(--radius-control)] border border-emerald-300 bg-emerald-100 px-2 text-xs font-bold text-emerald-800 transition-colors hover:bg-emerald-200 dark:border-emerald-800/70 dark:bg-emerald-950/40 dark:text-emerald-200"
-                                >
-                                    <i className="fas fa-check text-[11px]" aria-hidden="true"></i>
-                                    <span className="truncate">Confirmar conclusão</span>
-                                </button>
-                            </div>
-                        </div>
+                        valueConfirmationPanel
                     ) : (
                         <>
                             <p className="mb-2 flex items-center gap-1.5 text-xs font-bold text-amber-800 dark:text-amber-200">
@@ -365,6 +383,31 @@ const AppointmentCard: React.FC<{
                                 <span className="truncate">Não terminou? Continuar outro dia</span>
                             </button>
                         </>
+                    )}
+                </div>
+            ) : null}
+
+            {isCompleted ? (
+                <div className="border-t border-emerald-200 bg-emerald-50/60 p-3 dark:border-emerald-900/50 dark:bg-emerald-950/15">
+                    {isConfirmingValue ? (
+                        valueConfirmationPanel
+                    ) : (
+                        <div className="flex items-center justify-between gap-2">
+                            <div className="min-w-0">
+                                <span className="block text-[10px] font-bold uppercase text-emerald-700/70 dark:text-emerald-300/60">Valor final</span>
+                                <span className="block text-sm font-black text-emerald-800 dark:text-emerald-200">
+                                    {hasCurrentValue ? `R$ ${formatCurrencyBR(currentValue!)}` : 'Sem valor'}
+                                </span>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={handleEditValueClick}
+                                className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-[var(--radius-control)] border border-emerald-300 bg-white px-3 text-xs font-bold text-emerald-800 transition-colors hover:bg-emerald-100 dark:border-emerald-800/70 dark:bg-slate-800 dark:text-emerald-200"
+                            >
+                                <i className={`fas ${hasCurrentValue ? 'fa-pen' : 'fa-plus'} text-[10px]`} aria-hidden="true"></i>
+                                <span>{hasCurrentValue ? 'Editar valor' : 'Adicionar valor'}</span>
+                            </button>
+                        </div>
                     )}
                 </div>
             ) : null}

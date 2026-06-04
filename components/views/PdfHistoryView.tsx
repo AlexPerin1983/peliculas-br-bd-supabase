@@ -3598,10 +3598,42 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
     const periodFilteredPdfs = useMemo(() => (
         pdfs.filter(pdf => isWithinRange(parseDate(pdf.date), periodRange))
     ), [pdfs, periodRange]);
+    // Serviços avulsos: atendimentos concluídos com valor final, mas SEM orçamento
+    // vinculado. Eles não existem como PDF/orçamento, então sintetizamos um
+    // "orçamento virtual aprovado" só para entrar no resultado financeiro.
+    // Usamos um clienteId sintético (negativo, derivado do id do agendamento)
+    // para garantir que cada serviço avulso forme sua própria oportunidade e
+    // nunca se misture ao grupo de um orçamento real do mesmo cliente/mês.
+    const standaloneServicePdfs = useMemo<SavedPDF[]>(() => (
+        agendamentos
+            .filter(agendamento => (
+                agendamento.serviceStatus === 'completed'
+                && !agendamento.pdfId
+                && typeof agendamento.valorFinal === 'number'
+                && Number.isFinite(agendamento.valorFinal)
+                && agendamento.valorFinal > 0
+            ))
+            .map(agendamento => ({
+                id: agendamento.id ? -agendamento.id : undefined,
+                clienteId: agendamento.id ? -agendamento.id : -1,
+                clientName: agendamento.clienteNome,
+                date: agendamento.start,
+                totalPreco: agendamento.valorFinal as number,
+                totalM2: 0,
+                nomeArquivo: 'Serviço avulso',
+                status: 'approved' as const
+            }))
+    ), [agendamentos]);
+    // Array exclusivo do resultado financeiro: PDFs reais do período + serviços
+    // avulsos do período. Não alimenta a lista/cards do histórico.
+    const periodFilteredPdfsWithStandalone = useMemo(() => {
+        const standaloneInPeriod = standaloneServicePdfs.filter(pdf => isWithinRange(parseDate(pdf.date), periodRange));
+        return standaloneInPeriod.length > 0 ? [...periodFilteredPdfs, ...standaloneInPeriod] : periodFilteredPdfs;
+    }, [periodFilteredPdfs, standaloneServicePdfs, periodRange]);
     const selectedExpenseSummary = useMemo(() => (
-        buildPeriodExpenseSummary(periodFilteredPdfs, funnelReferencePdfIds, periodRangeLabel)
-            || (pdfs.length > 0 ? buildEmptyExpenseSummary(periodRangeLabel) : null)
-    ), [funnelReferencePdfIds, pdfs.length, periodFilteredPdfs, periodRangeLabel]);
+        buildPeriodExpenseSummary(periodFilteredPdfsWithStandalone, funnelReferencePdfIds, periodRangeLabel)
+            || (pdfs.length > 0 || standaloneServicePdfs.length > 0 ? buildEmptyExpenseSummary(periodRangeLabel) : null)
+    ), [funnelReferencePdfIds, pdfs.length, periodFilteredPdfsWithStandalone, standaloneServicePdfs.length, periodRangeLabel]);
 
     useEffect(() => {
         if (!isTemplateModalOpen) {

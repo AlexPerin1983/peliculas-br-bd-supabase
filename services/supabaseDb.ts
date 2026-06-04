@@ -897,7 +897,8 @@ export const saveAgendamento = async (agendamento: Agendamento | Omit<Agendament
         start: agendamento.start,
         end: agendamento.end,
         notes: agendamento.notes,
-        service_status: serviceStatus
+        service_status: serviceStatus,
+        valor_final: agendamento.valorFinal ?? null
     };
     const legacyAgendamentoData = {
         user_id: userId,
@@ -913,6 +914,11 @@ export const saveAgendamento = async (agendamento: Agendamento | Omit<Agendament
         const { service_status, ...rest } = payload;
         return rest;
     };
+    // Remove a coluna valor_final caso a migração ainda não tenha sido aplicada.
+    const stripValorFinal = <T extends { valor_final?: unknown }>(payload: T) => {
+        const { valor_final, ...rest } = payload;
+        return rest;
+    };
 
     const id = 'id' in agendamento && agendamento.id ? agendamento.id : undefined;
 
@@ -923,10 +929,17 @@ export const saveAgendamento = async (agendamento: Agendamento | Omit<Agendament
             : table.insert(payload).select().single();
     };
 
-    let { data, error } = await runQuery(agendamentoData);
+    let payload: Record<string, unknown> = agendamentoData;
+    let { data, error } = await runQuery(payload);
+
+    if (error && isValorFinalColumnError(error)) {
+        payload = stripValorFinal(payload);
+        ({ data, error } = await runQuery(payload));
+    }
 
     if (error && isServiceStatusColumnError(error)) {
-        ({ data, error } = await runQuery(stripServiceStatus(agendamentoData)));
+        payload = stripServiceStatus(payload);
+        ({ data, error } = await runQuery(payload));
     }
 
     if (error && isAgendamentoModernColumnError(error)) {
@@ -975,7 +988,8 @@ const mapRowToAgendamento = (row: any): Agendamento => ({
     start: row.start ?? row.start_time,
     end: row.end ?? row.end_time,
     notes: row.notes,
-    serviceStatus: row.service_status || 'scheduled'
+    serviceStatus: row.service_status || 'scheduled',
+    valorFinal: row.valor_final ?? undefined
 });
 
 const isServiceStatusColumnError = (error: unknown): boolean => {
@@ -990,6 +1004,25 @@ const isServiceStatusColumnError = (error: unknown): boolean => {
         .toLowerCase();
 
     return details.includes('service_status')
+        && (
+            details.includes('column')
+            || details.includes('schema cache')
+            || details.includes('could not find')
+        );
+};
+
+const isValorFinalColumnError = (error: unknown): boolean => {
+    const details = [
+        (error as { message?: string })?.message,
+        (error as { details?: string })?.details,
+        (error as { hint?: string })?.hint,
+        (error as { code?: string })?.code
+    ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+    return details.includes('valor_final')
         && (
             details.includes('column')
             || details.includes('schema cache')
