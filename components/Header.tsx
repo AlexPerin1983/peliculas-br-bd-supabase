@@ -355,8 +355,11 @@ const Header: React.FC<HeaderProps> = ({ activeTab, onTabChange, onGoBack, canGo
                         <span className="h-[2px] w-5 rounded-full bg-slate-700 dark:bg-slate-200" />
                     </button>
 
-                    <h1 className="text-lg font-bold tracking-tight text-slate-900 dark:text-white lg:hidden">
+                    <h1 className="flex items-center text-lg font-bold tracking-tight text-slate-900 dark:text-white lg:hidden">
                         Películas<span className="text-blue-600 dark:text-blue-400">BR</span>
+                        <span className="ml-1 -mt-2 rounded-full bg-blue-100 px-1.5 py-px text-[9px] font-bold uppercase leading-none tracking-wide text-blue-600 dark:bg-blue-500/20 dark:text-blue-300">
+                            beta
+                        </span>
                     </h1>
                     <h2 className="hidden text-lg font-bold tracking-tight text-slate-800 dark:text-slate-100 lg:block">
                         {pageLabels[activeTab] || ''}
@@ -488,6 +491,14 @@ const Header: React.FC<HeaderProps> = ({ activeTab, onTabChange, onGoBack, canGo
                                             </p>
                                         </div>
                                     </button>
+
+                                    <div className="mt-2 flex items-center justify-center gap-1.5 text-[11px] font-medium text-slate-400 dark:text-slate-500">
+                                        <span>PelículasBR</span>
+                                        <span className="rounded-full bg-blue-100 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-blue-600 dark:bg-blue-500/20 dark:text-blue-300">
+                                            beta
+                                        </span>
+                                        <span>v0.1.0</span>
+                                    </div>
                                 </div>
                             </div>
                         </aside>
