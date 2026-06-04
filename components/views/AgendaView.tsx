@@ -3,6 +3,10 @@ import { Agendamento, AgendamentoServiceStatus, Client, SavedPDF } from '../../t
 import ActionButton from '../ui/ActionButton';
 import ContentState from '../ui/ContentState';
 import AgendaPushReminderControl from './AgendaPushReminderControl';
+import { parseCurrencyInput } from '../../src/lib/proposalExpenses';
+
+const formatCurrencyBR = (value: number): string =>
+    (Number.isFinite(value) ? value : 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 interface AgendaViewProps {
     agendamentos: Agendamento[];
@@ -10,6 +14,7 @@ interface AgendaViewProps {
     clients: Client[];
     onEditAgendamento: (agendamento: Agendamento) => void;
     onUpdateServiceStatus: (agendamento: Agendamento, serviceStatus: AgendamentoServiceStatus) => void;
+    onCompleteAgendamentoWithValue: (agendamento: Agendamento, finalValue: number) => void;
     onContinueAgendamento: (agendamento: Agendamento) => void;
     onRescheduleAgendamento: (agendamento: Agendamento) => void;
     onCreateNewAgendamento: (date: Date) => void;
@@ -190,16 +195,35 @@ const RouteActionLink: React.FC<{
 const AppointmentCard: React.FC<{
     agendamento: AgendamentoWithStatus;
     client?: Client;
+    linkedPdf?: SavedPDF;
     onEdit: (agendamento: Agendamento) => void;
     onUpdateServiceStatus: (agendamento: Agendamento, serviceStatus: AgendamentoServiceStatus) => void;
+    onCompleteWithValue: (agendamento: Agendamento, finalValue: number) => void;
     onContinueAgendamento: (agendamento: Agendamento) => void;
     onReschedule: (agendamento: Agendamento) => void;
-}> = ({ agendamento, client, onEdit, onUpdateServiceStatus, onContinueAgendamento, onReschedule }) => {
+}> = ({ agendamento, client, linkedPdf, onEdit, onUpdateServiceStatus, onCompleteWithValue, onContinueAgendamento, onReschedule }) => {
     const status = agendamento.status || 'pending';
     const meta = STATUS_META[status] || STATUS_META.pending;
     const serviceStatus = agendamento.serviceStatus || 'scheduled';
     const hasEnded = new Date(agendamento.end).getTime() < Date.now();
     const showEndedPrompt = serviceStatus === 'scheduled' && hasEnded;
+    const [isConfirmingValue, setIsConfirmingValue] = useState(false);
+    const [finalValueInput, setFinalValueInput] = useState('');
+
+    const handleCompleteClick = () => {
+        if (linkedPdf) {
+            setFinalValueInput(formatCurrencyBR(linkedPdf.totalPreco));
+            setIsConfirmingValue(true);
+        } else {
+            onUpdateServiceStatus(agendamento, 'completed');
+        }
+    };
+
+    const handleConfirmValue = () => {
+        const parsed = parseCurrencyInput(finalValueInput);
+        onCompleteWithValue(agendamento, parsed);
+        setIsConfirmingValue(false);
+    };
     const bairro = client?.bairro;
     const clientAddress = formatFullAddress(client);
     const telUrl = getTelUrl(client?.telefone);
@@ -259,44 +283,89 @@ const AppointmentCard: React.FC<{
 
             {showEndedPrompt ? (
                 <div className="border-t border-amber-200 bg-amber-50 p-3 dark:border-amber-900/50 dark:bg-amber-950/20">
-                    <p className="mb-2 flex items-center gap-1.5 text-xs font-bold text-amber-800 dark:text-amber-200">
-                        <i className="fas fa-circle-exclamation text-[11px]" aria-hidden="true"></i>
-                        Horário encerrado — como foi o atendimento?
-                    </p>
-                    <div className="grid grid-cols-3 gap-2">
-                        <button
-                            type="button"
-                            onClick={() => onUpdateServiceStatus(agendamento, 'completed')}
-                            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[var(--radius-control)] border border-emerald-300 bg-emerald-100 px-2 text-xs font-bold text-emerald-800 transition-colors hover:bg-emerald-200 dark:border-emerald-800/70 dark:bg-emerald-950/40 dark:text-emerald-200"
-                        >
-                            <i className="fas fa-check text-[11px]" aria-hidden="true"></i>
-                            <span className="truncate">Concluído</span>
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => onUpdateServiceStatus(agendamento, 'no_show')}
-                            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[var(--radius-control)] border border-amber-300 bg-white px-2 text-xs font-bold text-amber-800 transition-colors hover:bg-amber-100 dark:border-amber-800/70 dark:bg-slate-800 dark:text-amber-200"
-                        >
-                            <i className="fas fa-user-slash text-[11px]" aria-hidden="true"></i>
-                            <span className="truncate">Faltou</span>
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => onUpdateServiceStatus(agendamento, 'cancelled')}
-                            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[var(--radius-control)] border border-rose-300 bg-white px-2 text-xs font-bold text-rose-800 transition-colors hover:bg-rose-100 dark:border-rose-800/70 dark:bg-slate-800 dark:text-rose-200"
-                        >
-                            <i className="fas fa-ban text-[11px]" aria-hidden="true"></i>
-                            <span className="truncate">Cancelado</span>
-                        </button>
-                    </div>
-                    <button
-                        type="button"
-                        onClick={() => onContinueAgendamento(agendamento)}
-                        className="mt-2 inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-[var(--radius-control)] border border-indigo-300 bg-indigo-100 px-2 text-xs font-bold text-indigo-800 transition-colors hover:bg-indigo-200 dark:border-indigo-800/70 dark:bg-indigo-950/40 dark:text-indigo-200"
-                    >
-                        <i className="fas fa-hourglass-half text-[11px]" aria-hidden="true"></i>
-                        <span className="truncate">Não terminou? Continuar outro dia</span>
-                    </button>
+                    {isConfirmingValue ? (
+                        <div>
+                            <p className="mb-2 flex items-center gap-1.5 text-xs font-bold text-emerald-800 dark:text-emerald-200">
+                                <i className="fas fa-circle-check text-[11px]" aria-hidden="true"></i>
+                                Valor final do serviço
+                            </p>
+                            <p className="mb-2 text-[11px] leading-4 text-amber-800/80 dark:text-amber-200/70">
+                                Confirme ou ajuste o valor cobrado (acréscimos ou descontos feitos na hora). Ele substituirá o valor do orçamento.
+                            </p>
+                            <div className="flex items-center gap-2">
+                                <div className="flex h-10 flex-1 items-center gap-1.5 rounded-[var(--radius-control)] border border-emerald-300 bg-white px-3 dark:border-emerald-800/70 dark:bg-slate-800">
+                                    <span className="text-sm font-bold text-slate-500 dark:text-slate-400">R$</span>
+                                    <input
+                                        type="text"
+                                        inputMode="decimal"
+                                        value={finalValueInput}
+                                        autoFocus
+                                        onChange={(e) => setFinalValueInput(e.target.value)}
+                                        className="w-full bg-transparent text-base font-bold text-[var(--text-strong)] outline-none"
+                                        placeholder="0,00"
+                                    />
+                                </div>
+                            </div>
+                            <div className="mt-2 grid grid-cols-2 gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsConfirmingValue(false)}
+                                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[var(--radius-control)] border border-slate-300 bg-white px-2 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
+                                >
+                                    <span className="truncate">Cancelar</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleConfirmValue}
+                                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[var(--radius-control)] border border-emerald-300 bg-emerald-100 px-2 text-xs font-bold text-emerald-800 transition-colors hover:bg-emerald-200 dark:border-emerald-800/70 dark:bg-emerald-950/40 dark:text-emerald-200"
+                                >
+                                    <i className="fas fa-check text-[11px]" aria-hidden="true"></i>
+                                    <span className="truncate">Confirmar conclusão</span>
+                                </button>
+                            </div>
+                        </div>
+                    ) : (
+                        <>
+                            <p className="mb-2 flex items-center gap-1.5 text-xs font-bold text-amber-800 dark:text-amber-200">
+                                <i className="fas fa-circle-exclamation text-[11px]" aria-hidden="true"></i>
+                                Horário encerrado — como foi o atendimento?
+                            </p>
+                            <div className="grid grid-cols-3 gap-2">
+                                <button
+                                    type="button"
+                                    onClick={handleCompleteClick}
+                                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[var(--radius-control)] border border-emerald-300 bg-emerald-100 px-2 text-xs font-bold text-emerald-800 transition-colors hover:bg-emerald-200 dark:border-emerald-800/70 dark:bg-emerald-950/40 dark:text-emerald-200"
+                                >
+                                    <i className="fas fa-check text-[11px]" aria-hidden="true"></i>
+                                    <span className="truncate">Concluído</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => onUpdateServiceStatus(agendamento, 'no_show')}
+                                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[var(--radius-control)] border border-amber-300 bg-white px-2 text-xs font-bold text-amber-800 transition-colors hover:bg-amber-100 dark:border-amber-800/70 dark:bg-slate-800 dark:text-amber-200"
+                                >
+                                    <i className="fas fa-user-slash text-[11px]" aria-hidden="true"></i>
+                                    <span className="truncate">Faltou</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => onUpdateServiceStatus(agendamento, 'cancelled')}
+                                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[var(--radius-control)] border border-rose-300 bg-white px-2 text-xs font-bold text-rose-800 transition-colors hover:bg-rose-100 dark:border-rose-800/70 dark:bg-slate-800 dark:text-rose-200"
+                                >
+                                    <i className="fas fa-ban text-[11px]" aria-hidden="true"></i>
+                                    <span className="truncate">Cancelado</span>
+                                </button>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => onContinueAgendamento(agendamento)}
+                                className="mt-2 inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-[var(--radius-control)] border border-indigo-300 bg-indigo-100 px-2 text-xs font-bold text-indigo-800 transition-colors hover:bg-indigo-200 dark:border-indigo-800/70 dark:bg-indigo-950/40 dark:text-indigo-200"
+                            >
+                                <i className="fas fa-hourglass-half text-[11px]" aria-hidden="true"></i>
+                                <span className="truncate">Não terminou? Continuar outro dia</span>
+                            </button>
+                        </>
+                    )}
                 </div>
             ) : null}
 
@@ -419,7 +488,7 @@ const AgendaQuickButton: React.FC<{
 
 const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
 
-const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, onEditAgendamento, onUpdateServiceStatus, onContinueAgendamento, onRescheduleAgendamento, onCreateNewAgendamento }) => {
+const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, onEditAgendamento, onUpdateServiceStatus, onCompleteAgendamentoWithValue, onContinueAgendamento, onRescheduleAgendamento, onCreateNewAgendamento }) => {
     const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState(new Date());
 
@@ -443,6 +512,16 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
         pdfs.forEach((pdf) => {
             if (pdf.id && pdf.status) {
                 map.set(pdf.id, pdf.status);
+            }
+        });
+        return map;
+    }, [pdfs]);
+
+    const pdfById = useMemo(() => {
+        const map = new Map<number, SavedPDF>();
+        pdfs.forEach((pdf) => {
+            if (pdf.id) {
+                map.set(pdf.id, pdf);
             }
         });
         return map;
@@ -663,7 +742,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                         <div className="space-y-3">
                             {selectedDayAgendamentos.map((agendamento) => {
                                 const client = clientsById.get(agendamento.clienteId);
-                                return <AppointmentCard key={agendamento.id} agendamento={agendamento} client={client} onEdit={onEditAgendamento} onUpdateServiceStatus={onUpdateServiceStatus} onContinueAgendamento={onContinueAgendamento} onReschedule={onRescheduleAgendamento} />;
+                                return <AppointmentCard key={agendamento.id} agendamento={agendamento} client={client} linkedPdf={agendamento.pdfId ? pdfById.get(agendamento.pdfId) : undefined} onEdit={onEditAgendamento} onUpdateServiceStatus={onUpdateServiceStatus} onCompleteWithValue={onCompleteAgendamentoWithValue} onContinueAgendamento={onContinueAgendamento} onReschedule={onRescheduleAgendamento} />;
                             })}
                         </div>
                     ) : (
@@ -773,7 +852,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                         <div className="space-y-3">
                             {selectedDayAgendamentos.map((agendamento) => {
                                 const client = clientsById.get(agendamento.clienteId);
-                                return <AppointmentCard key={agendamento.id} agendamento={agendamento} client={client} onEdit={onEditAgendamento} onUpdateServiceStatus={onUpdateServiceStatus} onContinueAgendamento={onContinueAgendamento} onReschedule={onRescheduleAgendamento} />;
+                                return <AppointmentCard key={agendamento.id} agendamento={agendamento} client={client} linkedPdf={agendamento.pdfId ? pdfById.get(agendamento.pdfId) : undefined} onEdit={onEditAgendamento} onUpdateServiceStatus={onUpdateServiceStatus} onCompleteWithValue={onCompleteAgendamentoWithValue} onContinueAgendamento={onContinueAgendamento} onReschedule={onRescheduleAgendamento} />;
                             })}
                         </div>
                     ) : (

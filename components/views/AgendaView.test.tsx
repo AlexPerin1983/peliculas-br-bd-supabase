@@ -32,6 +32,7 @@ const renderAgenda = (clients: Client[] = [clientWithAddress], agendamentos: Age
         clients={clients}
         onEditAgendamento={vi.fn()}
         onUpdateServiceStatus={vi.fn()}
+        onCompleteAgendamentoWithValue={vi.fn()}
         onContinueAgendamento={vi.fn()}
         onRescheduleAgendamento={vi.fn()}
         onCreateNewAgendamento={vi.fn()}

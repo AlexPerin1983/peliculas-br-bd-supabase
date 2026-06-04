@@ -81,6 +81,44 @@ export function useSchedulingFlow({
         }
     }, [handleShowInfo, setAgendamentos]);
 
+    const handleCompleteAgendamentoWithValue = useCallback(async (agendamento: Agendamento, finalValue: number) => {
+        const previousStatus = agendamento.serviceStatus;
+        // Conclui o atendimento de forma otimista.
+        setAgendamentos(current => current.map(item => (
+            item.id === agendamento.id ? { ...item, serviceStatus: 'completed' } : item
+        )));
+
+        const linkedPdf = agendamento.pdfId ? allSavedPdfs.find(pdf => pdf.id === agendamento.pdfId) : undefined;
+        const shouldUpdateValue = Boolean(
+            linkedPdf && Number.isFinite(finalValue) && finalValue > 0 && finalValue !== linkedPdf.totalPreco
+        );
+
+        if (shouldUpdateValue && linkedPdf) {
+            // Sobrescreve o valor do orcamento vinculado com o valor final do servico.
+            setAllSavedPdfs(previous => previous.map(pdf => (
+                pdf.id === linkedPdf.id ? { ...pdf, totalPreco: finalValue } : pdf
+            )));
+        }
+
+        try {
+            await db.saveAgendamento({ ...agendamento, serviceStatus: 'completed' });
+            if (shouldUpdateValue && linkedPdf) {
+                await db.updatePDF({ ...linkedPdf, totalPreco: finalValue });
+            }
+        } catch (error) {
+            console.error('Erro ao concluir atendimento com valor final:', error);
+            setAgendamentos(current => current.map(item => (
+                item.id === agendamento.id ? { ...item, serviceStatus: previousStatus } : item
+            )));
+            if (shouldUpdateValue && linkedPdf) {
+                setAllSavedPdfs(previous => previous.map(pdf => (
+                    pdf.id === linkedPdf.id ? { ...pdf, totalPreco: linkedPdf.totalPreco } : pdf
+                )));
+            }
+            handleShowInfo('Não foi possível concluir o atendimento. Tente novamente.');
+        }
+    }, [allSavedPdfs, handleShowInfo, setAgendamentos, setAllSavedPdfs]);
+
     const handleRequestDeleteAgendamento = useCallback((agendamento: Agendamento) => {
         handleCloseAgendamentoModal();
         setAgendamentoToDelete(agendamento);
@@ -172,6 +210,7 @@ export function useSchedulingFlow({
         handleCloseAgendamentoModal,
         handleSaveAgendamento,
         handleUpdateAgendamentoServiceStatus,
+        handleCompleteAgendamentoWithValue,
         handleContinueAgendamento,
         handleRequestDeleteAgendamento,
         handleConfirmDeleteAgendamento,

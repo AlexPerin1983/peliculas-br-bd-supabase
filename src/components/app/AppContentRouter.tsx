@@ -59,6 +59,7 @@ interface AppContentRouterProps {
     onNavigateToOption: (clientId: number, optionId: number) => void;
     onEditAgendamento: (agendamento: Agendamento) => void;
     onUpdateAgendamentoServiceStatus: (agendamento: Agendamento, serviceStatus: AgendamentoServiceStatus) => void;
+    onCompleteAgendamentoWithValue: (agendamento: Agendamento, finalValue: number) => void;
     onContinueAgendamento: (agendamento: Agendamento) => void;
     onRescheduleAgendamento: (agendamento: Agendamento) => void;
     onCreateNewAgendamento: (date: Date) => void;
@@ -135,6 +136,7 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
     onNavigateToOption,
     onEditAgendamento,
     onUpdateAgendamentoServiceStatus,
+    onCompleteAgendamentoWithValue,
     onContinueAgendamento,
     onRescheduleAgendamento,
     onCreateNewAgendamento,
@@ -275,6 +277,7 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
                 clients={clients}
                 onEditAgendamento={onEditAgendamento}
                 onUpdateServiceStatus={onUpdateAgendamentoServiceStatus}
+                onCompleteAgendamentoWithValue={onCompleteAgendamentoWithValue}
                 onContinueAgendamento={onContinueAgendamento}
                 onRescheduleAgendamento={onRescheduleAgendamento}
                 onCreateNewAgendamento={onCreateNewAgendamento}
