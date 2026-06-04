@@ -3,6 +3,7 @@ import { Client, SavedPDF } from '../../types';
 import ActionButton from '../ui/ActionButton';
 import ContentState from '../ui/ContentState';
 import { ListSkeleton } from '../ui/Skeleton';
+import { matchesSearch } from '../../src/lib/textSearch';
 
 const useDebounce = (value: string, delay: number) => {
     const [debouncedValue, setDebouncedValue] = useState(value);
@@ -206,7 +207,7 @@ const ClientSelectionModal: React.FC<ClientSelectionModalProps> = ({
         let result = clients;
         if (debouncedSearchTerm) {
             result = clients.filter(client =>
-                client.nome.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
+                matchesSearch(client.nome, debouncedSearchTerm)
             );
         }
         // Ordenar: fixados primeiro (pelo mais recente), depois por ID decrescente (mais recentes criados)

@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Bobina, Retalho } from '../../types';
+import { normalizeSearchText } from '../lib/textSearch';
 
 const ESTOQUE_VIEW_MODE_STORAGE_KEY = 'estoque-view-mode';
 
@@ -29,12 +30,12 @@ export function useEstoqueFilters(bobinas: Bobina[], retalhos: Retalho[]) {
 
     const filteredBobinas = useMemo(() => {
         return bobinas.filter(b => {
-            const normalizedSearch = searchTerm.toLowerCase();
-            const matchesSearch = searchTerm === '' ||
-                b.id?.toString().includes(searchTerm) ||
-                b.filmId.toLowerCase().includes(normalizedSearch) ||
-                (b.localizacao && b.localizacao.toLowerCase().includes(normalizedSearch)) ||
-                (b.lote && b.lote.toLowerCase().includes(normalizedSearch));
+            const normalizedSearch = normalizeSearchText(searchTerm);
+            const matchesSearch = normalizedSearch === '' ||
+                b.id?.toString().includes(normalizedSearch) ||
+                normalizeSearchText(b.filmId).includes(normalizedSearch) ||
+                (b.localizacao && normalizeSearchText(b.localizacao).includes(normalizedSearch)) ||
+                (b.lote && normalizeSearchText(b.lote).includes(normalizedSearch));
 
             const matchesStatus = statusFilter === 'todos' || b.status === statusFilter;
             return matchesSearch && matchesStatus;
@@ -43,11 +44,11 @@ export function useEstoqueFilters(bobinas: Bobina[], retalhos: Retalho[]) {
 
     const filteredRetalhos = useMemo(() => {
         return retalhos.filter(r => {
-            const normalizedSearch = searchTerm.toLowerCase();
-            const matchesSearch = searchTerm === '' ||
-                r.id?.toString().includes(searchTerm) ||
-                r.filmId.toLowerCase().includes(normalizedSearch) ||
-                (r.localizacao && r.localizacao.toLowerCase().includes(normalizedSearch));
+            const normalizedSearch = normalizeSearchText(searchTerm);
+            const matchesSearch = normalizedSearch === '' ||
+                r.id?.toString().includes(normalizedSearch) ||
+                normalizeSearchText(r.filmId).includes(normalizedSearch) ||
+                (r.localizacao && normalizeSearchText(r.localizacao).includes(normalizedSearch));
 
             const matchesStatus = statusFilter === 'todos' || r.status === statusFilter;
             return matchesSearch && matchesStatus;

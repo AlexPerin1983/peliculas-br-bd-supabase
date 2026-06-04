@@ -4,6 +4,7 @@ import ActionButton from '../ui/ActionButton';
 import ContentState from '../ui/ContentState';
 import PageCollectionToolbar from '../ui/PageCollectionToolbar';
 import ViewModeToggle from '../ui/ViewModeToggle';
+import { matchesSearch, normalizeSearchText } from '../../src/lib/textSearch';
 
 interface FilmListViewProps {
     films: Film[];
@@ -965,10 +966,10 @@ const FilmListView: React.FC<FilmListViewProps> = ({ films, onAdd, onEdit, onDel
     const filteredFilms = useMemo(() => {
         if (!deferredSearchTerm.trim()) return films;
 
-        const lowerTerm = deferredSearchTerm.toLowerCase().trim();
+        const lowerTerm = normalizeSearchText(deferredSearchTerm);
 
         return films.filter((film) =>
-            film.nome.toLowerCase().includes(lowerTerm) ||
+            matchesSearch(film.nome, lowerTerm) ||
             (film.preco ? film.preco.toString().includes(lowerTerm) : false) ||
             (film.maoDeObra ? film.maoDeObra.toString().includes(lowerTerm) : false)
         );

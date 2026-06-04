@@ -11,6 +11,7 @@ import {
     saveFornecedor
 } from '../../services/fornecedorService';
 import { useFeedback } from '../../src/contexts/FeedbackContext';
+import { matchesSearch, normalizeSearchText } from '../../src/lib/textSearch';
 
 const EMPTY_FORM = {
     empresa: '',
@@ -1033,21 +1034,21 @@ const FornecedoresView: React.FC = () => {
     }, [viewType]);
 
     const filtered = useMemo(() => {
-        const lowerTerm = deferredSearch.toLowerCase().trim();
+        const lowerTerm = normalizeSearchText(deferredSearch);
         const phoneTerm = deferredSearch.replace(/\D/g, '');
 
         if (!lowerTerm && !phoneTerm) return fornecedores;
 
         return fornecedores.filter(fornecedor => {
-            const tags = getFornecedorTags(fornecedor).join(' ').toLowerCase();
+            const tags = getFornecedorTags(fornecedor).join(' ');
             const normalizedPhone = fornecedor.telefone.replace(/\D/g, '');
 
             return (
-                fornecedor.empresa.toLowerCase().includes(lowerTerm) ||
-                fornecedor.contato.toLowerCase().includes(lowerTerm) ||
-                (fornecedor.email || '').toLowerCase().includes(lowerTerm) ||
-                (fornecedor.endereco || '').toLowerCase().includes(lowerTerm) ||
-                tags.includes(lowerTerm) ||
+                matchesSearch(fornecedor.empresa, lowerTerm) ||
+                matchesSearch(fornecedor.contato, lowerTerm) ||
+                matchesSearch(fornecedor.email || '', lowerTerm) ||
+                matchesSearch(fornecedor.endereco || '', lowerTerm) ||
+                matchesSearch(tags, lowerTerm) ||
                 (phoneTerm ? normalizedPhone.includes(phoneTerm) : false)
             );
         });

@@ -25,6 +25,7 @@ import ContentState from '../ui/ContentState';
 import Modal from '../ui/Modal';
 import { useFeedback } from '../../src/contexts/FeedbackContext';
 import { PROPOSAL_EXPENSE_CATEGORY_OPTIONS, summarizeProposalExpenses } from '../../src/lib/proposalExpenses';
+import { matchesSearch, normalizeSearchText } from '../../src/lib/textSearch';
 
 interface PdfHistoryViewProps {
     pdfs: SavedPDF[];
@@ -3752,11 +3753,11 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
         }
 
         if (deferredSearchTerm.trim()) {
-            const lowerTerm = deferredSearchTerm.toLowerCase().trim();
+            const lowerTerm = normalizeSearchText(deferredSearchTerm);
             groups = groups.filter(group => {
-                const clientMatch = group.client.nome.toLowerCase().includes(lowerTerm);
+                const clientMatch = matchesSearch(group.client.nome, lowerTerm);
                 const pdfMatch = group.pdfs.some(pdf =>
-                    (pdf.proposalOptionName && pdf.proposalOptionName.toLowerCase().includes(lowerTerm)) ||
+                    (pdf.proposalOptionName && matchesSearch(pdf.proposalOptionName, lowerTerm)) ||
                     formatNumberBR(pdf.totalPreco).includes(lowerTerm) ||
                     new Date(pdf.date).toLocaleDateString('pt-BR').includes(lowerTerm)
                 );

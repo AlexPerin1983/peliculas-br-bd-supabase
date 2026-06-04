@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { matchesSearch } from '../../src/lib/textSearch';
 
 interface SearchableSelectProps<T> {
     options: T[];
@@ -85,7 +86,7 @@ const SearchableSelect = <T extends { [key: string]: any }>({
             return options;
         }
         return options.filter(option =>
-            String(option[displayField]).toLowerCase().includes(debouncedSearchTerm.toLowerCase())
+            matchesSearch(String(option[displayField]), debouncedSearchTerm)
         );
     }, [options, debouncedSearchTerm, displayField]);
 

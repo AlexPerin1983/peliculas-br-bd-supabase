@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Film } from '../../types';
+import { matchesSearch } from '../../src/lib/textSearch';
 
 interface FilmSelectionModalProps {
     isOpen: boolean;
@@ -273,7 +274,7 @@ const FilmSelectionModal: React.FC<FilmSelectionModalProps> = ({ isOpen, onClose
 
         if (debouncedSearchTerm) {
             result = result.filter(item =>
-                item.film.nome.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
+                matchesSearch(item.film.nome, debouncedSearchTerm)
             );
         }
 

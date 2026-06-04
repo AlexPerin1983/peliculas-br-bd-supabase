@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { matchesSearch } from '../../src/lib/textSearch';
 
 interface DynamicSelectorProps {
     label: string;
@@ -30,7 +31,7 @@ const DynamicSelector: React.FC<DynamicSelectorProps> = ({ label, options, value
     }, []);
 
     const filteredOptions = options.filter(option =>
-        option.toLowerCase().includes(inputValue.toLowerCase())
+        matchesSearch(option, inputValue)
     );
 
     const handleSelect = (option: string) => {
