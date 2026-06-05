@@ -191,7 +191,7 @@ const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({
     );
 
     return (
-        <Modal isOpen={isOpen} onClose={isSaving ? () => {} : onClose} title={title} footer={footer} disableClose={isSaving}>
+        <Modal isOpen={isOpen} onClose={isSaving ? () => {} : onClose} title={title} footer={footer} disableClose={isSaving} fullScreenOnMobile>
             <form id="paymentMethodsForm" onSubmit={handleSubmit} className="space-y-4">
                 <fieldset disabled={isSaving} className="space-y-4">
                     {description && (

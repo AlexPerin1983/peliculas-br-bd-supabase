@@ -222,7 +222,7 @@ const AIMeasurementModal: React.FC<AIMeasurementModalProps> = ({ isOpen, onClose
     );
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title="Preenchimento Automatico com IA" footer={footer}>
+        <Modal isOpen={isOpen} onClose={onClose} title="Preenchimento Automatico com IA" footer={footer} fullScreenOnMobile>
             <form id="aiForm" onSubmit={handleSubmit} className="space-y-4" aria-busy={isProcessing}>
                 <div className="flex space-x-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-lg">
                     <TabButton tab="text" icon="fas fa-font">Texto</TabButton>

@@ -246,7 +246,7 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
     );
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title="Cadastrar Cliente com IA" footer={footer}>
+        <Modal isOpen={isOpen} onClose={onClose} title="Cadastrar Cliente com IA" footer={footer} fullScreenOnMobile>
             <form id="aiClientForm" onSubmit={handleSubmit} className="space-y-4" aria-busy={isProcessing}>
                 <div className="flex space-x-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-lg">
                     <TabButton tab="text" icon="fas fa-font">Texto</TabButton>

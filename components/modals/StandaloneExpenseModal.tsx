@@ -227,7 +227,7 @@ const StandaloneExpenseModal: React.FC<StandaloneExpenseModalProps> = ({
             title="Nova despesa"
             footer={footer}
             disableClose={isSaving}
-            wrapperClassName="sm:items-center items-start pt-12 sm:pt-4"
+            fullScreenOnMobile
         >
             <form id="standaloneExpenseForm" onSubmit={handleSubmit} className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">

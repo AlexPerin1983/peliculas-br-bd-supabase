@@ -286,7 +286,7 @@ const FilmModal: React.FC<FilmModalProps> = ({
     );
 
     return (
-        <Modal isOpen={isOpen} onClose={isSaving ? () => {} : onClose} title={modalTitle} footer={footer} disableClose={isSaving}>
+        <Modal isOpen={isOpen} onClose={isSaving ? () => {} : onClose} title={modalTitle} footer={footer} disableClose={isSaving} fullScreenOnMobile>
             <form id="filmForm" onSubmit={handleSubmit} className="space-y-4">
                 <fieldset disabled={isSaving} className="space-y-4">
                     <div className="p-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg space-y-4">

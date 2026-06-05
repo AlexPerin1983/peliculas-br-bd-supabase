@@ -466,7 +466,7 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
     const textareaClassName = `${inputClassName} min-h-[120px] resize-none`;
 
     return (
-        <Modal isOpen={isOpen} onClose={isSaving ? () => {} : onClose} title={modalTitle} footer={footerContent} disableClose={isSaving}>
+        <Modal isOpen={isOpen} onClose={isSaving ? () => {} : onClose} title={modalTitle} footer={footerContent} disableClose={isSaving} fullScreenOnMobile>
             <form id="agendamentoForm" onSubmit={handleSubmit} className="space-y-5">
                 <fieldset disabled={isSaving} className="space-y-5">
                     <div>

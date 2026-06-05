@@ -222,7 +222,7 @@ const AIFilmModal: React.FC<AIFilmModalProps> = ({ isOpen, onClose, onProcess, i
     );
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title="Preencher Pelicula com IA" footer={footer}>
+        <Modal isOpen={isOpen} onClose={onClose} title="Preencher Pelicula com IA" footer={footer} fullScreenOnMobile>
             <form id="aiFilmForm" onSubmit={handleSubmit} className="space-y-4" aria-busy={isProcessing}>
                 <div className="flex space-x-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-lg">
                     <TabButton tab="text" icon="fas fa-font">Texto</TabButton>

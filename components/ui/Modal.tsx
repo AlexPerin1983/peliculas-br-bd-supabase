@@ -1,4 +1,5 @@
 import React, { ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
 interface ModalProps {
@@ -9,14 +10,15 @@ interface ModalProps {
     footer?: ReactNode;
     wrapperClassName?: string;
     disableClose?: boolean;
+    fullScreenOnMobile?: boolean;
 }
 
-const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, footer, wrapperClassName, disableClose = false }) => {
-    if (!isOpen) return null;
+const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, footer, wrapperClassName, disableClose = false, fullScreenOnMobile = false }) => {
+    if (!isOpen || typeof document === 'undefined') return null;
 
-    return (
-        <div className={`fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/68 p-4 backdrop-blur-md transition-opacity duration-300 ease-in-out ${wrapperClassName || ''}`}>
-            <div className="flex max-h-[90vh] w-full max-w-xl scale-100 transform flex-col overflow-hidden rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface)] shadow-[var(--shadow-elevated)] transition-transform duration-300 ease-in-out sm:mx-0">
+    return createPortal(
+        <div className={`fixed inset-0 z-[10000] flex bg-slate-950/68 backdrop-blur-md transition-opacity duration-300 ease-in-out ${fullScreenOnMobile ? 'items-stretch justify-center p-0 sm:items-center sm:justify-center sm:p-4' : 'items-center justify-center p-4'} ${wrapperClassName || ''}`}>
+            <div className={`flex w-full transform flex-col overflow-hidden bg-[var(--surface)] shadow-[var(--shadow-elevated)] transition-transform duration-300 ease-in-out ${fullScreenOnMobile ? 'h-full max-h-full max-w-full rounded-none sm:mx-0 sm:h-auto sm:max-h-[90vh] sm:max-w-xl sm:rounded-[var(--radius-panel)] sm:border sm:border-[var(--border-subtle)]' : 'max-h-[90vh] max-w-xl scale-100 rounded-[var(--radius-panel)] border border-[var(--border-subtle)] sm:mx-0'}`}>
                 <div className="flex items-start justify-between gap-4 border-b border-[var(--border-subtle)] bg-[var(--surface-raised)] px-5 py-4">
                     <div className="min-w-0">
                         <p className="ui-kicker">Configurar</p>
@@ -31,16 +33,17 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, footer,
                         <X className="h-4 w-4" aria-hidden="true" />
                     </button>
                 </div>
-                <div className="max-h-[70vh] space-y-6 overflow-y-auto bg-[var(--surface)] p-5 text-[var(--text-body)]">
+                <div className={`space-y-6 overflow-y-auto bg-[var(--surface)] p-5 text-[var(--text-body)] ${fullScreenOnMobile ? 'flex-1 sm:max-h-[70vh] sm:flex-none' : 'max-h-[70vh]'}`}>
                     {children}
                 </div>
                 {footer && (
-                    <div className="flex flex-wrap items-center justify-end gap-3 border-t border-[var(--border-subtle)] bg-[var(--surface-muted)] p-4">
+                    <div className={`flex flex-wrap items-center justify-end gap-3 border-t border-[var(--border-subtle)] bg-[var(--surface-muted)] p-4 ${fullScreenOnMobile ? 'pb-[max(16px,env(safe-area-inset-bottom))] sm:pb-4' : ''}`}>
                         {footer}
                     </div>
                 )}
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 

@@ -227,7 +227,7 @@ const ProposalExpensesModal: React.FC<ProposalExpensesModalProps> = ({
             onClose={onClose}
             title="Gastos da proposta"
             footer={footer}
-            wrapperClassName="sm:items-center items-start pt-16 sm:pt-4"
+            fullScreenOnMobile
         >
             <form id="proposalExpensesForm" onSubmit={handleSubmit} className="space-y-5">
                 <div className="grid grid-cols-2 gap-3">

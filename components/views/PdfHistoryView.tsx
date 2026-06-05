@@ -4807,6 +4807,7 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
                 isOpen={isTemplateModalOpen}
                 onClose={() => setIsTemplateModalOpen(false)}
                 title="Editar textos prontos"
+                fullScreenOnMobile
                 footer={
                     <>
                         <ActionButton onClick={handleResetTemplates} variant="ghost" size="sm">
