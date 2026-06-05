@@ -209,9 +209,6 @@ const ProposalExpensesModal: React.FC<ProposalExpensesModalProps> = ({
 
     const footer = (
         <>
-            <ActionButton onClick={onClose} variant="ghost" size="sm">
-                Cancelar
-            </ActionButton>
             <ActionButton onClick={handleClear} variant="secondary" size="sm">
                 Limpar
             </ActionButton>

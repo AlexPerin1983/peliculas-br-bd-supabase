@@ -208,13 +208,6 @@ const AIClientModal: React.FC<AIClientModalProps> = ({ isOpen, onClose, onProces
     const footer = (
         <>
             <button
-                onClick={onClose}
-                className="px-4 py-2 text-sm font-semibold rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 dark:text-slate-300 disabled:opacity-50"
-                disabled={isProcessing}
-            >
-                Cancelar
-            </button>
-            <button
                 type="submit"
                 form="aiClientForm"
                 className="px-4 py-2 bg-slate-800 dark:bg-slate-700 text-white text-sm font-semibold rounded-md hover:bg-slate-700 dark:hover:bg-slate-600 min-w-[140px] disabled:bg-slate-500 disabled:cursor-wait flex items-center justify-center gap-2"

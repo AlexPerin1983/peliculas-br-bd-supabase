@@ -211,9 +211,6 @@ const StandaloneExpenseModal: React.FC<StandaloneExpenseModalProps> = ({
 
     const footer = (
         <>
-            <ActionButton onClick={onClose} variant="ghost" size="sm" disabled={isSaving}>
-                Cancelar
-            </ActionButton>
             <ActionButton type="submit" form="standaloneExpenseForm" variant="primary" size="sm" disabled={isSaving}>
                 {isSaving ? 'Salvando...' : 'Salvar despesa'}
             </ActionButton>

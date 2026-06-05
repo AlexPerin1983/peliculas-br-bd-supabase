@@ -173,9 +173,6 @@ const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({
                     {resetLabel}
                 </ActionButton>
             )}
-            <ActionButton onClick={onClose} disabled={isSaving} variant="ghost" size="sm">
-                Cancelar
-            </ActionButton>
             <ActionButton
                 type="submit"
                 form="paymentMethodsForm"

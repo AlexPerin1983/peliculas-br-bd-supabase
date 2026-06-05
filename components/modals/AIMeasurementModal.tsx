@@ -205,9 +205,6 @@ const AIMeasurementModal: React.FC<AIMeasurementModalProps> = ({ isOpen, onClose
 
     const footer = (
         <>
-            <button onClick={onClose} className="px-4 py-2 text-sm font-semibold rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 dark:text-slate-300 disabled:opacity-50" disabled={isProcessing}>
-                Cancelar
-            </button>
             <button type="submit" form="aiForm" className="px-4 py-2 bg-slate-800 dark:bg-slate-700 text-white text-sm font-semibold rounded-md hover:bg-slate-700 dark:hover:bg-slate-600 min-w-[140px] disabled:bg-slate-500 disabled:cursor-wait flex items-center justify-center gap-2" disabled={isProcessing || !isProcessable} aria-busy={isProcessing}>
                 {isProcessing ? <><i className="fas fa-spinner fa-spin"></i><span>Processando...</span></> : 'Processar'}
             </button>

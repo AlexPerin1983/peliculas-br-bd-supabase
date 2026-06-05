@@ -244,9 +244,6 @@ const FilmModal: React.FC<FilmModalProps> = ({
                 </ActionButton>
             )}
             <div className="flex-grow"></div>
-            <ActionButton onClick={onClose} disabled={isSaving} variant="ghost" size="sm">
-                Cancelar
-            </ActionButton>
             <ActionButton
                 type="submit"
                 form="filmForm"

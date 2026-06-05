@@ -21,8 +21,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, footer,
             <div className={`flex w-full transform flex-col overflow-hidden bg-[var(--surface)] shadow-[var(--shadow-elevated)] transition-transform duration-300 ease-in-out ${fullScreenOnMobile ? 'h-full max-h-full max-w-full rounded-none sm:mx-0 sm:h-auto sm:max-h-[90vh] sm:max-w-xl sm:rounded-[var(--radius-panel)] sm:border sm:border-[var(--border-subtle)]' : 'max-h-[90vh] max-w-xl scale-100 rounded-[var(--radius-panel)] border border-[var(--border-subtle)] sm:mx-0'}`}>
                 <div className="flex items-start justify-between gap-4 border-b border-[var(--border-subtle)] bg-[var(--surface-raised)] px-5 py-4">
                     <div className="min-w-0">
-                        <p className="ui-kicker">Configurar</p>
-                        <h2 className="mt-1 min-w-0 flex-grow text-xl font-bold leading-tight tracking-[-0.02em] text-[var(--text-strong)]">{title}</h2>
+                        <h2 className="min-w-0 flex-grow text-xl font-bold leading-tight tracking-[-0.02em] text-[var(--text-strong)]">{title}</h2>
                     </div>
                     <button
                         onClick={onClose}
