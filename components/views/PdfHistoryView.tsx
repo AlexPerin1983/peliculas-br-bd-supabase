@@ -1748,11 +1748,9 @@ const PdfHistoryMobileToolbar: React.FC<{
     isSearchActive: boolean;
     searchInputRef: React.RefObject<HTMLInputElement | null>;
     onOpenPeriod: () => void;
-    onActivateSearch: () => void;
     onCloseSearch: () => void;
     onSearchChange: (value: string) => void;
     onClearSearch: () => void;
-    onOpenTemplates: () => void;
 }> = ({
     totalGroups,
     filteredCount,
@@ -1761,11 +1759,9 @@ const PdfHistoryMobileToolbar: React.FC<{
     isSearchActive,
     searchInputRef,
     onOpenPeriod,
-    onActivateSearch,
     onCloseSearch,
     onSearchChange,
     onClearSearch,
-    onOpenTemplates,
 }) => {
     if (isSearchActive) {
         return (
@@ -1821,55 +1817,26 @@ const PdfHistoryMobileToolbar: React.FC<{
 
     return (
         <section className="sm:hidden">
-            <div className="rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface)] px-3 py-2.5 shadow-[var(--shadow-hairline)]">
-                <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                        <div className="flex min-w-0 items-center gap-2">
-                            <h2 className="truncate text-[1.1rem] font-bold leading-tight text-[var(--text-strong)]">
-                                Histórico
-                            </h2>
-                            <span className="inline-flex min-h-6 items-center rounded-full bg-[var(--surface-muted)] px-2 text-[9px] font-bold text-[var(--text-muted)]">
-                                {totalGroups}
-                            </span>
-                        </div>
-                        <p className="mt-0.5 truncate pr-1 text-[11px] font-semibold text-[var(--text-muted)]">
-                            {totalGroups === 0
-                                ? 'Acompanhe o andamento dos orçamentos.'
-                                : `${filteredCount} clientes com oportunidades salvas.`}
-                        </p>
-                        <button
-                            type="button"
-                            onClick={onOpenPeriod}
-                            aria-label={`Abrir periodo do historico: ${periodLabel}`}
-                            title={periodLabel}
-                            className="mt-2 inline-flex h-8 max-w-full items-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] px-2.5 text-[12px] font-bold text-[var(--text-strong)] transition-colors hover:bg-[var(--surface)]"
-                        >
-                            <CalendarDays className="h-3.5 w-3.5 shrink-0 text-[var(--text-muted)]" aria-hidden="true" />
-                            <span className="truncate">{periodLabel}</span>
-                        </button>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                        <button
-                            type="button"
-                            onClick={onActivateSearch}
-                            disabled={totalGroups === 0}
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-muted)] transition-all duration-200 hover:bg-[var(--surface)] hover:text-[var(--text-strong)] disabled:cursor-not-allowed disabled:opacity-50"
-                            aria-label="Buscar histórico"
-                        >
-                            <Search className="h-4 w-4" aria-hidden="true" />
-                        </button>
-
-                        <button
-                            type="button"
-                            onClick={onOpenTemplates}
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-[var(--radius-control)] bg-[var(--brand-primary)] text-white shadow-[var(--shadow-hairline)] transition-all duration-200 hover:bg-[var(--brand-primary-strong)]"
-                            aria-label="Editar textos prontos"
-                        >
-                            <MessageSquareText className="h-4 w-4" aria-hidden="true" />
-                        </button>
-                    </div>
+            <div className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-2">
+                    <h1 className="min-w-0 truncate text-2xl font-bold leading-tight text-[var(--text-strong)]">
+                        Histórico
+                    </h1>
+                    <span className="inline-flex h-6 shrink-0 items-center rounded-full bg-[var(--surface-muted)] px-2 text-[10px] font-bold text-[var(--text-muted)]">
+                        {totalGroups}
+                    </span>
                 </div>
+
+                <button
+                    type="button"
+                    onClick={onOpenPeriod}
+                    aria-label={`Abrir periodo do historico: ${periodLabel}`}
+                    title={periodLabel}
+                    className="inline-flex h-9 shrink-0 items-center gap-2 rounded-full px-2 text-sm font-bold text-[var(--text-strong)] transition-colors hover:bg-[var(--surface-muted)]"
+                >
+                    <CalendarDays className="h-5 w-5 text-[var(--text-muted)]" aria-hidden="true" />
+                    <span>{periodLabel}</span>
+                </button>
             </div>
         </section>
     );
@@ -3530,6 +3497,71 @@ const OptionsPager: React.FC<{
 };
 
 
+const PdfHistoryMobileFooter: React.FC<{
+    onSearch: () => void;
+    onOpenPeriod: () => void;
+    onOpenFaturamento: () => void;
+    faturamentoEnabled: boolean;
+    onFollowUp: () => void;
+    followUpPending: number;
+    onOpenTemplates: () => void;
+}> = ({ onSearch, onOpenPeriod, onOpenFaturamento, faturamentoEnabled, onFollowUp, followUpPending, onOpenTemplates }) => {
+    const FooterButton: React.FC<{
+        onClick: () => void;
+        label: string;
+        icon: React.ReactNode;
+        badge?: number;
+    }> = ({ onClick, label, icon, badge }) => (
+        <button
+            type="button"
+            onClick={onClick}
+            aria-label={label}
+            className="group relative flex h-14 w-16 flex-col items-center justify-center rounded-xl text-[var(--text-muted)] transition-all duration-200 hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)]"
+        >
+            <span className="transition-transform duration-300 group-active:scale-90">{icon}</span>
+            <span className="mt-1 text-[9px] font-bold uppercase tracking-wider">{label}</span>
+            {badge && badge > 0 ? (
+                <span className="absolute right-2 top-1 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold leading-none text-white">
+                    {badge}
+                </span>
+            ) : null}
+        </button>
+    );
+
+    return (
+        <div
+            className="fixed left-4 right-4 z-40 sm:hidden"
+            style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)' }}
+        >
+            <div className="rounded-2xl border border-white/20 bg-white/95 px-2 py-2 shadow-[0_8px_32px_rgba(0,0,0,0.15)] backdrop-blur-xl dark:border-slate-800/50 dark:bg-slate-900/95 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
+                <div className="relative flex items-center justify-between">
+                    <div className="flex gap-1">
+                        <FooterButton onClick={onSearch} label="Buscar" icon={<Search className="h-5 w-5" aria-hidden="true" />} />
+                        <FooterButton onClick={onOpenPeriod} label="Período" icon={<CalendarDays className="h-5 w-5" aria-hidden="true" />} />
+                    </div>
+
+                    <div className="absolute left-1/2 -top-12 -translate-x-1/2">
+                        <button
+                            type="button"
+                            onClick={onOpenFaturamento}
+                            disabled={!faturamentoEnabled}
+                            aria-label="Faturamento do período"
+                            className="flex h-16 w-16 items-center justify-center rounded-2xl border-4 border-white bg-gradient-to-br from-emerald-500 to-emerald-700 text-white shadow-[0_8px_20px_rgba(0,0,0,0.3)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_12px_24px_rgba(0,0,0,0.4)] active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 dark:border-slate-900"
+                        >
+                            <CircleDollarSign className="h-7 w-7" aria-hidden="true" />
+                        </button>
+                    </div>
+
+                    <div className="flex gap-1">
+                        <FooterButton onClick={onFollowUp} label="Avaliações" icon={<MessageSquareText className="h-5 w-5" aria-hidden="true" />} badge={followUpPending} />
+                        <FooterButton onClick={onOpenTemplates} label="Textos" icon={<FileText className="h-5 w-5" aria-hidden="true" />} />
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendamentos, films, googleReviewsLink, onDelete, onDownload, onUpdateStatus, onSchedule, onGenerateCombinedPdf, onNavigateToOption }) => {
     const { showToast } = useFeedback();
     const [pendingFocusClientId] = useState<number | null>(() => readInitialHistoryFocusClient());
@@ -3558,6 +3590,7 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
     const [visibleCount, setVisibleCount] = useState(10);
     const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
     const [isExpenseSummaryExpanded, setIsExpenseSummaryExpanded] = useState(false);
+    const reviewPanelRef = useRef<HTMLDivElement>(null);
     const [funnelReferencePdfIds, setFunnelReferencePdfIds] = useState<FunnelReferencePdfMap>(() => readFunnelReferencePdfIds());
     const [reviewRequestsSent, setReviewRequestsSent] = useState<ReviewRequestsSentMap>(() => readReviewRequestsSent());
     const [copiedReviewRequestKey, setCopiedReviewRequestKey] = useState<string | null>(null);
@@ -4403,6 +4436,14 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
         setIsMobilePeriodOpen(true);
     }, [customEndDate, customStartDate, period]);
 
+    const handleOpenFollowUp = useCallback(() => {
+        if (visibleReviewCampaignCandidates.length === 0) {
+            showToast('Nenhuma avaliação na fila neste período.', { tone: 'info' });
+            return;
+        }
+        reviewPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, [visibleReviewCampaignCandidates.length, showToast]);
+
     const handleSelectMobilePeriod = useCallback((nextPeriod: HistoryPeriodKey) => {
         if (nextPeriod === 'custom') {
             setMobileDraftPeriod('custom');
@@ -4480,7 +4521,7 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
     );
 
     return (
-        <div className="space-y-3 sm:space-y-4">
+        <div className="space-y-3 pb-28 sm:space-y-4 sm:pb-0">
             <PdfHistoryMobileToolbar
                 totalGroups={groupedHistory.length}
                 filteredCount={filteredGroupedHistory.length}
@@ -4489,11 +4530,9 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
                 isSearchActive={isSearchActive}
                 searchInputRef={searchInputRef}
                 onOpenPeriod={openMobilePeriodSelector}
-                onActivateSearch={() => setIsSearchActive(true)}
                 onCloseSearch={handleCloseSearch}
                 onSearchChange={handleSearchChange}
                 onClearSearch={handleClearSearch}
-                onOpenTemplates={() => setIsTemplateModalOpen(true)}
             />
 
             <MobileHistoryPeriodSelector
@@ -4544,15 +4583,17 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
                 </section>
             ) : null}
 
-            <ReviewRequestsPanel
-                candidates={visibleReviewCampaignCandidates}
-                pendingCount={visiblePendingReviewCampaignCount}
-                copiedKey={copiedReviewRequestKey}
-                onOpenWhatsApp={handleOpenReviewCampaignWhatsApp}
-                onCopyMessage={handleCopyReviewCampaignMessage}
-                onMarkSent={handleMarkReviewRequestSent}
-                onOpenApproved={() => handleStatusFilterChange('approved')}
-            />
+            <div ref={reviewPanelRef} className="scroll-mt-4">
+                <ReviewRequestsPanel
+                    candidates={visibleReviewCampaignCandidates}
+                    pendingCount={visiblePendingReviewCampaignCount}
+                    copiedKey={copiedReviewRequestKey}
+                    onOpenWhatsApp={handleOpenReviewCampaignWhatsApp}
+                    onCopyMessage={handleCopyReviewCampaignMessage}
+                    onMarkSent={handleMarkReviewRequestSent}
+                    onOpenApproved={() => handleStatusFilterChange('approved')}
+                />
+            </div>
 
             <MonthlyExpenseSummaryCard
                 selectedSummary={selectedExpenseSummary}
@@ -4771,9 +4812,6 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
                         <ActionButton onClick={handleResetTemplates} variant="ghost" size="sm">
                             Restaurar padrão
                         </ActionButton>
-                        <ActionButton onClick={() => setIsTemplateModalOpen(false)} variant="secondary" size="sm">
-                            Cancelar
-                        </ActionButton>
                         <ActionButton onClick={handleSaveTemplates} variant="primary" size="sm" iconClassName="fas fa-save">
                             Salvar textos
                         </ActionButton>
@@ -4919,6 +4957,16 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
                     document.body
                 );
             })()}
+
+            <PdfHistoryMobileFooter
+                onSearch={() => setIsSearchActive(true)}
+                onOpenPeriod={openMobilePeriodSelector}
+                onOpenFaturamento={() => setIsExpenseSummaryExpanded(true)}
+                faturamentoEnabled={Boolean(selectedExpenseSummary)}
+                onFollowUp={handleOpenFollowUp}
+                followUpPending={visiblePendingReviewCampaignCount}
+                onOpenTemplates={() => setIsTemplateModalOpen(true)}
+            />
         </div>
     );
 };
