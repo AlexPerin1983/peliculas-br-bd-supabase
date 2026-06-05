@@ -822,14 +822,6 @@ const FornecedorStyledModal: React.FC<{
     const footer = (
         <>
             <button
-                type="button"
-                onClick={onClose}
-                disabled={isSaving}
-                className="rounded-md px-4 py-2 text-sm font-semibold hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-                Cancelar
-            </button>
-            <button
                 type="submit"
                 form="fornecedorStyledForm"
                 disabled={isSaving}
@@ -852,7 +844,7 @@ const FornecedorStyledModal: React.FC<{
             isOpen={true}
             onClose={onClose}
             disableClose={isSaving}
-            wrapperClassName="backdrop-blur-sm"
+            fullScreenOnMobile
             title={
                 <div className="flex items-center gap-3">
                     <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
