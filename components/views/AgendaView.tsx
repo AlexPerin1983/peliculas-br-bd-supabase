@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Agendamento, AgendamentoServiceStatus, Client, SavedPDF } from '../../types';
 import ActionButton from '../ui/ActionButton';
 import ContentState from '../ui/ContentState';
+import Modal from '../ui/Modal';
 import AgendaPushReminderControl from './AgendaPushReminderControl';
 import { parseCurrencyInput } from '../../src/lib/proposalExpenses';
 
@@ -122,6 +123,36 @@ const getWhatsappUrl = (phone?: string) => {
     return normalizedPhone ? `https://wa.me/${normalizedPhone}` : '';
 };
 
+const isLikelyMobileDevice = () => (
+    typeof window !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(window.navigator.userAgent)
+);
+
+const getRegularWhatsappUrl = (phone?: string) => {
+    const normalizedPhone = normalizePhone(phone);
+    if (!normalizedPhone) return '';
+
+    if (isLikelyMobileDevice()) {
+        return `whatsapp://send?phone=${normalizedPhone}`;
+    }
+
+    return `https://wa.me/${normalizedPhone}`;
+};
+
+const getBusinessWhatsappUrl = (phone?: string) => {
+    const normalizedPhone = normalizePhone(phone);
+    if (!normalizedPhone) return '';
+
+    if (typeof window !== 'undefined' && /Android/i.test(window.navigator.userAgent)) {
+        return `intent://send?phone=${normalizedPhone}#Intent;scheme=whatsapp;package=com.whatsapp.w4b;end`;
+    }
+
+    if (typeof window !== 'undefined' && /iPhone|iPad|iPod/i.test(window.navigator.userAgent)) {
+        return `whatsapp-business://send?phone=${normalizedPhone}`;
+    }
+
+    return `https://wa.me/${normalizedPhone}`;
+};
+
 const getTelUrl = (phone?: string) => {
     const digits = phone?.replace(/\D/g, '') || '';
     return digits ? `tel:${digits}` : '';
@@ -149,32 +180,119 @@ const sameMonth = (date: Date, reference: Date) => (
     && date.getMonth() === reference.getMonth()
 );
 
+const AGENDA_ACTION_TONE_CLASSES = {
+    neutral: 'border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-muted)] hover:bg-[var(--surface)] hover:text-[var(--text-strong)]',
+    green: 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-800/70 dark:bg-emerald-950/25 dark:text-emerald-200 dark:hover:bg-emerald-900/35',
+    blue: 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-800/70 dark:bg-blue-950/25 dark:text-blue-200 dark:hover:bg-blue-900/35',
+} as const;
+
+const AGENDA_ACTION_BASE_CLASSES = 'inline-flex h-9 min-w-0 items-center justify-center gap-2 rounded-[var(--radius-control)] border px-3 text-xs font-bold transition-colors';
+
 const AgendaActionLink: React.FC<{
     href: string;
     label: string;
     ariaLabel: string;
     iconClassName: string;
-    tone?: 'neutral' | 'green' | 'blue';
+    tone?: keyof typeof AGENDA_ACTION_TONE_CLASSES;
     className?: string;
-}> = ({ href, label, ariaLabel, iconClassName, tone = 'neutral', className = '' }) => {
-    const toneClasses = {
-        neutral: 'border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-muted)] hover:bg-[var(--surface)] hover:text-[var(--text-strong)]',
-        green: 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-800/70 dark:bg-emerald-950/25 dark:text-emerald-200 dark:hover:bg-emerald-900/35',
-        blue: 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-800/70 dark:bg-blue-950/25 dark:text-blue-200 dark:hover:bg-blue-900/35',
-    }[tone];
+}> = ({ href, label, ariaLabel, iconClassName, tone = 'neutral', className = '' }) => (
+    <a
+        href={href}
+        target={href.startsWith('tel:') ? undefined : '_blank'}
+        rel={href.startsWith('tel:') ? undefined : 'noreferrer'}
+        onClick={(event) => event.stopPropagation()}
+        aria-label={ariaLabel}
+        className={`${AGENDA_ACTION_BASE_CLASSES} ${AGENDA_ACTION_TONE_CLASSES[tone]} ${className}`}
+    >
+        <i className={`${iconClassName} text-[11px]`} aria-hidden="true"></i>
+        <span className="truncate">{label}</span>
+    </a>
+);
+
+const AgendaActionButton: React.FC<{
+    onClick: () => void;
+    label: string;
+    ariaLabel: string;
+    iconClassName: string;
+    tone?: keyof typeof AGENDA_ACTION_TONE_CLASSES;
+    className?: string;
+}> = ({ onClick, label, ariaLabel, iconClassName, tone = 'neutral', className = '' }) => (
+    <button
+        type="button"
+        onClick={(event) => {
+            event.stopPropagation();
+            onClick();
+        }}
+        aria-label={ariaLabel}
+        className={`${AGENDA_ACTION_BASE_CLASSES} ${AGENDA_ACTION_TONE_CLASSES[tone]} ${className}`}
+    >
+        <i className={`${iconClassName} text-[11px]`} aria-hidden="true"></i>
+        <span className="truncate">{label}</span>
+    </button>
+);
+
+const AgendaWhatsAppChooserModal: React.FC<{
+    clientName: string;
+    phone?: string;
+    onClose: () => void;
+}> = ({ clientName, phone, onClose }) => {
+    const regularUrl = getRegularWhatsappUrl(phone);
+    const businessUrl = getBusinessWhatsappUrl(phone);
+
+    if (!regularUrl || !businessUrl) return null;
 
     return (
-        <a
-            href={href}
-            target={href.startsWith('tel:') ? undefined : '_blank'}
-            rel={href.startsWith('tel:') ? undefined : 'noreferrer'}
-            onClick={(event) => event.stopPropagation()}
-            aria-label={ariaLabel}
-            className={`inline-flex h-9 min-w-0 items-center justify-center gap-2 rounded-[var(--radius-control)] border px-3 text-xs font-bold transition-colors ${toneClasses} ${className}`}
+        <Modal
+            isOpen={true}
+            onClose={onClose}
+            wrapperClassName="backdrop-blur-sm"
+            title={
+                <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
+                        <i className="fab fa-whatsapp"></i>
+                    </div>
+                    <div className="min-w-0">
+                        <div className="text-xl font-semibold text-slate-800 dark:text-white">
+                            Abrir conversa
+                        </div>
+                    </div>
+                </div>
+            }
         >
-            <i className={`${iconClassName} text-[11px]`} aria-hidden="true"></i>
-            <span className="truncate">{label}</span>
-        </a>
+            <div className="space-y-4">
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                    Escolha qual app deseja usar para falar com <strong className="text-slate-700 dark:text-slate-200">{clientName}</strong>.
+                </p>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                    <a
+                        href={regularUrl}
+                        onClick={onClose}
+                        className="flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-600"
+                    >
+                        <i className="fab fa-whatsapp text-base"></i>
+                        WhatsApp
+                    </a>
+
+                    <a
+                        href={businessUrl}
+                        onClick={onClose}
+                        className="flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600"
+                    >
+                        <i className="fas fa-briefcase text-sm"></i>
+                        WhatsApp Business
+                    </a>
+                </div>
+
+                <button
+                    type="button"
+                    onClick={onClose}
+                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                >
+                    Cancelar
+                </button>
+            </div>
+        </Modal>
     );
 };
 
@@ -209,6 +327,7 @@ const AppointmentCard: React.FC<{
     const showEndedPrompt = serviceStatus === 'scheduled' && hasEnded;
     const [isConfirmingValue, setIsConfirmingValue] = useState(false);
     const [finalValueInput, setFinalValueInput] = useState('');
+    const [isChoosingWhatsapp, setIsChoosingWhatsapp] = useState(false);
 
     // Valor exibido/editado: vem do orcamento vinculado ou, sem orcamento, do
     // valor avulso guardado no proprio agendamento.
@@ -436,8 +555,8 @@ const AppointmentCard: React.FC<{
                         />
                     ) : null}
                     {whatsappUrl ? (
-                        <AgendaActionLink
-                            href={whatsappUrl}
+                        <AgendaActionButton
+                            onClick={() => setIsChoosingWhatsapp(true)}
                             label="WhatsApp"
                             ariaLabel={`Abrir WhatsApp de ${agendamento.clienteNome}`}
                             iconClassName="fab fa-whatsapp"
@@ -448,6 +567,14 @@ const AppointmentCard: React.FC<{
                         <RouteActionLink address={clientAddress} clientName={agendamento.clienteNome} />
                     ) : null}
                 </div>
+            ) : null}
+
+            {isChoosingWhatsapp ? (
+                <AgendaWhatsAppChooserModal
+                    clientName={agendamento.clienteNome}
+                    phone={client?.telefone}
+                    onClose={() => setIsChoosingWhatsapp(false)}
+                />
             ) : null}
         </article>
     );

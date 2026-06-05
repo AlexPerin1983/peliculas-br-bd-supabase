@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import AgendaView from './AgendaView';
 import { Agendamento, Client } from '../../types';
 
@@ -69,10 +69,23 @@ describe('AgendaView', () => {
         renderAgenda();
 
         const callLinks = screen.getAllByRole('link', { name: /ligar para cliente mapa/i });
-        const whatsappLinks = screen.getAllByRole('link', { name: /abrir whatsapp de cliente mapa/i });
+        const whatsappButtons = screen.getAllByRole('button', { name: /abrir whatsapp de cliente mapa/i });
 
         expect(callLinks[0]).toHaveAttribute('href', 'tel:83999990000');
-        expect(whatsappLinks[0]).toHaveAttribute('href', 'https://wa.me/5583999990000');
+        expect(whatsappButtons.length).toBeGreaterThan(0);
+    });
+
+    it('abre escolha entre WhatsApp e WhatsApp Business ao clicar no contato', () => {
+        renderAgenda();
+
+        const whatsappButtons = screen.getAllByRole('button', { name: /abrir whatsapp de cliente mapa/i });
+        fireEvent.click(whatsappButtons[0]);
+
+        const regularLink = screen.getByRole('link', { name: /^whatsapp$/i });
+        const businessLink = screen.getByRole('link', { name: /whatsapp business/i });
+
+        expect(regularLink).toHaveAttribute('href', 'https://wa.me/5583999990000');
+        expect(businessLink).toHaveAttribute('href', 'https://wa.me/5583999990000');
     });
 
     it('nao mostra link de navegacao sem endereco do cliente', () => {
