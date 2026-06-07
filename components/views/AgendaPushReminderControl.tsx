@@ -52,6 +52,7 @@ const AgendaPushReminderControl: React.FC = () => {
     const [reminderMinutes, setReminderMinutes] = useState(30);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
+    const [isExpanded, setIsExpanded] = useState(false);
 
     const refreshState = async () => {
         try {
@@ -202,10 +203,21 @@ const AgendaPushReminderControl: React.FC = () => {
                     >
                         {busyAction === 'toggle' ? '...' : isEnabled ? 'Desativar' : 'Ativar'}
                     </button>
+                    {isEnabled ? (
+                        <button
+                            type="button"
+                            onClick={() => setIsExpanded((prev) => !prev)}
+                            aria-label={isExpanded ? 'Recolher configuracoes de alerta' : 'Expandir configuracoes de alerta'}
+                            aria-expanded={isExpanded}
+                            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-muted)] transition-colors hover:bg-[var(--surface)] hover:text-[var(--text-strong)]"
+                        >
+                            <i className={`fas fa-chevron-down text-xs transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} aria-hidden="true"></i>
+                        </button>
+                    ) : null}
                 </div>
             </div>
 
-            {isEnabled ? (
+            {isEnabled && isExpanded ? (
                 <div className="flex flex-col gap-2 border-t border-[var(--border-subtle)] px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="min-w-0">
                         <p className="text-xs font-black uppercase text-[var(--text-muted)]">Antecedencia do alerta</p>
@@ -236,7 +248,7 @@ const AgendaPushReminderControl: React.FC = () => {
                 </div>
             ) : null}
 
-            {isEnabled ? (
+            {isEnabled && isExpanded ? (
                 <div className="flex flex-col gap-2 border-t border-[var(--border-subtle)] px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="min-w-0">
                         <p className="text-xs font-black uppercase text-[var(--text-muted)]">Resumo de amanha</p>
