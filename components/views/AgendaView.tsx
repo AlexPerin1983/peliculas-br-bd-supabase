@@ -95,6 +95,18 @@ const getStatusColor = (status?: SavedPDF['status']) => {
     return (STATUS_META[status || 'pending'] || STATUS_META.pending).dotClasses;
 };
 
+const SERVICE_STATUS_DOT: Record<AgendamentoServiceStatus, string> = {
+    scheduled: 'bg-blue-500',
+    completed: 'bg-emerald-500',
+    partial: 'bg-indigo-500',
+    cancelled: 'bg-rose-500',
+    no_show: 'bg-amber-400',
+};
+
+const getServiceStatusColor = (serviceStatus?: AgendamentoServiceStatus) => (
+    SERVICE_STATUS_DOT[serviceStatus || 'scheduled']
+);
+
 const formatFullAddress = (client?: Client): string => {
     if (!client) return '';
     const legacyAddress = (client as Client & { endereco?: string }).endereco?.trim();
@@ -714,9 +726,9 @@ const DayAgendaSummary: React.FC<{
 
     const first = agendamentos[0];
     const last = agendamentos[agendamentos.length - 1];
-    const approvedCount = agendamentos.filter((item) => item.status === 'approved').length;
-    const revisedCount = agendamentos.filter((item) => item.status === 'revised').length;
-    const pendingCount = agendamentos.filter((item) => (item.status || 'pending') === 'pending').length;
+    const completedCount = agendamentos.filter((item) => item.serviceStatus === 'completed').length;
+    const scheduledCount = agendamentos.filter((item) => (item.serviceStatus || 'scheduled') === 'scheduled').length;
+    const missedCount = agendamentos.filter((item) => item.serviceStatus === 'cancelled' || item.serviceStatus === 'no_show').length;
 
     return (
         <div className="mb-3 grid grid-cols-3 gap-2">
@@ -733,12 +745,12 @@ const DayAgendaSummary: React.FC<{
             <div className="rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] px-3 py-2 shadow-[var(--shadow-hairline)]">
                 <span className="block text-[10px] font-bold uppercase text-[var(--text-soft)]">Status</span>
                 <span className="mt-1 flex items-center gap-1.5">
-                    <span title="Aprovados" className="inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
-                    <span className="text-xs font-black text-[var(--text-strong)]">{approvedCount}</span>
-                    <span title="Revisar" className="inline-flex h-2 w-2 rounded-full bg-amber-400"></span>
-                    <span className="text-xs font-black text-[var(--text-strong)]">{revisedCount}</span>
-                    <span title="Pendentes" className="inline-flex h-2 w-2 rounded-full bg-slate-400"></span>
-                    <span className="text-xs font-black text-[var(--text-strong)]">{pendingCount}</span>
+                    <span title="Concluídos" className="inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
+                    <span className="text-xs font-black text-[var(--text-strong)]">{completedCount}</span>
+                    <span title="Agendados" className="inline-flex h-2 w-2 rounded-full bg-blue-500"></span>
+                    <span className="text-xs font-black text-[var(--text-strong)]">{scheduledCount}</span>
+                    <span title="Cancelados / Faltou" className="inline-flex h-2 w-2 rounded-full bg-rose-500"></span>
+                    <span className="text-xs font-black text-[var(--text-strong)]">{missedCount}</span>
                 </span>
             </div>
         </div>
@@ -747,23 +759,23 @@ const DayAgendaSummary: React.FC<{
 
 const CalendarMonthStats: React.FC<{
     total: number;
-    approved: number;
-    revised: number;
-    pending: number;
-}> = ({ total, approved, revised, pending }) => (
+    completed: number;
+    scheduled: number;
+    missed: number;
+}> = ({ total, completed, scheduled, missed }) => (
     <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] font-bold text-[var(--text-muted)]">
         <span className="inline-flex h-7 items-center rounded-full bg-[var(--surface-muted)] px-2.5">{total} no mês</span>
         <span className="hidden h-7 items-center gap-1 rounded-full bg-emerald-50 px-2 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-200 sm:inline-flex">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-            {approved}
+            {completed}
         </span>
-        <span className="hidden h-7 items-center gap-1 rounded-full bg-amber-50 px-2 text-amber-700 dark:bg-amber-950/30 dark:text-amber-200 sm:inline-flex">
-            <span className="h-1.5 w-1.5 rounded-full bg-amber-400"></span>
-            {revised}
+        <span className="hidden h-7 items-center gap-1 rounded-full bg-blue-50 px-2 text-blue-700 dark:bg-blue-950/30 dark:text-blue-200 sm:inline-flex">
+            <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
+            {scheduled}
         </span>
-        <span className="hidden h-7 items-center gap-1 rounded-full bg-slate-100 px-2 text-slate-600 dark:bg-slate-800 dark:text-slate-200 sm:inline-flex">
-            <span className="h-1.5 w-1.5 rounded-full bg-slate-400"></span>
-            {pending}
+        <span className="hidden h-7 items-center gap-1 rounded-full bg-rose-50 px-2 text-rose-700 dark:bg-rose-950/30 dark:text-rose-200 sm:inline-flex">
+            <span className="h-1.5 w-1.5 rounded-full bg-rose-500"></span>
+            {missed}
         </span>
     </div>
 );
@@ -771,16 +783,20 @@ const CalendarMonthStats: React.FC<{
 const CalendarStatusLegend: React.FC = () => (
     <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] font-bold text-[var(--text-muted)]">
         <span className="inline-flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-blue-500"></span>
+            Agendado
+        </span>
+        <span className="inline-flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
-            Aprovado
+            Concluído
         </span>
         <span className="inline-flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-full bg-amber-400"></span>
-            Revisar
+            Faltou
         </span>
         <span className="inline-flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full bg-slate-400"></span>
-            Pendente
+            <span className="h-2 w-2 rounded-full bg-rose-500"></span>
+            Cancelado
         </span>
         <span className="ml-auto inline-flex items-center gap-1.5 text-[var(--text-soft)]">
             <i className="fas fa-hand-pointer text-[10px]" aria-hidden="true"></i>
@@ -898,9 +914,9 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
 
     const monthStats = useMemo(() => ({
         total: monthAgendamentos.length,
-        approved: monthAgendamentos.filter((item) => item.status === 'approved').length,
-        revised: monthAgendamentos.filter((item) => item.status === 'revised').length,
-        pending: monthAgendamentos.filter((item) => (item.status || 'pending') === 'pending').length,
+        completed: monthAgendamentos.filter((item) => item.serviceStatus === 'completed').length,
+        scheduled: monthAgendamentos.filter((item) => (item.serviceStatus || 'scheduled') === 'scheduled').length,
+        missed: monthAgendamentos.filter((item) => item.serviceStatus === 'cancelled' || item.serviceStatus === 'no_show').length,
     }), [monthAgendamentos]);
 
     const nextAppointment = useMemo(() => {
@@ -1144,7 +1160,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                                             {dayAgendamentos.length > 0 && (
                                                 <div className="mt-1.5 flex flex-wrap justify-center items-center gap-1">
                                                     {dayAgendamentos.slice(0, 3).map((agendamento) => (
-                                                        <div key={agendamento.id} className={`w-2 h-2 rounded-full ${getStatusColor(agendamento.status)}`} title={agendamento.clienteNome}></div>
+                                                        <div key={agendamento.id} className={`w-2 h-2 rounded-full ${getServiceStatusColor(agendamento.serviceStatus)}`} title={agendamento.clienteNome}></div>
                                                     ))}
                                                     {dayAgendamentos.length > 3 && (
                                                         <div className="w-2 h-2 rounded-full bg-slate-300" title={`${dayAgendamentos.length - 3} mais`}></div>
@@ -1313,7 +1329,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                                             {dayAgendamentos.length > 0 && (
                                                 <div className="mt-1.5 flex flex-wrap justify-center items-center gap-1">
                                                     {dayAgendamentos.slice(0, 3).map((agendamento) => (
-                                                        <div key={agendamento.id} className={`w-2 h-2 rounded-full ${getStatusColor(agendamento.status)}`} title={agendamento.clienteNome}></div>
+                                                        <div key={agendamento.id} className={`w-2 h-2 rounded-full ${getServiceStatusColor(agendamento.serviceStatus)}`} title={agendamento.clienteNome}></div>
                                                     ))}
                                                     {dayAgendamentos.length > 3 && (
                                                         <div className="w-2 h-2 rounded-full bg-slate-300" title={`${dayAgendamentos.length - 3} mais`}></div>
