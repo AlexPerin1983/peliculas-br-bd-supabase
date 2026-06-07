@@ -1449,8 +1449,7 @@ const formatReviewCandidateDate = (candidate: ReviewCampaignCandidate) => {
 
     return date.toLocaleDateString('pt-BR', {
         day: '2-digit',
-        month: 'short',
-        year: 'numeric'
+        month: 'short'
     }).replace('.', '');
 };
 
@@ -1473,6 +1472,8 @@ const ReviewRequestsPanel: React.FC<{
     onMarkSent: (candidate: ReviewCampaignCandidate) => void;
     onOpenApproved: () => void;
 }> = ({ candidates, pendingCount, copiedKey, onOpenWhatsApp, onCopyMessage, onMarkSent, onOpenApproved }) => {
+    const [isQueueOpen, setIsQueueOpen] = useState(false);
+
     if (candidates.length === 0) return null;
 
     const sentCount = candidates.length - pendingCount;
@@ -1499,20 +1500,20 @@ const ReviewRequestsPanel: React.FC<{
                         </p>
                     </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-1.5 sm:hidden">
-                    <span className="inline-flex h-7 items-center rounded-full bg-[var(--surface-muted)] px-2.5 text-[11px] font-bold text-[var(--text-muted)]">
+                <button
+                    type="button"
+                    onClick={() => setIsQueueOpen((prev) => !prev)}
+                    aria-expanded={isQueueOpen}
+                    aria-label={isQueueOpen ? 'Recolher fila de avaliacao' : 'Expandir fila de avaliacao'}
+                    className="flex shrink-0 items-center gap-1.5 sm:hidden"
+                >
+                    <span className="inline-flex h-7 items-center rounded-full bg-emerald-500/10 px-2.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-200">
                         {pendingCount} pend.
                     </span>
-                    <button
-                        type="button"
-                        onClick={onOpenApproved}
-                        aria-label="Ver aprovados"
-                        title="Ver aprovados"
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-muted)] transition-colors hover:bg-[var(--surface)] hover:text-[var(--text-strong)]"
-                    >
-                        <ChevronRight className="h-4 w-4" aria-hidden="true" />
-                    </button>
-                </div>
+                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-muted)]">
+                        <ChevronDown className={`h-4 w-4 transition-transform duration-300 ${isQueueOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
+                    </span>
+                </button>
                 <div className="hidden flex-wrap gap-2 sm:flex">
                     <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[11px] font-bold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200">
                         {pendingCount} para pedir
@@ -1523,15 +1524,16 @@ const ReviewRequestsPanel: React.FC<{
                 </div>
             </div>
 
-            <div className="divide-y divide-[var(--border-subtle)] sm:hidden">
+            <div className={`divide-y divide-[var(--border-subtle)] sm:hidden ${isQueueOpen ? '' : 'hidden'}`}>
                 {mobileCandidates.map(candidate => {
                     const phone = normalizeWhatsappPhone(candidate.client.telefone);
                     const sentDate = formatReviewSentDate(candidate.sentAt);
+                    const isSent = !!candidate.sentAt;
 
                     return (
                         <article
                             key={candidate.requestKey}
-                            className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2.5 px-3 py-2.5"
+                            className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2.5 px-3 py-2.5 ${isSent ? 'opacity-70' : ''}`}
                         >
                             <div className="min-w-0">
                                 <div className="flex min-w-0 items-center gap-2">
@@ -1541,7 +1543,7 @@ const ReviewRequestsPanel: React.FC<{
                                     <p className="truncate text-[13px] font-bold leading-tight text-[var(--text-strong)]">{candidate.client.nome}</p>
                                 </div>
                                 <p className="mt-1 truncate pl-4 text-[11px] font-semibold text-[var(--text-muted)]">
-                                    {formatReviewCandidateDate(candidate)} - {candidate.pdf.proposalOptionName || 'Servico aprovado'}
+                                    {formatReviewCandidateDate(candidate)} · {candidate.pdf.proposalOptionName || 'Servico aprovado'}
                                 </p>
                                 {candidate.sentAt ? (
                                     <p className="mt-1 pl-4 text-[10px] font-bold uppercase text-slate-400">
@@ -1557,7 +1559,11 @@ const ReviewRequestsPanel: React.FC<{
                                     disabled={!phone}
                                     aria-label={`Abrir WhatsApp de ${candidate.client.nome}`}
                                     title="WhatsApp"
-                                    className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius-control)] border border-emerald-500/15 bg-emerald-500/10 text-emerald-700 transition-colors hover:bg-emerald-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-40 dark:text-emerald-200"
+                                    className={`inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius-control)] border transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                                        isSent
+                                            ? 'border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-muted)] hover:text-[var(--text-strong)]'
+                                            : 'border-emerald-500/15 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500 hover:text-white dark:text-emerald-200'
+                                    }`}
                                 >
                                     <i className="fab fa-whatsapp text-[13px]" aria-hidden="true"></i>
                                 </button>
@@ -1569,7 +1575,9 @@ const ReviewRequestsPanel: React.FC<{
                                     className={`inline-flex h-8 min-w-[72px] items-center justify-center gap-1.5 rounded-[var(--radius-control)] px-2.5 text-[11px] font-bold transition-colors ${
                                         copiedKey === candidate.requestKey
                                             ? 'border border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200'
-                                            : 'bg-[var(--brand-primary)] text-white hover:bg-[var(--brand-primary-strong)]'
+                                            : isSent
+                                                ? 'border border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-muted)] hover:text-[var(--text-strong)]'
+                                                : 'bg-[var(--brand-primary)] text-white hover:bg-[var(--brand-primary-strong)]'
                                     }`}
                                 >
                                     {copiedKey === candidate.requestKey ? (
@@ -1582,10 +1590,14 @@ const ReviewRequestsPanel: React.FC<{
                                 <button
                                     type="button"
                                     onClick={() => onMarkSent(candidate)}
-                                    disabled={!!candidate.sentAt}
+                                    disabled={isSent}
                                     aria-label={`Marcar pedido de avaliacao de ${candidate.client.nome} como feito`}
-                                    title="Marcar como feito"
-                                    className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-muted)] transition-colors hover:bg-[var(--surface)] hover:text-[var(--text-strong)] disabled:cursor-not-allowed disabled:opacity-40"
+                                    title={isSent ? 'Avaliacao ja solicitada' : 'Marcar como feito'}
+                                    className={`inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius-control)] border transition-colors disabled:cursor-not-allowed ${
+                                        isSent
+                                            ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'
+                                            : 'border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-muted)] hover:bg-[var(--surface)] hover:text-[var(--text-strong)]'
+                                    }`}
                                 >
                                     <Check className="h-3.5 w-3.5" aria-hidden="true" />
                                 </button>
@@ -1832,9 +1844,9 @@ const PdfHistoryMobileToolbar: React.FC<{
                     onClick={onOpenPeriod}
                     aria-label={`Abrir periodo do historico: ${periodLabel}`}
                     title={periodLabel}
-                    className="inline-flex h-9 shrink-0 items-center gap-2 rounded-full px-2 text-sm font-bold text-[var(--text-strong)] transition-colors hover:bg-[var(--surface-muted)]"
+                    className="inline-flex h-9 shrink-0 items-center gap-2 rounded-full border border-[var(--border-subtle)] bg-[var(--surface)] px-3 text-sm font-bold text-[var(--text-strong)] shadow-[var(--shadow-hairline)] transition-colors hover:bg-[var(--surface-muted)]"
                 >
-                    <CalendarDays className="h-5 w-5 text-[var(--text-muted)]" aria-hidden="true" />
+                    <CalendarDays className="h-4 w-4 text-[var(--text-muted)]" aria-hidden="true" />
                     <span>{periodLabel}</span>
                 </button>
             </div>
@@ -2572,13 +2584,13 @@ const HistoryStatusFilters: React.FC<{
     counts: Record<HistoryFocusFilter, number>;
     onChange: (filter: HistoryFocusFilter) => void;
 }> = ({ activeFilter, counts, onChange }) => {
-    const filters: { key: HistoryFocusFilter; label: string; dotClassName: string }[] = [
-        { key: 'all', label: 'Todos', dotClassName: 'bg-slate-400' },
-        { key: 'pending', label: 'Pendentes', dotClassName: 'bg-slate-400' },
-        { key: 'approved', label: 'Aprovados', dotClassName: 'bg-emerald-500' },
-        { key: 'revised', label: 'Revisar', dotClassName: 'bg-amber-500' },
-        { key: 'expired', label: 'Vencidos', dotClassName: 'bg-rose-500' },
-        { key: 'expenses', label: 'Com gastos', dotClassName: 'bg-blue-500' }
+    const filters: { key: HistoryFocusFilter; label: string; dotClassName: string; activeClassName: string }[] = [
+        { key: 'all', label: 'Todos', dotClassName: 'bg-slate-400', activeClassName: 'border-blue-500/70 bg-blue-500/10 text-blue-700 dark:border-blue-400/60 dark:text-blue-200' },
+        { key: 'pending', label: 'Pendentes', dotClassName: 'bg-slate-400', activeClassName: 'border-slate-400/70 bg-slate-500/10 text-slate-700 dark:border-slate-400/60 dark:text-slate-200' },
+        { key: 'approved', label: 'Aprovados', dotClassName: 'bg-emerald-500', activeClassName: 'border-emerald-500/70 bg-emerald-500/10 text-emerald-700 dark:border-emerald-400/60 dark:text-emerald-200' },
+        { key: 'revised', label: 'Revisar', dotClassName: 'bg-amber-500', activeClassName: 'border-amber-500/70 bg-amber-500/10 text-amber-700 dark:border-amber-400/60 dark:text-amber-200' },
+        { key: 'expired', label: 'Vencidos', dotClassName: 'bg-rose-500', activeClassName: 'border-rose-500/70 bg-rose-500/10 text-rose-700 dark:border-rose-400/60 dark:text-rose-200' },
+        { key: 'expenses', label: 'Com gastos', dotClassName: 'bg-blue-500', activeClassName: 'border-blue-500/70 bg-blue-500/10 text-blue-700 dark:border-blue-400/60 dark:text-blue-200' }
     ];
 
     return (
@@ -2595,13 +2607,13 @@ const HistoryStatusFilters: React.FC<{
                         className={[
                             'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-[var(--radius-control)] border px-2.5 text-[10px] font-bold transition-colors duration-200 sm:h-10 sm:gap-2 sm:px-3 sm:text-xs',
                             isActive
-                                ? 'border-blue-500/70 bg-blue-500/10 text-blue-700 shadow-[var(--shadow-hairline)] dark:border-blue-400/60 dark:text-blue-200'
+                                ? `${filter.activeClassName} shadow-[var(--shadow-hairline)]`
                                 : 'border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-muted)] hover:border-[var(--border-strong)] hover:text-[var(--text-strong)]'
                         ].join(' ')}
                     >
                         <span className={`h-1.5 w-1.5 rounded-full ${filter.dotClassName}`} aria-hidden="true" />
                         <span>{filter.label}</span>
-                        <span className={isActive ? 'text-blue-600 dark:text-blue-200' : 'text-slate-400'}>
+                        <span className={`inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-black ${isActive ? 'bg-white/60 text-current dark:bg-white/10' : 'bg-[var(--surface-muted)] text-slate-400'}`}>
                             {counts[filter.key] || 0}
                         </span>
                     </button>
@@ -4187,7 +4199,8 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
                         clientGroupRefs.current.delete(client.id!);
                     }
                 }}
-                className={`overflow-hidden border-b border-[var(--border-subtle)] bg-[var(--surface)] transition-all duration-300 last:border-b-0 sm:rounded-[var(--radius-panel)] sm:border sm:shadow-[var(--shadow-hairline)] sm:hover:-translate-y-0.5 sm:hover:border-[var(--border-strong)] ${isHighlighted ? 'ring-2 ring-blue-500 ring-offset-2 ring-offset-[var(--surface)] sm:!border-[var(--brand-primary)]' : ''} ${hasSelectedInGroup ? 'sm:border-[var(--brand-primary)] sm:ring-2 sm:ring-blue-500/15' : 'sm:border-[var(--border-subtle)]'}`}>
+                className={`relative overflow-hidden border-b border-[var(--border-subtle)] bg-[var(--surface)] transition-all duration-300 last:border-b-0 sm:rounded-[var(--radius-panel)] sm:border sm:shadow-[var(--shadow-hairline)] sm:hover:-translate-y-0.5 sm:hover:border-[var(--border-strong)] ${isHighlighted ? 'ring-2 ring-blue-500 ring-offset-2 ring-offset-[var(--surface)] sm:!border-[var(--brand-primary)]' : ''} ${hasSelectedInGroup ? 'sm:border-[var(--brand-primary)] sm:ring-2 sm:ring-blue-500/15' : 'sm:border-[var(--border-subtle)]'}`}>
+                <span className={`absolute left-0 top-0 h-full w-1 sm:hidden ${status.tone.dotClassName}`} aria-hidden="true" />
                 <button
                     onClick={() => handleToggleExpand(client.id!)}
                     className="w-full px-3 py-2.5 text-left transition-colors duration-200 hover:bg-[var(--surface-muted)] sm:px-4 sm:py-3"
@@ -4200,23 +4213,30 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
 
                         <div className="min-w-0 flex-1">
                             <div className="flex items-start gap-1.5">
-                                <span className={`mt-[0.38rem] h-2 w-2 shrink-0 rounded-full ${status.tone.dotClassName}`} />
+                                <span className={`mt-[0.38rem] hidden h-2 w-2 shrink-0 rounded-full sm:block ${status.tone.dotClassName}`} />
                                 <h3 className="text-[0.92rem] font-semibold leading-[1.2] tracking-[-0.02em] text-slate-900 dark:text-slate-50 sm:truncate sm:text-[1rem]">
                                     {client.nome}
                                 </h3>
                             </div>
-                            <p className="mt-1 truncate text-[11px] font-medium text-slate-500 dark:text-slate-400">
-                                <span className="sm:hidden">{status.text} / {latestContext}</span>
-                                <span className="hidden sm:inline">{status.text} / {latestContext}</span>
+                            <p className="mt-1 hidden truncate text-[11px] font-medium text-slate-500 dark:text-slate-400 sm:block">
+                                {status.text} / {latestContext}
                             </p>
 
-                            <div className="mt-1.5 flex items-center justify-between gap-3 pr-1 sm:hidden">
-                                <p className="text-[0.98rem] font-semibold leading-none tracking-[-0.03em] text-slate-950 dark:text-slate-50">
-                                    {formatNumberBR(clientFunnelSummary.funnelRevenue)}
-                                </p>
-                                <p className="text-[8px] font-semibold uppercase tracking-[0.14em] text-slate-400">
-                                    {latestDate} · {totalPdfs} {totalPdfs === 1 ? 'opção' : 'opções'}
-                                </p>
+                            <div className="mt-1.5 sm:hidden">
+                                <div className="flex min-w-0 items-center gap-1.5">
+                                    <span className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${status.tone.chipClassName}`}>
+                                        {status.tone.label}
+                                    </span>
+                                    <span className="truncate text-[11px] font-medium text-slate-400">{latestContext}</span>
+                                </div>
+                                <div className="mt-1.5 flex items-end justify-between gap-3 pr-1">
+                                    <p className={`text-[1.05rem] font-bold leading-none tracking-[-0.03em] ${status.tone === PDF_STATUS_META.approved ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-950 dark:text-slate-50'}`}>
+                                        {formatNumberBR(clientFunnelSummary.funnelRevenue)}
+                                    </p>
+                                    <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-400">
+                                        {latestDate} · {totalPdfs} {totalPdfs === 1 ? 'opção' : 'opções'}
+                                    </p>
+                                </div>
                             </div>
                         </div>
 
@@ -4224,7 +4244,7 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
                             <p className="text-[1rem] font-semibold leading-none tracking-[-0.03em] text-slate-950 dark:text-slate-50">
                                 {formatNumberBR(clientFunnelSummary.funnelRevenue)}
                             </p>
-                            <p className="mt-1 text-[8px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+                            <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-400">
                                 {latestDate} · {totalPdfs} {totalPdfs === 1 ? 'opção' : 'opções'}
                             </p>
                         </div>
@@ -4609,19 +4629,19 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
                         <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 sm:text-xs">
                             {filteredGroupedHistory.length} de {groupedHistory.length} clientes
                         </span>
-                        <span className="inline-flex items-center rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-[11px] font-medium text-blue-700 dark:border-blue-900/50 dark:bg-blue-950/20 dark:text-blue-300 sm:text-xs">
+                        <span className="hidden items-center rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-[11px] font-medium text-blue-700 dark:border-blue-900/50 dark:bg-blue-950/20 dark:text-blue-300 sm:inline-flex sm:text-xs">
                             {historyFunnelTotals.opportunityCount} oportunidades
                         </span>
-                        <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 sm:text-xs">
+                        <span className="hidden items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 sm:inline-flex sm:text-xs">
                             {totalPdfCount} opções
                         </span>
                         {historyFunnelTotals.duplicatedRevenue > 0 ? (
-                            <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[11px] font-medium text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-300 sm:text-xs">
+                            <span className="hidden items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[11px] font-medium text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-300 sm:inline-flex sm:text-xs">
                                 Funil {formatNumberBR(historyFunnelTotals.funnelRevenue)}
                             </span>
                         ) : null}
                         {historyFunnelTotals.duplicatedRevenue > 0 ? (
-                            <span className="inline-flex items-center rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-[11px] font-medium text-blue-700 dark:border-blue-900/50 dark:bg-blue-950/20 dark:text-blue-300 sm:text-xs">
+                            <span className="hidden items-center rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-[11px] font-medium text-blue-700 dark:border-blue-900/50 dark:bg-blue-950/20 dark:text-blue-300 sm:inline-flex sm:text-xs">
                                 Apresentado {formatNumberBR(historyFunnelTotals.presentedRevenue)}
                             </span>
                         ) : null}
