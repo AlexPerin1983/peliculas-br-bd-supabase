@@ -1,24 +1,30 @@
-import React, { FormEvent, useMemo, useState } from 'react';
-import { ShieldCheck } from 'lucide-react';
+import React, { FormEvent, useMemo, useRef, useState } from 'react';
+import { Building2, ImagePlus, Loader2, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { bootstrapOrganization } from '../services/organizationSetupService';
+import { processLogoImage } from '../services/imageProcessing';
 
 interface OrganizationSetupProps {
     initialEmail: string;
     initialOwnerName?: string;
-    onCompleted: (organizationName: string) => Promise<void> | void;
+    onCompleted: (organizationName: string, logo?: string) => Promise<void> | void;
 }
 
-function deriveCompanyName(email: string) {
-    if (!email) return '';
+// Sugere "Empresa do {primeiro nome}" a partir do nome do dono. Sem nome
+// utilizável, deixa vazio (o usuário digita; o botão fica travado até lá).
+function suggestCompanyName(ownerName?: string) {
+    const first = (ownerName || '').trim().split(/\s+/)[0] || '';
+    if (!first || first.includes('@')) return '';
+    const formatted = first.charAt(0).toUpperCase() + first.slice(1);
+    return `Empresa do ${formatted}`;
+}
 
-    const localPart = email.split('@')[0] || '';
-    if (!localPart) return '';
-
-    return localPart
-        .replace(/[._-]+/g, ' ')
-        .replace(/\b\w/g, (char) => char.toUpperCase())
-        .trim();
+// Iniciais da empresa para o avatar (logo provisória).
+function getInitials(name: string) {
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return '';
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 export const OrganizationSetup: React.FC<OrganizationSetupProps> = ({
@@ -27,15 +33,36 @@ export const OrganizationSetup: React.FC<OrganizationSetupProps> = ({
     onCompleted
 }) => {
     const { signOut } = useAuth();
-    const [companyName, setCompanyName] = useState(() => deriveCompanyName(initialEmail));
+    const [companyName, setCompanyName] = useState(() => suggestCompanyName(initialOwnerName));
     const [ownerName, setOwnerName] = useState(initialOwnerName || '');
     const [phone, setPhone] = useState('');
+    const [logo, setLogo] = useState('');
+    const [logoLoading, setLogoLoading] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const logoInputRef = useRef<HTMLInputElement>(null);
+
+    const handleLogoChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        event.target.value = '';
+        if (!file) return;
+        setLogoLoading(true);
+        setError(null);
+        try {
+            const optimized = await processLogoImage(file);
+            setLogo(optimized);
+        } catch (logoError) {
+            setError(logoError instanceof Error ? logoError.message : 'Não foi possível usar essa imagem.');
+        } finally {
+            setLogoLoading(false);
+        }
+    };
 
     const canSubmit = useMemo(() => {
         return companyName.trim().length >= 2 && ownerName.trim().length >= 2 && !loading;
     }, [companyName, ownerName, loading]);
+
+    const initials = useMemo(() => getInitials(companyName), [companyName]);
 
     const handleSubmit = async (event: FormEvent) => {
         event.preventDefault();
@@ -57,7 +84,7 @@ export const OrganizationSetup: React.FC<OrganizationSetupProps> = ({
         }
 
         try {
-            await onCompleted(result.organizationName);
+            await onCompleted(result.organizationName, logo || undefined);
         } catch (completionError) {
             setError(
                 completionError instanceof Error
@@ -73,18 +100,74 @@ export const OrganizationSetup: React.FC<OrganizationSetupProps> = ({
         <div className="min-h-[100dvh] w-full overflow-y-auto bg-[radial-gradient(circle_at_top,rgba(14,165,233,0.12),transparent_28%),linear-gradient(180deg,#f8fafc_0%,#eef2ff_100%)] px-3 py-3 sm:px-6 sm:py-6 lg:flex lg:items-center lg:justify-center lg:py-8">
             <div className="mx-auto w-full max-w-2xl overflow-hidden rounded-[1.5rem] border border-slate-100 bg-white shadow-[0_30px_80px_rgba(15,23,42,0.12)] lg:rounded-[2rem]">
                 <div className="flex flex-col px-5 py-6 sm:px-8 sm:py-10 sm:pb-[max(40px,env(safe-area-inset-bottom))]">
-                    <div className="mb-5 flex items-center gap-3 sm:mb-8">
-                        <div className="shrink-0 rounded-2xl bg-slate-100 p-2.5 text-slate-700 sm:p-3">
-                            <ShieldCheck className="h-5 w-5 sm:h-6 sm:w-6" />
+                    <div className="mb-5 flex flex-col items-center text-center sm:mb-7">
+                        <div className="relative h-16 w-16">
+                            <button
+                                type="button"
+                                onClick={() => logoInputRef.current?.click()}
+                                disabled={logoLoading}
+                                aria-label={logo ? 'Trocar logo' : 'Enviar logo'}
+                                className="group flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-slate-900 text-white shadow-[0_12px_30px_rgba(15,23,42,0.25)] transition focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 disabled:cursor-wait"
+                            >
+                                {logo ? (
+                                    <img src={logo} alt="Logo da empresa" className="h-full w-full object-contain" />
+                                ) : initials ? (
+                                    <span className="text-xl font-bold tracking-wide">{initials}</span>
+                                ) : (
+                                    <Building2 className="h-7 w-7" />
+                                )}
+                                <span className="absolute inset-0 flex items-center justify-center bg-slate-950/55 opacity-0 transition-opacity group-hover:opacity-100">
+                                    {logoLoading ? (
+                                        <Loader2 className="h-5 w-5 animate-spin" />
+                                    ) : (
+                                        <ImagePlus className="h-5 w-5" />
+                                    )}
+                                </span>
+                            </button>
+                            {logo ? (
+                                <button
+                                    type="button"
+                                    onClick={() => setLogo('')}
+                                    aria-label="Remover logo"
+                                    className="absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50"
+                                >
+                                    <X className="h-3.5 w-3.5" />
+                                </button>
+                            ) : null}
                         </div>
-                        <div>
-                            <h2 className="text-xl font-bold tracking-tight text-slate-950 sm:text-2xl">
-                                Dados iniciais da empresa
-                            </h2>
-                            <p className="text-sm leading-5 text-slate-500">
-                                Você poderá editar tudo depois em Configurações.
+
+                        <input
+                            ref={logoInputRef}
+                            type="file"
+                            accept="image/*"
+                            className="sr-only"
+                            onChange={handleLogoChange}
+                        />
+                        <button
+                            type="button"
+                            onClick={() => logoInputRef.current?.click()}
+                            disabled={logoLoading}
+                            className="mt-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 disabled:opacity-60"
+                        >
+                            {logoLoading ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                                <ImagePlus className="h-3.5 w-3.5" />
+                            )}
+                            {logo ? 'Trocar logo' : 'Enviar minha logo (opcional)'}
+                        </button>
+                        {!logo ? (
+                            <p className="mt-0.5 text-[11px] text-slate-400">
+                                Sem logo? Usamos as iniciais por enquanto.
                             </p>
-                        </div>
+                        ) : null}
+
+                        <h2 className="mt-3 text-xl font-bold tracking-tight text-slate-950 sm:text-2xl">
+                            Dados iniciais da empresa
+                        </h2>
+                        <p className="mt-1 max-w-sm text-sm leading-5 text-slate-500">
+                            Esses dados aparecem nos seus orçamentos. Você poderá editar tudo depois em Configurações.
+                        </p>
                     </div>
 
                     <form onSubmit={handleSubmit} className="flex flex-1 flex-col space-y-4 sm:space-y-5">

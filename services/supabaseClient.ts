@@ -16,6 +16,10 @@ export const supabase = createClient(
             persistSession: true,
             autoRefreshToken: true,
             detectSessionInUrl: true,
+            // O login social (Google) volta com ?code= (fluxo PKCE). Sem isto o
+            // cliente usa o padrao 'implicit' e rejeita o callback com erro de
+            // mismatch, impedindo a troca do codigo por sessao (loop no login).
+            flowType: 'pkce',
             // Nova storage key para invalidar tokens locais gerados antes da rotacao das chaves.
             storageKey: 'peliculas-br-bd-auth-v4',
         }

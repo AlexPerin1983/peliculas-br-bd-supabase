@@ -107,6 +107,7 @@ const DesktopSidebar: React.FC<DesktopSidebarProps> = ({ activeTab, onTabChange 
         return (
             <button
                 type="button"
+                data-tour={`nav-${tabId}`}
                 onClick={() => onTabChange(tabId)}
                 aria-label={label}
                 title={isCollapsed ? label : undefined}

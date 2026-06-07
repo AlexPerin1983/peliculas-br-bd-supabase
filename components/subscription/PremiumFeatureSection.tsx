@@ -51,7 +51,7 @@ const premiumHighlights: Record<string, string[]> = {
         'Operacao centralizada'
     ],
     personalizacao: [
-        'Logo e cores da empresa',
+        'Cores da empresa',
         'Assinatura digital',
         'Propostas com mais autoridade'
     ],

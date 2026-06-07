@@ -12,6 +12,7 @@ import {
     Package,
     QrCode,
     Scissors,
+    Sparkles,
     Users,
     Zap
 } from 'lucide-react';
@@ -730,6 +731,18 @@ export const UserAccount: React.FC = () => {
                                     {passwordLoading ? 'Atualizando...' : 'Atualizar senha'}
                                 </button>
                             </form>
+                        </div>
+
+                        <div className="border-t border-[var(--border-subtle)] pt-5">
+                            <h4 className="ui-kicker mb-3">Ajuda</h4>
+                            <button
+                                type="button"
+                                onClick={() => window.dispatchEvent(new Event('peliculas-br-open-tour'))}
+                                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] px-4 text-sm font-semibold text-[var(--text-body)] transition-colors hover:bg-[var(--surface)]"
+                            >
+                                <Sparkles className="h-4 w-4 text-[var(--brand-primary)]" aria-hidden="true" />
+                                Rever guia de primeiros passos
+                            </button>
                         </div>
 
                         <div className="border-t border-[var(--border-subtle)] pt-5">

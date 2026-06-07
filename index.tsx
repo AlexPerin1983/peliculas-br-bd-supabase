@@ -13,6 +13,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SubscriptionProvider } from './contexts/SubscriptionContext';
 import { ResetPassword } from './components/ResetPassword';
 import { redirectToCanonicalHostIfNeeded } from './src/lib/canonicalHost';
+import { supabase } from './services/supabaseClient';
 
 const EstoquePublicoView = lazy(() => import('./components/views/EstoquePublicoView'));
 const ServicoPublicoView = lazy(() => import('./components/views/ServicoPublicoView'));
@@ -26,7 +27,29 @@ if (!rootElement) {
 const urlParams = new URLSearchParams(window.location.search);
 const pathname = window.location.pathname;
 
-const isPublicEstoque = urlParams.has('qr') || urlParams.has('code');
+// O login com Google (PKCE) retorna para a raiz com ?code=, exatamente como os
+// links publicos de estoque. Antes de redirecionar para o Google marcamos uma
+// flag por aba; ao voltar, esse ?code= deve seguir para o fluxo de auth (app
+// normal), e nao ser tratado como QR de estoque.
+let isGoogleOAuthCallback = false;
+try {
+  if (sessionStorage.getItem('pb-google-oauth-redirect') === '1') {
+    sessionStorage.removeItem('pb-google-oauth-redirect');
+    isGoogleOAuthCallback = urlParams.has('code') || urlParams.has('error');
+  }
+} catch {
+  // sessionStorage indisponivel: segue o fluxo padrao.
+}
+
+// Captura o code do OAuth (Google) AGORA, sincronamente, antes que qualquer
+// efeito do React possa limpar a URL. A deteccao automatica do Supabase
+// (detectSessionInUrl) roda so depois de adquirir o lock (~120ms), tempo em
+// que o React ja montou e o ?code= pode ter sumido. Trocamos manualmente.
+const oauthCallbackCode = isGoogleOAuthCallback && urlParams.has('code')
+  ? urlParams.get('code')
+  : null;
+
+const isPublicEstoque = !isGoogleOAuthCallback && (urlParams.has('qr') || urlParams.has('code'));
 const isEstoquePublico = isPublicEstoque && (
   pathname === '/' ||
   pathname === '/consulta' ||
@@ -131,13 +154,45 @@ const renderApp = () => {
   }
 };
 
-void redirectToCanonicalHostIfNeeded()
-  .then(redirected => {
-    if (!redirected) {
-      renderApp();
+// Troca o code do Google por sessao explicitamente, garantindo que a sessao
+// exista ANTES de montar o React. Se a deteccao automatica do Supabase ja
+// tiver consumido o code, esta chamada apenas retorna erro (ignorado) e a
+// sessao ja estara salva. Se ela perdeu a corrida, esta troca a estabelece.
+const bootstrapOAuthSession = async () => {
+  if (!oauthCallbackCode) {
+    return;
+  }
+  try {
+    const { error } = await supabase.auth.exchangeCodeForSession(oauthCallbackCode);
+    if (error) {
+      console.warn('[OAuth] Troca explicita retornou erro (pode ja ter sido trocado):', error.message);
+    } else {
+      console.log('[OAuth] Sessao estabelecida via troca explicita do code.');
     }
+  } catch (error) {
+    console.error('[OAuth] Erro inesperado ao trocar o code:', error);
+  } finally {
+    // Limpa o ?code= da URL apos a troca.
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('code');
+      window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+    } catch {
+      // ignora: limpeza de URL e cosmetica.
+    }
+  }
+};
+
+void redirectToCanonicalHostIfNeeded()
+  .then(async redirected => {
+    if (redirected) {
+      return;
+    }
+    await bootstrapOAuthSession();
+    renderApp();
   })
-  .catch(error => {
+  .catch(async error => {
     console.error('Erro ao verificar dominio canonico:', error);
+    await bootstrapOAuthSession();
     renderApp();
   });

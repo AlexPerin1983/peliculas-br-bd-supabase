@@ -60,6 +60,8 @@ import { getSubscriptionInfo } from './services/subscriptionService';
 import { getFornecedores } from './services/fornecedorService';
 import { matchFilmFromExtractedText } from './services/filmMatchingService';
 import DesktopSidebar from './components/layout/DesktopSidebar';
+import OnboardingTour from './components/onboarding/OnboardingTour';
+import { seedExampleDataIfNeeded } from './services/seedData';
 import { GEMINI_TEXT_MODEL } from './src/lib/geminiModel';
 import { createPastedMeasurementsFromClipboard } from './src/lib/measurementClipboard';
 
@@ -2588,7 +2590,29 @@ Se não conseguir extrair, retorne: []`;
         onOpenLocationImport: () => setIsLocationImportModalOpen(true),
     };
 
-    const handleOrganizationSetupCompleted = useCallback(async (organizationName: string) => {
+    const handleOrganizationSetupCompleted = useCallback(async (organizationName: string, logo?: string) => {
+        // Cria dados de exemplo antes de carregar o app, para que o primeiro
+        // acesso não apareça vazio. refreshProfile() em seguida dispara o
+        // bootstrap, que já carrega os exemplos recém-criados.
+        try {
+            await seedExampleDataIfNeeded();
+        } catch (error) {
+            console.error('Erro ao criar dados de exemplo:', error);
+        }
+
+        // Se o usuário já enviou uma logo no cadastro, persiste antes de carregar
+        // o perfil para que ela apareça desde o início (já vem otimizada).
+        if (logo) {
+            try {
+                const current = await db.getUserInfo();
+                if (current) {
+                    await db.saveUserInfo({ ...current, logo, isFallback: false });
+                }
+            } catch (error) {
+                console.error('Erro ao salvar a logo inicial:', error);
+            }
+        }
+
         await refreshProfile();
         showToast(`Empresa "${organizationName}" criada com sucesso.`, {
             tone: 'success',
@@ -2623,6 +2647,7 @@ Se não conseguir extrair, retorne: []`;
                 ) : (
                     <>
                 <DesktopSidebar activeTab={activeTab} onTabChange={handleTabChange} />
+                <OnboardingTour onNavigate={handleTabChange} />
 
                 <div className="flex-grow flex flex-col min-w-0 h-full overflow-hidden">
                     <UpdateBanner />

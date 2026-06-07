@@ -4,6 +4,7 @@ import autoTable from 'jspdf-autotable';
 import { calculatePricingAreaM2 } from '../src/lib/pricingArea';
 import { buildPdfAdjustmentDisplay, type PdfDisplayLineItem } from '../src/lib/pdfAdjustmentDisplay';
 import { calculateProposalAdjustmentAmounts } from '../src/lib/proposalAdjustments';
+import { createDefaultLogo } from './defaultLogo';
 
 // Define GeneralDiscount locally since it's not exported from types.ts
 interface GeneralDiscount {
@@ -146,6 +147,12 @@ const renderPdfContent = async (
         const pageHeight = doc.internal.pageSize.height;
         const margin = 15;
 
+        // Usa a logo da empresa ou, enquanto não houver uma, um selo padrão
+        // gerado com as iniciais da empresa nas cores da marca.
+        const logoSource = userInfo.logo
+            || createDefaultLogo(userInfo.empresa || userInfo.nome || 'P', userInfo.cores?.primaria || '#155eef')
+            || '';
+
         const hexToRgb = (hex: string) => {
             const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
             return result ? [parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16)] : [0, 0, 0];
@@ -159,10 +166,10 @@ const renderPdfContent = async (
         };
 
         const addLogo = async (x: number, y: number, maxWidth: number, maxHeight: number) => {
-            if (userInfo.logo) {
+            if (logoSource) {
                 try {
                     const img = new Image();
-                    img.src = userInfo.logo;
+                    img.src = logoSource;
                     await new Promise(resolve => {
                         img.onload = resolve;
                         img.onerror = resolve; // Continue even if logo fails
@@ -181,7 +188,7 @@ const renderPdfContent = async (
                         imgWidth = imgHeight * ratio;
                     }
 
-                    doc.addImage(userInfo.logo, 'PNG', x, y, imgWidth, imgHeight);
+                    doc.addImage(logoSource, 'PNG', x, y, imgWidth, imgHeight);
                 } catch (error) {
                     console.error("Erro ao adicionar logo:", error);
                 }
@@ -208,10 +215,10 @@ const renderPdfContent = async (
 
             // Logo and Name
             let logoBottomY = 0;
-            if (userInfo.logo) {
+            if (logoSource) {
                 try {
                     const img = new Image();
-                    img.src = userInfo.logo;
+                    img.src = logoSource;
                     await new Promise(resolve => {
                         img.onload = resolve;
                         img.onerror = resolve;
@@ -219,7 +226,7 @@ const renderPdfContent = async (
                     const logoHeight = 8;
                     const ratio = img.width / img.height;
                     const logoWidth = logoHeight * ratio;
-                    doc.addImage(userInfo.logo, 'PNG', margin, headerStartY, logoWidth, logoHeight);
+                    doc.addImage(logoSource, 'PNG', margin, headerStartY, logoWidth, logoHeight);
                     doc.setFont("helvetica", 'bold');
                     doc.setFontSize(10);
                     doc.setTextColor(...bodyText);

@@ -11,9 +11,9 @@ import {
 import { useSubscription } from '../../contexts/SubscriptionContext';
 import {
     ModuleCard,
-    UsageBar,
-    ActivateModuleModal
+    UsageBar
 } from './SubscriptionComponents';
+import { PremiumModuleModal } from './PremiumModuleModal';
 import { SubscriptionModule } from '../../services/subscriptionService';
 
 interface SubscriptionPageProps {
@@ -28,7 +28,7 @@ interface SubscriptionPageProps {
     };
 }
 
-export function SubscriptionPage({ onBack, userInfo }: SubscriptionPageProps) {
+export function SubscriptionPage({ onBack }: SubscriptionPageProps) {
     const {
         info,
         modules,
@@ -39,10 +39,6 @@ export function SubscriptionPage({ onBack, userInfo }: SubscriptionPageProps) {
 
     const [selectedModule, setSelectedModule] = useState<SubscriptionModule | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
-
-    const adminPixKey =
-        userInfo?.payment_methods?.find(payment => payment.tipo === 'pix')?.chave_pix ||
-        'contato@peliculasbr.com';
 
     const handleActivateClick = (module: SubscriptionModule) => {
         setSelectedModule(module);
@@ -251,15 +247,13 @@ export function SubscriptionPage({ onBack, userInfo }: SubscriptionPageProps) {
             </div>
 
             {selectedModule && (
-                <ActivateModuleModal
+                <PremiumModuleModal
                     isOpen={isModalOpen}
+                    module={selectedModule}
                     onClose={() => {
                         setIsModalOpen(false);
                         setSelectedModule(null);
                     }}
-                    module={selectedModule}
-                    onConfirm={() => undefined}
-                    pixKey={adminPixKey}
                 />
             )}
         </div>

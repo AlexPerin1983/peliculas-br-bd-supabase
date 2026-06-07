@@ -100,7 +100,9 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
                                 icon="fas fa-dollar-sign"
                                 isActive={isTotalsDrawerOpen}
                             />
-                            <PdfActionButton />
+                            <span data-tour="generate-pdf">
+                                <PdfActionButton />
+                            </span>
                         </div>
                     </div>
                 </div>

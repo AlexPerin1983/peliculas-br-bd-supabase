@@ -6,6 +6,7 @@ import SignatureModal from '../modals/SignatureModal';
 import TeamManagement from '../TeamManagement';
 import InviteDisplay from '../InviteDisplay';
 import { getActiveInvite, createOrganizationInvite } from '../../services/inviteService';
+import { processLogoImage } from '../../services/imageProcessing';
 import { useTheme } from '../../src/contexts/ThemeContext';
 import { useFeedback } from '../../src/contexts/FeedbackContext';
 import { AlertTriangle, CheckCircle2, DollarSign, Facebook, FileSignature, Instagram, KeyRound, Loader2, MessageSquare, Moon, Palette, QrCode, Save, Settings, Share2, Shield, Smartphone, Sun, Users, Clock, Building2, Bot, Youtube, ChevronDown } from 'lucide-react';
@@ -294,17 +295,21 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({
         }));
     };
 
-    const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                const base64String = reader.result as string;
-                shouldScrollLogoPreviewRef.current = true;
-                setFormData(prev => ({ ...prev, logo: base64String }));
-                setLogoPreview(base64String);
-            };
-            reader.readAsDataURL(file);
+        if (!file) return;
+        // Permite reescolher o mesmo arquivo depois.
+        e.target.value = '';
+        try {
+            const optimized = await processLogoImage(file);
+            shouldScrollLogoPreviewRef.current = true;
+            setFormData(prev => ({ ...prev, logo: optimized }));
+            setLogoPreview(optimized);
+        } catch (error) {
+            showToast(
+                error instanceof Error ? error.message : 'Não foi possível usar essa imagem.',
+                { tone: 'error', duration: 3200 }
+            );
         }
     };
 
@@ -479,60 +484,66 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({
                 </div>
             </SettingsSection>
 
-            {/* ===== SECAO: PERSONALIZACAO ===== */}
+            {/* ===== SECAO: LOGOTIPO (gratuito) ===== */}
+            <SettingsSection
+                title="Logotipo da Empresa"
+                subtitle="Aparece no topo dos seus orçamentos"
+                icon={<Building2 className="w-5 h-5" />}
+                showFooterSave={false}
+            >
+                <div className="max-w-md">
+                    <div ref={logoUploadAreaRef} className="mt-1 flex min-h-[180px] cursor-pointer flex-col items-center justify-center rounded-[var(--radius-panel)] border border-dashed border-[var(--border-subtle)] bg-[var(--surface-muted)] p-6 transition-colors hover:border-[var(--brand-primary)] group">
+                        {logoPreview ? (
+                            <div className="text-center">
+                                <img src={logoPreview} alt="Logo" className="mx-auto mb-4 max-h-20 w-auto rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] p-2 shadow-[var(--shadow-hairline)]" />
+                                <div className="flex gap-3 justify-center">
+                                    <label htmlFor="logo-upload-input" className={`${secondaryButtonClassName} cursor-pointer`}>
+                                        Alterar
+                                        <input id="logo-upload-input" type="file" className="sr-only" accept="image/*" onChange={handleLogoChange} />
+                                    </label>
+                                    <button type="button" onClick={handleRemoveLogo} className="inline-flex h-11 items-center justify-center rounded-[var(--radius-control)] px-4 text-sm font-semibold text-[var(--danger)] transition-colors hover:bg-red-50 dark:hover:bg-red-950/25">
+                                        Remover
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <label htmlFor="logo-upload-input" className="text-center cursor-pointer">
+                                <div className="ui-icon-frame mx-auto mb-3 h-14 w-14 text-[var(--brand-primary)] transition-colors group-hover:bg-[var(--surface)]">
+                                    <Building2 className="h-6 w-6" aria-hidden="true" />
+                                </div>
+                                <p className="text-sm font-semibold text-[var(--text-strong)]">Clique para fazer upload</p>
+                                <p className="mt-1 text-xs text-[var(--text-soft)]">PNG ou JPG — otimizamos automaticamente</p>
+                                <input id="logo-upload-input" type="file" className="sr-only" accept="image/*" onChange={handleLogoChange} />
+                            </label>
+                        )}
+                    </div>
+                    <div className="mt-3 flex justify-end">
+                        {renderBrandingSaveButton('Salvar logo')}
+                    </div>
+                </div>
+            </SettingsSection>
+
+            {/* ===== SECAO: CORES E ASSINATURA (premium) ===== */}
             <FeatureGate
                 moduleId="personalizacao"
                 fallback={
                     <PremiumFeatureSection
                         moduleId="personalizacao"
-                        title="Personalizacao do Orcamento"
-                        description="Logo, cores e assinatura premium para deixar seus documentos mais profissionais."
+                        title="Cores e Assinatura"
+                        description="Cores da marca e assinatura digital premium para deixar seus documentos mais profissionais."
                         variant="inline"
                     />
                 }
             >
                 <SettingsSection
-                    title="Personalização do Orçamento"
-                    subtitle="Logo, cores, assinatura e identidade visual"
+                    title="Cores e Assinatura"
+                    subtitle="Paleta da marca e assinatura digital"
                     icon={<Palette className="w-5 h-5" />}
                     saveState={getSectionSaveState('branding')}
                     onSaveSection={() => handleSaveSection('branding')}
                     showFooterSave={false}
                 >
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        {/* Upload de Logo */}
-                        <div>
-                            <label className={labelClass}>Logotipo da Empresa</label>
-                            <div ref={logoUploadAreaRef} className="mt-1 flex min-h-[180px] cursor-pointer flex-col items-center justify-center rounded-[var(--radius-panel)] border border-dashed border-[var(--border-subtle)] bg-[var(--surface-muted)] p-6 transition-colors hover:border-[var(--brand-primary)] group">
-                                {logoPreview ? (
-                                    <div className="text-center">
-                                        <img src={logoPreview} alt="Logo" className="mx-auto mb-4 max-h-20 w-auto rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] p-2 shadow-[var(--shadow-hairline)]" />
-                                        <div className="flex gap-3 justify-center">
-                                            <label htmlFor="logo-upload-input" className={`${secondaryButtonClassName} cursor-pointer`}>
-                                                Alterar
-                                                <input id="logo-upload-input" type="file" className="sr-only" accept="image/*" onChange={handleLogoChange} />
-                                            </label>
-                                            <button type="button" onClick={handleRemoveLogo} className="inline-flex h-11 items-center justify-center rounded-[var(--radius-control)] px-4 text-sm font-semibold text-[var(--danger)] transition-colors hover:bg-red-50 dark:hover:bg-red-950/25">
-                                                Remover
-                                            </button>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <label htmlFor="logo-upload-input" className="text-center cursor-pointer">
-                                        <div className="ui-icon-frame mx-auto mb-3 h-14 w-14 text-[var(--brand-primary)] transition-colors group-hover:bg-[var(--surface)]">
-                                            <Palette className="h-6 w-6" aria-hidden="true" />
-                                        </div>
-                                        <p className="text-sm font-semibold text-[var(--text-strong)]">Clique para fazer upload</p>
-                                        <p className="mt-1 text-xs text-[var(--text-soft)]">PNG, JPG até 2MB</p>
-                                        <input id="logo-upload-input" type="file" className="sr-only" accept="image/*" onChange={handleLogoChange} />
-                                    </label>
-                                )}
-                            </div>
-                            <div className="mt-3 flex justify-end">
-                                {renderBrandingSaveButton('Salvar logo')}
-                            </div>
-                        </div>
-
                         {/* Branding / Cores */}
                         <div className="flex flex-col space-y-4">
                             <div className="space-y-5 rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-5">
@@ -863,19 +874,12 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({
                 </SettingsSection>
             </FeatureGate>
 
-            {/* ===== SECAO: CONVITE (APENAS OWNER) ===== */}
+            {/* ===== SECAO: CONVITE (APENAS OWNER) =====
+                Mesmo modulo "colaboradores" da secao acima: quando bloqueado,
+                nao mostramos um segundo card premium (evita duplicar a oferta).
+                A secao so aparece quando o modulo ja esta liberado. */}
             {userInfo.isOwner && (
-                <FeatureGate
-                    moduleId="colaboradores"
-                    fallback={
-                        <PremiumFeatureSection
-                            moduleId="colaboradores"
-                            title="Convite para Colaboradores"
-                            description="Convites e QR de equipe ficam disponiveis no mesmo plano premium de colaboradores."
-                            variant="inline"
-                        />
-                    }
-                >
+                <FeatureGate moduleId="colaboradores" showUpgradePrompt={false}>
                     <SettingsSection
                         title="Convite para Colaboradores"
                         subtitle="Gere um QR Code de acesso"

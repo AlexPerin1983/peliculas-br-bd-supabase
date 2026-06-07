@@ -100,7 +100,7 @@ export async function bootstrapOrganization(
         if (error) {
             return {
                 success: false,
-                error: error.message || 'Nao foi possivel criar a empresa'
+                error: error || 'Nao foi possivel criar a empresa'
             };
         }
 

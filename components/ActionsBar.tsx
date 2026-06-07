@@ -50,6 +50,7 @@ const ActionsBar: React.FC<ActionsBarProps> = ({
 
     const pdfButton = (
         <button
+            data-tour="generate-pdf"
             onClick={onGeneratePdf}
             className="col-span-2 flex h-12 items-center justify-center gap-2 rounded-[var(--radius-control)] bg-emerald-600 font-semibold text-white shadow-[0_12px_24px_rgba(5,150,105,0.18)] transition-all hover:bg-emerald-700 active:scale-[0.99] disabled:cursor-wait disabled:opacity-70 sm:col-span-1"
             disabled={isGeneratingPdf}
