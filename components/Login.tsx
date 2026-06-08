@@ -157,7 +157,7 @@ export const Login: React.FC = () => {
     const inputClasses = 'w-full pl-11 pr-4 py-3 bg-[#f1f5f9] border-none rounded-xl text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-slate-300 outline-none transition-all';
 
     return (
-        <div className="relative flex min-h-[100dvh] w-full flex-1 items-center justify-center px-4 py-6 font-sans sm:px-6 lg:justify-end lg:pr-[7%] xl:pr-[11%]">
+        <div className="relative flex min-h-[100dvh] w-full flex-1 items-center justify-center px-4 py-6 font-sans sm:px-6 lg:justify-start">
             {/* Imagem de fundo - apenas desktop (background-image nao e baixado no mobile pois fica display:none) */}
             <div
                 aria-hidden="true"
@@ -168,8 +168,10 @@ export const Login: React.FC = () => {
             {/* Fundo gradiente - mobile/tablet */}
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.10),transparent_28%),linear-gradient(180deg,#f8fafc_0%,#eef2ff_100%)] lg:hidden" />
 
+            {/* Faixa que ancora o card (largura limitada para nao colar na borda em telas largas) */}
+            <div className="relative z-10 flex w-full justify-center lg:max-w-[1180px] lg:justify-end lg:pr-8">
             {/* Card do formulario */}
-            <div className="relative z-10 w-full max-w-[420px] rounded-[2rem] border border-slate-100 bg-white p-6 shadow-[0_20px_50px_rgba(0,0,0,0.05)] sm:p-8 lg:p-10 lg:shadow-[0_30px_80px_rgba(0,0,0,0.45)]">
+            <div className="w-full max-w-[420px] rounded-[2rem] border border-slate-100 bg-white p-6 shadow-[0_20px_50px_rgba(0,0,0,0.05)] sm:p-8 lg:p-10 lg:shadow-[0_30px_80px_rgba(0,0,0,0.45)]">
                 <div className="text-center mb-10">
                     <h2 className="font-display mb-3 text-3xl font-bold tracking-tight text-[#020617]">
                         {showForgotPassword ? 'Redefinir Senha' : (isSignUp ? 'Criar Conta' : 'Fazer Login')}
@@ -369,6 +371,7 @@ export const Login: React.FC = () => {
                         )}
                     </button>
                 </div>
+            </div>
             </div>
         </div>
     );
