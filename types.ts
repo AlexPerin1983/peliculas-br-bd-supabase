@@ -295,6 +295,7 @@ export interface SavedPDF {
     proposalOptionId?: number; // ID da opção de proposta para navegação
     totalLinearMeters?: number;
     linearMeterCost?: number;
+    archivedAt?: string | null; // Quando o arquivo foi removido do Storage (orçamento vencido). PDF é regenerado sob demanda.
 }
 export type SchedulingInfo = {
     pdf: SavedPDF;

@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { UserInfo } from '../../types';
 import Input from '../ui/Input';
+import BrandSelect from '../ui/BrandSelect';
+import { PROPOSAL_VALIDITY_OPTIONS, DEFAULT_PROPOSAL_VALIDITY_DAYS, clampValidityDays } from '../../src/lib/proposalValidity';
 import ColorPicker from '../ui/ColorPicker';
 import SignatureModal from '../modals/SignatureModal';
 import TeamManagement from '../TeamManagement';
@@ -304,8 +306,7 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({
         } else if (id === 'cpfCnpj') {
             setFormData(prev => ({ ...prev, [id]: applyCpfCnpjMask(value) }));
         } else if (id === 'proposalValidityDays') {
-            const numValue = parseInt(value, 10);
-            setFormData(prev => ({ ...prev, [id]: isNaN(numValue) || numValue < 1 ? undefined : numValue }));
+            setFormData(prev => ({ ...prev, [id]: clampValidityDays(parseInt(value, 10)) }));
         } else {
             setFormData(prev => ({ ...prev, [id]: value }));
         }
@@ -829,7 +830,13 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({
             >
                 <div className="space-y-4">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <Input id="proposalValidityDays" label="Validade da Proposta (dias)" type="number" value={formData.proposalValidityDays || 15} onChange={handleChange} min={1} />
+                        <BrandSelect
+                            id="proposalValidityDays"
+                            label="Validade da Proposta"
+                            value={clampValidityDays(formData.proposalValidityDays ?? DEFAULT_PROPOSAL_VALIDITY_DAYS)}
+                            onChange={(val) => setFormData(prev => ({ ...prev, proposalValidityDays: clampValidityDays(Number(val)) }))}
+                            options={PROPOSAL_VALIDITY_OPTIONS.map(days => ({ value: days, label: `${days} dias` }))}
+                        />
                         <Input id="prazoPagamento" label="Prazo de Pagamento" type="text" value={formData.prazoPagamento || ''} onChange={handleChange} placeholder="Ex: à vista ou parcelado" />
                     </div>
                     <button

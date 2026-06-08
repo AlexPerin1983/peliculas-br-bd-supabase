@@ -5,6 +5,7 @@ import { calculatePricingAreaM2 } from '../src/lib/pricingArea';
 import { buildPdfAdjustmentDisplay, type PdfDisplayLineItem } from '../src/lib/pdfAdjustmentDisplay';
 import { calculateProposalAdjustmentAmounts } from '../src/lib/proposalAdjustments';
 import { createDefaultLogo } from './defaultLogo';
+import { clampValidityDays } from '../src/lib/proposalValidity';
 
 // Define GeneralDiscount locally since it's not exported from types.ts
 interface GeneralDiscount {
@@ -104,6 +105,36 @@ export const generatePDF = async (client: Client, userInfo: UserInfo, measuremen
     await renderPdfContent(doc, client, userInfo, [{ measurements, generalDiscount, totals, proposalOptionName, paymentConfig }], allFilms, true);
 
     return doc.output('blob');
+};
+
+// Regenera o PDF de um orçamento salvo a partir dos dados persistidos no banco.
+// Usado quando o arquivo original já foi removido do Storage pela limpeza de
+// orçamentos vencidos: os valores e medidas são reconstruídos de forma fiel; o
+// cabeçalho usa os dados atuais da empresa (logo/contato).
+export const regeneratePDFFromSaved = async (client: Client, userInfo: UserInfo, pdf: SavedPDF, allFilms: Film[]): Promise<Blob> => {
+    const generalDiscount: GeneralDiscount = {
+        value: pdf.generalDiscount?.value ?? '',
+        type: pdf.generalDiscount?.type || 'none',
+        operation: pdf.generalDiscount?.operation === 'increase' ? 'increase' : 'discount',
+        discountValue: pdf.generalDiscount?.discountValue,
+        discountType: pdf.generalDiscount?.discountType,
+        increaseValue: pdf.generalDiscount?.increaseValue,
+        increaseType: pdf.generalDiscount?.increaseType,
+        pricingMode: pdf.generalDiscount?.pricingMode === 'labor_only' ? 'labor_only' : 'complete',
+    };
+
+    const totals = calculateTotalsFromSavedPDF(pdf);
+
+    return generatePDF(
+        client,
+        userInfo,
+        pdf.measurements || [],
+        allFilms,
+        generalDiscount,
+        totals,
+        pdf.proposalOptionName || 'Opção',
+        undefined
+    );
 };
 
 export const generateCombinedPDF = async (client: Client, userInfo: UserInfo, savedPdfs: SavedPDF[], allFilms: Film[]): Promise<Blob> => {
@@ -887,7 +918,7 @@ const renderPdfContent = async (
             });
         }
 
-        const validityDays = userInfo.proposalValidityDays || 60;
+        const validityDays = clampValidityDays(userInfo.proposalValidityDays);
         const conditions: string[] = [];
         const resolvedPrazoPagamento = (optionsData[0]?.paymentConfig || basePaymentConfig).prazoPagamento;
         if (resolvedPrazoPagamento) {

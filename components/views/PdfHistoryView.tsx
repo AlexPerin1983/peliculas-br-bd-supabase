@@ -3102,6 +3102,15 @@ const PdfHistoryItem: React.FC<{
                     {/* Row 2: status + validade */}
                     <div className="mt-2 flex items-center gap-2 flex-wrap">
                         <StatusBadge status={pdf.status} />
+                        {pdf.archivedAt && (
+                            <span
+                                title="O arquivo foi removido para economizar espaço. O PDF é gerado novamente ao baixar."
+                                className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-400"
+                            >
+                                <i className="fas fa-box-archive text-[9px]" aria-hidden="true" />
+                                Arquivado
+                            </span>
+                        )}
                         {expirationDate && (
                             <span className={`text-[11px] ${isExpired ? 'font-semibold text-red-500' : 'text-slate-400 dark:text-slate-500'}`}>
                                 {isExpired ? <><i className="fas fa-exclamation-circle mr-1"/>Vencido</> : <>Vence {expirationDate.toLocaleDateString('pt-BR')}</>}

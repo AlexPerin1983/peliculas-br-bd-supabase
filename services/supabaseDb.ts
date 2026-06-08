@@ -582,7 +582,7 @@ export const getAllPDFs = async (): Promise<SavedPDF[]> => {
     // N?O buscamos o pdf_blob aqui para performance
     const { data, error } = await supabase
         .from('saved_pdfs')
-        .select('id, client_id, client_name, date, expiration_date, total_preco, total_m2, subtotal, general_discount_amount, general_discount, nome_arquivo, measurements, status, agendamento_id, proposal_option_name, proposal_option_id')
+        .select('id, client_id, client_name, date, expiration_date, total_preco, total_m2, subtotal, general_discount_amount, general_discount, nome_arquivo, measurements, status, agendamento_id, proposal_option_name, proposal_option_id, archived_at')
         .order('date', { ascending: false });
 
     if (error) {
@@ -627,7 +627,7 @@ export const getPDFsForClient = async (clientId: number): Promise<SavedPDF[]> =>
     // N?O buscamos o pdf_blob aqui para reduzir egress (blob sob demanda via getPDFBlob)
     const { data, error } = await supabase
         .from('saved_pdfs')
-        .select('id, client_id, client_name, date, expiration_date, total_preco, total_m2, subtotal, general_discount_amount, general_discount, nome_arquivo, measurements, status, agendamento_id, proposal_option_name, proposal_option_id')
+        .select('id, client_id, client_name, date, expiration_date, total_preco, total_m2, subtotal, general_discount_amount, general_discount, nome_arquivo, measurements, status, agendamento_id, proposal_option_name, proposal_option_id, archived_at')
         .eq('client_id', clientId)
         .order('date', { ascending: false });
 
@@ -845,7 +845,8 @@ const mapRowToPDF = async (row: any): Promise<SavedPDF> => ({
     status: row.status,
     agendamentoId: row.agendamento_id,
     proposalOptionName: row.proposal_option_name,
-    proposalOptionId: row.proposal_option_id
+    proposalOptionId: row.proposal_option_id,
+    archivedAt: row.archived_at ?? null
 });
 
 // ============================================

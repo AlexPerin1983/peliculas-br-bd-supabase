@@ -1,6 +1,7 @@
 import { Dispatch, SetStateAction, useCallback } from 'react';
 import * as db from '../../services/db';
 import { Client, Film, ProposalDiscount, ProposalOption, ProposalPaymentConfig, SavedPDF, Totals, UIMeasurement, UserInfo } from '../../types';
+import { clampValidityDays } from '../lib/proposalValidity';
 
 type PdfGenerationStatus = 'idle' | 'generating' | 'success';
 type DiscountType = ProposalDiscount;
@@ -109,13 +110,29 @@ export function usePdfActions({
             }
         }
 
+        // Fallback: o arquivo já foi removido do Storage (orçamento vencido e
+        // limpo). Regenera o PDF a partir dos dados salvos no banco.
+        if (!blob && userInfo) {
+            const client = selectedClient?.id === pdf.clienteId
+                ? selectedClient
+                : clients.find(item => item.id === pdf.clienteId);
+            if (client) {
+                try {
+                    const { regeneratePDFFromSaved } = await import('../../services/pdfGenerator');
+                    blob = await regeneratePDFFromSaved(client, userInfo, pdf, films);
+                } catch (error) {
+                    console.error('[PDF] Erro ao regenerar PDF arquivado:', error);
+                }
+            }
+        }
+
         if (blob) {
             downloadBlob(blob, filename);
             return;
         }
 
         handleShowInfo('Não foi possível baixar o PDF.');
-    }, [downloadBlob, handleShowInfo]);
+    }, [downloadBlob, handleShowInfo, userInfo, selectedClient, clients, films]);
 
     const executePdfGeneration = useCallback(async () => {
         const activeMeasurements = measurements.filter(measurement =>
@@ -161,7 +178,7 @@ export function usePdfActions({
                 }
             };
 
-            const validityDays = userInfo!.proposalValidityDays || 60;
+            const validityDays = clampValidityDays(userInfo!.proposalValidityDays);
             const issueDate = new Date();
             const expirationDate = new Date();
             expirationDate.setDate(issueDate.getDate() + validityDays);

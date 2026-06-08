@@ -1,6 +1,8 @@
 import React, { useState, useEffect, FormEvent } from 'react';
 import Modal from '../ui/Modal';
 import Input from '../ui/Input';
+import BrandSelect from '../ui/BrandSelect';
+import { PROPOSAL_VALIDITY_OPTIONS, DEFAULT_PROPOSAL_VALIDITY_DAYS, clampValidityDays } from '../../src/lib/proposalValidity';
 import ColorPicker from '../ui/ColorPicker';
 import { UserInfo } from '../../types';
 
@@ -81,6 +83,8 @@ const UserModal: React.FC<UserModalProps> = ({ isOpen, onClose, onSave, userInfo
             setFormData(prev => ({ ...prev, [id]: applyPhoneMask(value) }));
         } else if (id === 'cpfCnpj') {
             setFormData(prev => ({ ...prev, [id]: applyCpfCnpjMask(value) })); // Aplica máscara
+        } else if (id === 'proposalValidityDays') {
+            setFormData(prev => ({ ...prev, [id]: clampValidityDays(parseInt(value, 10)) }));
         }
         else {
             setFormData(prev => ({ ...prev, [id]: value }));
@@ -288,14 +292,12 @@ const UserModal: React.FC<UserModalProps> = ({ isOpen, onClose, onSave, userInfo
                 <div className={sectionClass}>
                     <h3 className={sectionTitleClass}>Configurações</h3>
                     <div className="mt-4 space-y-4">
-                        <Input
+                        <BrandSelect
                             id="proposalValidityDays"
-                            label="Validade da Proposta (dias)"
-                            type="number"
-                            value={formData.proposalValidityDays ?? ''}
-                            onChange={handleChange}
-                            placeholder="Ex: 60"
-                            min="1"
+                            label="Validade da Proposta"
+                            value={clampValidityDays(formData.proposalValidityDays ?? DEFAULT_PROPOSAL_VALIDITY_DAYS)}
+                            onChange={(val) => setFormData(prev => ({ ...prev, proposalValidityDays: clampValidityDays(Number(val)) }))}
+                            options={PROPOSAL_VALIDITY_OPTIONS.map(days => ({ value: days, label: `${days} dias` }))}
                         />
                         <Input
                             id="prazoPagamento"
