@@ -246,6 +246,7 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
                 onOpenAIQuickProposal={onOpenAIQuickProposal}
                 onOpenClientModal={onOpenClientModal}
                 onCreateProposal={onCreateProposal}
+                aiConfig={userInfo?.aiConfig}
             />,
             defaultLoadingView
         );

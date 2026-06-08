@@ -23,6 +23,7 @@ import {
     Plus,
     QrCode,
     ReceiptText,
+    Sparkles,
     Trash2,
     TrendingUp,
     UsersRound,
@@ -36,6 +37,7 @@ import { Agendamento, Client, Film, ProposalExpenseCategory, SavedPDF, Standalon
 import { getAllServicosPrestados, ServicoPrestado } from '../../services/servicosService';
 import { deleteStandaloneExpense, getAllStandaloneExpenses, saveStandaloneExpense } from '../../services/db';
 import StandaloneExpenseModal from '../modals/StandaloneExpenseModal';
+import AIFinancialAssistantModal, { FinancialAnalysisCache, FinancialSummary } from '../modals/AIFinancialAssistantModal';
 
 type ActiveTab = 'dashboard' | 'client' | 'films' | 'settings' | 'history' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores';
 type PeriodKey =
@@ -65,6 +67,7 @@ interface DashboardViewProps {
     onOpenAIQuickProposal: () => void;
     onOpenClientModal: (mode: 'add' | 'edit') => void;
     onCreateProposal?: () => void;
+    aiConfig?: { provider: 'gemini' | 'openai' | 'local_ocr'; apiKey: string };
 }
 
 const DESKTOP_PERIOD_OPTIONS: { key: PeriodKey; label: string }[] = [
@@ -701,9 +704,12 @@ const DashboardView: React.FC<DashboardViewProps> = ({
     onTabChange,
     onOpenAIQuickProposal,
     onOpenClientModal,
-    onCreateProposal
+    onCreateProposal,
+    aiConfig
 }) => {
     const [period, setPeriod] = useState<PeriodKey>('today');
+    const [isFinAssistantOpen, setIsFinAssistantOpen] = useState(false);
+    const [finAnalysisCache, setFinAnalysisCache] = useState<FinancialAnalysisCache | null>(null);
     const [customStartDate, setCustomStartDate] = useState(() => toDateInputValue(addDays(new Date(), -6)));
     const [customEndDate, setCustomEndDate] = useState(() => toDateInputValue(new Date()));
     const [isMobilePeriodOpen, setIsMobilePeriodOpen] = useState(false);
@@ -1020,6 +1026,27 @@ const DashboardView: React.FC<DashboardViewProps> = ({
     const customDateSummary = `${formatDateInputLabel(customStartDate)} - ${formatDateInputLabel(customEndDate)}`;
     const periodDisplayLabel = period === 'custom' ? `Personalizada: ${customDateSummary}` : PERIOD_LABELS[period];
     const mobilePeriodTriggerLabel = period === 'custom' ? customDateSummary : PERIOD_LABELS[period];
+
+    // Resumo financeiro reaproveitando os agregados ja calculados acima.
+    // Nenhuma consulta nova ao banco: tudo ja esta em memoria.
+    const financialSummary = useMemo<FinancialSummary>(() => ({
+        periodo: periodDisplayLabel,
+        faturamentoTotal: periodStats.totalValue,
+        faturamentoAprovado: periodStats.approvedValue,
+        despesas: periodStats.expenses,
+        lucroEstimado: periodStats.estimatedProfit,
+        margemEstimada: periodStats.estimatedMargin,
+        ticketMedio: periodStats.averageTicket,
+        taxaAprovacao: periodStats.conversionRate,
+        orcamentosGerados: periodStats.generatedCount,
+        orcamentosAprovados: periodStats.approvedCount,
+        orcamentosPendentes: periodStats.pendingCount,
+        totalM2: periodStats.totalM2,
+        gastoDiarioMedio: expenseRhythm.dailyAverage,
+        gastosPorCategoria: categoryTotals.map(item => ({ label: item.label, value: item.value })),
+        melhorCliente: topClient,
+        peliculaMaisUsada: topFilm
+    }), [periodDisplayLabel, periodStats, expenseRhythm, categoryTotals, topClient, topFilm]);
     const desktopRangeButtonLabel = formatRangeButtonLabel(periodRange);
 
     const syncDesktopDraftFromPeriod = (nextPeriod: PeriodKey) => {
@@ -1241,6 +1268,16 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                 isSaving={isSavingStandaloneExpense}
             />
 
+            <AIFinancialAssistantModal
+                isOpen={isFinAssistantOpen}
+                onClose={() => setIsFinAssistantOpen(false)}
+                summary={financialSummary}
+                apiKey={aiConfig?.apiKey}
+                provider={aiConfig?.provider}
+                cache={finAnalysisCache}
+                onCached={setFinAnalysisCache}
+            />
+
             <div className="grid min-w-0 grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-5">
                 <MetricCard
                     icon={<FileText className="h-5 w-5" aria-hidden="true" />}
@@ -1416,14 +1453,25 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                             <p className="ui-kicker">Resultado</p>
                             <h2 className="mt-1 text-lg font-bold text-[var(--text-strong)]">Resumo financeiro</h2>
                         </div>
-                        <button
-                            type="button"
-                            onClick={() => onTabChange('history')}
-                            className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] px-3 text-xs font-bold text-[var(--text-strong)] transition-colors hover:bg-[var(--surface)] sm:h-10 sm:text-sm"
-                        >
-                            Historico
-                            <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                        </button>
+                        <div className="flex shrink-0 items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setIsFinAssistantOpen(true)}
+                                className="inline-flex h-9 items-center justify-center gap-2 rounded-[var(--radius-control)] border border-blue-100 bg-blue-50 px-3 text-xs font-bold text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-300 sm:h-10 sm:text-sm"
+                            >
+                                <Sparkles className="h-4 w-4" aria-hidden="true" />
+                                <span className="hidden sm:inline">Analisar com IA</span>
+                                <span className="sm:hidden">IA</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => onTabChange('history')}
+                                className="inline-flex h-9 items-center justify-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] px-3 text-xs font-bold text-[var(--text-strong)] transition-colors hover:bg-[var(--surface)] sm:h-10 sm:text-sm"
+                            >
+                                Historico
+                                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                            </button>
+                        </div>
                     </div>
 
                     <div className="mt-4 grid min-w-0 grid-cols-2 gap-2 sm:mt-5 sm:grid-cols-2 sm:gap-3 xl:grid-cols-5">
