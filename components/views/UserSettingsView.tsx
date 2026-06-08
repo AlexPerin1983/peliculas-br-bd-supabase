@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import type { LucideIcon } from 'lucide-react';
 import { UserInfo } from '../../types';
 import Input from '../ui/Input';
 import ColorPicker from '../ui/ColorPicker';
@@ -9,7 +10,7 @@ import { getActiveInvite, createOrganizationInvite } from '../../services/invite
 import { processLogoImage } from '../../services/imageProcessing';
 import { useTheme } from '../../src/contexts/ThemeContext';
 import { useFeedback } from '../../src/contexts/FeedbackContext';
-import { AlertTriangle, CheckCircle2, DollarSign, Facebook, FileSignature, Instagram, KeyRound, Loader2, MessageSquare, Moon, Palette, QrCode, Save, Settings, Share2, Shield, Smartphone, Sun, Users, Clock, Building2, Bot, Youtube, ChevronDown } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, DollarSign, Facebook, FileSignature, Instagram, KeyRound, Loader2, MessageSquare, Moon, Palette, QrCode, Save, Settings, Share2, Shield, Smartphone, Sun, Users, Clock, Building2, Bot, Youtube, ChevronDown, Sparkles, X, Layers } from 'lucide-react';
 import { FeatureGate } from '../subscription/SubscriptionComponents';
 import { PremiumFeatureSection } from '../subscription/PremiumFeatureSection';
 
@@ -20,6 +21,7 @@ interface UserSettingsViewProps {
     onOpenApiKeyModal: (provider: 'gemini') => void;
     isPwaInstalled: boolean;
     onPromptPwaInstall: () => void;
+    onNavigateToCatalog: () => void;
 }
 
 const applyPhoneMask = (value: string) => {
@@ -79,6 +81,8 @@ interface SettingsSectionProps {
     saveLabel?: string;
     onSaveSection?: () => void;
     showFooterSave?: boolean;
+    sectionId?: string;
+    openSignal?: number;
 }
 
 const SettingsSection: React.FC<SettingsSectionProps> = ({
@@ -91,15 +95,24 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
     saveState = 'idle',
     saveLabel = 'Salvar seção',
     onSaveSection,
-    showFooterSave = true
+    showFooterSave = true,
+    sectionId,
+    openSignal
 }) => {
     const [isOpen, setIsOpen] = useState(defaultOpen);
+    const sectionRef = useRef<HTMLElement>(null);
+
+    useEffect(() => {
+        if (!openSignal) return;
+        setIsOpen(true);
+        sectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, [openSignal]);
     const isSavingSection = saveState === 'saving';
     const isSavedSection = saveState === 'saved';
     const isSaveDisabled = isSavingSection || saveState === 'disabled';
 
     return (
-        <section className="ui-surface overflow-hidden transition-shadow duration-200 hover:shadow-[var(--shadow-elevated)]">
+        <section ref={sectionRef} id={sectionId} className="ui-surface overflow-hidden transition-shadow duration-200 hover:shadow-[var(--shadow-elevated)]">
             <button
                 type="button"
                 onClick={() => setIsOpen(!isOpen)}
@@ -202,7 +215,8 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({
     onOpenPaymentMethods,
     onOpenApiKeyModal,
     isPwaInstalled,
-    onPromptPwaInstall
+    onPromptPwaInstall,
+    onNavigateToCatalog
 }) => {
     const { theme, toggleTheme } = useTheme();
     const { showToast } = useFeedback();
@@ -215,6 +229,29 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({
     const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
     const [inviteCode, setInviteCode] = useState<string | null>(null);
     const [loadingInvite, setLoadingInvite] = useState(false);
+    const [showHelpCard, setShowHelpCard] = useState(() => {
+        if (typeof window === 'undefined') return true;
+        return window.localStorage.getItem('peliculas-br-hide-settings-help') !== '1';
+    });
+    const [hoursOpenSignal, setHoursOpenSignal] = useState(0);
+
+    const handleDismissHelpCard = () => {
+        setShowHelpCard(false);
+        if (typeof window !== 'undefined') {
+            window.localStorage.setItem('peliculas-br-hide-settings-help', '1');
+        }
+    };
+
+    const handleOpenTour = () => {
+        window.dispatchEvent(new Event('peliculas-br-open-tour'));
+    };
+
+    const helpItems: { icon: LucideIcon; label: string; onClick: () => void }[] = [
+        { icon: Sparkles, label: 'Rever guia de primeiros passos', onClick: handleOpenTour },
+        { icon: Layers, label: 'Cadastrar películas e preços', onClick: onNavigateToCatalog },
+        { icon: DollarSign, label: 'Configurar formas de pagamento', onClick: onOpenPaymentMethods },
+        { icon: Clock, label: 'Definir horário de funcionamento', onClick: () => setHoursOpenSignal((value) => value + 1) }
+    ];
 
     useEffect(() => {
         setFormData(prev => ({
@@ -457,6 +494,48 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({
                     </div>
                 </div>
             </div>
+
+            {/* ===== CARD DE AJUDA / PRIMEIROS PASSOS (dispensável) ===== */}
+            {showHelpCard && (
+                <div className="lg:col-span-2">
+                    <div className="ui-surface relative overflow-hidden border-[color-mix(in_srgb,var(--brand-primary)_24%,var(--border-subtle))] bg-[color-mix(in_srgb,var(--brand-primary)_5%,var(--surface))] p-4 sm:p-5">
+                        <button
+                            type="button"
+                            onClick={handleDismissHelpCard}
+                            className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius-control)] text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)]"
+                            aria-label="Fechar ajuda"
+                        >
+                            <X className="h-4 w-4" aria-hidden="true" />
+                        </button>
+
+                        <div className="flex items-start gap-3 pr-8">
+                            <div className="ui-icon-frame h-11 w-11 shrink-0 text-[var(--brand-primary)]">
+                                <Sparkles className="h-5 w-5" aria-hidden="true" />
+                            </div>
+                            <div>
+                                <h3 className="font-semibold text-[var(--text-strong)]">Primeiros passos</h3>
+                                <p className="text-sm text-[var(--text-muted)]">
+                                    Atalhos para deixar sua conta pronta para uso.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                            {helpItems.map(({ icon: ItemIcon, label, onClick }) => (
+                                <button
+                                    key={label}
+                                    type="button"
+                                    onClick={onClick}
+                                    className={`${secondaryButtonClassName} w-full justify-start`}
+                                >
+                                    <ItemIcon className="h-4 w-4 shrink-0 text-[var(--brand-primary)]" aria-hidden="true" />
+                                    <span className="truncate">{label}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* ===== SECAO: DADOS DA EMPRESA ===== */}
             <SettingsSection
@@ -771,6 +850,8 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({
                 icon={<Clock className="w-5 h-5" />}
                 saveState={getSectionSaveState('hours')}
                 onSaveSection={() => handleSaveSection('hours')}
+                sectionId="settings-hours"
+                openSignal={hoursOpenSignal}
             >
                 <div className="space-y-5">
                     <div className="grid grid-cols-2 gap-4">
@@ -785,7 +866,7 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({
                                 return (
                                     <label
                                         key={day}
-                                        className={`cursor-pointer rounded-[var(--radius-control)] border px-4 py-2.5 text-sm font-semibold transition-all duration-200 ${isSelected
+                                        className={`relative cursor-pointer rounded-[var(--radius-control)] border px-4 py-2.5 text-sm font-semibold transition-all duration-200 ${isSelected
                                             ? 'border-[var(--brand-primary)] bg-[var(--brand-primary)] text-white shadow-[0_10px_20px_rgba(21,94,239,0.16)]'
                                             : 'border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-muted)] hover:bg-[var(--surface)] hover:text-[var(--text-strong)]'
                                             }`}
@@ -794,7 +875,7 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({
                                             type="checkbox"
                                             checked={isSelected}
                                             onChange={(e) => handleWorkingDayChange(index, e.target.checked)}
-                                            className="sr-only"
+                                            className="absolute inset-0 h-full w-full cursor-pointer appearance-none opacity-0"
                                         />
                                         {day}
                                     </label>

@@ -222,6 +222,7 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
                 onOpenApiKeyModal={onOpenApiKeyModal}
                 isPwaInstalled={isInstalled}
                 onPromptPwaInstall={onPromptPwaInstall}
+                onNavigateToCatalog={() => onTabChange('films')}
             />
         );
     }
