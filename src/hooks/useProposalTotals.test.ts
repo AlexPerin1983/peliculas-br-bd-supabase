@@ -328,4 +328,151 @@ describe('useProposalTotals', () => {
     expect(result.current.estimatedProfit).toBeCloseTo(result.current.finalTotal - result.current.estimatedTotalCost);
     expect(result.current.expensesByCategory?.map(item => item.category)).toEqual(['paid_traffic', 'transport']);
   });
+
+  it('cobra por metro linear quando a pelicula esta nesse modo', () => {
+    const films: Film[] = [
+      {
+        nome: 'Adesivo',
+        preco: 100,
+        precoVendaMetroLinear: 40,
+        precoMetroLinear: 20
+      }
+    ];
+
+    const measurements: UIMeasurement[] = [
+      {
+        id: 1,
+        largura: '1',
+        altura: '1',
+        quantidade: 1,
+        ambiente: 'Parede',
+        tipoAplicacao: 'Interna',
+        pelicula: 'Adesivo',
+        active: true,
+        discount: { value: '10', type: 'percentage' }
+      }
+    ];
+
+    const { result } = renderHook(() =>
+      useProposalTotals({
+        measurements,
+        films,
+        generalDiscount: {
+          value: '0',
+          type: 'percentage',
+          pricingMode: 'complete',
+          filmPricingModes: { Adesivo: 'linear' }
+        }
+      })
+    );
+
+    const linearMeters = result.current.totalLinearMeters;
+    expect(linearMeters).toBeGreaterThan(0);
+
+    // Venda = preco de venda por metro linear x metros lineares (ignora preco/m2).
+    expect(result.current.subtotal).toBeCloseTo(linearMeters * 40);
+    // Desconto por item nao se aplica no modo linear.
+    expect(result.current.totalItemDiscount).toBe(0);
+    expect(result.current.priceAfterItemDiscounts).toBeCloseTo(linearMeters * 40);
+    expect(result.current.finalTotal).toBeCloseTo(linearMeters * 40);
+    // Area continua sendo contabilizada para exibicao.
+    expect(result.current.totalM2).toBeCloseTo(1);
+    // Custo (margem) continua usando o custo por metro linear.
+    expect(result.current.linearMeterCost).toBeCloseTo(linearMeters * 20);
+    expect(result.current.groupedTotals?.Adesivo.filmPricingMode).toBe('linear');
+    expect(result.current.groupedTotals?.Adesivo.unitSalePriceLinearMeter).toBe(40);
+    expect(result.current.groupedTotals?.Adesivo.linearSaleSubtotal).toBeCloseTo(linearMeters * 40);
+  });
+
+  it('mistura cobranca por m2 e por metro linear na mesma proposta', () => {
+    const films: Film[] = [
+      { nome: 'Janela', preco: 100 },
+      { nome: 'Parede', preco: 80, precoVendaMetroLinear: 50 }
+    ];
+
+    const measurements: UIMeasurement[] = [
+      {
+        id: 1,
+        largura: '2',
+        altura: '1',
+        quantidade: 1,
+        ambiente: 'Janela',
+        tipoAplicacao: 'Interna',
+        pelicula: 'Janela',
+        active: true
+      },
+      {
+        id: 2,
+        largura: '1',
+        altura: '1',
+        quantidade: 1,
+        ambiente: 'Parede',
+        tipoAplicacao: 'Interna',
+        pelicula: 'Parede',
+        active: true
+      }
+    ];
+
+    const { result } = renderHook(() =>
+      useProposalTotals({
+        measurements,
+        films,
+        generalDiscount: {
+          value: '0',
+          type: 'percentage',
+          pricingMode: 'complete',
+          filmPricingModes: { Parede: 'linear' }
+        }
+      })
+    );
+
+    const paredeLinearMeters = result.current.groupedTotals?.Parede.totalLinearMeters || 0;
+    expect(paredeLinearMeters).toBeGreaterThan(0);
+
+    // Janela por m2 (2 m2 x 100) + Parede por metro linear.
+    expect(result.current.subtotal).toBeCloseTo(200 + paredeLinearMeters * 50);
+    expect(result.current.groupedTotals?.Janela.filmPricingMode).toBe('area');
+    expect(result.current.groupedTotals?.Parede.filmPricingMode).toBe('linear');
+  });
+
+  it('ignora venda por metro linear no modo apenas mao de obra', () => {
+    const films: Film[] = [
+      {
+        nome: 'Adesivo',
+        preco: 100,
+        maoDeObra: 30,
+        precoVendaMetroLinear: 40
+      }
+    ];
+
+    const measurements: UIMeasurement[] = [
+      {
+        id: 1,
+        largura: '2',
+        altura: '1',
+        quantidade: 1,
+        ambiente: 'Parede',
+        tipoAplicacao: 'Interna',
+        pelicula: 'Adesivo',
+        active: true
+      }
+    ];
+
+    const { result } = renderHook(() =>
+      useProposalTotals({
+        measurements,
+        films,
+        generalDiscount: {
+          value: '0',
+          type: 'percentage',
+          pricingMode: 'labor_only',
+          filmPricingModes: { Adesivo: 'linear' }
+        }
+      })
+    );
+
+    // No modo mao de obra, cobra por m2 da mao de obra (2 x 30), ignora o metro linear.
+    expect(result.current.subtotal).toBeCloseTo(60);
+    expect(result.current.groupedTotals?.Adesivo.filmPricingMode).toBe('area');
+  });
 });

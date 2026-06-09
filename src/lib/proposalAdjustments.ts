@@ -58,7 +58,7 @@ export const getProposalAdjustmentInputs = (generalDiscount: ProposalDiscount): 
                     ? generalDiscount.discountType
                     : legacyOperation === 'discount'
                         ? generalDiscount.type
-                        : 'percentage'
+                        : 'fixed'
             ),
         },
         increase: {

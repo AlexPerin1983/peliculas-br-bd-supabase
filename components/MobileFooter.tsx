@@ -114,6 +114,8 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
                 totals={totals}
                 generalDiscount={generalDiscount}
                 onUpdateGeneralDiscount={handleUpdateDiscount}
+                onGeneratePdf={onGeneratePdf}
+                isGeneratingPdf={isGeneratingPdf}
             />
         </>
     );

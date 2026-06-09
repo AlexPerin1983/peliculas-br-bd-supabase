@@ -15,6 +15,8 @@ interface TotalsDrawerProps {
     totals: Totals;
     generalDiscount: ProposalDiscount;
     onUpdateGeneralDiscount: (discount: ProposalDiscount) => void;
+    onGeneratePdf: () => void;
+    isGeneratingPdf: boolean;
 }
 
 const formatNumberBR = (number: number) => {
@@ -105,7 +107,9 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
     onClose,
     totals,
     generalDiscount,
-    onUpdateGeneralDiscount
+    onUpdateGeneralDiscount,
+    onGeneratePdf,
+    isGeneratingPdf
 }) => {
     const [openGroup, setOpenGroup] = useState<string | null>(null);
     const adjustmentInputs = getProposalAdjustmentInputs(generalDiscount);
@@ -118,11 +122,24 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
         }
     }, [totals.groupedTotals, openGroup]);
 
+    const isLaborOnly = generalDiscount.pricingMode === 'labor_only';
+    const filmPricingModes = generalDiscount.filmPricingModes || {};
+
     const updateAdjustment = (
         kind: 'discount' | 'increase',
         input: Partial<{ value: string; type: 'percentage' | 'fixed' }>
     ) => {
         onUpdateGeneralDiscount(updateProposalAdjustmentInput(generalDiscount, kind, input));
+    };
+
+    const setFilmPricingMode = (filmName: string, mode: 'area' | 'linear') => {
+        const next = { ...(generalDiscount.filmPricingModes || {}) };
+        if (mode === 'area') {
+            delete next[filmName];
+        } else {
+            next[filmName] = 'linear';
+        }
+        onUpdateGeneralDiscount({ ...generalDiscount, filmPricingModes: next });
     };
 
     const toggleGroup = (filmName: string) => {
@@ -133,10 +150,10 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
         <Drawer.Root open={isOpen} onOpenChange={(open) => !open && onClose()}>
             <Drawer.Portal>
                 <Drawer.Overlay className="fixed inset-0 bg-black/40 z-50" />
-                <Drawer.Content className="fixed bottom-0 left-0 right-0 z-50 flex h-auto max-h-[90vh] flex-col rounded-t-[20px] border-t border-slate-200 bg-white outline-none dark:border-slate-700 dark:bg-slate-900">
+                <Drawer.Content className="fixed bottom-0 left-0 right-0 z-50 flex h-[100dvh] max-h-[100dvh] flex-col border-t border-slate-200 bg-white outline-none dark:border-slate-700 dark:bg-slate-900">
                     <div
-                        className="overflow-y-auto rounded-t-[20px] bg-white p-4 dark:bg-slate-900"
-                        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 2rem)' }}
+                        className="flex-1 overflow-y-auto bg-white p-4 dark:bg-slate-900"
+                        style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.5rem)' }}
                     >
                         <div className="mx-auto mb-6 h-1.5 w-12 flex-shrink-0 rounded-full bg-slate-300 dark:bg-slate-700" />
 
@@ -191,6 +208,42 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
 
                                                 {openGroup === group.filmName && (
                                                     <div className="space-y-2 border-t border-slate-100 bg-slate-50/50 px-3 pb-3 pt-1 dark:border-slate-700/50 dark:bg-slate-800/50">
+                                                        {!isLaborOnly && (
+                                                            <div className="flex items-center justify-between gap-2 pt-1">
+                                                                <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Cobrar por</span>
+                                                                <div className="grid grid-cols-2 rounded-lg border border-slate-200 bg-slate-100 p-0.5 dark:border-slate-700 dark:bg-slate-900">
+                                                                    {(['area', 'linear'] as const).map((mode) => {
+                                                                        const active = (filmPricingModes[group.filmName] === 'linear' ? 'linear' : 'area') === mode;
+                                                                        return (
+                                                                            <button
+                                                                                key={mode}
+                                                                                type="button"
+                                                                                onClick={() => setFilmPricingMode(group.filmName, mode)}
+                                                                                aria-pressed={active}
+                                                                                className={`rounded-md px-2.5 py-1 text-[11px] font-bold transition-all ${
+                                                                                    active
+                                                                                        ? 'bg-blue-600 text-white shadow dark:bg-blue-500'
+                                                                                        : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                                                                                }`}
+                                                                            >
+                                                                                {mode === 'area' ? 'm²' : 'metro linear'}
+                                                                            </button>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {group.filmPricingMode === 'linear' && (
+                                                            <div className="flex items-center justify-between rounded-lg bg-blue-50 px-2 py-1.5 dark:bg-blue-900/20">
+                                                                <div className="flex flex-col">
+                                                                    <span className="text-[11px] font-semibold text-blue-700 dark:text-blue-300">Venda metro linear</span>
+                                                                    <span className="text-[10px] font-medium text-blue-500/80 dark:text-blue-300/70">{formatNumberBR(group.unitSalePriceLinearMeter)}/m × {group.totalLinearMeters.toFixed(2)} m</span>
+                                                                </div>
+                                                                <span className="text-xs font-bold text-blue-700 dark:text-blue-300">{formatNumberBR(group.linearSaleSubtotal)}</span>
+                                                            </div>
+                                                        )}
+
                                                         <div className="flex items-center justify-between">
                                                             <div className="flex flex-col">
                                                                 <span className="text-[11px] text-slate-500 dark:text-slate-400">Material</span>
@@ -317,6 +370,21 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                                 </div>
                             </div>
                         </div>
+                    </div>
+
+                    <div
+                        className="flex-shrink-0 border-t border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900"
+                        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)' }}
+                    >
+                        <button
+                            type="button"
+                            onClick={onGeneratePdf}
+                            disabled={isGeneratingPdf}
+                            className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 text-sm font-bold text-white transition-all active:scale-95 disabled:opacity-60 dark:bg-blue-500"
+                        >
+                            <i className={`fas ${isGeneratingPdf ? 'fa-spinner fa-spin' : 'fa-file-pdf'}`} aria-hidden="true" />
+                            <span>{isGeneratingPdf ? 'Gerando PDF...' : 'Salvar PDF'}</span>
+                        </button>
                     </div>
                 </Drawer.Content>
             </Drawer.Portal>

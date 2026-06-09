@@ -39,6 +39,7 @@ const FilmModal: React.FC<FilmModalProps> = ({
         nome: '',
         preco: 0,
         precoMetroLinear: 0,
+        precoVendaMetroLinear: 0,
         maoDeObra: 0,
         garantiaFabricante: 0,
         garantiaMaoDeObra: 30,
@@ -69,6 +70,7 @@ const FilmModal: React.FC<FilmModalProps> = ({
                 nome: film.nome || '',
                 preco: film.preco || 0,
                 precoMetroLinear: film.precoMetroLinear || 0,
+                precoVendaMetroLinear: film.precoVendaMetroLinear || 0,
                 maoDeObra: film.maoDeObra || 0,
                 garantiaFabricante: film.garantiaFabricante || 0,
                 garantiaMaoDeObra: film.garantiaMaoDeObra || 30,
@@ -93,6 +95,7 @@ const FilmModal: React.FC<FilmModalProps> = ({
                 nome: aiData.nome || initialName || '',
                 preco: Number(aiData.preco) || 0,
                 precoMetroLinear: Number(aiData.precoMetroLinear) || 0,
+                precoVendaMetroLinear: Number(aiData.precoVendaMetroLinear) || 0,
                 maoDeObra: Number(aiData.maoDeObra) || 0,
                 garantiaFabricante: Number(aiData.garantiaFabricante) || 0,
                 garantiaMaoDeObra: Number(aiData.garantiaMaoDeObra) || 30,
@@ -114,6 +117,7 @@ const FilmModal: React.FC<FilmModalProps> = ({
             nome: initialName || '',
             preco: 0,
             precoMetroLinear: 0,
+            precoVendaMetroLinear: 0,
             maoDeObra: 0,
             garantiaFabricante: 0,
             garantiaMaoDeObra: 30,
@@ -317,7 +321,7 @@ const FilmModal: React.FC<FilmModalProps> = ({
                             />
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <Input
                                 id="preco"
                                 label="Preço por m² (R$)"
@@ -330,20 +334,30 @@ const FilmModal: React.FC<FilmModalProps> = ({
                                 required
                             />
                             <Input
-                                id="precoMetroLinear"
-                                label="Preço metro linear (R$)"
+                                id="maoDeObra"
+                                label="Mão de obra (R$)"
                                 type="number"
-                                value={formData.precoMetroLinear}
+                                value={formData.maoDeObra}
                                 onChange={handleChange}
                                 onFocus={handleFocus}
                                 min="0"
                                 step="0.01"
                             />
                             <Input
-                                id="maoDeObra"
-                                label="Mão de obra (R$)"
+                                id="precoVendaMetroLinear"
+                                label="Venda por metro linear (R$)"
                                 type="number"
-                                value={formData.maoDeObra}
+                                value={formData.precoVendaMetroLinear}
+                                onChange={handleChange}
+                                onFocus={handleFocus}
+                                min="0"
+                                step="0.01"
+                            />
+                            <Input
+                                id="precoMetroLinear"
+                                label="Custo metro linear (R$)"
+                                type="number"
+                                value={formData.precoMetroLinear}
                                 onChange={handleChange}
                                 onFocus={handleFocus}
                                 min="0"

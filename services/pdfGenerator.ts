@@ -570,7 +570,21 @@ const renderPdfContent = async (
                 );
                 yPos += 6;
 
-                const head = [['Item', 'Ambiente', 'Dimensões', 'Qtd', 'M²', 'Preço Unit.', 'Desconto', 'Preço Final']];
+                const filmGroupTotals = optionTotals.groupedTotals?.[filmName];
+                const isLinearFilm = optionPricingMode !== 'labor_only'
+                    && optionGeneralDiscount?.filmPricingModes?.[filmName] === 'linear';
+                if (isLinearFilm && filmGroupTotals) {
+                    safeText(
+                        `Cobrança por metro linear: ${formatNumberBR(filmGroupTotals.totalLinearMeters)} m x R$ ${formatNumberBR(filmGroupTotals.unitSalePriceLinearMeter)}/m = R$ ${formatNumberBR(filmGroupTotals.linearSaleSubtotal)}`,
+                        margin,
+                        yPos
+                    );
+                    yPos += 6;
+                }
+
+                const head = isLinearFilm
+                    ? [['Item', 'Ambiente', 'Dimensões', 'Qtd', 'M²']]
+                    : [['Item', 'Ambiente', 'Dimensões', 'Qtd', 'M²', 'Preço Unit.', 'Desconto', 'Preço Final']];
                 const body = filmMeasurements.map((m, i) => {
                     const displayLineItem = displayLineItemsByMeasurement.get(m);
                     const m2 = displayLineItem?.m2 ?? calculatePricingAreaM2(
@@ -597,16 +611,23 @@ const renderPdfContent = async (
                     }
                     const finalItemPrice = displayLineItem?.displayFinalItemPrice ?? Math.max(0, basePrice - itemDiscountAmount);
 
-                    return [
+                    const row = [
                         i + 1,
                         m.ambiente,
                         `${m.largura}x${m.altura}`,
                         m.quantidade,
-                        formatNumberBR(m2).replace('R$', '').trim(),
-                        `R$ ${formatNumberBR(basePrice)}`,
-                        discountDisplay,
-                        `R$ ${formatNumberBR(finalItemPrice)}`
+                        formatNumberBR(m2).replace('R$', '').trim()
                     ];
+
+                    if (!isLinearFilm) {
+                        row.push(
+                            `R$ ${formatNumberBR(basePrice)}`,
+                            discountDisplay,
+                            `R$ ${formatNumberBR(finalItemPrice)}`
+                        );
+                    }
+
+                    return row;
                 });
 
                 autoTable(doc, {
@@ -616,13 +637,18 @@ const renderPdfContent = async (
                     theme: 'grid',
                     headStyles: { fillColor: colors.primary, textColor: colors.white },
                     styles: { fontSize: 8 },
-                    columnStyles: {
-                        0: { cellWidth: 10 },
-                        3: { cellWidth: 10 },
-                        5: { halign: 'right' },
-                        6: { halign: 'right' },
-                        7: { halign: 'right' },
-                    }
+                    columnStyles: isLinearFilm
+                        ? {
+                            0: { cellWidth: 10 },
+                            3: { cellWidth: 10 },
+                        }
+                        : {
+                            0: { cellWidth: 10 },
+                            3: { cellWidth: 10 },
+                            5: { halign: 'right' },
+                            6: { halign: 'right' },
+                            7: { halign: 'right' },
+                        }
                 });
 
                 yPos = (doc as any).lastAutoTable.finalY + 10;
@@ -763,9 +789,11 @@ const renderPdfContent = async (
                 ].filter(item => typeof item.value === 'number' && item.value > 0);
 
                 if (film.customFields) {
-                    Object.entries(film.customFields).forEach(([key, value]) => {
-                        techData.push({ label: key, value: value, unit: '' });
-                    });
+                    Object.entries(film.customFields)
+                        .filter(([key]) => !key.startsWith('__'))
+                        .forEach(([key, value]) => {
+                            techData.push({ label: key, value: value, unit: '' });
+                        });
                 }
 
                 if (techData.length > 0) {

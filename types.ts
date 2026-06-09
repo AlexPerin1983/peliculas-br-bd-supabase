@@ -61,6 +61,11 @@ export interface UIMeasurement extends Measurement {
 
 export type ProposalPricingMode = 'complete' | 'labor_only';
 
+// Modo de cobrança por película dentro de um orçamento: por área (m²) ou por metro linear.
+export type FilmPricingMode = 'area' | 'linear';
+
+export type FilmPricingModes = { [filmName: string]: FilmPricingMode };
+
 export type ProposalExpenseCategory = 'paid_traffic' | 'transport' | 'food' | 'tools' | 'material' | 'other';
 
 export interface ProposalFuelExpenseDetails {
@@ -117,6 +122,7 @@ export interface ProposalDiscount {
     increaseValue?: string;
     increaseType?: 'percentage' | 'fixed';
     pricingMode?: ProposalPricingMode;
+    filmPricingModes?: FilmPricingModes;
     expenses?: ProposalExpense[];
 }
 
@@ -129,6 +135,7 @@ export interface SavedProposalDiscount {
     increaseValue?: number | string;
     increaseType?: 'percentage' | 'fixed' | 'none';
     pricingMode?: ProposalPricingMode;
+    filmPricingModes?: FilmPricingModes;
     expenses?: ProposalExpense[];
     expenseSnapshot?: ProposalExpenseSnapshot;
 }
@@ -143,7 +150,8 @@ export interface ProposalOption {
 export interface Film {
     nome: string;
     preco: number;
-    precoMetroLinear?: number; // Preço por metro linear
+    precoMetroLinear?: number; // Custo por metro linear (usado para estimativa de margem)
+    precoVendaMetroLinear?: number; // Preço de VENDA por metro linear (usado no modo de cobrança por metro linear)
     maoDeObra?: number; // NOVO CAMPO: Valor fixo de mão de obra por m²
     garantiaFabricante?: number;
     garantiaMaoDeObra?: number;
@@ -271,6 +279,9 @@ export interface Totals {
             unitPriceMaterial: number;
             unitPriceLabor: number;
             unitPriceLinearMeter: number;
+            filmPricingMode: FilmPricingMode;
+            unitSalePriceLinearMeter: number;
+            linearSaleSubtotal: number;
         };
     };
 }

@@ -1,11 +1,12 @@
-import type { Film, Measurement, ProposalAdjustmentOperation, ProposalPricingMode, Totals } from '../../types';
+import type { Film, FilmPricingModes, Measurement, ProposalAdjustmentOperation, ProposalPricingMode, Totals } from '../../types';
 import { calculatePricingAreaM2 } from './pricingArea';
 
 type PdfGeneralAdjustment = {
     operation?: ProposalAdjustmentOperation;
+    filmPricingModes?: FilmPricingModes;
 };
 
-type PdfDisplayTotals = Pick<Totals, 'subtotal' | 'totalItemDiscount' | 'generalDiscountAmount' | 'finalTotal' | 'generalIncreaseAmount' | 'generalFinalDiscountAmount'>;
+type PdfDisplayTotals = Pick<Totals, 'subtotal' | 'totalItemDiscount' | 'generalDiscountAmount' | 'finalTotal' | 'generalIncreaseAmount' | 'generalFinalDiscountAmount' | 'groupedTotals'>;
 
 export interface PdfDisplayLineItem {
     measurement: Measurement;
@@ -99,14 +100,22 @@ export const buildPdfAdjustmentDisplay = ({
     generalAdjustment?: PdfGeneralAdjustment;
     totals: PdfDisplayTotals;
 }): PdfAdjustmentDisplay => {
+    const filmPricingModes = generalAdjustment?.filmPricingModes || {};
+    const groupedTotals = totals.groupedTotals || {};
+    const isLinearFilm = (filmName: string) => (
+        pricingMode !== 'labor_only' && filmPricingModes[filmName] === 'linear'
+    );
+
     const rawLineItems = measurements.map(measurement => {
         const largura = parseDecimal(measurement.largura);
         const altura = parseDecimal(measurement.altura);
         const quantidade = parseInt(String(measurement.quantidade), 10) || 0;
         const m2 = calculatePricingAreaM2(largura, altura, quantidade);
         const film = films.find(item => item.nome === measurement.pelicula);
-        const basePrice = getPricePerM2(film, pricingMode) * m2;
-        const itemDiscountAmount = calculateItemDiscountAmount(measurement, basePrice);
+        const linear = isLinearFilm(measurement.pelicula);
+        // No modo metro linear o preço por linha é distribuído da venda da película (abaixo).
+        const basePrice = linear ? 0 : getPricePerM2(film, pricingMode) * m2;
+        const itemDiscountAmount = linear ? 0 : calculateItemDiscountAmount(measurement, basePrice);
         const finalItemPrice = Math.max(0, basePrice - itemDiscountAmount);
 
         return {
@@ -114,8 +123,25 @@ export const buildPdfAdjustmentDisplay = ({
             m2,
             basePrice,
             itemDiscountAmount,
-            finalItemPrice
+            finalItemPrice,
+            linear
         };
+    });
+
+    // Distribui a venda por metro linear de cada película entre suas linhas (peso por m²).
+    const linearFilmGroups: { [film: string]: number[] } = {};
+    rawLineItems.forEach((item, index) => {
+        if (item.linear) {
+            (linearFilmGroups[item.measurement.pelicula] ||= []).push(index);
+        }
+    });
+    Object.entries(linearFilmGroups).forEach(([filmName, indices]) => {
+        const linearSale = groupedTotals[filmName]?.linearSaleSubtotal || 0;
+        const shares = distributeAmount(linearSale, indices.map(index => rawLineItems[index].m2));
+        indices.forEach((index, position) => {
+            rawLineItems[index].basePrice = shares[position];
+            rawLineItems[index].finalItemPrice = shares[position];
+        });
     });
 
     const increaseAmount = totals.generalIncreaseAmount ?? (
@@ -138,7 +164,7 @@ export const buildPdfAdjustmentDisplay = ({
         let displayBasePrice = item.basePrice + embeddedIncreaseAmount;
         let displayItemDiscountAmount = item.itemDiscountAmount;
 
-        const percentageDiscountRate = getPercentageDiscountRate(item.measurement);
+        const percentageDiscountRate = item.linear ? 0 : getPercentageDiscountRate(item.measurement);
         if (embedsGeneralIncrease && percentageDiscountRate > 0 && percentageDiscountRate < 100) {
             displayBasePrice = displayFinalItemPrice / (1 - (percentageDiscountRate / 100));
             displayItemDiscountAmount = displayBasePrice - displayFinalItemPrice;
