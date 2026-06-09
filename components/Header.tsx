@@ -16,7 +16,8 @@ type ActiveTab =
     | 'account'
     | 'estoque'
     | 'qr_code'
-    | 'fornecedores';
+    | 'fornecedores'
+    | 'assistentes';
 
 interface HeaderProps {
     activeTab: ActiveTab;
@@ -30,10 +31,12 @@ interface NavItem {
     icon: string;
     label: string;
     hint: string;
+    badge?: string;
 }
 
 const MAIN_NAV: NavItem[] = [
     { tabId: 'dashboard', icon: 'fas fa-chart-line', label: 'Dashboard', hint: 'visao geral do negocio' },
+    { tabId: 'assistentes', icon: 'fas fa-robot', label: 'Assistentes', hint: 'IA para o seu negocio', badge: 'Beta' },
     { tabId: 'client', icon: 'fas fa-user-friends', label: 'Clientes', hint: 'cadastro e propostas' },
     { tabId: 'films', icon: 'fas fa-layer-group', label: 'Películas', hint: 'catálogo e seleção' },
     { tabId: 'estoque', icon: 'fas fa-boxes', label: 'Estoque', hint: 'bobinas, retalhos e status' },
@@ -50,6 +53,7 @@ const SYSTEM_NAV: NavItem[] = [
 
 const pageLabels: Record<string, string> = {
     dashboard: 'Dashboard',
+    assistentes: 'Assistentes',
     client: 'Clientes',
     films: 'Películas',
     estoque: 'Estoque',
@@ -325,7 +329,13 @@ const Header: React.FC<HeaderProps> = ({ activeTab, onTabChange, onGoBack, canGo
                     </p>
                 </div>
 
-                {isActive ? <span className="h-2 w-2 rounded-full bg-blue-500 dark:bg-cyan-300/90" /> : null}
+                {item.badge ? (
+                    <span className="rounded-full bg-blue-100 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-blue-600 dark:bg-blue-500/20 dark:text-blue-300">
+                        {item.badge}
+                    </span>
+                ) : isActive ? (
+                    <span className="h-2 w-2 rounded-full bg-blue-500 dark:bg-cyan-300/90" />
+                ) : null}
             </button>
         );
     };

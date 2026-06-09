@@ -66,7 +66,7 @@ import { GEMINI_TEXT_MODEL } from './src/lib/geminiModel';
 import { createPastedMeasurementsFromClipboard } from './src/lib/measurementClipboard';
 
 
-type ActiveTab = 'dashboard' | 'client' | 'films' | 'settings' | 'history' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores';
+type ActiveTab = 'dashboard' | 'client' | 'films' | 'settings' | 'history' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores' | 'assistentes';
 
 interface BillingReturnState {
     status: BillingReturnStatus;
@@ -262,7 +262,7 @@ const App: React.FC = () => {
     const [pendingServiceStatusMark, setPendingServiceStatusMark] = useState<{ id: number; status: AgendamentoServiceStatus } | null>(null);
     const [activeTab, setActiveTab] = useState<ActiveTab>(() => {
         const saved = localStorage.getItem('peliculas-br-active-tab');
-        if (saved && ['dashboard', 'client', 'films', 'settings', 'history', 'agenda', 'sales', 'admin', 'account', 'estoque', 'qr_code', 'fornecedores'].includes(saved)) {
+        if (saved && ['dashboard', 'client', 'films', 'settings', 'history', 'agenda', 'sales', 'admin', 'account', 'estoque', 'qr_code', 'fornecedores', 'assistentes'].includes(saved)) {
             return saved as ActiveTab;
         }
         return 'dashboard';
@@ -2621,13 +2621,13 @@ Se não conseguir extrair, retorne: []`;
     }, [refreshProfile, showToast]);
 
 
-    const wideWorkspaceClass = ['dashboard', 'history', 'estoque', 'films', 'fornecedores', 'agenda', 'settings', 'qr_code', 'account'].includes(activeTab)
+    const wideWorkspaceClass = ['dashboard', 'history', 'estoque', 'films', 'fornecedores', 'agenda', 'settings', 'qr_code', 'account', 'assistentes'].includes(activeTab)
         ? 'mx-auto w-full max-w-[1480px]'
         : activeTab === 'client'
             ? 'mx-auto w-full max-w-[1480px]'
             : 'container mx-auto w-full max-w-2xl lg:max-w-5xl';
 
-    const useNativeSurface = ['dashboard', 'client', 'history', 'estoque', 'films', 'fornecedores', 'agenda', 'settings', 'qr_code', 'account'].includes(activeTab);
+    const useNativeSurface = ['dashboard', 'client', 'history', 'estoque', 'films', 'fornecedores', 'agenda', 'settings', 'qr_code', 'account', 'assistentes'].includes(activeTab);
 
 
 

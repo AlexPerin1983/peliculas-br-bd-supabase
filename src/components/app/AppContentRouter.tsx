@@ -11,6 +11,7 @@ import ContentState from '../../../components/ui/ContentState';
 import { getMeasurementClipboardCount } from '../../lib/measurementClipboard';
 
 const DashboardView = lazy(() => import('../../../components/views/DashboardView'));
+const AssistentesView = lazy(() => import('../../../components/views/AssistentesView'));
 const UserSettingsView = lazy(() => import('../../../components/views/UserSettingsView'));
 const PdfHistoryView = lazy(() => import('../../../components/views/PdfHistoryView'));
 const FilmListView = lazy(() => import('../../../components/views/FilmListView'));
@@ -21,7 +22,7 @@ const ServicoQrView = lazy(() => import('../../../components/views/ServicoQrView
 const AdminUsers = lazy(() => import('../../../components/AdminUsers').then(module => ({ default: module.AdminUsers })));
 const UserAccount = lazy(() => import('../../../components/UserAccount').then(module => ({ default: module.UserAccount })));
 
-type ActiveTab = 'dashboard' | 'client' | 'films' | 'settings' | 'history' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores';
+type ActiveTab = 'dashboard' | 'client' | 'films' | 'settings' | 'history' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores' | 'assistentes';
 
 interface AppContentRouterProps {
     activeTab: ActiveTab;
@@ -246,6 +247,17 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
                 onOpenAIQuickProposal={onOpenAIQuickProposal}
                 onOpenClientModal={onOpenClientModal}
                 onCreateProposal={onCreateProposal}
+                aiConfig={userInfo?.aiConfig}
+            />,
+            defaultLoadingView
+        );
+    }
+
+    if (activeTab === 'assistentes') {
+        return renderDeferred(
+            <AssistentesView
+                allSavedPdfs={allSavedPdfs}
+                clients={clients}
                 aiConfig={userInfo?.aiConfig}
             />,
             defaultLoadingView

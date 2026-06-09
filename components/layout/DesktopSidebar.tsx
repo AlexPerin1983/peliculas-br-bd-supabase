@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+    Bot,
     Boxes,
     CalendarDays,
     CircleUserRound,
@@ -21,7 +22,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import SyncStatusIndicator from '../SyncStatusIndicator';
 import ThemeToggle from '../ui/ThemeToggle';
 
-type ActiveTab = 'dashboard' | 'client' | 'films' | 'settings' | 'history' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores';
+type ActiveTab = 'dashboard' | 'client' | 'films' | 'settings' | 'history' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores' | 'assistentes';
 
 interface DesktopSidebarProps {
     activeTab: ActiveTab;
@@ -32,10 +33,12 @@ interface NavItemConfig {
     tabId: ActiveTab;
     icon: LucideIcon;
     label: string;
+    badge?: string;
 }
 
 const MAIN_NAV: NavItemConfig[] = [
     { tabId: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+    { tabId: 'assistentes', icon: Bot, label: 'Assistentes', badge: 'Beta' },
     { tabId: 'client', icon: UsersRound, label: 'Clientes' },
     { tabId: 'films', icon: Layers3, label: 'Películas' },
     { tabId: 'estoque', icon: Boxes, label: 'Estoque' },
@@ -101,7 +104,7 @@ const DesktopSidebar: React.FC<DesktopSidebarProps> = ({ activeTab, onTabChange 
         )
     );
 
-    const NavItem: React.FC<NavItemConfig> = ({ tabId, icon: Icon, label }) => {
+    const NavItem: React.FC<NavItemConfig> = ({ tabId, icon: Icon, label, badge }) => {
         const isActive = activeTab === tabId;
 
         return (
@@ -135,7 +138,13 @@ const DesktopSidebar: React.FC<DesktopSidebarProps> = ({ activeTab, onTabChange 
                 {!isCollapsed ? (
                     <>
                         <span className="min-w-0 flex-1 truncate text-sm font-semibold">{label}</span>
-                        {isActive ? <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--brand-primary)] dark:bg-blue-300" /> : null}
+                        {badge ? (
+                            <span className="shrink-0 rounded-full bg-blue-100 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-blue-600 dark:bg-blue-500/20 dark:text-blue-300">
+                                {badge}
+                            </span>
+                        ) : isActive ? (
+                            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--brand-primary)] dark:bg-blue-300" />
+                        ) : null}
                     </>
                 ) : null}
             </button>
