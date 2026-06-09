@@ -1027,6 +1027,71 @@ const DashboardView: React.FC<DashboardViewProps> = ({
     const periodDisplayLabel = period === 'custom' ? `Personalizada: ${customDateSummary}` : PERIOD_LABELS[period];
     const mobilePeriodTriggerLabel = period === 'custom' ? customDateSummary : PERIOD_LABELS[period];
 
+    // Periodo anterior equivalente: mesmo tamanho, imediatamente antes do atual.
+    // Serve para o Assistente Financeiro responder perguntas de comparacao.
+    const previousRange = useMemo<DateRange | null>(() => {
+        if (!periodRange) return null;
+        const lengthMs = periodRange.end.getTime() - periodRange.start.getTime();
+        const end = new Date(periodRange.start.getTime() - 1);
+        const start = new Date(end.getTime() - lengthMs);
+        return { start, end };
+    }, [periodRange]);
+
+    // Numeros do periodo anterior, calculados em memoria (zero consulta nova).
+    const comparisonStats = useMemo(() => {
+        if (!previousRange) return null;
+
+        const prevPdfs = allSavedPdfs.filter(pdf => isWithinRange(parseDate(pdf.date), previousRange));
+        const prevStandalone = standaloneExpenses.filter(expense => isWithinRange(parseDate(expense.date), previousRange));
+        const prevStandaloneTotal = prevStandalone.reduce((sum, expense) => sum + parseNumber(expense.amount), 0);
+
+        const totalValue = prevPdfs.reduce((sum, pdf) => sum + getPdfValue(pdf), 0);
+        const approvedValue = prevPdfs
+            .filter(pdf => getPdfStatus(pdf) === 'approved')
+            .reduce((sum, pdf) => sum + getPdfValue(pdf), 0);
+        const proposalExpenses = prevPdfs.reduce((sum, pdf) => sum + getOperationalExpenses(pdf), 0);
+        const expenses = proposalExpenses + prevStandaloneTotal;
+        const estimatedProfit = prevPdfs.reduce((sum, pdf) => sum + getEstimatedProfit(pdf), 0) - prevStandaloneTotal;
+
+        const categoryMap = new Map<string, { label: string; value: number }>();
+        const addCategory = (key: string, label: string, value: number) => {
+            const previous = categoryMap.get(key) || { label, value: 0 };
+            categoryMap.set(key, { label: previous.label || label, value: previous.value + value });
+        };
+        prevPdfs.forEach(pdf => {
+            const snapshotCategories = pdf.generalDiscount?.expenseSnapshot?.expensesByCategory || [];
+            if (snapshotCategories.length) {
+                snapshotCategories.forEach(category => {
+                    addCategory(category.category, category.label || EXPENSE_CATEGORY_LABELS[category.category] || 'Gasto', parseNumber(category.total));
+                });
+                return;
+            }
+            (pdf.generalDiscount?.expenses || []).forEach(expense => {
+                addCategory(expense.category, EXPENSE_CATEGORY_LABELS[expense.category] || 'Gasto', parseNumber(expense.amount));
+            });
+        });
+        prevStandalone.forEach(expense => {
+            addCategory(expense.category, EXPENSE_CATEGORY_LABELS[expense.category] || 'Gasto avulso', parseNumber(expense.amount));
+        });
+
+        return {
+            periodoAnterior: formatRangeButtonLabel(previousRange),
+            faturamentoTotal: totalValue,
+            faturamentoAprovado: approvedValue,
+            despesas: expenses,
+            lucroEstimado: estimatedProfit,
+            margemEstimada: totalValue > 0 ? (estimatedProfit / totalValue) * 100 : 0,
+            gastosPorCategoria: Array.from(categoryMap.values())
+                .filter(item => item.value > 0)
+                .sort((a, b) => b.value - a.value)
+        };
+    }, [previousRange, allSavedPdfs, standaloneExpenses]);
+
+    const daysInPeriod = useMemo(() => {
+        if (!periodRange) return 1;
+        return Math.max(1, Math.ceil((periodRange.end.getTime() - periodRange.start.getTime()) / 86400000));
+    }, [periodRange]);
+
     // Resumo financeiro reaproveitando os agregados ja calculados acima.
     // Nenhuma consulta nova ao banco: tudo ja esta em memoria.
     const financialSummary = useMemo<FinancialSummary>(() => ({
@@ -1043,10 +1108,13 @@ const DashboardView: React.FC<DashboardViewProps> = ({
         orcamentosPendentes: periodStats.pendingCount,
         totalM2: periodStats.totalM2,
         gastoDiarioMedio: expenseRhythm.dailyAverage,
+        diasNoPeriodo: daysInPeriod,
+        faturamentoDiarioMedio: periodStats.totalValue / daysInPeriod,
         gastosPorCategoria: categoryTotals.map(item => ({ label: item.label, value: item.value })),
         melhorCliente: topClient,
-        peliculaMaisUsada: topFilm
-    }), [periodDisplayLabel, periodStats, expenseRhythm, categoryTotals, topClient, topFilm]);
+        peliculaMaisUsada: topFilm,
+        comparativo: comparisonStats
+    }), [periodDisplayLabel, periodStats, expenseRhythm, categoryTotals, topClient, topFilm, comparisonStats, daysInPeriod]);
     const desktopRangeButtonLabel = formatRangeButtonLabel(periodRange);
 
     const syncDesktopDraftFromPeriod = (nextPeriod: PeriodKey) => {

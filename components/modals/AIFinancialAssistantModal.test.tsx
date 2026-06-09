@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import AIFinancialAssistantModal, { FinancialSummary } from './AIFinancialAssistantModal';
 
 // Mock do SDK Gemini para espionar se a IA e (ou nao) chamada.
@@ -128,5 +128,34 @@ describe('AIFinancialAssistantModal', () => {
         await waitFor(() => expect(generateContent).toHaveBeenCalledTimes(1));
         await screen.findByText(/Margem saudavel/);
         expect(onCached).toHaveBeenCalledTimes(1);
+    });
+
+    it('responde a uma pergunta de acompanhamento no chat', async () => {
+        generateContent
+            .mockResolvedValueOnce({ response: { text: () => '## Diagnostico\nTudo certo.' } })
+            .mockResolvedValueOnce({ response: { text: () => 'Seu faturamento subiu **20%**.' } });
+
+        render(
+            <AIFinancialAssistantModal
+                isOpen
+                onClose={vi.fn()}
+                summary={baseSummary}
+                apiKey="key-123"
+                provider="gemini"
+                cache={null}
+                onCached={vi.fn()}
+            />
+        );
+
+        await waitFor(() => expect(generateContent).toHaveBeenCalledTimes(1));
+
+        fireEvent.change(screen.getByPlaceholderText(/pergunte sobre seus numeros/i), {
+            target: { value: 'E o faturamento?' }
+        });
+        fireEvent.click(screen.getByLabelText(/enviar pergunta/i));
+
+        await waitFor(() => expect(generateContent).toHaveBeenCalledTimes(2));
+        expect(screen.getByText('E o faturamento?')).toBeInTheDocument();
+        await screen.findByText(/Seu faturamento subiu/);
     });
 });
