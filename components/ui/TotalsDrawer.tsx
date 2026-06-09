@@ -378,7 +378,7 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                     >
                         <button
                             type="button"
-                            onClick={onGeneratePdf}
+                            onClick={() => { onClose(); onGeneratePdf(); }}
                             disabled={isGeneratingPdf}
                             className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 text-sm font-bold text-white transition-all active:scale-95 disabled:opacity-60 dark:bg-blue-500"
                         >
