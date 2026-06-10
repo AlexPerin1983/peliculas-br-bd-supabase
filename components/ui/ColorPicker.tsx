@@ -4,6 +4,8 @@ import { Drawer } from 'vaul';
 
 const MOBILE_MEDIA_QUERY = '(max-width: 767px)';
 
+const PRESET_COLORS = ['#0F172A', '#FFFFFF', '#D92929', '#EA580C', '#F59E0B', '#16A34A', '#0D9488', '#2563EB', '#7C3AED', '#918B45'];
+
 const useIsMobile = () => {
     const [isMobile, setIsMobile] = useState(
         () => typeof window !== 'undefined' && window.matchMedia(MOBILE_MEDIA_QUERY).matches
@@ -84,8 +86,9 @@ const SaturationValuePicker: React.FC<{
     hue: number;
     saturation: number;
     value: number;
+    handleSize?: number;
     onChange: (s: number, v: number) => void;
-}> = ({ width, height, hue, saturation, value, onChange }) => {
+}> = ({ width, height, hue, saturation, value, handleSize = 12, onChange }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
     useEffect(() => {
@@ -160,17 +163,17 @@ const SaturationValuePicker: React.FC<{
 
     return (
         <div className="relative cursor-crosshair" style={{ touchAction: 'none' }}>
-            <canvas ref={canvasRef} width={width} height={height} onMouseDown={onMouseDown} onTouchStart={onTouchStart} />
+            <canvas className="rounded-xl" ref={canvasRef} width={width} height={height} onMouseDown={onMouseDown} onTouchStart={onTouchStart} />
             <div
                 style={{
                     position: 'absolute',
-                    left: `${handleX - 6}px`,
-                    top: `${handleY - 6}px`,
-                    width: '12px',
-                    height: '12px',
+                    left: `${handleX - handleSize / 2}px`,
+                    top: `${handleY - handleSize / 2}px`,
+                    width: `${handleSize}px`,
+                    height: `${handleSize}px`,
                     borderRadius: '50%',
                     border: '2px solid white',
-                    boxShadow: '0 0 0 1px rgba(0,0,0,0.5)',
+                    boxShadow: '0 0 0 1px rgba(0,0,0,0.5), 0 2px 6px rgba(0,0,0,0.35)',
                     pointerEvents: 'none',
                 }}
             />
@@ -257,7 +260,16 @@ const ColorPicker: React.FC<ColorPickerProps> = ({ color, onChange }) => {
         }
     };
 
-    const renderPickerBody = (width: number, squareHeight: number) => (
+    const applyHex = (newHex: string) => {
+        const rgb = hexToRgb(newHex);
+        if (!rgb) return;
+        const upper = newHex.toUpperCase();
+        setHsv(rgbToHsv(rgb.r, rgb.g, rgb.b));
+        setHexInput(upper);
+        onChange(upper);
+    };
+
+    const renderPickerBody = (width: number, squareHeight: number, isSheet = false) => (
         <>
             <SaturationValuePicker
                 width={Math.max(0, width)}
@@ -265,13 +277,14 @@ const ColorPicker: React.FC<ColorPickerProps> = ({ color, onChange }) => {
                 hue={hsv.h}
                 saturation={hsv.s}
                 value={hsv.v}
+                handleSize={isSheet ? 24 : 12}
                 onChange={handleSaturationValueChange}
             />
 
-            <div className="space-y-3">
+            <div className={isSheet ? 'space-y-4' : 'space-y-3'}>
                 <div className="flex items-center gap-3">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 w-8">Tom</span>
-                    <div className="flex-1 relative h-3 flex items-center">
+                    <div className={`flex-1 relative flex items-center ${isSheet ? 'h-8' : 'h-3'}`}>
                         <input
                             type="range"
                             min="0"
@@ -279,7 +292,9 @@ const ColorPicker: React.FC<ColorPickerProps> = ({ color, onChange }) => {
                             step="0.1"
                             value={hsv.h}
                             onChange={handleHueChange}
-                            className="w-full h-2 rounded-full appearance-none cursor-pointer"
+                            className={`w-full rounded-full appearance-none cursor-pointer ${isSheet
+                                ? 'h-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-7 [&::-webkit-slider-thumb]:w-7 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border [&::-webkit-slider-thumb]:border-slate-300 [&::-webkit-slider-thumb]:shadow-[0_2px_8px_rgba(0,0,0,0.35)] [&::-moz-range-thumb]:h-7 [&::-moz-range-thumb]:w-7 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:border [&::-moz-range-thumb]:border-slate-300'
+                                : 'h-2'}`}
                             style={{ background: 'linear-gradient(to right, #f00 0%, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00 100%)' }}
                         />
                     </div>
@@ -289,9 +304,13 @@ const ColorPicker: React.FC<ColorPickerProps> = ({ color, onChange }) => {
                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 w-8">HEX</span>
                     <input
                         type="text"
+                        inputMode="text"
+                        autoCapitalize="characters"
+                        autoCorrect="off"
+                        spellCheck={false}
                         value={hexInput}
                         onChange={handleHexChange}
-                        className="flex-1 px-3 py-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-mono text-center text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-slate-400/20 outline-none transition-all uppercase"
+                        className={`flex-1 px-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg font-mono text-center text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-slate-400/20 outline-none transition-all uppercase ${isSheet ? 'py-3 text-base' : 'py-1.5 text-sm'}`}
                     />
                 </div>
             </div>
@@ -329,29 +348,48 @@ const ColorPicker: React.FC<ColorPickerProps> = ({ color, onChange }) => {
                 <Drawer.Root open={isOpen} onOpenChange={setIsOpen}>
                     <Drawer.Portal>
                         <Drawer.Overlay className="fixed inset-0 bg-black/40 z-50" />
-                        <Drawer.Content className="bg-white dark:bg-slate-900 flex flex-col rounded-t-[16px] fixed bottom-0 left-0 right-0 z-50 outline-none border-t border-slate-200 dark:border-slate-700">
-                            <div className="p-4">
+                        <Drawer.Content className="bg-white dark:bg-slate-900 flex flex-col rounded-t-[20px] fixed bottom-0 left-0 right-0 z-50 outline-none border-t border-slate-200 dark:border-slate-700 max-h-[92dvh]">
+                            <div className="p-4 pb-[max(env(safe-area-inset-bottom),1rem)] overflow-y-auto overscroll-contain">
+                                <Drawer.Title className="sr-only">Selecionar cor</Drawer.Title>
                                 <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-slate-300 dark:bg-slate-700 mb-4" />
                                 <div className="mx-auto max-w-md space-y-4">
                                     <div className="flex items-center gap-3">
                                         <div
-                                            className="w-10 h-10 rounded-lg shadow-sm border border-black/10 dark:border-white/15"
+                                            className="w-11 h-11 rounded-xl shadow-sm border border-black/10 dark:border-white/15"
                                             style={{ backgroundColor: color }}
                                         />
                                         <div className="flex-1">
                                             <div className="text-xs font-medium text-slate-500 dark:text-slate-400">Cor selecionada</div>
-                                            <div className="text-sm font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider font-mono">{color}</div>
+                                            <div className="text-base font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider font-mono">{color}</div>
                                         </div>
                                     </div>
 
                                     <div ref={measureSheet} className="space-y-4">
-                                        {renderPickerBody(sheetWidth, 200)}
+                                        {renderPickerBody(sheetWidth, 180, true)}
+                                    </div>
+
+                                    <div>
+                                        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Sugestões</div>
+                                        <div className="grid grid-cols-5 gap-2">
+                                            {PRESET_COLORS.map(preset => (
+                                                <button
+                                                    key={preset}
+                                                    type="button"
+                                                    aria-label={`Usar cor ${preset}`}
+                                                    onClick={() => applyHex(preset)}
+                                                    className={`h-10 rounded-lg border transition active:scale-95 ${color.toUpperCase() === preset
+                                                        ? 'border-transparent ring-2 ring-blue-500 ring-offset-2 ring-offset-white dark:ring-offset-slate-900'
+                                                        : 'border-black/10 dark:border-white/15'}`}
+                                                    style={{ backgroundColor: preset }}
+                                                />
+                                            ))}
+                                        </div>
                                     </div>
 
                                     <button
                                         type="button"
                                         onClick={() => setIsOpen(false)}
-                                        className="w-full py-3 rounded-xl bg-blue-600 text-white font-semibold shadow-[0_10px_24px_rgba(37,99,235,0.25)] active:scale-[0.98] transition"
+                                        className="w-full py-3.5 rounded-xl bg-blue-600 text-white text-base font-semibold shadow-[0_10px_24px_rgba(37,99,235,0.25)] active:scale-[0.98] transition"
                                     >
                                         Concluir
                                     </button>
