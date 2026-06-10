@@ -189,6 +189,17 @@ const renderPdfContent = async (
             return result ? [parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16)] : [0, 0, 0];
         };
 
+        // Retorna preto ou branco, o que tiver melhor contraste sobre o fundo informado.
+        // Usa luminância relativa (WCAG) para garantir legibilidade independente da cor da marca.
+        const getContrastingTextColor = (bg: number[]): number[] => {
+            const toLinear = (v: number) => {
+                const s = v / 255;
+                return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+            };
+            const luminance = 0.2126 * toLinear(bg[0]) + 0.7152 * toLinear(bg[1]) + 0.0722 * toLinear(bg[2]);
+            return luminance > 0.4 ? [33, 37, 41] : [255, 255, 255];
+        };
+
         const bodyText = [33, 37, 41];
 
         const safeText = (text: any, x: number, y: number, options = {}) => {
@@ -318,7 +329,6 @@ const renderPdfContent = async (
         if (includeCover) {
             const primaryColor = hexToRgb(userInfo.cores?.primaria || '#0052FF');
             const secondaryColor = hexToRgb(userInfo.cores?.secundaria || '#2D3748');
-            const textWhite = [255, 255, 255];
             const textDark = [50, 50, 50];
 
             // Background shapes
@@ -341,8 +351,10 @@ const renderPdfContent = async (
             ]).fill();
 
             // Logo and company info (top-left, on shapes)
+            // Este texto fica sobre a forma da cor primária; escolhe preto/branco conforme o contraste.
+            const companyTextColor = getContrastingTextColor(primaryColor);
             await addLogo(margin, margin, 68, 25.5);
-            doc.setTextColor(...textWhite);
+            doc.setTextColor(...companyTextColor);
             doc.setFont("helvetica", "bold");
             doc.setFontSize(12);
             safeText(userInfo.empresa, margin, margin + 30);
@@ -353,9 +365,11 @@ const renderPdfContent = async (
 
 
             // Date & Proposal Number (top-right)
+            // Este texto fica sobre a forma da cor secundária; escolhe preto/branco conforme o contraste.
+            const headerTextColor = getContrastingTextColor(secondaryColor);
             const proposalId = `ORC-${new Date().getFullYear()}${(new Date().getMonth() + 1).toString().padStart(2, '0')}-${client.id || '00'}`;
             doc.setFontSize(9);
-            doc.setTextColor(...textDark);
+            doc.setTextColor(...headerTextColor);
             doc.setFont("helvetica", 'normal');
             safeText(`Data: ${new Date().toLocaleDateString('pt-BR')}`, pageWidth - margin, margin + 5, { align: 'right' });
             safeText(`Orçamento Nº: ${proposalId}`, pageWidth - margin, margin + 10, { align: 'right' });
