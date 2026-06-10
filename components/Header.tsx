@@ -343,27 +343,32 @@ const Header: React.FC<HeaderProps> = ({ activeTab, onTabChange, onGoBack, canGo
     return (
         <>
             <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                    {canGoBack && onGoBack ? (
+                <div className="flex items-center gap-2.5">
+                    <div className="flex items-center gap-0.5 rounded-full bg-slate-100 p-0.5 dark:bg-slate-800 lg:hidden">
+                        {canGoBack && onGoBack ? (
+                            <>
+                                <button
+                                    onClick={onGoBack}
+                                    aria-label="Voltar para a tela anterior"
+                                    className="flex h-9 w-9 items-center justify-center rounded-full text-slate-600 transition-all active:scale-95 dark:text-slate-300"
+                                >
+                                    <i className="fas fa-arrow-left text-sm" />
+                                </button>
+                                <span className="h-4 w-px bg-slate-300/80 dark:bg-slate-600/80" aria-hidden="true" />
+                            </>
+                        ) : null}
                         <button
-                            onClick={onGoBack}
-                            aria-label="Voltar para a tela anterior"
-                            className="lg:hidden flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200/70 bg-white/80 text-slate-700 shadow-sm shadow-slate-200/60 transition-all duration-200 hover:border-slate-300 hover:bg-white active:scale-95 dark:border-slate-800 dark:bg-slate-900/80 dark:text-slate-200 dark:shadow-black/20"
+                            onClick={openMenu}
+                            aria-label="Abrir menu"
+                            aria-expanded={isMenuMounted}
+                            aria-controls="mobile-main-menu"
+                            className="flex h-9 w-9 flex-col items-center justify-center gap-[4px] rounded-full text-slate-600 transition-all active:scale-95 dark:text-slate-300"
                         >
-                            <i className="fas fa-arrow-left text-base" />
+                            <span className="h-[2px] w-[18px] rounded-full bg-slate-600 dark:bg-slate-300" />
+                            <span className="ml-[9px] h-[2px] w-[13px] self-start rounded-full bg-slate-600 dark:bg-slate-300" />
+                            <span className="h-[2px] w-[18px] rounded-full bg-slate-600 dark:bg-slate-300" />
                         </button>
-                    ) : null}
-                    <button
-                        onClick={openMenu}
-                        aria-label="Abrir menu"
-                        aria-expanded={isMenuMounted}
-                        aria-controls="mobile-main-menu"
-                        className="lg:hidden flex h-10 w-10 flex-col items-center justify-center gap-[5px] rounded-2xl border border-slate-200/70 bg-white/80 text-slate-700 shadow-sm shadow-slate-200/60 transition-all duration-200 hover:border-slate-300 hover:bg-white active:scale-95 dark:border-slate-800 dark:bg-slate-900/80 dark:text-slate-200 dark:shadow-black/20"
-                    >
-                        <span className="h-[2px] w-5 rounded-full bg-slate-700 dark:bg-slate-200" />
-                        <span className="ml-2 h-[2px] w-3.5 self-start rounded-full bg-slate-700 dark:bg-slate-200" />
-                        <span className="h-[2px] w-5 rounded-full bg-slate-700 dark:bg-slate-200" />
-                    </button>
+                    </div>
 
                     <h1 className="flex items-center text-lg font-bold tracking-tight text-slate-900 dark:text-white lg:hidden">
                         Películas<span className="text-blue-600 dark:text-blue-400">BR</span>
