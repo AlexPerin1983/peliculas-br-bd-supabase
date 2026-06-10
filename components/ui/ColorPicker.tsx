@@ -1,5 +1,25 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Drawer } from 'vaul';
+
+const MOBILE_MEDIA_QUERY = '(max-width: 767px)';
+
+const useIsMobile = () => {
+    const [isMobile, setIsMobile] = useState(
+        () => typeof window !== 'undefined' && window.matchMedia(MOBILE_MEDIA_QUERY).matches
+    );
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const mediaQuery = window.matchMedia(MOBILE_MEDIA_QUERY);
+        const sync = () => setIsMobile(mediaQuery.matches);
+        sync();
+        mediaQuery.addEventListener('change', sync);
+        return () => mediaQuery.removeEventListener('change', sync);
+    }, []);
+
+    return isMobile;
+};
 
 // Helper functions for color conversion
 const hexToRgb = (hex: string): { r: number; g: number; b: number } | null => {
@@ -160,9 +180,10 @@ const SaturationValuePicker: React.FC<{
 
 const ColorPicker: React.FC<ColorPickerProps> = ({ color, onChange }) => {
     const [isOpen, setIsOpen] = useState(false);
-    const pickerRef = useRef<HTMLDivElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
-    const [containerWidth, setContainerWidth] = useState(250);
+    const [inlineWidth, setInlineWidth] = useState(250);
+    const [sheetWidth, setSheetWidth] = useState(280);
+    const isMobile = useIsMobile();
 
     const [hsv, setHsv] = useState(() => {
         const rgb = hexToRgb(color);
@@ -184,11 +205,11 @@ const ColorPicker: React.FC<ColorPickerProps> = ({ color, onChange }) => {
     useEffect(() => {
         const updateWidth = () => {
             if (containerRef.current) {
-                setContainerWidth(containerRef.current.offsetWidth);
+                setInlineWidth(containerRef.current.offsetWidth);
             }
         };
 
-        if (isOpen) {
+        if (isOpen && !isMobile) {
             updateWidth();
             window.addEventListener('resize', updateWidth);
         }
@@ -196,7 +217,13 @@ const ColorPicker: React.FC<ColorPickerProps> = ({ color, onChange }) => {
         return () => {
             window.removeEventListener('resize', updateWidth);
         };
-    }, [isOpen]);
+    }, [isOpen, isMobile]);
+
+    const measureSheet = useCallback((node: HTMLDivElement | null) => {
+        if (node) {
+            setSheetWidth(node.clientWidth);
+        }
+    }, []);
 
     const updateColor = useCallback((newHsv: { h: number; s: number; v: number }) => {
         setHsv(newHsv);
@@ -230,6 +257,47 @@ const ColorPicker: React.FC<ColorPickerProps> = ({ color, onChange }) => {
         }
     };
 
+    const renderPickerBody = (width: number, squareHeight: number) => (
+        <>
+            <SaturationValuePicker
+                width={Math.max(0, width)}
+                height={squareHeight}
+                hue={hsv.h}
+                saturation={hsv.s}
+                value={hsv.v}
+                onChange={handleSaturationValueChange}
+            />
+
+            <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 w-8">Tom</span>
+                    <div className="flex-1 relative h-3 flex items-center">
+                        <input
+                            type="range"
+                            min="0"
+                            max="359.9"
+                            step="0.1"
+                            value={hsv.h}
+                            onChange={handleHueChange}
+                            className="w-full h-2 rounded-full appearance-none cursor-pointer"
+                            style={{ background: 'linear-gradient(to right, #f00 0%, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00 100%)' }}
+                        />
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 w-8">HEX</span>
+                    <input
+                        type="text"
+                        value={hexInput}
+                        onChange={handleHexChange}
+                        className="flex-1 px-3 py-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-mono text-center text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-slate-400/20 outline-none transition-all uppercase"
+                    />
+                </div>
+            </div>
+        </>
+    );
+
     return (
         <div className="w-full" ref={containerRef}>
             <div
@@ -244,52 +312,54 @@ const ColorPicker: React.FC<ColorPickerProps> = ({ color, onChange }) => {
                     <div className="text-xs font-medium text-slate-500 dark:text-slate-400">Cor selecionada</div>
                     <div className="text-sm font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider font-mono">{color}</div>
                 </div>
-                <div className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}>
+                <div className={`transition-transform duration-200 ${isOpen && !isMobile ? 'rotate-180' : ''}`}>
                     <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                     </svg>
                 </div>
             </div>
 
-            {isOpen && (
+            {!isMobile && isOpen && (
                 <div className="mt-3 p-4 bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
-                    <SaturationValuePicker
-                        width={containerWidth - 34} // Adjust for padding (p-4 = 16px each side + 2px border)
-                        height={160}
-                        hue={hsv.h}
-                        saturation={hsv.s}
-                        value={hsv.v}
-                        onChange={handleSaturationValueChange}
-                    />
-
-                    <div className="space-y-3">
-                        <div className="flex items-center gap-3">
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 w-8">Tom</span>
-                            <div className="flex-1 relative h-3 flex items-center">
-                                <input
-                                    type="range"
-                                    min="0"
-                                    max="359.9"
-                                    step="0.1"
-                                    value={hsv.h}
-                                    onChange={handleHueChange}
-                                    className="w-full h-2 rounded-full appearance-none cursor-pointer"
-                                    style={{ background: 'linear-gradient(to right, #f00 0%, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00 100%)' }}
-                                />
-                            </div>
-                        </div>
-
-                        <div className="flex items-center gap-3">
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 w-8">HEX</span>
-                            <input
-                                type="text"
-                                value={hexInput}
-                                onChange={handleHexChange}
-                                className="flex-1 px-3 py-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-mono text-center text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-slate-400/20 outline-none transition-all uppercase"
-                            />
-                        </div>
-                    </div>
+                    {renderPickerBody(inlineWidth - 34, 160)}
                 </div>
+            )}
+
+            {isMobile && (
+                <Drawer.Root open={isOpen} onOpenChange={setIsOpen}>
+                    <Drawer.Portal>
+                        <Drawer.Overlay className="fixed inset-0 bg-black/40 z-50" />
+                        <Drawer.Content className="bg-white dark:bg-slate-900 flex flex-col rounded-t-[16px] fixed bottom-0 left-0 right-0 z-50 outline-none border-t border-slate-200 dark:border-slate-700">
+                            <div className="p-4">
+                                <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-slate-300 dark:bg-slate-700 mb-4" />
+                                <div className="mx-auto max-w-md space-y-4">
+                                    <div className="flex items-center gap-3">
+                                        <div
+                                            className="w-10 h-10 rounded-lg shadow-sm border border-black/10 dark:border-white/15"
+                                            style={{ backgroundColor: color }}
+                                        />
+                                        <div className="flex-1">
+                                            <div className="text-xs font-medium text-slate-500 dark:text-slate-400">Cor selecionada</div>
+                                            <div className="text-sm font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider font-mono">{color}</div>
+                                        </div>
+                                    </div>
+
+                                    <div ref={measureSheet} className="space-y-4">
+                                        {renderPickerBody(sheetWidth, 200)}
+                                    </div>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsOpen(false)}
+                                        className="w-full py-3 rounded-xl bg-blue-600 text-white font-semibold shadow-[0_10px_24px_rgba(37,99,235,0.25)] active:scale-[0.98] transition"
+                                    >
+                                        Concluir
+                                    </button>
+                                </div>
+                            </div>
+                        </Drawer.Content>
+                    </Drawer.Portal>
+                </Drawer.Root>
             )}
         </div>
     );

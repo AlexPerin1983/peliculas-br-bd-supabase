@@ -72,7 +72,7 @@ export const AdminUsers: React.FC = () => {
                         profiles.map(profile => {
                             const isExpanded = expandedUser === profile.id;
                             const activeModulesCount = profile.subscription?.active_modules?.length || 0;
-                            const hasFullPackage = isModuleActive(profile, 'pacote_completo') || isModuleActive(profile, 'ilimitado');
+                            const hasFullPackage = isModuleActive(profile, 'pacote_completo');
                             const isProfileAdmin = isUserAdmin(profile);
 
                             return (

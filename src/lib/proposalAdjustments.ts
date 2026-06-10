@@ -36,7 +36,7 @@ export const parseAdjustmentNumber = (value: string | number | undefined | null)
 );
 
 const resolveAdjustmentType = (type: unknown): 'percentage' | 'fixed' => (
-    type === 'fixed' ? 'fixed' : 'percentage'
+    type === 'percentage' ? 'percentage' : 'fixed'
 );
 
 export const getProposalAdjustmentInputs = (generalDiscount: ProposalDiscount): ProposalAdjustmentInputs => {
@@ -56,7 +56,7 @@ export const getProposalAdjustmentInputs = (generalDiscount: ProposalDiscount): 
             type: resolveAdjustmentType(
                 hasExplicitDiscount
                     ? generalDiscount.discountType
-                    : legacyOperation === 'discount'
+                    : legacyOperation === 'discount' && parseAdjustmentNumber(generalDiscount.value) > 0
                         ? generalDiscount.type
                         : 'fixed'
             ),
@@ -72,7 +72,7 @@ export const getProposalAdjustmentInputs = (generalDiscount: ProposalDiscount): 
             type: resolveAdjustmentType(
                 hasExplicitIncrease
                     ? generalDiscount.increaseType
-                    : legacyOperation === 'increase'
+                    : legacyOperation === 'increase' && parseAdjustmentNumber(generalDiscount.value) > 0
                         ? generalDiscount.type
                         : 'fixed'
             ),

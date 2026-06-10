@@ -11,7 +11,7 @@ interface UseProposalEditorParams {
     loadClients: (clientIdToSelect?: number, shouldReorder?: boolean) => Promise<void>;
 }
 
-const EMPTY_GENERAL_DISCOUNT: DiscountType = { value: '', type: 'percentage', operation: 'discount', pricingMode: 'complete' };
+const EMPTY_GENERAL_DISCOUNT: DiscountType = { value: '', type: 'fixed', operation: 'discount', pricingMode: 'complete' };
 
 const normalizeDiscountValue = (value: unknown): string => {
     if (typeof value === 'string') {
@@ -32,9 +32,9 @@ const normalizeGeneralDiscount = (
     const value = normalizeDiscountValue(discount?.value ?? fallback?.value);
     const type = discount?.type === 'fixed' || discount?.type === 'percentage'
         ? discount.type
-        : fallback?.type === 'fixed'
-            ? 'fixed'
-            : 'percentage';
+        : fallback?.type === 'percentage'
+            ? 'percentage'
+            : 'fixed';
     const operation = discount?.operation === 'increase' || discount?.operation === 'discount'
         ? discount.operation
         : fallback?.operation === 'increase'
@@ -53,17 +53,19 @@ const normalizeGeneralDiscount = (
         operation,
         discountValue,
         discountType: discount?.discountType === 'fixed' || discount?.discountType === 'percentage'
-        ? discount.discountType
-        : fallback?.discountType === 'fixed'
-            ? 'fixed'
-            : 'percentage',
+            ? discount.discountType
+            : fallback?.discountType === 'fixed' || fallback?.discountType === 'percentage'
+                ? fallback.discountType
+                : type === 'percentage' && (parseFloat(discountValue.replace(',', '.')) || 0) > 0
+                    ? 'percentage'
+                    : 'fixed',
         increaseValue,
         increaseType: discount?.increaseType === 'fixed' || discount?.increaseType === 'percentage'
             ? discount.increaseType
             : fallback?.increaseType === 'percentage'
                 ? 'percentage'
-                : operation === 'increase'
-                    ? type
+                : type === 'percentage' && (parseFloat(increaseValue.replace(',', '.')) || 0) > 0
+                    ? 'percentage'
                     : 'fixed',
         pricingMode: discount?.pricingMode === 'labor_only' || discount?.pricingMode === 'complete'
             ? discount.pricingMode

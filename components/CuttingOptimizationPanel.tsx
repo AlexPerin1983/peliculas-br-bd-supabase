@@ -1046,9 +1046,9 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                         {/* Settings - Always visible */}
                         <div className={`block mb-2 sm:mb-6`}>
                             {/* Mobile: technical control deck */}
-                            <div className="sm:hidden overflow-hidden rounded-xl border border-slate-700/80 bg-slate-950 shadow-[0_14px_34px_rgba(2,6,23,0.26)]">
-                                <div className="grid grid-cols-[minmax(0,1fr)_92px] border-b border-slate-800">
-                                    <div className="grid min-w-0 grid-cols-2 divide-x divide-slate-800">
+                            <div className="sm:hidden overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_14px_34px_rgba(15,23,42,0.10)] dark:border-slate-700/80 dark:bg-slate-950 dark:shadow-[0_14px_34px_rgba(2,6,23,0.26)]">
+                                <div className="grid grid-cols-[minmax(0,1fr)_92px] border-b border-slate-200 dark:border-slate-800">
+                                    <div className="grid min-w-0 grid-cols-2 divide-x divide-slate-200 dark:divide-slate-800">
                                         <label className="block px-3 py-2">
                                             <span className="block text-[10px] font-bold text-slate-500">Bobina</span>
                                             <span className="mt-0.5 flex items-end gap-1">
@@ -1058,7 +1058,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                                     value={currentSettings.rollWidth}
                                                     onChange={e => updateCurrentSettings('rollWidth', e.target.value)}
                                                     placeholder="152"
-                                                    className="h-7 min-w-0 flex-1 border-0 bg-transparent p-0 text-[17px] font-semibold leading-none text-white outline-none focus:ring-0"
+                                                    className="h-7 min-w-0 flex-1 border-0 bg-transparent p-0 text-[17px] font-semibold leading-none text-slate-900 outline-none focus:ring-0 dark:text-white"
                                                 />
                                                 <span className="pb-0.5 text-[10px] font-medium text-slate-500">cm</span>
                                             </span>
@@ -1072,7 +1072,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                                     value={currentSettings.bladeWidth}
                                                     onChange={e => updateCurrentSettings('bladeWidth', e.target.value)}
                                                     placeholder="0"
-                                                    className="h-7 min-w-0 flex-1 border-0 bg-transparent p-0 text-[17px] font-semibold leading-none text-white outline-none focus:ring-0"
+                                                    className="h-7 min-w-0 flex-1 border-0 bg-transparent p-0 text-[17px] font-semibold leading-none text-slate-900 outline-none focus:ring-0 dark:text-white"
                                                 />
                                                 <span className="pb-0.5 text-[10px] font-medium text-slate-500">mm</span>
                                             </span>
@@ -1094,55 +1094,55 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                         <div className="flex items-end justify-between gap-3">
                                             <div className="min-w-0">
                                                 <div className="text-[10px] font-semibold text-slate-500">Metro linear</div>
-                                                <div className="mt-0.5 text-[22px] font-semibold leading-none text-white">
+                                                <div className="mt-0.5 text-[22px] font-semibold leading-none text-slate-900 dark:text-white">
                                                     {visualSummary.linearMeters}<span className="ml-1 text-[12px] font-medium text-slate-500">m</span>
                                                 </div>
                                             </div>
                                             <div className="grid shrink-0 grid-cols-2 gap-3 text-right">
                                                 <div>
                                                     <div className="text-[10px] font-semibold text-slate-500">Uso</div>
-                                                    <div className="mt-0.5 text-[16px] font-semibold leading-none text-blue-300">{visualSummary.efficiency}%</div>
+                                                    <div className="mt-0.5 text-[16px] font-semibold leading-none text-blue-600 dark:text-blue-300">{visualSummary.efficiency}%</div>
                                                 </div>
                                                 <div>
                                                     <div className="text-[10px] font-semibold text-slate-500">Sobra</div>
-                                                    <div className="mt-0.5 text-[16px] font-semibold leading-none text-white">{visualSummary.wastePercent}%</div>
+                                                    <div className="mt-0.5 text-[16px] font-semibold leading-none text-slate-900 dark:text-white">{visualSummary.wastePercent}%</div>
                                                 </div>
                                             </div>
                                         </div>
 
-                                        <div className="mt-2 flex items-center justify-between gap-2 rounded-lg bg-slate-900/80 px-2.5 py-2">
-                                            <span className="text-[11px] font-medium text-slate-400">Material</span>
-                                            <span className="text-[14px] font-semibold text-white">{activeFilmMaterialCost !== null ? `R$ ${activeFilmMaterialCost.toFixed(2).replace('.', ',')}` : '--'}</span>
+                                        <div className="mt-2 flex items-center justify-between gap-2 rounded-lg bg-slate-100 px-2.5 py-2 dark:bg-slate-900/80">
+                                            <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Material</span>
+                                            <span className="text-[14px] font-semibold text-slate-900 dark:text-white">{activeFilmMaterialCost !== null ? `R$ ${activeFilmMaterialCost.toFixed(2).replace('.', ',')}` : '--'}</span>
                                             <span className="ml-auto text-[10px] font-semibold text-slate-500">{visualSummary.pieces} peças</span>
                                         </div>
                                     </div>
                                 )}
 
-                                <div className="flex items-center gap-1.5 border-t border-slate-800 px-2 py-2">
-                                    <label className={`inline-flex h-8 cursor-pointer select-none items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-semibold transition ${currentSettings.respectGrain ? 'bg-blue-500/15 text-blue-200 ring-1 ring-blue-400/40' : 'bg-slate-900 text-slate-400 ring-1 ring-slate-800'}`}>
-                                        <span className={`h-1.5 w-1.5 rounded-full ${currentSettings.respectGrain ? 'bg-blue-300' : 'bg-slate-600'}`}></span>
+                                <div className="flex items-center gap-1.5 border-t border-slate-200 px-2 py-2 dark:border-slate-800">
+                                    <label className={`inline-flex h-8 cursor-pointer select-none items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-semibold transition ${currentSettings.respectGrain ? 'bg-blue-500/15 text-blue-700 ring-1 ring-blue-400/40 dark:text-blue-200' : 'bg-slate-100 text-slate-500 ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-400 dark:ring-slate-800'}`}>
+                                        <span className={`h-1.5 w-1.5 rounded-full ${currentSettings.respectGrain ? 'bg-blue-500 dark:bg-blue-300' : 'bg-slate-400 dark:bg-slate-600'}`}></span>
                                         <input type="checkbox" checked={currentSettings.respectGrain} onChange={e => updateCurrentSettings('respectGrain', e.target.checked)} className="hidden" />
                                         Veio
                                     </label>
-                                    <label className={`inline-flex h-8 cursor-pointer select-none items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-semibold transition ${useDeepSearch ? 'bg-blue-500/15 text-blue-200 ring-1 ring-blue-400/40' : 'bg-slate-900 text-slate-400 ring-1 ring-slate-800'}`}>
-                                        <span className={`h-1.5 w-1.5 rounded-full ${useDeepSearch ? 'bg-blue-300' : 'bg-slate-600'}`}></span>
+                                    <label className={`inline-flex h-8 cursor-pointer select-none items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-semibold transition ${useDeepSearch ? 'bg-blue-500/15 text-blue-700 ring-1 ring-blue-400/40 dark:text-blue-200' : 'bg-slate-100 text-slate-500 ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-400 dark:ring-slate-800'}`}>
+                                        <span className={`h-1.5 w-1.5 rounded-full ${useDeepSearch ? 'bg-blue-500 dark:bg-blue-300' : 'bg-slate-400 dark:bg-slate-600'}`}></span>
                                         <input type="checkbox" checked={useDeepSearch} onChange={e => setUseDeepSearch(e.target.checked)} className="hidden" />
                                         Pro
                                     </label>
-                                    <div className="ml-auto flex h-8 shrink-0 items-center overflow-hidden rounded-lg bg-slate-900 ring-1 ring-slate-800">
+                                    <div className="ml-auto flex h-8 shrink-0 items-center overflow-hidden rounded-lg bg-slate-100 ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800">
                                         <button
                                             type="button"
                                             onClick={() => setZoomLevel(prev => Math.max(0.5, prev - 0.25))}
-                                            className="flex h-8 w-8 items-center justify-center text-slate-300 active:bg-slate-800"
+                                            className="flex h-8 w-8 items-center justify-center text-slate-600 active:bg-slate-200 dark:text-slate-300 dark:active:bg-slate-800"
                                             title="Diminuir zoom"
                                         >
                                             <Minus className="h-4 w-4" aria-hidden="true" />
                                         </button>
-                                        <span className="min-w-[36px] px-1 text-center text-[10px] font-black tabular-nums text-slate-300">{Math.round(zoomLevel * 100)}%</span>
+                                        <span className="min-w-[36px] px-1 text-center text-[10px] font-black tabular-nums text-slate-600 dark:text-slate-300">{Math.round(zoomLevel * 100)}%</span>
                                         <button
                                             type="button"
                                             onClick={() => setZoomLevel(prev => Math.min(3, prev + 0.25))}
-                                            className="flex h-8 w-8 items-center justify-center text-slate-300 active:bg-slate-800"
+                                            className="flex h-8 w-8 items-center justify-center text-slate-600 active:bg-slate-200 dark:text-slate-300 dark:active:bg-slate-800"
                                             title="Aumentar zoom"
                                         >
                                             <Plus className="h-4 w-4" aria-hidden="true" />
@@ -1154,7 +1154,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                             openFullscreenView();
                                         }}
                                         aria-label="Expandir tela cheia"
-                                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-blue-200 ring-1 ring-blue-500/30 active:bg-slate-800"
+                                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-blue-600 ring-1 ring-blue-500/30 active:bg-slate-200 dark:bg-slate-900 dark:text-blue-200 dark:active:bg-slate-800"
                                         title="Expandir tela cheia"
                                     >
                                         <Maximize2 className="h-4 w-4" aria-hidden="true" />

@@ -279,38 +279,38 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                                 </div>
                             )}
 
-                            <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-900 p-4 shadow-lg dark:border-slate-700 dark:bg-slate-800">
-                                <h3 className="text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">Resumo de Custos</h3>
+                            <div className="space-y-3 rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-4 shadow-[var(--shadow-soft)]">
+                                <h3 className="text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--text-soft)]">Resumo de Custos</h3>
                                 <div className="space-y-2">
                                     <div className="flex items-center justify-between">
-                                        <span className="text-xs text-slate-400">Total Material</span>
-                                        <span className="text-sm font-semibold text-white">{formatNumberBR(totals.totalMaterial)}</span>
+                                        <span className="text-xs text-[var(--text-muted)]">Total Material</span>
+                                        <span className="text-sm font-semibold text-[var(--text-strong)]">{formatNumberBR(totals.totalMaterial)}</span>
                                     </div>
                                     <div className="flex items-center justify-between">
-                                        <span className="text-xs text-slate-400">Total Mão de Obra</span>
-                                        <span className="text-sm font-semibold text-white">{formatNumberBR(totals.totalLabor)}</span>
+                                        <span className="text-xs text-[var(--text-muted)]">Total Mão de Obra</span>
+                                        <span className="text-sm font-semibold text-[var(--text-strong)]">{formatNumberBR(totals.totalLabor)}</span>
                                     </div>
                                     {totals.linearMeterCost > 0 && (
-                                        <div className="flex items-center justify-between border-t border-slate-800 pt-2">
-                                            <span className="text-xs text-blue-400">Total Metro Linear</span>
-                                            <span className="text-sm font-semibold text-blue-400">{formatNumberBR(totals.linearMeterCost)}</span>
+                                        <div className="flex items-center justify-between border-t border-[var(--border-subtle)] pt-2">
+                                            <span className="text-xs text-blue-600 dark:text-blue-400">Total Metro Linear</span>
+                                            <span className="text-sm font-semibold text-blue-600 dark:text-blue-400">{formatNumberBR(totals.linearMeterCost)}</span>
                                         </div>
                                     )}
                                     {totals.operationalExpenses > 0 && (
-                                        <div className="flex items-center justify-between border-t border-slate-800 pt-2">
-                                            <span className="text-xs text-amber-300">Gastos informados</span>
-                                            <span className="text-sm font-semibold text-amber-300">{formatNumberBR(totals.operationalExpenses)}</span>
+                                        <div className="flex items-center justify-between border-t border-[var(--border-subtle)] pt-2">
+                                            <span className="text-xs text-amber-600 dark:text-amber-300">Gastos informados</span>
+                                            <span className="text-sm font-semibold text-amber-600 dark:text-amber-300">{formatNumberBR(totals.operationalExpenses)}</span>
                                         </div>
                                     )}
                                     {totals.estimatedTotalCost > 0 && (
                                         <>
-                                            <div className="flex items-center justify-between border-t border-slate-800 pt-2">
-                                                <span className="text-xs text-slate-300">Custo estimado</span>
-                                                <span className="text-sm font-semibold text-white">{formatNumberBR(totals.estimatedTotalCost)}</span>
+                                            <div className="flex items-center justify-between border-t border-[var(--border-subtle)] pt-2">
+                                                <span className="text-xs text-[var(--text-muted)]">Custo estimado</span>
+                                                <span className="text-sm font-semibold text-[var(--text-strong)]">{formatNumberBR(totals.estimatedTotalCost)}</span>
                                             </div>
                                             <div className="flex items-center justify-between">
-                                                <span className="text-xs text-slate-300">Resultado estimado</span>
-                                                <span className={`text-sm font-semibold ${totals.estimatedProfit >= 0 ? 'text-emerald-300' : 'text-red-300'}`}>
+                                                <span className="text-xs text-[var(--text-muted)]">Resultado estimado</span>
+                                                <span className={`text-sm font-semibold ${totals.estimatedProfit >= 0 ? 'text-emerald-600 dark:text-emerald-300' : 'text-red-600 dark:text-red-300'}`}>
                                                     {formatNumberBR(totals.estimatedProfit)} ({totals.estimatedMarginPercentage.toFixed(1)}%)
                                                 </span>
                                             </div>

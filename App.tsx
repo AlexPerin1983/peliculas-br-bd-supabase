@@ -1494,7 +1494,7 @@ Regras:
                 id: proposalOptionId,
                 name: 'Opcao 1',
                 measurements: quickMeasurements.map(({ isNew, ...measurement }) => measurement),
-                generalDiscount: { value: '', type: 'percentage', operation: 'discount', pricingMode: 'complete' }
+                generalDiscount: { value: '', type: 'fixed', operation: 'discount', pricingMode: 'complete' }
             };
 
             await db.saveProposalOptions(savedClient.id, [proposalOption]);
