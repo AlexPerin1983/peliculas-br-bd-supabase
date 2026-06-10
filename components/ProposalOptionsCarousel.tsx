@@ -1,7 +1,27 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { CreditCard, MoreVertical, Pencil, Plus, Receipt, Trash2, X } from 'lucide-react';
+import { ChevronRight, CreditCard, MoreVertical, Pencil, Plus, Receipt, Trash2, X } from 'lucide-react';
+import { Drawer } from 'vaul';
 import { ProposalOption, ProposalPricingMode } from '../types';
+
+const MOBILE_MEDIA_QUERY = '(max-width: 639px)';
+
+const useIsMobile = () => {
+    const [isMobile, setIsMobile] = useState(
+        () => typeof window !== 'undefined' && window.matchMedia(MOBILE_MEDIA_QUERY).matches
+    );
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const mediaQuery = window.matchMedia(MOBILE_MEDIA_QUERY);
+        const sync = () => setIsMobile(mediaQuery.matches);
+        sync();
+        mediaQuery.addEventListener('change', sync);
+        return () => mediaQuery.removeEventListener('change', sync);
+    }, []);
+
+    return isMobile;
+};
 
 const sanitizeOptionName = (name: string): string => {
     if (!name) return name;
@@ -88,6 +108,8 @@ const ProposalOptionsCarousel: React.FC<ProposalOptionsCarouselProps> = ({
     const [editingOptionId, setEditingOptionId] = useState<number | null>(null);
     const [editingName, setEditingName] = useState('');
     const [actionsOptionId, setActionsOptionId] = useState<number | null>(null);
+    const isMobile = useIsMobile();
+    const lastActionsOptionRef = useRef<ProposalOption | null>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     const carouselRef = useRef<HTMLDivElement>(null);
     const itemRefs = useRef<Map<number, HTMLDivElement>>(new Map());
@@ -183,6 +205,10 @@ const ProposalOptionsCarousel: React.FC<ProposalOptionsCarouselProps> = ({
 
     const activeOption = options.find(option => option.id === activeOptionId) || null;
     const actionsOption = options.find(option => option.id === actionsOptionId) || null;
+    if (actionsOption) {
+        lastActionsOptionRef.current = actionsOption;
+    }
+    const sheetOption = actionsOption ?? lastActionsOptionRef.current;
     const activePricingMode = activeOption?.generalDiscount?.pricingMode === 'labor_only' ? 'labor_only' : 'complete';
     const activePricingModeLabel = activePricingMode === 'labor_only' ? 'Mao de obra' : 'Servico completo';
 
@@ -199,17 +225,18 @@ const ProposalOptionsCarousel: React.FC<ProposalOptionsCarouselProps> = ({
         description: string;
         onClick: () => void;
         tone?: 'default' | 'danger';
-    }> = ({ icon, label, description, onClick, tone = 'default' }) => (
+        active?: boolean;
+    }> = ({ icon, label, description, onClick, tone = 'default', active = false }) => (
         <button
             type="button"
             onClick={onClick}
-            className={`group flex w-full items-center gap-3 rounded-[var(--radius-control)] px-3 py-3 text-left transition-colors ${
+            className={`group flex w-full items-center gap-3 rounded-[var(--radius-control)] px-3 py-3 text-left transition-all active:scale-[0.99] ${
                 tone === 'danger'
-                    ? 'text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/25'
-                    : 'text-[var(--text-body)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)]'
+                    ? 'text-red-600 hover:bg-red-50 active:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/25 dark:active:bg-red-950/25'
+                    : 'text-[var(--text-body)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)] active:bg-[var(--surface-muted)]'
             }`}
         >
-            <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-control)] ${
+            <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius-control)] ${
                 tone === 'danger'
                     ? 'bg-red-50 text-red-600 dark:bg-red-950/30 dark:text-red-300'
                     : 'bg-[var(--brand-primary-soft)] text-[var(--brand-primary)] dark:text-blue-300'
@@ -217,10 +244,55 @@ const ProposalOptionsCarousel: React.FC<ProposalOptionsCarouselProps> = ({
                 {icon}
             </span>
             <span className="min-w-0 flex-1">
-                <span className="block text-sm font-bold">{label}</span>
+                <span className="flex items-center gap-1.5 text-sm font-bold">
+                    <span className="truncate">{label}</span>
+                    {active && (
+                        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500 dark:bg-blue-400" aria-hidden="true" />
+                    )}
+                </span>
                 <span className="mt-0.5 block truncate text-xs text-[var(--text-muted)]">{description}</span>
             </span>
+            {tone !== 'danger' && (
+                <ChevronRight className="h-4 w-4 shrink-0 text-[var(--text-soft)] transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+            )}
         </button>
+    );
+
+    const renderActionItems = (option: ProposalOption) => (
+        <>
+            <OptionActionItem
+                icon={<Pencil className="h-[18px] w-[18px]" aria-hidden="true" />}
+                label="Renomear opcao"
+                description="Ajustar o nome que aparece na aba"
+                onClick={() => runActionAndClose(() => startEditingOption(option, getOptionDisplayName(option)))}
+            />
+            <OptionActionItem
+                icon={<CreditCard className="h-[18px] w-[18px]" aria-hidden="true" />}
+                label="Pagamento"
+                description={hasActivePaymentOverride ? 'Pagamento personalizado ativo' : 'Configurar condicoes desta opcao'}
+                active={hasActivePaymentOverride}
+                onClick={() => runActionAndClose(onOpenPaymentConfig)}
+            />
+            <OptionActionItem
+                icon={<Receipt className="h-[18px] w-[18px]" aria-hidden="true" />}
+                label="Gastos"
+                description={hasActiveExpenses ? 'Gastos cadastrados nesta opcao' : 'Adicionar custos desta opcao'}
+                active={hasActiveExpenses}
+                onClick={() => runActionAndClose(onOpenExpenses)}
+            />
+            {options.length > 1 && (
+                <>
+                    <div className="mx-3 my-1 h-px bg-[var(--border-subtle)]" />
+                    <OptionActionItem
+                        icon={<Trash2 className="h-[18px] w-[18px]" aria-hidden="true" />}
+                        label="Excluir opcao"
+                        description="Remover este grupo de proposta"
+                        tone="danger"
+                        onClick={() => runActionAndClose(() => onDeleteOption(option.id))}
+                    />
+                </>
+            )}
+        </>
     );
 
     return (
@@ -346,8 +418,32 @@ const ProposalOptionsCarousel: React.FC<ProposalOptionsCarouselProps> = ({
                 </div>
             )}
 
-            {actionsOption && typeof document !== 'undefined' && createPortal(
-                <div className="fixed inset-0 z-[10020] flex items-end justify-center bg-slate-950/68 p-3 backdrop-blur-sm sm:items-center sm:p-4">
+            {isMobile && (
+                <Drawer.Root open={actionsOptionId !== null} onOpenChange={(open) => { if (!open) closeActionsModal(); }}>
+                    <Drawer.Portal>
+                        <Drawer.Overlay className="fixed inset-0 z-[10020] bg-slate-950/60 backdrop-blur-sm" />
+                        <Drawer.Content className="fixed bottom-0 left-0 right-0 z-[10021] flex max-h-[92dvh] flex-col rounded-t-[20px] border-t border-[var(--border-subtle)] bg-[var(--surface)] outline-none">
+                            {sheetOption && (
+                                <div className="overflow-y-auto overscroll-contain p-3 pb-[max(env(safe-area-inset-bottom),0.75rem)]">
+                                    <div className="mx-auto mb-3 h-1.5 w-12 flex-shrink-0 rounded-full bg-slate-300 dark:bg-slate-700" />
+                                    <div className="mb-2 px-2">
+                                        <p className="ui-kicker">Opcao ativa</p>
+                                        <Drawer.Title className="mt-0.5 truncate text-lg font-black leading-tight text-[var(--text-strong)]">
+                                            {getOptionDisplayName(sheetOption)}
+                                        </Drawer.Title>
+                                    </div>
+                                    <div className="space-y-1">
+                                        {renderActionItems(sheetOption)}
+                                    </div>
+                                </div>
+                            )}
+                        </Drawer.Content>
+                    </Drawer.Portal>
+                </Drawer.Root>
+            )}
+
+            {!isMobile && actionsOption && typeof document !== 'undefined' && createPortal(
+                <div className="fixed inset-0 z-[10020] flex items-center justify-center bg-slate-950/68 p-4 backdrop-blur-sm">
                     <button
                         type="button"
                         className="absolute inset-0 cursor-default"
@@ -377,36 +473,7 @@ const ProposalOptionsCarousel: React.FC<ProposalOptionsCarouselProps> = ({
                             </button>
                         </div>
                         <div className="space-y-1 p-2">
-                            <OptionActionItem
-                                icon={<Pencil className="h-4 w-4" aria-hidden="true" />}
-                                label="Renomear opcao"
-                                description="Ajustar o nome que aparece na aba"
-                                onClick={() => runActionAndClose(() => startEditingOption(actionsOption, getOptionDisplayName(actionsOption)))}
-                            />
-                            <OptionActionItem
-                                icon={<CreditCard className="h-4 w-4" aria-hidden="true" />}
-                                label="Pagamento"
-                                description={hasActivePaymentOverride ? 'Pagamento personalizado ativo' : 'Configurar condicoes desta opcao'}
-                                onClick={() => runActionAndClose(onOpenPaymentConfig)}
-                            />
-                            <OptionActionItem
-                                icon={<Receipt className="h-4 w-4" aria-hidden="true" />}
-                                label="Gastos"
-                                description={hasActiveExpenses ? 'Gastos cadastrados nesta opcao' : 'Adicionar custos desta opcao'}
-                                onClick={() => runActionAndClose(onOpenExpenses)}
-                            />
-                            {options.length > 1 && (
-                                <>
-                                    <div className="mx-3 my-1 h-px bg-[var(--border-subtle)]" />
-                                    <OptionActionItem
-                                        icon={<Trash2 className="h-4 w-4" aria-hidden="true" />}
-                                        label="Excluir opcao"
-                                        description="Remover este grupo de proposta"
-                                        tone="danger"
-                                        onClick={() => runActionAndClose(() => onDeleteOption(actionsOption.id))}
-                                    />
-                                </>
-                            )}
+                            {renderActionItems(actionsOption)}
                         </div>
                     </div>
                 </div>,
