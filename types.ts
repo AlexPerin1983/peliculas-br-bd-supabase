@@ -52,6 +52,9 @@ export interface Measurement {
     locationId?: number;
     locationName?: string;
     estoqueUso?: MeasurementEstoqueUso;
+    // Checklist de execucao: quando a medida foi aplicada no local (ISO).
+    // Nao afeta preco, grupos nem PDF — e so controle de progresso da obra.
+    aplicadoEm?: string;
 }
 
 export interface UIMeasurement extends Measurement {

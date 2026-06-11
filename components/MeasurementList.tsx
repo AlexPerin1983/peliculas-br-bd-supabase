@@ -1,11 +1,12 @@
 ﻿import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { MobileActionsDrawer } from './MobileActionsDrawer';
-import { CheckSquare, ChevronDown, ChevronUp, ClipboardPaste, Copy, Layers3, Trash2, X } from 'lucide-react';
+import { CheckSquare, ChevronDown, ChevronUp, ClipboardCheck, ClipboardPaste, Copy, Layers3, Trash2, X } from 'lucide-react';
 import { useMemo } from 'react';
 import { Measurement, Film, ProposalPricingMode, Retalho, UIMeasurement } from '../types';
 import MeasurementGroup from './MeasurementGroup';
 import ConfirmationModal from './modals/ConfirmationModal';
 import RetalhoSuggestionModal from './modals/RetalhoSuggestionModal';
+import ApplicationProgressModal, { getApplicationProgress } from './modals/ApplicationProgressModal';
 import { deleteConsumo, deleteRetalho, getAllRetalhos, saveConsumo, saveRetalho } from '../services/estoqueDb';
 import { getCompatibleRetalhosForMeasurement } from '../src/lib/retalhoMatching';
 import { RetalhoConsumptionPlan, planRetalhoConsumption } from '../src/lib/retalhoConsumption';
@@ -112,11 +113,14 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
     const [swipedItemId, setSwipedItemId] = useState<number | null>(null);
     const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const [isProgressModalOpen, setIsProgressModalOpen] = useState(false);
     const [availableRetalhos, setAvailableRetalhos] = useState<Retalho[]>([]);
     const [isLoadingRetalhos, setIsLoadingRetalhos] = useState(false);
     const [retalhoMeasurementId, setRetalhoMeasurementId] = useState<number | null>(null);
     const [consumingRetalhoId, setConsumingRetalhoId] = useState<number | null>(null);
     const formattedTotalM2 = totalM2.toFixed(2).replace('.', ',');
+    // Progresso do checklist de aplicacao (so leitura; muda apenas via modal).
+    const aplicacaoProgress = useMemo(() => getApplicationProgress(measurements), [measurements]);
 
     const scrollVelocityRef = useRef(0);
     const animationFrameRef = useRef<number | null>(null);
@@ -408,7 +412,9 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
             const newMeasurement: UIMeasurement = {
                 ...measurementToDuplicate,
                 id: Date.now(),
-                isNew: false
+                isNew: false,
+                // Copia da medida ainda nao foi aplicada na obra.
+                aplicadoEm: undefined
             };
 
             const index = measurements.findIndex(m => m.id === id);
@@ -736,6 +742,11 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
                                             label="Selecionar"
                                         />
                                         <ActionMenuItem
+                                            onClick={() => setIsProgressModalOpen(true)}
+                                            icon={<ClipboardCheck className="h-4 w-4" aria-hidden="true" />}
+                                            label="Progresso de Aplicacao"
+                                        />
+                                        <ActionMenuItem
                                             onClick={onOpenApplyFilmToAllModal}
                                             icon={<Layers3 className="h-4 w-4" aria-hidden="true" />}
                                             label="Aplicar a Todos"
@@ -753,6 +764,33 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
                             </div>
                         </div>
                     </div>
+
+                    {/* Barra discreta do checklist de aplicacao: so aparece depois
+                        que o primeiro item e marcado no modal de progresso. */}
+                    {aplicacaoProgress.started && (
+                        <button
+                            type="button"
+                            onClick={() => setIsProgressModalOpen(true)}
+                            className="mt-3 block w-full text-left"
+                            title="Abrir progresso de aplicacao"
+                        >
+                            <div className="flex items-center justify-between gap-2 text-[11px] font-bold">
+                                <span className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-300">
+                                    <ClipboardCheck className="h-3.5 w-3.5" aria-hidden="true" />
+                                    Aplicacao
+                                </span>
+                                <span className="text-[var(--text-muted)]">
+                                    {Math.round(aplicacaoProgress.percent)}% · {aplicacaoProgress.appliedPieces}/{aplicacaoProgress.totalPieces} pecas
+                                </span>
+                            </div>
+                            <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-[var(--surface-muted)]">
+                                <div
+                                    className="h-full rounded-full bg-emerald-500 transition-all duration-300"
+                                    style={{ width: `${Math.min(100, aplicacaoProgress.percent)}%` }}
+                                />
+                            </div>
+                        </button>
+                    )}
 
                     <MobileActionsDrawer
                         open={isMobileMenuOpen}
@@ -793,6 +831,27 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
                                         <div className="flex-1">
                                             <span className="font-semibold block text-base">Selecionar Medidas</span>
                                             <span className="text-xs text-slate-500 dark:text-slate-400 block mt-0.5">Copiar, apagar ou editar multiplos itens</span>
+                                        </div>
+                                        <i className="fas fa-chevron-right text-slate-300 text-xs"></i>
+                                    </button>
+
+                                    <button
+                                        onClick={() => {
+                                            setIsProgressModalOpen(true);
+                                            setIsMobileMenuOpen(false);
+                                        }}
+                                        className="w-full flex items-center gap-4 px-4 py-4 text-left transition-colors active:bg-slate-100 dark:active:bg-slate-700 rounded-xl text-slate-700 dark:text-slate-200"
+                                    >
+                                        <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 bg-emerald-50 dark:bg-emerald-900/20">
+                                            <i className="fas fa-clipboard-check text-lg text-emerald-600 dark:text-emerald-300"></i>
+                                        </div>
+                                        <div className="flex-1">
+                                            <span className="font-semibold block text-base">Progresso de Aplicacao</span>
+                                            <span className="text-xs text-slate-500 dark:text-slate-400 block mt-0.5">
+                                                {aplicacaoProgress.started
+                                                    ? `${Math.round(aplicacaoProgress.percent)}% executado · ${aplicacaoProgress.appliedPieces}/${aplicacaoProgress.totalPieces} pecas`
+                                                    : 'Marque o que ja foi aplicado na obra'}
+                                            </span>
                                         </div>
                                         <i className="fas fa-chevron-right text-slate-300 text-xs"></i>
                                     </button>
@@ -908,6 +967,13 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
                 consumingRetalhoId={consumingRetalhoId}
                 onClose={handleCloseRetalhoSuggestions}
                 onConfirm={handleUseRetalho}
+            />
+
+            <ApplicationProgressModal
+                isOpen={isProgressModalOpen}
+                onClose={() => setIsProgressModalOpen(false)}
+                measurements={measurements}
+                onApplyMeasurements={applyMeasurements}
             />
 
       <style>{`

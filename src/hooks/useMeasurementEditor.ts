@@ -221,7 +221,9 @@ export function useMeasurementEditor({
         const newMeasurement: UIMeasurement = {
             ...measurementToDuplicate,
             id: Date.now(),
-            isNew: false
+            isNew: false,
+            // Copia da medida ainda nao foi aplicada na obra.
+            aplicadoEm: undefined
         };
 
         const index = measurementsWithSavedValue.findIndex(measurement => measurement.id === measurementId);
