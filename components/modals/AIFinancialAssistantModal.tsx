@@ -40,6 +40,7 @@ const AIFinancialAssistantModal: React.FC<AIFinancialAssistantModalProps> = ({
         input,
         setInput,
         isLoading,
+        pendingReply,
         error,
         canUseAI,
         dataAvailable,
@@ -53,7 +54,7 @@ const AIFinancialAssistantModal: React.FC<AIFinancialAssistantModalProps> = ({
 
     useEffect(() => {
         threadEndRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'end' });
-    }, [messages, isLoading]);
+    }, [messages, isLoading, pendingReply]);
 
     const metricChips = [
         { label: 'Faturamento', value: formatCurrency(summary.faturamentoTotal) },
@@ -174,7 +175,14 @@ const AIFinancialAssistantModal: React.FC<AIFinancialAssistantModalProps> = ({
                                 )
                             )}
 
-                            {isLoading && (
+                            {isLoading && pendingReply && (
+                                <div className="rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-3">
+                                    {renderMarkdown(pendingReply)}
+                                    <span className="mt-1 inline-block h-3.5 w-1.5 animate-pulse rounded-sm bg-blue-500" aria-hidden="true" />
+                                </div>
+                            )}
+
+                            {isLoading && !pendingReply && (
                                 <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]" aria-live="polite">
                                     <Sparkles className="h-4 w-4 animate-pulse text-blue-500" aria-hidden="true" />
                                     {messages.length === 0 ? 'Analisando seus numeros...' : 'Pensando...'}

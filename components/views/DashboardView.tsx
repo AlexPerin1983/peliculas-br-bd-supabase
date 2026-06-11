@@ -852,6 +852,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
         const revised = periodPdfs.filter(pdf => getPdfStatus(pdf) === 'revised');
         const totalValue = periodPdfs.reduce((sum, pdf) => sum + getPdfValue(pdf), 0);
         const approvedValue = approved.reduce((sum, pdf) => sum + getPdfValue(pdf), 0);
+        const pendingValue = pending.reduce((sum, pdf) => sum + getPdfValue(pdf), 0);
         const proposalExpenses = periodPdfs.reduce((sum, pdf) => sum + getOperationalExpenses(pdf), 0);
         const expenses = proposalExpenses + standaloneExpenseTotal;
         const estimatedProfit = periodPdfs.reduce((sum, pdf) => sum + getEstimatedProfit(pdf), 0) - standaloneExpenseTotal;
@@ -864,6 +865,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
             revisedCount: revised.length,
             totalValue,
             approvedValue,
+            pendingValue,
             expenses,
             estimatedProfit,
             totalM2,
@@ -1098,6 +1100,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
         periodo: periodDisplayLabel,
         faturamentoTotal: periodStats.totalValue,
         faturamentoAprovado: periodStats.approvedValue,
+        faturamentoPendente: periodStats.pendingValue,
         despesas: periodStats.expenses,
         lucroEstimado: periodStats.estimatedProfit,
         margemEstimada: periodStats.estimatedMargin,

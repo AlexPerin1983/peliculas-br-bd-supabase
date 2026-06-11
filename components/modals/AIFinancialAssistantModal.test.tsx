@@ -6,15 +6,23 @@ const { generateContent } = vi.hoisted(() => ({ generateContent: vi.fn() }));
 vi.mock('@google/generative-ai', () => ({
     GoogleGenerativeAI: class {
         getGenerativeModel() {
-            return { generateContent };
+            return { generateContentStream: generateContent };
         }
     }
 }));
+
+// Resposta no formato de streaming do SDK: um unico chunk com o texto inteiro.
+const streamOf = (text: string) => ({
+    stream: (async function* () {
+        yield { text: () => text };
+    })()
+});
 
 const baseSummary: FinancialSummary = {
     periodo: 'Este mes',
     faturamentoTotal: 10000,
     faturamentoAprovado: 6000,
+    faturamentoPendente: 4000,
     despesas: 3000,
     lucroEstimado: 3000,
     margemEstimada: 30,
@@ -34,6 +42,7 @@ const emptySummary: FinancialSummary = {
     ...baseSummary,
     faturamentoTotal: 0,
     faturamentoAprovado: 0,
+    faturamentoPendente: 0,
     despesas: 0,
     lucroEstimado: 0,
     margemEstimada: 0,
@@ -108,9 +117,9 @@ describe('AIFinancialAssistantModal', () => {
     });
 
     it('chama a IA uma vez e renderiza a analise quando ha chave e dados', async () => {
-        generateContent.mockResolvedValue({
-            response: { text: () => '## Diagnostico\nMargem saudavel.\n\n## Pontos fortes\n- Boa **margem**' }
-        });
+        generateContent.mockResolvedValue(
+            streamOf('## Diagnostico\nMargem saudavel.\n\n## Pontos fortes\n- Boa **margem**')
+        );
 
         const onCached = vi.fn();
         render(
@@ -132,8 +141,8 @@ describe('AIFinancialAssistantModal', () => {
 
     it('responde a uma pergunta de acompanhamento no chat', async () => {
         generateContent
-            .mockResolvedValueOnce({ response: { text: () => '## Diagnostico\nTudo certo.' } })
-            .mockResolvedValueOnce({ response: { text: () => 'Seu faturamento subiu **20%**.' } });
+            .mockResolvedValueOnce(streamOf('## Diagnostico\nTudo certo.'))
+            .mockResolvedValueOnce(streamOf('Seu faturamento subiu **20%**.'));
 
         render(
             <AIFinancialAssistantModal

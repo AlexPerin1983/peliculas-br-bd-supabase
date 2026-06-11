@@ -21,8 +21,10 @@ const MAX_HISTORY_TURNS = 8;
 export const SUGGESTION_CHIPS = [
     'Comparar com o periodo anterior',
     'Onde meu custo mais aumentou?',
+    'Quanto tenho parado em orcamentos pendentes?',
     'Projete meu faturamento do mes',
-    'Como melhorar minha margem?'
+    'Como melhorar minha margem?',
+    'Me de 3 acoes para esta semana'
 ];
 
 const formatCurrency = (value: number) =>
@@ -32,7 +34,7 @@ const formatPercent = (value: number) => `${value.toFixed(1).replace('.', ',')}%
 
 // Assinatura usada para cache: se os numeros nao mudaram, reaproveita a
 // analise anterior em vez de gastar uma nova chamada na IA.
-const buildSignature = (summary: FinancialSummary) => JSON.stringify(summary);
+export const buildSignature = (summary: FinancialSummary) => JSON.stringify(summary);
 
 export const summaryHasData = (summary: FinancialSummary) =>
     summary.orcamentosGerados > 0 || summary.despesas > 0 || summary.faturamentoTotal > 0;
@@ -119,19 +121,27 @@ const formatCategorias = (categorias: { label: string; value: number }[]) =>
 // Contexto com TODOS os numeros do periodo. Vai no systemInstruction, entao a
 // IA so conversa em cima de dados reais (nao inventa valores).
 const buildSystemInstruction = (summary: FinancialSummary): string => {
+    const hoje = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
     const linhas = [
-        `Voce e um consultor financeiro experiente de uma empresa de aplicacao de peliculas/insulfilm (vidros automotivos e residenciais). Converse em portugues do Brasil, de forma direta, pratica e amigavel para um pequeno empresario (sem jargao academico).`,
+        `Voce e o "Financeiro", consultor financeiro de confianca de uma empresa brasileira de aplicacao de peliculas/insulfilm (vidros automotivos, residenciais e comerciais). Quem conversa com voce e o dono, um pequeno empresario que aplica pelicula no dia a dia. Fale em portugues do Brasil, com tom direto, pratico e parceiro, sem jargao academico.`,
+        '',
+        `Hoje e ${hoje}. O periodo em analise e "${summary.periodo}".`,
         '',
         'REGRAS IMPORTANTES:',
         '- Use SOMENTE os numeros fornecidos abaixo. NUNCA invente valores que nao estejam nos dados.',
+        '- Voce PODE e DEVE calcular a partir dos numeros fornecidos: somas, diferencas, variacoes percentuais e projecoes simples.',
         '- Para projecoes, baseie-se no faturamento diario medio e nos dias do periodo, e deixe claro que e uma estimativa.',
-        '- Se o usuario pedir algo que os dados nao cobrem, diga que esse dado nao esta disponivel neste resumo.',
-        '- Responda em markdown simples (titulos com ## e listas com -). Seja conciso e va direto ao ponto.',
+        '- Orcamentos pendentes sao dinheiro na mesa: quando relevante, lembre o dono de fazer follow-up neles.',
+        '- Se o usuario pedir algo que os dados nao cobrem, diga qual dado falta e onde registra-lo no app (orcamentos ficam no Historico; despesas avulsas, no Dashboard).',
+        '- Responda em markdown simples (titulos com ## e listas com -). Seja conciso: ate ~8 linhas ou listas curtas. Destaque os numeros importantes em **negrito**.',
         '- Formate dinheiro em reais (R$) e percentuais com uma casa decimal.',
+        '- Sempre que fizer sentido, termine com UMA proxima acao pratica que o dono pode executar hoje.',
+        '- Nunca repita a lista de dados inteira de volta; responda o que foi perguntado.',
         '',
         `DADOS DO PERIODO ATUAL (${summary.periodo}):`,
         `- Faturamento total cotado: ${formatCurrency(summary.faturamentoTotal)}`,
         `- Faturamento aprovado: ${formatCurrency(summary.faturamentoAprovado)}`,
+        `- Valor em orcamentos pendentes (aguardando aprovacao): ${formatCurrency(summary.faturamentoPendente)}`,
         `- Despesas: ${formatCurrency(summary.despesas)}`,
         `- Lucro estimado: ${formatCurrency(summary.lucroEstimado)}`,
         `- Margem estimada: ${formatPercent(summary.margemEstimada)}`,
@@ -166,10 +176,10 @@ const buildSystemInstruction = (summary: FinancialSummary): string => {
     return linhas.filter(Boolean).join('\n');
 };
 
-const DIAGNOSIS_FORMAT = `Responda EXATAMENTE nesta estrutura, usando markdown simples (## e listas com -). Maximo ~4 itens por secao:
+const DIAGNOSIS_FORMAT = `Responda EXATAMENTE nesta estrutura, usando markdown simples (## e listas com -). Maximo 3 itens por secao. Cite numeros concretos (em **negrito**) em todos os itens:
 
 ## Diagnostico
-(2 a 3 frases resumindo a saude financeira do periodo)
+(2 a 3 frases resumindo a saude financeira do periodo, com os numeros principais e a comparacao com o periodo anterior quando disponivel)
 
 ## Pontos fortes
 - ...
@@ -177,8 +187,8 @@ const DIAGNOSIS_FORMAT = `Responda EXATAMENTE nesta estrutura, usando markdown s
 ## Pontos de atencao
 - ...
 
-## Recomendacoes praticas
-- (acoes concretas que o dono pode tomar)`;
+## Proximas acoes
+- (2 a 3 acoes concretas e especificas que o dono pode executar esta semana, baseadas nos dados — ex: follow-up nos pendentes, rever um custo que subiu)`;
 
 interface UseFinancialAssistantChatParams {
     isOpen: boolean;
@@ -202,6 +212,8 @@ export const useFinancialAssistantChat = ({
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    // Texto parcial da resposta em streaming (null quando nao ha resposta em curso).
+    const [pendingReply, setPendingReply] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
 
     const signature = useMemo(() => buildSignature(summary), [summary]);
@@ -233,8 +245,17 @@ export const useFinancialAssistantChat = ({
             // Limita o tamanho da resposta -> controla o custo por chamada.
             generationConfig: { temperature: 0.4, maxOutputTokens: 700 }
         });
-        const response = await model.generateContent({ contents: buildContents(history) });
-        return response.response.text().trim();
+        // Streaming: a resposta vai aparecendo na tela conforme chega.
+        const result = await model.generateContentStream({ contents: buildContents(history) });
+        let full = '';
+        for await (const chunk of result.stream) {
+            const piece = chunk.text();
+            if (piece) {
+                full += piece;
+                setPendingReply(full);
+            }
+        }
+        return full.trim();
     };
 
     const describeError = (err: unknown) =>
@@ -263,6 +284,7 @@ export const useFinancialAssistantChat = ({
             setError(describeError(err));
         } finally {
             setIsLoading(false);
+            setPendingReply(null);
         }
     };
 
@@ -283,6 +305,7 @@ export const useFinancialAssistantChat = ({
             setError(describeError(err));
         } finally {
             setIsLoading(false);
+            setPendingReply(null);
         }
     };
 
@@ -303,6 +326,7 @@ export const useFinancialAssistantChat = ({
             setError(describeError(err));
         } finally {
             setIsLoading(false);
+            setPendingReply(null);
         }
     };
 
@@ -329,6 +353,7 @@ export const useFinancialAssistantChat = ({
         input,
         setInput,
         isLoading,
+        pendingReply,
         error,
         canUseAI,
         dataAvailable,

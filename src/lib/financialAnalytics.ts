@@ -18,6 +18,7 @@ export interface FinancialSummary {
     periodo: string;
     faturamentoTotal: number;
     faturamentoAprovado: number;
+    faturamentoPendente: number;
     despesas: number;
     lucroEstimado: number;
     margemEstimada: number;
@@ -163,6 +164,7 @@ export const buildFinancialSummary = ({
     const pending = periodPdfs.filter(pdf => getPdfStatus(pdf) === 'pending');
     const totalValue = periodPdfs.reduce((sum, pdf) => sum + getPdfValue(pdf), 0);
     const approvedValue = approved.reduce((sum, pdf) => sum + getPdfValue(pdf), 0);
+    const pendingValue = pending.reduce((sum, pdf) => sum + getPdfValue(pdf), 0);
     const proposalExpenses = periodPdfs.reduce((sum, pdf) => sum + getOperationalExpenses(pdf), 0);
     const expenses = proposalExpenses + standaloneTotal;
     const estimatedProfit = periodPdfs.reduce((sum, pdf) => sum + getEstimatedProfit(pdf), 0) - standaloneTotal;
@@ -240,6 +242,7 @@ export const buildFinancialSummary = ({
         periodo: periodLabel,
         faturamentoTotal: totalValue,
         faturamentoAprovado: approvedValue,
+        faturamentoPendente: pendingValue,
         despesas: expenses,
         lucroEstimado: estimatedProfit,
         margemEstimada: totalValue > 0 ? (estimatedProfit / totalValue) * 100 : 0,
@@ -270,4 +273,64 @@ export const getCurrentMonthRanges = (now: Date = new Date()) => {
         end: new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999)
     };
     return { range, previousRange };
+};
+
+// Periodos disponiveis para analise nos assistentes. Cada um traz o periodo
+// anterior equivalente para o comparativo.
+export type AnalysisPeriodKey = 'month' | 'previousMonth' | 'last7' | 'last30' | 'year';
+
+export const ANALYSIS_PERIODS: { key: AnalysisPeriodKey; label: string }[] = [
+    { key: 'month', label: 'Este mes' },
+    { key: 'previousMonth', label: 'Mes passado' },
+    { key: 'last7', label: '7 dias' },
+    { key: 'last30', label: '30 dias' },
+    { key: 'year', label: 'Este ano' }
+];
+
+const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+const lastNDaysRanges = (days: number, now: Date) => {
+    const start = startOfDay(new Date(now.getTime() - (days - 1) * 86400000));
+    const range: DateRange = { start, end: now };
+    const previousRange: DateRange = {
+        start: new Date(start.getTime() - days * 86400000),
+        end: new Date(start.getTime() - 1)
+    };
+    return { range, previousRange };
+};
+
+export const getAnalysisPeriodRanges = (
+    key: AnalysisPeriodKey,
+    now: Date = new Date()
+): { range: DateRange; previousRange: DateRange; periodLabel: string } => {
+    switch (key) {
+        case 'previousMonth': {
+            const range: DateRange = {
+                start: new Date(now.getFullYear(), now.getMonth() - 1, 1),
+                end: new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999)
+            };
+            const previousRange: DateRange = {
+                start: new Date(now.getFullYear(), now.getMonth() - 2, 1),
+                end: new Date(now.getFullYear(), now.getMonth() - 1, 0, 23, 59, 59, 999)
+            };
+            return { range, previousRange, periodLabel: 'Mes passado' };
+        }
+        case 'last7':
+            return { ...lastNDaysRanges(7, now), periodLabel: 'Ultimos 7 dias' };
+        case 'last30':
+            return { ...lastNDaysRanges(30, now), periodLabel: 'Ultimos 30 dias' };
+        case 'year': {
+            const range: DateRange = { start: new Date(now.getFullYear(), 0, 1), end: now };
+            // Mesmo trecho do ano anterior (1 jan ate a mesma data), para
+            // comparar periodos de duracao equivalente.
+            const previousRange: DateRange = {
+                start: new Date(now.getFullYear() - 1, 0, 1),
+                end: new Date(now.getFullYear() - 1, now.getMonth(), now.getDate(), 23, 59, 59, 999)
+            };
+            return { range, previousRange, periodLabel: 'Este ano' };
+        }
+        case 'month':
+        default:
+            return { ...getCurrentMonthRanges(now), periodLabel: 'Este mes' };
+    }
 };
