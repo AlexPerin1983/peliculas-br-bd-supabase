@@ -237,6 +237,41 @@ const renderPdfContent = async (
             }
         };
 
+        // Renderiza um glifo do Font Awesome Brands (ja carregado pelo app via
+        // CDN) num canvas e devolve como PNG para embutir no PDF. Retorna null
+        // se a fonte nao estiver disponivel (o chamador usa o fallback em texto).
+        const renderBrandIcon = async (
+            glyph: string,
+            color: [number, number, number]
+        ): Promise<{ dataUrl: string; aspect: number } | null> => {
+            try {
+                if (typeof document === 'undefined' || !document.fonts) return null;
+                const fontSpec = '400 96px "Font Awesome 6 Brands"';
+                await document.fonts.load(fontSpec, glyph);
+                if (!document.fonts.check(fontSpec, glyph)) return null;
+
+                const probe = document.createElement('canvas').getContext('2d');
+                if (!probe) return null;
+                probe.font = fontSpec;
+                const width = Math.ceil(probe.measureText(glyph).width);
+                if (width <= 0) return null;
+
+                const canvas = document.createElement('canvas');
+                canvas.width = width + 8;
+                canvas.height = 112;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) return null;
+                ctx.font = fontSpec;
+                ctx.fillStyle = `rgb(${color[0]},${color[1]},${color[2]})`;
+                ctx.textBaseline = 'middle';
+                ctx.fillText(glyph, 4, canvas.height / 2 + 4);
+                return { dataUrl: canvas.toDataURL('image/png'), aspect: canvas.width / canvas.height };
+            } catch (error) {
+                console.warn('Nao foi possivel renderizar icone de rede social:', error);
+                return null;
+            }
+        };
+
         let pageCounter = 1;
         const addFooter = () => {
             const footerY = pageHeight - 15;
@@ -483,23 +518,30 @@ const renderPdfContent = async (
                 }
             }
 
-            // --- REDES SOCIAIS - ÍCONES SIMPLES NO RODAPÉ ---
+            // --- REDES SOCIAIS - ÍCONES NO RODAPÉ DA CAPA ---
             const socialLinks = userInfo.socialLinks;
-            const activeSocialLinks: { type: string; url: string; symbol: string }[] = [];
+            // Glifos do Font Awesome 6 Brands (mesma fonte usada na interface).
+            const activeSocialLinks: { type: string; url: string; symbol: string; glyph: string }[] = [];
 
             if (socialLinks) {
-                if (socialLinks.instagram) activeSocialLinks.push({ type: 'instagram', url: socialLinks.instagram, symbol: 'in' });
-                if (socialLinks.facebook) activeSocialLinks.push({ type: 'facebook', url: socialLinks.facebook, symbol: 'fb' });
-                if (socialLinks.youtube) activeSocialLinks.push({ type: 'youtube', url: socialLinks.youtube, symbol: 'yt' });
-                if (socialLinks.tiktok) activeSocialLinks.push({ type: 'tiktok', url: socialLinks.tiktok, symbol: 'tk' });
-                if (socialLinks.googleReviews) activeSocialLinks.push({ type: 'google', url: socialLinks.googleReviews, symbol: 'g' });
+                if (socialLinks.instagram) activeSocialLinks.push({ type: 'instagram', url: socialLinks.instagram, symbol: 'in', glyph: '\uf16d' });
+                if (socialLinks.facebook) activeSocialLinks.push({ type: 'facebook', url: socialLinks.facebook, symbol: 'fb', glyph: '\uf09a' });
+                if (socialLinks.youtube) activeSocialLinks.push({ type: 'youtube', url: socialLinks.youtube, symbol: 'yt', glyph: '\uf167' });
+                if (socialLinks.tiktok) activeSocialLinks.push({ type: 'tiktok', url: socialLinks.tiktok, symbol: 'tk', glyph: '\ue07b' });
+                if (socialLinks.googleReviews) activeSocialLinks.push({ type: 'google', url: socialLinks.googleReviews, symbol: 'g', glyph: '\uf1a0' });
             }
 
             if (activeSocialLinks.length > 0) {
                 // Posição: rodapé da capa, alinhado à direita
                 const socialY = pageHeight - 10;
+                const iconHeight = 4.6; // mm
+                const iconGap = 3;
 
-                // Renderizar símbolos em linha separados por |
+                // Renderiza os icones reais; quem falhar usa a sigla em texto.
+                const renderedIcons = await Promise.all(
+                    activeSocialLinks.map(social => renderBrandIcon(social.glyph, primaryColor))
+                );
+
                 doc.setTextColor(...primaryColor);
                 doc.setFontSize(7);
                 doc.setFont("helvetica", 'normal');
@@ -509,22 +551,22 @@ const renderPdfContent = async (
                 // Desenhar da direita para esquerda
                 for (let i = activeSocialLinks.length - 1; i >= 0; i--) {
                     const social = activeSocialLinks[i];
-                    const symbolWidth = doc.getTextWidth(social.symbol);
+                    const icon = renderedIcons[i];
 
-                    currentX -= symbolWidth;
-                    doc.text(social.symbol, currentX, socialY);
-
-                    // Criar área clicável maior para facilitar toque no celular
-                    doc.link(currentX - 2, socialY - 5, symbolWidth + 4, 10, { url: social.url });
-
-                    // Adicionar separador | (exceto antes do primeiro)
-                    if (i > 0) {
-                        currentX -= 3;
-                        doc.setTextColor(180, 180, 180);
-                        doc.text('|', currentX, socialY);
-                        doc.setTextColor(...primaryColor);
-                        currentX -= 3;
+                    if (icon) {
+                        const iconWidth = iconHeight * icon.aspect;
+                        currentX -= iconWidth;
+                        doc.addImage(icon.dataUrl, 'PNG', currentX, socialY - iconHeight + 1, iconWidth, iconHeight);
+                        // Área clicável maior para facilitar o toque no celular
+                        doc.link(currentX - 1.5, socialY - iconHeight - 1.5, iconWidth + 3, iconHeight + 5, { url: social.url });
+                    } else {
+                        const symbolWidth = doc.getTextWidth(social.symbol);
+                        currentX -= symbolWidth;
+                        doc.text(social.symbol, currentX, socialY);
+                        doc.link(currentX - 2, socialY - 5, symbolWidth + 4, 10, { url: social.url });
                     }
+
+                    if (i > 0) currentX -= iconGap;
                 }
             }
             // --- FIM REDES SOCIAIS ---
