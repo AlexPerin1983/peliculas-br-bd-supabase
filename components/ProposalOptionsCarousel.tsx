@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { ChevronRight, CreditCard, MoreVertical, Pencil, Plus, Receipt, Trash2, X } from 'lucide-react';
 import { Drawer } from 'vaul';
 import { ProposalOption, ProposalPricingMode } from '../types';
+import { selectAllForOverwrite } from '../src/lib/selectOnFocus';
 
 const MOBILE_MEDIA_QUERY = '(max-width: 639px)';
 
@@ -151,7 +152,7 @@ const ProposalOptionsCarousel: React.FC<ProposalOptionsCarouselProps> = ({
     useEffect(() => {
         if (editingOptionId !== null && inputRef.current) {
             inputRef.current.focus();
-            inputRef.current.select();
+            selectAllForOverwrite(inputRef.current);
         }
     }, [editingOptionId]);
 

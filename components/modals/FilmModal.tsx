@@ -11,6 +11,7 @@ import {
     stripMatchingMetadataFromCustomFields,
     withMatchingMetadata
 } from '../../utils/filmMatchingMetadata';
+import { selectAllOnFocus } from '../../src/lib/selectOnFocus';
 
 interface FilmModalProps {
     isOpen: boolean;
@@ -148,7 +149,7 @@ const FilmModal: React.FC<FilmModalProps> = ({
     };
 
     const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
-        e.target.select();
+        selectAllOnFocus(e);
     };
 
     const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {

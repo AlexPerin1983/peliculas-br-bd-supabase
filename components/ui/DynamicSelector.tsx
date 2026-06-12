@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { matchesSearch } from '../../src/lib/textSearch';
+import { selectAllOnFocus } from '../../src/lib/selectOnFocus';
 
 interface DynamicSelectorProps {
     label: string;
@@ -55,7 +56,7 @@ const DynamicSelector: React.FC<DynamicSelectorProps> = ({ label, options, value
                 onChange={handleInputChange}
                 onFocus={(e) => {
                     setShowDropdown(true);
-                    e.target.select();
+                    selectAllOnFocus(e);
                 }}
                 className="w-full mt-1 p-2 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:ring-slate-500 focus:border-slate-500 sm:text-sm disabled:bg-slate-100 dark:disabled:bg-slate-800"
                 disabled={disabled}

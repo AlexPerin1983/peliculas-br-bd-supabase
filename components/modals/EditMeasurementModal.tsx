@@ -7,6 +7,7 @@ import LocationSearchInput from '../ui/LocationSearchInput';
 import { locationService } from '../../services/locationService';
 import { useAuth } from '../../contexts/AuthContext';
 import { calculatePricingAreaM2 } from '../../src/lib/pricingArea';
+import { selectAllOnFocus } from '../../src/lib/selectOnFocus';
 
 type UIMeasurement = Measurement & { isNew?: boolean };
 
@@ -220,7 +221,7 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
     };
 
     const handleFocus = (e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-        e.target.select();
+        selectAllOnFocus(e);
     };
 
     const LabeledInput: React.FC<{ label: string; children: React.ReactNode; hasError?: boolean }> = ({ label, children, hasError }) => (
