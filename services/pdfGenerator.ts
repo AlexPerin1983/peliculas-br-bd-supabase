@@ -411,9 +411,13 @@ const renderPdfContent = async (
             const clientInfoLineHeight = 4.5;
             const maxClientInfoWidth = (pageWidth / 2) - margin - 10;
 
-            // Nome do cliente (sempre exibido)
-            safeText(client.nome, margin, clientYPos);
-            clientYPos += clientInfoLineHeight;
+            // Nome do cliente (sempre exibido, quebrando linha para nao
+            // invadir a coluna "Preparado por:" quando for longo)
+            const clientNameLines = doc.splitTextToSize(String(client.nome || ''), maxClientInfoWidth);
+            for (const line of clientNameLines) {
+                safeText(line, margin, clientYPos);
+                clientYPos += clientInfoLineHeight;
+            }
 
             // CPF/CNPJ (se existir)
             if (client.cpfCnpj) {
@@ -452,17 +456,31 @@ const renderPdfContent = async (
             }
             // --- FIM DA SE??O DO CLIENTE ---
 
-            // Informações do usuário/empresa (lado direito)
+            // Informações do usuário/empresa (lado direito), com quebra de
+            // linha limitada à coluna para nao estourar a margem da pagina.
+            const companyX = pageWidth / 2 + 10;
+            const maxCompanyInfoWidth = pageWidth - margin - companyX;
+            let companyYPos = yPos;
+
             doc.setFontSize(9);
             doc.setTextColor(...textDark);
-            safeText(userInfo.nome, pageWidth / 2 + 10, yPos);
-            safeText(userInfo.empresa, pageWidth / 2 + 10, yPos + clientInfoLineHeight);
+            for (const line of doc.splitTextToSize(String(userInfo.nome || ''), maxCompanyInfoWidth)) {
+                safeText(line, companyX, companyYPos);
+                companyYPos += clientInfoLineHeight;
+            }
+            for (const line of doc.splitTextToSize(String(userInfo.empresa || ''), maxCompanyInfoWidth)) {
+                safeText(line, companyX, companyYPos);
+                companyYPos += clientInfoLineHeight;
+            }
 
             // Endereço da empresa
             if (userInfo.endereco) {
                 doc.setFontSize(8);
                 doc.setTextColor(80, 80, 80);
-                safeText(userInfo.endereco, pageWidth / 2 + 10, yPos + (clientInfoLineHeight * 2));
+                for (const line of doc.splitTextToSize(String(userInfo.endereco), maxCompanyInfoWidth)) {
+                    safeText(line, companyX, companyYPos);
+                    companyYPos += clientInfoLineHeight;
+                }
             }
 
             // --- REDES SOCIAIS - ÍCONES SIMPLES NO RODAPÉ ---
