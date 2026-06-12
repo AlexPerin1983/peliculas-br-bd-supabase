@@ -414,7 +414,8 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
                 id: Date.now(),
                 isNew: false,
                 // Copia da medida ainda nao foi aplicada na obra.
-                aplicadoEm: undefined
+                aplicadoEm: undefined,
+                aplicadoPecas: undefined
             };
 
             const index = measurements.findIndex(m => m.id === id);

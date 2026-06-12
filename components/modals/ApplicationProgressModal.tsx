@@ -1,12 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, Circle, ClipboardCheck, RotateCcw } from 'lucide-react';
+import { Check, CheckCircle2, ChevronDown, Circle, CircleDot, ClipboardCheck, RotateCcw } from 'lucide-react';
 import Modal from '../ui/Modal';
 import { UIMeasurement } from '../../types';
 import { calculatePricingAreaM2 } from '../../src/lib/pricingArea';
 
-// Checklist de execucao da obra: marca cada medida como "aplicada" e mostra o
-// progresso em % (pecas e m²). Mexe SOMENTE no campo `aplicadoEm` — grupos,
-// precos e status das medidas ficam intocados.
+// Checklist de execucao da obra: marca cada medida (ou cada peca dela) como
+// aplicada e mostra o progresso em % (pecas e m²). Mexe SOMENTE nos campos
+// `aplicadoEm`/`aplicadoPecas` — grupos, precos e status ficam intocados.
 
 const parseDim = (value: string | number) => {
     const parsed = Number(String(value ?? '').replace(',', '.'));
@@ -18,6 +18,30 @@ const formatM2 = (value: number) => `${value.toFixed(2).replace('.', ',')} m2`;
 const measurementArea = (measurement: UIMeasurement) =>
     calculatePricingAreaM2(parseDim(measurement.largura), parseDim(measurement.altura), Number(measurement.quantidade) || 1);
 
+const piecesOf = (measurement: UIMeasurement) => Math.max(1, Number(measurement.quantidade) || 1);
+
+// Pecas aplicadas da medida. `aplicadoPecas` tem prioridade; `aplicadoEm`
+// sozinho (formato antigo) significa "todas aplicadas".
+export const getAppliedPieces = (measurement: UIMeasurement) => {
+    const total = piecesOf(measurement);
+    if (measurement.aplicadoPecas !== undefined && measurement.aplicadoPecas !== null) {
+        return Math.max(0, Math.min(total, Math.floor(measurement.aplicadoPecas)));
+    }
+    return measurement.aplicadoEm ? total : 0;
+};
+
+// Devolve a medida com `count` pecas aplicadas, mantendo a semantica:
+// aplicadoEm so fica preenchido quando a medida esta 100% aplicada.
+const withAppliedPieces = (measurement: UIMeasurement, count: number, now: string): UIMeasurement => {
+    const total = piecesOf(measurement);
+    const clamped = Math.max(0, Math.min(total, Math.floor(count)));
+    return {
+        ...measurement,
+        aplicadoPecas: clamped > 0 ? clamped : undefined,
+        aplicadoEm: clamped === total && clamped > 0 ? measurement.aplicadoEm || now : undefined
+    };
+};
+
 export interface ApplicationProgress {
     totalPieces: number;
     appliedPieces: number;
@@ -28,7 +52,7 @@ export interface ApplicationProgress {
 }
 
 // Resumo do progresso (so medidas ativas contam: as desmarcadas nao fazem
-// parte do servico fechado).
+// parte do servico fechado). Area aplicada e proporcional as pecas.
 export const getApplicationProgress = (measurements: UIMeasurement[]): ApplicationProgress => {
     let totalPieces = 0;
     let appliedPieces = 0;
@@ -37,14 +61,13 @@ export const getApplicationProgress = (measurements: UIMeasurement[]): Applicati
 
     measurements.forEach(measurement => {
         if (measurement.active === false) return;
-        const pieces = Number(measurement.quantidade) || 1;
+        const pieces = piecesOf(measurement);
+        const applied = getAppliedPieces(measurement);
         const area = measurementArea(measurement);
         totalPieces += pieces;
         totalArea += area;
-        if (measurement.aplicadoEm) {
-            appliedPieces += pieces;
-            appliedArea += area;
-        }
+        appliedPieces += applied;
+        appliedArea += area * (applied / pieces);
     });
 
     return {
@@ -59,9 +82,11 @@ export const getApplicationProgress = (measurements: UIMeasurement[]): Applicati
 
 interface ProgressGroup {
     key: string;
-    label: string;
+    pelicula: string;
+    ambiente: string;
     items: UIMeasurement[];
-    appliedCount: number;
+    appliedPieces: number;
+    totalPieces: number;
 }
 
 interface ApplicationProgressModalProps {
@@ -78,9 +103,13 @@ const ApplicationProgressModal: React.FC<ApplicationProgressModalProps> = ({
     onApplyMeasurements
 }) => {
     const [confirmingReset, setConfirmingReset] = useState(false);
+    const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
 
     useEffect(() => {
-        if (!isOpen) setConfirmingReset(false);
+        if (!isOpen) {
+            setConfirmingReset(false);
+            setExpandedIds(new Set());
+        }
     }, [isOpen]);
 
     const activeMeasurements = useMemo(
@@ -100,36 +129,52 @@ const ApplicationProgressModal: React.FC<ApplicationProgressModalProps> = ({
             const key = `${pelicula}|${ambiente}`;
             const group = byKey.get(key) || {
                 key,
-                label: ambiente ? `${pelicula} (${ambiente})` : pelicula,
+                pelicula,
+                ambiente,
                 items: [],
-                appliedCount: 0
+                appliedPieces: 0,
+                totalPieces: 0
             };
             group.items.push(measurement);
-            if (measurement.aplicadoEm) group.appliedCount += 1;
+            group.appliedPieces += getAppliedPieces(measurement);
+            group.totalPieces += piecesOf(measurement);
             byKey.set(key, group);
         });
         return Array.from(byKey.values());
     }, [activeMeasurements]);
 
-    const toggleItem = (id: number) => {
+    const toggleExpanded = (id: number) => {
+        setExpandedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
+
+    const setItemPieces = (id: number, count: number) => {
         const now = new Date().toISOString();
         void onApplyMeasurements(
             measurements.map(measurement =>
-                measurement.id === id
-                    ? { ...measurement, aplicadoEm: measurement.aplicadoEm ? undefined : now }
-                    : measurement
+                measurement.id === id ? withAppliedPieces(measurement, count, now) : measurement
             )
         );
     };
 
+    // Circulo da linha: alterna entre tudo aplicado e nada aplicado.
+    const toggleItem = (item: UIMeasurement) => {
+        const total = piecesOf(item);
+        setItemPieces(item.id, getAppliedPieces(item) === total ? 0 : total);
+    };
+
     const toggleGroup = (group: ProgressGroup) => {
         const ids = new Set(group.items.map(item => item.id));
-        const markAll = group.appliedCount < group.items.length;
+        const markAll = group.appliedPieces < group.totalPieces;
         const now = new Date().toISOString();
         void onApplyMeasurements(
             measurements.map(measurement =>
                 ids.has(measurement.id)
-                    ? { ...measurement, aplicadoEm: markAll ? measurement.aplicadoEm || now : undefined }
+                    ? withAppliedPieces(measurement, markAll ? piecesOf(measurement) : 0, now)
                     : measurement
             )
         );
@@ -141,9 +186,10 @@ const ApplicationProgressModal: React.FC<ApplicationProgressModalProps> = ({
             return;
         }
         setConfirmingReset(false);
+        const now = new Date().toISOString();
         void onApplyMeasurements(
             measurements.map(measurement =>
-                measurement.aplicadoEm ? { ...measurement, aplicadoEm: undefined } : measurement
+                getAppliedPieces(measurement) > 0 ? withAppliedPieces(measurement, 0, now) : measurement
             )
         );
     };
@@ -237,16 +283,23 @@ const ApplicationProgressModal: React.FC<ApplicationProgressModalProps> = ({
                 ) : (
                     <div className="space-y-3">
                         {groups.map(group => {
-                            const groupComplete = group.appliedCount === group.items.length;
+                            const groupComplete = group.appliedPieces === group.totalPieces;
                             return (
                                 <div
                                     key={group.key}
                                     className="overflow-hidden rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface)]"
                                 >
                                     <div className="flex items-center justify-between gap-2 border-b border-[var(--border-subtle)] bg-[var(--surface-raised)] px-3 py-2.5">
-                                        <p className="min-w-0 truncate text-sm font-bold text-[var(--text-strong)]">
-                                            {group.label}
-                                        </p>
+                                        <div className="min-w-0">
+                                            <p className="truncate text-sm font-bold leading-tight text-[var(--text-strong)]">
+                                                {group.pelicula}
+                                            </p>
+                                            {group.ambiente && (
+                                                <p className="mt-0.5 break-words text-[11px] font-medium leading-snug text-[var(--text-muted)]">
+                                                    {group.ambiente}
+                                                </p>
+                                            )}
+                                        </div>
                                         <div className="flex shrink-0 items-center gap-2">
                                             <span
                                                 className={`rounded-full px-2 py-px text-[10px] font-bold ${
@@ -255,7 +308,7 @@ const ApplicationProgressModal: React.FC<ApplicationProgressModalProps> = ({
                                                         : 'bg-[var(--surface-muted)] text-[var(--text-muted)]'
                                                 }`}
                                             >
-                                                {group.appliedCount}/{group.items.length}
+                                                {group.appliedPieces}/{group.totalPieces}
                                             </span>
                                             <button
                                                 type="button"
@@ -268,37 +321,101 @@ const ApplicationProgressModal: React.FC<ApplicationProgressModalProps> = ({
                                     </div>
                                     <ul className="divide-y divide-[var(--border-subtle)]">
                                         {group.items.map(item => {
-                                            const applied = Boolean(item.aplicadoEm);
-                                            const pieces = Number(item.quantidade) || 1;
+                                            const pieces = piecesOf(item);
+                                            const applied = getAppliedPieces(item);
+                                            const fullApplied = applied === pieces;
+                                            const partial = applied > 0 && !fullApplied;
+                                            const expandable = pieces > 1;
+                                            const expanded = expandable && expandedIds.has(item.id);
                                             return (
                                                 <li key={item.id}>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => toggleItem(item.id)}
-                                                        className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-[var(--surface-muted)]"
-                                                        aria-pressed={applied}
-                                                    >
-                                                        {applied ? (
-                                                            <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-500" aria-hidden="true" />
-                                                        ) : (
-                                                            <Circle className="h-5 w-5 shrink-0 text-[var(--text-soft)]" aria-hidden="true" />
-                                                        )}
-                                                        <span
-                                                            className={`min-w-0 flex-1 truncate text-sm ${
-                                                                applied
-                                                                    ? 'text-[var(--text-muted)]'
-                                                                    : 'text-[var(--text-strong)]'
-                                                            }`}
+                                                    <div className="flex w-full items-center gap-1 px-3 py-1 transition-colors hover:bg-[var(--surface-muted)]">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => toggleItem(item)}
+                                                            className="-ml-1 flex h-10 w-10 shrink-0 items-center justify-center"
+                                                            aria-pressed={fullApplied}
+                                                            aria-label={fullApplied ? 'Desmarcar medida' : 'Marcar medida como aplicada'}
+                                                            title={fullApplied ? 'Desmarcar tudo' : 'Marcar tudo desta medida'}
                                                         >
-                                                            {String(item.largura || '0')} x {String(item.altura || '0')}
-                                                            <span className="text-[var(--text-muted)]">
-                                                                {' '}· {pieces} pc{pieces === 1 ? '' : 's'}
+                                                            {fullApplied ? (
+                                                                <CheckCircle2 className="h-5 w-5 text-emerald-500" aria-hidden="true" />
+                                                            ) : partial ? (
+                                                                <CircleDot className="h-5 w-5 text-emerald-500" aria-hidden="true" />
+                                                            ) : (
+                                                                <Circle className="h-5 w-5 text-[var(--text-soft)]" aria-hidden="true" />
+                                                            )}
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => (expandable ? toggleExpanded(item.id) : toggleItem(item))}
+                                                            className="flex min-w-0 flex-1 items-center gap-2 py-1.5 text-left"
+                                                            aria-expanded={expandable ? expanded : undefined}
+                                                        >
+                                                            <span
+                                                                className={`min-w-0 flex-1 truncate text-sm ${
+                                                                    fullApplied
+                                                                        ? 'text-[var(--text-muted)]'
+                                                                        : 'text-[var(--text-strong)]'
+                                                                }`}
+                                                            >
+                                                                {String(item.largura || '0')} x {String(item.altura || '0')}
+                                                                <span className="text-[var(--text-muted)]">
+                                                                    {' '}· {pieces} pc{pieces === 1 ? '' : 's'}
+                                                                </span>
                                                             </span>
-                                                        </span>
-                                                        <span className="shrink-0 text-xs font-semibold text-[var(--text-muted)]">
-                                                            {formatM2(measurementArea(item))}
-                                                        </span>
-                                                    </button>
+                                                            {partial && (
+                                                                <span className="shrink-0 rounded-full bg-emerald-50 px-1.5 py-px text-[10px] font-bold text-emerald-600 dark:bg-emerald-400/10 dark:text-emerald-300">
+                                                                    {applied}/{pieces}
+                                                                </span>
+                                                            )}
+                                                            <span className="shrink-0 text-xs font-semibold text-[var(--text-muted)]">
+                                                                {formatM2(measurementArea(item))}
+                                                            </span>
+                                                            {expandable && (
+                                                                <ChevronDown
+                                                                    className={`h-4 w-4 shrink-0 text-[var(--text-soft)] transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
+                                                                    aria-hidden="true"
+                                                                />
+                                                            )}
+                                                        </button>
+                                                    </div>
+                                                    {expanded && (
+                                                        <div className="border-t border-dashed border-[var(--border-subtle)] bg-[var(--surface-muted)] px-3 py-2.5">
+                                                            <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--text-soft)]">
+                                                                Pecas aplicadas: {applied} de {pieces}
+                                                            </p>
+                                                            <div className="flex flex-wrap gap-1.5">
+                                                                {Array.from({ length: pieces }, (_, index) => {
+                                                                    const pieceNumber = index + 1;
+                                                                    const checked = pieceNumber <= applied;
+                                                                    return (
+                                                                        <button
+                                                                            key={pieceNumber}
+                                                                            type="button"
+                                                                            // "Apliquei ate aqui": toca na peca N e marca N;
+                                                                            // tocar de novo na ultima marcada volta uma.
+                                                                            onClick={() =>
+                                                                                setItemPieces(
+                                                                                    item.id,
+                                                                                    applied === pieceNumber ? pieceNumber - 1 : pieceNumber
+                                                                                )
+                                                                            }
+                                                                            aria-pressed={checked}
+                                                                            aria-label={`Peca ${pieceNumber}`}
+                                                                            className={`relative flex h-9 w-9 items-center justify-center rounded-full border text-xs font-bold transition-colors ${
+                                                                                checked
+                                                                                    ? 'border-emerald-500 bg-emerald-500 text-white'
+                                                                                    : 'border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-muted)] hover:border-emerald-300'
+                                                                            }`}
+                                                                        >
+                                                                            {checked ? <Check className="h-4 w-4" aria-hidden="true" /> : pieceNumber}
+                                                                        </button>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </li>
                                             );
                                         })}

@@ -223,7 +223,8 @@ export function useMeasurementEditor({
             id: Date.now(),
             isNew: false,
             // Copia da medida ainda nao foi aplicada na obra.
-            aplicadoEm: undefined
+            aplicadoEm: undefined,
+            aplicadoPecas: undefined
         };
 
         const index = measurementsWithSavedValue.findIndex(measurement => measurement.id === measurementId);
