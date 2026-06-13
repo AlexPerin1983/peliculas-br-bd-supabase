@@ -26,6 +26,18 @@ interface QRScannerModalProps {
     onDataUpdated: () => void;
 }
 
+// O QR é gerado com a URL pública inteira (ex.: https://app.filmstec.shop?qr=PBR-...).
+// O scanner precisa extrair só o código antes de consultar o estoque.
+const extrairCodigoQr = (raw: string): string => {
+    const texto = raw.trim();
+    try {
+        const url = new URL(texto);
+        return (url.searchParams.get('qr') || url.searchParams.get('code') || texto).trim();
+    } catch {
+        return texto; // Já veio só o código puro
+    }
+};
+
 const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose, onDataUpdated }) => {
     const { showAlert, showToast } = useFeedback();
     const [scanning, setScanning] = useState(true);
@@ -69,7 +81,8 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose, onData
     };
 
     const handleQRCodeScanned = async (decodedText: string) => {
-        console.log('QR Code escaneado:', decodedText);
+        const codigo = extrairCodigoQr(decodedText);
+        console.log('QR Code escaneado:', decodedText, '→ código:', codigo);
 
         // Parar scanner imediatamente após leitura bem-sucedida
         await stopScanner();
@@ -79,7 +92,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose, onData
 
         try {
             // Tentar buscar como bobina primeiro
-            let bobina = await getBobinaByQR(decodedText);
+            let bobina = await getBobinaByQR(codigo);
 
             if (bobina) {
                 setLoadingSecondary(true);
@@ -91,7 +104,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose, onData
                 setLoadingSecondary(false);
             } else {
                 // Se não for bobina, tentar buscar como retalho
-                const retalho = await getRetalhoByQR(decodedText);
+                const retalho = await getRetalhoByQR(codigo);
                 if (retalho) {
                     let parentBobina: Bobina | undefined;
                     if (retalho.bobinaId) {
