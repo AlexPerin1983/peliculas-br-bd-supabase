@@ -696,7 +696,10 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
     }, [handleOptimize, activeFilm]);
 
     // Calculate dynamic scale (sem limite de altura - a virtualização cuida da renderização)
-    const availableWidth = Math.max(0, containerWidth - 48);
+    // Desconta padding do contêiner + régua esquerda + espaço da cota direita,
+    // para o plano caber inteiro a 100% de zoom sem scroll horizontal
+    const horizontalGutter = containerWidth < 640 ? 152 : 200;
+    const availableWidth = Math.max(0, containerWidth - horizontalGutter);
     const baseScale = result && result.rollWidth > 0 ? availableWidth / result.rollWidth : 2;
     const scale = baseScale * zoomLevel;
 
@@ -976,10 +979,59 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
         return Object.values(groups).sort((a, b) => (b.w * b.h) - (a.w * a.h));
     }, [getPieceGroupKey, result]);
 
+    // Peças que não couberam na bobina, agrupadas por dimensão
+    const unplacedGroups = useMemo(() => {
+        if (!result?.unplacedItems?.length) return [];
+        const groups: { [key: string]: { key: string, maxSide: number, minSide: number, count: number, fitsIfRotated: boolean } } = {};
+
+        result.unplacedItems.forEach(item => {
+            const maxSide = Math.max(item.w, item.h);
+            const minSide = Math.min(item.w, item.h);
+            const key = `${Math.round(maxSide * 10) / 10}x${Math.round(minSide * 10) / 10}`;
+            if (!groups[key]) {
+                groups[key] = { key, maxSide, minSide, count: 0, fitsIfRotated: minSide <= result.rollWidth };
+            }
+            groups[key].count++;
+        });
+
+        return Object.values(groups).sort((a, b) => (b.maxSide * b.minSide) - (a.maxSide * a.minSide));
+    }, [result]);
+    const unplacedCount = result?.unplacedItems?.length ?? 0;
+
     const openFullscreenView = React.useCallback(() => {
         setFullscreenZoom(1);
         setIsFullscreen(true);
     }, []);
+
+    // Linha de cota estilo desenho técnico: extremidades marcadas e etiqueta central.
+    // Substitui os antigos cards flutuantes de Bobina/Comprimento sobre as réguas.
+    const renderWidthDimension = (meters: string, kicker: string) => (
+        <div className="flex w-full items-center">
+            <span className="h-2.5 w-px shrink-0 bg-cyan-600/70 dark:bg-cyan-300/70"></span>
+            <span className="h-px flex-1 bg-cyan-600/40 dark:bg-cyan-300/30"></span>
+            <span className="mx-1.5 flex shrink-0 items-baseline gap-1 whitespace-nowrap rounded-full border border-cyan-600/25 bg-white/95 px-2 py-1 shadow-sm dark:border-cyan-300/25 dark:bg-slate-950/95">
+                <span className="text-[8px] font-black uppercase tracking-[0.16em] text-cyan-700 dark:text-cyan-300">{kicker}</span>
+                <span className="text-[11px] font-black leading-none tabular-nums text-slate-900 dark:text-white">{meters}</span>
+                <span className="text-[8px] font-bold text-slate-400 dark:text-slate-500">m</span>
+            </span>
+            <span className="h-px flex-1 bg-cyan-600/40 dark:bg-cyan-300/30"></span>
+            <span className="h-2.5 w-px shrink-0 bg-cyan-600/70 dark:bg-cyan-300/70"></span>
+        </div>
+    );
+
+    const renderLengthDimension = (meters: string, kicker: string) => (
+        <div className="flex h-full flex-col items-center">
+            <span className="h-px w-2.5 shrink-0 bg-cyan-600/70 dark:bg-cyan-300/70"></span>
+            <span className="w-px flex-1 bg-cyan-600/40 dark:bg-cyan-300/30"></span>
+            <span className="my-1.5 flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-cyan-600/25 bg-white/95 px-1.5 py-2 shadow-sm dark:border-cyan-300/25 dark:bg-slate-950/95" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
+                <span className="text-[8px] font-black uppercase tracking-[0.16em] text-cyan-700 dark:text-cyan-300">{kicker}</span>
+                <span className="text-[11px] font-black leading-none tabular-nums text-slate-900 dark:text-white">{meters}</span>
+                <span className="text-[8px] font-bold text-slate-400 dark:text-slate-500">m</span>
+            </span>
+            <span className="w-px flex-1 bg-cyan-600/40 dark:bg-cyan-300/30"></span>
+            <span className="h-px w-2.5 shrink-0 bg-cyan-600/70 dark:bg-cyan-300/70"></span>
+        </div>
+    );
 
     return (
         <div className="mt-8 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
@@ -996,10 +1048,13 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                     <div className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700">
                         {/* Desktop Header */}
                         <div className="hidden sm:flex p-4 items-center justify-between">
-                            <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                                Otimizador de Corte
-                                <span className="text-[10px] text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-1.5 py-0.5 rounded-full border border-blue-100 dark:border-blue-800 font-semibold">BETA</span>
-                            </h3>
+                            <div>
+                                <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                                    Otimizador de Corte
+                                    <span className="text-[10px] text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-1.5 py-0.5 rounded-full border border-blue-100 dark:border-blue-800 font-semibold">BETA</span>
+                                </h3>
+                                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Aproveitamento da bobina e sequência de cortes por película</p>
+                            </div>
 
                             {/* Desktop Tabs */}
                             {uniqueFilms.length > 1 && (
@@ -1162,123 +1217,42 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                 </div>
                             </div>
 
-                            <div className="hidden">
-                                <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_80px] gap-2">
-                                    {/* Bobina Field */}
-                                    <div className="flex-1">
-                                        <div className="mb-1 flex items-center gap-1">
-                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3 text-blue-400">
-                                                <path d="M3.75 3a.75.75 0 00-.75.75v.5c0 .414.336.75.75.75H4c6.075 0 11 4.925 11 11v.25c0 .414.336.75.75.75h.5a.75.75 0 00.75-.75V16C17 8.82 11.18 3 4 3h-.25z" />
-                                                <path d="M3.75 9a.75.75 0 00-.75.75v.5c0 .414.336.75.75.75H4a5 5 0 015 5v.25c0 .414.336.75.75.75h.5a.75.75 0 00.75-.75V15c0-3.866-3.134-7-7-7h-.25z" />
-                                                <path d="M7 15a2 2 0 11-4 0 2 2 0 014 0z" />
-                                            </svg>
-                                            <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Bobina</label>
-                                        </div>
-                                        <div className="relative">
-                                            <input
-                                                type="number"
-                                                inputMode="decimal"
-                                                value={currentSettings.rollWidth}
-                                                onChange={e => updateCurrentSettings('rollWidth', e.target.value)}
-                                                placeholder="152"
-                                                className="h-9 w-full rounded-lg border border-slate-300 bg-white p-2 pr-9 text-sm font-bold text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 dark:border-slate-600/50 dark:bg-slate-900/80 dark:text-white"
-                                            />
-                                            <span className="absolute right-2.5 top-2.5 text-[10px] font-medium text-slate-500">cm</span>
-                                        </div>
-                                    </div>
-                                    {/* Sangria Field */}
-                                    <div className="flex-1">
-                                        <div className="mb-1 flex items-center gap-1">
-                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3 text-amber-400">
-                                                <path fillRule="evenodd" d="M5.5 3A2.5 2.5 0 003 5.5v2.879a2.5 2.5 0 00.732 1.767l6.5 6.5a2.5 2.5 0 003.536 0l2.878-2.878a2.5 2.5 0 000-3.536l-6.5-6.5A2.5 2.5 0 008.38 3H5.5zM6 7a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-                                            </svg>
-                                            <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Sangria</label>
-                                        </div>
-                                        <div className="relative">
-                                            <input
-                                                type="number"
-                                                inputMode="decimal"
-                                                value={currentSettings.bladeWidth}
-                                                onChange={e => updateCurrentSettings('bladeWidth', e.target.value)}
-                                                placeholder="0"
-                                                className="h-9 w-full rounded-lg border border-slate-300 bg-white p-2 pr-10 text-sm font-bold text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 dark:border-slate-600/50 dark:bg-slate-900/80 dark:text-white"
-                                            />
-                                            <span className="absolute right-2.5 top-2.5 text-[10px] font-medium text-slate-500">mm</span>
-                                        </div>
-                                    </div>
-
-                                    <button
-                                        onClick={() => handleOptimize(true)}
-                                        disabled={!result || isOptimizing}
-                                        className={`mt-[18px] flex h-9 items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-emerald-600 to-emerald-500 px-2 text-xs font-bold text-white shadow-lg shadow-emerald-500/20 transition-all active:from-emerald-700 active:to-emerald-600 ${(!result || isOptimizing) ? 'cursor-not-allowed opacity-50' : 'hover:from-emerald-500 hover:to-emerald-400'}`}
-                                    >
-                                        {isOptimizing ? (
-                                            <svg className="h-3.5 w-3.5 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                                        ) : (
-                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-11.25a.75.75 0 00-1.5 0v2.5h-2.5a.75.75 0 000 1.5h2.5v2.5a.75.75 0 001.5 0v-2.5h2.5a.75.75 0 000-1.5h-2.5v-2.5z" clipRule="evenodd" /></svg>
-                                        )}
-                                        {isOptimizing ? 'Salvando' : 'Salvar'}
-                                    </button>
-                                </div>
-
-                                <div className="mt-1.5 flex items-center gap-3 border-t border-slate-200 pt-1.5 dark:border-slate-700/60">
-                                    <div className="flex flex-1 items-center gap-4">
-                                        {/* Toggle Veio */}
-                                        <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                                            <div className={`relative w-8 h-[18px] rounded-full transition-all duration-200 ${currentSettings.respectGrain ? 'bg-blue-600 shadow-blue-500/30 shadow-md' : 'bg-slate-300 dark:bg-slate-600'}`}>
-                                                <div className={`absolute top-0.5 left-0.5 bg-white w-3.5 h-3.5 rounded-full shadow transform transition-transform duration-200 ${currentSettings.respectGrain ? 'translate-x-3.5' : 'translate-x-0'}`} />
-                                            </div>
-                                            <input type="checkbox" checked={currentSettings.respectGrain} onChange={e => updateCurrentSettings('respectGrain', e.target.checked)} className="hidden" />
-                                            <span className={`text-[11px] font-medium transition-colors ${currentSettings.respectGrain ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}>Veio</span>
-                                        </label>
-                                        {/* Toggle Pro */}
-                                        <label className="flex items-center gap-1.5 cursor-pointer select-none" title="Otimização Profunda">
-                                            <div className={`relative w-8 h-[18px] rounded-full transition-all duration-200 ${useDeepSearch ? 'bg-purple-600 shadow-purple-500/30 shadow-md' : 'bg-slate-300 dark:bg-slate-600'}`}>
-                                                <div className={`absolute top-0.5 left-0.5 bg-white w-3.5 h-3.5 rounded-full shadow transform transition-transform duration-200 ${useDeepSearch ? 'translate-x-3.5' : 'translate-x-0'}`} />
-                                            </div>
-                                            <input type="checkbox" checked={useDeepSearch} onChange={e => setUseDeepSearch(e.target.checked)} className="hidden" />
-                                            <span className={`text-[11px] font-medium flex items-center gap-0.5 transition-colors ${useDeepSearch ? 'text-purple-400' : 'text-slate-400'}`}>
-                                                Pro<span className="text-[8px] bg-purple-500/20 text-purple-400 px-1 rounded font-bold">ß</span>
-                                            </span>
-                                        </label>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Desktop: Original layout */}
-                            <div className="hidden sm:flex sm:flex-wrap gap-4 items-end">
-                                <div>
-                                    <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Largura Bobina (cm)</label>
-                                    <input type="number" inputMode="decimal" value={currentSettings.rollWidth} onChange={e => updateCurrentSettings('rollWidth', e.target.value)} placeholder="152" className="border border-slate-300 dark:border-slate-600 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 outline-none w-32 text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100" />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Espaçamento (Corte)</label>
-                                    <div className="relative">
-                                        <input type="number" inputMode="decimal" value={currentSettings.bladeWidth} onChange={e => updateCurrentSettings('bladeWidth', e.target.value)} placeholder="0" className="border border-slate-300 dark:border-slate-600 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 outline-none w-32 pr-8 text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100" />
-                                        <span className="absolute right-2 top-2 text-xs text-slate-400 dark:text-slate-500">mm</span>
-                                    </div>
-                                </div>
-                                <div className="flex items-center h-10">
-                                    <label className="flex items-center gap-2 cursor-pointer select-none">
-                                        <div className={`w-10 h-6 rounded-full p-1 transition-colors ${currentSettings.respectGrain ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-600'}`}>
+                            {/* Desktop: barra de configuração */}
+                            <div className="hidden sm:block rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
+                                <div className="flex flex-wrap items-center gap-2 p-2">
+                                    <label className="flex min-w-[150px] cursor-text flex-col rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 transition-colors focus-within:border-blue-500 focus-within:bg-white dark:border-slate-700 dark:bg-slate-950/60 dark:focus-within:border-blue-400 dark:focus-within:bg-slate-950">
+                                        <span className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Largura da bobina</span>
+                                        <span className="mt-0.5 flex items-baseline gap-1">
+                                            <input type="number" inputMode="decimal" value={currentSettings.rollWidth} onChange={e => updateCurrentSettings('rollWidth', e.target.value)} placeholder="152" className="w-20 border-0 bg-transparent p-0 text-base font-bold tabular-nums text-slate-900 outline-none focus:ring-0 dark:text-white" />
+                                            <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500">cm</span>
+                                        </span>
+                                    </label>
+                                    <label className="flex min-w-[130px] cursor-text flex-col rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 transition-colors focus-within:border-blue-500 focus-within:bg-white dark:border-slate-700 dark:bg-slate-950/60 dark:focus-within:border-blue-400 dark:focus-within:bg-slate-950" title="Espaçamento entre os cortes (sangria)">
+                                        <span className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Sangria do corte</span>
+                                        <span className="mt-0.5 flex items-baseline gap-1">
+                                            <input type="number" inputMode="decimal" value={currentSettings.bladeWidth} onChange={e => updateCurrentSettings('bladeWidth', e.target.value)} placeholder="0" className="w-16 border-0 bg-transparent p-0 text-base font-bold tabular-nums text-slate-900 outline-none focus:ring-0 dark:text-white" />
+                                            <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500">mm</span>
+                                        </span>
+                                    </label>
+                                    <div className="mx-1 hidden h-9 w-px bg-slate-200 dark:bg-slate-700 lg:block"></div>
+                                    <label className="flex h-[52px] items-center gap-2 cursor-pointer select-none rounded-lg px-2 hover:bg-slate-50 dark:hover:bg-slate-800/60" title="Impede a rotação das peças para respeitar o veio do material">
+                                        <div className={`w-9 h-5 shrink-0 rounded-full p-0.5 transition-colors ${currentSettings.respectGrain ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-600'}`}>
                                             <div className={`bg-white w-4 h-4 rounded-full shadow-sm transform transition-transform ${currentSettings.respectGrain ? 'translate-x-4' : 'translate-x-0'}`} />
                                         </div>
                                         <input type="checkbox" checked={currentSettings.respectGrain} onChange={e => updateCurrentSettings('respectGrain', e.target.checked)} className="hidden" />
-                                        <span className="text-sm text-slate-700 dark:text-slate-300 font-medium">Resp. Veio</span>
+                                        <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Resp. Veio</span>
                                     </label>
-                                </div>
-                                <div className="flex items-center h-10">
-                                    <label className="flex items-center gap-2 cursor-pointer select-none" title="Otimização Profunda">
-                                        <div className={`w-10 h-6 rounded-full p-1 transition-colors ${useDeepSearch ? 'bg-purple-600' : 'bg-slate-300 dark:bg-slate-600'}`}>
+                                    <label className="flex h-[52px] items-center gap-2 cursor-pointer select-none rounded-lg px-2 hover:bg-slate-50 dark:hover:bg-slate-800/60" title="Testa combinações extras para encontrar um plano com menos sobra (mais lento)">
+                                        <div className={`w-9 h-5 shrink-0 rounded-full p-0.5 transition-colors ${useDeepSearch ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-600'}`}>
                                             <div className={`bg-white w-4 h-4 rounded-full shadow-sm transform transition-transform ${useDeepSearch ? 'translate-x-4' : 'translate-x-0'}`} />
                                         </div>
                                         <input type="checkbox" checked={useDeepSearch} onChange={e => setUseDeepSearch(e.target.checked)} className="hidden" />
-                                        <span className="text-sm text-slate-700 dark:text-slate-300 font-medium flex items-center gap-1">Otimização Profunda<span className="text-[10px] text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 px-1 py-0.5 rounded-full border border-purple-100 dark:border-purple-800">ß</span></span>
+                                        <span className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-1">Otimização Profunda<span className="text-[10px] text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-1 py-0.5 rounded-full border border-blue-100 dark:border-blue-800">ß</span></span>
                                     </label>
+                                    <button onClick={() => handleOptimize(true)} disabled={!result || isOptimizing} className={`ml-auto flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-500 active:bg-blue-700 ${(!result || isOptimizing) ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                                        {isOptimizing ? (<><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /><span>Otimizando...</span></>) : (<><Save className="h-4 w-4" aria-hidden="true" /><span>Gerar Plano de Corte</span></>)}
+                                    </button>
                                 </div>
-                                <button onClick={() => handleOptimize(true)} disabled={!result || isOptimizing} className={`bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors ml-auto text-sm flex items-center gap-2 ${(!result || isOptimizing) ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                                    {isOptimizing ? (<><svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><span>Otimizando...</span></>) : (<><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-11.25a.75.75 0 00-1.5 0v2.5h-2.5a.75.75 0 000 1.5h2.5v2.5a.75.75 0 001.5 0v-2.5h2.5a.75.75 0 000-1.5h-2.5v-2.5z" clipRule="evenodd" /></svg><span>Gerar Plano de Corte</span></>)}
-                                </button>
                             </div>
                         </div>
 
@@ -1336,78 +1310,6 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                         {/* Visualization */}
                         {result && (
                             <div className="animate-fade-in" ref={containerRef}>
-                                {/* Mobile: condensed cutting command bar */}
-                                {visualSummary && (
-                                    <div className="hidden">
-                                        <div className="grid grid-cols-[1fr_0.72fr_1fr] gap-1.5">
-                                            <div className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 dark:border-slate-700 dark:bg-slate-800/80">
-                                                <div className="text-[8px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Metro</div>
-                                                <div className="mt-0.5 flex items-baseline gap-1">
-                                                    <span className="text-[15px] font-black leading-none text-slate-950 dark:text-white">{visualSummary.linearMeters}</span>
-                                                    <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">m</span>
-                                                </div>
-                                            </div>
-                                            <div className="rounded-lg border border-blue-200 bg-blue-50 px-2 py-1.5 dark:border-blue-800/70 dark:bg-blue-950/30">
-                                                <div className="text-[8px] font-bold uppercase tracking-wide text-blue-700 dark:text-blue-300">Uso</div>
-                                                <div className="mt-0.5 flex items-baseline gap-1">
-                                                    <span className="text-[15px] font-black leading-none text-blue-800 dark:text-blue-200">{visualSummary.efficiency}</span>
-                                                    <span className="text-[10px] font-semibold text-blue-700 dark:text-blue-300">%</span>
-                                                </div>
-                                            </div>
-                                            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1.5 dark:border-emerald-800 dark:bg-emerald-950/30">
-                                                <div className="text-[8px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Material</div>
-                                                <div className="mt-0.5 truncate text-[15px] font-black leading-none text-emerald-800 dark:text-emerald-200">
-                                                    {activeFilmMaterialCost !== null ? `R$ ${activeFilmMaterialCost.toFixed(2).replace('.', ',')}` : '--'}
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div className="mt-1.5 flex items-center gap-1.5">
-                                            <span className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">{visualSummary.pieces} pecas</span>
-                                            <span className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] font-bold text-amber-700 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300">Sobra {visualSummary.wastePercent}%</span>
-                                            <span className="min-w-0 truncate rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Bobina {visualSummary.rollWidthMeters} m</span>
-
-                                            <div className="ml-auto flex h-8 shrink-0 items-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setZoomLevel(prev => Math.max(0.5, prev - 0.25))}
-                                                    className="flex h-8 w-8 items-center justify-center text-slate-600 active:bg-slate-200 dark:text-slate-300 dark:active:bg-slate-700"
-                                                    title="Diminuir zoom"
-                                                >
-                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
-                                                        <path fillRule="evenodd" d="M4 10a.75.75 0 01.75-.75h10.5a.75.75 0 010 1.5H4.75A.75.75 0 014 10z" clipRule="evenodd" />
-                                                    </svg>
-                                                </button>
-                                                <span className="min-w-[34px] px-1 text-center text-[10px] font-black text-slate-700 dark:text-slate-300">{Math.round(zoomLevel * 100)}%</span>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setZoomLevel(prev => Math.min(3, prev + 0.25))}
-                                                    className="flex h-8 w-8 items-center justify-center text-slate-600 active:bg-slate-200 dark:text-slate-300 dark:active:bg-slate-700"
-                                                    title="Aumentar zoom"
-                                                >
-                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
-                                                        <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
-                                                    </svg>
-                                                </button>
-                                            </div>
-
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    openFullscreenView();
-                                                }}
-                                                aria-label="Expandir tela cheia"
-                                                className="flex h-8 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white shadow-sm active:bg-blue-700"
-                                                title="Expandir tela cheia"
-                                            >
-                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
-                                                    <path d="M13.28 7.78l3.22-3.22v2.69a.75.75 0 001.5 0v-4.5a.75.75 0 00-.75-.75h-4.5a.75.75 0 000 1.5h2.69l-3.22 3.22a.75.75 0 001.06 1.06zM2 17.25v-4.5a.75.75 0 011.5 0v2.69l3.22-3.22a.75.75 0 011.06 1.06L4.56 16.5h2.69a.75.75 0 010 1.5h-4.5a.75.75 0 01-.75-.75zM12.22 13.28l3.22 3.22h-2.69a.75.75 0 000 1.5h4.5a.75.75 0 00.75-.75v-4.5a.75.75 0 00-1.5 0v2.69l-3.22-3.22a.75.75 0 00-1.06 1.06zM3.5 4.56l3.22 3.22a.75.75 0 001.06-1.06L4.56 3.5h2.69a.75.75 0 000-1.5h-4.5a.75.75 0 00-.75.75v4.5a.75.75 0 001.5 0V4.56z" />
-                                                </svg>
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-
                                 {/* Stats - Compact inline for mobile */}
                                 <div className="mb-5 hidden overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:block">
                                     <div className="border-b border-slate-200 bg-slate-50/90 px-3 py-2.5 dark:border-slate-700 dark:bg-slate-950/40 sm:flex sm:items-center sm:justify-between sm:px-4 sm:py-3">
@@ -1439,12 +1341,15 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                                     <span className="text-[10px] text-emerald-700 dark:text-emerald-300">%</span>
                                                 </div>
                                             </div>
-                                            <div className="rounded-lg border border-slate-200 bg-slate-50 px-1.5 py-1.5 text-center dark:border-slate-700 dark:bg-slate-800/80">
-                                                <div className="text-[8px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Peças</div>
+                                            <div className={`rounded-lg border px-1.5 py-1.5 text-center ${unplacedCount > 0 ? 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/30' : 'border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/80'}`}>
+                                                <div className={`text-[8px] font-semibold uppercase tracking-wide ${unplacedCount > 0 ? 'text-red-700 dark:text-red-300' : 'text-slate-500 dark:text-slate-400'}`}>Peças</div>
                                                 <div className="mt-0.5 flex items-baseline justify-center gap-1">
                                                     <span className="font-bold text-slate-800 dark:text-slate-100 text-sm">{result.placedItems.length}</span>
                                                     <span className="text-[10px] text-slate-500 dark:text-slate-400">pçs</span>
                                                 </div>
+                                                {unplacedCount > 0 && (
+                                                    <div className="text-[8px] font-bold text-red-600 dark:text-red-400">{unplacedCount} fora</div>
+                                                )}
                                             </div>
                                             <div className="rounded-lg border border-amber-200 bg-amber-50 px-1.5 py-1.5 text-center dark:border-amber-800 dark:bg-amber-950/30">
                                                 <div className="text-[8px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">Sobra</div>
@@ -1507,91 +1412,113 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                     </div>
 
                                     {/* Desktop layout */}
-                                    <div className="hidden sm:grid grid-cols-4 gap-3 p-4">
-                                        <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/70">
-                                            <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Metro linear</div>
-                                            <div className="mt-1 flex items-baseline gap-1">
-                                                <span className="text-2xl font-black text-slate-900 dark:text-slate-100">{visualSummary?.linearMeters}</span>
-                                                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">m</span>
+                                    <div className={`hidden sm:grid ${activeFilmMaterialCostText ? 'sm:grid-cols-5' : 'sm:grid-cols-4'} sm:divide-x sm:divide-slate-200 dark:sm:divide-slate-800`}>
+                                        <div className="px-4 py-3.5">
+                                            <div className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Metro linear</div>
+                                            <div className="mt-1.5 flex items-baseline gap-1">
+                                                <span className="text-[22px] font-black leading-none tabular-nums text-slate-900 dark:text-white">{visualSummary?.linearMeters}</span>
+                                                <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500">m</span>
                                             </div>
                                         </div>
-                                        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-800 dark:bg-emerald-950/30">
-                                            <div className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Aproveitamento</div>
-                                            <div className="mt-1 flex items-baseline gap-1">
-                                                <span className="text-2xl font-black text-emerald-800 dark:text-emerald-200">{visualSummary?.efficiency}</span>
-                                                <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">%</span>
+                                        <div className="px-4 py-3.5">
+                                            <div className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Aproveitamento</div>
+                                            <div className="mt-1.5 flex items-baseline gap-1">
+                                                <span className="text-[22px] font-black leading-none tabular-nums text-emerald-600 dark:text-emerald-300">{visualSummary?.efficiency}</span>
+                                                <span className="text-[11px] font-semibold text-emerald-600/70 dark:text-emerald-300/70">%</span>
+                                            </div>
+                                            <div className="mt-2 h-1 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                                                <div className="h-full rounded-full bg-emerald-500" style={{ width: `${Math.min(100, Number(visualSummary?.efficiency) || 0)}%` }}></div>
                                             </div>
                                         </div>
-                                        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800 dark:bg-amber-950/30">
-                                            <div className="text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">Sobra estimada</div>
-                                            <div className="mt-1 flex items-baseline gap-1">
-                                                <span className="text-2xl font-black text-amber-800 dark:text-amber-200">{visualSummary?.wastePercent}</span>
-                                                <span className="text-xs font-semibold text-amber-700 dark:text-amber-300">%</span>
+                                        <div className="px-4 py-3.5">
+                                            <div className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Sobra estimada</div>
+                                            <div className="mt-1.5 flex items-baseline gap-1">
+                                                <span className="text-[22px] font-black leading-none tabular-nums text-amber-600 dark:text-amber-300">{visualSummary?.wastePercent}</span>
+                                                <span className="text-[11px] font-semibold text-amber-600/70 dark:text-amber-300/70">%</span>
+                                            </div>
+                                            <div className="mt-2 h-1 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                                                <div className="h-full rounded-full bg-amber-400" style={{ width: `${Math.min(100, Number(visualSummary?.wastePercent) || 0)}%` }}></div>
                                             </div>
                                         </div>
-                                        <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/70">
-                                            <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Peças no mapa</div>
-                                            <div className="mt-1 flex items-baseline gap-1">
-                                                <span className="text-2xl font-black text-slate-900 dark:text-slate-100">{visualSummary?.pieces}</span>
-                                                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">itens</span>
+                                        <div className="px-4 py-3.5">
+                                            <div className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Peças no mapa</div>
+                                            <div className="mt-1.5 flex items-baseline gap-1">
+                                                <span className="text-[22px] font-black leading-none tabular-nums text-slate-900 dark:text-white">{visualSummary?.pieces}</span>
+                                                <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500">itens</span>
                                             </div>
+                                            {unplacedCount > 0 && (
+                                                <div className="mt-1.5 text-[10px] font-bold text-red-600 dark:text-red-400">{unplacedCount} fora do plano</div>
+                                            )}
                                         </div>
-                                        <div className="hidden">
-                                            <div className="flex items-baseline gap-1 flex-1 justify-center sm:justify-start">
-                                                <span className="font-bold text-slate-800 dark:text-slate-100 text-base sm:text-lg">{result.totalHeight.toFixed(0)}</span>
-                                                <span className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400">cm</span>
+                                        {activeFilmMaterialCostText && (
+                                            <div className="px-4 py-3.5">
+                                                <div className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Custo material</div>
+                                                <div className="mt-1.5 truncate text-[20px] font-black leading-none tabular-nums text-slate-900 dark:text-white">{activeFilmMaterialCostText}</div>
+                                                <div className="mt-1.5 text-[10px] font-medium text-slate-400 dark:text-slate-500">pelo metro linear da bobina</div>
                                             </div>
-                                            <div className="w-px h-5 bg-slate-300 dark:bg-slate-600"></div>
-                                            <div className="flex items-baseline gap-1 flex-1 justify-center sm:justify-start">
-                                                <span className="font-bold text-slate-800 dark:text-slate-100 text-base sm:text-lg">{result.efficiency.toFixed(0)}</span>
-                                                <span className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400">%</span>
-                                            </div>
-                                            <div className="w-px h-5 bg-slate-300 dark:bg-slate-600"></div>
-                                            <div className="flex items-baseline gap-1 flex-1 justify-center sm:justify-start">
-                                                <span className="font-bold text-slate-800 dark:text-slate-100 text-base sm:text-lg">{result.placedItems.length}</span>
-                                                <span className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400">pçs</span>
-                                            </div>
-                                        </div>
+                                        )}
                                     </div>
                                 </div>
 
-                                {/* Estimated Cost - desktop only; mobile shows it inside the technical summary */}
-                                {activeFilmMaterialCost !== null && (
-                                    <div className="mb-4 hidden rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-800 dark:bg-green-900/20 sm:block">
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-xs font-medium text-green-700 dark:text-green-400">Custo Estimado de Material</span>
-                                            <span className="text-lg font-bold text-green-800 dark:text-green-300">R$ {activeFilmMaterialCost.toFixed(2).replace('.', ',')}</span>
+                                {/* Aviso de peças que não couberam na bobina */}
+                                {unplacedCount > 0 && visualSummary && (
+                                    <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 dark:border-red-800 dark:bg-red-950/30 sm:p-4">
+                                        <div className="flex items-start gap-2.5">
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="mt-0.5 h-5 w-5 shrink-0 text-red-600 dark:text-red-400">
+                                                <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                                            </svg>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-sm font-bold text-red-800 dark:text-red-200">
+                                                    {unplacedCount === 1 ? '1 peça ficou fora do plano de corte' : `${unplacedCount} peças ficaram fora do plano de corte`}
+                                                </p>
+                                                <p className="mt-0.5 text-xs text-red-700 dark:text-red-300">
+                                                    {unplacedCount === 1 ? 'Ela é maior' : 'Elas são maiores'} que a largura da bobina ({visualSummary.rollWidthMeters} m) e não {unplacedCount === 1 ? 'foi incluída' : 'foram incluídas'} no metro linear nem no custo de material.
+                                                </p>
+                                                <div className="mt-2 flex flex-wrap gap-1.5">
+                                                    {unplacedGroups.map(group => (
+                                                        <span key={group.key} className="inline-flex items-center gap-1.5 rounded-md border border-red-300 bg-white px-2 py-1 text-[11px] font-bold text-red-800 dark:border-red-700 dark:bg-red-900/40 dark:text-red-200">
+                                                            {(group.maxSide / 100).toFixed(2).replace('.', ',')} × {(group.minSide / 100).toFixed(2).replace('.', ',')} m
+                                                            {group.count > 1 && <span className="font-semibold text-red-600 dark:text-red-300">×{group.count}</span>}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                                <p className="mt-2 text-xs font-medium text-red-700 dark:text-red-300">
+                                                    {unplacedGroups.some(g => g.fitsIfRotated)
+                                                        ? 'Dica: parte dessas peças caberia girada — desative "Resp. Veio" para permitir a rotação.'
+                                                        : 'Dica: use uma bobina mais larga ou divida a medida em duas peças menores (aplicação com emenda).'}
+                                                </p>
+                                            </div>
                                         </div>
                                     </div>
                                 )}
 
                                 {/* Zoom Slider - Desktop only, mobile uses buttons in stats bar */}
-                                <div className="relative z-30 hidden sm:flex mb-4 items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-                                    <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Zoom</span>
+                                <div className="relative z-30 hidden sm:flex mb-4 items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+                                    <span className="shrink-0 text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Zoom</span>
                                     <input
                                         type="range"
                                         min="50"
                                         max="300"
                                         value={zoomLevel * 100}
                                         onChange={(e) => setZoomLevel(parseInt(e.target.value) / 100)}
-                                        className="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-green-600 hover:accent-green-700"
+                                        className="flex-1 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600 hover:accent-blue-700"
                                         style={{
-                                            background: `linear-gradient(to right, #16a34a 0%, #16a34a ${((zoomLevel * 100 - 50) / 250) * 100}%, #e2e8f0 ${((zoomLevel * 100 - 50) / 250) * 100}%, #e2e8f0 100%)`
+                                            background: `linear-gradient(to right, #2563eb 0%, #2563eb ${((zoomLevel * 100 - 50) / 250) * 100}%, #e2e8f0 ${((zoomLevel * 100 - 50) / 250) * 100}%, #e2e8f0 100%)`
                                         }}
                                     />
-                                    <span className="text-xs font-medium text-slate-600 dark:text-slate-400 min-w-[45px] text-center">{Math.round(zoomLevel * 100)}%</span>
+                                    <span className="min-w-[45px] text-center text-xs font-semibold tabular-nums text-slate-600 dark:text-slate-400">{Math.round(zoomLevel * 100)}%</span>
                                     <div className="mx-1 h-5 w-px bg-slate-200 dark:bg-slate-700"></div>
-                                    <div className="flex items-center gap-2 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
-                                        <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-2 py-1 text-sky-700 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-300">
-                                            <span className="h-2 w-2 rounded-sm bg-sky-400"></span>
+                                    <div className="flex items-center gap-3 text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                                        <span className="inline-flex items-center gap-1.5">
+                                            <span className="h-2 w-2 rounded-full bg-sky-400"></span>
                                             Livre
                                         </span>
-                                        <span className="inline-flex items-center gap-1.5 rounded-full border border-yellow-200 bg-yellow-50 px-2 py-1 text-yellow-700 dark:border-yellow-800 dark:bg-yellow-950/40 dark:text-yellow-300">
-                                            <span className="h-2 w-2 rounded-sm bg-yellow-400"></span>
+                                        <span className="inline-flex items-center gap-1.5">
+                                            <span className="h-2 w-2 rounded-full bg-yellow-400"></span>
                                             Selecionado
                                         </span>
-                                        <span className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-red-50 px-2 py-1 text-red-700 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300">
-                                            <span className="h-2 w-2 rounded-sm bg-red-400"></span>
+                                        <span className="inline-flex items-center gap-1.5">
+                                            <span className="h-2 w-2 rounded-full bg-red-400"></span>
                                             Travado
                                         </span>
                                     </div>
@@ -1601,13 +1528,11 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                         onClick={() => {
                                             openFullscreenView();
                                         }}
-                                        className="relative z-20 shrink-0 pointer-events-auto rounded-lg bg-slate-900 px-3 py-2 text-white transition-colors flex items-center gap-1.5 touch-manipulation hover:bg-slate-800 dark:bg-blue-600 dark:hover:bg-blue-500"
+                                        className="relative z-20 shrink-0 pointer-events-auto flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition-colors touch-manipulation hover:bg-slate-50 hover:text-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
                                         title="Expandir tela cheia"
                                     >
-                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                                            <path d="M13.28 7.78l3.22-3.22v2.69a.75.75 0 001.5 0v-4.5a.75.75 0 00-.75-.75h-4.5a.75.75 0 000 1.5h2.69l-3.22 3.22a.75.75 0 001.06 1.06zM2 17.25v-4.5a.75.75 0 011.5 0v2.69l3.22-3.22a.75.75 0 011.06 1.06L4.56 16.5h2.69a.75.75 0 010 1.5h-4.5a.75.75 0 01-.75-.75zM12.22 13.28l3.22 3.22h-2.69a.75.75 0 000 1.5h4.5a.75.75 0 00.75-.75v-4.5a.75.75 0 00-1.5 0v2.69l-3.22-3.22a.75.75 0 00-1.06 1.06zM3.5 4.56l3.22 3.22a.75.75 0 001.06-1.06L4.56 3.5h2.69a.75.75 0 000-1.5h-4.5a.75.75 0 00-.75.75v4.5a.75.75 0 001.5 0V4.56z" />
-                                        </svg>
-                                        <span className="text-xs font-medium">Expandir</span>
+                                        <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
+                                        <span>Expandir</span>
                                     </button>
                                 </div>
 
@@ -1627,26 +1552,16 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                             {horizontalRulerLabels.map((val) => (
                                                 <span
                                                     key={val}
-                                                    className="absolute top-[28px] rounded-md border border-slate-200/80 bg-white/95 px-1.5 py-1 text-[10px] font-black leading-none tabular-nums text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-950/90 dark:text-slate-200"
+                                                    className="absolute top-[34px] rounded-md border border-slate-200/80 bg-white/95 px-1.5 py-1 text-[10px] font-black leading-none tabular-nums text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-950/90 dark:text-slate-200"
                                                     style={getHorizontalLabelStyle(val, scale, result.rollWidth)}
                                                 >
                                                     {formatRulerLabel(val)}
                                                 </span>
                                             ))}
-                                            {/* Last Value Marker (if not exact multiple) */}
+                                            {/* Cota da largura da bobina */}
                                             {result.rollWidth > 0 && (
-                                                <div className="absolute bottom-0 z-20" style={{ left: `${result.rollWidth * scale}px` }}>
-                                                    <span
-                                                        className="absolute -top-[68px] min-w-[72px] overflow-hidden rounded-lg border border-cyan-400/30 bg-slate-950 text-left shadow-lg ring-1 ring-white/10"
-                                                        style={{ left: '-4px', transform: 'translateX(-100%)' }}
-                                                    >
-                                                        <span className="block border-b border-white/10 bg-white/10 px-2 py-1 text-[7px] font-black uppercase text-cyan-100/80">Bobina</span>
-                                                        <span className="flex items-baseline gap-1 px-2 py-1.5">
-                                                            <span className="text-[12px] font-black leading-none tabular-nums text-white">{(result.rollWidth / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                                                            <span className="text-[8px] font-bold text-cyan-100/80">m</span>
-                                                        </span>
-                                                    </span>
-                                                    <div className="h-4 w-px bg-gradient-to-b from-slate-950 to-cyan-500 dark:from-white dark:to-cyan-300"></div>
+                                                <div className="absolute left-0 top-[6px] z-20" style={{ width: `${result.rollWidth * scale}px` }}>
+                                                    {renderWidthDimension((result.rollWidth / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 'Bobina')}
                                                 </div>
                                             )}
                                         </div>
@@ -1665,20 +1580,14 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                                     {formatRulerLabel(val)}
                                                 </span>
                                             ))}
-                                            {/* Last Height Marker */}
-                                            <div className="absolute right-0" style={{ top: `${result.totalHeight * scale}px` }}>
-                                                <span
-                                                    className="absolute left-[18px] top-[10px] min-w-[72px] overflow-hidden rounded-lg border border-cyan-400/30 bg-slate-950 text-left shadow-lg ring-1 ring-white/10"
-                                                >
-                                                    <span className="block border-b border-white/10 bg-white/10 px-2 py-1 text-[7px] font-black uppercase text-cyan-100/80">Compr.</span>
-                                                    <span className="flex items-baseline gap-1 px-2 py-1.5">
-                                                        <span className="text-[12px] font-black leading-none tabular-nums text-white">{(result.totalHeight / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                                                        <span className="text-[8px] font-bold text-cyan-100/80">m</span>
-                                                    </span>
-                                                </span>
-                                                <div className="h-px w-4 bg-gradient-to-r from-cyan-500 to-slate-950 dark:from-cyan-300 dark:to-white"></div>
-                                            </div>
                                         </div>
+
+                                        {/* Cota do comprimento total (lado direito do mapa) */}
+                                        {result.totalHeight > 0 && (
+                                            <div className="absolute top-0 z-20" style={{ right: '-32px', height: `${result.totalHeight * scale}px` }}>
+                                                {renderLengthDimension((result.totalHeight / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 'Compr.')}
+                                            </div>
+                                        )}
 
                                         {/* Roll Background & Grid */}
                                         <div
@@ -1892,6 +1801,9 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                             <path fillRule="evenodd" d="M2.625 6.75a1.125 1.125 0 112.25 0 1.125 1.125 0 01-2.25 0zm4.875 0A.75.75 0 018.25 6h12a.75.75 0 010 1.5h-12a.75.75 0 01-.75-.75zM2.625 12a1.125 1.125 0 112.25 0 1.125 1.125 0 01-2.25 0zM7.5 12a.75.75 0 01.75-.75h12a.75.75 0 010 1.5h-12A.75.75 0 017.5 12zm-4.875 5.25a1.125 1.125 0 112.25 0 1.125 1.125 0 01-2.25 0zm4.875 0a.75.75 0 01.75-.75h12a.75.75 0 010 1.5h-12a.75.75 0 01-.75-.75z" clipRule="evenodd" />
                                         </svg>
                                         Lista de Cortes
+                                        <span className="ml-auto text-[11px] font-semibold normal-case text-slate-400 dark:text-slate-500">
+                                            {groupedItems.length} {groupedItems.length === 1 ? 'grupo' : 'grupos'} · {result.placedItems.length} {result.placedItems.length === 1 ? 'peça' : 'peças'}
+                                        </span>
                                     </h4>
                                     <div className="overflow-x-auto">
                                         <table className="w-full text-sm">
@@ -2161,26 +2073,16 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                             {fullscreenHorizontalRulerLabels.map((val) => (
                                                 <span
                                                     key={val}
-                                                    className="absolute top-[24px] rounded-md border border-slate-200/80 bg-white/95 px-1.5 py-1 text-[10px] font-black leading-none tabular-nums text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-950/90 dark:text-slate-200"
+                                                    className="absolute top-[34px] rounded-md border border-slate-200/80 bg-white/95 px-1.5 py-1 text-[10px] font-black leading-none tabular-nums text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-950/90 dark:text-slate-200"
                                                     style={getHorizontalLabelStyle(val, fullscreenScale, fullscreenAxisWidth)}
                                                 >
                                                     {formatRulerLabel(val)}
                                                 </span>
                                             ))}
-                                            {/* Largura total marker */}
+                                            {/* Cota do eixo horizontal (bobina em retrato, comprimento em paisagem) */}
                                             {fullscreenAxisWidth > 0 && (
-                                                <div className="absolute bottom-0 z-20" style={{ left: `${fullscreenAxisWidth * fullscreenScale}px` }}>
-                                                    <span
-                                                        className="absolute -top-[78px] min-w-[82px] overflow-hidden rounded-lg border border-cyan-400/30 bg-slate-950 text-left shadow-[0_14px_28px_rgba(15,23,42,0.32)] ring-1 ring-white/10"
-                                                        style={{ left: '-4px', transform: 'translateX(-100%)' }}
-                                                    >
-                                                        <span className="block border-b border-white/10 bg-white/10 px-2 py-1 text-[7px] font-black uppercase text-cyan-100/80">Bobina</span>
-                                                        <span className="flex items-baseline gap-1 px-2 py-1.5">
-                                                            <span className="text-[13px] font-black leading-none tabular-nums text-white">{fullscreenAxisWidthMeters}</span>
-                                                            <span className="text-[9px] font-bold text-cyan-100/80">m</span>
-                                                        </span>
-                                                    </span>
-                                                    <div className="h-4 w-px bg-gradient-to-b from-slate-950 to-cyan-500 dark:from-white dark:to-cyan-300"></div>
+                                                <div className="absolute left-0 top-[6px] z-20" style={{ width: `${fullscreenAxisWidth * fullscreenScale}px` }}>
+                                                    {renderWidthDimension(fullscreenAxisWidthMeters, fullscreenOrientation === 'landscape' ? 'Compr.' : 'Bobina')}
                                                 </div>
                                             )}
                                         </div>
@@ -2199,22 +2101,14 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                                     {formatRulerLabel(val)}
                                                 </span>
                                             ))}
-                                            {/* Altura total marker */}
-                                            {fullscreenAxisHeight > 0 && (
-                                                <div className="absolute right-0" style={{ top: `${fullscreenAxisHeight * fullscreenScale}px` }}>
-                                                    <span
-                                                        className="absolute left-[18px] top-[10px] min-w-[96px] overflow-hidden rounded-lg border border-cyan-400/30 bg-slate-950 text-left shadow-[0_14px_28px_rgba(15,23,42,0.32)] ring-1 ring-white/10"
-                                                    >
-                                                        <span className="block border-b border-white/10 bg-white/10 px-2 py-1 text-[7px] font-black uppercase text-cyan-100/80">Compr.</span>
-                                                        <span className="flex items-baseline gap-1 px-2 py-1.5">
-                                                            <span className="text-[13px] font-black leading-none tabular-nums text-white">{fullscreenAxisHeightMeters}</span>
-                                                            <span className="text-[9px] font-bold text-cyan-100/80">m</span>
-                                                        </span>
-                                                    </span>
-                                                    <div className="h-px w-4 bg-gradient-to-r from-cyan-500 to-slate-950 dark:from-cyan-300 dark:to-white"></div>
-                                                </div>
-                                            )}
                                         </div>
+
+                                        {/* Cota do eixo vertical (comprimento em retrato, bobina em paisagem) */}
+                                        {fullscreenAxisHeight > 0 && (
+                                            <div className="absolute top-0 z-20" style={{ right: '-36px', height: `${fullscreenAxisHeight * fullscreenScale}px` }}>
+                                                {renderLengthDimension(fullscreenAxisHeightMeters, fullscreenOrientation === 'landscape' ? 'Bobina' : 'Compr.')}
+                                            </div>
+                                        )}
 
                                         {/* Fullscreen Roll Drawing */}
                                         <div

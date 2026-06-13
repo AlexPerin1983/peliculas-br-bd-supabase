@@ -14,6 +14,9 @@ export interface OptimizationResult {
     totalHeight: number;
     efficiency: number;
     rollWidth: number;
+    // Peças que não couberam na bobina (maiores que a largura em todas as
+    // orientações permitidas). Opcional para compatibilidade com históricos salvos.
+    unplacedItems?: Rect[];
 }
 
 export interface OptimizerOptions {
@@ -177,7 +180,20 @@ export class CuttingOptimizer {
         }
 
         // console.log('Selected method:', bestMethod, '| Height:', bestResult?.totalHeight, 'cm | Efficiency:', bestResult?.efficiency.toFixed(2) + '%');
-        return bestResult!;
+
+        const finalResult = bestResult ?? {
+            placedItems: [...lockedItems],
+            totalHeight: 0,
+            efficiency: 0,
+            rollWidth: this.rollWidth
+        };
+
+        // Peças que nenhuma estratégia conseguiu posicionar (não cabem na
+        // largura da bobina) eram descartadas em silêncio; agora são reportadas.
+        const placedIds = new Set(finalResult.placedItems.map(p => p.id));
+        const unplacedItems = itemsToPack.filter(item => item.id !== undefined && !placedIds.has(item.id));
+
+        return { ...finalResult, unplacedItems };
     }
 
     private runRowBasedPacking(items: Rect[]): OptimizationResult | null {
