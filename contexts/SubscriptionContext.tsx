@@ -62,7 +62,7 @@ const defaultContext: SubscriptionContextType = {
     refresh: async () => { }
 };
 
-const SubscriptionContext = createContext<SubscriptionContextType>(defaultContext);
+export const SubscriptionContext = createContext<SubscriptionContextType>(defaultContext);
 
 // ============================================
 // PROVIDER

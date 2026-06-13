@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+    ArrowLeft,
     CalendarDays,
     CheckCircle2,
     ChevronRight,
@@ -15,6 +16,7 @@ import {
     Search,
     Tag,
     UserRound,
+    X,
     XCircle
 } from 'lucide-react';
 import { Client, Film, UserInfo } from '../../types';
@@ -131,6 +133,140 @@ const FooterActionButton: React.FC<{
     </button>
 );
 
+const ServicoSearchModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    servicos: ServicoPrestado[];
+    onSelect: (servico: ServicoPrestado) => void;
+}> = ({ isOpen, onClose, servicos, onSelect }) => {
+    const [searchTerm, setSearchTerm] = useState('');
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        if (isOpen) setSearchTerm('');
+    }, [isOpen]);
+
+    if (!isOpen) return null;
+
+    const term = searchTerm.trim().toLowerCase();
+    const filtered = term
+        ? servicos.filter(servico =>
+            [servico.cliente_nome, servico.filme_aplicado, servico.cidade, servico.uf, servico.codigo_qr]
+                .filter(Boolean)
+                .join(' ')
+                .toLowerCase()
+                .includes(term))
+        : servicos;
+
+    return (
+        <div className="fixed inset-0 z-50 flex flex-col bg-white/94 backdrop-blur-md animate-fade-in dark:bg-slate-900/95">
+            <div className="sticky top-0 z-10 flex-shrink-0 border-b border-slate-200/80 bg-white/94 p-3.5 backdrop-blur dark:border-slate-700 dark:bg-slate-900/94">
+                <div className="mx-auto max-w-3xl">
+                    <div className="flex items-center gap-3">
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            aria-label="Voltar"
+                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition-colors hover:border-slate-300 hover:text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:text-white"
+                        >
+                            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+                        </button>
+
+                        <div className="min-w-0 flex-1">
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
+                                Histórico
+                            </p>
+                            <h2 className="truncate text-[1.15rem] font-semibold tracking-[-0.03em] text-slate-800 dark:text-slate-100">
+                                Buscar etiqueta
+                            </h2>
+                        </div>
+
+                        <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                            {filtered.length}
+                        </span>
+                    </div>
+
+                    <div className="relative mt-3">
+                        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
+                            <Search className="h-4 w-4 text-slate-400" aria-hidden="true" />
+                        </div>
+                        <input
+                            ref={inputRef}
+                            type="text"
+                            value={searchTerm}
+                            onChange={(event) => setSearchTerm(event.target.value)}
+                            placeholder="Buscar por local, película ou cidade..."
+                            className="h-11 w-full rounded-[16px] border border-slate-200 bg-slate-50/90 pl-10 pr-10 text-[14px] text-slate-800 shadow-sm outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:focus:bg-slate-800"
+                        />
+                        {searchTerm && (
+                            <button
+                                type="button"
+                                onClick={() => { setSearchTerm(''); inputRef.current?.focus(); }}
+                                className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-slate-400 transition-colors hover:text-slate-600 dark:hover:text-slate-200"
+                                aria-label="Limpar busca"
+                            >
+                                <X className="h-4 w-4" aria-hidden="true" />
+                            </button>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            <div className="flex-grow overflow-y-auto p-4">
+                <div className="mx-auto max-w-3xl space-y-2.5">
+                    {filtered.map(servico => (
+                        <button
+                            key={servico.codigo_qr}
+                            type="button"
+                            onClick={() => onSelect(servico)}
+                            className="group w-full rounded-2xl border border-slate-200 bg-white p-3.5 text-left shadow-sm transition-all duration-200 hover:border-slate-300 active:scale-[0.99] dark:border-slate-700 dark:bg-slate-800 dark:hover:border-slate-600"
+                        >
+                            <div className="flex items-center gap-3">
+                                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-blue-600 dark:border-slate-700 dark:bg-slate-900 dark:text-blue-400">
+                                    <QrCode className="h-4 w-4" aria-hidden="true" />
+                                </span>
+                                <div className="min-w-0 flex-1">
+                                    <p className="truncate text-[14px] font-semibold text-slate-800 dark:text-slate-100">
+                                        {servico.cliente_nome}
+                                    </p>
+                                    <p className="truncate text-[12px] text-slate-500 dark:text-slate-400">
+                                        {servico.filme_aplicado}
+                                    </p>
+                                </div>
+                                <ChevronRight className="h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200 group-hover:translate-x-0.5" aria-hidden="true" />
+                            </div>
+                            <div className="mt-2.5 flex flex-wrap gap-1.5">
+                                {buildHistoryChips(servico).map(chip => (
+                                    <span
+                                        key={chip}
+                                        className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400"
+                                    >
+                                        {chip}
+                                    </span>
+                                ))}
+                            </div>
+                        </button>
+                    ))}
+
+                    {filtered.length === 0 && (
+                        <div className="flex flex-col items-center gap-2 py-14 text-center">
+                            <span className="flex h-12 w-12 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400 dark:border-slate-700 dark:bg-slate-800">
+                                <Search className="h-5 w-5" aria-hidden="true" />
+                            </span>
+                            <p className="text-[14px] font-semibold text-slate-700 dark:text-slate-200">
+                                {term ? 'Nenhuma etiqueta encontrada' : 'Nenhuma etiqueta gerada ainda'}
+                            </p>
+                            <p className="text-[12px] text-slate-500 dark:text-slate-400">
+                                {term ? 'Tente outro local, película ou cidade.' : 'Quando você salvar a primeira, ela aparece aqui.'}
+                            </p>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const SECTION_CARD_CLASSNAME = 'rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface)] p-4 shadow-[var(--shadow-hairline)] sm:p-5';
 const FIELD_CLASSNAME = 'ui-field w-full px-3.5 py-3 text-[14px] outline-none';
 const FIELD_LABEL_CLASSNAME = 'ui-label mb-1.5 block';
@@ -167,8 +303,10 @@ const ServicoQrView: React.FC<ServicoQrViewProps> = ({
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
     const [savedServico, setSavedServico] = useState<ServicoPrestado | null>(null);
     const [recentServicos, setRecentServicos] = useState<ServicoPrestado[]>([]);
+    const [allServicos, setAllServicos] = useState<ServicoPrestado[]>([]);
     const [isClientModalOpen, setIsClientModalOpen] = useState(false);
     const [isFormDrawerOpen, setIsFormDrawerOpen] = useState(false);
+    const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
     const [labelFormat, setLabelFormat] = useState<NimbotLabelFormat>('40x60');
     const isMobile = useIsMobile();
 
@@ -186,7 +324,6 @@ const ServicoQrView: React.FC<ServicoQrViewProps> = ({
     const printRef = useRef<HTMLDivElement>(null);
     const formSectionRef = useRef<HTMLElement>(null);
     const previewSectionRef = useRef<HTMLElement>(null);
-    const historySectionRef = useRef<HTMLElement>(null);
 
     const scrollToSection = useCallback((ref: React.RefObject<HTMLElement>) => {
         if (typeof window === 'undefined') return;
@@ -226,6 +363,7 @@ const ServicoQrView: React.FC<ServicoQrViewProps> = ({
         try {
             setIsHistoryLoading(true);
             const servicos = await getAllServicosPrestados();
+            setAllServicos(servicos);
             setRecentServicos(servicos.slice(0, 8));
         } catch (loadError) {
             console.error('Erro ao carregar serviços QR:', loadError);
@@ -767,7 +905,7 @@ const ServicoQrView: React.FC<ServicoQrViewProps> = ({
                         </section>
                     )}
 
-                    <section ref={historySectionRef} className={`${SECTION_CARD_CLASSNAME} scroll-mt-24`}>
+                    <section className={`${SECTION_CARD_CLASSNAME} scroll-mt-24`}>
                         <div className="mb-4 flex items-end justify-between gap-3">
                             <div className="flex min-w-0 items-center gap-3">
                                 <span className={ICON_FRAME_CLASSNAME}>
@@ -917,7 +1055,7 @@ const ServicoQrView: React.FC<ServicoQrViewProps> = ({
                                     icon={<Copy className="h-5 w-5" aria-hidden="true" />}
                                 />
                                 <FooterActionButton
-                                    onClick={() => scrollToSection(historySectionRef)}
+                                    onClick={() => setIsHistoryModalOpen(true)}
                                     label="Recentes"
                                     icon={<CalendarDays className="h-5 w-5" aria-hidden="true" />}
                                 />
@@ -946,6 +1084,16 @@ const ServicoQrView: React.FC<ServicoQrViewProps> = ({
                     </div>
                 </MobileActionsDrawer>
             )}
+
+            <ServicoSearchModal
+                isOpen={isHistoryModalOpen}
+                onClose={() => setIsHistoryModalOpen(false)}
+                servicos={allServicos}
+                onSelect={(servico) => {
+                    setIsHistoryModalOpen(false);
+                    handleLoadRecentServico(servico);
+                }}
+            />
 
             <ClientSelectionModal
                 isOpen={isClientModalOpen}
