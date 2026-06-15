@@ -14,6 +14,9 @@ export const AdminUsers: React.FC = () => {
         setExpandedUser,
         activatingModule,
         grantingAll,
+        signupTrial,
+        savingSignupTrial,
+        saveSignupTrial,
         feedback,
         fetchProfiles,
         activateModuleForUser,
@@ -25,11 +28,26 @@ export const AdminUsers: React.FC = () => {
     } = useAdminUsers(isAdmin);
 
     const [accessDays, setAccessDays] = React.useState(30);
+    const [trialDays, setTrialDays] = React.useState(7);
+
+    // Sincroniza o input de dias do trial quando a config carrega do banco
+    React.useEffect(() => {
+        if (signupTrial.days > 0) setTrialDays(signupTrial.days);
+    }, [signupTrial.days]);
 
     const handleGrantAll = () => {
         if (window.confirm(`Liberar o Pacote Completo por ${accessDays} dia(s) para TODAS as organizações? Isso libera todos os módulos para todos os usuários.`)) {
             grantFullAccessAll(accessDays);
         }
+    };
+
+    const handleToggleTrial = () => {
+        // Liga usando os dias do input; desliga mantendo o valor
+        saveSignupTrial(!signupTrial.enabled, trialDays);
+    };
+
+    const handleSaveTrialDays = () => {
+        saveSignupTrial(signupTrial.enabled, trialDays);
     };
 
     if (!isAdmin) return null;
@@ -82,6 +100,59 @@ export const AdminUsers: React.FC = () => {
                             onClick={handleGrantAll}
                         >
                             Liberar tudo para todos
+                        </ActionButton>
+                    </div>
+                </div>
+            </div>
+
+            {/* Trial automático para novos cadastros */}
+            <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4 dark:border-violet-900/40 dark:bg-violet-950/20">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                        <h3 className="flex items-center gap-2 text-base font-bold text-slate-800 dark:text-slate-100">
+                            <Clock className="h-4 w-4 text-violet-500" /> Trial automático para novos cadastros
+                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${signupTrial.enabled
+                                ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                : 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
+                                }`}>
+                                {signupTrial.enabled ? `Ligado · ${signupTrial.days}d` : 'Desligado'}
+                            </span>
+                        </h3>
+                        <p className="mt-1 text-sm text-slate-500">
+                            Quando ligado, todo novo cadastro ganha o Pacote Completo por X dias automaticamente. No vencimento, volta para o plano grátis.
+                        </p>
+                    </div>
+                    <div className="flex items-end gap-3">
+                        <label className="text-sm">
+                            <span className="mb-1 block text-slate-500">Dias</span>
+                            <input
+                                type="number"
+                                min={1}
+                                value={trialDays}
+                                onChange={(e) => setTrialDays(Math.max(1, Number(e.target.value) || 1))}
+                                className="w-24 rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                            />
+                        </label>
+                        {signupTrial.enabled && signupTrial.days !== trialDays && (
+                            <ActionButton
+                                variant="secondary"
+                                size="sm"
+                                loading={savingSignupTrial}
+                                loadingText="Salvando..."
+                                onClick={handleSaveTrialDays}
+                            >
+                                Salvar dias
+                            </ActionButton>
+                        )}
+                        <ActionButton
+                            variant={signupTrial.enabled ? 'secondary' : 'primary'}
+                            size="sm"
+                            iconClassName={signupTrial.enabled ? 'fas fa-toggle-off' : 'fas fa-toggle-on'}
+                            loading={savingSignupTrial}
+                            loadingText="Salvando..."
+                            onClick={handleToggleTrial}
+                        >
+                            {signupTrial.enabled ? 'Desligar trial' : 'Ligar trial'}
                         </ActionButton>
                     </div>
                 </div>
@@ -229,6 +300,9 @@ export const AdminUsers: React.FC = () => {
                                                     </div>
                                                 ) : (
                                                     <>
+                                                        <p className="mb-3 text-xs text-slate-500">
+                                                            Será liberado por <span className="font-semibold text-blue-500">{accessDays} dia(s)</span> (ajuste no campo "Dias" acima).
+                                                        </p>
                                                         {!hasFullPackage && (
                                                             <div className="mb-4">
                                                                 <ActionButton
@@ -242,7 +316,7 @@ export const AdminUsers: React.FC = () => {
                                                                         activateModuleForUser(profile, 'pacote_completo', accessDays);
                                                                     }}
                                                                 >
-                                                                    Ativar Pacote Completo
+                                                                    Ativar Pacote Completo · {accessDays}d
                                                                 </ActionButton>
                                                             </div>
                                                         )}

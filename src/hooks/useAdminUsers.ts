@@ -40,6 +40,8 @@ export const useAdminUsers = (enabled: boolean) => {
     const [expandedUser, setExpandedUser] = useState<string | null>(null);
     const [activatingModule, setActivatingModule] = useState<{ userId: string; moduleId: string } | null>(null);
     const [grantingAll, setGrantingAll] = useState(false);
+    const [signupTrial, setSignupTrial] = useState<{ enabled: boolean; days: number }>({ enabled: false, days: 0 });
+    const [savingSignupTrial, setSavingSignupTrial] = useState(false);
     const [feedback, setFeedback] = useState<{ type: 'error' | 'success'; message: string } | null>(null);
 
     const fetchProfiles = useCallback(async () => {
@@ -129,11 +131,54 @@ export const useAdminUsers = (enabled: boolean) => {
         }
     }, []);
 
+    const loadSignupTrial = useCallback(async () => {
+        const { data, error } = await supabase
+            .from('signup_trial_config')
+            .select('enabled, trial_days')
+            .eq('id', true)
+            .maybeSingle();
+
+        if (!error && data) {
+            setSignupTrial({ enabled: !!data.enabled, days: data.trial_days || 0 });
+        }
+    }, []);
+
     useEffect(() => {
         if (enabled) {
             fetchProfiles();
+            loadSignupTrial();
         }
-    }, [enabled, fetchProfiles]);
+    }, [enabled, fetchProfiles, loadSignupTrial]);
+
+    const saveSignupTrial = useCallback(async (nextEnabled: boolean, days: number) => {
+        setSavingSignupTrial(true);
+        setFeedback(null);
+
+        try {
+            const { error } = await supabase.rpc('set_signup_trial_config', {
+                p_enabled: nextEnabled,
+                p_days: days,
+            });
+
+            if (error) throw error;
+
+            setSignupTrial({ enabled: nextEnabled, days });
+            setFeedback({
+                type: 'success',
+                message: nextEnabled
+                    ? `Trial automático ligado: ${days} dia(s) para novos cadastros.`
+                    : 'Trial automático para novos cadastros desligado.',
+            });
+        } catch (error: any) {
+            console.error('Erro ao salvar trial de cadastro:', error);
+            setFeedback({
+                type: 'error',
+                message: `Erro ao salvar trial de cadastro: ${error.message}`,
+            });
+        } finally {
+            setSavingSignupTrial(false);
+        }
+    }, []);
 
     const activateModuleForUser = useCallback(async (profile: UserWithSubscription, moduleId: string, days: number = 30) => {
         setActivatingModule({ userId: profile.id, moduleId });
@@ -299,6 +344,9 @@ export const useAdminUsers = (enabled: boolean) => {
         setExpandedUser,
         activatingModule,
         grantingAll,
+        signupTrial,
+        savingSignupTrial,
+        saveSignupTrial,
         feedback,
         fetchProfiles,
         activateModuleForUser,

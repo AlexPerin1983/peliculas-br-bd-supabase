@@ -8,7 +8,15 @@
 -- -----------------------------------------------------
 -- 1a. activate_module: novo parâmetro opcional p_days
 --     (NULL = comportamento atual por meses; retrocompatível)
+--
+-- Importante: a versão anterior tinha 5 parâmetros. Adicionar p_days
+-- cria uma SOBRECARGA nova em vez de substituir, e o PostgREST não
+-- consegue resolver a chamada. Por isso removemos a versão antiga de 5
+-- args primeiro (a de 6 args cobre os dois chamadores: a chamada por
+-- meses simplesmente não passa p_days e usa o default NULL).
 -- -----------------------------------------------------
+DROP FUNCTION IF EXISTS activate_module(UUID, TEXT, INTEGER, NUMERIC, TEXT);
+
 CREATE OR REPLACE FUNCTION activate_module(
     p_subscription_id UUID,
     p_module_id TEXT,
@@ -214,3 +222,9 @@ SELECT cron.schedule(
     '0 3 * * *',
     $$SELECT expire_modules();$$
 );
+
+-- -----------------------------------------------------
+-- Recarrega o schema cache do PostgREST para que a API
+-- enxergue a nova assinatura de activate_module imediatamente.
+-- -----------------------------------------------------
+NOTIFY pgrst, 'reload schema';
