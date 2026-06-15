@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, ChevronDown, ChevronUp, Crown, Shield, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, Crown, Clock, Shield, X, Zap } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import ActionButton from './ui/ActionButton';
 import ContentState from './ui/ContentState';
@@ -13,13 +13,24 @@ export const AdminUsers: React.FC = () => {
         expandedUser,
         setExpandedUser,
         activatingModule,
+        grantingAll,
         feedback,
         fetchProfiles,
         activateModuleForUser,
+        grantFullAccessAll,
         getModuleExpiryDays,
         isModuleActive,
         usersWithModules,
+        activeGrants,
     } = useAdminUsers(isAdmin);
+
+    const [accessDays, setAccessDays] = React.useState(30);
+
+    const handleGrantAll = () => {
+        if (window.confirm(`Liberar o Pacote Completo por ${accessDays} dia(s) para TODAS as organizações? Isso libera todos os módulos para todos os usuários.`)) {
+            grantFullAccessAll(accessDays);
+        }
+    };
 
     if (!isAdmin) return null;
 
@@ -34,7 +45,81 @@ export const AdminUsers: React.FC = () => {
                     <div className="text-2xl font-bold text-purple-500">{usersWithModules}</div>
                     <div className="text-sm text-slate-500">Com Módulos</div>
                 </div>
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
+                    <div className="text-2xl font-bold text-green-500">{activeGrants.length}</div>
+                    <div className="text-sm text-slate-500">Acessos liberados</div>
+                </div>
             </div>
+
+            {/* Liberar acesso por X dias */}
+            <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-900/40 dark:bg-blue-950/20">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                        <h3 className="flex items-center gap-2 text-base font-bold text-slate-800 dark:text-slate-100">
+                            <Zap className="h-4 w-4 text-blue-500" /> Liberar acesso por período
+                        </h3>
+                        <p className="mt-1 text-sm text-slate-500">
+                            Define a duração em dias. Vale para os botões de ativação por usuário e para a liberação geral. A revogação é automática no vencimento.
+                        </p>
+                    </div>
+                    <div className="flex items-end gap-3">
+                        <label className="text-sm">
+                            <span className="mb-1 block text-slate-500">Dias</span>
+                            <input
+                                type="number"
+                                min={1}
+                                value={accessDays}
+                                onChange={(e) => setAccessDays(Math.max(1, Number(e.target.value) || 1))}
+                                className="w-24 rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                            />
+                        </label>
+                        <ActionButton
+                            variant="primary"
+                            size="sm"
+                            iconClassName="fas fa-bolt"
+                            loading={grantingAll}
+                            loadingText="Liberando..."
+                            onClick={handleGrantAll}
+                        >
+                            Liberar tudo para todos
+                        </ActionButton>
+                    </div>
+                </div>
+            </div>
+
+            {/* Acompanhamento de acessos liberados */}
+            {activeGrants.length > 0 && (
+                <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                    <div className="flex items-center gap-2 border-b border-slate-200 p-4 dark:border-slate-700">
+                        <Clock className="h-4 w-4 text-slate-500" />
+                        <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">Acessos liberados (por vencimento)</h3>
+                    </div>
+                    <div className="divide-y divide-slate-200 dark:divide-slate-700">
+                        {activeGrants.map(grant => {
+                            const expiringSoon = grant.daysRemaining !== null && grant.daysRemaining <= 7;
+                            return (
+                                <div key={grant.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                                    <div className="min-w-0">
+                                        <div className="truncate text-sm font-medium text-slate-900 dark:text-white">{grant.email}</div>
+                                        <div className="text-xs text-slate-500">
+                                            {grant.hasFullPackage ? 'Pacote Completo' : `${grant.moduleCount} módulo(s)`}
+                                            {grant.expiresAt && ` • expira em ${new Date(grant.expiresAt).toLocaleDateString()}`}
+                                        </div>
+                                    </div>
+                                    {grant.daysRemaining !== null && (
+                                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${expiringSoon
+                                            ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                                            : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                            }`}>
+                                            {grant.daysRemaining}d restantes
+                                        </span>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
 
             <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
                 <div className="flex items-center justify-between border-b border-slate-200 p-6 dark:border-slate-700">
@@ -154,7 +239,7 @@ export const AdminUsers: React.FC = () => {
                                                                     loadingText="Ativando..."
                                                                     onClick={(e) => {
                                                                         e.stopPropagation();
-                                                                        activateModuleForUser(profile, 'pacote_completo', 6);
+                                                                        activateModuleForUser(profile, 'pacote_completo', accessDays);
                                                                     }}
                                                                 >
                                                                     Ativar Pacote Completo
@@ -198,7 +283,7 @@ export const AdminUsers: React.FC = () => {
                                                                                 loadingText="Ativando..."
                                                                                 onClick={(e) => {
                                                                                     e.stopPropagation();
-                                                                                    activateModuleForUser(profile, module.id, 6);
+                                                                                    activateModuleForUser(profile, module.id, accessDays);
                                                                                 }}
                                                                             >
                                                                                 Ativar

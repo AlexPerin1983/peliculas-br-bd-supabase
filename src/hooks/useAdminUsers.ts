@@ -39,6 +39,7 @@ export const useAdminUsers = (enabled: boolean) => {
     const [loading, setLoading] = useState(true);
     const [expandedUser, setExpandedUser] = useState<string | null>(null);
     const [activatingModule, setActivatingModule] = useState<{ userId: string; moduleId: string } | null>(null);
+    const [grantingAll, setGrantingAll] = useState(false);
     const [feedback, setFeedback] = useState<{ type: 'error' | 'success'; message: string } | null>(null);
 
     const fetchProfiles = useCallback(async () => {
@@ -134,7 +135,7 @@ export const useAdminUsers = (enabled: boolean) => {
         }
     }, [enabled, fetchProfiles]);
 
-    const activateModuleForUser = useCallback(async (profile: UserWithSubscription, moduleId: string, months: number = 6) => {
+    const activateModuleForUser = useCallback(async (profile: UserWithSubscription, moduleId: string, days: number = 30) => {
         setActivatingModule({ userId: profile.id, moduleId });
         setFeedback(null);
 
@@ -194,16 +195,16 @@ export const useAdminUsers = (enabled: boolean) => {
             const { error: activateError } = await supabase.rpc('activate_module', {
                 p_subscription_id: subId,
                 p_module_id: moduleId,
-                p_months: months,
-                p_payment_amount: moduleId === 'pacote_completo' ? 149 : 39,
-                p_payment_reference: 'ADMIN-MANUAL',
+                p_payment_amount: 0,
+                p_payment_reference: 'ADMIN-TRIAL',
+                p_days: days,
             });
 
             if (activateError) throw activateError;
 
             setFeedback({
                 type: 'success',
-                message: `Módulo ativado com sucesso para ${profile.email}.`,
+                message: `Acesso liberado por ${days} dia(s) para ${profile.email}.`,
             });
             await fetchProfiles();
         } catch (error: any) {
@@ -214,6 +215,34 @@ export const useAdminUsers = (enabled: boolean) => {
             });
         } finally {
             setActivatingModule(null);
+        }
+    }, [fetchProfiles]);
+
+    const grantFullAccessAll = useCallback(async (days: number = 30) => {
+        setGrantingAll(true);
+        setFeedback(null);
+
+        try {
+            const { data, error } = await supabase.rpc('admin_grant_full_access_all', {
+                p_days: days,
+                p_payment_reference: 'ADMIN-PROMO',
+            });
+
+            if (error) throw error;
+
+            setFeedback({
+                type: 'success',
+                message: `Pacote Completo liberado por ${days} dia(s) para ${data ?? 0} organização(ões).`,
+            });
+            await fetchProfiles();
+        } catch (error: any) {
+            console.error('Erro ao liberar acesso em massa:', error);
+            setFeedback({
+                type: 'error',
+                message: `Erro ao liberar acesso para todos: ${error.message}`,
+            });
+        } finally {
+            setGrantingAll(false);
         }
     }, [fetchProfiles]);
 
@@ -234,17 +263,49 @@ export const useAdminUsers = (enabled: boolean) => {
         [profiles]
     );
 
+    // Acompanhamento: usuários com acesso liberado, ordenados pelo vencimento mais próximo
+    const activeGrants = useMemo(() => {
+        return profiles
+            .filter(p => !isUserAdmin(p) && (p.subscription?.active_modules?.length || 0) > 0)
+            .map(p => {
+                const details = p.subscription?.modules_detail || [];
+                const soonest = details
+                    .filter(d => d.expires_at)
+                    .map(d => new Date(d.expires_at).getTime())
+                    .sort((a, b) => a - b)[0];
+                const daysRemaining = soonest
+                    ? Math.ceil((soonest - Date.now()) / (1000 * 60 * 60 * 24))
+                    : null;
+                return {
+                    id: p.id,
+                    email: p.email,
+                    moduleCount: p.subscription?.active_modules?.length || 0,
+                    hasFullPackage: p.subscription?.active_modules?.includes('pacote_completo') || false,
+                    expiresAt: soonest ? new Date(soonest).toISOString() : null,
+                    daysRemaining,
+                };
+            })
+            .sort((a, b) => {
+                if (a.daysRemaining === null) return 1;
+                if (b.daysRemaining === null) return -1;
+                return a.daysRemaining - b.daysRemaining;
+            });
+    }, [profiles]);
+
     return {
         profiles,
         loading,
         expandedUser,
         setExpandedUser,
         activatingModule,
+        grantingAll,
         feedback,
         fetchProfiles,
         activateModuleForUser,
+        grantFullAccessAll,
         getModuleExpiryDays,
         isModuleActive,
         usersWithModules,
+        activeGrants,
     };
 };
