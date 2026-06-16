@@ -1,10 +1,18 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Drawer } from 'vaul';
 import { Agendamento, AgendamentoServiceStatus, Client, SavedPDF } from '../../types';
 import ActionButton from '../ui/ActionButton';
 import ContentState from '../ui/ContentState';
 import Modal from '../ui/Modal';
 import AgendaPushReminderControl from './AgendaPushReminderControl';
 import { parseCurrencyInput } from '../../src/lib/proposalExpenses';
+import {
+    buildReviewFollowUpMessage,
+    buildShortReviewMessage,
+    getReviewTokens,
+    renderReviewTemplate,
+    templatizeReviewMessage,
+} from '../../src/lib/reviewMessage';
 
 const formatCurrencyBR = (value: number): string =>
     (Number.isFinite(value) ? value : 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -19,6 +27,7 @@ interface AgendaViewProps {
     onContinueAgendamento: (agendamento: Agendamento) => void;
     onRescheduleAgendamento: (agendamento: Agendamento) => void;
     onCreateNewAgendamento: (date: Date) => void;
+    googleReviewsLink?: string;
 }
 
 type AgendamentoWithStatus = Agendamento & { status?: SavedPDF['status'] };
@@ -139,30 +148,34 @@ const isLikelyMobileDevice = () => (
     typeof window !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(window.navigator.userAgent)
 );
 
-const getRegularWhatsappUrl = (phone?: string) => {
+const getRegularWhatsappUrl = (phone?: string, text?: string) => {
     const normalizedPhone = normalizePhone(phone);
     if (!normalizedPhone) return '';
+
+    const encoded = text ? encodeURIComponent(text) : '';
 
     if (isLikelyMobileDevice()) {
-        return `whatsapp://send?phone=${normalizedPhone}`;
+        return `whatsapp://send?phone=${normalizedPhone}${encoded ? `&text=${encoded}` : ''}`;
     }
 
-    return `https://wa.me/${normalizedPhone}`;
+    return `https://wa.me/${normalizedPhone}${encoded ? `?text=${encoded}` : ''}`;
 };
 
-const getBusinessWhatsappUrl = (phone?: string) => {
+const getBusinessWhatsappUrl = (phone?: string, text?: string) => {
     const normalizedPhone = normalizePhone(phone);
     if (!normalizedPhone) return '';
 
+    const encoded = text ? encodeURIComponent(text) : '';
+
     if (typeof window !== 'undefined' && /Android/i.test(window.navigator.userAgent)) {
-        return `intent://send?phone=${normalizedPhone}#Intent;scheme=whatsapp;package=com.whatsapp.w4b;end`;
+        return `intent://send?phone=${normalizedPhone}${encoded ? `&text=${encoded}` : ''}#Intent;scheme=whatsapp;package=com.whatsapp.w4b;end`;
     }
 
     if (typeof window !== 'undefined' && /iPhone|iPad|iPod/i.test(window.navigator.userAgent)) {
-        return `whatsapp-business://send?phone=${normalizedPhone}`;
+        return `whatsapp-business://send?phone=${normalizedPhone}${encoded ? `&text=${encoded}` : ''}`;
     }
 
-    return `https://wa.me/${normalizedPhone}`;
+    return `https://wa.me/${normalizedPhone}${encoded ? `?text=${encoded}` : ''}`;
 };
 
 const getTelUrl = (phone?: string) => {
@@ -278,10 +291,11 @@ const AgendaActionButton: React.FC<{
 const AgendaWhatsAppChooserModal: React.FC<{
     clientName: string;
     phone?: string;
+    messageText?: string;
     onClose: () => void;
-}> = ({ clientName, phone, onClose }) => {
-    const regularUrl = getRegularWhatsappUrl(phone);
-    const businessUrl = getBusinessWhatsappUrl(phone);
+}> = ({ clientName, phone, messageText, onClose }) => {
+    const regularUrl = getRegularWhatsappUrl(phone, messageText);
+    const businessUrl = getBusinessWhatsappUrl(phone, messageText);
 
     if (!regularUrl || !businessUrl) return null;
 
@@ -340,6 +354,371 @@ const AgendaWhatsAppChooserModal: React.FC<{
     );
 };
 
+type ReviewScriptMode = 'short' | 'long';
+
+const REVIEW_SCRIPT_OPTIONS: { key: ReviewScriptMode; label: string; iconClassName: string }[] = [
+    { key: 'short', label: 'Na hora, com o cliente', iconClassName: 'fas fa-user-check' },
+    { key: 'long', label: 'Depois, à distância', iconClassName: 'fas fa-paper-plane' },
+];
+
+// Molde editado pelo usuario fica salvo no navegador (sem banco), por script.
+const REVIEW_TEMPLATES_STORAGE_KEY = 'peliculas-br-agenda-review-templates-v1';
+
+const readReviewTemplate = (mode: ReviewScriptMode): string | null => {
+    if (typeof window === 'undefined') return null;
+    try {
+        const raw = window.localStorage.getItem(REVIEW_TEMPLATES_STORAGE_KEY);
+        if (!raw) return null;
+        const value = (JSON.parse(raw) as Record<string, unknown>)?.[mode];
+        return typeof value === 'string' ? value : null;
+    } catch {
+        return null;
+    }
+};
+
+const saveReviewTemplate = (mode: ReviewScriptMode, template: string) => {
+    if (typeof window === 'undefined') return;
+    try {
+        const raw = window.localStorage.getItem(REVIEW_TEMPLATES_STORAGE_KEY);
+        const parsed = raw ? JSON.parse(raw) : {};
+        window.localStorage.setItem(REVIEW_TEMPLATES_STORAGE_KEY, JSON.stringify({ ...parsed, [mode]: template }));
+    } catch {
+        // Silencioso: localStorage indisponivel (modo privado/quota).
+    }
+};
+
+const removeReviewTemplate = (mode: ReviewScriptMode) => {
+    if (typeof window === 'undefined') return;
+    try {
+        const raw = window.localStorage.getItem(REVIEW_TEMPLATES_STORAGE_KEY);
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        delete parsed[mode];
+        window.localStorage.setItem(REVIEW_TEMPLATES_STORAGE_KEY, JSON.stringify(parsed));
+    } catch {
+        // Silencioso.
+    }
+};
+
+// Nota da avaliacao por atendimento (0 = ainda nao avaliado). Salva no navegador.
+const REVIEW_RATINGS_STORAGE_KEY = 'peliculas-br-agenda-review-ratings-v1';
+
+const readAllReviewRatings = (): Record<number, number> => {
+    if (typeof window === 'undefined') return {};
+    try {
+        const raw = window.localStorage.getItem(REVIEW_RATINGS_STORAGE_KEY);
+        if (!raw) return {};
+        const parsed = JSON.parse(raw) as Record<string, unknown>;
+        return Object.entries(parsed).reduce<Record<number, number>>((acc, [id, value]) => {
+            const stars = Number(value);
+            if (Number.isFinite(stars) && stars > 0) acc[Number(id)] = stars;
+            return acc;
+        }, {});
+    } catch {
+        return {};
+    }
+};
+
+const saveAllReviewRatings = (ratings: Record<number, number>) => {
+    if (typeof window === 'undefined') return;
+    try {
+        window.localStorage.setItem(REVIEW_RATINGS_STORAGE_KEY, JSON.stringify(ratings));
+    } catch {
+        // Silencioso: localStorage indisponivel (modo privado/quota).
+    }
+};
+
+const ReviewStars: React.FC<{ stars: number; className?: string }> = ({ stars, className = '' }) => (
+    <span className={`inline-flex items-center gap-0.5 ${className}`} aria-label={`${stars} de 5 estrelas`}>
+        {[1, 2, 3, 4, 5].map((value) => (
+            <i
+                key={value}
+                className={`fas fa-star ${value <= stars ? 'text-amber-400' : 'text-emerald-300/40 dark:text-emerald-700/50'}`}
+                aria-hidden="true"
+            />
+        ))}
+    </span>
+);
+
+const ReviewRequestModal: React.FC<{
+    agendamento: Agendamento;
+    client?: Client;
+    linkedPdf?: SavedPDF;
+    googleReviewsLink?: string;
+    stars: number;
+    onRate: (stars: number) => void;
+    onClose: () => void;
+}> = ({ agendamento, client, linkedPdf, googleReviewsLink, stars, onRate, onClose }) => {
+    // useMemo mantem identidade estavel para nao resetar a edicao da textarea a
+    // cada render (o objeto de fallback seria recriado sempre, senao).
+    const reviewClient = useMemo(
+        () => client || ({ nome: agendamento.clienteNome } as Client),
+        [client, agendamento.clienteNome],
+    );
+    const source = useMemo(
+        () => linkedPdf || { clientName: agendamento.clienteNome },
+        [linkedPdf, agendamento.clienteNome],
+    );
+
+    const shortMessage = useMemo(
+        () => buildShortReviewMessage(source, reviewClient, googleReviewsLink),
+        [source, reviewClient, googleReviewsLink],
+    );
+    const longMessage = useMemo(
+        () => buildReviewFollowUpMessage(source, reviewClient, googleReviewsLink),
+        [source, reviewClient, googleReviewsLink],
+    );
+
+    const tokens = useMemo(
+        () => getReviewTokens(source, reviewClient, googleReviewsLink),
+        [source, reviewClient, googleReviewsLink],
+    );
+
+    // Texto de cada script: se houver molde salvo no navegador, reidrata com os
+    // dados deste atendimento; senao, usa o texto padrao gerado.
+    const computeMessageForMode = useCallback((nextMode: ReviewScriptMode) => {
+        const savedTemplate = readReviewTemplate(nextMode);
+        if (savedTemplate !== null) return renderReviewTemplate(savedTemplate, tokens);
+        return nextMode === 'short' ? shortMessage : longMessage;
+    }, [tokens, shortMessage, longMessage]);
+
+    const [mode, setMode] = useState<ReviewScriptMode>('short');
+    const [message, setMessage] = useState(() => computeMessageForMode('short'));
+    const [hasOverride, setHasOverride] = useState(() => readReviewTemplate('short') !== null);
+    const [copied, setCopied] = useState(false);
+    const [isChoosingWhatsapp, setIsChoosingWhatsapp] = useState(false);
+
+    // Recarrega o texto ao trocar de script (ou quando os dados mudam).
+    useEffect(() => {
+        setMessage(computeMessageForMode(mode));
+        setHasOverride(readReviewTemplate(mode) !== null);
+    }, [mode, computeMessageForMode]);
+
+    // Salva a edicao como molde (com marcadores) no navegador, a cada alteracao.
+    const handleMessageChange = (value: string) => {
+        setMessage(value);
+        saveReviewTemplate(mode, templatizeReviewMessage(value, tokens));
+        setHasOverride(true);
+    };
+
+    const handleResetTemplate = () => {
+        removeReviewTemplate(mode);
+        setMessage(mode === 'short' ? shortMessage : longMessage);
+        setHasOverride(false);
+    };
+
+    const hasLink = Boolean(googleReviewsLink?.trim());
+    const phone = client?.telefone;
+    const hasPhone = Boolean(getWhatsappUrl(phone));
+
+    const handleCopy = async () => {
+        try {
+            if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                await navigator.clipboard.writeText(message);
+                setCopied(true);
+                window.setTimeout(() => setCopied(false), 1800);
+            }
+        } catch {
+            // Silencioso: alguns navegadores bloqueiam o clipboard sem gesto direto.
+        }
+    };
+
+    const swipeStartXRef = useRef<number | null>(null);
+
+    const goToAdjacentScript = (direction: 1 | -1) => {
+        const order = REVIEW_SCRIPT_OPTIONS.map((option) => option.key);
+        const currentIndex = order.indexOf(mode);
+        const nextIndex = Math.min(order.length - 1, Math.max(0, currentIndex + direction));
+        if (nextIndex !== currentIndex) setMode(order[nextIndex]);
+    };
+
+    const handleSwipeStart = (event: React.TouchEvent) => {
+        // Ignora gestos iniciados na textarea para nao atrapalhar a edicao do texto.
+        if ((event.target as HTMLElement).closest('textarea')) {
+            swipeStartXRef.current = null;
+            return;
+        }
+        swipeStartXRef.current = event.touches[0].clientX;
+    };
+
+    const handleSwipeEnd = (event: React.TouchEvent) => {
+        const startX = swipeStartXRef.current;
+        swipeStartXRef.current = null;
+        if (startX === null) return;
+        const deltaX = event.changedTouches[0].clientX - startX;
+        if (Math.abs(deltaX) < 50) return;
+        // Arrasta para a esquerda avanca; para a direita volta.
+        goToAdjacentScript(deltaX < 0 ? 1 : -1);
+    };
+
+    return (
+        <Drawer.Root open={true} onOpenChange={(open) => !open && onClose()}>
+            <Drawer.Portal>
+                <Drawer.Overlay className="fixed inset-0 z-[9999] bg-slate-950/68 backdrop-blur-sm" />
+                <Drawer.Content className="fixed inset-x-0 bottom-0 z-[10000] mx-auto flex h-[100dvh] max-h-[100dvh] flex-col rounded-t-[var(--radius-panel)] border-t border-[var(--border-subtle)] bg-[var(--surface)] outline-none sm:max-w-xl">
+                    <div className="mx-auto mt-3 h-1.5 w-12 flex-shrink-0 rounded-full bg-slate-300 dark:bg-slate-700" aria-hidden="true" />
+
+                    <div className="flex items-start justify-between gap-3 px-5 pb-4 pt-3">
+                        <div className="flex min-w-0 items-center gap-3">
+                            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-300">
+                                <i className="fas fa-star"></i>
+                            </div>
+                            <div className="min-w-0">
+                                <div className="text-xl font-semibold text-slate-800 dark:text-white">Pedir avaliação</div>
+                                <div className="truncate text-xs font-medium text-slate-500 dark:text-slate-400">
+                                    {agendamento.clienteNome}
+                                </div>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            aria-label="Fechar"
+                            className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)]"
+                        >
+                            <i className="fas fa-times" aria-hidden="true"></i>
+                        </button>
+                    </div>
+
+                    <div
+                        className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 pb-2"
+                        onTouchStart={handleSwipeStart}
+                        onTouchEnd={handleSwipeEnd}
+                    >
+                        <div className="flex items-center justify-center gap-2 pt-1">
+                            {REVIEW_SCRIPT_OPTIONS.map((option) => {
+                                const isActive = mode === option.key;
+                                return (
+                                    <button
+                                        key={option.key}
+                                        type="button"
+                                        onClick={() => setMode(option.key)}
+                                        aria-pressed={isActive}
+                                        aria-label={option.label}
+                                        title={option.label}
+                                        className={`h-2.5 rounded-full transition-all ${isActive ? 'w-6 bg-[var(--brand-primary)]' : 'w-2.5 bg-slate-300 dark:bg-slate-600'}`}
+                                    />
+                                );
+                            })}
+                        </div>
+
+                        {!hasLink ? (
+                            <div className="rounded-[var(--radius-control)] border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800/70 dark:bg-amber-950/25 dark:text-amber-200">
+                                <p className="flex items-start gap-2">
+                                    <i className="fas fa-circle-info mt-0.5 text-[12px]" aria-hidden="true"></i>
+                                    <span>
+                                        Cadastre o <strong>link de avaliação do Google</strong> em
+                                        {' '}Configurações → Redes sociais para que a mensagem inclua o link automaticamente.
+                                    </span>
+                                </p>
+                            </div>
+                        ) : (
+                            <p className="text-sm leading-relaxed text-slate-500 dark:text-slate-400">
+                                {mode === 'short'
+                                    ? 'Mensagem curta para avaliar junto com o cliente, na hora. Puxa só o modelo da película e o bairro vinculados ao serviço.'
+                                    : 'Mensagem completa de pós-venda para enviar depois que você já saiu, com link do Google e dicas de SEO.'}
+                            </p>
+                        )}
+
+                        <div className={`rounded-[var(--radius-control)] border p-3 transition-colors ${stars > 0 ? 'border-emerald-300 bg-emerald-50 dark:border-emerald-800/70 dark:bg-emerald-950/25' : 'border-amber-300 bg-amber-50 dark:border-amber-800/70 dark:bg-amber-950/25'}`}>
+                            <div className="flex items-center justify-between gap-2">
+                                <span className={`text-xs font-bold uppercase tracking-wide ${stars > 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-300'}`}>
+                                    Avaliação do cliente
+                                </span>
+                                {stars > 0 ? (
+                                    <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                                        <i className="fas fa-circle-check text-[11px]" aria-hidden="true"></i>
+                                        Avaliado
+                                    </span>
+                                ) : (
+                                    <span className="text-xs font-semibold text-amber-700 dark:text-amber-300">Toque para marcar</span>
+                                )}
+                            </div>
+                            <div className="mt-2 flex items-center justify-center gap-2">
+                                {[1, 2, 3, 4, 5].map((value) => (
+                                    <button
+                                        key={value}
+                                        type="button"
+                                        onClick={() => onRate(value === stars ? 0 : value)}
+                                        aria-label={`${value} estrela${value > 1 ? 's' : ''}`}
+                                        className="p-1 transition-transform active:scale-90"
+                                    >
+                                        <i className={`fas fa-star text-3xl ${value <= stars ? 'text-amber-400' : 'text-slate-300 dark:text-slate-600'}`} aria-hidden="true"></i>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="flex min-h-0 flex-1 flex-col">
+                            <div className="mb-1.5 flex items-center justify-between gap-2">
+                                <label className="block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                                    Mensagem de avaliação
+                                </label>
+                                {hasOverride ? (
+                                    <button
+                                        type="button"
+                                        onClick={handleResetTemplate}
+                                        className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-500 transition-colors hover:text-[var(--brand-primary)] dark:text-slate-400"
+                                    >
+                                        <i className="fas fa-rotate-left text-[10px]" aria-hidden="true"></i>
+                                        Restaurar padrão
+                                    </button>
+                                ) : null}
+                            </div>
+                            <textarea
+                                value={message}
+                                onChange={(event) => handleMessageChange(event.target.value)}
+                                className="w-full flex-1 min-h-[180px] resize-none rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-3 text-sm leading-relaxed text-[var(--text-strong)] outline-none focus:border-[var(--brand-primary)]"
+                                placeholder="Escreva a mensagem de avaliação..."
+                            />
+                            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                                {!hasPhone
+                                    ? 'Cliente sem telefone cadastrado — use "Copiar texto" para enviar manualmente.'
+                                    : 'Suas edições ficam salvas neste navegador e já vêm prontas no próximo atendimento.'}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div
+                        className="flex flex-shrink-0 flex-col gap-2 border-t border-[var(--border-subtle)] bg-[var(--surface-muted)] p-4 sm:flex-row sm:justify-end"
+                        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)' }}
+                    >
+                        <button
+                            type="button"
+                            onClick={handleCopy}
+                            className="inline-flex h-11 items-center justify-center gap-2 rounded-[var(--radius-control)] border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
+                        >
+                            <i className={`fas ${copied ? 'fa-check' : 'fa-copy'} text-[13px]`} aria-hidden="true"></i>
+                            {copied ? 'Copiado!' : 'Copiar texto'}
+                        </button>
+                        <button
+                            type="button"
+                            disabled={!hasPhone}
+                            onClick={() => setIsChoosingWhatsapp(true)}
+                            className="inline-flex h-11 items-center justify-center gap-2 rounded-[var(--radius-control)] bg-emerald-500 px-4 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            <i className="fab fa-whatsapp text-base" aria-hidden="true"></i>
+                            Enviar no WhatsApp
+                        </button>
+                    </div>
+                </Drawer.Content>
+            </Drawer.Portal>
+
+            {isChoosingWhatsapp ? (
+                <AgendaWhatsAppChooserModal
+                    clientName={agendamento.clienteNome}
+                    phone={phone}
+                    messageText={message}
+                    onClose={() => {
+                        setIsChoosingWhatsapp(false);
+                        onClose();
+                    }}
+                />
+            ) : null}
+        </Drawer.Root>
+    );
+};
+
 const RouteActionLink: React.FC<{
     address: string;
     clientName: string;
@@ -363,7 +742,10 @@ const AppointmentCard: React.FC<{
     onCompleteWithValue: (agendamento: Agendamento, finalValue: number) => void;
     onContinueAgendamento: (agendamento: Agendamento) => void;
     onReschedule: (agendamento: Agendamento) => void;
-}> = ({ agendamento, client, linkedPdf, onEdit, onUpdateServiceStatus, onCompleteWithValue, onContinueAgendamento, onReschedule }) => {
+    googleReviewsLink?: string;
+    reviewStars: number;
+    onUpdateReviewRating: (agendamentoId: number, stars: number) => void;
+}> = ({ agendamento, client, linkedPdf, onEdit, onUpdateServiceStatus, onCompleteWithValue, onContinueAgendamento, onReschedule, googleReviewsLink, reviewStars, onUpdateReviewRating }) => {
     const status = agendamento.status || 'pending';
     const meta = STATUS_META[status] || STATUS_META.pending;
     const serviceStatus = agendamento.serviceStatus || 'scheduled';
@@ -372,6 +754,7 @@ const AppointmentCard: React.FC<{
     const [isConfirmingValue, setIsConfirmingValue] = useState(false);
     const [finalValueInput, setFinalValueInput] = useState('');
     const [isChoosingWhatsapp, setIsChoosingWhatsapp] = useState(false);
+    const [isRequestingReview, setIsRequestingReview] = useState(false);
 
     // Valor exibido/editado: vem do orcamento vinculado ou, sem orcamento, do
     // valor avulso guardado no proprio agendamento.
@@ -398,6 +781,7 @@ const AppointmentCard: React.FC<{
     };
 
     const isCompleted = serviceStatus === 'completed';
+    const isReviewed = reviewStars > 0;
 
     const valueConfirmationPanel = (
         <div>
@@ -476,6 +860,17 @@ const AppointmentCard: React.FC<{
                                 </p>
                                 <div className="mt-2 flex flex-wrap items-center gap-2">
                                     {serviceStatus !== 'scheduled' ? <ServiceStatusBadge status={serviceStatus} /> : null}
+                                    {isReviewed ? (
+                                        <span
+                                            onClick={(event) => { event.stopPropagation(); setIsRequestingReview(true); }}
+                                            title="Ver / editar avaliação"
+                                            className="inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-800 transition-colors hover:bg-emerald-200 dark:bg-emerald-950/35 dark:text-emerald-200 dark:hover:bg-emerald-900/45"
+                                        >
+                                            <i className="fas fa-circle-check text-[10px]" aria-hidden="true"></i>
+                                            Avaliado
+                                            <ReviewStars stars={reviewStars} className="text-[8px]" />
+                                        </span>
+                                    ) : null}
                                     <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--surface-muted)] px-2 py-1 text-xs font-bold text-[var(--text-muted)]">
                                         <i className="far fa-clock text-[10px]" aria-hidden="true"></i>
                                         {duration}
@@ -555,24 +950,48 @@ const AppointmentCard: React.FC<{
                     {isConfirmingValue ? (
                         valueConfirmationPanel
                     ) : (
-                        <div className="flex items-center justify-between gap-2">
-                            <div className="min-w-0">
-                                <span className="block text-[10px] font-bold uppercase text-emerald-700/70 dark:text-emerald-300/60">Valor final</span>
-                                <span className="block text-sm font-black text-emerald-800 dark:text-emerald-200">
-                                    {hasCurrentValue ? `R$ ${formatCurrencyBR(currentValue!)}` : 'Sem valor'}
-                                </span>
+                        <>
+                            <div className="flex items-center justify-between gap-2">
+                                <div className="min-w-0">
+                                    <span className="block text-[10px] font-bold uppercase text-emerald-700/70 dark:text-emerald-300/60">Valor final</span>
+                                    <span className="block text-sm font-black text-emerald-800 dark:text-emerald-200">
+                                        {hasCurrentValue ? `R$ ${formatCurrencyBR(currentValue!)}` : 'Sem valor'}
+                                    </span>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={handleEditValueClick}
+                                    className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-[var(--radius-control)] border border-emerald-300 bg-white px-3 text-xs font-bold text-emerald-800 transition-colors hover:bg-emerald-100 dark:border-emerald-800/70 dark:bg-slate-800 dark:text-emerald-200"
+                                >
+                                    <i className={`fas ${hasCurrentValue ? 'fa-pen' : 'fa-plus'} text-[10px]`} aria-hidden="true"></i>
+                                    <span>{hasCurrentValue ? 'Editar valor' : 'Adicionar valor'}</span>
+                                </button>
                             </div>
-                            <button
-                                type="button"
-                                onClick={handleEditValueClick}
-                                className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-[var(--radius-control)] border border-emerald-300 bg-white px-3 text-xs font-bold text-emerald-800 transition-colors hover:bg-emerald-100 dark:border-emerald-800/70 dark:bg-slate-800 dark:text-emerald-200"
-                            >
-                                <i className={`fas ${hasCurrentValue ? 'fa-pen' : 'fa-plus'} text-[10px]`} aria-hidden="true"></i>
-                                <span>{hasCurrentValue ? 'Editar valor' : 'Adicionar valor'}</span>
-                            </button>
-                        </div>
+                            {!isReviewed ? (
+                                <button
+                                    type="button"
+                                    onClick={() => setIsRequestingReview(true)}
+                                    className="mt-2 inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-[var(--radius-control)] border border-amber-300 bg-amber-100 px-2 text-xs font-bold text-amber-800 transition-colors hover:bg-amber-200 dark:border-amber-800/70 dark:bg-amber-950/40 dark:text-amber-200"
+                                >
+                                    <i className="fas fa-star text-[11px]" aria-hidden="true"></i>
+                                    <span className="truncate">Pedir avaliação no Google</span>
+                                </button>
+                            ) : null}
+                        </>
                     )}
                 </div>
+            ) : null}
+
+            {isRequestingReview ? (
+                <ReviewRequestModal
+                    agendamento={agendamento}
+                    client={client}
+                    linkedPdf={linkedPdf}
+                    googleReviewsLink={googleReviewsLink}
+                    stars={reviewStars}
+                    onRate={(value) => { if (agendamento.id != null) onUpdateReviewRating(agendamento.id, value); }}
+                    onClose={() => setIsRequestingReview(false)}
+                />
             ) : null}
 
             {serviceStatus === 'cancelled' || serviceStatus === 'no_show' ? (
@@ -845,9 +1264,19 @@ const AgendaQuickButton: React.FC<{
 
 const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
 
-const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, onEditAgendamento, onUpdateServiceStatus, onCompleteAgendamentoWithValue, onContinueAgendamento, onRescheduleAgendamento, onCreateNewAgendamento }) => {
+const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, onEditAgendamento, onUpdateServiceStatus, onCompleteAgendamentoWithValue, onContinueAgendamento, onRescheduleAgendamento, onCreateNewAgendamento, googleReviewsLink }) => {
     const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState(new Date());
+    const [reviewRatings, setReviewRatings] = useState<Record<number, number>>(() => readAllReviewRatings());
+
+    const handleUpdateReviewRating = useCallback((agendamentoId: number, stars: number) => {
+        setReviewRatings((prev) => {
+            const next = { ...prev };
+            if (stars > 0) next[agendamentoId] = stars; else delete next[agendamentoId];
+            saveAllReviewRatings(next);
+            return next;
+        });
+    }, []);
 
     const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
     const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
@@ -1205,7 +1634,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                         <div className="space-y-3">
                             {selectedDayAgendamentos.map((agendamento) => {
                                 const client = clientsById.get(agendamento.clienteId);
-                                return <AppointmentCard key={agendamento.id} agendamento={agendamento} client={client} linkedPdf={agendamento.pdfId ? pdfById.get(agendamento.pdfId) : undefined} onEdit={onEditAgendamento} onUpdateServiceStatus={onUpdateServiceStatus} onCompleteWithValue={onCompleteAgendamentoWithValue} onContinueAgendamento={onContinueAgendamento} onReschedule={onRescheduleAgendamento} />;
+                                return <AppointmentCard key={agendamento.id} agendamento={agendamento} client={client} linkedPdf={agendamento.pdfId ? pdfById.get(agendamento.pdfId) : undefined} onEdit={onEditAgendamento} onUpdateServiceStatus={onUpdateServiceStatus} onCompleteWithValue={onCompleteAgendamentoWithValue} onContinueAgendamento={onContinueAgendamento} onReschedule={onRescheduleAgendamento} googleReviewsLink={googleReviewsLink} reviewStars={agendamento.id != null ? (reviewRatings[agendamento.id] || 0) : 0} onUpdateReviewRating={handleUpdateReviewRating} />;
                             })}
                         </div>
                     ) : (
@@ -1255,7 +1684,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                                     </div>
                                     {items.map((agendamento) => {
                                         const client = clientsById.get(agendamento.clienteId);
-                                        return <AppointmentCard key={agendamento.id} agendamento={agendamento} client={client} linkedPdf={agendamento.pdfId ? pdfById.get(agendamento.pdfId) : undefined} onEdit={onEditAgendamento} onUpdateServiceStatus={onUpdateServiceStatus} onCompleteWithValue={onCompleteAgendamentoWithValue} onContinueAgendamento={onContinueAgendamento} onReschedule={onRescheduleAgendamento} />;
+                                        return <AppointmentCard key={agendamento.id} agendamento={agendamento} client={client} linkedPdf={agendamento.pdfId ? pdfById.get(agendamento.pdfId) : undefined} onEdit={onEditAgendamento} onUpdateServiceStatus={onUpdateServiceStatus} onCompleteWithValue={onCompleteAgendamentoWithValue} onContinueAgendamento={onContinueAgendamento} onReschedule={onRescheduleAgendamento} googleReviewsLink={googleReviewsLink} reviewStars={agendamento.id != null ? (reviewRatings[agendamento.id] || 0) : 0} onUpdateReviewRating={handleUpdateReviewRating} />;
                                     })}
                                 </div>
                             ))}
@@ -1368,7 +1797,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                         <div className="space-y-3">
                             {selectedDayAgendamentos.map((agendamento) => {
                                 const client = clientsById.get(agendamento.clienteId);
-                                return <AppointmentCard key={agendamento.id} agendamento={agendamento} client={client} linkedPdf={agendamento.pdfId ? pdfById.get(agendamento.pdfId) : undefined} onEdit={onEditAgendamento} onUpdateServiceStatus={onUpdateServiceStatus} onCompleteWithValue={onCompleteAgendamentoWithValue} onContinueAgendamento={onContinueAgendamento} onReschedule={onRescheduleAgendamento} />;
+                                return <AppointmentCard key={agendamento.id} agendamento={agendamento} client={client} linkedPdf={agendamento.pdfId ? pdfById.get(agendamento.pdfId) : undefined} onEdit={onEditAgendamento} onUpdateServiceStatus={onUpdateServiceStatus} onCompleteWithValue={onCompleteAgendamentoWithValue} onContinueAgendamento={onContinueAgendamento} onReschedule={onRescheduleAgendamento} googleReviewsLink={googleReviewsLink} reviewStars={agendamento.id != null ? (reviewRatings[agendamento.id] || 0) : 0} onUpdateReviewRating={handleUpdateReviewRating} />;
                             })}
                         </div>
                     ) : (

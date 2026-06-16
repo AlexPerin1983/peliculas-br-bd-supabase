@@ -26,6 +26,7 @@ import Modal from '../ui/Modal';
 import { useFeedback } from '../../src/contexts/FeedbackContext';
 import { PROPOSAL_EXPENSE_CATEGORY_OPTIONS, summarizeProposalExpenses } from '../../src/lib/proposalExpenses';
 import { matchesSearch, normalizeSearchText } from '../../src/lib/textSearch';
+import { buildReviewFollowUpMessage } from '../../src/lib/reviewMessage';
 
 interface PdfHistoryViewProps {
     pdfs: SavedPDF[];
@@ -1208,55 +1209,8 @@ const buildCombinedProposalMessages = (selectedPdfs: SavedPDF[], client: Client 
     ];
 };
 
-const buildReviewLocationHint = (pdf: SavedPDF, client: Client) => {
-    const applicationTypes = getUniqueMeaningfulValues((pdf.measurements || []).map(measurement => measurement.tipoAplicacao));
-    const environments = getUniqueMeaningfulValues((pdf.measurements || []).map(measurement => measurement.ambiente));
-    const filmNames = getUniqueMeaningfulValues((pdf.measurements || []).map(measurement => measurement.pelicula));
-    const filmDetail = filmNames.length > 0 ? buildFilmSummary(filmNames) : '';
-    const applicationDetail = applicationTypes.length > 0 || environments.length > 0
-        ? `onde aplicamos${applicationTypes.length > 0 || environments.length > 0
-            ? ` (${[applicationTypes[0], environments[0]].filter(Boolean).join(' / ')})`
-            : ''}`
-        : '';
-    const neighborhoodDetail = isMeaningfulText(client.bairro)
-        ? `sua região/bairro (${client.bairro!.trim()})`
-        : '';
-
-    const details = [filmDetail, applicationDetail, neighborhoodDetail].filter(Boolean);
-    if (details.length === 0) {
-        return 'Se puder, use palavras que descrevam o servico feito, como pelicula para vidro, controle solar, privacidade, seguranca, insulfilm residencial ou comercial e sua cidade/bairro. Isso ajuda outras pessoas a encontrarem a Peliculas Brasil no Google.';
-    }
-
-    if (details.length === 1) {
-        return `Se puder, mencione ${details[0]} e palavras relacionadas ao servico, como pelicula para vidro, controle solar, privacidade, seguranca, insulfilm residencial ou comercial e sua cidade/bairro. Isso ajuda outras pessoas a encontrarem a Peliculas Brasil no Google.`;
-    }
-
-    const intro = details.slice(0, -1).join(', ');
-    const lastDetail = details[details.length - 1];
-    return `Se puder, mencione ${intro} e ${lastDetail}, junto com palavras relacionadas ao servico, como pelicula para vidro, controle solar, privacidade, seguranca, insulfilm residencial ou comercial e sua cidade/bairro. Isso ajuda outras pessoas a encontrarem a Peliculas Brasil no Google.`;
-};
-
-const buildReviewFollowUpMessage = (pdf: SavedPDF, client: Client, googleReviewsLink?: string) => {
-    const reviewLink = googleReviewsLink?.trim();
-    if (!reviewLink) return '';
-
-    const firstName = getFirstName(client.nome || pdf.clientName || 'cliente');
-    const locationHint = buildReviewLocationHint(pdf, client);
-
-    return [
-        `Ola ${firstName}, essa e uma pesquisa de satisfacao para avaliar nosso trabalho.`,
-        '',
-        'Seu retorno ajuda a gente a melhorar e tambem ajuda novos clientes a conhecerem a qualidade do servico.',
-        '',
-        'Se puder, deixe sua avaliacao no Google pelo link abaixo:',
-        reviewLink,
-        ...(locationHint ? ['', locationHint] : []),
-        '',
-        'Se tambem puder enviar 1 ou 2 fotos do resultado, registramos junto do pos-venda e da garantia.',
-        '',
-        'Obrigado pela confianca.',
-    ].join('\n');
-};
+// buildReviewLocationHint e buildReviewFollowUpMessage foram movidos para
+// ../../src/lib/reviewMessage para serem reaproveitados na Agenda (card concluido).
 
 const normalizeWhatsappPhone = (phone?: string | null) => {
     if (!phone) return null;
