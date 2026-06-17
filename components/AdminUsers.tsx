@@ -1,9 +1,10 @@
 import React from 'react';
-import { Check, ChevronDown, ChevronUp, Crown, Clock, Shield, X, Zap } from 'lucide-react';
+import { Ban, Check, ChevronDown, ChevronUp, Crown, Clock, Shield, Trash2, Unlock, X, Zap } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import ActionButton from './ui/ActionButton';
 import ContentState from './ui/ContentState';
-import { AVAILABLE_MODULES, isUserAdmin, useAdminUsers } from '../src/hooks/useAdminUsers';
+import { AdminUserEngagement } from './AdminUserEngagement';
+import { AVAILABLE_MODULES, isTestAccount, isUserAdmin, useAdminUsers } from '../src/hooks/useAdminUsers';
 
 export const AdminUsers: React.FC = () => {
     const { isAdmin } = useAuth();
@@ -14,6 +15,7 @@ export const AdminUsers: React.FC = () => {
         setExpandedUser,
         activatingModule,
         grantingAll,
+        busyUser,
         signupTrial,
         savingSignupTrial,
         saveSignupTrial,
@@ -21,6 +23,8 @@ export const AdminUsers: React.FC = () => {
         fetchProfiles,
         activateModuleForUser,
         grantFullAccessAll,
+        setUserBlocked,
+        deleteUser,
         getModuleExpiryDays,
         isModuleActive,
         usersWithModules,
@@ -29,6 +33,19 @@ export const AdminUsers: React.FC = () => {
 
     const [accessDays, setAccessDays] = React.useState(30);
     const [trialDays, setTrialDays] = React.useState(7);
+    const [onlyTests, setOnlyTests] = React.useState(false);
+
+    const visibleProfiles = onlyTests ? profiles.filter(isTestAccount) : profiles;
+
+    const handleDeleteUser = (profile: typeof profiles[number]) => {
+        if (!window.confirm(`EXCLUIR permanentemente ${profile.email}? Isso apaga login, dados e arquivos. NÃO pode ser desfeito.`)) return;
+        const typed = window.prompt(`Para confirmar, digite o email do usuário:\n${profile.email}`);
+        if (typed?.trim().toLowerCase() !== (profile.email || '').toLowerCase()) {
+            if (typed !== null) window.alert('Email não confere. Exclusão cancelada.');
+            return;
+        }
+        deleteUser(profile);
+    };
 
     // Sincroniza o input de dias do trial quando a config carrega do banco
     React.useEffect(() => {
@@ -68,6 +85,9 @@ export const AdminUsers: React.FC = () => {
                     <div className="text-sm text-slate-500">Acessos liberados</div>
                 </div>
             </div>
+
+            {/* Ranking de engajamento — quem mais usa a ferramenta */}
+            <AdminUserEngagement isAdmin={isAdmin} />
 
             {/* Liberar acesso por X dias */}
             <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-900/40 dark:bg-blue-950/20">
@@ -193,11 +213,22 @@ export const AdminUsers: React.FC = () => {
             )}
 
             <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
-                <div className="flex items-center justify-between border-b border-slate-200 p-6 dark:border-slate-700">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-6 dark:border-slate-700">
                     <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">Gerenciar Usuários</h3>
-                    <ActionButton variant="secondary" size="sm" iconClassName="fas fa-rotate-right" onClick={fetchProfiles}>
-                        Atualizar Lista
-                    </ActionButton>
+                    <div className="flex items-center gap-3">
+                        <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+                            <input
+                                type="checkbox"
+                                checked={onlyTests}
+                                onChange={(e) => setOnlyTests(e.target.checked)}
+                                className="h-4 w-4 rounded border-slate-300"
+                            />
+                            Só contas de teste
+                        </label>
+                        <ActionButton variant="secondary" size="sm" iconClassName="fas fa-rotate-right" onClick={fetchProfiles}>
+                            Atualizar Lista
+                        </ActionButton>
+                    </div>
                 </div>
 
                 {feedback && (
@@ -217,15 +248,15 @@ export const AdminUsers: React.FC = () => {
                             title="Carregando usuarios"
                             description="Buscando perfis e acessos."
                         />
-                    ) : profiles.length === 0 ? (
+                    ) : visibleProfiles.length === 0 ? (
                         <ContentState
                             compact
                             iconClassName="fas fa-users-slash"
-                            title="Nenhum usuario ainda"
-                            description="Os usuarios cadastrados aparecem aqui."
+                            title={onlyTests ? 'Nenhuma conta de teste' : 'Nenhum usuario ainda'}
+                            description={onlyTests ? 'Não há contas de teste (emails com +, demo ou @example.com).' : 'Os usuarios cadastrados aparecem aqui.'}
                         />
                     ) : (
-                        profiles.map(profile => {
+                        visibleProfiles.map(profile => {
                             const isExpanded = expandedUser === profile.id;
                             const activeModulesCount = profile.subscription?.active_modules?.length || 0;
                             const hasFullPackage = isModuleActive(profile, 'pacote_completo');
@@ -266,6 +297,16 @@ export const AdminUsers: React.FC = () => {
                                                         {hasFullPackage && !isProfileAdmin && (
                                                             <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
                                                                 Completo
+                                                            </span>
+                                                        )}
+                                                        {profile.blocked && (
+                                                            <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold uppercase text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                                                                Bloqueado
+                                                            </span>
+                                                        )}
+                                                        {isTestAccount(profile) && !isProfileAdmin && (
+                                                            <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-bold uppercase text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+                                                                Teste
                                                             </span>
                                                         )}
                                                     </div>
@@ -366,6 +407,37 @@ export const AdminUsers: React.FC = () => {
                                                                     </div>
                                                                 );
                                                             })}
+                                                        </div>
+
+                                                        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-200 pt-3 dark:border-slate-700">
+                                                            <ActionButton
+                                                                variant="secondary"
+                                                                size="sm"
+                                                                loading={busyUser?.userId === profile.id && busyUser?.action === 'block'}
+                                                                loadingText="Salvando..."
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setUserBlocked(profile, !profile.blocked);
+                                                                }}
+                                                            >
+                                                                {profile.blocked ? (
+                                                                    <span className="flex items-center gap-1"><Unlock className="h-4 w-4" /> Reativar acesso</span>
+                                                                ) : (
+                                                                    <span className="flex items-center gap-1"><Ban className="h-4 w-4" /> Bloquear acesso</span>
+                                                                )}
+                                                            </ActionButton>
+                                                            <button
+                                                                type="button"
+                                                                disabled={busyUser?.userId === profile.id}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleDeleteUser(profile);
+                                                                }}
+                                                                className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700 transition-colors hover:bg-red-100 disabled:opacity-50 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-300 dark:hover:bg-red-950/50"
+                                                            >
+                                                                <Trash2 className="h-4 w-4" />
+                                                                {busyUser?.userId === profile.id && busyUser?.action === 'delete' ? 'Excluindo...' : 'Excluir usuário'}
+                                                            </button>
                                                         </div>
                                                     </>
                                                 )}
