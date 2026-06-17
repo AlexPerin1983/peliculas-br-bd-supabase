@@ -27,6 +27,7 @@ import { useFeedback } from '../../src/contexts/FeedbackContext';
 import { PROPOSAL_EXPENSE_CATEGORY_OPTIONS, summarizeProposalExpenses } from '../../src/lib/proposalExpenses';
 import { matchesSearch, normalizeSearchText } from '../../src/lib/textSearch';
 import { buildReviewFollowUpMessage } from '../../src/lib/reviewMessage';
+import { formatGarantiaMaoDeObra, garantiaEmDias } from '../../src/lib/filmWarranty';
 
 interface PdfHistoryViewProps {
     pdfs: SavedPDF[];
@@ -1062,10 +1063,6 @@ const buildFilmSummary = (filmNames: string[]) => {
     return `as películas ${filmNames[0]}, ${filmNames[1]} e outras`;
 };
 
-const formatLaborWarrantyDays = (days: number) => {
-    return `${days} dia${days === 1 ? '' : 's'}`;
-};
-
 const buildWarrantyText = (films: Film[], filmNames: string[]) => {
     const matchedFilms = filmNames
         .map(name => films.find(film => film.nome === name))
@@ -1075,9 +1072,8 @@ const buildWarrantyText = (films: Film[], filmNames: string[]) => {
         .map(film => film.garantiaFabricante)
         .filter((value): value is number => typeof value === 'number' && value > 0);
 
-    const maoDeObra = matchedFilms
-        .map(film => film.garantiaMaoDeObra)
-        .filter((value): value is number => typeof value === 'number' && value > 0);
+    const maoDeObraFilms = matchedFilms
+        .filter(film => typeof film.garantiaMaoDeObra === 'number' && film.garantiaMaoDeObra > 0);
 
     const parts: string[] = [];
 
@@ -1086,9 +1082,10 @@ const buildWarrantyText = (films: Film[], filmNames: string[]) => {
         parts.push(`garantia de fabricante de ${maxFabricante} ano${maxFabricante > 1 ? 's' : ''}`);
     }
 
-    if (maoDeObra.length > 0) {
-        const maxMaoDeObra = Math.max(...maoDeObra);
-        parts.push(`garantia de instalação de ${formatLaborWarrantyDays(maxMaoDeObra)}`);
+    if (maoDeObraFilms.length > 0) {
+        const best = maoDeObraFilms.reduce((a, b) =>
+            garantiaEmDias(b.garantiaMaoDeObra, b.garantiaMaoDeObraUnidade) > garantiaEmDias(a.garantiaMaoDeObra, a.garantiaMaoDeObraUnidade) ? b : a);
+        parts.push(`garantia de instalação de ${formatGarantiaMaoDeObra(best.garantiaMaoDeObra, best.garantiaMaoDeObraUnidade)}`);
     }
 
     if (parts.length === 0) {

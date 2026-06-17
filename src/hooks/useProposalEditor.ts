@@ -73,7 +73,8 @@ const normalizeGeneralDiscount = (
                 ? 'labor_only'
                 : 'complete',
         filmPricingModes: discount?.filmPricingModes ?? fallback?.filmPricingModes,
-        expenses: normalizeProposalExpenses(discount?.expenses ?? fallback?.expenses)
+        expenses: normalizeProposalExpenses(discount?.expenses ?? fallback?.expenses),
+        hideMeasurements: discount?.hideMeasurements ?? fallback?.hideMeasurements,
     };
 };
 

@@ -8,6 +8,7 @@ import { locationService } from '../../services/locationService';
 import { useAuth } from '../../contexts/AuthContext';
 import { calculatePricingAreaM2 } from '../../src/lib/pricingArea';
 import { selectAllOnFocus } from '../../src/lib/selectOnFocus';
+import { formatGarantiaMaoDeObraCurto } from '../../src/lib/filmWarranty';
 
 type UIMeasurement = Measurement & { isNew?: boolean };
 
@@ -323,7 +324,7 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
                                     </p>
                                     {selectedFilm && (
                                         <p className="text-xs text-slate-500 mt-1">
-                                            Garantia: {selectedFilm.garantiaFabricante || 'N/A'}a Fab. / {selectedFilm.garantiaMaoDeObra || 'N/A'}d M.O.
+                                            Garantia: {selectedFilm.garantiaFabricante || 'N/A'}a Fab. / {formatGarantiaMaoDeObraCurto(selectedFilm.garantiaMaoDeObra, selectedFilm.garantiaMaoDeObraUnidade) || 'N/A'} M.O.
                                         </p>
                                     )}
                                 </div>

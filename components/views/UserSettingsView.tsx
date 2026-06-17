@@ -847,6 +847,26 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({
                         <DollarSign className="h-4 w-4" aria-hidden="true" />
                         Configurar Formas de Pagamento
                     </button>
+
+                    {/* Anti-cópia: oculta dimensões e m² no PDF (padrão para todos os orçamentos) */}
+                    <button
+                        type="button"
+                        role="switch"
+                        aria-checked={!!formData.hideMeasurementsInPdf}
+                        onClick={() => setFormData(prev => ({ ...prev, hideMeasurementsInPdf: !prev.hideMeasurementsInPdf }))}
+                        className={`flex w-full items-center justify-between gap-3 rounded-[var(--radius-control)] border p-3 text-left transition-colors ${formData.hideMeasurementsInPdf
+                            ? 'border-[var(--brand-primary)] bg-[rgba(21,94,239,0.06)]'
+                            : 'border-[var(--border-subtle)] bg-[var(--surface-muted)]'
+                            }`}
+                    >
+                        <span className="min-w-0">
+                            <span className="block text-sm font-semibold text-[var(--text-strong)]">Ocultar medidas no PDF</span>
+                            <span className="block text-xs text-[var(--text-muted)]">Esconde dimensões e m² do orçamento (evita que o cliente leve as medidas para cotar com concorrentes). Você pode sobrescrever por orçamento no Resumo de Valores.</span>
+                        </span>
+                        <span className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${formData.hideMeasurementsInPdf ? 'bg-[var(--brand-primary)]' : 'bg-slate-300 dark:bg-slate-600'}`}>
+                            <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${formData.hideMeasurementsInPdf ? 'left-[22px]' : 'left-0.5'}`} />
+                        </span>
+                    </button>
                 </div>
             </SettingsSection>
 

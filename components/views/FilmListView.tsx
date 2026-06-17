@@ -5,6 +5,7 @@ import ContentState from '../ui/ContentState';
 import PageCollectionToolbar from '../ui/PageCollectionToolbar';
 import ViewModeToggle from '../ui/ViewModeToggle';
 import { matchesSearch, normalizeSearchText } from '../../src/lib/textSearch';
+import { formatGarantiaMaoDeObraCurto } from '../../src/lib/filmWarranty';
 
 interface FilmListViewProps {
     films: Film[];
@@ -127,7 +128,7 @@ const FilmCard: React.FC<{
                             {film.garantiaMaoDeObra ? (
                                 <span className="inline-flex items-center gap-1 rounded-full border border-[var(--border-subtle)] bg-[var(--surface-muted)] px-2 py-1 text-[9px] font-semibold text-[var(--text-body)] sm:px-2.5 sm:text-[10px]">
                                     <i className="fas fa-tools text-[7px] sm:text-[8px]" aria-hidden="true"></i>
-                                    {film.garantiaMaoDeObra}d M.O.
+                                    {formatGarantiaMaoDeObraCurto(film.garantiaMaoDeObra, film.garantiaMaoDeObraUnidade)} M.O.
                                 </span>
                             ) : null}
                         </div>
@@ -288,7 +289,7 @@ const FilmListRow: React.FC<{
     const accentColor = getFilmAccentColor(film);
     const warrantySummary = [
         film.garantiaFabricante ? `${film.garantiaFabricante} anos fabricante` : null,
-        film.garantiaMaoDeObra ? `${film.garantiaMaoDeObra}d M.O.` : null,
+        film.garantiaMaoDeObra ? `${formatGarantiaMaoDeObraCurto(film.garantiaMaoDeObra, film.garantiaMaoDeObraUnidade)} M.O.` : null,
     ]
         .filter(Boolean)
         .join(' • ');
@@ -539,7 +540,7 @@ const FilmListAppleRow: React.FC<{
     const accentDotClass = getFilmAccentDotClass(film);
     const warrantySummary = [
         film.garantiaFabricante ? `${film.garantiaFabricante} anos fabricante` : null,
-        film.garantiaMaoDeObra ? `${film.garantiaMaoDeObra}d M.O.` : null,
+        film.garantiaMaoDeObra ? `${formatGarantiaMaoDeObraCurto(film.garantiaMaoDeObra, film.garantiaMaoDeObraUnidade)} M.O.` : null,
     ]
         .filter(Boolean)
         .join(' / ');

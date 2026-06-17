@@ -2727,6 +2727,7 @@ Se não conseguir extrair, retorne: []`;
                                                 setShowIaUpgradeModal(true);
                                             }
                                         }}
+                                        defaultHideMeasurements={!!userInfo?.hideMeasurementsInPdf}
                                     />
                                 ) : ['history', 'agenda'].includes(activeTab) ? (
                                     <div className={activeTab === 'history'

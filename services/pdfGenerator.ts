@@ -6,6 +6,7 @@ import { buildPdfAdjustmentDisplay, type PdfDisplayLineItem } from '../src/lib/p
 import { calculateProposalAdjustmentAmounts } from '../src/lib/proposalAdjustments';
 import { createDefaultLogo } from './defaultLogo';
 import { clampValidityDays } from '../src/lib/proposalValidity';
+import { formatGarantiaMaoDeObra } from '../src/lib/filmWarranty';
 
 // Define GeneralDiscount locally since it's not exported from types.ts
 interface GeneralDiscount {
@@ -17,6 +18,8 @@ interface GeneralDiscount {
     increaseValue?: string | number;
     increaseType?: 'percentage' | 'fixed' | 'none';
     pricingMode?: ProposalPricingMode;
+    filmPricingModes?: { [filmName: string]: 'area' | 'linear' };
+    hideMeasurements?: boolean;
 }
 
 const formatNumberBR = (number: number): string => {
@@ -121,6 +124,8 @@ export const regeneratePDFFromSaved = async (client: Client, userInfo: UserInfo,
         increaseValue: pdf.generalDiscount?.increaseValue,
         increaseType: pdf.generalDiscount?.increaseType,
         pricingMode: pdf.generalDiscount?.pricingMode === 'labor_only' ? 'labor_only' : 'complete',
+        filmPricingModes: pdf.generalDiscount?.filmPricingModes,
+        hideMeasurements: pdf.generalDiscount?.hideMeasurements,
     };
 
     const totals = calculateTotalsFromSavedPDF(pdf);
@@ -151,6 +156,8 @@ export const generateCombinedPDF = async (client: Client, userInfo: UserInfo, sa
             increaseValue: pdf.generalDiscount?.increaseValue,
             increaseType: pdf.generalDiscount?.increaseType,
             pricingMode: pdf.generalDiscount?.pricingMode === 'labor_only' ? 'labor_only' : 'complete',
+            filmPricingModes: pdf.generalDiscount?.filmPricingModes,
+            hideMeasurements: pdf.generalDiscount?.hideMeasurements,
         } as GeneralDiscount,
         totals: calculateTotalsFromSavedPDF(pdf),
         paymentConfig: undefined as ProposalPaymentConfig | undefined,
@@ -647,7 +654,11 @@ const renderPdfContent = async (
                 const filmGroupTotals = optionTotals.groupedTotals?.[filmName];
                 const isLinearFilm = optionPricingMode !== 'labor_only'
                     && optionGeneralDiscount?.filmPricingModes?.[filmName] === 'linear';
-                if (isLinearFilm && filmGroupTotals) {
+                // Anti-cópia: oculta dimensões/m² (e a linha de metros lineares) no PDF.
+                // Override por orçamento; senão cai no padrão global do UserInfo.
+                const hideMeasures = optionGeneralDiscount?.hideMeasurements ?? userInfo.hideMeasurementsInPdf ?? false;
+                const showMeasures = !hideMeasures;
+                if (isLinearFilm && filmGroupTotals && showMeasures) {
                     safeText(
                         `Cobrança por metro linear: ${formatNumberBR(filmGroupTotals.totalLinearMeters)} m x R$ ${formatNumberBR(filmGroupTotals.unitSalePriceLinearMeter)}/m = R$ ${formatNumberBR(filmGroupTotals.linearSaleSubtotal)}`,
                         margin,
@@ -656,9 +667,12 @@ const renderPdfContent = async (
                     yPos += 6;
                 }
 
-                const head = isLinearFilm
-                    ? [['Item', 'Ambiente', 'Dimensões', 'Qtd', 'M²']]
-                    : [['Item', 'Ambiente', 'Dimensões', 'Qtd', 'M²', 'Preço Unit.', 'Desconto', 'Preço Final']];
+                const headRow: string[] = ['Item', 'Ambiente'];
+                if (showMeasures) headRow.push('Dimensões');
+                headRow.push('Qtd');
+                if (showMeasures) headRow.push('M²');
+                if (!isLinearFilm) headRow.push('Preço Unit.', 'Desconto', 'Preço Final');
+                const head = [headRow];
                 const body = filmMeasurements.map((m, i) => {
                     const displayLineItem = displayLineItemsByMeasurement.get(m);
                     const m2 = displayLineItem?.m2 ?? calculatePricingAreaM2(
@@ -685,13 +699,10 @@ const renderPdfContent = async (
                     }
                     const finalItemPrice = displayLineItem?.displayFinalItemPrice ?? Math.max(0, basePrice - itemDiscountAmount);
 
-                    const row = [
-                        i + 1,
-                        m.ambiente,
-                        `${m.largura}x${m.altura}`,
-                        m.quantidade,
-                        formatNumberBR(m2).replace('R$', '').trim()
-                    ];
+                    const row: (string | number)[] = [i + 1, m.ambiente];
+                    if (showMeasures) row.push(`${m.largura}x${m.altura}`);
+                    row.push(m.quantidade);
+                    if (showMeasures) row.push(formatNumberBR(m2).replace('R$', '').trim());
 
                     if (!isLinearFilm) {
                         row.push(
@@ -704,6 +715,19 @@ const renderPdfContent = async (
                     return row;
                 });
 
+                // Índices dependem de quais colunas existem (medidas ocultas mudam o layout).
+                const qtdIndex = showMeasures ? 3 : 2;
+                const columnStyles: { [key: number]: { cellWidth?: number; halign?: 'right' } } = {
+                    0: { cellWidth: 10 },
+                    [qtdIndex]: { cellWidth: 10 },
+                };
+                if (!isLinearFilm) {
+                    const n = headRow.length;
+                    columnStyles[n - 3] = { halign: 'right' };
+                    columnStyles[n - 2] = { halign: 'right' };
+                    columnStyles[n - 1] = { halign: 'right' };
+                }
+
                 autoTable(doc, {
                     head,
                     body,
@@ -711,18 +735,13 @@ const renderPdfContent = async (
                     theme: 'grid',
                     headStyles: { fillColor: colors.primary, textColor: colors.white },
                     styles: { fontSize: 8 },
-                    columnStyles: isLinearFilm
-                        ? {
-                            0: { cellWidth: 10 },
-                            3: { cellWidth: 10 },
+                    columnStyles,
+                    // Alinha tambem o CABECALHO das colunas de preco a direita (combina com os valores).
+                    didParseCell: (data) => {
+                        if (data.section === 'head' && columnStyles[data.column.index]?.halign === 'right') {
+                            data.cell.styles.halign = 'right';
                         }
-                        : {
-                            0: { cellWidth: 10 },
-                            3: { cellWidth: 10 },
-                            5: { halign: 'right' },
-                            6: { halign: 'right' },
-                            7: { halign: 'right' },
-                        }
+                    },
                 });
 
                 yPos = (doc as any).lastAutoTable.finalY + 10;
@@ -832,7 +851,7 @@ const renderPdfContent = async (
                     safeText(`  - Garantia Fabricante: ${film.garantiaFabricante || 'N/A'} anos`, margin, yPos);
                     yPos += 6;
                 }
-                safeText(`  - Garantia Mão de Obra: ${film.garantiaMaoDeObra || 'N/A'} dias`, margin, yPos);
+                safeText(`  - Garantia Mão de Obra: ${formatGarantiaMaoDeObra(film.garantiaMaoDeObra, film.garantiaMaoDeObraUnidade)}`, margin, yPos);
                 yPos += 8;
             }
         }

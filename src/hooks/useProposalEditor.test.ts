@@ -72,6 +72,10 @@ describe('useProposalEditor', () => {
       value: '5',
       type: 'percentage',
       operation: 'discount',
+      discountType: 'percentage',
+      discountValue: '5',
+      increaseType: 'fixed',
+      increaseValue: '',
       pricingMode: 'labor_only',
       expenses: []
     });

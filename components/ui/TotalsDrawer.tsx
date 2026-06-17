@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Drawer } from 'vaul';
-import { CircleDollarSign, MinusCircle, Percent, PlusCircle } from 'lucide-react';
+import { CircleDollarSign, Eye, EyeOff, MinusCircle, Percent, PlusCircle } from 'lucide-react';
 
 import { ProposalDiscount, Totals } from '../../types';
 import {
@@ -17,6 +17,7 @@ interface TotalsDrawerProps {
     onUpdateGeneralDiscount: (discount: ProposalDiscount) => void;
     onGeneratePdf: () => void;
     isGeneratingPdf: boolean;
+    defaultHideMeasurements?: boolean;
 }
 
 const formatNumberBR = (number: number) => {
@@ -109,7 +110,8 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
     generalDiscount,
     onUpdateGeneralDiscount,
     onGeneratePdf,
-    isGeneratingPdf
+    isGeneratingPdf,
+    defaultHideMeasurements = false
 }) => {
     const [openGroup, setOpenGroup] = useState<string | null>(null);
     const adjustmentInputs = getProposalAdjustmentInputs(generalDiscount);
@@ -124,6 +126,11 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
 
     const isLaborOnly = generalDiscount.pricingMode === 'labor_only';
     const filmPricingModes = generalDiscount.filmPricingModes || {};
+    // Anti-cópia: estado efetivo = override do orçamento ou o padrão global da empresa.
+    const hideMeasurements = generalDiscount.hideMeasurements ?? defaultHideMeasurements;
+    const toggleHideMeasurements = () => {
+        onUpdateGeneralDiscount({ ...generalDiscount, hideMeasurements: !hideMeasurements });
+    };
 
     const updateAdjustment = (
         kind: 'discount' | 'increase',
@@ -376,6 +383,30 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                         className="flex-shrink-0 border-t border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900"
                         style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)' }}
                     >
+                        {/* Anti-cópia: oculta dimensões e m² no PDF */}
+                        <button
+                            type="button"
+                            onClick={toggleHideMeasurements}
+                            role="switch"
+                            aria-checked={hideMeasurements}
+                            className={`mb-3 flex w-full items-center justify-between gap-3 rounded-xl border p-3 text-left transition-colors ${hideMeasurements
+                                ? 'border-blue-200 bg-blue-50 dark:border-blue-900/40 dark:bg-blue-950/30'
+                                : 'border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60'
+                                }`}
+                        >
+                            <span className="flex items-center gap-2.5">
+                                <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${hideMeasurements ? 'bg-blue-500 text-white' : 'bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-300'}`}>
+                                    {hideMeasurements ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                </span>
+                                <span className="min-w-0">
+                                    <span className="block text-sm font-semibold text-slate-800 dark:text-slate-100">Ocultar medidas no PDF</span>
+                                    <span className="block text-[11px] text-slate-500">Esconde dimensões e m² (anti-cópia)</span>
+                                </span>
+                            </span>
+                            <span className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${hideMeasurements ? 'bg-blue-500' : 'bg-slate-300 dark:bg-slate-600'}`}>
+                                <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${hideMeasurements ? 'left-[22px]' : 'left-0.5'}`} />
+                            </span>
+                        </button>
                         <button
                             type="button"
                             onClick={() => { onClose(); onGeneratePdf(); }}

@@ -130,6 +130,8 @@ export interface ProposalDiscount {
     pricingMode?: ProposalPricingMode;
     filmPricingModes?: FilmPricingModes;
     expenses?: ProposalExpense[];
+    // Override por orçamento da ocultação de medidas no PDF (undefined = usa o padrão global do UserInfo).
+    hideMeasurements?: boolean;
 }
 
 export interface SavedProposalDiscount {
@@ -144,6 +146,7 @@ export interface SavedProposalDiscount {
     filmPricingModes?: FilmPricingModes;
     expenses?: ProposalExpense[];
     expenseSnapshot?: ProposalExpenseSnapshot;
+    hideMeasurements?: boolean;
 }
 
 export interface ProposalOption {
@@ -161,6 +164,7 @@ export interface Film {
     maoDeObra?: number; // NOVO CAMPO: Valor fixo de mão de obra por m²
     garantiaFabricante?: number;
     garantiaMaoDeObra?: number;
+    garantiaMaoDeObraUnidade?: 'dias' | 'meses' | 'anos'; // default 'dias' (retrocompatível)
     uv?: number;
     ir?: number;
     vtl?: number;
@@ -216,6 +220,8 @@ export interface UserInfo {
     payment_methods: PaymentMethods;
     proposalValidityDays?: number;
     prazoPagamento?: string;
+    // Padrão global: ocultar dimensões/m² na tabela do PDF (anti-cópia). Pode ser sobrescrito por orçamento.
+    hideMeasurementsInPdf?: boolean;
     workingHours?: {
         start: string; // "HH:MM" format
         end: string;   // "HH:MM" format

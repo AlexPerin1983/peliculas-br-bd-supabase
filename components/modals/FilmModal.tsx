@@ -12,6 +12,7 @@ import {
     withMatchingMetadata
 } from '../../utils/filmMatchingMetadata';
 import { selectAllOnFocus } from '../../src/lib/selectOnFocus';
+import { GARANTIA_UNIDADES, GarantiaUnidade } from '../../src/lib/filmWarranty';
 
 interface FilmModalProps {
     isOpen: boolean;
@@ -44,6 +45,7 @@ const FilmModal: React.FC<FilmModalProps> = ({
         maoDeObra: 0,
         garantiaFabricante: 0,
         garantiaMaoDeObra: 30,
+        garantiaMaoDeObraUnidade: 'dias',
         uv: 0,
         ir: 0,
         vtl: 0,
@@ -75,6 +77,7 @@ const FilmModal: React.FC<FilmModalProps> = ({
                 maoDeObra: film.maoDeObra || 0,
                 garantiaFabricante: film.garantiaFabricante || 0,
                 garantiaMaoDeObra: film.garantiaMaoDeObra || 30,
+                garantiaMaoDeObraUnidade: film.garantiaMaoDeObraUnidade || 'dias',
                 uv: film.uv || 0,
                 ir: film.ir || 0,
                 vtl: film.vtl || 0,
@@ -100,6 +103,7 @@ const FilmModal: React.FC<FilmModalProps> = ({
                 maoDeObra: Number(aiData.maoDeObra) || 0,
                 garantiaFabricante: Number(aiData.garantiaFabricante) || 0,
                 garantiaMaoDeObra: Number(aiData.garantiaMaoDeObra) || 30,
+                garantiaMaoDeObraUnidade: (aiData as Film).garantiaMaoDeObraUnidade || 'dias',
                 uv: Number(aiData.uv) || 0,
                 ir: Number(aiData.ir) || 0,
                 vtl: Number(aiData.vtl) || 0,
@@ -122,6 +126,7 @@ const FilmModal: React.FC<FilmModalProps> = ({
             maoDeObra: 0,
             garantiaFabricante: 0,
             garantiaMaoDeObra: 30,
+            garantiaMaoDeObraUnidade: 'dias',
             uv: 0,
             ir: 0,
             vtl: 0,
@@ -366,7 +371,7 @@ const FilmModal: React.FC<FilmModalProps> = ({
                             />
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <Input
                                 id="garantiaFabricante"
                                 label="Garantia fabricante (anos)"
@@ -376,17 +381,31 @@ const FilmModal: React.FC<FilmModalProps> = ({
                                 onFocus={handleFocus}
                                 min="0"
                             />
-                            <Input
-                                as="select"
-                                id="garantiaMaoDeObra"
-                                label="Garantia mão de obra (dias)"
-                                value={formData.garantiaMaoDeObra}
-                                onChange={handleChange}
-                            >
-                                <option value={30}>30 dias</option>
-                                <option value={60}>60 dias</option>
-                                <option value={90}>90 dias</option>
-                            </Input>
+                            <div>
+                                <label htmlFor="garantiaMaoDeObra" className="ui-label block">Garantia mão de obra</label>
+                                <div className="mt-1 flex items-stretch gap-2">
+                                    <input
+                                        id="garantiaMaoDeObra"
+                                        type="number"
+                                        min="0"
+                                        inputMode="numeric"
+                                        value={Number.isFinite(formData.garantiaMaoDeObra) ? formData.garantiaMaoDeObra : ''}
+                                        onChange={handleChange}
+                                        onFocus={handleFocus}
+                                        className="ui-field block w-full min-w-0 flex-1 px-3 py-2.5 text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                                    />
+                                    <select
+                                        aria-label="Unidade da garantia de mão de obra"
+                                        value={formData.garantiaMaoDeObraUnidade || 'dias'}
+                                        onChange={(e) => setFormData(prev => ({ ...prev, garantiaMaoDeObraUnidade: e.target.value as GarantiaUnidade }))}
+                                        className="ui-field block w-24 shrink-0 px-2.5 py-2.5 text-sm"
+                                    >
+                                        {GARANTIA_UNIDADES.map(u => (
+                                            <option key={u.value} value={u.value}>{u.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
                         </div>
                     </div>
 

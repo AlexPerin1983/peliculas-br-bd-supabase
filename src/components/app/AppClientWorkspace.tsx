@@ -68,6 +68,7 @@ interface AppClientWorkspaceProps {
     onDuplicateMeasurements: () => void;
     onGeneratePdf: () => void;
     onOpenAIModal: () => void;
+    defaultHideMeasurements?: boolean;
 }
 
 const formatCurrencyBR = (value: number) => new Intl.NumberFormat('pt-BR', {
@@ -410,7 +411,8 @@ export const AppClientWorkspace: React.FC<AppClientWorkspaceProps> = ({
     onAddMeasurement,
     onDuplicateMeasurements,
     onGeneratePdf,
-    onOpenAIModal
+    onOpenAIModal,
+    defaultHideMeasurements
 }) => {
     if (clientsCount === 0) {
         return (
@@ -544,6 +546,7 @@ export const AppClientWorkspace: React.FC<AppClientWorkspaceProps> = ({
                         onGeneratePdf={onGeneratePdf}
                         isGeneratingPdf={isGeneratingPdf}
                         onOpenAIModal={onOpenAIModal}
+                        defaultHideMeasurements={defaultHideMeasurements}
                     />
                 </>
             )}
