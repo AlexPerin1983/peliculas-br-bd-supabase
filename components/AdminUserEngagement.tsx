@@ -61,7 +61,7 @@ export const AdminUserEngagement: React.FC<AdminUserEngagementProps> = ({ rows, 
                     <BarChart3 className="h-5 w-5 text-blue-500" />
                     <div>
                         <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">Engajamento dos usuários</h3>
-                        <p className="text-sm text-slate-500">Quem mais usa a ferramenta — clique numa empresa para ver o detalhe.</p>
+                        <p className="hidden text-sm text-slate-500 sm:block">Quem mais usa a ferramenta — clique numa empresa para ver o detalhe.</p>
                     </div>
                 </div>
                 <ActionButton variant="secondary" size="sm" iconClassName="fas fa-rotate-right" onClick={fetchEngagement}>
@@ -167,8 +167,8 @@ export const AdminUserEngagement: React.FC<AdminUserEngagementProps> = ({ rows, 
                                             <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
                                                 <span>{formatInt(row.orcamentos)} orç.</span>
                                                 <span>{formatInt(row.clientes)} cli.</span>
-                                                <span>{formatInt(row.agendamentos)} agend.</span>
-                                                <span>{formatInt(row.servicos)} serv.</span>
+                                                <span className="hidden sm:inline">{formatInt(row.agendamentos)} agend.</span>
+                                                <span className="hidden sm:inline">{formatInt(row.servicos)} serv.</span>
                                                 <span className="text-slate-400">• {relativeDays(row.ultima_atividade)}</span>
                                             </div>
                                         </div>

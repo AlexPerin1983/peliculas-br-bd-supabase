@@ -14,8 +14,8 @@ interface AdminOverviewProps {
     activeWindowDays: number;
 }
 
-const Card: React.FC<{ icon: React.ComponentType<{ className?: string }>; label: string; value: React.ReactNode; accent?: string; sub?: string }> = ({ icon: Icon, label, value, accent = 'text-slate-900 dark:text-white', sub }) => (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
+const Card: React.FC<{ icon: React.ComponentType<{ className?: string }>; label: string; value: React.ReactNode; accent?: string; sub?: string; className?: string }> = ({ icon: Icon, label, value, accent = 'text-slate-900 dark:text-white', sub, className = '' }) => (
+    <div className={`rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800 ${className}`}>
         <div className="flex items-center gap-1.5 text-xs text-slate-500"><Icon className="h-3.5 w-3.5" /> {label}</div>
         <div className={`mt-1 text-2xl font-bold ${accent}`}>{value}</div>
         {sub && <div className="text-[11px] text-slate-400">{sub}</div>}
@@ -82,26 +82,30 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({ profiles, engageme
 
     return (
         <div className="space-y-4">
-            {/* KPIs */}
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-                <Card icon={Building2} label="Empresas" value={formatInt(companies.length)} />
-                <Card icon={Activity} label={`Ativas (${activeWindowDays}d)`} value={<span className="text-green-600 dark:text-green-400">{totals.ativos30d}</span>} sub={`de ${companies.length}`} />
-                <Card icon={UserPlus} label="Novas no mês" value={formatInt(novasNoMes)} accent="text-blue-600 dark:text-blue-400" />
-                <Card icon={FileText} label="Orçamentos" value={formatInt(totals.orcamentos)} />
-                <Card icon={DollarSign} label="Faturamento" value={<span className="text-sm sm:text-base lg:text-xl">{formatMoney(totals.faturamento)}</span>} />
-                <Card icon={Clock} label="Em trial" value={<span className="text-amber-600 dark:text-amber-400">{trialUserIds.size}</span>} />
+            {/* KPIs — carrossel no mobile, grid no desktop */}
+            <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1 scrollbar-hide snap-x snap-mandatory sm:mx-0 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-6">
+                {[
+                    { icon: Building2, label: 'Empresas', value: formatInt(companies.length) },
+                    { icon: Activity, label: `Ativas (${activeWindowDays}d)`, value: <span className="text-green-600 dark:text-green-400">{totals.ativos30d}</span>, sub: `de ${companies.length}` },
+                    { icon: UserPlus, label: 'Novas no mês', value: formatInt(novasNoMes), accent: 'text-blue-600 dark:text-blue-400' },
+                    { icon: FileText, label: 'Orçamentos', value: formatInt(totals.orcamentos) },
+                    { icon: DollarSign, label: 'Faturamento', value: <span className="text-sm sm:text-base lg:text-xl">{formatMoney(totals.faturamento)}</span> },
+                    { icon: Clock, label: 'Em trial', value: <span className="text-amber-600 dark:text-amber-400">{trialUserIds.size}</span> },
+                ].map((kpi, i) => (
+                    <Card key={i} icon={kpi.icon} label={kpi.label} value={kpi.value} accent={kpi.accent} sub={kpi.sub} className="snap-start min-w-[44%] shrink-0 sm:min-w-0" />
+                ))}
             </div>
 
-            {/* Visualizações */}
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+            {/* Visualizações — carrossel no mobile, grid no desktop */}
+            <div className="-mx-1 flex gap-4 overflow-x-auto px-1 pb-1 scrollbar-hide snap-x snap-mandatory lg:mx-0 lg:grid lg:grid-cols-3 lg:overflow-visible lg:px-0 lg:pb-0">
                 {/* Cadastros por mês */}
-                <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
+                <div className="snap-start w-[86%] shrink-0 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800 lg:w-auto">
                     <h4 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200">Cadastros por mês</h4>
                     <MiniBars data={signupsByMonth} colorClass="bg-blue-500" />
                 </div>
 
                 {/* Módulos mais usados */}
-                <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
+                <div className="snap-start w-[86%] shrink-0 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800 lg:w-auto">
                     <h4 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200">Módulos mais usados</h4>
                     {moduleUsage.length === 0 ? (
                         <p className="text-sm text-slate-400">Nenhum módulo ativo ainda.</p>
@@ -123,7 +127,7 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({ profiles, engageme
                 </div>
 
                 {/* Saúde da base */}
-                <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
+                <div className="snap-start w-[86%] shrink-0 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800 lg:w-auto">
                     <h4 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200">Saúde da base</h4>
                     <Donut
                         centerValue={engagementRows.length}

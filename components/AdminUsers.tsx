@@ -138,7 +138,7 @@ export const AdminUsers: React.FC = () => {
                     <h3 className="flex items-center gap-2 text-base font-bold text-slate-800 dark:text-slate-100">
                         <Zap className="h-4 w-4 text-blue-500" /> Liberar acesso por período
                     </h3>
-                    <p className="mt-1 text-sm text-slate-500">
+                    <p className="mt-1 hidden text-sm text-slate-500 sm:block">
                         Define a duração em dias. Vale para os botões de ativação por empresa (no detalhe) e para a liberação geral. A revogação é automática no vencimento.
                     </p>
                     <div className="mt-3 flex items-end gap-3">
@@ -176,7 +176,7 @@ export const AdminUsers: React.FC = () => {
                             {signupTrial.enabled ? `Ligado · ${signupTrial.days}d` : 'Desligado'}
                         </span>
                     </h3>
-                    <p className="mt-1 text-sm text-slate-500">
+                    <p className="mt-1 hidden text-sm text-slate-500 sm:block">
                         Quando ligado, todo novo cadastro ganha o Pacote Completo por X dias automaticamente. No vencimento, volta para o plano grátis.
                     </p>
                     <div className="mt-3 flex flex-wrap items-end gap-3">

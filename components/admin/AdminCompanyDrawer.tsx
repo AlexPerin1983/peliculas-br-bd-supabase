@@ -5,6 +5,7 @@ import ActionButton from '../ui/ActionButton';
 import { AVAILABLE_MODULES, UserWithSubscription, isUserAdmin } from '../../src/hooks/useAdminUsers';
 import { EngagementRow } from '../../src/hooks/useAdminEngagement';
 import { useAdminCompanyDetail } from '../../src/hooks/useAdminCompanyDetail';
+import { useIsMobile } from '../../src/hooks/useIsMobile';
 import { buildWhatsappLink, formatInt, formatMoney, monthLabel, relativeDays } from './adminFormat';
 import { MiniBars } from './charts/MiniBars';
 
@@ -43,6 +44,7 @@ export const AdminCompanyDrawer: React.FC<AdminCompanyDrawerProps> = ({
     isModuleActive,
 }) => {
     const open = !!profile;
+    const isMobile = useIsMobile();
     const { series, loading: loadingSeries, error: seriesError } = useAdminCompanyDetail(profile?.id ?? null);
     const [copied, setCopied] = React.useState(false);
 
@@ -74,10 +76,15 @@ export const AdminCompanyDrawer: React.FC<AdminCompanyDrawerProps> = ({
     const title = engagement?.empresa || profile?.email || 'Empresa';
 
     return (
-        <Drawer.Root open={open} onOpenChange={(o) => !o && onClose()} direction="right">
+        <Drawer.Root open={open} onOpenChange={(o) => !o && onClose()} direction={isMobile ? 'bottom' : 'right'}>
             <Drawer.Portal>
                 <Drawer.Overlay className="fixed inset-0 z-50 bg-black/40" />
-                <Drawer.Content className="fixed bottom-0 right-0 top-0 z-50 flex w-full max-w-md flex-col bg-white outline-none dark:bg-slate-900">
+                <Drawer.Content
+                    className={isMobile
+                        ? 'fixed inset-x-0 bottom-0 z-50 flex max-h-[92vh] flex-col rounded-t-2xl bg-white outline-none dark:bg-slate-900'
+                        : 'fixed bottom-0 right-0 top-0 z-50 flex w-full max-w-md flex-col bg-white outline-none dark:bg-slate-900'}
+                >
+                    {isMobile && <div className="mx-auto mt-2 h-1.5 w-12 shrink-0 rounded-full bg-slate-300 dark:bg-slate-700" />}
                     {profile && (
                         <>
                             {/* Header */}
