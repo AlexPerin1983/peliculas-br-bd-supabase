@@ -1,51 +1,36 @@
 import React from 'react';
-import { Activity, BarChart3, Copy, FileText, Users, CalendarClock, Wrench, DollarSign, Crown, MessageCircle } from 'lucide-react';
+import { BarChart3, Copy, FileText, Users, CalendarClock, Wrench, DollarSign, Crown, MessageCircle, ChevronRight } from 'lucide-react';
 import ActionButton from './ui/ActionButton';
 import ContentState from './ui/ContentState';
-import { EngagementMetric, EngagementRow, useAdminEngagement } from '../src/hooks/useAdminEngagement';
+import { EngagementMetric, EngagementRow } from '../src/hooks/useAdminEngagement';
+import { buildWhatsappLink, formatInt, formatMoney, relativeDays } from './admin/adminFormat';
 
 interface MetricDef {
     key: EngagementMetric;
     label: string;
-    short: string;
     icon: React.ComponentType<{ className?: string }>;
     color: string; // tailwind bg for the bar
     accent: string; // tailwind text
     format: (v: number) => string;
 }
 
-const formatInt = (v: number) => v.toLocaleString('pt-BR');
-const formatMoney = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
 const METRICS: MetricDef[] = [
-    { key: 'orcamentos', label: 'Orçamentos', short: 'Orç.', icon: FileText, color: 'bg-blue-500', accent: 'text-blue-600 dark:text-blue-400', format: formatInt },
-    { key: 'clientes', label: 'Clientes', short: 'Cli.', icon: Users, color: 'bg-emerald-500', accent: 'text-emerald-600 dark:text-emerald-400', format: formatInt },
-    { key: 'agendamentos', label: 'Agendamentos', short: 'Age.', icon: CalendarClock, color: 'bg-violet-500', accent: 'text-violet-600 dark:text-violet-400', format: formatInt },
-    { key: 'servicos', label: 'Serviços', short: 'Ser.', icon: Wrench, color: 'bg-amber-500', accent: 'text-amber-600 dark:text-amber-400', format: formatInt },
-    { key: 'faturamento', label: 'Faturamento', short: 'R$', icon: DollarSign, color: 'bg-rose-500', accent: 'text-rose-600 dark:text-rose-400', format: formatMoney },
+    { key: 'orcamentos', label: 'Orçamentos', icon: FileText, color: 'bg-blue-500', accent: 'text-blue-600 dark:text-blue-400', format: formatInt },
+    { key: 'clientes', label: 'Clientes', icon: Users, color: 'bg-emerald-500', accent: 'text-emerald-600 dark:text-emerald-400', format: formatInt },
+    { key: 'agendamentos', label: 'Agendamentos', icon: CalendarClock, color: 'bg-violet-500', accent: 'text-violet-600 dark:text-violet-400', format: formatInt },
+    { key: 'servicos', label: 'Serviços', icon: Wrench, color: 'bg-amber-500', accent: 'text-amber-600 dark:text-amber-400', format: formatInt },
+    { key: 'faturamento', label: 'Faturamento', icon: DollarSign, color: 'bg-rose-500', accent: 'text-rose-600 dark:text-rose-400', format: formatMoney },
 ];
 
-// Monta o link wa.me a partir de um telefone brasileiro. Retorna null se não der pra discar.
-const buildWhatsappLink = (phone: string | null): string | null => {
-    if (!phone) return null;
-    let digits = phone.replace(/\D/g, '');
-    if (digits.length < 10) return null; // sem DDD/número válido
-    if (!digits.startsWith('55')) digits = `55${digits}`; // assume Brasil
-    return `https://wa.me/${digits}`;
-};
+interface AdminUserEngagementProps {
+    rows: EngagementRow[];
+    loading: boolean;
+    error: string | null;
+    fetchEngagement: () => void;
+    onSelectCompany?: (userId: string) => void;
+}
 
-const relativeDays = (iso: string | null): string => {
-    if (!iso) return 'sem atividade';
-    const diff = Math.floor((Date.now() - new Date(iso).getTime()) / (1000 * 60 * 60 * 24));
-    if (diff <= 0) return 'hoje';
-    if (diff === 1) return 'ontem';
-    if (diff < 30) return `há ${diff} dias`;
-    if (diff < 60) return 'há 1 mês';
-    return `há ${Math.floor(diff / 30)} meses`;
-};
-
-export const AdminUserEngagement: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
-    const { rows, loading, error, fetchEngagement, totals, activeWindowDays } = useAdminEngagement(isAdmin);
+export const AdminUserEngagement: React.FC<AdminUserEngagementProps> = ({ rows, loading, error, fetchEngagement, onSelectCompany }) => {
     const [metric, setMetric] = React.useState<EngagementMetric>('orcamentos');
     const [showAll, setShowAll] = React.useState(false);
     const [copiedEmail, setCopiedEmail] = React.useState<string | null>(null);
@@ -69,8 +54,6 @@ export const AdminUserEngagement: React.FC<{ isAdmin: boolean }> = ({ isAdmin })
         }
     };
 
-    if (!isAdmin) return null;
-
     return (
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-6 dark:border-slate-700">
@@ -78,32 +61,12 @@ export const AdminUserEngagement: React.FC<{ isAdmin: boolean }> = ({ isAdmin })
                     <BarChart3 className="h-5 w-5 text-blue-500" />
                     <div>
                         <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">Engajamento dos usuários</h3>
-                        <p className="text-sm text-slate-500">Quem mais usa a ferramenta — ranqueado por atividade real no banco.</p>
+                        <p className="text-sm text-slate-500">Quem mais usa a ferramenta — clique numa empresa para ver o detalhe.</p>
                     </div>
                 </div>
                 <ActionButton variant="secondary" size="sm" iconClassName="fas fa-rotate-right" onClick={fetchEngagement}>
                     Atualizar
                 </ActionButton>
-            </div>
-
-            {/* KPIs */}
-            <div className="grid grid-cols-2 gap-3 border-b border-slate-200 p-4 dark:border-slate-700 sm:grid-cols-4">
-                <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-900/50">
-                    <div className="flex items-center gap-1.5 text-xs text-slate-500"><Activity className="h-3.5 w-3.5" /> Ativos ({activeWindowDays}d)</div>
-                    <div className="mt-1 text-2xl font-bold text-green-600 dark:text-green-400">{totals.ativos30d}<span className="text-base font-medium text-slate-400">/{totals.totalUsuarios}</span></div>
-                </div>
-                <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-900/50">
-                    <div className="flex items-center gap-1.5 text-xs text-slate-500"><FileText className="h-3.5 w-3.5" /> Orçamentos</div>
-                    <div className="mt-1 text-2xl font-bold text-slate-900 dark:text-white">{formatInt(totals.orcamentos)}</div>
-                </div>
-                <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-900/50">
-                    <div className="flex items-center gap-1.5 text-xs text-slate-500"><Users className="h-3.5 w-3.5" /> Clientes</div>
-                    <div className="mt-1 text-2xl font-bold text-slate-900 dark:text-white">{formatInt(totals.clientes)}</div>
-                </div>
-                <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-900/50">
-                    <div className="flex items-center gap-1.5 text-xs text-slate-500"><DollarSign className="h-3.5 w-3.5" /> Faturamento</div>
-                    <div className="mt-1 text-2xl font-bold text-slate-900 dark:text-white">{formatMoney(totals.faturamento)}</div>
-                </div>
             </div>
 
             {/* Seletor de métrica */}
@@ -142,7 +105,12 @@ export const AdminUserEngagement: React.FC<{ isAdmin: boolean }> = ({ isAdmin })
                             const value = row[metric];
                             const pct = maxValue > 0 ? Math.max(2, (value / maxValue) * 100) : 0;
                             return (
-                                <div key={row.user_id} className="px-4 py-3 sm:px-6">
+                                <div
+                                    key={row.user_id}
+                                    role={onSelectCompany ? 'button' : undefined}
+                                    onClick={onSelectCompany ? () => onSelectCompany(row.user_id) : undefined}
+                                    className={`px-4 py-3 sm:px-6 ${onSelectCompany ? 'cursor-pointer transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/40' : ''}`}
+                                >
                                     <div className="flex items-center gap-3">
                                         <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${index === 0
                                             ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
@@ -161,7 +129,7 @@ export const AdminUserEngagement: React.FC<{ isAdmin: boolean }> = ({ isAdmin })
                                                     )}
                                                     <button
                                                         type="button"
-                                                        onClick={() => copyEmail(row.email)}
+                                                        onClick={(e) => { e.stopPropagation(); copyEmail(row.email); }}
                                                         title="Copiar email"
                                                         className="shrink-0 rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700"
                                                     >
@@ -174,6 +142,7 @@ export const AdminUserEngagement: React.FC<{ isAdmin: boolean }> = ({ isAdmin })
                                                                 href={wa}
                                                                 target="_blank"
                                                                 rel="noopener noreferrer"
+                                                                onClick={(e) => e.stopPropagation()}
                                                                 title={`WhatsApp: ${row.telefone}`}
                                                                 className="shrink-0 rounded p-0.5 text-green-500 hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/30"
                                                             >
@@ -183,9 +152,12 @@ export const AdminUserEngagement: React.FC<{ isAdmin: boolean }> = ({ isAdmin })
                                                     })()}
                                                     {copiedEmail === row.email && <span className="text-[10px] font-medium text-green-500">copiado</span>}
                                                 </div>
-                                                <span className={`shrink-0 text-sm font-bold tabular-nums ${activeMetric.accent}`}>
-                                                    {activeMetric.format(value)}
-                                                </span>
+                                                <div className="flex shrink-0 items-center gap-1.5">
+                                                    <span className={`text-sm font-bold tabular-nums ${activeMetric.accent}`}>
+                                                        {activeMetric.format(value)}
+                                                    </span>
+                                                    {onSelectCompany && <ChevronRight className="h-4 w-4 text-slate-300 dark:text-slate-600" />}
+                                                </div>
                                             </div>
                                             {/* Barra */}
                                             <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700">

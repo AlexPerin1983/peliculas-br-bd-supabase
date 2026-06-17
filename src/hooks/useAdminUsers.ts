@@ -16,7 +16,17 @@ export interface UserWithSubscription extends Profile {
         id: string;
         name: string;
     };
+    blocked?: boolean;
+    empresa?: string | null;
+    telefone?: string | null;
 }
+
+const TEST_EMAIL_PATTERNS = [/\+/, /@example\.com$/i, /demo/i];
+
+export const isTestAccount = (profile: Profile): boolean => {
+    const email = (profile.email || '').toLowerCase();
+    return TEST_EMAIL_PATTERNS.some((re) => re.test(email));
+};
 
 export const AVAILABLE_MODULES = [
     { id: 'estoque', name: 'Controle de Estoque', price: 39 },
@@ -40,6 +50,7 @@ export const useAdminUsers = (enabled: boolean) => {
     const [expandedUser, setExpandedUser] = useState<string | null>(null);
     const [activatingModule, setActivatingModule] = useState<{ userId: string; moduleId: string } | null>(null);
     const [grantingAll, setGrantingAll] = useState(false);
+    const [busyUser, setBusyUser] = useState<{ userId: string; action: 'block' | 'delete' } | null>(null);
     const [signupTrial, setSignupTrial] = useState<{ enabled: boolean; days: number }>({ enabled: false, days: 0 });
     const [savingSignupTrial, setSavingSignupTrial] = useState(false);
     const [feedback, setFeedback] = useState<{ type: 'error' | 'success'; message: string } | null>(null);
@@ -49,77 +60,28 @@ export const useAdminUsers = (enabled: boolean) => {
             setLoading(true);
             setFeedback(null);
 
-            const { data: profilesData, error: profilesError } = await supabase
-                .from('profiles')
-                .select('*')
-                .order('created_at', { ascending: false });
+            // 1 chamada agregada (substitui o antigo N+1 por empresa) → baixo egress
+            const { data, error } = await supabase.rpc('admin_users_overview');
+            if (error) throw error;
 
-            if (profilesError) throw profilesError;
+            const mapped: UserWithSubscription[] = (data || []).map((row: any) => ({
+                id: row.id,
+                email: row.email,
+                role: row.role,
+                approved: true,
+                created_at: row.created_at,
+                organization_id: row.organization_id || undefined,
+                organization: row.organization_id ? { id: row.organization_id, name: row.empresa || '' } : undefined,
+                blocked: !!row.blocked,
+                subscription: {
+                    active_modules: Array.isArray(row.active_modules) ? row.active_modules : [],
+                    modules_detail: Array.isArray(row.modules_detail) ? row.modules_detail : [],
+                },
+                empresa: row.empresa || null,
+                telefone: row.telefone || null,
+            }));
 
-            const profilesWithSubs = await Promise.all(
-                (profilesData || []).map(async (profile) => {
-                    try {
-                        let targetOrgId = profile.organization_id;
-                        let orgData = null;
-
-                        if (targetOrgId) {
-                            const { data, error } = await supabase
-                                .from('organizations')
-                                .select('id, name')
-                                .eq('id', targetOrgId)
-                                .maybeSingle();
-                            if (error) throw error;
-                            orgData = data;
-                        } else {
-                            const { data, error } = await supabase
-                                .from('organizations')
-                                .select('id, name')
-                                .eq('owner_id', profile.id)
-                                .maybeSingle();
-                            if (error) throw error;
-                            orgData = data;
-                        }
-
-                        if (orgData) {
-                            const { data: subData, error: subError } = await supabase
-                                .from('subscriptions')
-                                .select('id, active_modules')
-                                .eq('organization_id', orgData.id)
-                                .maybeSingle();
-
-                            if (subError) throw subError;
-
-                            let activationsData = null;
-                            if (subData?.id) {
-                                const { data, error } = await supabase
-                                    .from('module_activations')
-                                    .select('module_id, expires_at, status')
-                                    .eq('subscription_id', subData.id)
-                                    .eq('status', 'active');
-                                if (error) throw error;
-                                activationsData = data;
-                            }
-
-                            return {
-                                ...profile,
-                                organization: orgData,
-                                subscription: subData
-                                    ? {
-                                        ...subData,
-                                        modules_detail: activationsData || [],
-                                    }
-                                    : undefined,
-                            };
-                        }
-                    } catch {
-                        return profile;
-                    }
-
-                    return profile;
-                })
-            );
-
-            setProfiles(profilesWithSubs);
+            setProfiles(mapped);
         } catch (error) {
             console.error('Error fetching profiles:', error);
             setFeedback({
@@ -291,6 +253,66 @@ export const useAdminUsers = (enabled: boolean) => {
         }
     }, [fetchProfiles]);
 
+    const setUserBlocked = useCallback(async (profile: UserWithSubscription, blocked: boolean) => {
+        setBusyUser({ userId: profile.id, action: 'block' });
+        setFeedback(null);
+
+        try {
+            const { error } = await supabase.rpc('admin_set_user_blocked', {
+                p_user_id: profile.id,
+                p_blocked: blocked,
+            });
+
+            if (error) throw error;
+
+            setFeedback({
+                type: 'success',
+                message: blocked
+                    ? `Acesso de ${profile.email} bloqueado.`
+                    : `Acesso de ${profile.email} reativado.`,
+            });
+            await fetchProfiles();
+        } catch (error: any) {
+            console.error('Erro ao bloquear/reativar usuário:', error);
+            setFeedback({
+                type: 'error',
+                message: `Erro ao alterar acesso: ${error.message}`,
+            });
+        } finally {
+            setBusyUser(null);
+        }
+    }, [fetchProfiles]);
+
+    const deleteUser = useCallback(async (profile: UserWithSubscription) => {
+        setBusyUser({ userId: profile.id, action: 'delete' });
+        setFeedback(null);
+
+        try {
+            const { data, error } = await supabase.functions.invoke('admin-delete-user', {
+                body: { userId: profile.id, confirmEmail: profile.email },
+            });
+
+            if (error) throw error;
+            if (data && data.success === false) throw new Error(data.error || 'Falha ao excluir usuário');
+
+            setProfiles((prev) => prev.filter((p) => p.id !== profile.id));
+            setExpandedUser(null);
+            setFeedback({
+                type: 'success',
+                message: `Usuário ${profile.email} excluído.${data?.warnings?.length ? ' (avisos no console)' : ''}`,
+            });
+            if (data?.warnings?.length) console.warn('admin-delete-user warnings:', data.warnings);
+        } catch (error: any) {
+            console.error('Erro ao excluir usuário:', error);
+            setFeedback({
+                type: 'error',
+                message: `Erro ao excluir usuário: ${error.message}`,
+            });
+        } finally {
+            setBusyUser(null);
+        }
+    }, []);
+
     const getModuleExpiryDays = useCallback((profile: UserWithSubscription, moduleId: string): number | null => {
         const detail = profile.subscription?.modules_detail?.find(m => m.module_id === moduleId);
         if (detail?.expires_at) {
@@ -344,6 +366,7 @@ export const useAdminUsers = (enabled: boolean) => {
         setExpandedUser,
         activatingModule,
         grantingAll,
+        busyUser,
         signupTrial,
         savingSignupTrial,
         saveSignupTrial,
@@ -351,6 +374,8 @@ export const useAdminUsers = (enabled: boolean) => {
         fetchProfiles,
         activateModuleForUser,
         grantFullAccessAll,
+        setUserBlocked,
+        deleteUser,
         getModuleExpiryDays,
         isModuleActive,
         usersWithModules,

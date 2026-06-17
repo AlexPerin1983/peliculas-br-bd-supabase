@@ -2621,7 +2621,7 @@ Se não conseguir extrair, retorne: []`;
     }, [refreshProfile, showToast]);
 
 
-    const wideWorkspaceClass = ['dashboard', 'history', 'estoque', 'films', 'fornecedores', 'agenda', 'settings', 'qr_code', 'account', 'assistentes'].includes(activeTab)
+    const wideWorkspaceClass = ['dashboard', 'history', 'estoque', 'films', 'fornecedores', 'agenda', 'settings', 'qr_code', 'account', 'assistentes', 'admin'].includes(activeTab)
         ? 'mx-auto w-full max-w-[1480px]'
         : activeTab === 'client'
             ? 'mx-auto w-full max-w-[1480px]'
