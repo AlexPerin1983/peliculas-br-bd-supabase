@@ -62,6 +62,47 @@ export const isRetalhoCompatibleWithMeasurement = (
     );
 };
 
+// Verifica se um retalho comporta uma peça de largura x comprimento (cm),
+// considerando rotação. Checa só a GEOMETRIA (não o status nem a película) —
+// o filtro de status/película fica a cargo de quem chama (ex.: painel do estoque).
+export const doesRetalhoFitDimensions = (
+    retalho: Retalho,
+    larguraCm: number,
+    comprimentoCm: number
+): boolean => {
+    if (!retalho.id || larguraCm <= 0 || comprimentoCm <= 0) {
+        return false;
+    }
+    const dims = normalizeLegacyRetalhoDimensions(retalho.larguraCm, retalho.comprimentoCm, retalho.areaM2);
+    const fits = (w: number, l: number) => dims.larguraCm + EPSILON_CM >= w && dims.comprimentoCm + EPSILON_CM >= l;
+    return fits(larguraCm, comprimentoCm) || fits(comprimentoCm, larguraCm);
+};
+
+// Retorna os retalhos disponíveis que cabem na medida informada (cm), do menor
+// desperdício para o maior. filmId opcional restringe à película.
+export const getRetalhosForDimensions = (
+    larguraCm: number,
+    comprimentoCm: number,
+    retalhos: Retalho[],
+    filmId?: string
+): Retalho[] => {
+    const normalizedFilm = normalizeFilmName(filmId);
+    const requiredAreaCm2 = larguraCm * comprimentoCm;
+
+    return retalhos
+        .filter(retalho =>
+            doesRetalhoFitDimensions(retalho, larguraCm, comprimentoCm)
+            && (!normalizedFilm || normalizeFilmName(retalho.filmId) === normalizedFilm))
+        .sort((left, right) => {
+            const l = normalizeLegacyRetalhoDimensions(left.larguraCm, left.comprimentoCm, left.areaM2);
+            const r = normalizeLegacyRetalhoDimensions(right.larguraCm, right.comprimentoCm, right.areaM2);
+            const leftWaste = l.larguraCm * l.comprimentoCm - requiredAreaCm2;
+            const rightWaste = r.larguraCm * r.comprimentoCm - requiredAreaCm2;
+            if (leftWaste !== rightWaste) return leftWaste - rightWaste;
+            return (left.id || 0) - (right.id || 0);
+        });
+};
+
 export const getCompatibleRetalhosForMeasurement = (
     measurement: Measurement,
     retalhos: Retalho[]

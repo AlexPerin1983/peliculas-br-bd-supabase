@@ -1,6 +1,8 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Bobina, Retalho } from '../../types';
 import { normalizeSearchText } from '../lib/textSearch';
+import { getRetalhosForDimensions } from '../lib/retalhoMatching';
+import { parseFlexibleCentimeterInput } from '../lib/estoqueDimensions';
 
 const ESTOQUE_VIEW_MODE_STORAGE_KEY = 'estoque-view-mode';
 
@@ -19,6 +21,14 @@ export function useEstoqueFilters(bobinas: Bobina[], retalhos: Retalho[]) {
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>('todos');
     const [viewMode, setViewModeState] = useState<'grid' | 'list'>(getInitialViewMode);
+    // Busca de retalho por medida (cm) — só usado na aba de retalhos.
+    const [medidaLarguraCm, setMedidaLarguraCm] = useState('');
+    const [medidaComprimentoCm, setMedidaComprimentoCm] = useState('');
+
+    const limparBuscaPorMedida = useCallback(() => {
+        setMedidaLarguraCm('');
+        setMedidaComprimentoCm('');
+    }, []);
 
     const setViewMode = useCallback((mode: 'grid' | 'list') => {
         setViewModeState(mode);
@@ -42,8 +52,12 @@ export function useEstoqueFilters(bobinas: Bobina[], retalhos: Retalho[]) {
         });
     }, [bobinas, searchTerm, statusFilter]);
 
+    const larguraCm = parseFlexibleCentimeterInput(medidaLarguraCm);
+    const comprimentoCm = parseFlexibleCentimeterInput(medidaComprimentoCm);
+    const buscandoPorMedida = larguraCm > 0 && comprimentoCm > 0;
+
     const filteredRetalhos = useMemo(() => {
-        return retalhos.filter(r => {
+        const base = retalhos.filter(r => {
             const normalizedSearch = normalizeSearchText(searchTerm);
             const matchesSearch = normalizedSearch === '' ||
                 r.id?.toString().includes(normalizedSearch) ||
@@ -53,7 +67,13 @@ export function useEstoqueFilters(bobinas: Bobina[], retalhos: Retalho[]) {
             const matchesStatus = statusFilter === 'todos' || r.status === statusFilter;
             return matchesSearch && matchesStatus;
         });
-    }, [retalhos, searchTerm, statusFilter]);
+
+        // Busca por medida: mantém só os retalhos disponíveis que cabem, do menor desperdício.
+        if (buscandoPorMedida) {
+            return getRetalhosForDimensions(larguraCm, comprimentoCm, base);
+        }
+        return base;
+    }, [retalhos, searchTerm, statusFilter, buscandoPorMedida, larguraCm, comprimentoCm]);
 
     return {
         searchTerm,
@@ -63,6 +83,12 @@ export function useEstoqueFilters(bobinas: Bobina[], retalhos: Retalho[]) {
         viewMode,
         setViewMode,
         filteredBobinas,
-        filteredRetalhos
+        filteredRetalhos,
+        medidaLarguraCm,
+        setMedidaLarguraCm,
+        medidaComprimentoCm,
+        setMedidaComprimentoCm,
+        buscandoPorMedida,
+        limparBuscaPorMedida
     };
 }

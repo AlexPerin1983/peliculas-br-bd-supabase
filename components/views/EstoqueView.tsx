@@ -14,6 +14,7 @@ import EstoqueStatsBar from './estoque/EstoqueStatsBar';
 import EstoqueTopControls from './estoque/EstoqueTopControls';
 import EstoqueBobinasPanel from './estoque/EstoqueBobinasPanel';
 import EstoqueRetalhosPanel from './estoque/EstoqueRetalhosPanel';
+import EstoqueRetalhoMedidaSearch from './estoque/EstoqueRetalhoMedidaSearch';
 import EstoqueAddModal from './estoque/EstoqueAddModal';
 import EstoqueQrModal from './estoque/EstoqueQrModal';
 import EstoqueDeleteConfirmModal from './estoque/EstoqueDeleteConfirmModal';
@@ -63,7 +64,13 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
         viewMode,
         setViewMode,
         filteredBobinas,
-        filteredRetalhos
+        filteredRetalhos,
+        medidaLarguraCm,
+        setMedidaLarguraCm,
+        medidaComprimentoCm,
+        setMedidaComprimentoCm,
+        buscandoPorMedida,
+        limparBuscaPorMedida
     } = useEstoqueFilters(bobinas, retalhos);
 
     // Sincronizar films com props quando mudarem
@@ -188,6 +195,20 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
                     onScan={() => setShowScannerModal(true)}
                 />
             </div>
+
+            {activeTab === 'retalhos' && (
+                <div className="order-2 sm:order-3">
+                    <EstoqueRetalhoMedidaSearch
+                        larguraCm={medidaLarguraCm}
+                        comprimentoCm={medidaComprimentoCm}
+                        onLarguraChange={setMedidaLarguraCm}
+                        onComprimentoChange={setMedidaComprimentoCm}
+                        onClear={limparBuscaPorMedida}
+                        active={buscandoPorMedida}
+                        matchCount={filteredRetalhos.length}
+                    />
+                </div>
+            )}
 
             <div className="order-2 sm:order-3">
                 {activePanel}
