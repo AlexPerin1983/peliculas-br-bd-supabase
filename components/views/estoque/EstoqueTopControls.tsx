@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { StatusFilterDropdown } from '../../ui/StatusFilterDropdown';
 import { PackageIcon, PlusIcon, QrCodeIcon, ScissorsIcon, SearchIcon } from './EstoqueIcons';
+import { getEstoqueStatusOptions } from './estoqueStatus';
 
 interface EstoqueTopControlsProps {
     activeTab: 'bobinas' | 'retalhos';
@@ -16,6 +17,9 @@ interface EstoqueTopControlsProps {
     viewMode: 'grid' | 'list';
     onViewModeChange: (mode: 'grid' | 'list') => void;
     onScan: () => void;
+    /** Busca mobile controlada pelo footer flutuante. */
+    mobileSearchOpen: boolean;
+    onCloseMobileSearch: () => void;
 }
 
 const tabBaseClassName =
@@ -41,21 +45,16 @@ const EstoqueTopControls: React.FC<EstoqueTopControlsProps> = ({
     viewMode,
     onViewModeChange,
     onScan,
+    mobileSearchOpen,
+    onCloseMobileSearch,
 }) => {
-    const [isSearchActive, setIsSearchActive] = useState(false);
     const searchInputRef = useRef<HTMLInputElement | null>(null);
 
     useEffect(() => {
-        if (isSearchActive) {
+        if (mobileSearchOpen) {
             searchInputRef.current?.focus();
         }
-    }, [isSearchActive]);
-
-    useEffect(() => {
-        if (searchTerm.trim()) {
-            setIsSearchActive(true);
-        }
-    }, [searchTerm]);
+    }, [mobileSearchOpen]);
 
     const currentTabLabel = activeTab === 'bobinas' ? 'bobinas' : 'retalhos';
     const resultSummary = `${visibleCount} de ${activeTab === 'bobinas' ? bobinasCount : retalhosCount} ${currentTabLabel}`;
@@ -64,24 +63,7 @@ const EstoqueTopControls: React.FC<EstoqueTopControlsProps> = ({
             ? `${bobinasCount} bobinas em acompanhamento`
             : `${retalhosCount} retalhos disponiveis`;
 
-    const statusOptions = useMemo(
-        () =>
-            activeTab === 'bobinas'
-                ? [
-                      { value: 'todos', label: 'Status', emoji: '•' },
-                      { value: 'ativa', label: 'Ativa', emoji: '•' },
-                      { value: 'finalizada', label: 'Finalizada', emoji: '•' },
-                      { value: 'descartada', label: 'Descartada', emoji: '•' },
-                  ]
-                : [
-                      { value: 'todos', label: 'Status', emoji: '•' },
-                      { value: 'disponivel', label: 'Disponivel', emoji: '•' },
-                      { value: 'reservado', label: 'Reservado', emoji: '•' },
-                      { value: 'usado', label: 'Usado', emoji: '•' },
-                      { value: 'descartado', label: 'Descartado', emoji: '•' },
-                  ],
-        [activeTab]
-    );
+    const statusOptions = useMemo(() => getEstoqueStatusOptions(activeTab), [activeTab]);
 
     const renderViewToggle = (iconSize: number) => (
         <div className="flex rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-1 shadow-[var(--shadow-hairline)]">
@@ -127,13 +109,13 @@ const EstoqueTopControls: React.FC<EstoqueTopControlsProps> = ({
     return (
         <section className="relative overflow-hidden rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface-raised)] p-3.5 shadow-[var(--shadow-soft)] sm:p-5">
             <div className="absolute inset-x-0 top-0 h-1 bg-[var(--brand-primary)]" aria-hidden="true" />
-            {isSearchActive ? (
+            {mobileSearchOpen ? (
                 <div className="sm:hidden">
                     <div className="flex items-center gap-2">
                         <button
                             type="button"
                             onClick={() => {
-                                setIsSearchActive(false);
+                                onCloseMobileSearch();
                                 if (!searchTerm.trim()) {
                                     onSearchChange('');
                                 }
@@ -204,16 +186,8 @@ const EstoqueTopControls: React.FC<EstoqueTopControlsProps> = ({
                             </p>
                         </div>
 
-                        <div className="flex items-center gap-1.5 sm:gap-2">
-                            <button
-                                type="button"
-                                onClick={() => setIsSearchActive(true)}
-                                className={`${actionButtonClassName} sm:hidden`}
-                                aria-label="Abrir busca"
-                            >
-                                <SearchIcon />
-                            </button>
-
+                        {/* Ações no desktop; no mobile vão para o footer flutuante */}
+                        <div className="hidden items-center gap-1.5 sm:flex sm:gap-2">
                             <button
                                 type="button"
                                 onClick={onScan}
@@ -309,23 +283,6 @@ const EstoqueTopControls: React.FC<EstoqueTopControlsProps> = ({
                         </div>
 
                         {renderViewToggle(18)}
-                    </div>
-
-                    <div className="mt-3 space-y-2.5 sm:hidden">
-                        <div className="flex items-center gap-2">
-                            <span className="inline-flex min-h-8 items-center rounded-full border border-[var(--border-subtle)] bg-[var(--surface-muted)] px-3 py-1.5 text-[11px] font-semibold text-[var(--text-muted)]">
-                                {resultSummary}
-                            </span>
-                            <div className="ml-auto">
-                                {renderViewToggle(16)}
-                            </div>
-                        </div>
-
-                        <StatusFilterDropdown
-                            value={statusFilter}
-                            onChange={onStatusFilterChange}
-                            options={statusOptions}
-                        />
                     </div>
                 </>
             )}

@@ -193,12 +193,6 @@ export default function EstoqueRetalhosPanel({
                                 </div>
                             </div>
 
-                            <div className="mt-3 flex flex-wrap gap-2 text-[10px] font-medium text-[var(--text-muted)] sm:text-[11px]">
-                                <span>{formatArea(retalho)}m2</span>
-                                <span>- {retalho.larguraCm} cm largura</span>
-                                <span>- {retalho.comprimentoCm} cm comprimento</span>
-                            </div>
-
                             <div className="mt-3 flex items-center justify-between gap-3 sm:justify-start sm:gap-2">
                                 <button
                                     className={statusActionButtonClassName}

@@ -15,6 +15,9 @@ import EstoqueTopControls from './estoque/EstoqueTopControls';
 import EstoqueBobinasPanel from './estoque/EstoqueBobinasPanel';
 import EstoqueRetalhosPanel from './estoque/EstoqueRetalhosPanel';
 import EstoqueRetalhoMedidaSearch from './estoque/EstoqueRetalhoMedidaSearch';
+import EstoqueMobileFooter from './estoque/EstoqueMobileFooter';
+import EstoqueStatusSheet from './estoque/EstoqueStatusSheet';
+import { getEstoqueStatusOptions } from './estoque/estoqueStatus';
 import EstoqueAddModal from './estoque/EstoqueAddModal';
 import EstoqueQrModal from './estoque/EstoqueQrModal';
 import EstoqueDeleteConfirmModal from './estoque/EstoqueDeleteConfirmModal';
@@ -56,6 +59,8 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
     const [showStatusModal, setShowStatusModal] = useState<{ type: 'bobina' | 'retalho', item: Bobina | Retalho } | null>(null);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState<{ type: 'bobina' | 'retalho', id: number } | null>(null);
     const [isGenerating, setIsGenerating] = useState(false);
+    const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+    const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
     const {
         searchTerm,
         setSearchTerm,
@@ -177,7 +182,7 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
     );
 
     return (
-        <div className="estoque-view flex flex-col gap-5">
+        <div className="estoque-view flex flex-col gap-5 pb-28 sm:pb-0">
             <div className="order-1 sm:order-2">
                 <EstoqueTopControls
                     activeTab={activeTab}
@@ -193,6 +198,8 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
                     viewMode={viewMode}
                     onViewModeChange={setViewMode}
                     onScan={() => setShowScannerModal(true)}
+                    mobileSearchOpen={mobileSearchOpen}
+                    onCloseMobileSearch={() => setMobileSearchOpen(false)}
                 />
             </div>
 
@@ -292,6 +299,26 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
                 showDeleteConfirm={showDeleteConfirm}
                 onClose={() => setShowDeleteConfirm(null)}
                 onConfirm={handleConfirmDelete}
+            />
+
+            {/* Ações rápidas (mobile) */}
+            <EstoqueMobileFooter
+                activeTab={activeTab}
+                viewMode={viewMode}
+                onAdd={() => setShowAddModal(true)}
+                onScan={() => setShowScannerModal(true)}
+                onOpenSearch={() => setMobileSearchOpen(true)}
+                onOpenFilter={() => setMobileFilterOpen(true)}
+                onToggleView={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+                filterActive={statusFilter !== 'todos'}
+            />
+
+            <EstoqueStatusSheet
+                isOpen={mobileFilterOpen}
+                onClose={() => setMobileFilterOpen(false)}
+                value={statusFilter}
+                options={getEstoqueStatusOptions(activeTab)}
+                onChange={setStatusFilter}
             />
 
             <style>{`
