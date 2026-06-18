@@ -17,7 +17,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, footer,
     if (!isOpen || typeof document === 'undefined') return null;
 
     return createPortal(
-        <div className={`fixed inset-0 z-[10000] flex bg-slate-950/68 backdrop-blur-md transition-opacity duration-300 ease-in-out ${fullScreenOnMobile ? 'items-stretch justify-center p-0 sm:items-center sm:justify-center sm:p-4' : 'items-center justify-center p-4'} ${wrapperClassName || ''}`}>
+        <div className={`pointer-events-auto fixed inset-0 z-[10000] flex bg-slate-950/68 backdrop-blur-md transition-opacity duration-300 ease-in-out ${fullScreenOnMobile ? 'items-stretch justify-center p-0 sm:items-center sm:justify-center sm:p-4' : 'items-center justify-center p-4'} ${wrapperClassName || ''}`}>
             <div className={`flex w-full transform flex-col overflow-hidden bg-[var(--surface)] shadow-[var(--shadow-elevated)] transition-transform duration-300 ease-in-out ${fullScreenOnMobile ? 'h-full max-h-full max-w-full rounded-none sm:mx-0 sm:h-auto sm:max-h-[90vh] sm:max-w-xl sm:rounded-[var(--radius-panel)] sm:border sm:border-[var(--border-subtle)]' : 'max-h-[90vh] max-w-xl scale-100 rounded-[var(--radius-panel)] border border-[var(--border-subtle)] sm:mx-0'}`}>
                 <div className="flex items-start justify-between gap-4 border-b border-[var(--border-subtle)] bg-[var(--surface-raised)] px-5 py-4">
                     <div className="min-w-0">

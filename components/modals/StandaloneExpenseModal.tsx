@@ -1,4 +1,5 @@
-import React, { FormEvent, useEffect, useMemo, useState } from 'react';
+import React, { FormEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { CalendarDays, Check, ChevronDown, CreditCard, FileText, Tag, UsersRound } from 'lucide-react';
 import { Client, SavedPDF, StandaloneExpense } from '../../types';
 import { PROPOSAL_EXPENSE_CATEGORY_OPTIONS, normalizeCurrencyInput, parseCurrencyInput } from '../../src/lib/proposalExpenses';
@@ -59,6 +60,40 @@ const PickerField: React.FC<{
 }) => {
     const selectedOption = options.find(option => option.value === value);
     const isOpen = openPicker === id;
+    const triggerRef = useRef<HTMLButtonElement>(null);
+    const menuRef = useRef<HTMLDivElement>(null);
+    const [coords, setCoords] = useState<{ left: number; top: number; width: number } | null>(null);
+
+    const updateCoords = () => {
+        const el = triggerRef.current;
+        if (!el) return;
+        const rect = el.getBoundingClientRect();
+        setCoords({ left: rect.left, top: rect.bottom + 6, width: rect.width });
+    };
+
+    useLayoutEffect(() => {
+        if (isOpen) updateCoords();
+    }, [isOpen]);
+
+    // Reposiciona ao rolar/redimensionar e fecha ao clicar fora (menu vive num portal).
+    useEffect(() => {
+        if (!isOpen) return;
+        const onReposition = () => updateCoords();
+        const onOutside = (event: MouseEvent) => {
+            const target = event.target as Node;
+            if (triggerRef.current?.contains(target)) return;
+            if (menuRef.current?.contains(target)) return;
+            onToggle(id);
+        };
+        window.addEventListener('scroll', onReposition, true);
+        window.addEventListener('resize', onReposition);
+        document.addEventListener('mousedown', onOutside);
+        return () => {
+            window.removeEventListener('scroll', onReposition, true);
+            window.removeEventListener('resize', onReposition);
+            document.removeEventListener('mousedown', onOutside);
+        };
+    }, [isOpen, id, onToggle]);
 
     return (
         <div className="relative">
@@ -67,6 +102,7 @@ const PickerField: React.FC<{
                 {label}
             </span>
             <button
+                ref={triggerRef}
                 type="button"
                 onClick={() => onToggle(id)}
                 className="flex h-11 w-full min-w-0 items-center justify-between gap-3 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] px-3 text-left text-sm font-semibold text-[var(--text-strong)] shadow-[var(--shadow-hairline)] transition-colors hover:bg-[var(--surface-muted)]"
@@ -77,10 +113,12 @@ const PickerField: React.FC<{
                 <ChevronDown className={`h-4 w-4 shrink-0 text-[var(--text-muted)] transition-transform ${isOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
             </button>
 
-            {isOpen && (
+            {isOpen && coords && createPortal(
                 <div
+                    ref={menuRef}
                     role="listbox"
-                    className="absolute left-0 right-0 top-[calc(100%+6px)] z-[10020] max-h-60 overflow-y-auto rounded-[var(--radius-card)] border border-[var(--border-subtle)] bg-[var(--surface)] p-1 shadow-[var(--shadow-elevated)]"
+                    style={{ position: 'fixed', left: coords.left, top: coords.top, width: coords.width }}
+                    className="z-[10050] max-h-60 overflow-y-auto rounded-[var(--radius-card)] border border-[var(--border-subtle)] bg-[var(--surface)] p-1 shadow-[var(--shadow-elevated)] ring-1 ring-black/5 dark:ring-white/10"
                 >
                     {options.map(option => {
                         const isSelected = option.value === value;
@@ -106,7 +144,8 @@ const PickerField: React.FC<{
                             </button>
                         );
                     })}
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

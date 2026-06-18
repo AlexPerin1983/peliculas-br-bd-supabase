@@ -60,10 +60,20 @@ function whatsappPhone(phone: string): string {
     return digits.startsWith('55') ? digits : `55${digits}`;
 }
 
+function isLikelyMobileDevice(): boolean {
+    return typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
 function whatsappBusinessUrl(phone: string): string {
     const num = whatsappPhone(phone);
-    if (/Android/i.test(window.navigator.userAgent)) {
-        return `intent://send?phone=${num}#Intent;scheme=whatsapp;package=com.whatsapp.w4b;end`;
+    if (typeof window !== 'undefined' && /Android/i.test(window.navigator.userAgent)) {
+        // browser_fallback_url: se o WhatsApp Business nao estiver instalado, abre o WhatsApp Web.
+        const fallback = encodeURIComponent(`https://wa.me/${num}`);
+        return `intent://send?phone=${num}#Intent;scheme=whatsapp;package=com.whatsapp.w4b;S.browser_fallback_url=${fallback};end`;
+    }
+
+    if (typeof window !== 'undefined' && /iPhone|iPad|iPod/i.test(window.navigator.userAgent)) {
+        return `whatsapp-business://send?phone=${num}`;
     }
 
     return `https://wa.me/${num}`;
@@ -724,6 +734,7 @@ const WhatsAppChooserModal: React.FC<{
 
     const regularUrl = `whatsapp://send?phone=${whatsappPhone(fornecedor.telefone)}`;
     const businessUrl = whatsappBusinessUrl(fornecedor.telefone);
+    const showBusiness = isLikelyMobileDevice();
 
     return (
         <Modal
@@ -748,7 +759,7 @@ const WhatsAppChooserModal: React.FC<{
                     Escolha qual app deseja usar para falar com <strong className="text-slate-700 dark:text-slate-200">{fornecedor.empresa}</strong>.
                 </p>
 
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className={`grid gap-3 ${showBusiness ? 'sm:grid-cols-2' : ''}`}>
                     <a
                         href={regularUrl}
                         onClick={onClose}
@@ -758,14 +769,16 @@ const WhatsAppChooserModal: React.FC<{
                         WhatsApp
                     </a>
 
-                    <a
-                        href={businessUrl}
-                        onClick={onClose}
-                        className="flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600"
-                    >
-                        <i className="fas fa-briefcase text-sm"></i>
-                        WhatsApp Business
-                    </a>
+                    {showBusiness && (
+                        <a
+                            href={businessUrl}
+                            onClick={onClose}
+                            className="flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600"
+                        >
+                            <i className="fas fa-briefcase text-sm"></i>
+                            WhatsApp Business
+                        </a>
+                    )}
                 </div>
 
                 <button

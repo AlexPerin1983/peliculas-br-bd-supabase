@@ -167,15 +167,18 @@ const getBusinessWhatsappUrl = (phone?: string, text?: string) => {
 
     const encoded = text ? encodeURIComponent(text) : '';
 
+    const webFallback = `https://wa.me/${normalizedPhone}${encoded ? `?text=${encoded}` : ''}`;
+
     if (typeof window !== 'undefined' && /Android/i.test(window.navigator.userAgent)) {
-        return `intent://send?phone=${normalizedPhone}${encoded ? `&text=${encoded}` : ''}#Intent;scheme=whatsapp;package=com.whatsapp.w4b;end`;
+        // browser_fallback_url: se o WhatsApp Business nao estiver instalado, abre o WhatsApp Web.
+        return `intent://send?phone=${normalizedPhone}${encoded ? `&text=${encoded}` : ''}#Intent;scheme=whatsapp;package=com.whatsapp.w4b;S.browser_fallback_url=${encodeURIComponent(webFallback)};end`;
     }
 
     if (typeof window !== 'undefined' && /iPhone|iPad|iPod/i.test(window.navigator.userAgent)) {
         return `whatsapp-business://send?phone=${normalizedPhone}${encoded ? `&text=${encoded}` : ''}`;
     }
 
-    return `https://wa.me/${normalizedPhone}${encoded ? `?text=${encoded}` : ''}`;
+    return webFallback;
 };
 
 const getTelUrl = (phone?: string) => {
@@ -296,8 +299,10 @@ const AgendaWhatsAppChooserModal: React.FC<{
 }> = ({ clientName, phone, messageText, onClose }) => {
     const regularUrl = getRegularWhatsappUrl(phone, messageText);
     const businessUrl = getBusinessWhatsappUrl(phone, messageText);
+    // WhatsApp Business só faz sentido no mobile (deep link Android/iOS); no desktop ambos abrem o WhatsApp Web.
+    const showBusiness = isLikelyMobileDevice();
 
-    if (!regularUrl || !businessUrl) return null;
+    if (!regularUrl) return null;
 
     return (
         <Modal
@@ -322,7 +327,7 @@ const AgendaWhatsAppChooserModal: React.FC<{
                     Escolha qual app deseja usar para falar com <strong className="text-slate-700 dark:text-slate-200">{clientName}</strong>.
                 </p>
 
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className={`grid gap-3 ${showBusiness ? 'sm:grid-cols-2' : ''}`}>
                     <a
                         href={regularUrl}
                         onClick={onClose}
@@ -332,14 +337,16 @@ const AgendaWhatsAppChooserModal: React.FC<{
                         WhatsApp
                     </a>
 
-                    <a
-                        href={businessUrl}
-                        onClick={onClose}
-                        className="flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600"
-                    >
-                        <i className="fas fa-briefcase text-sm"></i>
-                        WhatsApp Business
-                    </a>
+                    {showBusiness && businessUrl && (
+                        <a
+                            href={businessUrl}
+                            onClick={onClose}
+                            className="flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600"
+                        >
+                            <i className="fas fa-briefcase text-sm"></i>
+                            WhatsApp Business
+                        </a>
+                    )}
                 </div>
 
                 <button

@@ -75,17 +75,17 @@ describe('AgendaView', () => {
         expect(whatsappButtons.length).toBeGreaterThan(0);
     });
 
-    it('abre escolha entre WhatsApp e WhatsApp Business ao clicar no contato', () => {
+    it('abre o WhatsApp ao clicar no contato (Business so aparece no mobile)', () => {
         renderAgenda();
 
         const whatsappButtons = screen.getAllByRole('button', { name: /abrir whatsapp de cliente mapa/i });
         fireEvent.click(whatsappButtons[0]);
 
         const regularLink = screen.getByRole('link', { name: /^whatsapp$/i });
-        const businessLink = screen.getByRole('link', { name: /whatsapp business/i });
-
         expect(regularLink).toHaveAttribute('href', 'https://wa.me/5583999990000');
-        expect(businessLink).toHaveAttribute('href', 'https://wa.me/5583999990000');
+
+        // No desktop (jsdom = UA nao-mobile) o WhatsApp Business nao e exibido.
+        expect(screen.queryByRole('link', { name: /whatsapp business/i })).not.toBeInTheDocument();
     });
 
     it('nao mostra link de navegacao sem endereco do cliente', () => {
