@@ -3,6 +3,8 @@ import ReactDOM from 'react-dom';
 import { useAuth } from '../contexts/AuthContext';
 import SyncStatusIndicator from './SyncStatusIndicator';
 import ThemeToggle from './ui/ThemeToggle';
+import SupportModal from './modals/SupportModal';
+import { isWaConnectorEnabled } from '../src/lib/waConnector';
 
 type ActiveTab =
     | 'dashboard'
@@ -17,7 +19,8 @@ type ActiveTab =
     | 'estoque'
     | 'qr_code'
     | 'fornecedores'
-    | 'assistentes';
+    | 'assistentes'
+    | 'wa_connector';
 
 interface HeaderProps {
     activeTab: ActiveTab;
@@ -44,6 +47,10 @@ const MAIN_NAV: NavItem[] = [
     { tabId: 'agenda', icon: 'fas fa-calendar-alt', label: 'Agenda', hint: 'visitas, prazos e tarefas' },
     { tabId: 'history', icon: 'fas fa-history', label: 'Histórico', hint: 'registros, PDFs e consultas' },
     { tabId: 'fornecedores', icon: 'fas fa-truck', label: 'Fornecedores', hint: 'compras, contatos e apoio' },
+    // Conector de WhatsApp: só aparece localmente quando VITE_WA_CONNECTOR=1 (nunca em produção).
+    ...(isWaConnectorEnabled()
+        ? [{ tabId: 'wa_connector' as ActiveTab, icon: 'fab fa-whatsapp', label: 'WhatsApp', hint: 'capturar contato como cliente', badge: 'Local' }]
+        : []),
 ];
 
 const SYSTEM_NAV: NavItem[] = [
@@ -64,6 +71,7 @@ const pageLabels: Record<string, string> = {
     admin: 'Admin',
     settings: 'Configurações',
     account: 'Minha Conta',
+    wa_connector: 'WhatsApp',
 };
 
 type MenuRenderState = 'closed' | 'opening' | 'open' | 'closing';
@@ -73,6 +81,7 @@ const MAX_SWIPE_TRANSLATE = 240;
 const Header: React.FC<HeaderProps> = ({ activeTab, onTabChange, onGoBack, canGoBack = false }) => {
     const { isAdmin, user, signOut } = useAuth();
     const [menuState, setMenuState] = useState<MenuRenderState>('closed');
+    const [isSupportOpen, setIsSupportOpen] = useState(false);
     const [dragOffsetX, setDragOffsetX] = useState(0);
     const [isDraggingMenu, setIsDraggingMenu] = useState(false);
     const [shellMetrics, setShellMetrics] = useState({ width: 336, height: 880 });
@@ -481,6 +490,22 @@ const Header: React.FC<HeaderProps> = ({ activeTab, onTabChange, onGoBack, canGo
                                     <section className="relative border-t border-slate-200/80 pt-[var(--sidebar-section-top)] dark:border-cyan-300/18">
                                         <div className="space-y-1">
                                             {SYSTEM_NAV.map(item => renderNavItem(item, 'system'))}
+                                            <button
+                                                onClick={() => {
+                                                    setIsSupportOpen(true);
+                                                    closeMenu();
+                                                }}
+                                                className="group relative flex w-full items-center gap-[var(--sidebar-item-gap)] rounded-2xl px-[var(--sidebar-item-px)] py-[var(--sidebar-item-py)] text-left transition-all duration-200 hover:bg-slate-100/80 active:scale-[0.985] dark:hover:bg-white/[0.03]"
+                                            >
+                                                <div className="flex h-[var(--sidebar-icon-box)] w-[var(--sidebar-icon-box)] flex-shrink-0 items-center justify-center">
+                                                    <i className="fab fa-whatsapp text-[var(--sidebar-icon-size)] text-emerald-500 dark:text-emerald-400" />
+                                                </div>
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="truncate text-[var(--sidebar-item-font)] font-medium tracking-[0.005em] text-slate-700 group-hover:text-slate-900 dark:text-white/88 dark:group-hover:text-white">
+                                                        Suporte
+                                                    </p>
+                                                </div>
+                                            </button>
                                         </div>
                                     </section>
                                 </div>
@@ -520,6 +545,8 @@ const Header: React.FC<HeaderProps> = ({ activeTab, onTabChange, onGoBack, canGo
                     </div>,
                     document.body
                 )}
+
+            <SupportModal isOpen={isSupportOpen} onClose={() => setIsSupportOpen(false)} />
         </>
     );
 };

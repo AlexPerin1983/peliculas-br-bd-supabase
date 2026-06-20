@@ -7,9 +7,11 @@ import {
     History,
     Layers3,
     LayoutDashboard,
+    LifeBuoy,
     Loader2,
     LogOut,
     LucideIcon,
+    MessageCircle,
     PanelLeftClose,
     PanelLeftOpen,
     QrCode,
@@ -19,10 +21,12 @@ import {
     UsersRound
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { isWaConnectorEnabled } from '../../src/lib/waConnector';
 import SyncStatusIndicator from '../SyncStatusIndicator';
 import ThemeToggle from '../ui/ThemeToggle';
+import SupportModal from '../modals/SupportModal';
 
-type ActiveTab = 'dashboard' | 'client' | 'films' | 'settings' | 'history' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores' | 'assistentes';
+type ActiveTab = 'dashboard' | 'client' | 'films' | 'settings' | 'history' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores' | 'assistentes' | 'wa_connector';
 
 interface DesktopSidebarProps {
     activeTab: ActiveTab;
@@ -45,7 +49,11 @@ const MAIN_NAV: NavItemConfig[] = [
     { tabId: 'qr_code', icon: QrCode, label: 'QR Code' },
     { tabId: 'agenda', icon: CalendarDays, label: 'Agenda' },
     { tabId: 'history', icon: History, label: 'Histórico' },
-    { tabId: 'fornecedores', icon: Truck, label: 'Fornecedores' }
+    { tabId: 'fornecedores', icon: Truck, label: 'Fornecedores' },
+    // Conector de WhatsApp: só aparece localmente quando VITE_WA_CONNECTOR=1 (nunca em produção).
+    ...(isWaConnectorEnabled()
+        ? [{ tabId: 'wa_connector' as ActiveTab, icon: MessageCircle, label: 'WhatsApp', badge: 'Local' }]
+        : [])
 ];
 
 const SIDEBAR_COLLAPSED_KEY = 'peliculas-br-sidebar-collapsed';
@@ -53,6 +61,7 @@ const SIDEBAR_COLLAPSED_KEY = 'peliculas-br-sidebar-collapsed';
 const DesktopSidebar: React.FC<DesktopSidebarProps> = ({ activeTab, onTabChange }) => {
     const { isAdmin, user, signOut } = useAuth();
     const [isSigningOut, setIsSigningOut] = useState(false);
+    const [isSupportOpen, setIsSupportOpen] = useState(false);
     const [isCollapsed, setIsCollapsed] = useState(() => {
         try {
             return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true';
@@ -196,6 +205,24 @@ const DesktopSidebar: React.FC<DesktopSidebarProps> = ({ activeTab, onTabChange 
                     {systemNav.map(item => (
                         <NavItem key={item.tabId} {...item} />
                     ))}
+                    <button
+                        type="button"
+                        onClick={() => setIsSupportOpen(true)}
+                        aria-label="Suporte"
+                        title={isCollapsed ? 'Suporte' : undefined}
+                        className={[
+                            'group relative flex h-10 w-full items-center rounded-[var(--radius-control)] border border-transparent text-left text-[var(--text-muted)] transition-colors duration-200 hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)] dark:text-slate-400 dark:hover:bg-white/[0.055] dark:hover:text-slate-100',
+                            isCollapsed ? 'justify-center px-0' : 'gap-3 px-3'
+                        ].join(' ')}
+                    >
+                        <LifeBuoy
+                            className="h-4 w-4 shrink-0 text-emerald-500 transition-colors group-hover:text-emerald-600 dark:text-emerald-400"
+                            aria-hidden="true"
+                        />
+                        {!isCollapsed ? (
+                            <span className="min-w-0 flex-1 truncate text-sm font-semibold">Suporte</span>
+                        ) : null}
+                    </button>
                 </div>
             </nav>
 
@@ -256,6 +283,8 @@ const DesktopSidebar: React.FC<DesktopSidebarProps> = ({ activeTab, onTabChange 
                     </button>
                 </div>
             </div>
+
+            <SupportModal isOpen={isSupportOpen} onClose={() => setIsSupportOpen(false)} />
         </aside>
     );
 };
