@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { Drawer } from 'vaul';
 import {
     Bolt,
     Edit3,
@@ -11,8 +12,10 @@ import {
     Trash2,
     UserPlus,
     WandSparkles,
+    X,
 } from 'lucide-react';
 import { Client } from '../types';
+import { useIsMobile } from '../src/hooks/useIsMobile';
 
 interface ClientBarProps {
     selectedClient: Client | null;
@@ -48,6 +51,7 @@ const ClientBar: React.FC<ClientBarProps> = ({
     onSwipeLeft,
     onSwipeRight,
 }) => {
+    const isMobile = useIsMobile();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [menuPosition, setMenuPosition] = useState<React.CSSProperties | null>(null);
     const menuRef = useRef<HTMLDivElement>(null);
@@ -83,7 +87,7 @@ const ClientBar: React.FC<ClientBarProps> = ({
     };
 
     useEffect(() => {
-        if (!isMenuOpen) {
+        if (!isMenuOpen || isMobile) {
             return;
         }
 
@@ -115,7 +119,7 @@ const ClientBar: React.FC<ClientBarProps> = ({
             window.removeEventListener('resize', updateMenuPosition);
             window.removeEventListener('scroll', updateMenuPosition, true);
         };
-    }, [isMenuOpen]);
+    }, [isMenuOpen, isMobile]);
 
     const handleTouchStart = (event: React.TouchEvent) => {
         touchStartX.current = event.targetTouches[0].clientX;
@@ -274,7 +278,44 @@ const ClientBar: React.FC<ClientBarProps> = ({
         </div>
     );
 
-    const clientActionsMenuPortal = isMenuOpen && typeof document !== 'undefined'
+    // Mobile: bottom sheet em tela cheia com arrastar-para-fechar (igual ao Totais).
+    const clientActionsMenuMobile = (
+        <Drawer.Root open={isMenuOpen && isMobile} onOpenChange={(open) => !open && setIsMenuOpen(false)}>
+            <Drawer.Portal>
+                <Drawer.Overlay className="fixed inset-0 z-[9998] bg-black/40" />
+                <Drawer.Content className="fixed bottom-0 left-0 right-0 z-[9999] flex h-[100dvh] max-h-[100dvh] flex-col border-t border-[var(--border-subtle)] bg-[var(--surface)] outline-none">
+                    <div
+                        className="flex-1 overflow-y-auto overscroll-contain p-4"
+                        style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.5rem)' }}
+                    >
+                        <div className="mx-auto mb-5 h-1.5 w-12 flex-shrink-0 rounded-full bg-[var(--border-strong)]" />
+                        <div className="mx-auto w-full max-w-md">
+                            <div className="mb-4 flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                    <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--text-muted)]">Ações do cliente</span>
+                                    <h2 className="truncate text-lg font-bold text-[var(--text-strong)]">
+                                        {selectedClient?.nome || 'Cliente'}
+                                    </h2>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsMenuOpen(false)}
+                                    className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[var(--radius-control)] text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)]"
+                                    aria-label="Fechar"
+                                >
+                                    <X className="h-5 w-5" aria-hidden="true" />
+                                </button>
+                            </div>
+                            <ClientActionsMenu />
+                        </div>
+                    </div>
+                </Drawer.Content>
+            </Drawer.Portal>
+        </Drawer.Root>
+    );
+
+    // Desktop: dropdown posicionado abaixo do botão.
+    const clientActionsMenuDesktop = isMenuOpen && !isMobile && typeof document !== 'undefined'
         ? createPortal(
             <>
                 <button
@@ -386,7 +427,8 @@ const ClientBar: React.FC<ClientBarProps> = ({
                     </div>
                 )}
             </div>
-            {clientActionsMenuPortal}
+            {clientActionsMenuDesktop}
+            {clientActionsMenuMobile}
 
             <style>{`
                 @keyframes fade-in-scale {
