@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Drawer } from 'vaul';
 import { CircleDollarSign, Eye, EyeOff, MinusCircle, Percent, PlusCircle } from 'lucide-react';
 
@@ -18,6 +18,10 @@ interface TotalsDrawerProps {
     onGeneratePdf: () => void;
     isGeneratingPdf: boolean;
     defaultHideMeasurements?: boolean;
+    /** Opções/oportunidades da proposta — habilita o swipe entre elas no mobile. */
+    options?: { id: number; name: string }[];
+    activeOptionId?: number | null;
+    onSelectOption?: (optionId: number) => void;
 }
 
 const formatNumberBR = (number: number) => {
@@ -111,9 +115,40 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
     onUpdateGeneralDiscount,
     onGeneratePdf,
     isGeneratingPdf,
-    defaultHideMeasurements = false
+    defaultHideMeasurements = false,
+    options = [],
+    activeOptionId = null,
+    onSelectOption
 }) => {
     const [openGroup, setOpenGroup] = useState<string | null>(null);
+    const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+
+    const hasMultipleOptions = options.length > 1 && !!onSelectOption;
+    const activeOptionIndex = options.findIndex((option) => option.id === activeOptionId);
+
+    const goToOption = (direction: -1 | 1) => {
+        if (!hasMultipleOptions || activeOptionIndex < 0) return;
+        const nextIndex = activeOptionIndex + direction;
+        if (nextIndex < 0 || nextIndex >= options.length) return;
+        onSelectOption?.(options[nextIndex].id);
+    };
+
+    const handleTouchStart = (event: React.TouchEvent) => {
+        if (!hasMultipleOptions) return;
+        const touch = event.touches[0];
+        touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+    };
+
+    const handleTouchEnd = (event: React.TouchEvent) => {
+        if (!hasMultipleOptions || !touchStartRef.current) return;
+        const touch = event.changedTouches[0];
+        const deltaX = touch.clientX - touchStartRef.current.x;
+        const deltaY = touch.clientY - touchStartRef.current.y;
+        touchStartRef.current = null;
+        // Só reage a gestos predominantemente horizontais para não brigar com o scroll vertical.
+        if (Math.abs(deltaX) < 60 || Math.abs(deltaX) < Math.abs(deltaY) * 1.5) return;
+        goToOption(deltaX < 0 ? 1 : -1);
+    };
     const adjustmentInputs = getProposalAdjustmentInputs(generalDiscount);
     const hiddenIncreaseAmount = totals.generalIncreaseAmount || 0;
     const finalDiscountAmount = totals.generalFinalDiscountAmount || 0;
@@ -161,6 +196,8 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                     <div
                         className="flex-1 overflow-y-auto bg-white p-4 dark:bg-slate-900"
                         style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.5rem)' }}
+                        onTouchStart={handleTouchStart}
+                        onTouchEnd={handleTouchEnd}
                     >
                         <div className="mx-auto mb-6 h-1.5 w-12 flex-shrink-0 rounded-full bg-slate-300 dark:bg-slate-700" />
 
@@ -175,6 +212,49 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                                     <i className="fas fa-times text-lg" />
                                 </button>
                             </div>
+
+                            {hasMultipleOptions && (
+                                <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-800/60">
+                                    <button
+                                        type="button"
+                                        onClick={() => goToOption(-1)}
+                                        disabled={activeOptionIndex <= 0}
+                                        aria-label="Oportunidade anterior"
+                                        className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-white text-slate-600 shadow-sm transition-all active:scale-90 disabled:opacity-30 dark:bg-slate-900 dark:text-slate-300"
+                                    >
+                                        <i className="fas fa-chevron-left text-sm" />
+                                    </button>
+                                    <div className="flex min-w-0 flex-1 flex-col items-center">
+                                        <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">
+                                            Oportunidade {activeOptionIndex + 1} de {options.length}
+                                        </span>
+                                        <span className="max-w-full truncate text-sm font-bold text-slate-900 dark:text-white">
+                                            {activeOptionIndex >= 0 ? options[activeOptionIndex].name : '—'}
+                                        </span>
+                                        <div className="mt-1.5 flex items-center gap-1.5">
+                                            {options.map((option, idx) => (
+                                                <button
+                                                    key={option.id}
+                                                    type="button"
+                                                    onClick={() => onSelectOption?.(option.id)}
+                                                    aria-label={`Ver ${option.name}`}
+                                                    aria-current={idx === activeOptionIndex}
+                                                    className={`h-1.5 rounded-full transition-all duration-200 ${idx === activeOptionIndex ? 'w-4 bg-blue-500' : 'w-1.5 bg-slate-300 dark:bg-slate-600'}`}
+                                                />
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => goToOption(1)}
+                                        disabled={activeOptionIndex >= options.length - 1}
+                                        aria-label="Próxima oportunidade"
+                                        className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-white text-slate-600 shadow-sm transition-all active:scale-90 disabled:opacity-30 dark:bg-slate-900 dark:text-slate-300"
+                                    >
+                                        <i className="fas fa-chevron-right text-sm" />
+                                    </button>
+                                </div>
+                            )}
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 dark:border-slate-700/50 dark:bg-slate-800/40">

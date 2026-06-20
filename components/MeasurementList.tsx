@@ -71,6 +71,7 @@ interface MeasurementListProps {
     totalM2: number;
     totalQuantity: number;
     pricingMode: ProposalPricingMode;
+    onSelectPricingMode?: (pricingMode: ProposalPricingMode) => void;
     clientId?: number;
     optionId?: number;
     onDeleteMeasurementImmediate: (id: number) => void;
@@ -97,6 +98,7 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
     totalM2,
     totalQuantity,
     pricingMode,
+    onSelectPricingMode,
     clientId,
     onOpenFilmSelectionModal,
     onPasteCopiedMeasurements,
@@ -800,6 +802,49 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
                         description="Gerencie suas medidas em lote"
                     >
                                 <div className="space-y-2">
+                                    {onSelectPricingMode && (
+                                        <>
+                                            <div className="px-4 py-3">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 bg-blue-50 dark:bg-blue-900/20">
+                                                        <i className="fas fa-tags text-lg text-blue-600 dark:text-blue-300"></i>
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <span className="font-semibold block text-base text-slate-700 dark:text-slate-200">Tipo de cobranca</span>
+                                                        <span className="text-xs text-slate-500 dark:text-slate-400 block mt-0.5">
+                                                            {pricingMode === 'labor_only' ? 'Cobrando apenas a mao de obra' : 'Material + mao de obra'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <div className="mt-3 grid grid-cols-2 gap-1 rounded-xl bg-slate-100 dark:bg-slate-800 p-1">
+                                                    {([
+                                                        { mode: 'complete' as const, label: 'Completo' },
+                                                        { mode: 'labor_only' as const, label: 'Mao de obra' },
+                                                    ]).map(({ mode, label }) => {
+                                                        const active = (pricingMode === 'labor_only' ? 'labor_only' : 'complete') === mode;
+                                                        return (
+                                                            <button
+                                                                key={mode}
+                                                                type="button"
+                                                                onClick={() => onSelectPricingMode(mode)}
+                                                                aria-pressed={active}
+                                                                className={`h-10 rounded-lg text-sm font-bold transition-all ${
+                                                                    active
+                                                                        ? 'bg-blue-600 text-white shadow dark:bg-blue-500'
+                                                                        : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                                                                }`}
+                                                            >
+                                                                {label}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+
+                                            <div className="h-px bg-slate-100 dark:bg-slate-700 my-2"></div>
+                                        </>
+                                    )}
+
                                     {copiedMeasurementsCount > 0 && (
                                         <button
                                             onClick={() => {

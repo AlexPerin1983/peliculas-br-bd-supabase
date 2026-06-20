@@ -1,6 +1,6 @@
 import React, { ReactNode } from 'react';
 import ClientBar from '../../../components/ClientBar';
-import ProposalOptionsCarousel from '../../../components/ProposalOptionsCarousel';
+import ProposalOptionsCarousel, { getOptionDisplayName } from '../../../components/ProposalOptionsCarousel';
 import SummaryBar from '../../../components/SummaryBar';
 import ActionsBar from '../../../components/ActionsBar';
 import MobileFooter from '../../../components/MobileFooter';
@@ -461,26 +461,6 @@ export const AppClientWorkspace: React.FC<AppClientWorkspaceProps> = ({
                                     onSwipeDirectionChange={onSwipeDirectionChange}
                                 />
                             </div>
-
-                            {measurements.length > 0 && (
-                                <div className="sm:hidden">
-                                    <ProposalOptionsCarousel
-                                        options={proposalOptions}
-                                        activeOptionId={activeOptionId}
-                                        onSelectOption={onSelectOption}
-                                        onRenameOption={onRenameOption}
-                                        onDeleteOption={onDeleteOption}
-                                        onAddOption={onAddOption}
-                                        onSelectPricingMode={onSelectPricingMode}
-                                        onOpenPaymentConfig={onOpenProposalPaymentConfig}
-                                        onOpenExpenses={onOpenProposalExpenses}
-                                        hasActivePaymentOverride={hasCustomProposalPaymentConfig}
-                                        hasActiveExpenses={hasActiveExpenses}
-                                        onSwipeDirectionChange={onSwipeDirectionChange}
-                                        showOptionsStrip={false}
-                                    />
-                                </div>
-                            )}
                         </>
                     )}
 
@@ -547,6 +527,9 @@ export const AppClientWorkspace: React.FC<AppClientWorkspaceProps> = ({
                         isGeneratingPdf={isGeneratingPdf}
                         onOpenAIModal={onOpenAIModal}
                         defaultHideMeasurements={defaultHideMeasurements}
+                        options={proposalOptions.map((option) => ({ id: option.id, name: getOptionDisplayName(option) }))}
+                        activeOptionId={activeOptionId}
+                        onSelectOption={onSelectOption}
                     />
                 </>
             )}

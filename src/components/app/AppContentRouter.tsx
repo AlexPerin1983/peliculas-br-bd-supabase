@@ -397,6 +397,7 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
                 measurements={measurements}
                 films={films}
                 pricingMode={pricingMode}
+                onSelectPricingMode={onSelectPricingMode}
                 clientId={selectedClientId}
                 optionId={activeOptionId}
                 onMeasurementsChange={onMeasurementsChange}

@@ -62,7 +62,7 @@ const getFirstQuotedFilmName = (option: ProposalOption): string => {
     return measurement?.pelicula?.trim() || '';
 };
 
-const getOptionDisplayName = (option: ProposalOption): string => {
+export const getOptionDisplayName = (option: ProposalOption): string => {
     const optionName = sanitizeOptionName(option.name).trim();
     const firstFilmName = getFirstQuotedFilmName(option);
 

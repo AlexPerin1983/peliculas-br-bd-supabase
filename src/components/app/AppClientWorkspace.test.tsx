@@ -21,7 +21,8 @@ vi.mock('../../../components/ProposalOptionsCarousel', () => ({
       {showOptionsStrip ? <button onClick={onAddOption}>Add Option</button> : null}
       <button onClick={onOpenExpenses}>Open Expenses</button>
     </>
-  )
+  ),
+  getOptionDisplayName: (option: { name: string }) => option.name
 }));
 
 vi.mock('../../../components/SummaryBar', () => ({

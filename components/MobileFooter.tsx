@@ -13,6 +13,9 @@ interface MobileFooterProps {
     isGeneratingPdf: boolean;
     onOpenAIModal: () => void;
     defaultHideMeasurements?: boolean;
+    options?: { id: number; name: string }[];
+    activeOptionId?: number | null;
+    onSelectOption?: (optionId: number) => void;
 }
 
 const MobileFooter: React.FC<MobileFooterProps> = ({
@@ -25,7 +28,10 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
     onGeneratePdf,
     isGeneratingPdf,
     onOpenAIModal,
-    defaultHideMeasurements
+    defaultHideMeasurements,
+    options,
+    activeOptionId,
+    onSelectOption
 }) => {
     const [isTotalsDrawerOpen, setIsTotalsDrawerOpen] = useState(false);
 
@@ -119,6 +125,9 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
                 onGeneratePdf={onGeneratePdf}
                 isGeneratingPdf={isGeneratingPdf}
                 defaultHideMeasurements={defaultHideMeasurements}
+                options={options}
+                activeOptionId={activeOptionId}
+                onSelectOption={onSelectOption}
             />
         </>
     );
