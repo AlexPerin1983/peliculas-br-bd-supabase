@@ -183,6 +183,11 @@ interface ModalsContainerProps {
     isDuplicateAllModalOpen: boolean;
     setIsDuplicateAllModalOpen: (value: boolean) => void;
     handleConfirmDuplicateAll: () => void;
+    handleDuplicateWithFilm: (filmName: string) => void;
+    handleOpenDuplicateFilmSelector: () => void;
+    isDuplicateFilmSelectorOpen: boolean;
+    setIsDuplicateFilmSelectorOpen: (value: boolean) => void;
+    handleSelectFilmForDuplicate: (filmName: string) => void;
     activeOption: ProposalOption | null;
 
     // Measurement Delete Modal
@@ -362,6 +367,20 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
                     onClose={() => props.setIsApplyFilmToAllModalOpen(false)}
                     films={props.films}
                     onSelect={(filmName) => props.handleApplyFilmToAll(filmName)}
+                    onAddNewFilm={props.handleAddNewFilm}
+                    onEditFilm={props.handleEditFilm}
+                    onDeleteFilm={props.handleRequestDeleteFilm}
+                    onTogglePin={props.handleToggleFilmPin}
+                />
+            )}
+
+            {/* Duplicar Opcao - Seletor de pelicula (quando nao ha favoritas) */}
+            {props.isDuplicateFilmSelectorOpen && (
+                <FilmSelectionModal
+                    isOpen={props.isDuplicateFilmSelectorOpen}
+                    onClose={() => props.setIsDuplicateFilmSelectorOpen(false)}
+                    films={props.films}
+                    onSelect={(filmName) => props.handleSelectFilmForDuplicate(filmName)}
                     onAddNewFilm={props.handleAddNewFilm}
                     onEditFilm={props.handleEditFilm}
                     onDeleteFilm={props.handleRequestDeleteFilm}
@@ -555,15 +574,69 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
                     title="Duplicar Opção de Proposta"
                     message={
                         <>
-                            <p className="text-slate-700">
+                            <p className="text-slate-700 dark:text-slate-300">
                                 Você está prestes a duplicar a opção atual "<strong>{props.activeOption.name}</strong>" ({props.activeOption.measurements.length} medidas) e criar uma nova opção de proposta.
                             </p>
-                            <p className="mt-2 text-sm text-slate-600">
-                                Deseja continuar?
+
+                            {(() => {
+                                const pinnedFilms = props.films.filter(film => film.pinned);
+                                return (
+                                    <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/60">
+                                        <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400 dark:text-slate-500">
+                                            Já aplicar película em todos os grupos
+                                        </p>
+                                        {pinnedFilms.length > 0 ? (
+                                            <>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {pinnedFilms.map(film => (
+                                                        <button
+                                                            key={film.nome}
+                                                            type="button"
+                                                            onClick={() => props.handleDuplicateWithFilm(film.nome)}
+                                                            className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 transition-all active:scale-95 hover:bg-blue-100 dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-300"
+                                                        >
+                                                            <i className="fas fa-star text-[10px] text-amber-400" aria-hidden="true" />
+                                                            <span className="truncate">{film.nome}</span>
+                                                        </button>
+                                                    ))}
+                                                    <button
+                                                        type="button"
+                                                        onClick={props.handleOpenDuplicateFilmSelector}
+                                                        className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-500 transition-all active:scale-95 hover:border-slate-400 hover:text-slate-700 dark:border-slate-600 dark:text-slate-400 dark:hover:text-slate-200"
+                                                    >
+                                                        <i className="fas fa-layer-group text-[10px]" aria-hidden="true" />
+                                                        <span>Outra película</span>
+                                                    </button>
+                                                </div>
+                                                <p className="mt-2 text-[11px] leading-snug text-slate-500 dark:text-slate-400">
+                                                    Toque numa película para duplicar já trocando o material de todos os grupos.
+                                                </p>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <button
+                                                    type="button"
+                                                    onClick={props.handleOpenDuplicateFilmSelector}
+                                                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-sm font-bold text-blue-700 transition-all active:scale-95 hover:bg-blue-100 dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-300"
+                                                >
+                                                    <i className="fas fa-layer-group text-xs" aria-hidden="true" />
+                                                    <span>Escolher película e duplicar</span>
+                                                </button>
+                                                <p className="mt-2 text-[11px] leading-snug text-slate-500 dark:text-slate-400">
+                                                    Fixe (📌) suas películas mais usadas para que apareçam aqui como atalho.
+                                                </p>
+                                            </>
+                                        )}
+                                    </div>
+                                );
+                            })()}
+
+                            <p className="mt-3 text-sm text-slate-600 dark:text-slate-400">
+                                Ou apenas duplique mantendo as películas atuais.
                             </p>
                         </>
                     }
-                    confirmButtonText="Sim, Duplicar Opção"
+                    confirmButtonText="Duplicar mantendo películas"
                 />
             )}
 

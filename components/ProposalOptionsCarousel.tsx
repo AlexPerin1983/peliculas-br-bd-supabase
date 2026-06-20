@@ -115,6 +115,45 @@ const ProposalOptionsCarousel: React.FC<ProposalOptionsCarouselProps> = ({
     const carouselRef = useRef<HTMLDivElement>(null);
     const itemRefs = useRef<Map<number, HTMLDivElement>>(new Map());
     const previousActiveIdRef = useRef<number>(activeOptionId);
+    const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const longPressTriggeredRef = useRef(false);
+    const longPressStartRef = useRef<{ x: number; y: number } | null>(null);
+
+    const cancelLongPress = useCallback(() => {
+        if (longPressTimerRef.current) {
+            clearTimeout(longPressTimerRef.current);
+            longPressTimerRef.current = null;
+        }
+        longPressStartRef.current = null;
+    }, []);
+
+    // Segurar (long-press) numa aba no mobile abre o sheet de acoes (com "Excluir opcao").
+    const handleLongPressStart = useCallback((event: React.PointerEvent, option: ProposalOption) => {
+        if (event.pointerType !== 'touch') return;
+        if (editingOptionId === option.id) return;
+        longPressTriggeredRef.current = false;
+        longPressStartRef.current = { x: event.clientX, y: event.clientY };
+        cancelLongPress();
+        longPressTimerRef.current = setTimeout(() => {
+            longPressTriggeredRef.current = true;
+            if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+                navigator.vibrate(12);
+            }
+            setActionsOptionId(option.id);
+        }, 450);
+    }, [cancelLongPress, editingOptionId]);
+
+    // Cancela o long-press se o dedo se mover (ex.: rolagem horizontal das abas).
+    const handleLongPressMove = useCallback((event: React.PointerEvent) => {
+        if (!longPressStartRef.current || !longPressTimerRef.current) return;
+        const dx = event.clientX - longPressStartRef.current.x;
+        const dy = event.clientY - longPressStartRef.current.y;
+        if (Math.hypot(dx, dy) > 10) {
+            cancelLongPress();
+        }
+    }, [cancelLongPress]);
+
+    useEffect(() => cancelLongPress, [cancelLongPress]);
 
     useEffect(() => {
         const activeItem = itemRefs.current.get(activeOptionId);
@@ -312,7 +351,14 @@ const ProposalOptionsCarousel: React.FC<ProposalOptionsCarouselProps> = ({
                             <div
                                 key={option.id}
                                 ref={(el) => setItemRef(option.id, el)}
-                                className={`flex min-h-8 items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-control)] border transition-all duration-200 flex-shrink-0 snap-center ${isActiveOption
+                                onPointerDown={(event) => handleLongPressStart(event, option)}
+                                onPointerUp={cancelLongPress}
+                                onPointerCancel={cancelLongPress}
+                                onPointerLeave={cancelLongPress}
+                                onPointerMove={handleLongPressMove}
+                                onContextMenu={(event) => event.preventDefault()}
+                                style={{ WebkitTouchCallout: 'none' }}
+                                className={`flex min-h-8 select-none items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-control)] border transition-all duration-200 flex-shrink-0 snap-center ${isActiveOption
                                     ? 'border-blue-500 bg-blue-600 text-white shadow-[0_10px_20px_rgba(37,99,235,0.24)] ring-1 ring-blue-300/25 dark:border-blue-400 dark:bg-blue-500 dark:text-white dark:ring-blue-300/20'
                                     : 'border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-body)] hover:bg-[var(--surface)] hover:text-[var(--text-strong)]'
                                 }`}
@@ -330,8 +376,15 @@ const ProposalOptionsCarousel: React.FC<ProposalOptionsCarouselProps> = ({
                                     />
                                 ) : (
                                     <span
-                                        onClick={() => onSelectOption(option.id)}
-                                        className="max-w-[9rem] cursor-pointer truncate text-xs font-semibold"
+                                        onClick={() => {
+                                            // Apos um long-press nao seleciona a opcao (so abre o sheet de acoes).
+                                            if (longPressTriggeredRef.current) {
+                                                longPressTriggeredRef.current = false;
+                                                return;
+                                            }
+                                            onSelectOption(option.id);
+                                        }}
+                                        className="max-w-[9rem] cursor-pointer select-none truncate text-xs font-semibold"
                                         title={displayName}
                                     >
                                         {displayName}

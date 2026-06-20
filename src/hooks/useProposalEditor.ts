@@ -263,7 +263,9 @@ export function useProposalEditor({
         handleMeasurementsChange(updatedMeasurements);
     }, [createEmptyMeasurement, measurements, handleMeasurementsChange]);
 
-    const duplicateActiveOption = useCallback(() => {
+    // filmName opcional: ao duplicar, ja aplica a mesma pelicula em todos os grupos
+    // (acelera criar variacoes de orcamento trocando so o material).
+    const duplicateActiveOption = useCallback((filmName?: string) => {
         if (!activeOption) {
             return;
         }
@@ -274,7 +276,8 @@ export function useProposalEditor({
             measurements: activeOption.measurements.map((measurement, index) => ({
                 ...measurement,
                 id: Date.now() + index,
-                isNew: false
+                isNew: false,
+                ...(filmName ? { pelicula: filmName, aiFilmSuggestion: undefined } : {})
             })),
             generalDiscount: {
                 ...activeOption.generalDiscount,

@@ -131,6 +131,36 @@ describe('useProposalEditor', () => {
     expect(result.current.activeOption?.name).toBe('Opcao Base');
   });
 
+  it('duplica aplicando uma pelicula em todos os grupos', async () => {
+    mockedDb.getProposalOptions.mockResolvedValue([
+      {
+        id: 20,
+        name: 'Base',
+        measurements: [
+          { id: 1, largura: '1', altura: '1', quantidade: 1, pelicula: 'Window Blue' },
+          { id: 2, largura: '2', altura: '1', quantidade: 1, pelicula: 'Window Blue' }
+        ],
+        generalDiscount: { value: '', type: 'percentage' }
+      }
+    ]);
+
+    const { result } = buildHook();
+
+    await act(async () => {});
+
+    act(() => {
+      result.current.duplicateActiveOption('Blackout');
+    });
+
+    expect(result.current.proposalOptions).toHaveLength(2);
+    const duplicated = result.current.activeOption!;
+    expect(duplicated.measurements).toHaveLength(2);
+    expect(duplicated.measurements.every(m => m.pelicula === 'Blackout')).toBe(true);
+    // A opcao de origem permanece intacta.
+    const base = result.current.proposalOptions.find(opt => opt.id === 20)!;
+    expect(base.measurements.every(m => m.pelicula === 'Window Blue')).toBe(true);
+  });
+
   it('salva automaticamente apos alteracoes pendentes', async () => {
     vi.useFakeTimers();
     mockedDb.getProposalOptions.mockResolvedValue([]);

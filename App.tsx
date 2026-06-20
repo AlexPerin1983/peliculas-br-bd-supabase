@@ -367,6 +367,8 @@ const App: React.FC = () => {
     const [isDeletingPdf, setIsDeletingPdf] = useState(false);
     const [isFilmSelectionModalOpen, setIsFilmSelectionModalOpen] = useState(false);
     const [isApplyFilmToAllModalOpen, setIsApplyFilmToAllModalOpen] = useState(false);
+    // Seletor de pelicula aberto a partir do modal "Duplicar Opcao" (quando nao ha favoritas).
+    const [isDuplicateFilmSelectorOpen, setIsDuplicateFilmSelectorOpen] = useState(false);
     const [newFilmName, setNewFilmName] = useState<string>('');
     const [filmToApplyToAll, setFilmToApplyToAll] = useState<string | null>(null);
     const [editingMeasurementIdForFilm, setEditingMeasurementIdForFilm] = useState<number | null>(null);
@@ -912,6 +914,23 @@ const App: React.FC = () => {
     const handleConfirmDuplicateAll = useCallback(() => {
         duplicateActiveOption();
         setIsDuplicateAllModalOpen(false);
+    }, [duplicateActiveOption]);
+
+    // Duplica ja aplicando uma pelicula (favorita) em todos os grupos.
+    const handleDuplicateWithFilm = useCallback((filmName: string) => {
+        duplicateActiveOption(filmName);
+        setIsDuplicateAllModalOpen(false);
+    }, [duplicateActiveOption]);
+
+    // Sem favoritas: abre o seletor de pelicula; ao escolher, duplica aplicando a todos.
+    const handleOpenDuplicateFilmSelector = useCallback(() => {
+        setIsDuplicateAllModalOpen(false);
+        setIsDuplicateFilmSelectorOpen(true);
+    }, []);
+
+    const handleSelectFilmForDuplicate = useCallback((filmName: string) => {
+        duplicateActiveOption(filmName);
+        setIsDuplicateFilmSelectorOpen(false);
     }, [duplicateActiveOption]);
 
     const handleRequestDeleteProposalOption = useCallback((optionId: number) => {
@@ -2567,6 +2586,11 @@ Se não conseguir extrair, retorne: []`;
         setIsDuplicateAllModalOpen,
         activeOption,
         handleConfirmDuplicateAll,
+        handleDuplicateWithFilm,
+        handleOpenDuplicateFilmSelector,
+        isDuplicateFilmSelectorOpen,
+        setIsDuplicateFilmSelectorOpen,
+        handleSelectFilmForDuplicate,
         measurementToDeleteId,
         setMeasurementToDeleteId,
         handleConfirmDeleteIndividualMeasurement: handleConfirmDeleteMeasurementWithFeedback,
