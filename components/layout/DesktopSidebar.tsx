@@ -25,6 +25,7 @@ import { isWaConnectorEnabled } from '../../src/lib/waConnector';
 import SyncStatusIndicator from '../SyncStatusIndicator';
 import ThemeToggle from '../ui/ThemeToggle';
 import SupportModal from '../modals/SupportModal';
+import * as db from '../../services/db';
 
 type ActiveTab = 'dashboard' | 'client' | 'films' | 'settings' | 'history' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores' | 'assistentes' | 'wa_connector';
 
@@ -62,6 +63,15 @@ const DesktopSidebar: React.FC<DesktopSidebarProps> = ({ activeTab, onTabChange 
     const { isAdmin, user, signOut } = useAuth();
     const [isSigningOut, setIsSigningOut] = useState(false);
     const [isSupportOpen, setIsSupportOpen] = useState(false);
+    const [companyLogo, setCompanyLogo] = useState<string | undefined>(undefined);
+
+    useEffect(() => {
+        let active = true;
+        db.getUserInfo()
+            .then(info => { if (active) setCompanyLogo(info?.logo || undefined); })
+            .catch(() => { /* sem logo: mantem as iniciais */ });
+        return () => { active = false; };
+    }, []);
     const [isCollapsed, setIsCollapsed] = useState(() => {
         try {
             return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true';
@@ -242,8 +252,12 @@ const DesktopSidebar: React.FC<DesktopSidebarProps> = ({ activeTab, onTabChange 
                     ].join(' ')}
                     title={user?.email || userName}
                 >
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-[var(--brand-primary)] text-xs font-bold text-white shadow-[0_10px_22px_rgba(37,99,235,0.22)]">
-                        {initials}
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-[var(--radius-control)] bg-[var(--brand-primary)] text-xs font-bold text-white shadow-[0_10px_22px_rgba(37,99,235,0.22)]">
+                        {companyLogo ? (
+                            <img src={companyLogo} alt="Logo da empresa" className="h-full w-full object-cover" />
+                        ) : (
+                            initials
+                        )}
                     </div>
                     {!isCollapsed ? (
                         <div className="min-w-0 flex-grow">
