@@ -5,6 +5,7 @@ import ActionButton from '../ui/ActionButton';
 import ContentState from '../ui/ContentState';
 import Modal from '../ui/Modal';
 import AgendaPushReminderControl from './AgendaPushReminderControl';
+import { getAgendaPushState } from '../../services/agendaPushNotifications';
 import { parseCurrencyInput } from '../../src/lib/proposalExpenses';
 import {
     buildReviewFollowUpMessage,
@@ -1498,6 +1499,15 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
 
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
     const [showAlertsPanel, setShowAlertsPanel] = useState(false);
+    const [alertsActive, setAlertsActive] = useState(false);
+
+    useEffect(() => {
+        let cancelled = false;
+        getAgendaPushState()
+            .then((state) => { if (!cancelled) setAlertsActive(Boolean(state?.subscribed)); })
+            .catch(() => { if (!cancelled) setAlertsActive(false); });
+        return () => { cancelled = true; };
+    }, []);
 
     const upcomingGroups = useMemo<[string, AgendamentoWithStatus[]][]>(() => {
         const now = Date.now();
@@ -1536,15 +1546,15 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                                 onClick={() => setShowAlertsPanel((prev) => !prev)}
                                 aria-label="Configurar alertas"
                                 aria-expanded={showAlertsPanel}
-                                className={`inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius-control)] border transition-colors ${showAlertsPanel ? 'border-[var(--brand-primary)] bg-[var(--brand-primary)]/10 text-[var(--brand-primary)]' : 'border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-muted)] hover:bg-[var(--surface)] hover:text-[var(--text-strong)]'}`}
+                                className={`inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius-control)] border transition-colors ${alertsActive ? 'border-emerald-500 bg-emerald-500 text-white shadow-[0_4px_12px_rgba(16,185,129,0.35)]' : showAlertsPanel ? 'border-[var(--brand-primary)] bg-[var(--brand-primary)]/10 text-[var(--brand-primary)]' : 'border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-muted)] hover:bg-[var(--surface)] hover:text-[var(--text-strong)]'}`}
                             >
-                                <i className="far fa-bell text-sm" aria-hidden="true"></i>
+                                <i className={`${alertsActive ? 'fas' : 'far'} fa-bell text-sm`} aria-hidden="true"></i>
                             </button>
                             <AgendaViewToggle viewMode={viewMode} onChange={setViewMode} />
                         </div>
                     </div>
 
-                    {showAlertsPanel ? <AgendaPushReminderControl /> : null}
+                    {showAlertsPanel ? <AgendaPushReminderControl onActiveChange={setAlertsActive} /> : null}
 
                     {viewMode === 'grid' ? (
                       <>
@@ -1737,7 +1747,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                         <CalendarMonthStats {...monthStats} />
                     </div>
 
-                    <AgendaPushReminderControl />
+                    <AgendaPushReminderControl onActiveChange={setAlertsActive} />
 
                     <div className="grid grid-cols-7 gap-1 text-center text-sm font-semibold text-[var(--text-muted)] mb-2">
                         {weekDays.map((day) => <div key={day}>{day}</div>)}

@@ -45,7 +45,11 @@ const getStatusText = (state: AgendaPushState | null, errorMessage: string | nul
     return 'Desativado';
 };
 
-const AgendaPushReminderControl: React.FC = () => {
+interface AgendaPushReminderControlProps {
+    onActiveChange?: (active: boolean) => void;
+}
+
+const AgendaPushReminderControl: React.FC<AgendaPushReminderControlProps> = ({ onActiveChange }) => {
     const [state, setState] = useState<AgendaPushState | null>(null);
     const [busyAction, setBusyAction] = useState<'toggle' | 'test' | 'reminder' | 'summary' | 'summaryTest' | null>(null);
     const [summaryTime, setSummaryTime] = useState('18:00');
@@ -77,6 +81,12 @@ const AgendaPushReminderControl: React.FC = () => {
             setReminderMinutes(state.reminderMinutes);
         }
     }, [state?.reminderMinutes]);
+
+    useEffect(() => {
+        if (state) {
+            onActiveChange?.(Boolean(state.subscribed));
+        }
+    }, [state?.subscribed, onActiveChange]);
 
     const handleToggle = async () => {
         setBusyAction('toggle');
