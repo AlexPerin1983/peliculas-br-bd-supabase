@@ -454,6 +454,43 @@ async function fetchDailySummarySubscriptions(
   return data || [];
 }
 
+// "Orcamentos sem retorno" por usuario: nao aprovados, nao arquivados, sem
+// agendamento vinculado e enviados ha mais de N dias. Defensivo: se a tabela/
+// colunas nao existirem, devolve mapa vazio (so omite a linha de orcamentos).
+const STALLED_PROPOSAL_DAYS = 5;
+async function fetchStalledProposalsByUser(
+  adminClient: ReturnType<typeof createSupabaseAdminClient>,
+  userIds: string[],
+  now: Date,
+): Promise<Map<string, number>> {
+  const result = new Map<string, number>();
+  if (userIds.length === 0) return result;
+
+  const thresholdIso = new Date(now.getTime() - (STALLED_PROPOSAL_DAYS * 24 * 60 * 60_000)).toISOString();
+
+  const { data, error } = await adminClient
+    .from('saved_pdfs')
+    .select('user_id')
+    .in('user_id', userIds)
+    .lt('date', thresholdIso)
+    .neq('status', 'approved')
+    .is('archived_at', null)
+    .is('agendamento_id', null)
+    .limit(1000);
+
+  if (error) {
+    console.warn('[agenda-push-reminders] orcamentos parados: query falhou:', error.message);
+    return result;
+  }
+
+  (data || []).forEach((row: { user_id?: string | null }) => {
+    if (!row.user_id) return;
+    result.set(row.user_id, (result.get(row.user_id) || 0) + 1);
+  });
+
+  return result;
+}
+
 function shouldNotify(nowMs: number, agendamento: AgendamentoReminder, subscription: PushSubscriptionRecord): boolean {
   const startMs = new Date(agendamento.start).getTime();
   const reminderMinutes = subscription.reminder_minutes || DEFAULT_REMINDER_MINUTES;
@@ -726,19 +763,27 @@ function createDailySummaryPayload(
   agendamentos: AgendamentoReminder[],
   tagSuffix = 'daily',
   receipt?: PushReceiptTarget,
+  stalledCount = 0,
 ): string {
   const count = agendamentos.length;
   const visibleItems = agendamentos.slice(0, 4).map(formatSummaryItem);
   const overflow = count > visibleItems.length ? ` +${count - visibleItems.length}` : '';
-  const body = count > 0
+  const agendaLine = count > 0
     ? `${visibleItems.join(' | ')}${overflow}`
     : 'Nenhum atendimento agendado para amanha.';
+  const stalledLine = stalledCount > 0
+    ? `\n${stalledCount} orcamento${stalledCount === 1 ? '' : 's'} esperando retorno`
+    : '';
+
+  const title = count > 0
+    ? `Agenda de amanha: ${count} atendimento${count === 1 ? '' : 's'}`
+    : stalledCount > 0
+      ? `${stalledCount} orcamento${stalledCount === 1 ? '' : 's'} esperando retorno`
+      : 'Agenda de amanha livre';
 
   return JSON.stringify({
-    title: count > 0
-      ? `Agenda de amanha: ${count} atendimento${count === 1 ? '' : 's'}`
-      : 'Agenda de amanha livre',
-    body,
+    title,
+    body: `${agendaLine}${stalledLine}`,
     icon: '/icon-192x192.png',
     badge: '/icon-192x192.png',
     tag: `agenda-summary-${summaryDate}-${tagSuffix.replace(/[^a-zA-Z0-9_-]/g, '-')}`,
@@ -1064,6 +1109,8 @@ async function handleDailySummaryTestRequest(req: Request): Promise<Response> {
     agendamento.user_id === userId ||
     (organizationId && allProfiles.get(agendamento.user_id)?.organization_id === organizationId)
   ));
+  const stalledByUser = await fetchStalledProposalsByUser(adminClient, [userId], new Date());
+  const stalledCount = stalledByUser.get(userId) || 0;
 
   let sent = 0;
   let failed = 0;
@@ -1074,6 +1121,8 @@ async function handleDailySummaryTestRequest(req: Request): Promise<Response> {
         summaryDate,
         scopedAgendamentos,
         `test-${Date.now()}`,
+        undefined,
+        stalledCount,
       ));
       sent += 1;
     } catch (error) {
@@ -1112,6 +1161,11 @@ async function processDailySummaries(
     ...agendamentos.map((agendamento) => agendamento.user_id),
   ]);
   const profiles = await fetchProfiles(adminClient, profileIds);
+  const stalledByUser = await fetchStalledProposalsByUser(
+    adminClient,
+    uniqueValues(dueSubscriptions.map((subscription) => subscription.user_id)),
+    now,
+  );
 
   let sent = 0;
   let skipped = 0;
@@ -1123,6 +1177,7 @@ async function processDailySummaries(
       agendamento.user_id === subscription.user_id ||
       (subscriptionOrgId && profiles.get(agendamento.user_id)?.organization_id === subscriptionOrgId)
     ));
+    const stalledCount = stalledByUser.get(subscription.user_id) || 0;
     const summaryReceipt = await registerPendingDailySummary(
       adminClient,
       subscription.id,
@@ -1146,6 +1201,7 @@ async function processDailySummaries(
           id: summaryReceipt.id,
           token: summaryReceipt.token,
         },
+        stalledCount,
       ));
       await markDailySummarySent(adminClient, summaryReceipt.id);
       sent += 1;
