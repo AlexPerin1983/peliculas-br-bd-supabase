@@ -24,6 +24,7 @@ import {
     QrCode,
     ReceiptText,
     Sparkles,
+    Star,
     Trash2,
     TrendingUp,
     UsersRound,
@@ -696,6 +697,49 @@ const EmptyLine: React.FC<{ title: string; description: string }> = ({ title, de
 
 const HISTORY_FOCUS_FILTER_KEY = 'peliculas-br-history-focus-filter';
 
+// Notas de avaliacao salvas pela Agenda (0/ausente = ainda nao avaliado).
+const AGENDA_REVIEW_RATINGS_KEY = 'peliculas-br-agenda-review-ratings-v1';
+const readAgendaReviewRatings = (): Record<number, number> => {
+    if (typeof window === 'undefined') return {};
+    try {
+        const raw = window.localStorage.getItem(AGENDA_REVIEW_RATINGS_KEY);
+        return raw ? JSON.parse(raw) : {};
+    } catch {
+        return {};
+    }
+};
+
+const firstName = (full?: string) => (full || 'Cliente').trim().split(/\s+/)[0] || 'Cliente';
+
+const ActionRow: React.FC<{
+    icon: React.ReactNode;
+    tone: Tone;
+    title: string;
+    subtitle: string;
+    count?: number;
+    onClick: () => void;
+}> = ({ icon, tone, title, subtitle, count, onClick }) => (
+    <button
+        type="button"
+        onClick={onClick}
+        className="flex w-full items-center gap-3 rounded-[var(--radius-card)] border border-[var(--border-subtle)] bg-[var(--surface)] p-3 text-left transition-colors hover:bg-[var(--surface-muted)]"
+    >
+        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-card)] ${TONE_CLASSES[tone].icon}`}>
+            {icon}
+        </span>
+        <span className="min-w-0 flex-1">
+            <span className="block text-sm font-bold text-[var(--text-strong)]">{title}</span>
+            <span className="mt-0.5 block truncate text-xs text-[var(--text-muted)]">{subtitle}</span>
+        </span>
+        {typeof count === 'number' ? (
+            <span className={`flex h-6 min-w-[24px] shrink-0 items-center justify-center rounded-full px-1.5 text-xs font-bold ${TONE_CLASSES[tone].icon}`}>
+                {count}
+            </span>
+        ) : null}
+        <ChevronRight className="h-4 w-4 shrink-0 text-[var(--text-soft)]" aria-hidden="true" />
+    </button>
+);
+
 const DashboardView: React.FC<DashboardViewProps> = ({
     allSavedPdfs,
     clients,
@@ -1018,6 +1062,59 @@ const DashboardView: React.FC<DashboardViewProps> = ({
         return allSavedPdfs.filter(isPdfExpired).length;
     }, [allSavedPdfs]);
 
+    // Central de "Acoes do dia": pendencias que valem a pena abrir o app todo dia.
+    // Tudo derivado dos dados que ja temos em memoria (zero consulta nova).
+    const dailyActions = useMemo(() => {
+        const now = new Date();
+        const todayRange = getTodayRange();
+        const nowMs = now.getTime();
+        const fiveDaysAgoMs = addDays(now, -5).getTime();
+        const threeDaysAgoMs = addDays(now, -3).getTime();
+        const thirtyDaysAgoMs = addDays(now, -30).getTime();
+
+        // 1) Instalacoes de hoje (exclui canceladas).
+        const todayAppointments = agendamentos
+            .filter(agendamento => {
+                const date = parseDate(agendamento.start);
+                return !!date && isWithinRange(date, todayRange) && agendamento.serviceStatus !== 'cancelled';
+            })
+            .sort((a, b) => (parseDate(a.start)?.getTime() || 0) - (parseDate(b.start)?.getTime() || 0));
+
+        // 2) Orcamentos sem retorno: nao aprovados, enviados ha +5 dias e cujo
+        //    cliente nao tem agendamento criado depois (proxy de conversao).
+        const stalledProposals = allSavedPdfs.filter(pdf => {
+            if (getPdfStatus(pdf) === 'approved') return false;
+            const date = parseDate(pdf.date);
+            if (!date || date.getTime() >= fiveDaysAgoMs) return false;
+            const hasFollowUp = agendamentos.some(agendamento => {
+                if (agendamento.clienteId !== pdf.clienteId) return false;
+                const apptDate = parseDate(agendamento.start);
+                return !!apptDate && apptDate.getTime() >= date.getTime();
+            });
+            return !hasFollowUp;
+        });
+
+        // 3) Pedir avaliacao: servicos concluidos nos ultimos 3 dias ainda sem nota.
+        const ratings = readAgendaReviewRatings();
+        const pendingReviews = agendamentos.filter(agendamento => {
+            if (agendamento.serviceStatus !== 'completed') return false;
+            const date = parseDate(agendamento.end || agendamento.start);
+            if (!date) return false;
+            const time = date.getTime();
+            if (time < threeDaysAgoMs || time > nowMs) return false;
+            return typeof agendamento.id === 'number' ? !((ratings[agendamento.id] || 0) > 0) : true;
+        });
+
+        // 4) Clientes para reativar: com telefone e sem atualizacao ha +30 dias.
+        const dormantClients = clients.filter(client => {
+            if (!client.telefone) return false;
+            const date = parseDate(client.lastUpdated);
+            return !date || date.getTime() < thirtyDaysAgoMs;
+        });
+
+        return { todayAppointments, stalledProposals, pendingReviews, dormantClients };
+    }, [agendamentos, allSavedPdfs, clients]);
+
     const maxCategoryValue = categoryTotals[0]?.value || 0;
     const maxEvolutionValue = Math.max(
         1,
@@ -1273,6 +1370,20 @@ const DashboardView: React.FC<DashboardViewProps> = ({
         }
     };
 
+    const todayCount = dailyActions.todayAppointments.length;
+    const stalledCount = dailyActions.stalledProposals.length;
+    const reviewCount = dailyActions.pendingReviews.length;
+    const dormantCount = dailyActions.dormantClients.length;
+    const totalActions = todayCount + stalledCount + reviewCount + dormantCount;
+    const todayActionSubtitle = dailyActions.todayAppointments
+        .slice(0, 2)
+        .map(agendamento => {
+            const date = parseDate(agendamento.start);
+            const hour = date ? date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+            return `${firstName(agendamento.clienteNome)} ${hour}`.trim();
+        })
+        .join(' · ');
+
     return (
         <div className="w-full max-w-full space-y-5 overflow-x-hidden pb-28 sm:pb-0">
             <div className="flex min-w-0 flex-col gap-3 sm:gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -1348,6 +1459,65 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                 cache={finAnalysisCache}
                 onCached={setFinAnalysisCache}
             />
+
+            <section className="ui-card p-3 sm:p-4">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                        <h2 className="text-base font-bold text-[var(--text-strong)] sm:text-lg">Ações do dia</h2>
+                        <p className="text-xs text-[var(--text-muted)]">O que precisa da sua atenção agora</p>
+                    </div>
+                    {totalActions > 0 ? (
+                        <span className="flex h-7 min-w-[28px] shrink-0 items-center justify-center rounded-full bg-[var(--brand-primary)] px-2 text-xs font-bold text-white">
+                            {totalActions}
+                        </span>
+                    ) : null}
+                </div>
+                <div className="space-y-2">
+                    {todayCount > 0 ? (
+                        <ActionRow
+                            tone="blue"
+                            icon={<CalendarDays className="h-5 w-5" aria-hidden="true" />}
+                            title={todayCount === 1 ? '1 instalação hoje' : `${todayCount} instalações hoje`}
+                            subtitle={todayActionSubtitle || 'Veja sua agenda de hoje'}
+                            count={todayCount}
+                            onClick={() => onTabChange('agenda')}
+                        />
+                    ) : null}
+                    {stalledCount > 0 ? (
+                        <ActionRow
+                            tone="amber"
+                            icon={<FileText className="h-5 w-5" aria-hidden="true" />}
+                            title={stalledCount === 1 ? '1 orçamento sem retorno' : `${stalledCount} orçamentos sem retorno`}
+                            subtitle="Enviados há mais de 5 dias — dê um retorno"
+                            count={stalledCount}
+                            onClick={() => handleOpenHistory('all')}
+                        />
+                    ) : null}
+                    {reviewCount > 0 ? (
+                        <ActionRow
+                            tone="emerald"
+                            icon={<Star className="h-5 w-5" aria-hidden="true" />}
+                            title="Pedir avaliação no Google"
+                            subtitle={reviewCount === 1 ? '1 serviço concluído recentemente' : `${reviewCount} serviços concluídos recentemente`}
+                            count={reviewCount}
+                            onClick={() => onTabChange('agenda')}
+                        />
+                    ) : null}
+                    {dormantCount > 0 ? (
+                        <ActionRow
+                            tone="slate"
+                            icon={<UsersRound className="h-5 w-5" aria-hidden="true" />}
+                            title={dormantCount === 1 ? '1 cliente para reativar' : `${dormantCount} clientes para reativar`}
+                            subtitle="Sem contato há mais de 30 dias"
+                            count={dormantCount}
+                            onClick={() => onTabChange('client')}
+                        />
+                    ) : null}
+                    {totalActions === 0 ? (
+                        <EmptyLine title="Tudo em dia" description="Nenhuma pendência por agora. Bom trabalho!" />
+                    ) : null}
+                </div>
+            </section>
 
             <div className="grid min-w-0 grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-5">
                 <MetricCard
