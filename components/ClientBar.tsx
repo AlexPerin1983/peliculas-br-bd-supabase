@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Drawer } from 'vaul';
 import {
     Bolt,
+    Contact,
     Edit3,
     MapPin,
     MessageCircle,
@@ -20,6 +21,7 @@ import { useIsMobile } from '../src/hooks/useIsMobile';
 interface ClientBarProps {
     selectedClient: Client | null;
     onSelectClientClick: () => void;
+    onOpenClientHub?: () => void;
     onAddClient: () => void;
     onAddClientAI?: () => void;
     onQuickProposalAI?: () => void;
@@ -43,6 +45,7 @@ const formatAddress = (client: Client): string => {
 const ClientBar: React.FC<ClientBarProps> = ({
     selectedClient,
     onSelectClientClick,
+    onOpenClientHub,
     onAddClient,
     onAddClientAI,
     onQuickProposalAI,
@@ -208,6 +211,15 @@ const ClientBar: React.FC<ClientBarProps> = ({
 
     const ClientActionsMenu = () => (
         <div className="space-y-1">
+            {onOpenClientHub && (
+                <MenuItem
+                    onClick={onOpenClientHub}
+                    icon={<Contact className="h-4 w-4" aria-hidden="true" />}
+                    label="Ver ficha do cliente"
+                    description="Histórico, orçamentos e agenda"
+                    disabled={!selectedClient}
+                />
+            )}
             <MenuItem
                 onClick={onSelectClientClick}
                 icon={<Repeat2 className="h-4 w-4" aria-hidden="true" />}

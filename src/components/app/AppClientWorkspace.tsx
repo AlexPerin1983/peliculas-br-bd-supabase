@@ -45,6 +45,7 @@ interface AppClientWorkspaceProps {
     content: ReactNode;
     isGeneratingPdf: boolean;
     onSelectClientClick: () => void;
+    onOpenClientHub: () => void;
     onAddClient: () => void;
     onAddClientAI: () => void;
     onOpenAIQuickProposal: () => void;
@@ -389,6 +390,7 @@ export const AppClientWorkspace: React.FC<AppClientWorkspaceProps> = ({
     content,
     isGeneratingPdf,
     onSelectClientClick,
+    onOpenClientHub,
     onAddClient,
     onAddClientAI,
     onOpenAIQuickProposal,
@@ -433,6 +435,7 @@ export const AppClientWorkspace: React.FC<AppClientWorkspaceProps> = ({
                             key={clientTransitionKey}
                             selectedClient={selectedClient}
                             onSelectClientClick={onSelectClientClick}
+                            onOpenClientHub={onOpenClientHub}
                             onAddClient={onAddClient}
                             onAddClientAI={onAddClientAI}
                             onQuickProposalAI={onOpenAIQuickProposal}

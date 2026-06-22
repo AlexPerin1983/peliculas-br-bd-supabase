@@ -61,6 +61,8 @@ describe('AppContentRouter', () => {
     onDeleteFilm: vi.fn(),
     onOpenGallery: vi.fn(),
     onOpenClientModal: vi.fn(),
+    onOpenClientFromList: vi.fn(),
+    onNavigateBack: vi.fn(),
     onOpenAIQuickProposal: vi.fn(),
     onTabChange: vi.fn(),
     onSelectOption: vi.fn(),

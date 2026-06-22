@@ -19,10 +19,12 @@ const AgendaView = lazy(() => import('../../../components/views/AgendaView'));
 const EstoqueView = lazy(() => import('../../../components/views/EstoqueView'));
 const FornecedoresView = lazy(() => import('../../../components/views/FornecedoresView'));
 const ServicoQrView = lazy(() => import('../../../components/views/ServicoQrView'));
+const ClientHubView = lazy(() => import('../../../components/views/ClientHubView'));
+const ClientListView = lazy(() => import('../../../components/views/ClientListView'));
 const AdminUsers = lazy(() => import('../../../components/AdminUsers').then(module => ({ default: module.AdminUsers })));
 const UserAccount = lazy(() => import('../../../components/UserAccount').then(module => ({ default: module.UserAccount })));
 
-type ActiveTab = 'dashboard' | 'client' | 'films' | 'settings' | 'history' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores' | 'assistentes';
+type ActiveTab = 'dashboard' | 'client' | 'cliente_hub' | 'clients_list' | 'films' | 'settings' | 'history' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores' | 'assistentes';
 
 interface AppContentRouterProps {
     activeTab: ActiveTab;
@@ -69,6 +71,8 @@ interface AppContentRouterProps {
     onDeleteFilm: (filmName: string) => void;
     onOpenGallery: (images: string[], initialIndex: number) => void;
     onOpenClientModal: (mode: 'add' | 'edit') => void;
+    onOpenClientFromList: (clientId: number) => void;
+    onNavigateBack: () => void;
     onOpenAIQuickProposal: () => void;
     onCreateProposal: () => void;
     onTabChange: (tab: ActiveTab) => void;
@@ -146,6 +150,8 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
     onDeleteFilm,
     onOpenGallery,
     onOpenClientModal,
+    onOpenClientFromList,
+    onNavigateBack,
     onOpenAIQuickProposal,
     onCreateProposal,
     onTabChange,
@@ -357,6 +363,39 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
                     onAddNewClient={onAddNewClient}
                 />
             </FeatureGate>,
+            defaultLoadingView
+        );
+    }
+
+    if (activeTab === 'clients_list') {
+        return renderDeferred(
+            <ClientListView
+                clients={clients}
+                pdfs={allSavedPdfs}
+                isLoading={isClientsLoading}
+                onOpenClient={onOpenClientFromList}
+                onAddClient={() => onOpenClientModal('add')}
+                onTogglePin={(id) => onTogglePin?.(id)}
+            />,
+            defaultLoadingView
+        );
+    }
+
+    if (activeTab === 'cliente_hub') {
+        const hubClient = clients.find(client => client.id === selectedClientId) ?? null;
+        return renderDeferred(
+            <ClientHubView
+                client={hubClient}
+                pdfs={allSavedPdfs}
+                agendamentos={agendamentos}
+                onNavigateToOption={onNavigateToOption}
+                onDownloadPdf={onDownloadPdf}
+                onUpdatePdfStatus={onUpdatePdfStatus}
+                onEditAgendamento={onEditAgendamento}
+                onEditClient={() => onOpenClientModal('edit')}
+                onNewProposal={() => onTabChange('client')}
+                onBack={onNavigateBack}
+            />,
             defaultLoadingView
         );
     }

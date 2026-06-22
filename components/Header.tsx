@@ -10,6 +10,8 @@ import * as db from '../services/db';
 type ActiveTab =
     | 'dashboard'
     | 'client'
+    | 'cliente_hub'
+    | 'clients_list'
     | 'films'
     | 'settings'
     | 'history'
@@ -52,7 +54,8 @@ const SECTION_GERAL: NavItem[] = [
 ];
 
 const SECTION_VENDAS: NavItem[] = [
-    { tabId: 'client', icon: 'fas fa-user-friends', label: 'Clientes', hint: 'cadastro e propostas' },
+    { tabId: 'clients_list', icon: 'fas fa-user-friends', label: 'Clientes', hint: 'cadastro e histórico' },
+    { tabId: 'client', icon: 'fas fa-file-invoice-dollar', label: 'Orçamento', hint: 'montar e enviar' },
     { tabId: 'films', icon: 'fas fa-layer-group', label: 'Películas', hint: 'catálogo e seleção' },
     { tabId: 'history', icon: 'fas fa-history', label: 'Histórico', hint: 'registros, PDFs e consultas' },
 ];
@@ -72,7 +75,9 @@ const SECTION_SISTEMA: NavItem[] = [
 const pageLabels: Record<string, string> = {
     dashboard: 'Dashboard',
     assistentes: 'Assistentes',
-    client: 'Clientes',
+    clients_list: 'Clientes',
+    client: 'Orçamento',
+    cliente_hub: 'Ficha do cliente',
     films: 'Películas',
     estoque: 'Estoque',
     qr_code: 'QR Code',

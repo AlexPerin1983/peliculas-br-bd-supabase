@@ -66,7 +66,7 @@ import { GEMINI_TEXT_MODEL } from './src/lib/geminiModel';
 import { createPastedMeasurementsFromClipboard } from './src/lib/measurementClipboard';
 
 
-type ActiveTab = 'dashboard' | 'client' | 'films' | 'settings' | 'history' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores' | 'assistentes';
+type ActiveTab = 'dashboard' | 'client' | 'cliente_hub' | 'clients_list' | 'films' | 'settings' | 'history' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores' | 'assistentes';
 
 interface BillingReturnState {
     status: BillingReturnStatus;
@@ -1996,6 +1996,15 @@ Regras:
         }
     }, [numpadConfig.isOpen, handleNumpadClose, hasModule]);
 
+    const handleOpenClientHub = useCallback(() => {
+        handleTabChange('cliente_hub');
+    }, [handleTabChange]);
+
+    const handleOpenClientFromList = useCallback((clientId: number) => {
+        setSelectedClientId(clientId);
+        handleTabChange('cliente_hub');
+    }, [handleTabChange]);
+
     const handleGoBack = useCallback(() => {
         if (numpadConfig.isOpen) {
             handleNumpadClose();
@@ -2432,6 +2441,8 @@ Se não conseguir extrair, retorne: []`;
             onDeleteFilm={handleRequestDeleteFilm}
             onOpenGallery={handleOpenGallery}
             onOpenClientModal={handleOpenClientModal}
+            onOpenClientFromList={handleOpenClientFromList}
+            onNavigateBack={handleGoBack}
             onOpenAIQuickProposal={handleOpenAIQuickProposalModal}
             onCreateProposal={handleOpenClientSelectionModal}
             onTabChange={handleTabChange}
@@ -2645,13 +2656,13 @@ Se não conseguir extrair, retorne: []`;
     }, [refreshProfile, showToast]);
 
 
-    const wideWorkspaceClass = ['dashboard', 'history', 'estoque', 'films', 'fornecedores', 'agenda', 'settings', 'qr_code', 'account', 'assistentes', 'admin'].includes(activeTab)
+    const wideWorkspaceClass = ['dashboard', 'history', 'estoque', 'films', 'fornecedores', 'agenda', 'settings', 'qr_code', 'account', 'assistentes', 'admin', 'cliente_hub', 'clients_list'].includes(activeTab)
         ? 'mx-auto w-full max-w-[1480px]'
         : activeTab === 'client'
             ? 'mx-auto w-full max-w-[1480px]'
             : 'container mx-auto w-full max-w-2xl lg:max-w-5xl';
 
-    const useNativeSurface = ['dashboard', 'client', 'history', 'estoque', 'films', 'fornecedores', 'agenda', 'settings', 'qr_code', 'account', 'assistentes'].includes(activeTab);
+    const useNativeSurface = ['dashboard', 'client', 'cliente_hub', 'clients_list', 'history', 'estoque', 'films', 'fornecedores', 'agenda', 'settings', 'qr_code', 'account', 'assistentes'].includes(activeTab);
 
 
 
@@ -2722,6 +2733,7 @@ Se não conseguir extrair, retorne: []`;
                                         content={tabContent}
                                         isGeneratingPdf={pdfGenerationStatus === 'generating'}
                                         onSelectClientClick={handleOpenClientSelectionModal}
+                                        onOpenClientHub={handleOpenClientHub}
                                         onAddClient={() => handleOpenClientModal('add')}
                                         onAddClientAI={handleOpenAIClientModal}
                                         onOpenAIQuickProposal={handleOpenAIQuickProposalModal}

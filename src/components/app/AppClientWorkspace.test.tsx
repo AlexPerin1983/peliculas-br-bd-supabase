@@ -103,6 +103,7 @@ describe('AppClientWorkspace', () => {
     content: <div>Workspace Content</div>,
     isGeneratingPdf: false,
     onSelectClientClick: vi.fn(),
+    onOpenClientHub: vi.fn(),
     onAddClient: vi.fn(),
     onAddClientAI: vi.fn(),
     onEditClient: vi.fn(),

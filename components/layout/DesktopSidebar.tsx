@@ -4,6 +4,7 @@ import {
     Boxes,
     CalendarDays,
     CircleUserRound,
+    FileText,
     History,
     Layers3,
     LayoutDashboard,
@@ -27,7 +28,7 @@ import ThemeToggle from '../ui/ThemeToggle';
 import SupportModal from '../modals/SupportModal';
 import * as db from '../../services/db';
 
-type ActiveTab = 'dashboard' | 'client' | 'films' | 'settings' | 'history' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores' | 'assistentes' | 'wa_connector';
+type ActiveTab = 'dashboard' | 'client' | 'cliente_hub' | 'clients_list' | 'films' | 'settings' | 'history' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores' | 'assistentes' | 'wa_connector';
 
 interface DesktopSidebarProps {
     activeTab: ActiveTab;
@@ -44,7 +45,8 @@ interface NavItemConfig {
 const MAIN_NAV: NavItemConfig[] = [
     { tabId: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { tabId: 'assistentes', icon: Bot, label: 'Assistentes', badge: 'Beta' },
-    { tabId: 'client', icon: UsersRound, label: 'Clientes' },
+    { tabId: 'clients_list', icon: UsersRound, label: 'Clientes' },
+    { tabId: 'client', icon: FileText, label: 'Orçamento' },
     { tabId: 'films', icon: Layers3, label: 'Películas' },
     { tabId: 'estoque', icon: Boxes, label: 'Estoque' },
     { tabId: 'qr_code', icon: QrCode, label: 'QR Code' },
