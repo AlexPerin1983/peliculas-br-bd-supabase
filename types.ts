@@ -132,6 +132,8 @@ export interface ProposalDiscount {
     expenses?: ProposalExpense[];
     // Override por orçamento da ocultação de medidas no PDF (undefined = usa o padrão global do UserInfo).
     hideMeasurements?: boolean;
+    // Override por orçamento da inclusão do Termo de Responsabilidade no PDF (undefined = usa o padrão global).
+    incluirTermoResponsabilidade?: boolean;
 }
 
 export interface SavedProposalDiscount {
@@ -147,6 +149,7 @@ export interface SavedProposalDiscount {
     expenses?: ProposalExpense[];
     expenseSnapshot?: ProposalExpenseSnapshot;
     hideMeasurements?: boolean;
+    incluirTermoResponsabilidade?: boolean;
 }
 
 export interface ProposalOption {
@@ -222,6 +225,11 @@ export interface UserInfo {
     prazoPagamento?: string;
     // Padrão global: ocultar dimensões/m² na tabela do PDF (anti-cópia). Pode ser sobrescrito por orçamento.
     hideMeasurementsInPdf?: boolean;
+    // Termo de Responsabilidade sobre a integridade dos vidros (rodapé do PDF).
+    // texto: undefined = usa o texto padrão do app (DEFAULT_TERMO_RESPONSABILIDADE).
+    termoResponsabilidade?: string;
+    // Padrão global de inclusão do termo no PDF (pode ser sobrescrito por orçamento). Default: true.
+    incluirTermoResponsabilidadePadrao?: boolean;
     workingHours?: {
         start: string; // "HH:MM" format
         end: string;   // "HH:MM" format

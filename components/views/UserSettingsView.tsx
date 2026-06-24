@@ -4,6 +4,7 @@ import { UserInfo } from '../../types';
 import Input from '../ui/Input';
 import BrandSelect from '../ui/BrandSelect';
 import { PROPOSAL_VALIDITY_OPTIONS, DEFAULT_PROPOSAL_VALIDITY_DAYS, clampValidityDays } from '../../src/lib/proposalValidity';
+import { DEFAULT_TERMO_RESPONSABILIDADE } from '../../src/lib/termoResponsabilidade';
 import ColorPicker from '../ui/ColorPicker';
 import SignatureModal from '../modals/SignatureModal';
 import TeamManagement from '../TeamManagement';
@@ -867,6 +868,52 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({
                             <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${formData.hideMeasurementsInPdf ? 'left-[22px]' : 'left-0.5'}`} />
                         </span>
                     </button>
+
+                    {/* Termo de Responsabilidade sobre a integridade dos vidros (rodapé do PDF) */}
+                    {(() => {
+                        const incluirTermo = formData.incluirTermoResponsabilidadePadrao ?? true;
+                        return (
+                            <div className="space-y-3 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-3">
+                                <button
+                                    type="button"
+                                    role="switch"
+                                    aria-checked={incluirTermo}
+                                    onClick={() => setFormData(prev => ({ ...prev, incluirTermoResponsabilidadePadrao: !(prev.incluirTermoResponsabilidadePadrao ?? true) }))}
+                                    className="flex w-full items-center justify-between gap-3 text-left"
+                                >
+                                    <span className="min-w-0">
+                                        <span className="block text-sm font-semibold text-[var(--text-strong)]">Termo de responsabilidade no PDF</span>
+                                        <span className="block text-xs text-[var(--text-muted)]">Inclui uma seção isentando a empresa por quebras/avarias em vidros já fragilizados (trincas prévias, vidro antigo, etc.). Você pode ligar/desligar por orçamento no Resumo de Valores.</span>
+                                    </span>
+                                    <span className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${incluirTermo ? 'bg-[var(--brand-primary)]' : 'bg-slate-300 dark:bg-slate-600'}`}>
+                                        <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${incluirTermo ? 'left-[22px]' : 'left-0.5'}`} />
+                                    </span>
+                                </button>
+                                {incluirTermo && (
+                                    <div>
+                                        <Input
+                                            as="textarea"
+                                            id="termoResponsabilidade"
+                                            label="Texto do termo (editável)"
+                                            rows={10}
+                                            value={formData.termoResponsabilidade ?? DEFAULT_TERMO_RESPONSABILIDADE}
+                                            onChange={(e) => setFormData(prev => ({ ...prev, termoResponsabilidade: e.target.value }))}
+                                        />
+                                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => setFormData(prev => ({ ...prev, termoResponsabilidade: DEFAULT_TERMO_RESPONSABILIDADE }))}
+                                                className="text-xs font-semibold text-[var(--brand-primary)] hover:underline"
+                                            >
+                                                Restaurar texto padrão
+                                            </button>
+                                            <span className="text-[11px] text-[var(--text-muted)]">Não substitui orientação jurídica — vale revisar com um advogado.</span>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })()}
                 </div>
             </SettingsSection>
 

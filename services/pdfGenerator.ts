@@ -7,6 +7,7 @@ import { calculateProposalAdjustmentAmounts } from '../src/lib/proposalAdjustmen
 import { createDefaultLogo } from './defaultLogo';
 import { clampValidityDays } from '../src/lib/proposalValidity';
 import { formatGarantiaMaoDeObra } from '../src/lib/filmWarranty';
+import { DEFAULT_TERMO_RESPONSABILIDADE } from '../src/lib/termoResponsabilidade';
 
 // Define GeneralDiscount locally since it's not exported from types.ts
 interface GeneralDiscount {
@@ -20,6 +21,7 @@ interface GeneralDiscount {
     pricingMode?: ProposalPricingMode;
     filmPricingModes?: { [filmName: string]: 'area' | 'linear' };
     hideMeasurements?: boolean;
+    incluirTermoResponsabilidade?: boolean;
 }
 
 const formatNumberBR = (number: number): string => {
@@ -126,6 +128,7 @@ export const regeneratePDFFromSaved = async (client: Client, userInfo: UserInfo,
         pricingMode: pdf.generalDiscount?.pricingMode === 'labor_only' ? 'labor_only' : 'complete',
         filmPricingModes: pdf.generalDiscount?.filmPricingModes,
         hideMeasurements: pdf.generalDiscount?.hideMeasurements,
+        incluirTermoResponsabilidade: pdf.generalDiscount?.incluirTermoResponsabilidade,
     };
 
     const totals = calculateTotalsFromSavedPDF(pdf);
@@ -158,6 +161,7 @@ export const generateCombinedPDF = async (client: Client, userInfo: UserInfo, sa
             pricingMode: pdf.generalDiscount?.pricingMode === 'labor_only' ? 'labor_only' : 'complete',
             filmPricingModes: pdf.generalDiscount?.filmPricingModes,
             hideMeasurements: pdf.generalDiscount?.hideMeasurements,
+            incluirTermoResponsabilidade: pdf.generalDiscount?.incluirTermoResponsabilidade,
         } as GeneralDiscount,
         totals: calculateTotalsFromSavedPDF(pdf),
         paymentConfig: undefined as ProposalPaymentConfig | undefined,
@@ -1071,6 +1075,40 @@ const renderPdfContent = async (
         for (const line of conditions) {
             safeText(line, margin, yPos);
             yPos += LINE_HEIGHT;
+        }
+
+        // --- Termo de Responsabilidade (integridade dos vidros) ---
+        // Texto editável nas Configurações (undefined = usa o padrão do app). A inclusão
+        // pode ser sobrescrita por orçamento (generalDiscount) ou pelo padrão global do UserInfo.
+        const termoText = userInfo.termoResponsabilidade === undefined
+            ? DEFAULT_TERMO_RESPONSABILIDADE
+            : userInfo.termoResponsabilidade.trim();
+        const termoOverride = optionsData
+            .find(opt => opt.generalDiscount?.incluirTermoResponsabilidade !== undefined)
+            ?.generalDiscount?.incluirTermoResponsabilidade;
+        const incluirTermo = termoOverride ?? userInfo.incluirTermoResponsabilidadePadrao ?? true;
+
+        if (incluirTermo && termoText) {
+            const TERMO_LINE_HEIGHT = 4.2;
+            doc.setFontSize(8);
+            const termoLines: string[] = [];
+            for (const paragraph of termoText.split(/\n+/).map(p => p.trim()).filter(Boolean)) {
+                termoLines.push(...(doc.splitTextToSize(paragraph, pageWidth - margin * 2) as string[]), '');
+            }
+
+            if (yPos + SECTION_TITLE_HEIGHT + termoLines.length * TERMO_LINE_HEIGHT > pageHeight - PAGE_BOTTOM_MARGIN) {
+                await addNewPage();
+            }
+
+            await addSectionTitle("Termo de Responsabilidade");
+            doc.setFont("helvetica", 'normal');
+            doc.setFontSize(8);
+            doc.setTextColor(100, 100, 100);
+            for (const line of termoLines) {
+                if (yPos > pageHeight - PAGE_BOTTOM_MARGIN) await addNewPage();
+                if (line) safeText(line, margin, yPos);
+                yPos += TERMO_LINE_HEIGHT;
+            }
         }
 
         // --- Signature Section ---

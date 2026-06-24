@@ -75,6 +75,7 @@ const normalizeGeneralDiscount = (
         filmPricingModes: discount?.filmPricingModes ?? fallback?.filmPricingModes,
         expenses: normalizeProposalExpenses(discount?.expenses ?? fallback?.expenses),
         hideMeasurements: discount?.hideMeasurements ?? fallback?.hideMeasurements,
+        incluirTermoResponsabilidade: discount?.incluirTermoResponsabilidade ?? fallback?.incluirTermoResponsabilidade,
     };
 };
 

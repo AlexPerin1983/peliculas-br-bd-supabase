@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Drawer } from 'vaul';
-import { CircleDollarSign, Eye, EyeOff, MinusCircle, Percent, PlusCircle } from 'lucide-react';
+import { CircleDollarSign, Eye, EyeOff, MinusCircle, Percent, PlusCircle, Shield, ShieldCheck } from 'lucide-react';
 
 import { ProposalDiscount, Totals } from '../../types';
 import {
@@ -18,6 +18,7 @@ interface TotalsDrawerProps {
     onGeneratePdf: () => void;
     isGeneratingPdf: boolean;
     defaultHideMeasurements?: boolean;
+    defaultIncluirTermo?: boolean;
     /** Opções/oportunidades da proposta — habilita o swipe entre elas no mobile. */
     options?: { id: number; name: string }[];
     activeOptionId?: number | null;
@@ -116,6 +117,7 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
     onGeneratePdf,
     isGeneratingPdf,
     defaultHideMeasurements = false,
+    defaultIncluirTermo = true,
     options = [],
     activeOptionId = null,
     onSelectOption
@@ -165,6 +167,11 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
     const hideMeasurements = generalDiscount.hideMeasurements ?? defaultHideMeasurements;
     const toggleHideMeasurements = () => {
         onUpdateGeneralDiscount({ ...generalDiscount, hideMeasurements: !hideMeasurements });
+    };
+    // Termo de Responsabilidade: estado efetivo = override do orçamento ou o padrão global da empresa.
+    const incluirTermo = generalDiscount.incluirTermoResponsabilidade ?? defaultIncluirTermo;
+    const toggleIncluirTermo = () => {
+        onUpdateGeneralDiscount({ ...generalDiscount, incluirTermoResponsabilidade: !incluirTermo });
     };
 
     const updateAdjustment = (
@@ -485,6 +492,30 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                             </span>
                             <span className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${hideMeasurements ? 'bg-blue-500' : 'bg-slate-300 dark:bg-slate-600'}`}>
                                 <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${hideMeasurements ? 'left-[22px]' : 'left-0.5'}`} />
+                            </span>
+                        </button>
+                        {/* Termo de Responsabilidade (integridade dos vidros) no PDF */}
+                        <button
+                            type="button"
+                            onClick={toggleIncluirTermo}
+                            role="switch"
+                            aria-checked={incluirTermo}
+                            className={`mb-3 flex w-full items-center justify-between gap-3 rounded-xl border p-3 text-left transition-colors ${incluirTermo
+                                ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-900/40 dark:bg-emerald-950/30'
+                                : 'border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60'
+                                }`}
+                        >
+                            <span className="flex items-center gap-2.5">
+                                <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${incluirTermo ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-300'}`}>
+                                    {incluirTermo ? <ShieldCheck className="h-4 w-4" /> : <Shield className="h-4 w-4" />}
+                                </span>
+                                <span className="min-w-0">
+                                    <span className="block text-sm font-semibold text-slate-800 dark:text-slate-100">Termo de responsabilidade</span>
+                                    <span className="block text-[11px] text-slate-500">Isenção por quebras em vidros já fragilizados</span>
+                                </span>
+                            </span>
+                            <span className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${incluirTermo ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`}>
+                                <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${incluirTermo ? 'left-[22px]' : 'left-0.5'}`} />
                             </span>
                         </button>
                         <button
