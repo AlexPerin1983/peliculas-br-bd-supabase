@@ -5,10 +5,10 @@ import {
     CalendarDays,
     CircleUserRound,
     FileText,
+    Headset,
     History,
     Layers3,
     LayoutDashboard,
-    LifeBuoy,
     Loader2,
     LogOut,
     LucideIcon,
@@ -227,8 +227,8 @@ const DesktopSidebar: React.FC<DesktopSidebarProps> = ({ activeTab, onTabChange 
                             isCollapsed ? 'justify-center px-0' : 'gap-3 px-3'
                         ].join(' ')}
                     >
-                        <LifeBuoy
-                            className="h-4 w-4 shrink-0 text-emerald-500 transition-colors group-hover:text-emerald-600 dark:text-emerald-400"
+                        <Headset
+                            className="h-4 w-4 shrink-0 text-[var(--text-soft)] transition-colors group-hover:text-[var(--text-strong)] dark:text-slate-500 dark:group-hover:text-slate-300"
                             aria-hidden="true"
                         />
                         {!isCollapsed ? (

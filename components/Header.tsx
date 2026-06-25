@@ -516,7 +516,7 @@ const Header: React.FC<HeaderProps> = ({ activeTab, onTabChange, onGoBack, canGo
                                                             className="group relative flex w-full items-center gap-[var(--sidebar-item-gap)] rounded-2xl px-[var(--sidebar-item-px)] py-[var(--sidebar-item-py)] text-left transition-all duration-200 hover:bg-slate-100/80 active:scale-[0.985] dark:hover:bg-white/[0.03]"
                                                         >
                                                             <div className="flex h-[var(--sidebar-icon-box)] w-[var(--sidebar-icon-box)] flex-shrink-0 items-center justify-center">
-                                                                <i className="fab fa-whatsapp text-[var(--sidebar-icon-size)] text-emerald-500 dark:text-emerald-400" />
+                                                                <i className="fas fa-headset text-[var(--sidebar-icon-size)] text-blue-500/85 group-hover:text-blue-700 dark:text-cyan-300/85 dark:group-hover:text-cyan-200" />
                                                             </div>
                                                             <div className="min-w-0 flex-1">
                                                                 <p className="truncate text-[var(--sidebar-item-font)] font-medium tracking-[0.005em] text-slate-700 group-hover:text-slate-900 dark:text-white/88 dark:group-hover:text-white">
