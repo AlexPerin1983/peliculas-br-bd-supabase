@@ -1541,7 +1541,9 @@ Regras:
 
     const handleProcessAIClientInput = useCallback(async (input: AIInput) => {
         if (!userInfo?.aiConfig?.apiKey) {
-            showError("Por favor, configure sua chave de API do Google Gemini na aba 'Empresa' para usar esta funcionalidade.");
+            // Sem IA ativada: leva direto para a tela de ativacao em vez de um beco sem saida.
+            setApiKeyModalProvider('gemini');
+            setIsApiKeyModalOpen(true);
             return;
         }
 
@@ -1573,7 +1575,9 @@ Regras:
 
     const handleProcessAIFilmInput = useCallback(async (input: AIInput) => {
         if (!userInfo?.aiConfig?.apiKey) {
-            showError("Por favor, configure sua chave de API do Google Gemini na aba 'Empresa' para usar esta funcionalidade.");
+            // Sem IA ativada: leva direto para a tela de ativacao em vez de um beco sem saida.
+            setApiKeyModalProvider('gemini');
+            setIsApiKeyModalOpen(true);
             return;
         }
 
@@ -1877,9 +1881,11 @@ Regras:
             return;
         }
 
-        // Modo Gemini/OpenAI - requer API key
+        // Modo Gemini/OpenAI - requer IA ativada
         if (!userInfo?.aiConfig?.apiKey) {
-            showError("Por favor, configure sua chave de API na aba 'Empresa' para usar esta funcionalidade.");
+            // Leva direto para a tela de ativacao em vez de um beco sem saida.
+            setApiKeyModalProvider('gemini');
+            setIsApiKeyModalOpen(true);
             return;
         }
 
@@ -2073,6 +2079,22 @@ Regras:
         }
     }, [userInfo, apiKeyModalProvider]);
 
+    // Porteiro único da IA: garante que o recurso está liberado (modulo comprado)
+    // e que a IA foi ativada (chave configurada). Se faltar algo, leva o usuario
+    // direto para a tela certa — upgrade ou ativacao — em vez de deixar ele
+    // abrir a funcao, digitar tudo e so depois descobrir que falta configurar.
+    const ensureAiReady = useCallback((): boolean => {
+        if (!hasModule('ia_ocr')) {
+            setShowIaUpgradeModal(true);
+            return false;
+        }
+        if (!userInfo?.aiConfig?.apiKey) {
+            handleOpenApiKeyModal('gemini');
+            return false;
+        }
+        return true;
+    }, [hasModule, userInfo, handleOpenApiKeyModal]);
+
     const handleSaveGeneralDiscount = useCallback((discount: ProposalDiscount) => {
         handleGeneralDiscountChange(discount);
         setIsGeneralDiscountModalOpen(false);
@@ -2096,36 +2118,29 @@ Regras:
     }, []);
 
     const handleOpenAIClientModal = useCallback(() => {
-        if (hasModule('ia_ocr')) {
-            setIsClientModalOpen(false);
-            setIsAIClientModalOpen(true);
-        } else {
-            setShowIaUpgradeModal(true);
-        }
-    }, [hasModule]);
+        if (!ensureAiReady()) return;
+        setIsClientModalOpen(false);
+        setIsAIClientModalOpen(true);
+    }, [ensureAiReady]);
 
     const handleOpenAIQuickProposalModal = useCallback(() => {
-        if (hasModule('ia_ocr')) {
-            setIsClientModalOpen(false);
-            setIsAIClientModalOpen(false);
-            setIsAIMeasurementModalOpen(false);
-            setIsAIQuickProposalModalOpen(true);
-        } else {
-            setShowIaUpgradeModal(true);
-        }
-    }, [hasModule]);
+        if (!ensureAiReady()) return;
+        setIsClientModalOpen(false);
+        setIsAIClientModalOpen(false);
+        setIsAIMeasurementModalOpen(false);
+        setIsAIQuickProposalModalOpen(true);
+    }, [ensureAiReady]);
 
     const handleOpenAIFilmModal = useCallback(() => {
-        if (hasModule('ia_ocr')) {
-            setIsAIFilmModalOpen(true);
-        } else {
-            setShowIaUpgradeModal(true);
-        }
-    }, [hasModule]);
+        if (!ensureAiReady()) return;
+        setIsAIFilmModalOpen(true);
+    }, [ensureAiReady]);
 
     const handleProcessAIMeasurementInput = useCallback(async (input: AIInput) => {
         if (!userInfo?.aiConfig?.apiKey) {
-            handleShowInfo("Por favor, configure sua chave de API na aba 'Empresa' para usar esta funcionalidade.");
+            // Leva direto para a tela de ativacao em vez de um beco sem saida.
+            setApiKeyModalProvider('gemini');
+            setIsApiKeyModalOpen(true);
             return;
         }
 
@@ -2757,11 +2772,8 @@ Se não conseguir extrair, retorne: []`;
                                         onDuplicateMeasurements={duplicateAllMeasurements}
                                         onGeneratePdf={handleGeneratePdf}
                                         onOpenAIModal={() => {
-                                            if (hasModule('ia_ocr')) {
-                                                setIsAIMeasurementModalOpen(true);
-                                            } else {
-                                                setShowIaUpgradeModal(true);
-                                            }
+                                            if (!ensureAiReady()) return;
+                                            setIsAIMeasurementModalOpen(true);
                                         }}
                                         defaultHideMeasurements={!!userInfo?.hideMeasurementsInPdf}
                                     />

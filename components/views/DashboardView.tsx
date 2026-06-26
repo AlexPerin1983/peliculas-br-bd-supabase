@@ -69,6 +69,7 @@ interface DashboardViewProps {
     onOpenClientModal: (mode: 'add' | 'edit') => void;
     onCreateProposal?: () => void;
     aiConfig?: { provider: 'gemini' | 'openai' | 'local_ocr'; apiKey: string };
+    onOpenApiKeyModal?: (provider: 'gemini' | 'openai') => void;
 }
 
 const DESKTOP_PERIOD_OPTIONS: { key: PeriodKey; label: string }[] = [
@@ -749,7 +750,8 @@ const DashboardView: React.FC<DashboardViewProps> = ({
     onOpenAIQuickProposal,
     onOpenClientModal,
     onCreateProposal,
-    aiConfig
+    aiConfig,
+    onOpenApiKeyModal
 }) => {
     const [period, setPeriod] = useState<PeriodKey>('today');
     const [isFinAssistantOpen, setIsFinAssistantOpen] = useState(false);
@@ -1458,6 +1460,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                 provider={aiConfig?.provider}
                 cache={finAnalysisCache}
                 onCached={setFinAnalysisCache}
+                onActivateAI={onOpenApiKeyModal ? () => onOpenApiKeyModal('gemini') : undefined}
             />
 
             <section className="ui-card p-3 sm:p-4">
@@ -1697,7 +1700,15 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                         <div className="flex shrink-0 items-center gap-2">
                             <button
                                 type="button"
-                                onClick={() => setIsFinAssistantOpen(true)}
+                                onClick={() => {
+                                    // Sem IA ativada: leva direto para a ativacao em vez de abrir
+                                    // o assistente num estado vazio sem saida.
+                                    if (!aiConfig?.apiKey && onOpenApiKeyModal) {
+                                        onOpenApiKeyModal('gemini');
+                                        return;
+                                    }
+                                    setIsFinAssistantOpen(true);
+                                }}
                                 className="inline-flex h-9 items-center justify-center gap-2 rounded-[var(--radius-control)] border border-blue-100 bg-blue-50 px-3 text-xs font-bold text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-300 sm:h-10 sm:text-sm"
                             >
                                 <Sparkles className="h-4 w-4" aria-hidden="true" />

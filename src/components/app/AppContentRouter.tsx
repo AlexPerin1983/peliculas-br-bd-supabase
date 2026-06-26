@@ -254,6 +254,7 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
                 onOpenClientModal={onOpenClientModal}
                 onCreateProposal={onCreateProposal}
                 aiConfig={userInfo?.aiConfig}
+                onOpenApiKeyModal={onOpenApiKeyModal}
             />,
             defaultLoadingView
         );
@@ -265,6 +266,7 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
                 allSavedPdfs={allSavedPdfs}
                 clients={clients}
                 aiConfig={userInfo?.aiConfig}
+                onOpenApiKeyModal={onOpenApiKeyModal}
             />,
             defaultLoadingView
         );
