@@ -155,27 +155,19 @@ export class CuttingOptimizer {
             }
         }
 
-        // Deep Search (Randomized / Genetic-lite)
-        if (useDeepSearch) {
-            const iterations = 50; // Number of random tries
+        // Busca local (substitui o antigo "deep search" de 50 shuffles aleatórios,
+        // que economizava quase nada). Sempre roda uma passada leve em trabalhos
+        // pequenos; uma passada longa quando o usuário pede "Otimização Profunda".
+        const itemCount = itemsToPack.length;
+        const runLightSearch = itemCount > 0 && itemCount <= 60;
+        if (useDeepSearch || runLightSearch) {
+            const budgetMs = useDeepSearch ? 320 : 70;
+            const maxIterations = useDeepSearch ? 8000 : 1500;
+            const localSearch = this.runLocalSearch(itemsToPack, lockedItems, budgetMs, maxIterations);
 
-            for (let i = 0; i < iterations; i++) {
-                // Shuffle items randomly
-                const shuffledItems = [...itemsToPack].sort(() => Math.random() - 0.5);
-
-                // Run MaxRects on shuffled items
-                const randomResult = this.runMaxRectsPacking(shuffledItems, true, lockedItems); // true = skip internal sort
-
-                if (randomResult) {
-                    const isBetter = !bestResult ||
-                        randomResult.totalHeight < bestResult.totalHeight ||
-                        (Math.abs(randomResult.totalHeight - bestResult.totalHeight) < 5 && randomResult.efficiency > bestResult.efficiency);
-
-                    if (isBetter) {
-                        bestResult = randomResult;
-                        bestMethod = `DeepSearch-Iter${i}`;
-                    }
-                }
+            if (localSearch && this.isResultBetter(localSearch, bestResult)) {
+                bestResult = localSearch;
+                bestMethod = useDeepSearch ? 'LocalSearch-Deep' : 'LocalSearch-Auto';
             }
         }
 
@@ -477,6 +469,87 @@ export class CuttingOptimizer {
             efficiency,
             rollWidth: this.rollWidth
         };
+    }
+
+    // Verdadeiro melhor: menor metragem (totalHeight) primeiro; em empate técnico
+    // (< 2cm) desempata por eficiência. É o mesmo critério usado em optimize().
+    private isResultBetter(candidate: OptimizationResult | null, best: OptimizationResult | null): boolean {
+        if (!candidate) return false;
+        if (!best) return true;
+        if (candidate.totalHeight < best.totalHeight - 0.01) return true;
+        if (Math.abs(candidate.totalHeight - best.totalHeight) < 2 && candidate.efficiency > best.efficiency + 1e-6) return true;
+        return false;
+    }
+
+    // Empacota uma ORDEM específica de peças (MaxRects é o único algoritmo
+    // sensível à ordem — Skyline/Guillotine reordenam internamente).
+    private packOrder(order: Rect[], lockedItems: Rect[]): OptimizationResult | null {
+        return this.runMaxRectsPacking(order, true, lockedItems);
+    }
+
+    // Busca local sobre a ordem de colocação: parte das melhores ordenações
+    // determinísticas e melhora com trocas/realocações (hill-climbing) e
+    // reinícios aleatórios, dentro de um orçamento de tempo/iterações.
+    private runLocalSearch(items: Rect[], lockedItems: Rect[], budgetMs: number, maxIterations: number): OptimizationResult | null {
+        if (items.length === 0) return null;
+
+        const seedOrders: Rect[][] = [
+            [...items].sort((a, b) => (b.w * b.h) - (a.w * a.h)),          // área
+            [...items].sort((a, b) => (b.h - a.h) || (b.w - a.w)),         // altura
+            [...items].sort((a, b) => (b.w - a.w) || (b.h - a.h)),         // largura
+            [...items].sort((a, b) => Math.max(b.w, b.h) - Math.max(a.w, a.h)), // maior lado
+            [...items].sort((a, b) => (b.w + b.h) - (a.w + a.h)),          // perímetro
+        ];
+
+        let bestOrder = seedOrders[0];
+        let bestResult = this.packOrder(bestOrder, lockedItems);
+        for (let i = 1; i < seedOrders.length; i++) {
+            const r = this.packOrder(seedOrders[i], lockedItems);
+            if (this.isResultBetter(r, bestResult)) { bestResult = r; bestOrder = seedOrders[i]; }
+        }
+        if (!bestResult) return null;
+
+        let current = bestOrder.slice();
+        let currentResult = bestResult;
+        const deadline = Date.now() + budgetMs;
+        const n = current.length;
+
+        for (let iter = 0; iter < maxIterations; iter++) {
+            if ((iter & 63) === 0 && Date.now() >= deadline) break;
+
+            const neighbor = current.slice();
+            let a = Math.floor(Math.random() * n);
+            let b = Math.floor(Math.random() * n);
+            if (a === b) b = (b + 1) % n;
+
+            if (Math.random() < 0.5) {
+                // troca
+                const tmp = neighbor[a];
+                neighbor[a] = neighbor[b];
+                neighbor[b] = tmp;
+            } else {
+                // realocação
+                const [moved] = neighbor.splice(a, 1);
+                neighbor.splice(b, 0, moved);
+            }
+
+            const r = this.packOrder(neighbor, lockedItems);
+            if (this.isResultBetter(r, currentResult)) {
+                current = neighbor;
+                currentResult = r!;
+                if (this.isResultBetter(r, bestResult)) {
+                    bestResult = r!;
+                    bestOrder = neighbor.slice();
+                }
+            } else if (Math.random() < 0.03) {
+                // reinício aleatório para escapar de mínimos locais
+                current = [...items].sort(() => Math.random() - 0.5);
+                const rr = this.packOrder(current, lockedItems);
+                if (rr) currentResult = rr;
+            }
+        }
+
+        return bestResult;
     }
 
     private placeItemMaxRects(item: Rect) {

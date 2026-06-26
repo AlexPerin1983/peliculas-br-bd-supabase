@@ -17,6 +17,7 @@ interface AgendamentoModalProps {
     onAddNewClient: (clientName: string) => void;
     userInfo: UserInfo | null;
     agendamentos: Agendamento[];
+    onOpenApiKeyModal?: () => void;
 }
 
 type AISuggestion = {
@@ -92,7 +93,7 @@ const getWorkingEndLabel = (scheduleStart: string, scheduleEnd: string): string 
     return scheduleEnd;
 };
 
-const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, onSave, onDelete, schedulingInfo, clients, onAddNewClient, userInfo, agendamentos }) => {
+const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, onSave, onDelete, schedulingInfo, clients, onAddNewClient, userInfo, agendamentos, onOpenApiKeyModal }) => {
     const agendamento = schedulingInfo.agendamento;
     const pdf = 'pdf' in schedulingInfo ? schedulingInfo.pdf : undefined;
 
@@ -176,8 +177,13 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
         setAiSuggestions(null);
 
         if (!userInfo?.aiConfig?.apiKey || userInfo.aiConfig.provider !== 'gemini') {
-            setValidationError("A sugestão por IA requer uma chave de API do Gemini configurada na aba 'Empresa'.");
+            // Sem IA ativada: leva direto para a ativacao em vez de barrar com um aviso.
             setIsSuggesting(false);
+            if (onOpenApiKeyModal) {
+                onOpenApiKeyModal();
+            } else {
+                setValidationError("Ative a Inteligência Artificial nas Configurações para usar a sugestão automática.");
+            }
             return;
         }
         if (!selectedClientId || !date) {

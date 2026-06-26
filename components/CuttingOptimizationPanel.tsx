@@ -6,7 +6,7 @@ import ConfirmationModal from './modals/ConfirmationModal';
 import Modal from './ui/Modal';
 import { useSubscription } from '../contexts/SubscriptionContext';
 import { PremiumFeatureSection } from './subscription/PremiumFeatureSection';
-import { Loader2, Maximize2, Minus, Plus, RotateCcw, Save, X } from 'lucide-react';
+import { Info, Loader2, Maximize2, Minus, Plus, Save, X } from 'lucide-react';
 
 interface CuttingOptimizationPanelProps {
     measurements: Measurement[];
@@ -19,6 +19,25 @@ const FULLSCREEN_SIDE_GUTTER_PX = 96;
 const FULLSCREEN_VERTICAL_GUTTER_PX = 96;
 const FULLSCREEN_MIN_FIT_SCALE = 1.25;
 const FULLSCREEN_MAX_FIT_SCALE = 12;
+
+// Paleta de cores por grupo de peça (mesma medida = mesma cor).
+// Evita amarelo/âmbar (reservados para "selecionado" e "sobra") e vermelho (travado).
+interface PieceColor {
+    fill: string;
+    border: string;
+    ink: string;
+}
+const PIECE_COLORS: PieceColor[] = [
+    { fill: '#7DD3FC', border: '#0284C7', ink: '#0C4A6E' }, // sky
+    { fill: '#5EEAD4', border: '#0D9488', ink: '#134E4A' }, // teal
+    { fill: '#C4B5FD', border: '#7C3AED', ink: '#4C1D95' }, // violet
+    { fill: '#F0ABFC', border: '#C026D3', ink: '#86198F' }, // fuchsia
+    { fill: '#BEF264', border: '#65A30D', ink: '#3F6212' }, // lime
+    { fill: '#A5B4FC', border: '#4F46E5', ink: '#312E81' }, // indigo
+    { fill: '#FDBA74', border: '#EA580C', ink: '#9A3412' }, // orange
+    { fill: '#67E8F9', border: '#0891B2', ink: '#155E75' }, // cyan
+];
+const DEFAULT_PIECE_COLOR = PIECE_COLORS[0];
 
 const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ measurements, clientId, optionId, films }) => {
     // Verificar acesso ao módulo de corte inteligente
@@ -90,6 +109,8 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
     const [fullscreenZoom, setFullscreenZoom] = useState<number>(1);
     const [fullscreenOrientation, setFullscreenOrientation] = useState<'portrait' | 'landscape'>('portrait');
     const [fullscreenViewportSize, setFullscreenViewportSize] = useState({ width: 0, height: 0 });
+    // Painel de números na tela cheia abre só sob demanda (modo foco no desenho).
+    const [showFullscreenStats, setShowFullscreenStats] = useState(false);
 
     // Virtualização: rastrear posição do scroll para renderizar apenas peças visíveis
     const [scrollTop, setScrollTop] = useState(0);
@@ -869,13 +890,32 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
         const totalArea = result.rollWidth * result.totalHeight;
         const wastePercent = totalArea > 0 ? Math.max(0, 100 - result.efficiency) : 0;
 
+        // Piso teórico (limite inferior): nenhum plano usa menos roll que a área
+        // total das peças dividida pela largura da bobina. É intransponível, mas
+        // nem sempre atingível (retângulos nem sempre encaixam 100%). O gap até ele
+        // é o MÁXIMO que qualquer otimização poderia economizar.
+        const theoreticalMinHeight = result.rollWidth > 0 ? usedArea / result.rollWidth : 0; // cm
+        const maxSavingCm = Math.max(0, result.totalHeight - theoreticalMinHeight);
+        const efficiencyNum = result.efficiency;
+        // Veredito de qualidade do plano para este orçamento.
+        const quality = efficiencyNum >= 90
+            ? { label: 'Plano quase ótimo', tone: 'good' as const }
+            : efficiencyNum >= 78
+                ? { label: 'Bom plano', tone: 'ok' as const }
+                : { label: 'Dá para melhorar — tente Otimização Profunda', tone: 'warn' as const };
+
         return {
             linearMeters: (result.totalHeight / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
             rollWidthMeters: (result.rollWidth / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
             usedAreaMeters: (usedArea / 10000).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
             wastePercent: wastePercent.toFixed(0),
             efficiency: result.efficiency.toFixed(0),
+            efficiencyNum,
             pieces: result.placedItems.length,
+            theoreticalMinMeters: (theoreticalMinHeight / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+            maxSavingMeters: (maxSavingCm / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+            maxSavingCm,
+            quality,
         };
     }, [result]);
     const activeFilmMaterialCost = useMemo(() => {
@@ -979,6 +1019,30 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
         return Object.values(groups).sort((a, b) => (b.w * b.h) - (a.w * a.h));
     }, [getPieceGroupKey, result]);
 
+    // Cor por grupo de peça: a ordem segue groupedItems (maior área primeiro),
+    // então a cor é estável entre re-otimizações com os mesmos tamanhos.
+    const groupColorMap = useMemo(() => {
+        const map: Record<string, PieceColor> = {};
+        groupedItems.forEach((group, index) => {
+            map[group.key] = PIECE_COLORS[index % PIECE_COLORS.length];
+        });
+        return map;
+    }, [groupedItems]);
+
+    const getPieceColor = React.useCallback((item: Pick<Rect, 'w' | 'h'>) => {
+        return groupColorMap[getPieceGroupKey(item)] || DEFAULT_PIECE_COLOR;
+    }, [groupColorMap, getPieceGroupKey]);
+
+    // Índices (1-based) da peça "representante" de cada grupo — a única que
+    // exibe a cota, evitando repetir a mesma medida em peças idênticas.
+    const representativeIndices = useMemo(() => {
+        const set = new Set<number>();
+        groupedItems.forEach(group => {
+            if (group.indices.length > 0) set.add(group.indices[0]);
+        });
+        return set;
+    }, [groupedItems]);
+
     // Peças que não couberam na bobina, agrupadas por dimensão
     const unplacedGroups = useMemo(() => {
         if (!result?.unplacedItems?.length) return [];
@@ -1032,6 +1096,50 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
             <span className="h-px w-2.5 shrink-0 bg-cyan-600/70 dark:bg-cyan-300/70"></span>
         </div>
     );
+
+    // Barra segmentada Uso x Sobra: leitura imediata do aproveitamento da bobina.
+    const renderUsageBar = (usagePercent: number, wastePercent: number) => {
+        const usage = Math.max(0, Math.min(100, Math.round(usagePercent)));
+        const waste = Math.max(0, 100 - usage);
+        return (
+            <div
+                className="flex h-5 w-full overflow-hidden rounded-md border border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-800"
+                role="img"
+                aria-label={`Uso ${usage}% e sobra ${waste}% da bobina`}
+            >
+                <div className="flex min-w-0 items-center justify-start bg-sky-500 pl-2" style={{ width: `${usage}%` }}>
+                    {usage >= 18 && <span className="truncate text-[10px] font-bold text-white">Uso {usage}%</span>}
+                </div>
+                <div className="flex min-w-0 flex-1 items-center justify-end bg-amber-400 pr-2" style={{ width: `${waste}%` }}>
+                    {waste >= 14 && <span className="truncate text-[10px] font-bold text-amber-900">Sobra {waste}%</span>}
+                </div>
+            </div>
+        );
+    };
+
+    // Indicador honesto de qualidade: compara o plano com o piso teórico (limite
+    // matemático intransponível) e dá um veredito por orçamento.
+    const renderQualityIndicator = () => {
+        if (!visualSummary) return null;
+        const tone = visualSummary.quality.tone;
+        const toneCls = tone === 'good'
+            ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200'
+            : tone === 'warn'
+                ? 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200'
+                : 'border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200';
+        return (
+            <div className={`flex items-start gap-2 rounded-lg border px-2.5 py-2 ${toneCls}`}>
+                <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-current"></span>
+                <div className="min-w-0 leading-tight">
+                    <div className="text-[11px] font-black">{visualSummary.quality.label}</div>
+                    <div className="mt-0.5 text-[10px] font-semibold opacity-80">
+                        Piso teórico {visualSummary.theoreticalMinMeters} m
+                        {visualSummary.maxSavingCm >= 5 ? ` · no máximo −${visualSummary.maxSavingMeters} m` : ' · você já está no limite'}
+                    </div>
+                </div>
+            </div>
+        );
+    };
 
     return (
         <div className="mt-8 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
@@ -1458,6 +1566,13 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                             </div>
                                         )}
                                     </div>
+                                    {/* Barra Uso x Sobra — leitura imediata do aproveitamento */}
+                                    {visualSummary && (
+                                        <div className="space-y-2.5 border-t border-slate-200 px-3 py-3 dark:border-slate-800 sm:px-4">
+                                            {renderUsageBar(Number(visualSummary.efficiency), Number(visualSummary.wastePercent))}
+                                            {renderQualityIndicator()}
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Aviso de peças que não couberam na bobina */}
@@ -1616,8 +1731,15 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                                 backgroundPosition: '-1px -1px' // Align grid lines
                                             }}
                                         >
-                                            {/* 
-                                     * Blade width (sangria) is calculated in the optimization algorithm 
+                                            {/* Hachura de sobra: cobre todo o rolo; as peças (opacas) ocultam a área usada,
+                                                então o padrão só aparece nos vãos = desperdício real. */}
+                                            <div
+                                                className="pointer-events-none absolute inset-0"
+                                                style={{ backgroundImage: 'repeating-linear-gradient(45deg, rgba(245, 158, 11, 0.16) 0, rgba(245, 158, 11, 0.16) 6px, transparent 6px, transparent 12px)' }}
+                                                aria-hidden="true"
+                                            ></div>
+                                            {/*
+                                     * Blade width (sangria) is calculated in the optimization algorithm
                                      * but visual rendering was removed for a cleaner interface.
                                      * The spacing is still applied between pieces during calculation.
                                      */}
@@ -1634,16 +1756,19 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                                 const showDimensionLabels = pieceScaledWidth > 34 && pieceScaledHeight > 34;
                                                 // Encontrar índice original para exibição
                                                 const originalIndex = result.placedItems.findIndex(p => p.id === item.id);
+                                                const pieceColor = getPieceColor(item);
+                                                // Só a peça representante de cada grupo carrega a cota (evita repetição).
+                                                const isRepresentative = representativeIndices.has(originalIndex + 1);
 
                                                 return (
                                                     <div
                                                         key={item.id || originalIndex}
                                                         onClick={() => togglePieceSelection(item)}
-                                                        className={`pointer-events-auto absolute isolate flex items-center justify-center overflow-visible rounded-[3px] text-xs font-bold border transition-all cursor-pointer backdrop-blur-[1px] ${isSelected
+                                                        className={`pointer-events-auto absolute isolate flex items-center justify-center overflow-visible rounded-[3px] text-xs font-bold border transition-all cursor-pointer ${isSelected
                                                             ? 'z-20 shadow-[0_0_0_2px_rgba(250,204,21,0.35),0_12px_28px_rgba(15,23,42,0.28)] scale-[1.01]'
                                                             : isGroupHighlighted
-                                                                ? 'z-10 shadow-[0_0_0_2px_rgba(103,232,249,0.34),0_14px_30px_rgba(8,145,178,0.26)]'
-                                                            : 'shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] hover:z-10 hover:shadow-[0_10px_24px_rgba(14,165,233,0.22)]'
+                                                                ? 'z-10 shadow-[0_0_0_2px_rgba(15,23,42,0.28),0_14px_30px_rgba(15,23,42,0.22)]'
+                                                            : 'shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] hover:z-10 hover:shadow-[0_10px_24px_rgba(15,23,42,0.22)]'
                                                             }`}
                                                         style={{
                                                             left: `${item.x * scale}px`,
@@ -1651,19 +1776,16 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                                             width: `${item.w * scale}px`,
                                                             height: `${item.h * scale}px`,
                                                             background: isSelected
-                                                                ? 'linear-gradient(135deg, rgba(254, 240, 138, 0.72), rgba(251, 191, 36, 0.42))'
+                                                                ? 'linear-gradient(135deg, rgba(254, 240, 138, 0.95), rgba(251, 191, 36, 0.82))'
                                                                 : isLocked
-                                                                    ? 'linear-gradient(135deg, rgba(248, 113, 113, 0.36), rgba(239, 68, 68, 0.18))'
-                                                                    : isGroupHighlighted
-                                                                        ? 'linear-gradient(135deg, rgba(103, 232, 249, 0.58), rgba(14, 165, 233, 0.26))'
-                                                                    : 'linear-gradient(135deg, rgba(125, 211, 252, 0.42), rgba(14, 165, 233, 0.18))',
+                                                                    ? 'linear-gradient(135deg, rgba(248, 113, 113, 0.92), rgba(239, 68, 68, 0.8))'
+                                                                    : pieceColor.fill,
                                                             borderColor: isSelected
-                                                                ? 'rgba(250, 204, 21, 0.9)' // Yellow border
+                                                                ? 'rgba(250, 204, 21, 0.95)' // Yellow border
                                                                 : isLocked
-                                                                    ? 'rgba(239, 68, 68, 0.6)' // Red border for locked
-                                                                    : isGroupHighlighted
-                                                                        ? 'rgba(103, 232, 249, 0.95)'
-                                                                    : 'rgba(14, 165, 233, 0.75)', // Sky-500 default
+                                                                    ? 'rgba(239, 68, 68, 0.8)' // Red border for locked
+                                                                    : pieceColor.border,
+                                                            boxShadow: isGroupHighlighted && !isSelected ? `inset 0 0 0 2px ${pieceColor.border}` : undefined,
                                                             color: 'rgba(15, 23, 42, 0.88)'
                                                         }}
                                                         title={`#${originalIndex + 1}: ${item.label} (${item.w.toFixed(1)} x ${item.h.toFixed(1)}) - Clique para selecionar`}
@@ -1673,14 +1795,14 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                                             className="absolute inset-0 flex items-center justify-center overflow-hidden rounded-[3px] font-black pointer-events-none select-none"
                                                             style={{
                                                                 fontSize: `${Math.min(item.w, item.h) * scale * 0.6}px`,
-                                                                color: isSelected ? 'rgba(120, 53, 15, 0.2)' : isGroupHighlighted ? 'rgba(8, 47, 73, 0.18)' : 'rgba(15, 23, 42, 0.14)'
+                                                                color: isSelected ? 'rgba(120, 53, 15, 0.32)' : isLocked ? 'rgba(127, 29, 29, 0.3)' : `${pieceColor.ink}33`
                                                             }}
                                                         >
                                                             {originalIndex + 1}
                                                         </div>
 
-                                                        {/* Dimensions - Only show if piece is big enough */}
-                                                        {showDimensionLabels && (
+                                                        {/* Dimensions - só na peça representante do grupo e se couber */}
+                                                        {showDimensionLabels && isRepresentative && (
                                                             <>
                                                                 {/* Width Label (Bottom Right inside) */}
                                                                 <div className={`absolute bottom-1 right-1.5 z-20 rounded-md border px-1.5 py-0.5 text-[10px] font-black leading-none tabular-nums shadow-sm backdrop-blur sm:text-xs ${isSelected ? 'border-yellow-200/70 bg-yellow-50/95 text-yellow-950' : 'border-white/60 bg-white/90 text-slate-900'}`}>
@@ -1844,11 +1966,20 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                                                 }`}
                                                         >
                                                             <td className="p-3">
-                                                                <div className="font-mono font-black text-slate-800 dark:text-slate-100">
-                                                                    {(group.w / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} x {(group.h / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m
-                                                                </div>
-                                                                <div className="mt-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
-                                                                    {group.areaM2.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m² no grupo
+                                                                <div className="flex items-center gap-2.5">
+                                                                    <span
+                                                                        className="h-4 w-4 shrink-0 rounded-[4px] border"
+                                                                        style={{ backgroundColor: (groupColorMap[group.key] || DEFAULT_PIECE_COLOR).fill, borderColor: (groupColorMap[group.key] || DEFAULT_PIECE_COLOR).border }}
+                                                                        title="Cor desta medida no mapa"
+                                                                    ></span>
+                                                                    <div className="min-w-0">
+                                                                        <div className="font-mono font-black text-slate-800 dark:text-slate-100">
+                                                                            {(group.w / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} x {(group.h / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m
+                                                                        </div>
+                                                                        <div className="mt-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                                                                            {group.areaM2.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m² no grupo
+                                                                        </div>
+                                                                    </div>
                                                                 </div>
                                                             </td>
                                                             <td className="p-3 text-center">
@@ -1930,119 +2061,82 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                     zIndex: 99999,
                                 }}
                             >
-                                {/* Barra de controles tecnica */}
-                                <div className="z-30 grid grid-cols-1 gap-2 border-b border-slate-200/90 bg-white/95 px-3 py-2 shadow-sm backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/95 xl:grid-cols-[minmax(240px,1fr)_auto_minmax(300px,1fr)_auto] xl:items-center">
-                                    {/* Zoom Controls */}
-                                    <div className="flex min-w-0 items-center justify-between gap-3 xl:w-auto">
-                                        <div className="min-w-0">
-                                            <div className="flex items-center gap-2 text-[10px] font-black uppercase text-slate-500 dark:text-slate-400">
-                                                <span className="h-2 w-2 rounded-full bg-cyan-500 shadow-[0_0_0_3px_rgba(6,182,212,0.16)]"></span>
-                                                Plano de corte
-                                            </div>
-                                            <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-2">
-                                                <span className="truncate text-[15px] font-black text-slate-950 dark:text-white">{activeFilm}</span>
-                                                <span className="rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-                                                    {fullscreenOrientation === 'landscape' ? 'Horizontal' : 'Vertical'}
-                                                </span>
-                                                <span className="hidden shrink-0 rounded-md border border-cyan-200 bg-cyan-50 px-1.5 py-0.5 text-[10px] font-bold text-cyan-700 dark:border-cyan-800 dark:bg-cyan-950/40 dark:text-cyan-200 sm:inline-flex">{fullscreenAxisWidthMeters} x {fullscreenAxisHeightMeters} m</span>
-                                            </div>
-                                        </div>
-                                        <button
-                                            onClick={() => setIsFullscreen(false)}
-                                            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-slate-50 active:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:hover:bg-slate-800 xl:hidden"
-                                            title="Fechar"
-                                        >
-                                            <X className="h-5 w-5" aria-hidden="true" />
-                                        </button>
-                                    </div>
-                                    <div className="order-3 flex w-full items-stretch gap-1.5 overflow-x-auto rounded-xl border border-slate-200 bg-slate-50/95 p-1.5 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 xl:order-none xl:w-auto xl:justify-center">
-                                        <div className="min-w-[96px] rounded-lg bg-white px-3 py-1.5 dark:bg-slate-800/90">
-                                            <div className="text-[9px] font-black uppercase text-slate-500 dark:text-slate-400">Metro linear</div>
-                                            <div className="mt-0.5 flex items-baseline gap-1">
-                                                <span className="text-[15px] font-black tabular-nums text-slate-900 dark:text-slate-100">{fullscreenLinearMeters}</span>
-                                                <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">m</span>
-                                            </div>
-                                        </div>
-                                        {activeFilmMaterialCostText && (
-                                            <div className="min-w-[118px] rounded-lg border border-emerald-500/20 bg-emerald-50 px-3 py-1.5 dark:bg-emerald-950/35">
-                                                <div className="text-[9px] font-black uppercase text-emerald-700 dark:text-emerald-300">Material</div>
-                                                <div className="mt-0.5 text-[15px] font-black tabular-nums text-emerald-800 dark:text-emerald-200">{activeFilmMaterialCostText}</div>
-                                            </div>
-                                        )}
-                                        <div className="min-w-[74px] rounded-lg bg-white px-3 py-1.5 dark:bg-slate-800/90">
-                                            <div className="text-[9px] font-black uppercase text-slate-500 dark:text-slate-400">Uso</div>
-                                            <div className="mt-0.5 flex items-baseline gap-1">
-                                                <span className="text-[15px] font-black tabular-nums text-slate-900 dark:text-slate-100">{fullscreenUsage}</span>
-                                                <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">%</span>
-                                            </div>
-                                        </div>
-                                        <div className="min-w-[76px] rounded-lg border border-amber-500/20 bg-amber-50 px-3 py-1.5 dark:bg-amber-950/35">
-                                            <div className="text-[9px] font-black uppercase text-amber-700 dark:text-amber-300">Sobra</div>
-                                            <div className="mt-0.5 flex items-baseline gap-1">
-                                                <span className="text-[15px] font-black tabular-nums text-amber-800 dark:text-amber-200">{fullscreenWaste}</span>
-                                                <span className="text-[10px] font-bold text-amber-700 dark:text-amber-300">%</span>
-                                            </div>
-                                        </div>
-                                        <div className="min-w-[76px] rounded-lg bg-white px-3 py-1.5 dark:bg-slate-800/90">
-                                            <div className="text-[9px] font-black uppercase text-slate-500 dark:text-slate-400">Peças</div>
-                                            <div className="mt-0.5 flex items-baseline gap-1">
-                                                <span className="text-[15px] font-black tabular-nums text-slate-900 dark:text-slate-100">{fullscreenPieces}</span>
-                                                <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">pçs</span>
-                                            </div>
-                                        </div>
-                                        <div className="min-w-[86px] rounded-lg bg-white px-3 py-1.5 dark:bg-slate-800/90">
-                                            <div className="text-[9px] font-black uppercase text-slate-500 dark:text-slate-400">Bobina</div>
-                                            <div className="mt-0.5 flex items-baseline gap-1">
-                                                <span className="text-[15px] font-black tabular-nums text-slate-900 dark:text-slate-100">{fullscreenAxisWidthMeters}</span>
-                                                <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">m</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="order-2 flex min-w-0 flex-wrap items-center justify-start gap-2 xl:order-none xl:justify-end">
-                                        <div className="inline-flex h-10 shrink-0 items-center overflow-hidden rounded-lg border border-slate-300/80 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
-                                            <button
-                                                onClick={() => setFullscreenZoom(prev => Math.max(0.25, prev - 0.25))}
-                                                className="flex h-10 w-10 items-center justify-center border-r border-slate-200 text-slate-700 transition-colors hover:bg-slate-50 active:bg-slate-100 dark:border-slate-700 dark:text-slate-100 dark:hover:bg-slate-800"
-                                                title="Diminuir zoom"
-                                            >
-                                                <Minus className="h-4 w-4" aria-hidden="true" />
-                                            </button>
-                                            <span className="flex h-10 min-w-[68px] items-center justify-center bg-slate-950 px-3 text-sm font-black tabular-nums text-white dark:bg-white dark:text-slate-950">{Math.round(fullscreenZoom * 100)}%</span>
-                                            <button
-                                                onClick={() => setFullscreenZoom(prev => Math.min(5, prev + 0.25))}
-                                                className="flex h-10 w-10 items-center justify-center border-l border-slate-200 text-slate-700 transition-colors hover:bg-slate-50 active:bg-slate-100 dark:border-slate-700 dark:text-slate-100 dark:hover:bg-slate-800"
-                                                title="Aumentar zoom"
-                                            >
-                                                <Plus className="h-4 w-4" aria-hidden="true" />
-                                            </button>
-                                        </div>
-                                        <button
-                                            onClick={() => setFullscreenZoom(1)}
-                                            className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 active:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
-                                            title="Resetar zoom"
-                                        >
-                                            <RotateCcw className="h-4 w-4" aria-hidden="true" />
-                                            <span className="hidden 2xl:inline">Reset</span>
-                                        </button>
-                                        <button
-                                            onClick={() => setFullscreenOrientation(prev => prev === 'portrait' ? 'landscape' : 'portrait')}
-                                            className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 active:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
-                                            aria-label={fullscreenOrientation === 'portrait' ? 'Ver mesa na horizontal' : 'Ver mesa na vertical'}
-                                            title={fullscreenOrientation === 'portrait' ? 'Ver mesa na horizontal' : 'Ver mesa na vertical'}
-                                        >
-                                            <Maximize2 className="h-4 w-4" aria-hidden="true" />
-                                            <span className="hidden 2xl:inline">{fullscreenOrientation === 'portrait' ? 'Horizontal' : 'Vertical'}</span>
-                                        </button>
-                                    </div>
-                                    {/* Close Button */}
+                                {/* Top bar minimalista — modo foco, só o essencial */}
+                                <div className="relative z-40 flex items-center gap-2 border-b border-slate-200/80 bg-white/90 px-3 py-2 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/90">
                                     <button
-                                        onClick={() => setIsFullscreen(false)}
-                                        className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-slate-50 active:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:hover:bg-slate-800 xl:inline-flex"
+                                        onClick={() => { setShowFullscreenStats(false); setIsFullscreen(false); }}
+                                        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm transition-colors active:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
                                         title="Fechar"
+                                        aria-label="Fechar"
                                     >
                                         <X className="h-5 w-5" aria-hidden="true" />
                                     </button>
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="truncate text-sm font-black text-slate-950 dark:text-white">{activeFilm}</span>
+                                            <span className="shrink-0 rounded border border-slate-200 bg-slate-50 px-1 py-0.5 text-[9px] font-bold uppercase text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
+                                                {fullscreenOrientation === 'landscape' ? 'Horizontal' : 'Vertical'}
+                                            </span>
+                                        </div>
+                                        <div className="truncate text-[10px] font-bold tabular-nums text-slate-500 dark:text-slate-400">
+                                            {fullscreenLinearMeters} m · {fullscreenUsage}% uso{activeFilmMaterialCostText ? ` · ${activeFilmMaterialCostText}` : ''}
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => setShowFullscreenStats(prev => !prev)}
+                                        className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border shadow-sm transition-colors ${showFullscreenStats
+                                            ? 'border-cyan-300 bg-cyan-50 text-cyan-800 dark:border-cyan-700 dark:bg-cyan-950/50 dark:text-cyan-200'
+                                            : 'border-slate-200 bg-white text-slate-700 active:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200'}`}
+                                        aria-label="Mostrar números do plano"
+                                        aria-expanded={showFullscreenStats}
+                                        title="Números do plano"
+                                    >
+                                        <Info className="h-4 w-4" aria-hidden="true" />
+                                    </button>
+                                    <button
+                                        onClick={() => setFullscreenOrientation(prev => prev === 'portrait' ? 'landscape' : 'portrait')}
+                                        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm transition-colors active:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                                        aria-label={fullscreenOrientation === 'portrait' ? 'Ver mesa na horizontal' : 'Ver mesa na vertical'}
+                                        title={fullscreenOrientation === 'portrait' ? 'Ver mesa na horizontal' : 'Ver mesa na vertical'}
+                                    >
+                                        <Maximize2 className="h-4 w-4" aria-hidden="true" />
+                                    </button>
                                 </div>
+
+                                {/* Camada para fechar o painel de números ao tocar fora */}
+                                {showFullscreenStats && (
+                                    <div className="absolute inset-0 z-30" onClick={() => setShowFullscreenStats(false)} aria-hidden="true"></div>
+                                )}
+
+                                {/* Painel de números — abre sob demanda, sobreposto (não rouba espaço do desenho) */}
+                                {showFullscreenStats && (
+                                    <div className="absolute left-2 right-2 top-[58px] z-50 rounded-xl border border-slate-200 bg-white/95 p-3 shadow-2xl backdrop-blur-xl dark:border-slate-700 dark:bg-slate-950/95 sm:left-auto sm:right-3 sm:w-80">
+                                        <div className="mb-2.5 grid grid-cols-2 gap-2">
+                                            <div className="rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-900">
+                                                <div className="text-[9px] font-black uppercase text-slate-500 dark:text-slate-400">Metro linear</div>
+                                                <div className="text-[15px] font-black tabular-nums text-slate-900 dark:text-white">{fullscreenLinearMeters} m</div>
+                                            </div>
+                                            {activeFilmMaterialCostText && (
+                                                <div className="rounded-lg bg-emerald-50 px-3 py-2 dark:bg-emerald-950/40">
+                                                    <div className="text-[9px] font-black uppercase text-emerald-700 dark:text-emerald-300">Material</div>
+                                                    <div className="text-[15px] font-black tabular-nums text-emerald-800 dark:text-emerald-200">{activeFilmMaterialCostText}</div>
+                                                </div>
+                                            )}
+                                            <div className="rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-900">
+                                                <div className="text-[9px] font-black uppercase text-slate-500 dark:text-slate-400">Peças</div>
+                                                <div className="text-[15px] font-black tabular-nums text-slate-900 dark:text-white">{fullscreenPieces}</div>
+                                            </div>
+                                            <div className="rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-900">
+                                                <div className="text-[9px] font-black uppercase text-slate-500 dark:text-slate-400">Bobina</div>
+                                                <div className="text-[15px] font-black tabular-nums text-slate-900 dark:text-white">{fullscreenAxisWidthMeters} m</div>
+                                            </div>
+                                        </div>
+                                        {renderUsageBar(Number(fullscreenUsage), Number(fullscreenWaste))}
+                                        <div className="mt-2.5">
+                                            {renderQualityIndicator()}
+                                        </div>
+                                    </div>
+                                )}
                                 {/* Fullscreen Content */}
                                 <div
                                     ref={fullscreenScrollRef}
@@ -2138,6 +2232,12 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                                 backgroundPosition: '-1px -1px'
                                             }}
                                         >
+                                            {/* Hachura de sobra: aparece só nos vãos entre as peças (opacas) = desperdício. */}
+                                            <div
+                                                className="pointer-events-none absolute inset-0"
+                                                style={{ backgroundImage: 'repeating-linear-gradient(45deg, rgba(245, 158, 11, 0.16) 0, rgba(245, 158, 11, 0.16) 7px, transparent 7px, transparent 14px)' }}
+                                                aria-hidden="true"
+                                            ></div>
                                             {/* Items */}
                                             {result.placedItems.map((item, idx) => {
                                                 const itemFrame = getFullscreenItemFrame(item);
@@ -2150,16 +2250,18 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                                 const pieceScaledHeight = (fullscreenOrientation === 'landscape' ? item.w : item.h) * fullscreenScale;
                                                 const showDimensionLabels = pieceScaledWidth > 34 && pieceScaledHeight > 34;
                                                 const needsLargerButtons = pieceScaledWidth < 72 || pieceScaledHeight < 48;
+                                                const pieceColor = getPieceColor(item);
+                                                const isRepresentative = representativeIndices.has(idx + 1);
 
                                                 return (
                                                     <div
                                                         key={item.id || idx}
                                                         onClick={() => togglePieceSelection(item)}
-                                                        className={`absolute isolate flex items-center justify-center overflow-visible rounded-[3px] text-xs font-bold border transition-all cursor-pointer backdrop-blur-[1px] ${isSelected
+                                                        className={`absolute isolate flex items-center justify-center overflow-visible rounded-[3px] text-xs font-bold border transition-all cursor-pointer ${isSelected
                                                             ? 'z-20 shadow-[0_0_0_2px_rgba(250,204,21,0.35),0_16px_34px_rgba(15,23,42,0.3)] scale-[1.01]'
                                                             : isGroupHighlighted
-                                                                ? 'z-10 shadow-[0_0_0_2px_rgba(103,232,249,0.34),0_16px_34px_rgba(8,145,178,0.3)]'
-                                                            : 'shadow-[inset_0_1px_0_rgba(255,255,255,0.4)] hover:z-10 hover:shadow-[0_12px_28px_rgba(14,165,233,0.22)]'
+                                                                ? 'z-10 shadow-[0_0_0_2px_rgba(15,23,42,0.3),0_16px_34px_rgba(15,23,42,0.24)]'
+                                                            : 'shadow-[inset_0_1px_0_rgba(255,255,255,0.4)] hover:z-10 hover:shadow-[0_12px_28px_rgba(15,23,42,0.22)]'
                                                             }`}
                                                         style={{
                                                             left: itemFrame.left,
@@ -2167,19 +2269,16 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                                             width: itemFrame.width,
                                                             height: itemFrame.height,
                                                             background: isSelected
-                                                                ? 'linear-gradient(135deg, rgba(254, 240, 138, 0.74), rgba(251, 191, 36, 0.46))'
+                                                                ? 'linear-gradient(135deg, rgba(254, 240, 138, 0.95), rgba(251, 191, 36, 0.82))'
                                                                 : isLocked
-                                                                    ? 'linear-gradient(135deg, rgba(248, 113, 113, 0.38), rgba(239, 68, 68, 0.2))'
-                                                                    : isGroupHighlighted
-                                                                        ? 'linear-gradient(135deg, rgba(103, 232, 249, 0.58), rgba(14, 165, 233, 0.26))'
-                                                                    : 'linear-gradient(135deg, rgba(125, 211, 252, 0.42), rgba(14, 165, 233, 0.18))',
+                                                                    ? 'linear-gradient(135deg, rgba(248, 113, 113, 0.92), rgba(239, 68, 68, 0.8))'
+                                                                    : pieceColor.fill,
                                                             borderColor: isSelected
-                                                                ? 'rgba(250, 204, 21, 0.85)'
+                                                                ? 'rgba(250, 204, 21, 0.9)'
                                                                 : isLocked
-                                                                    ? 'rgba(239, 68, 68, 0.6)'
-                                                                    : isGroupHighlighted
-                                                                        ? 'rgba(103, 232, 249, 0.95)'
-                                                                    : 'rgba(14, 165, 233, 0.72)',
+                                                                    ? 'rgba(239, 68, 68, 0.8)'
+                                                                    : pieceColor.border,
+                                                            boxShadow: isGroupHighlighted && !isSelected ? `inset 0 0 0 2px ${pieceColor.border}` : undefined,
                                                             color: 'rgba(15, 23, 42, 0.88)'
                                                         }}
                                                         title={`#${idx + 1}: ${item.label} (${item.w.toFixed(1)} x ${item.h.toFixed(1)}) - Clique para selecionar`}
@@ -2189,13 +2288,13 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                                             className="absolute inset-0 flex items-center justify-center overflow-hidden rounded-[3px] font-black pointer-events-none select-none"
                                                             style={{
                                                                 fontSize: `${Math.min(item.w, item.h) * fullscreenScale * 0.5}px`,
-                                                                color: isSelected ? 'rgba(120, 53, 15, 0.2)' : isGroupHighlighted ? 'rgba(8, 47, 73, 0.18)' : 'rgba(15, 23, 42, 0.12)'
+                                                                color: isSelected ? 'rgba(120, 53, 15, 0.3)' : isLocked ? 'rgba(127, 29, 29, 0.28)' : `${pieceColor.ink}30`
                                                             }}
                                                         >
                                                             {idx + 1}
                                                         </div>
-                                                        {/* Dimensions */}
-                                                        {showDimensionLabels && (
+                                                        {/* Dimensions — só na peça representante do grupo */}
+                                                        {showDimensionLabels && isRepresentative && (
                                                             <>
                                                                 <div className={`absolute bottom-1.5 right-1.5 z-20 rounded-md border px-1.5 py-1 text-[11px] font-black leading-none tabular-nums shadow-sm backdrop-blur ${isSelected ? 'border-yellow-200 bg-yellow-50/95 text-yellow-950' : 'border-white/70 bg-white/90 text-slate-900'}`}>
                                                                     {itemFrame.horizontalLabel}
@@ -2290,6 +2389,35 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                             })}
                                         </div>
                                         </div>
+                                    </div>
+                                </div>
+                                {/* Zoom flutuante — sobreposto, não ocupa espaço do desenho. Toque no % reseta. */}
+                                <div className="absolute bottom-4 left-1/2 z-40 -translate-x-1/2">
+                                    <div className="flex items-center gap-0.5 rounded-full border border-slate-200/80 bg-white/95 p-1 shadow-[0_10px_30px_rgba(15,23,42,0.22)] backdrop-blur-xl dark:border-slate-700 dark:bg-slate-950/95">
+                                        <button
+                                            onClick={() => setFullscreenZoom(prev => Math.max(0.25, prev - 0.25))}
+                                            className="flex h-10 w-10 items-center justify-center rounded-full text-slate-700 transition-colors active:bg-slate-100 dark:text-slate-100 dark:active:bg-slate-800"
+                                            title="Diminuir zoom"
+                                            aria-label="Diminuir zoom"
+                                        >
+                                            <Minus className="h-5 w-5" aria-hidden="true" />
+                                        </button>
+                                        <button
+                                            onClick={() => setFullscreenZoom(1)}
+                                            className="flex h-10 min-w-[60px] items-center justify-center rounded-full px-2 text-sm font-black tabular-nums text-slate-900 transition-colors active:bg-slate-100 dark:text-white dark:active:bg-slate-800"
+                                            title="Resetar zoom (100%)"
+                                            aria-label="Resetar zoom"
+                                        >
+                                            {Math.round(fullscreenZoom * 100)}%
+                                        </button>
+                                        <button
+                                            onClick={() => setFullscreenZoom(prev => Math.min(5, prev + 0.25))}
+                                            className="flex h-10 w-10 items-center justify-center rounded-full text-slate-700 transition-colors active:bg-slate-100 dark:text-slate-100 dark:active:bg-slate-800"
+                                            title="Aumentar zoom"
+                                            aria-label="Aumentar zoom"
+                                        >
+                                            <Plus className="h-5 w-5" aria-hidden="true" />
+                                        </button>
                                     </div>
                                 </div>
                                 <div className="pointer-events-none absolute bottom-4 right-4 z-40 hidden sm:block">

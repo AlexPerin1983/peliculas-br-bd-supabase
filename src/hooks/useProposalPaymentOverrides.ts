@@ -44,6 +44,30 @@ export const getDefaultProposalPaymentConfig = (userInfo: UserInfo | null): Prop
     prazoPagamento: userInfo?.prazoPagamento || ''
 });
 
+/**
+ * Resolve a configuração de pagamento de uma proposta (cliente + opção) fora de um
+ * componente React — usa o override salvo no localStorage e, se não houver, cai para
+ * o padrão da empresa. Espelha exatamente a regra de `effectivePaymentConfig` do hook,
+ * para que o orçamento gerado em segundo plano use a mesma config que a tela usaria.
+ */
+export const resolveProposalPaymentConfig = (
+    clientId: number | null | undefined,
+    optionName: string | null | undefined,
+    userInfo: UserInfo | null
+): ProposalPaymentConfig => {
+    if (clientId && optionName?.trim()) {
+        const override = readStoredOverrides()[buildStorageKey(clientId, optionName)];
+        if (override) {
+            return {
+                paymentMethods: clonePaymentMethods(override.paymentMethods),
+                prazoPagamento: override.prazoPagamento || ''
+            };
+        }
+    }
+
+    return getDefaultProposalPaymentConfig(userInfo);
+};
+
 interface UseProposalPaymentOverridesParams {
     selectedClientId: number | null;
     activeOptionName: string | null;

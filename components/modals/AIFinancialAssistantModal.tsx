@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Sparkles, AlertCircle, KeyRound, BarChart3, Send, RefreshCw } from 'lucide-react';
+import { Sparkles, AlertCircle, BarChart3, Send, RefreshCw } from 'lucide-react';
 import Modal from '../ui/Modal';
 import {
     FinancialSummary,
@@ -24,6 +24,7 @@ interface AIFinancialAssistantModalProps {
     provider?: 'gemini' | 'openai' | 'local_ocr';
     cache: FinancialAnalysisCache | null;
     onCached: (entry: FinancialAnalysisCache) => void;
+    onActivateAI?: () => void;
 }
 
 const AIFinancialAssistantModal: React.FC<AIFinancialAssistantModalProps> = ({
@@ -33,7 +34,8 @@ const AIFinancialAssistantModal: React.FC<AIFinancialAssistantModalProps> = ({
     apiKey,
     provider,
     cache,
-    onCached
+    onCached,
+    onActivateAI
 }) => {
     const {
         messages,
@@ -137,12 +139,27 @@ const AIFinancialAssistantModal: React.FC<AIFinancialAssistantModalProps> = ({
 
                 <div className="border-t border-[var(--border-subtle)] pt-4">
                     {!canUseAI && (
-                        <div className="flex flex-col items-center justify-center gap-3 py-8 text-center">
-                            <KeyRound className="h-10 w-10 text-blue-500" aria-hidden="true" />
+                        <div className="flex flex-col items-center justify-center gap-4 py-8 text-center">
+                            <div
+                                className="flex h-14 w-14 items-center justify-center rounded-2xl"
+                                style={{ background: 'var(--brand-primary-soft)' }}
+                            >
+                                <Sparkles className="h-7 w-7" style={{ color: 'var(--brand-primary)' }} aria-hidden="true" />
+                            </div>
                             <p className="max-w-sm text-sm text-[var(--text-body)]">
-                                Para usar o Assistente Financeiro, configure o provedor <strong>Gemini</strong> e
-                                sua chave de API em <strong>Configuracoes &gt; Empresa</strong>.
+                                Ative a inteligência artificial para o assistente analisar os números do seu negócio. É grátis e leva uns 2 minutinhos.
                             </p>
+                            {onActivateAI && (
+                                <button
+                                    type="button"
+                                    onClick={onActivateAI}
+                                    className="inline-flex items-center gap-2 rounded-[var(--radius-control)] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_10px_20px_rgba(21,94,239,0.18)] transition-colors"
+                                    style={{ background: 'var(--brand-primary)' }}
+                                >
+                                    <Sparkles className="h-4 w-4" aria-hidden="true" />
+                                    Ativar Inteligência Artificial
+                                </button>
+                            )}
                         </div>
                     )}
 

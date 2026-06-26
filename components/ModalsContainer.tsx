@@ -344,6 +344,7 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
                     onAddNewClient={props.handleAddNewClientFromAgendamento}
                     userInfo={props.userInfo}
                     agendamentos={props.agendamentos}
+                    onOpenApiKeyModal={() => props.setIsApiKeyModalOpen(true)}
                 />
             )}
 

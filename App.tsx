@@ -64,9 +64,10 @@ import OnboardingTour from './components/onboarding/OnboardingTour';
 import { seedExampleDataIfNeeded } from './services/seedData';
 import { GEMINI_TEXT_MODEL } from './src/lib/geminiModel';
 import { createPastedMeasurementsFromClipboard } from './src/lib/measurementClipboard';
+import { enviarDocumento, getConversa, getGatilhos, getGatilhosEnvio, isWaConnectorEnabled, soDigitos } from './src/lib/waConnector';
 
 
-type ActiveTab = 'dashboard' | 'client' | 'cliente_hub' | 'clients_list' | 'films' | 'settings' | 'history' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores' | 'assistentes';
+type ActiveTab = 'dashboard' | 'client' | 'cliente_hub' | 'clients_list' | 'films' | 'settings' | 'history' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores' | 'assistentes' | 'wa_connector';
 
 interface BillingReturnState {
     status: BillingReturnStatus;
@@ -90,6 +91,20 @@ interface QuickProposalExtraction {
     cliente?: Partial<ExtractedClientData>;
     medidas?: QuickProposalMeasurement[];
     observacoes?: string;
+}
+
+// Converte base64 (mídia vinda do conector de WhatsApp) em Uint8Array / Blob / File.
+function base64ToBytes(base64: string): Uint8Array {
+    const bin = atob(base64);
+    const arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return arr;
+}
+function base64ParaBlob(base64: string, mime: string): Blob {
+    return new Blob([base64ToBytes(base64)], { type: mime });
+}
+function base64ParaFile(base64: string, mime: string, nome: string): File {
+    return new File([base64ToBytes(base64)], nome, { type: mime });
 }
 
 // Função para sanitizar nomes com problemas de encoding para uso em filenames
@@ -1146,14 +1161,15 @@ const App: React.FC = () => {
         handleDownloadPdf,
         handleGeneratePdfWithSaveCheck,
         handleConfirmSaveBeforePdf,
-        handleGenerateCombinedPdf
+        handleGenerateCombinedPdf,
+        gerarOrcamentoParaEnvio,
+        gerarOrcamentoParaEnvioPorCliente
     } = usePdfActions({
         measurements,
         films,
         generalDiscount,
         totals,
         selectedClient,
-        selectedClientId,
         userInfo,
         activeOption,
         proposalPaymentConfig: effectivePaymentConfig,
@@ -1336,6 +1352,25 @@ const App: React.FC = () => {
         uf: clientData?.uf?.trim().slice(0, 2).toUpperCase() || '',
         lastUpdated: new Date().toISOString()
     });
+
+    // Conector de WhatsApp (uso local): salva o contato capturado como cliente,
+    // deduplicando por id e por telefone, sem trocar o cliente selecionado.
+    const handleSaveCapturedClient = useCallback(async (data: { nome: string; telefone: string }) => {
+        const telefone = data.telefone.replace(/\D/g, '');
+        const savedClient = await db.saveClient({
+            nome: data.nome.trim() || 'Cliente sem nome',
+            telefone,
+            email: '',
+            cpfCnpj: '',
+            lastUpdated: new Date().toISOString()
+        });
+        setClients(prev => {
+            const without = prev.filter(
+                c => c.id !== savedClient.id && (c.telefone || '').replace(/\D/g, '') !== telefone
+            );
+            return [savedClient, ...without];
+        });
+    }, [setClients]);
 
     const createQuickProposalMeasurements = (items: QuickProposalMeasurement[]): UIMeasurement[] => {
         const highConfidenceThreshold = 0.85;
@@ -1539,9 +1574,219 @@ Regras:
         }
     }, [userInfo, createEmptyMeasurement, films, loadClients, handleShowInfo, showToast]);
 
+    // Fase 2 / Etapa 1: monta o rascunho da proposta a partir da conversa do WhatsApp.
+    // Reaproveita o mesmo motor da Proposta rápida (Gemini + medidas + película) e abre
+    // a proposta no cliente para revisão. Anexa ao cliente existente (pelo telefone) se houver.
+    const handleMontarOrcamentoFromConversa = useCallback(async (telefone: string, nomeContato: string) => {
+        if (!userInfo?.aiConfig?.apiKey || userInfo.aiConfig.provider !== 'gemini') {
+            handleShowInfo("Para montar o orçamento pela conversa, configure o Gemini na aba 'Empresa'.");
+            return;
+        }
+        const digits = telefone.replace(/\D/g, '');
+        setIsProcessingAI(true);
+        try {
+            const mensagens = await getConversa(digits);
+            if (!mensagens || mensagens.length === 0) {
+                handleShowInfo("Ainda não há conversa registrada com esse contato para a IA ler.");
+                return;
+            }
+
+            const conversaTexto = mensagens
+                .map(m => `${m.fromMe ? 'Atendente' : 'Cliente'}: ${m.texto}`)
+                .join('\n');
+            const prefixo = "Conversa de WhatsApp entre o atendente e o cliente (pode incluir fotos e áudios enviados pelo cliente). Extraia os dados do CLIENTE e as medidas/películas que o cliente pediu, considerando texto, imagens e áudios. Ignore valores e preços que o atendente mencionou.\n\n";
+
+            // Inclui as fotos e o áudio mais recente que o cliente mandou na conversa.
+            const imagens: File[] = [];
+            let audio: Blob | undefined;
+            for (const m of mensagens) {
+                if (!m.midia?.base64) continue;
+                if (m.midia.tipo === 'image' && imagens.length < 5) {
+                    imagens.push(base64ParaFile(m.midia.base64, m.midia.mimetype || 'image/jpeg', `foto_${imagens.length + 1}.jpg`));
+                } else if (m.midia.tipo === 'audio') {
+                    audio = base64ParaBlob(m.midia.base64, m.midia.mimetype || 'audio/ogg');
+                }
+            }
+
+            const extracted = await processQuickProposalWithGemini({ text: prefixo + conversaTexto, images: imagens, audio });
+            const quickMeasurements = createQuickProposalMeasurements(extracted.medidas || []);
+
+            // Cliente: usa o existente (pelo telefone) ou cria a partir do que a IA extraiu.
+            const existing = clients.find(c => (c.telefone || '').replace(/\D/g, '') === digits);
+            const baseExtraido = buildQuickProposalClient({ ...extracted.cliente, telefone: digits });
+            const clientePayload = existing
+                ? { ...existing, telefone: digits, lastUpdated: new Date().toISOString() }
+                : {
+                    ...baseExtraido,
+                    nome: baseExtraido.nome === 'Cliente sem nome' && nomeContato ? nomeContato : baseExtraido.nome
+                };
+
+            const savedClient = await db.saveClient(clientePayload);
+            if (!savedClient.id) {
+                throw new Error("Não foi possível salvar o cliente.");
+            }
+
+            const proposalOptionId = Date.now();
+            const proposalOption: ProposalOption = {
+                id: proposalOptionId,
+                name: 'Opcao 1',
+                measurements: quickMeasurements.map(({ isNew, ...measurement }) => measurement),
+                generalDiscount: { value: '', type: 'fixed', operation: 'discount', pricingMode: 'complete' }
+            };
+            await db.saveProposalOptions(savedClient.id, [proposalOption]);
+            await loadClients(savedClient.id);
+            setActiveTab('client');
+            setActiveOptionId(proposalOptionId);
+
+            if (quickMeasurements.length > 0) {
+                const suggestionCount = quickMeasurements.filter(m => m.aiFilmSuggestion).length;
+                const suggestionText = suggestionCount > 0 ? ` ${suggestionCount} película(s) ficaram como sugestão.` : '';
+                showToast(`Rascunho criado com ${quickMeasurements.length} medida(s). Revise antes de gerar o PDF.${suggestionText}`, {
+                    tone: 'success',
+                    duration: 3200
+                });
+            } else {
+                showToast('Cliente aberto, mas a IA não achou medidas na conversa. Adicione as medidas manualmente.', {
+                    tone: 'warning',
+                    duration: 3600
+                });
+            }
+        } catch (error) {
+            console.error("Erro ao montar orçamento pela conversa:", error);
+            handleShowInfo(`Erro: ${error instanceof Error ? error.message : 'Tente novamente'}`);
+        } finally {
+            setIsProcessingAI(false);
+        }
+    }, [userInfo, clients, loadClients, handleShowInfo, showToast]);
+
+    // Fase 2 / Etapa 3: o "segue orçamento" chega pelo WhatsApp e precisa correr sozinho,
+    // mesmo com outra proposta aberta ou ninguém na tela. Resolve o contato pelo telefone,
+    // gera o PDF da proposta DELE (da tela se estiver aberta, senão do que está salvo no
+    // banco) e envia — sem travar num modal pedindo pra abrir a proposta certa.
+    const handleGerarEnviarOrcamento = useCallback(async (telefone: string) => {
+        const digits = soDigitos(telefone);
+
+        // Acha o contato que mandou "segue orçamento". Procura no estado e, se não achar
+        // (cliente recém-criado pelo gatilho de "orçar" no mesmo ciclo), confere no banco.
+        let target = clients.find(c => soDigitos(c.telefone) === digits) || null;
+        if (!target && digits) {
+            try {
+                const todos = await db.getAllClients();
+                target = todos.find(c => soDigitos(c.telefone) === digits) || null;
+            } catch (error) {
+                console.error('[WA] Erro ao buscar o contato para envio:', error);
+            }
+        }
+
+        if (!target) {
+            // Sem proposta pra esse contato — não trava o app, só registra (o gatilho de
+            // "orçar" normalmente monta a proposta antes). O toast some sozinho.
+            showToast('Recebi "segue orçamento" de um contato sem proposta montada.', { tone: 'warning', duration: 4000 });
+            return;
+        }
+
+        const destino = soDigitos(target.telefone) || digits;
+        if (!destino) {
+            showToast(`A proposta de "${target.nome}" não tem telefone para receber o orçamento.`, { tone: 'warning', duration: 4000 });
+            return;
+        }
+
+        // "segue orçamento" = sua autorização. Envia direto, sem clique.
+        showToast(`Gerando e enviando o orçamento de "${target.nome}"...`, { tone: 'info', duration: 2000 });
+
+        // Proposta aberta na tela: usa o estado atual (inclui edições não salvas).
+        // Qualquer outro contato: gera em segundo plano a partir do banco.
+        const result = target.id === selectedClientId
+            ? await gerarOrcamentoParaEnvio()
+            : await gerarOrcamentoParaEnvioPorCliente(target);
+
+        if (!result) {
+            showToast(`Não consegui montar o orçamento de "${target.nome}". A proposta tem medidas válidas?`, { tone: 'warning', duration: 4000 });
+            return;
+        }
+        const { blob, filename } = result;
+
+        try {
+            const { data } = await blobToBase64(blob);
+            await enviarDocumento(destino, data, filename, 'Segue seu orçamento. Qualquer dúvida, é só chamar!');
+            showToast(`Orçamento enviado para ${target.nome} no WhatsApp!`, { tone: 'success', duration: 3000 });
+        } catch (error) {
+            handleShowInfo(`Não consegui enviar pelo WhatsApp: ${error instanceof Error ? error.message : 'erro'}. O conector está conectado?`);
+        }
+    }, [clients, selectedClientId, gerarOrcamentoParaEnvio, gerarOrcamentoParaEnvioPorCliente, showToast, handleShowInfo]);
+
+    // Liga/desliga a automação do WhatsApp (botão "Parar automação" na seção do WhatsApp).
+    const [waAutomacaoAtiva, setWaAutomacaoAtiva] = useState<boolean>(() => {
+        try { return localStorage.getItem('wa-automacao-ativa') !== 'false'; } catch { return true; }
+    });
+    const waAutomacaoRef = useRef(waAutomacaoAtiva);
+    useEffect(() => { waAutomacaoRef.current = waAutomacaoAtiva; }, [waAutomacaoAtiva]);
+    const handleToggleWaAutomacao = useCallback(() => {
+        setWaAutomacaoAtiva(prev => {
+            const next = !prev;
+            try { localStorage.setItem('wa-automacao-ativa', String(next)); } catch { /* ignore */ }
+            return next;
+        });
+    }, []);
+
+    // Polling global dos gatilhos do WhatsApp (orçar + enviar), funciona de qualquer aba.
+    // Só roda localmente quando a flag VITE_WA_CONNECTOR está ligada.
+    useEffect(() => {
+        if (!isWaConnectorEnabled()) return;
+        let cancelled = false;
+        let rodando = false;
+        const ORCAR_KEY = 'wa-gatilho-orcar-since';
+        const ENVIO_KEY = 'wa-gatilho-envio-since';
+        const agora = Date.now();
+        let orcarSince = Number(localStorage.getItem(ORCAR_KEY)) || agora;
+        let envioSince = Number(localStorage.getItem(ENVIO_KEY)) || agora;
+        localStorage.setItem(ORCAR_KEY, String(orcarSince));
+        localStorage.setItem(ENVIO_KEY, String(envioSince));
+
+        const tick = async () => {
+            if (rodando || cancelled) return;
+            rodando = true;
+            try {
+                const [orcar, envio] = await Promise.all([
+                    getGatilhos(orcarSince).catch(() => []),
+                    getGatilhosEnvio(envioSince).catch(() => [])
+                ]);
+                if (cancelled) return;
+                // Automação pausada: ainda consome os gatilhos (avança o "since" para
+                // descartá-los), mas NÃO executa nada.
+                const automacaoOn = waAutomacaoRef.current;
+                if (orcar.length > 0) {
+                    orcarSince = Math.max(orcarSince, ...orcar.map(g => g.ts));
+                    localStorage.setItem(ORCAR_KEY, String(orcarSince));
+                    if (automacaoOn) {
+                        const latest = orcar.reduce((a, b) => (b.ts > a.ts ? b : a));
+                        const nome = latest.nome || clients.find(c => soDigitos(c.telefone) === soDigitos(latest.telefone))?.nome || '';
+                        await handleMontarOrcamentoFromConversa(latest.telefone, nome);
+                    }
+                }
+                if (cancelled) return;
+                if (envio.length > 0) {
+                    envioSince = Math.max(envioSince, ...envio.map(g => g.ts));
+                    localStorage.setItem(ENVIO_KEY, String(envioSince));
+                    if (automacaoOn) {
+                        const latest = envio.reduce((a, b) => (b.ts > a.ts ? b : a));
+                        await handleGerarEnviarOrcamento(latest.telefone);
+                    }
+                }
+            } finally {
+                rodando = false;
+            }
+        };
+
+        const id = window.setInterval(tick, 3500);
+        return () => { cancelled = true; window.clearInterval(id); };
+    }, [clients, handleMontarOrcamentoFromConversa, handleGerarEnviarOrcamento]);
+
     const handleProcessAIClientInput = useCallback(async (input: AIInput) => {
         if (!userInfo?.aiConfig?.apiKey) {
-            showError("Por favor, configure sua chave de API do Google Gemini na aba 'Empresa' para usar esta funcionalidade.");
+            // Sem IA ativada: leva direto para a tela de ativacao em vez de um beco sem saida.
+            setApiKeyModalProvider('gemini');
+            setIsApiKeyModalOpen(true);
             return;
         }
 
@@ -1573,7 +1818,9 @@ Regras:
 
     const handleProcessAIFilmInput = useCallback(async (input: AIInput) => {
         if (!userInfo?.aiConfig?.apiKey) {
-            showError("Por favor, configure sua chave de API do Google Gemini na aba 'Empresa' para usar esta funcionalidade.");
+            // Sem IA ativada: leva direto para a tela de ativacao em vez de um beco sem saida.
+            setApiKeyModalProvider('gemini');
+            setIsApiKeyModalOpen(true);
             return;
         }
 
@@ -1877,9 +2124,11 @@ Regras:
             return;
         }
 
-        // Modo Gemini/OpenAI - requer API key
+        // Modo Gemini/OpenAI - requer IA ativada
         if (!userInfo?.aiConfig?.apiKey) {
-            showError("Por favor, configure sua chave de API na aba 'Empresa' para usar esta funcionalidade.");
+            // Leva direto para a tela de ativacao em vez de um beco sem saida.
+            setApiKeyModalProvider('gemini');
+            setIsApiKeyModalOpen(true);
             return;
         }
 
@@ -2073,6 +2322,22 @@ Regras:
         }
     }, [userInfo, apiKeyModalProvider]);
 
+    // Porteiro único da IA: garante que o recurso está liberado (modulo comprado)
+    // e que a IA foi ativada (chave configurada). Se faltar algo, leva o usuario
+    // direto para a tela certa — upgrade ou ativacao — em vez de deixar ele
+    // abrir a funcao, digitar tudo e so depois descobrir que falta configurar.
+    const ensureAiReady = useCallback((): boolean => {
+        if (!hasModule('ia_ocr')) {
+            setShowIaUpgradeModal(true);
+            return false;
+        }
+        if (!userInfo?.aiConfig?.apiKey) {
+            handleOpenApiKeyModal('gemini');
+            return false;
+        }
+        return true;
+    }, [hasModule, userInfo, handleOpenApiKeyModal]);
+
     const handleSaveGeneralDiscount = useCallback((discount: ProposalDiscount) => {
         handleGeneralDiscountChange(discount);
         setIsGeneralDiscountModalOpen(false);
@@ -2096,36 +2361,29 @@ Regras:
     }, []);
 
     const handleOpenAIClientModal = useCallback(() => {
-        if (hasModule('ia_ocr')) {
-            setIsClientModalOpen(false);
-            setIsAIClientModalOpen(true);
-        } else {
-            setShowIaUpgradeModal(true);
-        }
-    }, [hasModule]);
+        if (!ensureAiReady()) return;
+        setIsClientModalOpen(false);
+        setIsAIClientModalOpen(true);
+    }, [ensureAiReady]);
 
     const handleOpenAIQuickProposalModal = useCallback(() => {
-        if (hasModule('ia_ocr')) {
-            setIsClientModalOpen(false);
-            setIsAIClientModalOpen(false);
-            setIsAIMeasurementModalOpen(false);
-            setIsAIQuickProposalModalOpen(true);
-        } else {
-            setShowIaUpgradeModal(true);
-        }
-    }, [hasModule]);
+        if (!ensureAiReady()) return;
+        setIsClientModalOpen(false);
+        setIsAIClientModalOpen(false);
+        setIsAIMeasurementModalOpen(false);
+        setIsAIQuickProposalModalOpen(true);
+    }, [ensureAiReady]);
 
     const handleOpenAIFilmModal = useCallback(() => {
-        if (hasModule('ia_ocr')) {
-            setIsAIFilmModalOpen(true);
-        } else {
-            setShowIaUpgradeModal(true);
-        }
-    }, [hasModule]);
+        if (!ensureAiReady()) return;
+        setIsAIFilmModalOpen(true);
+    }, [ensureAiReady]);
 
     const handleProcessAIMeasurementInput = useCallback(async (input: AIInput) => {
         if (!userInfo?.aiConfig?.apiKey) {
-            handleShowInfo("Por favor, configure sua chave de API na aba 'Empresa' para usar esta funcionalidade.");
+            // Leva direto para a tela de ativacao em vez de um beco sem saida.
+            setApiKeyModalProvider('gemini');
+            setIsApiKeyModalOpen(true);
             return;
         }
 
@@ -2472,6 +2730,10 @@ Se não conseguir extrair, retorne: []`;
             onPasteCopiedMeasurements={handlePasteCopiedMeasurements}
             onTogglePin={handleToggleClientPin}
             onAddNewClient={handleAddNewClientFromSelection}
+            onSaveCapturedClient={handleSaveCapturedClient}
+            onMontarOrcamento={handleMontarOrcamentoFromConversa}
+            waAutomacaoAtiva={waAutomacaoAtiva}
+            onToggleWaAutomacao={handleToggleWaAutomacao}
             isClientsLoading={isLoading}
         />
     );
@@ -2757,13 +3019,11 @@ Se não conseguir extrair, retorne: []`;
                                         onDuplicateMeasurements={duplicateAllMeasurements}
                                         onGeneratePdf={handleGeneratePdf}
                                         onOpenAIModal={() => {
-                                            if (hasModule('ia_ocr')) {
-                                                setIsAIMeasurementModalOpen(true);
-                                            } else {
-                                                setShowIaUpgradeModal(true);
-                                            }
+                                            if (!ensureAiReady()) return;
+                                            setIsAIMeasurementModalOpen(true);
                                         }}
                                         defaultHideMeasurements={!!userInfo?.hideMeasurementsInPdf}
+                                        defaultIncluirTermo={userInfo?.incluirTermoResponsabilidadePadrao ?? true}
                                     />
                                 ) : ['history', 'agenda'].includes(activeTab) ? (
                                     <div className={activeTab === 'history'

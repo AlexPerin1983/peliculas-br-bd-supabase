@@ -5,7 +5,6 @@ import {
     CalendarDays,
     CheckCircle2,
     FileText,
-    KeyRound,
     Loader2,
     Lock,
     Megaphone,
@@ -40,6 +39,7 @@ interface AssistentesViewProps {
     allSavedPdfs: SavedPDF[];
     clients: Client[];
     aiConfig?: { provider: 'gemini' | 'openai' | 'local_ocr'; apiKey: string };
+    onOpenApiKeyModal?: (provider: 'gemini' | 'openai') => void;
 }
 
 type AssistantId = 'financeiro' | 'secretaria' | 'vendedor' | 'marketing';
@@ -202,7 +202,8 @@ const FinancialAssistantPanel: React.FC<{
     provider?: 'gemini' | 'openai' | 'local_ocr';
     cache: FinancialAnalysisCache | null;
     onCached: (entry: FinancialAnalysisCache) => void;
-}> = ({ config, summary, periodLabel, apiKey, provider, cache, onCached }) => {
+    onActivateAI?: () => void;
+}> = ({ config, summary, periodLabel, apiKey, provider, cache, onCached, onActivateAI }) => {
     const {
         messages,
         input,
@@ -273,12 +274,27 @@ const FinancialAssistantPanel: React.FC<{
 
             <div className="flex-1 space-y-4 overflow-y-auto p-4">
                 {!canUseAI && (
-                    <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
-                        <KeyRound className="h-10 w-10 text-rose-500" aria-hidden="true" />
+                    <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
+                        <div
+                            className="flex h-14 w-14 items-center justify-center rounded-2xl"
+                            style={{ background: 'var(--brand-primary-soft)' }}
+                        >
+                            <Sparkles className="h-7 w-7" style={{ color: 'var(--brand-primary)' }} aria-hidden="true" />
+                        </div>
                         <p className="max-w-sm text-sm text-[var(--text-body)]">
-                            Para usar o assistente, configure o provedor <strong>Gemini</strong> e sua chave de API em{' '}
-                            <strong>Configuracoes &gt; Empresa</strong>.
+                            Ative a inteligência artificial para o assistente analisar os números do seu negócio. É grátis e leva uns 2 minutinhos.
                         </p>
+                        {onActivateAI && (
+                            <button
+                                type="button"
+                                onClick={onActivateAI}
+                                className="inline-flex items-center gap-2 rounded-[var(--radius-control)] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_10px_20px_rgba(21,94,239,0.18)] transition-colors"
+                                style={{ background: 'var(--brand-primary)' }}
+                            >
+                                <Sparkles className="h-4 w-4" aria-hidden="true" />
+                                Ativar Inteligência Artificial
+                            </button>
+                        )}
                     </div>
                 )}
 
@@ -380,7 +396,7 @@ const FinancialAssistantPanel: React.FC<{
     );
 };
 
-const AssistentesView: React.FC<AssistentesViewProps> = ({ allSavedPdfs, clients, aiConfig }) => {
+const AssistentesView: React.FC<AssistentesViewProps> = ({ allSavedPdfs, clients, aiConfig, onOpenApiKeyModal }) => {
     const [activeAssistant, setActiveAssistant] = useState<AssistantId>('financeiro');
     const [periodKey, setPeriodKey] = useState<AnalysisPeriodKey>('month');
     const [standaloneExpenses, setStandaloneExpenses] = useState<StandaloneExpense[]>([]);
@@ -507,6 +523,7 @@ const AssistentesView: React.FC<AssistentesViewProps> = ({ allSavedPdfs, clients
                         provider={aiConfig?.provider}
                         cache={cacheMap[signature] ?? null}
                         onCached={entry => setCacheMap(prev => ({ ...prev, [entry.signature]: entry }))}
+                        onActivateAI={onOpenApiKeyModal ? () => onOpenApiKeyModal('gemini') : undefined}
                     />
                 </>
             )}

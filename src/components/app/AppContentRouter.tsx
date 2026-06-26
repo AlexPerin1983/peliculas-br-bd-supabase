@@ -19,12 +19,13 @@ const AgendaView = lazy(() => import('../../../components/views/AgendaView'));
 const EstoqueView = lazy(() => import('../../../components/views/EstoqueView'));
 const FornecedoresView = lazy(() => import('../../../components/views/FornecedoresView'));
 const ServicoQrView = lazy(() => import('../../../components/views/ServicoQrView'));
+const WhatsappConnectorView = lazy(() => import('../../../components/views/WhatsappConnectorView'));
 const ClientHubView = lazy(() => import('../../../components/views/ClientHubView'));
 const ClientListView = lazy(() => import('../../../components/views/ClientListView'));
 const AdminUsers = lazy(() => import('../../../components/AdminUsers').then(module => ({ default: module.AdminUsers })));
 const UserAccount = lazy(() => import('../../../components/UserAccount').then(module => ({ default: module.UserAccount })));
 
-type ActiveTab = 'dashboard' | 'client' | 'cliente_hub' | 'clients_list' | 'films' | 'settings' | 'history' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores' | 'assistentes';
+type ActiveTab = 'dashboard' | 'client' | 'cliente_hub' | 'clients_list' | 'films' | 'settings' | 'history' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores' | 'assistentes' | 'wa_connector';
 
 interface AppContentRouterProps {
     activeTab: ActiveTab;
@@ -102,6 +103,10 @@ interface AppContentRouterProps {
     onPasteCopiedMeasurements?: () => void | Promise<void>;
     onTogglePin?: (id: number) => void;
     onAddNewClient?: (clientName: string) => void;
+    onSaveCapturedClient?: (data: { nome: string; telefone: string }) => Promise<void>;
+    onMontarOrcamento?: (telefone: string, nomeContato: string) => Promise<void>;
+    waAutomacaoAtiva?: boolean;
+    onToggleWaAutomacao?: () => void;
     isClientsLoading?: boolean;
 }
 
@@ -181,6 +186,10 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
     onPasteCopiedMeasurements,
     onTogglePin,
     onAddNewClient,
+    onSaveCapturedClient,
+    onMontarOrcamento,
+    waAutomacaoAtiva = true,
+    onToggleWaAutomacao,
     isClientsLoading = false
 }) => {
     const copiedMeasurementsCount = getMeasurementClipboardCount();
@@ -254,6 +263,7 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
                 onOpenClientModal={onOpenClientModal}
                 onCreateProposal={onCreateProposal}
                 aiConfig={userInfo?.aiConfig}
+                onOpenApiKeyModal={onOpenApiKeyModal}
             />,
             defaultLoadingView
         );
@@ -265,6 +275,7 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
                 allSavedPdfs={allSavedPdfs}
                 clients={clients}
                 aiConfig={userInfo?.aiConfig}
+                onOpenApiKeyModal={onOpenApiKeyModal}
             />,
             defaultLoadingView
         );
@@ -363,6 +374,19 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
                     onAddNewClient={onAddNewClient}
                 />
             </FeatureGate>,
+            defaultLoadingView
+        );
+    }
+
+    if (activeTab === 'wa_connector') {
+        return renderDeferred(
+            <WhatsappConnectorView
+                clients={clients}
+                onSaveClient={onSaveCapturedClient ?? (async () => undefined)}
+                onMontarOrcamento={onMontarOrcamento}
+                automacaoAtiva={waAutomacaoAtiva}
+                onToggleAutomacao={onToggleWaAutomacao}
+            />,
             defaultLoadingView
         );
     }

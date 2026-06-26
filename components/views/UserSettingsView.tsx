@@ -13,7 +13,7 @@ import { getActiveInvite, createOrganizationInvite } from '../../services/invite
 import { processLogoImage } from '../../services/imageProcessing';
 import { useTheme } from '../../src/contexts/ThemeContext';
 import { useFeedback } from '../../src/contexts/FeedbackContext';
-import { AlertTriangle, CheckCircle2, DollarSign, Facebook, FileSignature, Instagram, KeyRound, Loader2, MessageSquare, Moon, Palette, QrCode, Save, Settings, Share2, Shield, Smartphone, Sun, Users, Clock, Building2, Bot, Youtube, ChevronDown, Sparkles, X, Layers } from 'lucide-react';
+import { CheckCircle2, DollarSign, Facebook, FileSignature, Instagram, Loader2, MessageSquare, Moon, Palette, QrCode, Save, Settings, Share2, Shield, Smartphone, Sun, Users, Clock, Building2, Bot, Youtube, ChevronDown, Sparkles, X, Layers } from 'lucide-react';
 import { FeatureGate } from '../subscription/SubscriptionComponents';
 import { PremiumFeatureSection } from '../subscription/PremiumFeatureSection';
 
@@ -1002,15 +1002,17 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({
                     onSaveSection={() => handleSaveSection('ai')}
                 >
                     <div className="space-y-4">
-                        <div className="rounded-[var(--radius-panel)] border border-amber-200 bg-amber-50 p-3.5 dark:border-amber-800/50 dark:bg-amber-900/20">
-                            <p className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-300">
-                                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-                                <span><strong>Privacidade:</strong> Ao configurar a IA, dados serão enviados ao provedor escolhido. A responsabilidade e os custos são do usuário.</span>
+                        <div className="rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--brand-primary-soft)] p-3.5">
+                            <p className="flex items-start gap-2 text-xs leading-relaxed text-[var(--text-body)]">
+                                <Sparkles className="mt-0.5 h-4 w-4 shrink-0" style={{ color: 'var(--brand-primary)' }} aria-hidden="true" />
+                                <span>
+                                    O app usa o <strong>Google Gemini</strong>, a inteligência artificial do Google, para trabalhar por você — preenchendo orçamentos, fichas de clientes e muito mais. É grátis e a ativação leva uns 2 minutinhos.
+                                </span>
                             </p>
                         </div>
 
                         <div>
-                            <label className={labelClass}>Provedor de IA</label>
+                            <label className={labelClass}>Sua inteligência artificial</label>
                             <div className="mt-2 flex items-center gap-3 rounded-[var(--radius-control)] border border-[var(--brand-primary)] bg-[var(--brand-primary)] px-4 py-3 text-sm font-semibold text-white shadow-[0_10px_20px_rgba(21,94,239,0.16)]">
                                 <Bot className="h-4 w-4" aria-hidden="true" />
                                 Google Gemini
@@ -1022,8 +1024,8 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({
                             onClick={() => onOpenApiKeyModal('gemini')}
                             className={`${primaryButtonClassName} w-full`}
                         >
-                            <KeyRound className="h-4 w-4" aria-hidden="true" />
-                            {formData.aiConfig?.apiKey ? 'Alterar Chave de API' : 'Configurar Chave de API'}
+                            <Sparkles className="h-4 w-4" aria-hidden="true" />
+                            {formData.aiConfig?.apiKey ? 'Gerenciar Inteligência Artificial' : 'Ativar Inteligência Artificial'}
                         </button>
                     </div>
                 </SettingsSection>

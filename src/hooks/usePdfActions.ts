@@ -2,6 +2,8 @@ import { Dispatch, SetStateAction, useCallback } from 'react';
 import * as db from '../../services/db';
 import { Client, Film, ProposalDiscount, ProposalOption, ProposalPaymentConfig, SavedPDF, Totals, UIMeasurement, UserInfo } from '../../types';
 import { clampValidityDays } from '../lib/proposalValidity';
+import { calculateProposalTotals } from '../lib/calculateProposalTotals';
+import { resolveProposalPaymentConfig } from './useProposalPaymentOverrides';
 
 type PdfGenerationStatus = 'idle' | 'generating' | 'success';
 type DiscountType = ProposalDiscount;
@@ -12,7 +14,6 @@ interface UsePdfActionsParams {
     generalDiscount: DiscountType;
     totals: Totals;
     selectedClient: Client | null;
-    selectedClientId: number | null;
     userInfo: UserInfo | null;
     activeOption: ProposalOption | null;
     proposalPaymentConfig: ProposalPaymentConfig;
@@ -50,7 +51,6 @@ export function usePdfActions({
     generalDiscount,
     totals,
     selectedClient,
-    selectedClientId,
     userInfo,
     activeOption,
     proposalPaymentConfig,
@@ -134,16 +134,23 @@ export function usePdfActions({
         handleShowInfo('Não foi possível baixar o PDF.');
     }, [downloadBlob, handleShowInfo, userInfo, selectedClient, clients, films]);
 
-    const executePdfGeneration = useCallback(async () => {
-        const activeMeasurements = measurements.filter(measurement =>
-            measurement.active &&
-            parseFloat(String(measurement.largura).replace(',', '.')) > 0 &&
-            parseFloat(String(measurement.altura).replace(',', '.')) > 0
-        );
+    // Núcleo de geração: monta o PDF, salva no banco e atualiza o histórico. Compartilhado
+    // entre a geração da proposta aberta na tela e a geração em segundo plano (WhatsApp).
+    // Não exibe modais — quem chama decide como avisar (toast na tela, silêncio no background).
+    const buildAndSavePdf = useCallback(async (params: {
+        client: Client;
+        activeMeasurements: UIMeasurement[];
+        generalDiscount: DiscountType;
+        totals: Totals;
+        optionName: string;
+        optionId: number;
+        paymentConfig: ProposalPaymentConfig;
+        download: boolean;
+    }) => {
+        const { client, activeMeasurements, generalDiscount, totals, optionName, optionId, paymentConfig, download } = params;
 
-        if (activeMeasurements.length === 0) {
-            handleShowInfo('Não há medidas válidas para gerar um orçamento.');
-            return;
+        if (!userInfo || client.id == null) {
+            return null;
         }
 
         setPdfGenerationStatus('generating');
@@ -151,17 +158,17 @@ export function usePdfActions({
         try {
             const { generatePDF } = await import('../../services/pdfGenerator');
             const pdfBlob = await generatePDF(
-                selectedClient!,
-                userInfo!,
+                client,
+                userInfo,
                 activeMeasurements,
                 films,
                 generalDiscount,
                 totals,
-                activeOption!.name,
-                proposalPaymentConfig
+                optionName,
+                paymentConfig
             );
 
-            const filename = `orcamento_${sanitizeForFilename(selectedClient!.nome).replace(/\s+/g, '_').toLowerCase()}_${sanitizeForFilename(activeOption!.name).replace(/\s+/g, '_').toLowerCase()}_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.pdf`;
+            const filename = `orcamento_${sanitizeForFilename(client.nome).replace(/\s+/g, '_').toLowerCase()}_${sanitizeForFilename(optionName).replace(/\s+/g, '_').toLowerCase()}_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.pdf`;
 
             const generalDiscountForDb: SavedPDF['generalDiscount'] = {
                 ...generalDiscount,
@@ -178,14 +185,14 @@ export function usePdfActions({
                 }
             };
 
-            const validityDays = clampValidityDays(userInfo!.proposalValidityDays);
+            const validityDays = clampValidityDays(userInfo.proposalValidityDays);
             const issueDate = new Date();
             const expirationDate = new Date();
             expirationDate.setDate(issueDate.getDate() + validityDays);
 
             const pdfToSave: Omit<SavedPDF, 'id'> = {
-                clienteId: selectedClientId!,
-                clientName: selectedClient.nome,
+                clienteId: client.id,
+                clientName: client.nome,
                 date: issueDate.toISOString(),
                 expirationDate: expirationDate.toISOString(),
                 totalPreco: totals.finalTotal,
@@ -197,37 +204,115 @@ export function usePdfActions({
                 nomeArquivo: filename,
                 measurements: activeMeasurements.map(({ isNew, ...rest }) => rest),
                 status: 'pending',
-                proposalOptionName: activeOption!.name,
-                proposalOptionId: activeOption!.id
+                proposalOptionName: optionName,
+                proposalOptionId: optionId
             };
 
             const savedPdf = await db.savePDF(pdfToSave);
-            downloadBlob(pdfBlob, filename);
+            if (download) {
+                downloadBlob(pdfBlob, filename);
+            }
             setAllSavedPdfs(previous => [savedPdf, ...previous]);
-            if (typeof window !== 'undefined' && selectedClientId != null) {
-                window.localStorage.setItem('peliculas-br-history-focus-client', String(selectedClientId));
+            if (typeof window !== 'undefined') {
+                window.localStorage.setItem('peliculas-br-history-focus-client', String(client.id));
             }
             setPdfGenerationStatus('success');
+            return { blob: pdfBlob, filename, client };
         } catch (error) {
             console.error('Erro ao gerar ou salvar PDF:', error);
-            handleShowInfo('Ocorreu um erro ao gerar o PDF. Verifique o console para mais detalhes.');
             setPdfGenerationStatus('idle');
+            return null;
         }
+    }, [userInfo, films, downloadBlob, setAllSavedPdfs, setPdfGenerationStatus]);
+
+    const executePdfGeneration = useCallback(async (opts?: { download?: boolean }) => {
+        const activeMeasurements = measurements.filter(measurement =>
+            measurement.active &&
+            parseFloat(String(measurement.largura).replace(',', '.')) > 0 &&
+            parseFloat(String(measurement.altura).replace(',', '.')) > 0
+        );
+
+        if (activeMeasurements.length === 0) {
+            handleShowInfo('Não há medidas válidas para gerar um orçamento.');
+            return null;
+        }
+
+        const result = await buildAndSavePdf({
+            client: selectedClient!,
+            activeMeasurements,
+            generalDiscount,
+            totals,
+            optionName: activeOption!.name,
+            optionId: activeOption!.id,
+            paymentConfig: proposalPaymentConfig,
+            download: opts?.download !== false
+        });
+
+        if (!result) {
+            handleShowInfo('Ocorreu um erro ao gerar o PDF. Verifique o console para mais detalhes.');
+        }
+        return result;
     }, [
         measurements,
         selectedClient,
-        userInfo,
-        films,
         generalDiscount,
         totals,
         activeOption,
         proposalPaymentConfig,
-        selectedClientId,
-        setPdfGenerationStatus,
-        downloadBlob,
-        setAllSavedPdfs,
+        buildAndSavePdf,
         handleShowInfo
     ]);
+
+    // Geração em segundo plano para o fluxo "segue orçamento" do WhatsApp: lê a proposta
+    // SALVA no banco do contato (não depende da proposta aberta na tela) e gera o PDF.
+    // Devolve null sem modal quando não há proposta/medidas — quem chama decide o aviso.
+    const gerarOrcamentoParaEnvioPorCliente = useCallback(async (client: Client) => {
+        if (!client?.id || !userInfo) {
+            return null;
+        }
+
+        let options: ProposalOption[] = [];
+        try {
+            options = await db.getProposalOptions(client.id);
+        } catch (error) {
+            console.error('[WA] Erro ao carregar a proposta do contato para envio:', error);
+            return null;
+        }
+
+        const option = options[0];
+        if (!option) {
+            return null;
+        }
+
+        const optionMeasurements = (option.measurements || []) as UIMeasurement[];
+        const activeMeasurements = optionMeasurements.filter(measurement =>
+            measurement.active &&
+            parseFloat(String(measurement.largura).replace(',', '.')) > 0 &&
+            parseFloat(String(measurement.altura).replace(',', '.')) > 0
+        );
+        if (activeMeasurements.length === 0) {
+            return null;
+        }
+
+        const optionDiscount: DiscountType = option.generalDiscount || { value: '', type: 'fixed', operation: 'discount' };
+        const optionTotals = calculateProposalTotals({
+            measurements: optionMeasurements,
+            films,
+            generalDiscount: optionDiscount
+        });
+        const paymentConfig = resolveProposalPaymentConfig(client.id, option.name, userInfo);
+
+        return buildAndSavePdf({
+            client,
+            activeMeasurements,
+            generalDiscount: optionDiscount,
+            totals: optionTotals,
+            optionName: option.name,
+            optionId: option.id,
+            paymentConfig,
+            download: false
+        });
+    }, [userInfo, films, buildAndSavePdf]);
 
     const handleGeneratePdf = useCallback(async () => {
         if (!selectedClient || !userInfo || !activeOption) {
@@ -290,11 +375,19 @@ export function usePdfActions({
         }
     }, [userInfo, clients, films, downloadBlob, handleShowInfo, setPdfGenerationStatus]);
 
+    // Gera o PDF do cliente/proposta aberto e devolve o Blob (sem baixar) — usado pelo envio via WhatsApp.
+    const gerarOrcamentoParaEnvio = useCallback(
+        () => executePdfGeneration({ download: false }),
+        [executePdfGeneration]
+    );
+
     return {
         handleDownloadPdf,
         handleGeneratePdf,
         handleGeneratePdfWithSaveCheck,
         handleConfirmSaveBeforePdf,
-        handleGenerateCombinedPdf
+        handleGenerateCombinedPdf,
+        gerarOrcamentoParaEnvio,
+        gerarOrcamentoParaEnvioPorCliente
     };
 }
