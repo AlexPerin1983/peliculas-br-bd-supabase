@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { matchesSearch } from '../../src/lib/textSearch';
+import { useIsMobile } from '../../src/hooks/useIsMobile';
 
 interface SearchableSelectProps<T> {
     options: T[];
@@ -42,17 +43,19 @@ const SearchableSelect = <T extends { [key: string]: any }>({
     searchFields,
     listHeader,
 }: SearchableSelectProps<T>) => {
+    const isMobile = useIsMobile();
     const [searchTerm, setSearchTerm] = useState('');
     const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
     const [isOpen, setIsOpen] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
+    const sheetInputRef = useRef<HTMLInputElement>(null);
 
     const selectedOption = useMemo(() =>
         options.find(opt => opt[valueField] === value),
         [options, value, valueField]);
 
-    // Effect to set display text when dropdown is closed or value changes
+    // Texto exibido quando fechado / valor muda (somente no fluxo inline do desktop).
     useEffect(() => {
         if (!isOpen) {
             const displayValue = selectedOption ? String(selectedOption[displayField]) : '';
@@ -61,19 +64,16 @@ const SearchableSelect = <T extends { [key: string]: any }>({
         }
     }, [isOpen, selectedOption, displayField]);
 
-    // Effect for debouncing user input
+    // Debounce da digitação.
     useEffect(() => {
-        const timerId = setTimeout(() => {
-            setDebouncedSearchTerm(searchTerm);
-        }, 300);
-
-        return () => {
-            clearTimeout(timerId);
-        };
+        const timerId = setTimeout(() => setDebouncedSearchTerm(searchTerm), 300);
+        return () => clearTimeout(timerId);
     }, [searchTerm]);
 
-    // Effect to handle clicks outside the component
+    // Fechar ao clicar fora — só no dropdown inline (desktop). No mobile o
+    // overlay tem o próprio fechamento (tocar fora / botão), então não atrapalha.
     useEffect(() => {
+        if (isMobile) return;
         const handleClickOutside = (event: MouseEvent) => {
             if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
                 setIsOpen(false);
@@ -81,19 +81,26 @@ const SearchableSelect = <T extends { [key: string]: any }>({
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
+    }, [isMobile]);
 
-    // Effect to autofocus the input
+    // Autofocus do input inline (desktop). No mobile não há input no mount, então
+    // não abre nada sozinho — o seletor só abre quando o usuário toca no campo.
     useEffect(() => {
-        if (autoFocus && inputRef.current) {
+        if (!isMobile && autoFocus && inputRef.current) {
             inputRef.current.focus();
         }
-    }, [autoFocus]);
+    }, [autoFocus, isMobile]);
+
+    // Foca a busca quando o bottom-sheet abre (após a animação de subida).
+    useEffect(() => {
+        if (isMobile && isOpen) {
+            const t = setTimeout(() => sheetInputRef.current?.focus(), 60);
+            return () => clearTimeout(t);
+        }
+    }, [isMobile, isOpen]);
 
     const filteredOptions = useMemo(() => {
-        if (!debouncedSearchTerm) {
-            return options;
-        }
+        if (!debouncedSearchTerm) return options;
         const fields = searchFields && searchFields.length ? searchFields : [displayField];
         return options.filter(option =>
             fields.some(field => matchesSearch(String(option[field] ?? ''), debouncedSearchTerm))
@@ -104,7 +111,7 @@ const SearchableSelect = <T extends { [key: string]: any }>({
         const displayValue = String(option[displayField]);
         onChange(option[valueField]);
         setSearchTerm(displayValue);
-        setDebouncedSearchTerm(displayValue); // Update immediately on select
+        setDebouncedSearchTerm(displayValue);
         setIsOpen(false);
     };
 
@@ -113,22 +120,148 @@ const SearchableSelect = <T extends { [key: string]: any }>({
         if (!isOpen) setIsOpen(true);
     };
 
+    // Foco NÃO abre a lista (evita cobrir o formulário no autoFocus ao abrir o
+    // modal). A lista abre só por intenção do usuário: clicar no campo ou digitar.
     const handleInputFocus = () => {
         if (onFocus) onFocus();
-        setIsOpen(true);
     };
 
     const handleClear = (e: React.MouseEvent) => {
         e.stopPropagation();
         setSearchTerm('');
-        setDebouncedSearchTerm(''); // Clear debounced term immediately
+        setDebouncedSearchTerm('');
         onChange(null);
         setIsOpen(false);
         inputRef.current?.focus();
     };
 
+    const openSheet = () => {
+        if (disabled || loading) return;
+        setSearchTerm('');
+        setDebouncedSearchTerm('');
+        if (onFocus) onFocus();
+        setIsOpen(true);
+    };
+
     const currentPlaceholder = loading && loadingPlaceholder ? loadingPlaceholder : placeholder;
 
+    // Itens da lista, reaproveitados no dropdown (desktop) e no sheet (mobile).
+    const optionItems = (useClick: boolean): React.ReactNode => {
+        if (loading) {
+            return (
+                <li className="flex items-center justify-center p-3 text-center text-slate-500">
+                    <i className="fas fa-spinner fa-spin mr-2"></i>
+                    Carregando...
+                </li>
+            );
+        }
+        if (filteredOptions.length > 0) {
+            return (
+                <>
+                    {listHeader && !debouncedSearchTerm && (
+                        <li className="sticky top-0 z-10 bg-slate-50 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:bg-slate-900/80 dark:text-slate-500">
+                            {listHeader}
+                        </li>
+                    )}
+                    {filteredOptions.map(option => {
+                        const isSelected = value === option[valueField];
+                        const handlers = useClick
+                            ? { onClick: () => handleSelect(option) }
+                            : { onMouseDown: (e: React.MouseEvent) => { e.preventDefault(); handleSelect(option); } };
+                        return (
+                            <li
+                                key={String(option[valueField])}
+                                {...handlers}
+                                className={`cursor-pointer border-b border-slate-100 transition-colors last:border-b-0 hover:bg-slate-100 dark:border-slate-700/60 dark:hover:bg-slate-700 ${isSelected ? 'bg-blue-50 dark:bg-blue-950/30' : ''} ${renderOption ? '' : 'p-3 text-slate-700 dark:text-slate-300'}`}
+                            >
+                                {renderOption ? renderOption(option, isSelected) : String(option[displayField])}
+                            </li>
+                        );
+                    })}
+                </>
+            );
+        }
+        return debouncedSearchTerm && renderNoResults
+            ? renderNoResults(debouncedSearchTerm)
+            : <li className="p-3 text-slate-500 dark:text-slate-400">Nenhum resultado encontrado</li>;
+    };
+
+    // ----- Mobile: campo que abre um seletor em tela cheia (bottom-sheet) -----
+    if (isMobile) {
+        return (
+            <div className="relative flex-grow" ref={containerRef}>
+                <button
+                    type="button"
+                    disabled={disabled || loading}
+                    onClick={openSheet}
+                    className="flex w-full items-center justify-between gap-2 rounded-lg border border-slate-300 bg-white p-3 text-left text-base text-slate-900 shadow-sm dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500 dark:disabled:bg-slate-800"
+                >
+                    <span className={`truncate ${selectedOption ? '' : 'text-slate-400 dark:text-slate-500'}`}>
+                        {selectedOption ? String(selectedOption[displayField]) : currentPlaceholder}
+                    </span>
+                    <span className="flex items-center gap-3 text-slate-400">
+                        {selectedOption && !disabled && !loading && (
+                            <span
+                                role="button"
+                                aria-label="Limpar seleção"
+                                onClick={(e) => { e.stopPropagation(); onChange(null); }}
+                                className="px-1 text-slate-400 hover:text-slate-600"
+                            >
+                                <i className="fas fa-times text-sm"></i>
+                            </span>
+                        )}
+                        {loading
+                            ? <i className="fas fa-spinner fa-spin"></i>
+                            : <i className="fas fa-chevron-down text-xs pointer-events-none"></i>}
+                    </span>
+                </button>
+
+                {isOpen && (
+                    <div
+                        className="fixed inset-0 z-[10050] flex flex-col justify-end bg-slate-950/60 backdrop-blur-sm"
+                        onClick={() => setIsOpen(false)}
+                    >
+                        <div
+                            className="animate-slide-up flex max-h-[88vh] flex-col rounded-t-2xl border-t border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800"
+                            onClick={(e) => e.stopPropagation()}
+                            style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+                        >
+                            <div className="flex-shrink-0 px-4 pb-3 pt-2">
+                                <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-slate-300 dark:bg-slate-600" />
+                                <div className="flex items-center gap-2">
+                                    <div className="relative flex-1">
+                                        <i className="fas fa-search pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400"></i>
+                                        <input
+                                            ref={sheetInputRef}
+                                            type="text"
+                                            value={searchTerm}
+                                            onChange={handleInputChange}
+                                            placeholder={placeholder}
+                                            autoComplete="off"
+                                            className="w-full rounded-lg border border-slate-300 bg-white py-2.5 pl-9 pr-3 text-base text-slate-900 outline-none focus:border-blue-400 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200"
+                                        />
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsOpen(false)}
+                                        aria-label="Fechar"
+                                        className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700"
+                                    >
+                                        <i className="fas fa-times"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <ul className="flex-1 overflow-y-auto border-t border-slate-100 dark:border-slate-700/60">
+                                {optionItems(true)}
+                            </ul>
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    }
+
+    // ----- Desktop: dropdown inline (comportamento original) -----
     return (
         <div className="relative flex-grow" ref={containerRef}>
             <div className="relative">
@@ -138,6 +271,7 @@ const SearchableSelect = <T extends { [key: string]: any }>({
                     value={searchTerm}
                     onChange={handleInputChange}
                     onFocus={handleInputFocus}
+                    onClick={() => { if (!isOpen) setIsOpen(true); }}
                     placeholder={currentPlaceholder}
                     className="w-full p-3 pr-12 text-base bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-200 border border-slate-300 dark:border-slate-600 rounded-lg shadow-sm focus:ring-1 focus:ring-slate-500 focus:border-slate-500 placeholder:text-slate-400 dark:placeholder:text-slate-500 disabled:bg-slate-100 dark:disabled:bg-slate-800 disabled:text-slate-500 disabled:cursor-not-allowed"
                     disabled={disabled || loading}
@@ -167,47 +301,20 @@ const SearchableSelect = <T extends { [key: string]: any }>({
                     {loading ? (
                         <i className="fas fa-spinner fa-spin text-slate-400"></i>
                     ) : !searchTerm ? (
-                        <i className={`fas fa-chevron-down text-slate-400 text-xs transition-transform duration-200 ${isOpen ? 'rotate-180' : ''} pointer-events-none`}></i>
+                        <button
+                            type="button"
+                            onClick={() => setIsOpen(o => !o)}
+                            aria-label={isOpen ? 'Fechar lista' : 'Abrir lista'}
+                            className="text-slate-400 hover:text-slate-600 focus:outline-none"
+                        >
+                            <i className={`fas fa-chevron-down text-xs transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}></i>
+                        </button>
                     ) : null}
                 </div>
             </div>
             {isOpen && (
                 <ul className="absolute z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl dark:border-slate-600 dark:bg-slate-800">
-                    {loading ? (
-                        <li className="flex items-center justify-center p-3 text-center text-slate-500">
-                            <i className="fas fa-spinner fa-spin mr-2"></i>
-                            Carregando...
-                        </li>
-                    ) : filteredOptions.length > 0 ? (
-                        <>
-                            {listHeader && !debouncedSearchTerm && (
-                                <li className="sticky top-0 z-10 bg-slate-50 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:bg-slate-900/80 dark:text-slate-500">
-                                    {listHeader}
-                                </li>
-                            )}
-                            {filteredOptions.map(option => {
-                                const isSelected = value === option[valueField];
-                                return (
-                                    <li
-                                        key={option[valueField]}
-                                        onMouseDown={(e) => {
-                                            e.preventDefault();
-                                            handleSelect(option);
-                                        }}
-                                        className={`cursor-pointer border-b border-slate-100 last:border-b-0 transition-colors hover:bg-slate-100 dark:border-slate-700/60 dark:hover:bg-slate-700 ${isSelected ? 'bg-blue-50 dark:bg-blue-950/30' : ''} ${renderOption ? '' : 'p-3 text-slate-700 dark:text-slate-300'}`}
-                                    >
-                                        {renderOption ? renderOption(option, isSelected) : String(option[displayField])}
-                                    </li>
-                                );
-                            })}
-                        </>
-                    ) : (
-                        debouncedSearchTerm && renderNoResults ? (
-                            renderNoResults(debouncedSearchTerm)
-                        ) : (
-                            <li className="p-3 text-slate-500 dark:text-slate-400">Nenhum resultado encontrado</li>
-                        )
-                    )}
+                    {optionItems(false)}
                 </ul>
             )}
         </div>
