@@ -705,6 +705,19 @@ const stripAgendamentoSyncMetadata = (localAgendamento: offlineDb.LocalAgendamen
     return { ...agendamento, id: publicId };
 };
 
+// Tamanho da equipe ativa (capacidade de agendamentos simultâneos). Leitura
+// leve e org-wide — vai direto ao Supabase, sem cache local (não faz sentido
+// guardar offline um número que muda com convites/bloqueios). Em falha/offline,
+// retorna 0 e o chamador aplica o piso mínimo de 1 (o próprio dono).
+export async function getActiveTeamSize(): Promise<number> {
+    try {
+        return await supabaseDb.getActiveTeamSize();
+    } catch (error) {
+        console.error('[offlineFirst] getActiveTeamSize failed:', error);
+        return 0;
+    }
+}
+
 export async function getAllAgendamentos(): Promise<Agendamento[]> {
     try {
         const localAgendamentos = await offlineDb.getAllAgendamentosLocal();

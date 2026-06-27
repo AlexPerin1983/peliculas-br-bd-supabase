@@ -311,6 +311,27 @@ export const getUserInfo = async (): Promise<UserInfo> => {
     return { ...mockUserInfo, ...userInfo, isFallback: false };
 };
 
+// Tamanho da equipe ATIVA da organização (dono + colaboradores ativos com login).
+// É org-wide e idêntico para qualquer conta logada — por isso serve de fonte de
+// verdade para a capacidade de agendamentos simultâneos (quantos atendimentos
+// podem acontecer ao mesmo tempo). Conta só membros com status 'active'.
+export const getActiveTeamSize = async (): Promise<number> => {
+    const orgId = await getEffectiveOrganizationId();
+    if (!orgId) return 0;
+
+    const { count, error } = await supabase
+        .from('organization_members')
+        .select('id', { count: 'exact', head: true })
+        .eq('organization_id', orgId)
+        .eq('status', 'active');
+
+    if (error) {
+        console.error('Error fetching active team size:', error);
+        return 0;
+    }
+    return count ?? 0;
+};
+
 export const saveUserInfo = async (userInfo: UserInfo): Promise<UserInfo> => {
     const userId = await getCurrentUserId();
     if (!userId) throw new Error('User not authenticated');

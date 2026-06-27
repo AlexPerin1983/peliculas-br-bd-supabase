@@ -6,6 +6,7 @@ import Input from '../ui/Input';
 import SearchableSelect from '../ui/SearchableSelect';
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 import { GEMINI_TEXT_MODEL } from '../../src/lib/geminiModel';
+import * as db from '../../services/db';
 
 interface AgendamentoModalProps {
     isOpen: boolean;
@@ -62,6 +63,17 @@ const formatClientAddress = (client: Client): string => {
     return parts.filter(Boolean).join(', ');
 };
 
+// --- Avatar do cliente no seletor (iniciais + cor estável pelo nome) ---
+const AVATAR_COLORS = ['bg-blue-500', 'bg-emerald-500', 'bg-violet-500', 'bg-amber-500', 'bg-rose-500', 'bg-cyan-500', 'bg-indigo-500', 'bg-teal-500'];
+const clientInitials = (nome: string): string =>
+    (nome || '').trim().split(/\s+/).slice(0, 2).map(p => p[0]?.toUpperCase() ?? '').join('') || '?';
+const colorForName = (nome: string): string =>
+    AVATAR_COLORS[[...(nome || '?')].reduce((acc, ch) => acc + ch.charCodeAt(0), 0) % AVATAR_COLORS.length];
+
+// Linha secundária: telefone + cidade/UF (o que estiver preenchido).
+const clientSubtitle = (client: Client): string =>
+    [client.telefone, [client.cidade, client.uf].filter(Boolean).join('/')].filter(Boolean).join('  ·  ');
+
 const timeToMinutes = (value: string): number => {
     const [hours = '0', minutes = '0'] = value.split(':');
     return Number(hours) * 60 + Number(minutes);
@@ -110,6 +122,37 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
     const [isSuggesting, setIsSuggesting] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [aiSuggestions, setAiSuggestions] = useState<AISuggestion[] | null>(null);
+    // Capacidade = nº de colaboradores ATIVOS da organização (dono + convidados).
+    // Org-wide e igual em qualquer conta logada (corrige a antiga contagem por
+    // "Equipe" manual, que não crescia ao convidar e variava por conta).
+    const [teamSize, setTeamSize] = useState(0);
+
+    // Carrega o tamanho da equipe ativa ao abrir (fonte de verdade da capacidade).
+    useEffect(() => {
+        if (!isOpen) return;
+        let active = true;
+        db.getActiveTeamSize()
+            .then(n => { if (active) setTeamSize(n); })
+            .catch(() => { /* offline/erro: cai no piso mínimo de 1 (o próprio dono) */ });
+        return () => { active = false; };
+    }, [isOpen]);
+
+    // Piso de 1 (o dono sempre conta). Mantém a "Equipe" manual como reforço para
+    // quem cadastra instaladores sem login.
+    const teamCapacity = Math.max(teamSize, userInfo?.employees?.length ?? 0, 1);
+
+    // Ordem inteligente do seletor de clientes: favoritos primeiro, depois os mais
+    // recentes (última atualização) e por fim em ordem alfabética.
+    const sortedClients = useMemo(() => {
+        return [...clients].sort((a, b) => {
+            if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
+            if (a.pinned && b.pinned) return (b.pinnedAt ?? 0) - (a.pinnedAt ?? 0);
+            const la = a.lastUpdated ? new Date(a.lastUpdated).getTime() : 0;
+            const lb = b.lastUpdated ? new Date(b.lastUpdated).getTime() : 0;
+            if (la !== lb) return lb - la;
+            return (a.nome || '').localeCompare(b.nome || '');
+        });
+    }, [clients]);
 
     useEffect(() => {
         if (isOpen) {
@@ -148,8 +191,7 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
     // Disponibilidade ao vivo: quantos colaboradores ficam livres no horário escolhido.
     // Usado para avisar antes de salvar (ex.: reagendar/continuar num dia já cheio).
     const availability = useMemo(() => {
-        const employeesCount = userInfo?.employees?.length ?? 0;
-        if (employeesCount === 0 || !date || !startTime || !endTime) return null;
+        if (!date || !startTime || !endTime) return null;
 
         const [year, month, day] = date.split('-').map(Number);
         const [startHours, startMinutes] = startTime.split(':').map(Number);
@@ -168,8 +210,8 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
             return startDateTime < existingEnd && endDateTime > existingStart;
         }).length;
 
-        return { employeesCount, busy, free: employeesCount - busy };
-    }, [agendamentos, date, startTime, endTime, isEditing, agendamento?.id, userInfo?.employees]);
+        return { capacity: teamCapacity, busy, free: teamCapacity - busy };
+    }, [agendamentos, date, startTime, endTime, isEditing, agendamento?.id, teamCapacity]);
 
     const handleAISuggestion = async () => {
         setIsSuggesting(true);
@@ -299,16 +341,13 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
         const startDateTime = new Date(year, month - 1, day, startHours, startMinutes);
         const endDateTime = new Date(year, month - 1, day, endHours, endMinutes);
 
-        if (!userInfo || !userInfo.workingHours || !userInfo.employees) {
-            setValidationError("Configurações da empresa (horário, equipe) não encontradas. Por favor, configure na aba 'Empresa'.");
+        if (!userInfo || !userInfo.workingHours) {
+            setValidationError("Configure o horário de funcionamento da empresa nas Configurações para agendar.");
             return;
         }
 
-        const maxAppointments = userInfo.employees.length;
-        if (maxAppointments === 0) {
-            setValidationError('Não há colaboradores cadastrados para realizar agendamentos. Adicione um colaborador na aba "Empresa".');
-            return;
-        }
+        // Capacidade = colaboradores ativos da organização (mínimo 1 = o dono).
+        const maxAppointments = teamCapacity;
 
         if (startDateTime >= endDateTime) {
             setValidationError('O horário de término deve ser posterior ao de início.');
@@ -478,7 +517,7 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                     <div>
                         <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Cliente</label>
                         <SearchableSelect
-                            options={clients}
+                            options={sortedClients}
                             value={selectedClientId}
                             onChange={(id) => setSelectedClientId(id as number | null)}
                             displayField="nome"
@@ -486,6 +525,25 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                             placeholder="Selecione ou digite um nome"
                             disabled={isClientLocked}
                             autoFocus={!isClientLocked}
+                            searchFields={['nome', 'telefone', 'cidade']}
+                            listHeader="Favoritos e recentes"
+                            renderOption={(client) => {
+                                const subtitle = clientSubtitle(client);
+                                return (
+                                    <div className="flex items-center gap-3 px-3 py-2.5">
+                                        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${colorForName(client.nome)}`}>
+                                            {clientInitials(client.nome)}
+                                        </span>
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="truncate text-sm font-medium text-slate-800 dark:text-slate-100">{client.nome}</span>
+                                                {client.pinned && <i className="fas fa-star text-[10px] text-amber-400" aria-hidden="true"></i>}
+                                            </div>
+                                            {subtitle && <p className="truncate text-xs text-slate-400 dark:text-slate-500">{subtitle}</p>}
+                                        </div>
+                                    </div>
+                                );
+                            }}
                             renderNoResults={(searchTerm) => (
                                 <li className="p-3 text-center">
                                     <p className="text-sm text-slate-500 mb-3">
@@ -572,12 +630,12 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                         availability.free <= 0 ? (
                             <div className="flex items-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-200">
                                 <i className="fas fa-triangle-exclamation" aria-hidden="true"></i>
-                                <span>Horário cheio — todos os {availability.employeesCount} colaborador(es) já estão ocupados. Escolha outro horário.</span>
+                                <span>Horário cheio — todos os {availability.capacity} colaborador(es) já estão ocupados. Escolha outro horário.</span>
                             </div>
                         ) : (
                             <div className="flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-200">
                                 <i className="fas fa-user-check" aria-hidden="true"></i>
-                                <span>{availability.free} de {availability.employeesCount} colaborador(es) livre(s) neste horário.</span>
+                                <span>{availability.free} de {availability.capacity} colaborador(es) livre(s) neste horário.</span>
                             </div>
                         )
                     )}
