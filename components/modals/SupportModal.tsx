@@ -3,6 +3,7 @@ import { Drawer } from 'vaul';
 import {
     Bug,
     ChevronRight,
+    Handshake,
     Headset,
     Lightbulb,
     LifeBuoy,
@@ -77,6 +78,15 @@ const SUPPORT_OPTIONS: SupportOption[] = [
         intro: 'Quero ajuda para usar o app / acessar tutoriais:\n\n• Sobre o que preciso de ajuda: ',
         icon: <LifeBuoy className="h-5 w-5" aria-hidden="true" />,
         tone: 'text-blue-600 bg-blue-50 dark:text-blue-300 dark:bg-blue-950/30',
+    },
+    {
+        id: 'parceria',
+        label: 'Quero ser parceiro',
+        description: 'Propor uma parceria comercial',
+        category: '🤝 Proposta de parceria',
+        intro: 'Tenho interesse em fazer uma parceria com o PelículasBR:\n\n• Quem sou / minha empresa: \n• Tipo de parceria que tenho em mente: \n• Como acho que podemos crescer juntos: ',
+        icon: <Handshake className="h-5 w-5" aria-hidden="true" />,
+        tone: 'text-teal-600 bg-teal-50 dark:text-teal-300 dark:bg-teal-950/30',
     },
 ];
 
