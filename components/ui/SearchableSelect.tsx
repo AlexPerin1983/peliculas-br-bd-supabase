@@ -50,6 +50,8 @@ const SearchableSelect = <T extends { [key: string]: any }>({
     const containerRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     const sheetInputRef = useRef<HTMLInputElement>(null);
+    // Área visível (acima do teclado) para o seletor mobile — via visualViewport.
+    const [sheetViewport, setSheetViewport] = useState<{ top: number; height: number } | null>(null);
 
     const selectedOption = useMemo(() =>
         options.find(opt => opt[valueField] === value),
@@ -97,6 +99,25 @@ const SearchableSelect = <T extends { [key: string]: any }>({
             const t = setTimeout(() => sheetInputRef.current?.focus(), 60);
             return () => clearTimeout(t);
         }
+    }, [isMobile, isOpen]);
+
+    // Acompanha o teclado: o seletor mobile ocupa só a área visível (visualViewport),
+    // mantendo a busca fixa no topo e a lista rolando acima do teclado.
+    useEffect(() => {
+        if (!isMobile || !isOpen) {
+            setSheetViewport(null);
+            return;
+        }
+        const vv = window.visualViewport;
+        if (!vv) return;
+        const update = () => setSheetViewport({ top: vv.offsetTop, height: vv.height });
+        update();
+        vv.addEventListener('resize', update);
+        vv.addEventListener('scroll', update);
+        return () => {
+            vv.removeEventListener('resize', update);
+            vv.removeEventListener('scroll', update);
+        };
     }, [isMobile, isOpen]);
 
     const filteredOptions = useMemo(() => {
@@ -218,43 +239,37 @@ const SearchableSelect = <T extends { [key: string]: any }>({
 
                 {isOpen && (
                     <div
-                        className="fixed inset-0 z-[10050] flex flex-col justify-end bg-slate-950/60 backdrop-blur-sm"
-                        onClick={() => setIsOpen(false)}
+                        className="animate-fade-in fixed left-0 right-0 z-[10050] flex flex-col bg-white shadow-2xl dark:bg-slate-900"
+                        style={sheetViewport
+                            ? { top: sheetViewport.top, height: sheetViewport.height }
+                            : { top: 0, height: '100dvh' }}
                     >
-                        <div
-                            className="animate-slide-up flex max-h-[88vh] flex-col rounded-t-2xl border-t border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800"
-                            onClick={(e) => e.stopPropagation()}
-                            style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
-                        >
-                            <div className="flex-shrink-0 px-4 pb-3 pt-2">
-                                <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-slate-300 dark:bg-slate-600" />
-                                <div className="flex items-center gap-2">
-                                    <div className="relative flex-1">
-                                        <i className="fas fa-search pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400"></i>
-                                        <input
-                                            ref={sheetInputRef}
-                                            type="text"
-                                            value={searchTerm}
-                                            onChange={handleInputChange}
-                                            placeholder={placeholder}
-                                            autoComplete="off"
-                                            className="w-full rounded-lg border border-slate-300 bg-white py-2.5 pl-9 pr-3 text-base text-slate-900 outline-none focus:border-blue-400 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200"
-                                        />
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => setIsOpen(false)}
-                                        aria-label="Fechar"
-                                        className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700"
-                                    >
-                                        <i className="fas fa-times"></i>
-                                    </button>
-                                </div>
+                        {/* Cabeçalho fixo: busca + fechar (nunca sai da tela com o teclado) */}
+                        <div className="flex flex-shrink-0 items-center gap-2 border-b border-slate-200 px-4 py-3 dark:border-slate-700/60">
+                            <div className="relative flex-1">
+                                <i className="fas fa-search pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400"></i>
+                                <input
+                                    ref={sheetInputRef}
+                                    type="text"
+                                    value={searchTerm}
+                                    onChange={handleInputChange}
+                                    placeholder={placeholder}
+                                    autoComplete="off"
+                                    className="w-full rounded-lg border border-slate-300 bg-white py-2.5 pl-9 pr-3 text-base text-slate-900 outline-none focus:border-blue-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
+                                />
                             </div>
-                            <ul className="flex-1 overflow-y-auto border-t border-slate-100 dark:border-slate-700/60">
-                                {optionItems(true)}
-                            </ul>
+                            <button
+                                type="button"
+                                onClick={() => setIsOpen(false)}
+                                aria-label="Fechar"
+                                className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700"
+                            >
+                                <i className="fas fa-times text-lg"></i>
+                            </button>
                         </div>
+                        <ul className="flex-1 overflow-y-auto overscroll-contain">
+                            {optionItems(true)}
+                        </ul>
                     </div>
                 )}
             </div>
