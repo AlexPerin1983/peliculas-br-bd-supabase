@@ -10,6 +10,7 @@ export interface UserWithSubscription extends Profile {
             module_id: string;
             expires_at: string;
             status: string;
+            payment_reference?: string | null;
         }>;
     };
     organization?: {
@@ -19,6 +20,8 @@ export interface UserWithSubscription extends Profile {
     blocked?: boolean;
     empresa?: string | null;
     telefone?: string | null;
+    /** Já teve algum módulo ativado (mesmo que expirado) — detecta "terminou o teste". */
+    ever_had_access?: boolean;
 }
 
 const TEST_EMAIL_PATTERNS = [/\+/, /@example\.com$/i, /demo/i];
@@ -79,6 +82,7 @@ export const useAdminUsers = (enabled: boolean) => {
                 },
                 empresa: row.empresa || null,
                 telefone: row.telefone || null,
+                ever_had_access: row.ever_had_access ?? undefined,
             }));
 
             setProfiles(mapped);

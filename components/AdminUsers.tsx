@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronRight, Clock, Crown, Search, Shield, Zap } from 'lucide-react';
+import { ChevronRight, Clock, Crown, Moon, Search, Shield, Zap } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import ActionButton from './ui/ActionButton';
 import ContentState from './ui/ContentState';
@@ -8,6 +8,14 @@ import { AdminOverview } from './admin/AdminOverview';
 import { AdminCompanyDrawer } from './admin/AdminCompanyDrawer';
 import { isTestAccount, isUserAdmin, useAdminUsers } from '../src/hooks/useAdminUsers';
 import { useAdminEngagement } from '../src/hooks/useAdminEngagement';
+import {
+    CompanyStatusBadge,
+    CompanyFilterKey,
+    CompanyFlags,
+    deriveCompanyStatus,
+    daysUntilExpiry,
+    matchesFilter,
+} from './admin/companyStatus';
 
 export const AdminUsers: React.FC = () => {
     const { isAdmin } = useAuth();
@@ -39,7 +47,7 @@ export const AdminUsers: React.FC = () => {
     const [selectedUserId, setSelectedUserId] = React.useState<string | null>(null);
 
     const [search, setSearch] = React.useState('');
-    const [filterKey, setFilterKey] = React.useState<'todas' | 'ativas' | 'inativas' | 'trial' | 'bloqueadas' | 'completo'>('todas');
+    const [filterKey, setFilterKey] = React.useState<CompanyFilterKey>('todas');
     const [sortKey, setSortKey] = React.useState<'recentes' | 'orcamentos' | 'faturamento' | 'atividade' | 'az'>('recentes');
     const [visibleCount, setVisibleCount] = React.useState(20);
 
@@ -53,29 +61,56 @@ export const AdminUsers: React.FC = () => {
         return (Date.now() - new Date(iso).getTime()) / 86_400_000 <= activeWindowDays;
     }, [activeWindowDays]);
 
-    // Lista de empresas: filtro + busca + ordenação (cruzando com engajamento)
-    const filteredCompanies = React.useMemo(() => {
-        let list = onlyTests ? profiles.filter(isTestAccount) : profiles;
+    // Situação (status + recortes de atividade/teste) de cada empresa.
+    const flagsByProfile = React.useMemo(() => {
+        const map = new Map<string, CompanyFlags>();
+        for (const p of profiles) {
+            const eng = engagementMap.get(p.id);
+            map.set(p.id, {
+                status: deriveCompanyStatus(p),
+                inactive: !isUserAdmin(p) && !p.blocked && !isRecent(eng?.ultima_atividade),
+                test: isTestAccount(p),
+            });
+        }
+        return map;
+    }, [profiles, engagementMap, isRecent]);
 
+    // Base = só busca + "contas de teste" (antes do filtro de status), para as
+    // contagens dos chips refletirem o contexto da busca atual.
+    const baseList = React.useMemo(() => {
+        let list = onlyTests ? profiles.filter(isTestAccount) : profiles;
         const q = search.trim().toLowerCase();
         if (q) {
             list = list.filter(p =>
                 (p.empresa || '').toLowerCase().includes(q) || (p.email || '').toLowerCase().includes(q));
         }
+        return list;
+    }, [profiles, onlyTests, search]);
 
-        list = list.filter(p => {
-            const eng = engagementMap.get(p.id);
-            const admin = isUserAdmin(p);
-            switch (filterKey) {
-                case 'ativas': return isRecent(eng?.ultima_atividade);
-                case 'inativas': return !admin && !isRecent(eng?.ultima_atividade);
-                case 'trial': return trialUserIds.has(p.id);
-                case 'bloqueadas': return !!p.blocked;
-                case 'completo': return isModuleActive(p, 'pacote_completo');
-                default: return true;
-            }
+    // Contagem por filtro (para mostrar nos chips e esconder os vazios).
+    const counts = React.useMemo(() => {
+        const c: Record<CompanyFilterKey, number> = {
+            todas: baseList.length,
+            comAcessoGroup: 0, assinante: 0, cortesia: 0, comAcesso: 0,
+            terminou: 0, gratis: 0, bloqueado: 0, admin: 0, inativas: 0, teste: 0,
+        };
+        for (const p of baseList) {
+            const f = flagsByProfile.get(p.id);
+            if (!f) continue;
+            c[f.status] += 1;
+            if (f.status === 'assinante' || f.status === 'cortesia' || f.status === 'comAcesso') c.comAcessoGroup += 1;
+            if (f.inactive) c.inativas += 1;
+            if (f.test) c.teste += 1;
+        }
+        return c;
+    }, [baseList, flagsByProfile]);
+
+    // Lista final: aplica o filtro de status escolhido + ordenação.
+    const filteredCompanies = React.useMemo(() => {
+        const list = baseList.filter(p => {
+            const f = flagsByProfile.get(p.id);
+            return f ? matchesFilter(filterKey, f) : false;
         });
-
         return [...list].sort((a, b) => {
             const ea = engagementMap.get(a.id);
             const eb = engagementMap.get(b.id);
@@ -88,7 +123,7 @@ export const AdminUsers: React.FC = () => {
                 default: return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
             }
         });
-    }, [profiles, onlyTests, search, filterKey, sortKey, engagementMap, trialUserIds, isModuleActive, isRecent]);
+    }, [baseList, flagsByProfile, filterKey, sortKey, engagementMap]);
 
     const visibleCompanies = filteredCompanies.slice(0, visibleCount);
 
@@ -301,28 +336,43 @@ export const AdminUsers: React.FC = () => {
                         </select>
                     </div>
 
-                    {/* Filtros rápidos */}
+                    {/* Filtros rápidos com contagem (esconde os vazios) */}
                     <div className="mt-3 flex flex-wrap gap-1.5">
                         {([
                             ['todas', 'Todas'],
-                            ['ativas', 'Ativas'],
+                            ['comAcessoGroup', 'Acesso ativo'],
+                            ['assinante', 'Assinantes'],
+                            ['cortesia', 'Cortesia'],
+                            ['comAcesso', 'Com acesso'],
+                            ['terminou', 'Terminou teste'],
+                            ['gratis', 'Grátis'],
                             ['inativas', 'Inativas'],
-                            ['trial', 'Em trial'],
-                            ['completo', 'Completo'],
-                            ['bloqueadas', 'Bloqueadas'],
-                        ] as const).map(([key, label]) => (
-                            <button
-                                key={key}
-                                type="button"
-                                onClick={() => setFilterKey(key)}
-                                className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${filterKey === key
-                                    ? 'bg-blue-500 text-white'
-                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600'
-                                    }`}
-                            >
-                                {label}
-                            </button>
-                        ))}
+                            ['bloqueado', 'Bloqueadas'],
+                            ['teste', 'Teste'],
+                        ] as [CompanyFilterKey, string][])
+                            // "Com acesso (grupo)" só aparece quando há mistura de assinante+cortesia;
+                            // o "Com acesso" simples cobre o estado pré-migration (sem dado de pagamento).
+                            .filter(([key]) => {
+                                if (key === 'todas') return true;
+                                if (key === 'comAcessoGroup') return counts.assinante > 0 && counts.cortesia > 0;
+                                return counts[key] > 0;
+                            })
+                            .map(([key, label]) => (
+                                <button
+                                    key={key}
+                                    type="button"
+                                    onClick={() => setFilterKey(key)}
+                                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors ${filterKey === key
+                                        ? 'bg-blue-500 text-white'
+                                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600'
+                                        }`}
+                                >
+                                    {label}
+                                    <span className={`rounded-full px-1.5 text-[10px] font-bold tabular-nums ${filterKey === key ? 'bg-white/25 text-white' : 'bg-slate-200 text-slate-500 dark:bg-slate-600 dark:text-slate-300'}`}>
+                                        {counts[key]}
+                                    </span>
+                                </button>
+                            ))}
                     </div>
                 </div>
 
@@ -339,9 +389,17 @@ export const AdminUsers: React.FC = () => {
                     ) : (
                         visibleCompanies.map(profile => {
                             const eng = engagementMap.get(profile.id);
-                            const isProfileAdmin = isUserAdmin(profile);
+                            const flags = flagsByProfile.get(profile.id);
+                            const status = flags?.status ?? deriveCompanyStatus(profile);
+                            const isProfileAdmin = status === 'admin';
                             const hasFullPackage = isModuleActive(profile, 'pacote_completo');
-                            const activeModulesCount = profile.subscription?.active_modules?.length || 0;
+                            const hasAccess = status === 'assinante' || status === 'cortesia' || status === 'comAcesso';
+                            const expiry = hasAccess ? daysUntilExpiry(profile) : null;
+                            const avatarBg = status === 'admin' ? 'bg-gradient-to-br from-purple-500 to-indigo-600'
+                                : status === 'bloqueado' ? 'bg-red-400 dark:bg-red-500/70'
+                                : status === 'assinante' ? 'bg-gradient-to-br from-emerald-400 to-green-600'
+                                : hasAccess ? 'bg-gradient-to-br from-amber-400 to-yellow-500'
+                                : 'bg-slate-300 dark:bg-slate-600';
                             return (
                                 <button
                                     key={profile.id}
@@ -350,24 +408,29 @@ export const AdminUsers: React.FC = () => {
                                     className="flex w-full items-center justify-between gap-3 p-4 text-left transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/50"
                                 >
                                     <div className="flex min-w-0 items-center gap-4">
-                                        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${isProfileAdmin
-                                            ? 'bg-gradient-to-br from-purple-500 to-indigo-600'
-                                            : hasFullPackage ? 'bg-gradient-to-br from-amber-400 to-yellow-500' : activeModulesCount > 0 ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-600'
-                                            }`}>
+                                        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${avatarBg}`}>
                                             {isProfileAdmin ? <Shield className="h-5 w-5 text-white" /> : hasFullPackage ? <Crown className="h-5 w-5 text-white" /> : <span className="text-sm font-bold text-white">{(eng?.empresa || profile.email)?.charAt(0).toUpperCase()}</span>}
                                         </div>
                                         <div className="min-w-0">
                                             <div className="flex flex-wrap items-center gap-2">
                                                 <span className="truncate font-medium text-slate-900 dark:text-white">{eng?.empresa || profile.email}</span>
-                                                {isProfileAdmin && <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-bold uppercase text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">Admin</span>}
-                                                {hasFullPackage && !isProfileAdmin && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">Completo</span>}
-                                                {profile.blocked && <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold uppercase text-red-700 dark:bg-red-900/30 dark:text-red-400">Bloqueado</span>}
-                                                {isTestAccount(profile) && !isProfileAdmin && <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-bold uppercase text-slate-600 dark:bg-slate-700 dark:text-slate-300">Teste</span>}
+                                                <CompanyStatusBadge status={status} />
+                                                {flags?.inactive && (
+                                                    <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500 dark:bg-slate-700 dark:text-slate-400">
+                                                        <Moon className="h-2.5 w-2.5" /> Inativo
+                                                    </span>
+                                                )}
+                                                {flags?.test && <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-bold uppercase text-slate-600 dark:bg-slate-700 dark:text-slate-300">Teste</span>}
                                             </div>
-                                            <div className="flex flex-wrap items-center gap-3 text-sm text-slate-500">
+                                            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-slate-500">
                                                 {eng?.empresa && <span className="truncate text-xs text-slate-400">{profile.email}</span>}
-                                                <span>{profile.created_at ? new Date(profile.created_at).toLocaleDateString('pt-BR') : '—'}</span>
-                                                {eng && <span className="text-blue-500">• {eng.orcamentos} orç.</span>}
+                                                <span className="text-xs">{profile.created_at ? new Date(profile.created_at).toLocaleDateString('pt-BR') : '—'}</span>
+                                                {eng && <span className="text-xs text-blue-500">• {eng.orcamentos} orç.</span>}
+                                                {expiry !== null && (
+                                                    <span className={`text-xs font-medium ${expiry <= 7 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400'}`}>
+                                                        • {expiry > 0 ? `${expiry}d restantes` : 'vence hoje'}
+                                                    </span>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
