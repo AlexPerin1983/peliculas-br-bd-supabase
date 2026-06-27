@@ -45,6 +45,7 @@ export {
     deleteStandaloneExpense,
 
     // Agendamento functions
+    getActiveTeamSize,
     getAllAgendamentos,
     saveAgendamento,
     deleteAgendamento,

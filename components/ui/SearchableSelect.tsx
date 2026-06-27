@@ -16,6 +16,12 @@ interface SearchableSelectProps<T> {
     autoFocus?: boolean;
     renderNoResults?: (searchTerm: string) => React.ReactNode;
     onMagicClick?: (searchTerm: string) => void;
+    /** Conteúdo customizado de cada item (ex.: avatar + nome + telefone). */
+    renderOption?: (option: T, isSelected: boolean) => React.ReactNode;
+    /** Campos extras para a busca casar (padrão: só o displayField). */
+    searchFields?: (keyof T)[];
+    /** Rótulo fixo no topo da lista (ex.: "Favoritos e recentes"). */
+    listHeader?: React.ReactNode;
 }
 
 const SearchableSelect = <T extends { [key: string]: any }>({
@@ -32,6 +38,9 @@ const SearchableSelect = <T extends { [key: string]: any }>({
     autoFocus = false,
     renderNoResults,
     onMagicClick,
+    renderOption,
+    searchFields,
+    listHeader,
 }: SearchableSelectProps<T>) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
@@ -85,10 +94,11 @@ const SearchableSelect = <T extends { [key: string]: any }>({
         if (!debouncedSearchTerm) {
             return options;
         }
+        const fields = searchFields && searchFields.length ? searchFields : [displayField];
         return options.filter(option =>
-            matchesSearch(String(option[displayField]), debouncedSearchTerm)
+            fields.some(field => matchesSearch(String(option[field] ?? ''), debouncedSearchTerm))
         );
-    }, [options, debouncedSearchTerm, displayField]);
+    }, [options, debouncedSearchTerm, displayField, searchFields]);
 
     const handleSelect = (option: T) => {
         const displayValue = String(option[displayField]);
@@ -162,25 +172,35 @@ const SearchableSelect = <T extends { [key: string]: any }>({
                 </div>
             </div>
             {isOpen && (
-                <ul className="absolute z-20 w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md shadow-lg max-h-60 overflow-y-auto mt-1">
+                <ul className="absolute z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl dark:border-slate-600 dark:bg-slate-800">
                     {loading ? (
-                        <li className="p-2 text-slate-500 text-center flex items-center justify-center">
+                        <li className="flex items-center justify-center p-3 text-center text-slate-500">
                             <i className="fas fa-spinner fa-spin mr-2"></i>
                             Carregando...
                         </li>
                     ) : filteredOptions.length > 0 ? (
-                        filteredOptions.map(option => (
-                            <li
-                                key={option[valueField]}
-                                onMouseDown={(e) => {
-                                    e.preventDefault();
-                                    handleSelect(option);
-                                }}
-                                className={`p-3 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer text-slate-700 dark:text-slate-300 ${value === option[valueField] ? 'bg-slate-200 dark:bg-slate-700' : ''}`}
-                            >
-                                {String(option[displayField])}
-                            </li>
-                        ))
+                        <>
+                            {listHeader && !debouncedSearchTerm && (
+                                <li className="sticky top-0 z-10 bg-slate-50 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:bg-slate-900/80 dark:text-slate-500">
+                                    {listHeader}
+                                </li>
+                            )}
+                            {filteredOptions.map(option => {
+                                const isSelected = value === option[valueField];
+                                return (
+                                    <li
+                                        key={option[valueField]}
+                                        onMouseDown={(e) => {
+                                            e.preventDefault();
+                                            handleSelect(option);
+                                        }}
+                                        className={`cursor-pointer border-b border-slate-100 last:border-b-0 transition-colors hover:bg-slate-100 dark:border-slate-700/60 dark:hover:bg-slate-700 ${isSelected ? 'bg-blue-50 dark:bg-blue-950/30' : ''} ${renderOption ? '' : 'p-3 text-slate-700 dark:text-slate-300'}`}
+                                    >
+                                        {renderOption ? renderOption(option, isSelected) : String(option[displayField])}
+                                    </li>
+                                );
+                            })}
+                        </>
                     ) : (
                         debouncedSearchTerm && renderNoResults ? (
                             renderNoResults(debouncedSearchTerm)
