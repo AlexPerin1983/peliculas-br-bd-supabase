@@ -775,6 +775,13 @@ const DashboardView: React.FC<DashboardViewProps> = ({
     const [isSavingStandaloneExpense, setIsSavingStandaloneExpense] = useState(false);
 
     useEffect(() => {
+        (window as any).fbq?.('track', 'ViewContent', {
+            content_name: 'Dashboard',
+            content_category: 'app_usage'
+        });
+    }, []);
+
+    useEffect(() => {
         let isMounted = true;
 
         const loadServicos = async () => {

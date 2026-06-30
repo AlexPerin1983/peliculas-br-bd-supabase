@@ -139,6 +139,13 @@ export const Login: React.FC = () => {
 
                 if (error) throw error;
 
+                if (data.user) {
+                    (window as any).fbq?.('track', 'Lead', {
+                        content_name: 'Cadastro App Filmstec',
+                        content_category: 'app_registration'
+                    });
+                }
+
                 if (data.user && !data.session) {
                     setMessage({ type: 'success', text: 'Cadastro realizado. Verifique seu email para confirmar.' });
                 }

@@ -83,6 +83,11 @@ export const OrganizationSetup: React.FC<OrganizationSetupProps> = ({
             return;
         }
 
+        (window as any).fbq?.('track', 'CompleteRegistration', {
+            content_name: 'Onboarding Concluído',
+            status: true
+        });
+
         try {
             await onCompleted(result.organizationName, logo || undefined);
         } catch (completionError) {
