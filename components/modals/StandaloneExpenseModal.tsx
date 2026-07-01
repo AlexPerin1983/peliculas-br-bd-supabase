@@ -117,7 +117,10 @@ const PickerField: React.FC<{
                 <div
                     ref={menuRef}
                     role="listbox"
-                    style={{ position: 'fixed', left: coords.left, top: coords.top, width: coords.width }}
+                    data-modal-companion=""
+                    // pointerEvents: o Radix (vaul modal) zera pointer-events do body;
+                    // sem o auto explícito o toque atravessa o menu e a opção nunca é aplicada.
+                    style={{ position: 'fixed', left: coords.left, top: coords.top, width: coords.width, pointerEvents: 'auto' }}
                     className="z-[10050] max-h-60 overflow-y-auto rounded-[var(--radius-card)] border border-[var(--border-subtle)] bg-[var(--surface)] p-1 shadow-[var(--shadow-elevated)] ring-1 ring-black/5 dark:ring-white/10"
                 >
                     {options.map(option => {

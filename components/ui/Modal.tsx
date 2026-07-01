@@ -40,7 +40,17 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, footer,
             >
                 <Drawer.Portal>
                     <Drawer.Overlay className="fixed inset-0 z-[10000] bg-slate-950/68 backdrop-blur-md" />
-                    <Drawer.Content className="fixed bottom-0 left-0 right-0 z-[10001] flex h-[100dvh] max-h-[100dvh] flex-col border-t border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-body)] outline-none">
+                    <Drawer.Content
+                        className="fixed bottom-0 left-0 right-0 z-[10001] flex h-[100dvh] max-h-[100dvh] flex-col border-t border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-body)] outline-none"
+                        onInteractOutside={(event) => {
+                            // Menus/dropdowns portalados para o body (ex.: PickerField) ficam
+                            // fora do Drawer.Content; tocar neles não deve fechar o sheet.
+                            const target = event.target as HTMLElement | null;
+                            if (target?.closest('[data-modal-companion]')) {
+                                event.preventDefault();
+                            }
+                        }}
+                    >
                         <div
                             className="flex-shrink-0 border-b border-[var(--border-subtle)] bg-[var(--surface-raised)] px-5 pb-3"
                             style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.5rem)' }}
