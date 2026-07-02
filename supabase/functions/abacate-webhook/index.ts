@@ -312,6 +312,88 @@ async function markRecurringCancellation(params: {
     if (refreshError) throw new Error(refreshError.message);
 }
 
+const META_PIXEL_ID = '847876754650924';
+
+async function sha256HexLower(input: string): Promise<string> {
+    const data = new TextEncoder().encode(input.trim().toLowerCase());
+    const digest = await crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(digest))
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
+}
+
+// Envia o evento Purchase para a Meta (Conversions API) quando um pagamento REAL e
+// confirmado pelo AbacatePay. Totalmente isolado: qualquer erro aqui e engolido e
+// NUNCA afeta o processamento do pagamento/ativacao. Nao dispara para cortesias/trial
+// de admin, pois esses nao passam por este webhook.
+async function sendPurchaseToMeta(params: {
+    subscriptionId: string;
+    amountCents: number;
+    dedupKey: string;
+}): Promise<void> {
+    try {
+        const token = Deno.env.get('META_CAPI_TOKEN');
+        if (!token) return;
+
+        const admin = createSupabaseAdminClient();
+
+        const { data: subscription } = await admin
+            .from('subscriptions')
+            .select('organization_id')
+            .eq('id', params.subscriptionId)
+            .maybeSingle();
+        const organizationId = subscription?.organization_id as string | undefined;
+        if (!organizationId) return;
+
+        const { data: organization } = await admin
+            .from('organizations')
+            .select('owner_id')
+            .eq('id', organizationId)
+            .maybeSingle();
+        const ownerId = organization?.owner_id as string | undefined;
+        if (!ownerId) return;
+
+        const { data: profile } = await admin
+            .from('profiles')
+            .select('email')
+            .eq('id', ownerId)
+            .maybeSingle();
+        const email = (profile?.email as string | undefined) || undefined;
+
+        const userData: Record<string, unknown> = {
+            external_id: [await sha256HexLower(ownerId)]
+        };
+        if (email) userData.em = [await sha256HexLower(email)];
+
+        const payload = {
+            data: [
+                {
+                    event_name: 'Purchase',
+                    event_time: Math.floor(Date.now() / 1000),
+                    event_id: params.dedupKey,
+                    action_source: 'website',
+                    user_data: userData,
+                    custom_data: {
+                        currency: 'BRL',
+                        value: Number((params.amountCents / 100).toFixed(2))
+                    }
+                }
+            ]
+        };
+
+        await fetch(
+            `https://graph.facebook.com/v18.0/${META_PIXEL_ID}/events?access_token=${encodeURIComponent(token)}`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            }
+        );
+    } catch (err) {
+        console.error('[abacate-webhook] Purchase CAPI falhou (ignorado):', err);
+    }
+}
+
 async function dispatchEvent(event: AbacateWebhookEvent) {
     const activation = await resolveActivation({
         activationId: event.data?.transparent?.metadata?.activationId || null,
@@ -345,6 +427,13 @@ async function dispatchEvent(event: AbacateWebhookEvent) {
                 paymentId: action.paymentId || null,
                 customerId: action.customerId || null,
                 isRecurring: action.isRecurring
+            });
+
+            // Pagamento REAL confirmado -> Purchase para a Meta (isolado, fire-and-forget).
+            await sendPurchaseToMeta({
+                subscriptionId: activation.subscription_id as string,
+                amountCents: action.amountCents,
+                dedupKey: `purchase_${event.id}`
             });
 
             return true;
