@@ -140,36 +140,65 @@ export const Login: React.FC = () => {
                 if (error) throw error;
 
                 if (data.user) {
-                    // eventId compartilhado entre o Pixel (browser) e a CAPI (servidor)
-                    // para a Meta deduplicar o CompleteRegistration em vez de contar 2x.
-                    const capiEventId =
+                    const userId = data.user.id;
+                    // Cada evento tem seu proprio event_id, compartilhado entre o Pixel
+                    // (browser) e a CAPI (servidor) para a Meta deduplicar em vez de contar 2x.
+                    const genEventId = () =>
                         typeof crypto !== 'undefined' && 'randomUUID' in crypto
                             ? crypto.randomUUID()
-                            : `cr_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+                            : `ev_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+                    const leadEventId = genEventId();
+                    const regEventId = genEventId();
+
+                    const readCookie = (name: string) =>
+                        document.cookie
+                            .split('; ')
+                            .find((c) => c.startsWith(`${name}=`))
+                            ?.split('=')[1];
+                    const fbp = readCookie('_fbp');
+                    const fbc = readCookie('_fbc'); // identificador do clique no anuncio
 
                     (window as any).fbq?.('track', 'Lead', {
                         content_name: 'Cadastro App Filmstec',
                         content_category: 'app_registration'
-                    });
+                    }, { eventID: leadEventId });
                     (window as any).fbq?.('track', 'CompleteRegistration', {
                         content_name: 'Cadastro App Filmstec',
                         status: true
-                    }, { eventID: capiEventId });
+                    }, { eventID: regEventId });
 
-                    // Conversions API (server-side). Fire-and-forget: qualquer falha
-                    // aqui nunca afeta o cadastro do usuario.
-                    const fbp = document.cookie
-                        .split('; ')
-                        .find((c) => c.startsWith('_fbp='))
-                        ?.split('=')[1];
+                    // Conversions API (server-side). external_id (id do usuario) e fbc
+                    // melhoram o match quality. Fire-and-forget: falha nunca afeta o cadastro.
+                    const capiBase = {
+                        email,
+                        externalId: userId,
+                        eventSourceUrl: window.location.href,
+                        fbp,
+                        fbc,
+                    };
                     void supabase.functions
                         .invoke('meta-capi-event', {
                             body: {
-                                email,
-                                eventId: capiEventId,
+                                ...capiBase,
+                                eventName: 'Lead',
+                                eventId: leadEventId,
+                                customData: {
+                                    content_name: 'Cadastro App Filmstec',
+                                    content_category: 'app_registration'
+                                }
+                            }
+                        })
+                        .catch(() => {});
+                    void supabase.functions
+                        .invoke('meta-capi-event', {
+                            body: {
+                                ...capiBase,
                                 eventName: 'CompleteRegistration',
-                                eventSourceUrl: window.location.href,
-                                fbp,
+                                eventId: regEventId,
+                                customData: {
+                                    content_name: 'Cadastro App Filmstec',
+                                    status: true
+                                }
                             }
                         })
                         .catch(() => {});
