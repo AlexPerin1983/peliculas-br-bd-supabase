@@ -360,10 +360,25 @@ async function sendPurchaseToMeta(params: {
             .maybeSingle();
         const email = (profile?.email as string | undefined) || undefined;
 
+        // Telefone fica em user_info (chave user_id). Normaliza: so digitos e, se nao
+        // comecar com 55 (DDI Brasil), prefixa 55. Ex.: (11) 99999-8888 -> 5511999998888.
+        const { data: userInfo } = await admin
+            .from('user_info')
+            .select('telefone')
+            .eq('user_id', ownerId)
+            .maybeSingle();
+        const phoneDigits = ((userInfo?.telefone as string | undefined) || '').replace(/\D/g, '');
+        const normalizedPhone = phoneDigits
+            ? phoneDigits.startsWith('55')
+                ? phoneDigits
+                : `55${phoneDigits}`
+            : '';
+
         const userData: Record<string, unknown> = {
             external_id: [await sha256HexLower(ownerId)]
         };
         if (email) userData.em = [await sha256HexLower(email)];
+        if (normalizedPhone) userData.ph = [await sha256HexLower(normalizedPhone)];
 
         const payload = {
             data: [
