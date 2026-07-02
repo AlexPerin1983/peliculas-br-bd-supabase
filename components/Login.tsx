@@ -140,6 +140,13 @@ export const Login: React.FC = () => {
                 if (error) throw error;
 
                 if (data.user) {
+                    // eventId compartilhado entre o Pixel (browser) e a CAPI (servidor)
+                    // para a Meta deduplicar o CompleteRegistration em vez de contar 2x.
+                    const capiEventId =
+                        typeof crypto !== 'undefined' && 'randomUUID' in crypto
+                            ? crypto.randomUUID()
+                            : `cr_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+
                     (window as any).fbq?.('track', 'Lead', {
                         content_name: 'Cadastro App Filmstec',
                         content_category: 'app_registration'
@@ -147,7 +154,25 @@ export const Login: React.FC = () => {
                     (window as any).fbq?.('track', 'CompleteRegistration', {
                         content_name: 'Cadastro App Filmstec',
                         status: true
-                    });
+                    }, { eventID: capiEventId });
+
+                    // Conversions API (server-side). Fire-and-forget: qualquer falha
+                    // aqui nunca afeta o cadastro do usuario.
+                    const fbp = document.cookie
+                        .split('; ')
+                        .find((c) => c.startsWith('_fbp='))
+                        ?.split('=')[1];
+                    void supabase.functions
+                        .invoke('meta-capi-event', {
+                            body: {
+                                email,
+                                eventId: capiEventId,
+                                eventName: 'CompleteRegistration',
+                                eventSourceUrl: window.location.href,
+                                fbp,
+                            }
+                        })
+                        .catch(() => {});
                 }
 
                 if (data.user && !data.session) {
