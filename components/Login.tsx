@@ -144,6 +144,10 @@ export const Login: React.FC = () => {
                         content_name: 'Cadastro App Filmstec',
                         content_category: 'app_registration'
                     });
+                    (window as any).fbq?.('track', 'CompleteRegistration', {
+                        content_name: 'Cadastro App Filmstec',
+                        status: true
+                    });
                 }
 
                 if (data.user && !data.session) {
