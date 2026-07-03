@@ -37,10 +37,27 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, footer,
                     }
                 }}
                 dismissible={!disableClose}
+                // O sheet é sempre tela cheia (h-[100dvh]) e o teclado só encolhe o
+                // visual viewport, então o reposicionamento automático do vaul não
+                // ajuda — e ainda deixa uma altura inline "presa" no Drawer.Content
+                // quando o teclado é aberto por um overlay externo (ex.: o seletor de
+                // cliente do SearchableSelect), fazendo o modal ficar cortado ao meio
+                // depois que o teclado some. Desligar mantém o sheet em tela cheia.
+                repositionInputs={false}
             >
                 <Drawer.Portal>
                     <Drawer.Overlay className="fixed inset-0 z-[10000] bg-slate-950/68 backdrop-blur-md" />
-                    <Drawer.Content className="fixed bottom-0 left-0 right-0 z-[10001] flex h-[100dvh] max-h-[100dvh] flex-col border-t border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-body)] outline-none">
+                    <Drawer.Content
+                        className="fixed bottom-0 left-0 right-0 z-[10001] flex h-[100dvh] max-h-[100dvh] flex-col border-t border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-body)] outline-none"
+                        onInteractOutside={(event) => {
+                            // Menus/dropdowns portalados para o body (ex.: PickerField) ficam
+                            // fora do Drawer.Content; tocar neles não deve fechar o sheet.
+                            const target = event.target as HTMLElement | null;
+                            if (target?.closest('[data-modal-companion]')) {
+                                event.preventDefault();
+                            }
+                        }}
+                    >
                         <div
                             className="flex-shrink-0 border-b border-[var(--border-subtle)] bg-[var(--surface-raised)] px-5 pb-3"
                             style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.5rem)' }}
