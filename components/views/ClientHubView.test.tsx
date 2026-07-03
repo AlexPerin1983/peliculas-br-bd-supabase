@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import ClientHubView from './ClientHubView';
 import { Agendamento, Client, SavedPDF } from '../../types';
 
@@ -81,9 +81,30 @@ describe('ClientHubView', () => {
         };
 
         render(<ClientHubView {...props} />);
-        fireEvent.click(screen.getByText('Abrir'));
+        fireEvent.click(screen.getByRole('button', { name: 'Abrir orçamento' }));
 
         expect(props.onNavigateToOption).toHaveBeenCalledWith(1, 99);
+    });
+
+    it('mostra o preparo e envia o PDF completo para download', async () => {
+        let finishDownload: (started: boolean) => void = () => undefined;
+        const downloadPromise = new Promise<boolean>(resolve => { finishDownload = resolve; });
+        const pdf = makePdf({ id: 10, totalPreco: 1500, proposalOptionName: 'Opção A' });
+        const props = {
+            ...baseProps(),
+            pdfs: [pdf],
+            onDownloadPdf: vi.fn().mockReturnValue(downloadPromise),
+        };
+
+        render(<ClientHubView {...props} />);
+        fireEvent.click(screen.getByRole('button', { name: 'Baixar PDF' }));
+
+        expect(props.onDownloadPdf).toHaveBeenCalledWith(pdf, pdf.nomeArquivo);
+        expect(screen.getByText('Preparando PDF…')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Preparando PDF' })).toBeDisabled();
+
+        finishDownload(true);
+        await waitFor(() => expect(screen.getByText('Download iniciado')).toBeInTheDocument());
     });
 
     it('mostra estado vazio e cria novo orçamento', () => {
