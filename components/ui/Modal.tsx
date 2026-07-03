@@ -1,4 +1,4 @@
-import React, { ReactNode } from 'react';
+import React, { ReactNode, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Drawer } from 'vaul';
 import { X } from 'lucide-react';
@@ -22,6 +22,60 @@ interface ModalProps {
 
 const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, footer, wrapperClassName, disableClose = false }) => {
     const isMobile = useIsMobile();
+    const scrollRef = useRef<HTMLDivElement>(null);
+
+    // Mantém o campo em foco visível acima do teclado no bottom sheet.
+    // Com o reposicionamento do vaul desligado (repositionInputs=false), o scroll
+    // nativo pode encostar o campo no topo (escondido atrás do cabeçalho) ao pular
+    // de um input para outro com o teclado já aberto. Aqui: (1) damos folga no fim
+    // da lista igual à altura do teclado para o último campo poder subir, e (2)
+    // reposicionamos o campo focado para a faixa visível entre cabeçalho e teclado.
+    useEffect(() => {
+        if (!isMobile || !isOpen) return;
+        const container = scrollRef.current;
+        const vv = window.visualViewport;
+        if (!container || !vv) return;
+
+        const keyboardHeight = () => Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+
+        const syncPadding = () => {
+            const kb = keyboardHeight();
+            container.style.paddingBottom = kb > 120 ? `${kb}px` : '';
+        };
+
+        const ensureVisible = (el: HTMLElement) => {
+            const top = container.getBoundingClientRect().top + 12;
+            const bottom = vv.offsetTop + vv.height - 12;
+            const rect = el.getBoundingClientRect();
+            if (rect.bottom > bottom) container.scrollTop += rect.bottom - bottom;
+            else if (rect.top < top) container.scrollTop -= top - rect.top;
+        };
+
+        const onFocusIn = (event: FocusEvent) => {
+            const target = event.target as HTMLElement | null;
+            if (!target || !/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
+            if (keyboardHeight() > 120) {
+                // Teclado já aberto: reposiciona no próximo frame (após o scroll nativo).
+                requestAnimationFrame(() => { syncPadding(); ensureVisible(target); });
+            } else {
+                // Teclado abrindo: espera o viewport encolher para medir a posição certa.
+                let done = false;
+                const run = () => { if (done) return; done = true; syncPadding(); ensureVisible(target); vv.removeEventListener('resize', run); };
+                vv.addEventListener('resize', run);
+                window.setTimeout(run, 400);
+            }
+        };
+
+        container.addEventListener('focusin', onFocusIn);
+        vv.addEventListener('resize', syncPadding);
+        vv.addEventListener('scroll', syncPadding);
+        return () => {
+            container.removeEventListener('focusin', onFocusIn);
+            vv.removeEventListener('resize', syncPadding);
+            vv.removeEventListener('scroll', syncPadding);
+            container.style.paddingBottom = '';
+        };
+    }, [isMobile, isOpen]);
 
     if (typeof document === 'undefined') return null;
 
@@ -37,6 +91,13 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, footer,
                     }
                 }}
                 dismissible={!disableClose}
+                // O sheet é sempre tela cheia (h-[100dvh]) e o teclado só encolhe o
+                // visual viewport, então o reposicionamento automático do vaul não
+                // ajuda — e ainda deixa uma altura inline "presa" no Drawer.Content
+                // quando o teclado é aberto por um overlay externo (ex.: o seletor de
+                // cliente do SearchableSelect), fazendo o modal ficar cortado ao meio
+                // depois que o teclado some. Desligar mantém o sheet em tela cheia.
+                repositionInputs={false}
             >
                 <Drawer.Portal>
                     <Drawer.Overlay className="fixed inset-0 z-[10000] bg-slate-950/68 backdrop-blur-md" />
@@ -70,7 +131,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, footer,
                                 </button>
                             </div>
                         </div>
-                        <div className="flex-1 space-y-6 overflow-y-auto bg-[var(--surface)] p-5">
+                        <div ref={scrollRef} className="flex-1 space-y-6 overflow-y-auto bg-[var(--surface)] p-5">
                             {children}
                         </div>
                         {footer && (

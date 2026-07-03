@@ -1232,23 +1232,47 @@ const CalendarStatusLegend: React.FC = () => (
     </div>
 );
 
+type AgendaViewMode = 'day' | 'week' | 'grid' | 'list';
+
+const AGENDA_VIEW_MODE_OPTIONS: { key: AgendaViewMode; label: string; iconClassName: string }[] = [
+    { key: 'day', label: 'Dia', iconClassName: 'fas fa-calendar-day' },
+    { key: 'week', label: 'Semana', iconClassName: 'fas fa-calendar-week' },
+    { key: 'grid', label: 'Mês', iconClassName: 'fas fa-calendar-days' },
+    { key: 'list', label: 'Lista', iconClassName: 'fas fa-list-ul' },
+];
+
+// Visao escolhida fica salva no navegador para reabrir a Agenda do mesmo jeito.
+const AGENDA_VIEW_MODE_STORAGE_KEY = 'peliculas-br-agenda-view-mode-v1';
+
+const readStoredAgendaViewMode = (): AgendaViewMode => {
+    if (typeof window === 'undefined') return 'grid';
+    try {
+        const saved = window.localStorage.getItem(AGENDA_VIEW_MODE_STORAGE_KEY);
+        return saved === 'day' || saved === 'week' || saved === 'grid' || saved === 'list' ? saved : 'grid';
+    } catch {
+        return 'grid';
+    }
+};
+
 const AgendaViewToggle: React.FC<{
-    viewMode: 'grid' | 'list';
-    onChange: (mode: 'grid' | 'list') => void;
+    viewMode: AgendaViewMode;
+    onChange: (mode: AgendaViewMode) => void;
 }> = ({ viewMode, onChange }) => (
     <div className="inline-flex shrink-0 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-0.5">
-        {(['grid', 'list'] as const).map((mode) => {
-            const isActive = viewMode === mode;
+        {AGENDA_VIEW_MODE_OPTIONS.map((option) => {
+            const isActive = viewMode === option.key;
             return (
                 <button
-                    key={mode}
+                    key={option.key}
                     type="button"
-                    onClick={() => onChange(mode)}
+                    onClick={() => onChange(option.key)}
                     aria-pressed={isActive}
-                    className={`inline-flex h-8 items-center gap-1.5 rounded-[calc(var(--radius-control)-2px)] px-3 text-xs font-black transition-colors ${isActive ? 'bg-[var(--surface)] text-[var(--text-strong)] shadow-[var(--shadow-hairline)]' : 'text-[var(--text-muted)]'}`}
+                    aria-label={option.label}
+                    title={option.label}
+                    className={`inline-flex h-8 items-center gap-1.5 rounded-[calc(var(--radius-control)-2px)] px-2.5 text-xs font-black transition-colors ${isActive ? 'bg-[var(--surface)] text-[var(--text-strong)] shadow-[var(--shadow-hairline)]' : 'text-[var(--text-muted)]'}`}
                 >
-                    <i className={`fas ${mode === 'grid' ? 'fa-calendar-days' : 'fa-list-ul'} text-[11px]`} aria-hidden="true"></i>
-                    {mode === 'grid' ? 'Mês' : 'Lista'}
+                    <i className={`${option.iconClassName} text-[11px]`} aria-hidden="true"></i>
+                    {isActive ? option.label : null}
                 </button>
             );
         })}
@@ -1365,6 +1389,27 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
         return agendamentosByDate.get(selectedDate.toDateString()) || [];
     }, [agendamentosByDate, selectedDate]);
 
+    // Semana (Dom a Sab) que contem o dia selecionado, para a visao "Semana".
+    const weekStripDays = useMemo(() => {
+        const start = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate() - selectedDate.getDay());
+        return Array.from({ length: 7 }, (_, index) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + index));
+    }, [selectedDate]);
+
+    const weekTotal = useMemo(() => (
+        weekStripDays.reduce((total, day) => total + (agendamentosByDate.get(day.toDateString())?.length || 0), 0)
+    ), [weekStripDays, agendamentosByDate]);
+
+    const weekRangeLabel = useMemo(() => {
+        const start = weekStripDays[0];
+        const end = weekStripDays[6];
+        const monthLong = (date: Date) => date.toLocaleDateString('pt-BR', { month: 'long' });
+        const monthShort = (date: Date) => date.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '');
+        if (start.getMonth() === end.getMonth()) {
+            return `${start.getDate()} – ${end.getDate()} de ${monthLong(end)}`;
+        }
+        return `${start.getDate()} ${monthShort(start)} – ${end.getDate()} ${monthShort(end)}`;
+    }, [weekStripDays]);
+
     const changeMonth = (amount: number) => {
         setCurrentDate((prev) => new Date(prev.getFullYear(), prev.getMonth() + amount, 1));
     };
@@ -1378,7 +1423,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
         touchStartRef.current = { x: touch.clientX, y: touch.clientY };
     };
 
-    const handleGridTouchEnd = (event: React.TouchEvent) => {
+    const handleSwipeNavEnd = (event: React.TouchEvent, navigate: (amount: number) => void) => {
         const start = touchStartRef.current;
         touchStartRef.current = null;
         if (!start) return;
@@ -1389,7 +1434,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
 
         if (Math.abs(deltaX) > 50 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
             justSwipedRef.current = true;
-            changeMonth(deltaX < 0 ? 1 : -1);
+            navigate(deltaX < 0 ? 1 : -1);
         }
     };
 
@@ -1397,6 +1442,18 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
         setSelectedDate(date);
         setCurrentDate(new Date(date.getFullYear(), date.getMonth(), 1));
     };
+
+    const changeDay = (amount: number) => {
+        selectDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate() + amount));
+    };
+
+    const changeWeek = (amount: number) => {
+        selectDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate() + amount * 7));
+    };
+
+    const handleGridTouchEnd = (event: React.TouchEvent) => handleSwipeNavEnd(event, changeMonth);
+    const handleWeekTouchEnd = (event: React.TouchEvent) => handleSwipeNavEnd(event, changeWeek);
+    const handleDayTouchEnd = (event: React.TouchEvent) => handleSwipeNavEnd(event, changeDay);
 
     const handleDayClick = (day: Date | null) => {
         if (!day) return;
@@ -1497,8 +1554,17 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
 
     const currentMonthLabel = currentDate.toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
 
-    const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+    const [viewMode, setViewMode] = useState<AgendaViewMode>(() => readStoredAgendaViewMode());
     const [showAlertsPanel, setShowAlertsPanel] = useState(false);
+
+    const handleChangeViewMode = (mode: AgendaViewMode) => {
+        setViewMode(mode);
+        try {
+            window.localStorage.setItem(AGENDA_VIEW_MODE_STORAGE_KEY, mode);
+        } catch {
+            // Silencioso: localStorage indisponivel (modo privado/quota).
+        }
+    };
     const [alertsActive, setAlertsActive] = useState(false);
 
     useEffect(() => {
@@ -1550,7 +1616,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                             >
                                 <i className={`${alertsActive ? 'fas' : 'far'} fa-bell text-sm`} aria-hidden="true"></i>
                             </button>
-                            <AgendaViewToggle viewMode={viewMode} onChange={setViewMode} />
+                            <AgendaViewToggle viewMode={viewMode} onChange={handleChangeViewMode} />
                         </div>
                     </div>
 
@@ -1623,16 +1689,96 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                         <CalendarStatusLegend />
                       </>
                     ) : null}
+
+                    {viewMode === 'week' ? (
+                      <>
+                        <header className="mb-3 flex items-center justify-between gap-2">
+                            <div className="flex min-w-0 items-center gap-1">
+                                <button onClick={() => changeWeek(-1)} aria-label="Semana anterior" className="h-9 w-9 shrink-0 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400">
+                                    <i className="fas fa-chevron-left"></i>
+                                </button>
+                                <h2 className="truncate text-lg font-bold text-slate-800 dark:text-slate-200 capitalize">
+                                    {weekRangeLabel}
+                                </h2>
+                                <button onClick={() => changeWeek(1)} aria-label="Próxima semana" className="h-9 w-9 shrink-0 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400">
+                                    <i className="fas fa-chevron-right"></i>
+                                </button>
+                            </div>
+                            <span className="inline-flex h-7 shrink-0 items-center rounded-full bg-[var(--surface-muted)] px-2.5 text-[11px] font-bold text-[var(--text-muted)]">
+                                {weekTotal} na semana
+                            </span>
+                        </header>
+
+                        <div className="grid grid-cols-7 gap-1 mb-2 text-center text-sm font-semibold text-slate-500">
+                            {weekDays.map((day) => <div key={day}>{day}</div>)}
+                        </div>
+
+                        <div
+                            className="grid grid-cols-7 gap-1 touch-pan-y"
+                            onTouchStart={handleGridTouchStart}
+                            onTouchEnd={handleWeekTouchEnd}
+                        >
+                        {weekStripDays.map((day) => {
+                            const dayAgendamentos = agendamentosByDate.get(day.toDateString()) || [];
+                            return (
+                                <div
+                                    key={day.toISOString()}
+                                    onClick={() => handleDayClick(day)}
+                                    onTouchStart={() => handleCellTouchStart(day)}
+                                    onTouchMove={clearLongPress}
+                                    onTouchEnd={clearLongPress}
+                                    className={getDayCellClasses(day)}
+                                >
+                                    <div className="absolute inset-0 p-1.5 flex flex-col items-center overflow-hidden">
+                                        {dayAgendamentos.length > 0 ? (
+                                            <span className="absolute right-1 top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--brand-primary)] px-1 text-[9px] font-black text-white">
+                                                {dayAgendamentos.length}
+                                            </span>
+                                        ) : null}
+                                        <span className={getDayNumberClasses(day)}>
+                                            {day.getDate()}
+                                        </span>
+                                        {dayAgendamentos.length > 0 && (
+                                            <div className="mt-1.5 flex flex-wrap justify-center items-center gap-1">
+                                                {dayAgendamentos.slice(0, 3).map((agendamento) => (
+                                                    <div key={agendamento.id} className={`w-2 h-2 rounded-full ${getServiceStatusColor(agendamento.serviceStatus)}`} title={agendamento.clienteNome}></div>
+                                                ))}
+                                                {dayAgendamentos.length > 3 && (
+                                                    <div className="w-2 h-2 rounded-full bg-slate-300" title={`${dayAgendamentos.length - 3} mais`}></div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                        </div>
+
+                        <CalendarStatusLegend />
+                      </>
+                    ) : null}
                 </section>
 
-                {viewMode === 'grid' ? (
+                {viewMode !== 'list' ? (
                 <section>
                     <div className="mb-4 flex items-end justify-between gap-4 border-b border-slate-200 pb-3 dark:border-slate-700">
-                        <div>
-                            <span className="text-sm font-semibold text-slate-500">Agenda:</span>
-                            <h3 className="text-lg font-bold leading-tight text-slate-800 dark:text-slate-200">
-                                {selectedDateString}
-                            </h3>
+                        <div className="flex min-w-0 items-center gap-1">
+                            {viewMode === 'day' ? (
+                                <button onClick={() => changeDay(-1)} aria-label="Dia anterior" className="h-9 w-9 shrink-0 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400">
+                                    <i className="fas fa-chevron-left"></i>
+                                </button>
+                            ) : null}
+                            <div className="min-w-0">
+                                <span className="text-sm font-semibold text-slate-500">Agenda:</span>
+                                <h3 className="truncate text-lg font-bold leading-tight text-slate-800 dark:text-slate-200">
+                                    {selectedDateString}
+                                </h3>
+                            </div>
+                            {viewMode === 'day' ? (
+                                <button onClick={() => changeDay(1)} aria-label="Próximo dia" className="h-9 w-9 shrink-0 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400">
+                                    <i className="fas fa-chevron-right"></i>
+                                </button>
+                            ) : null}
                         </div>
                         <ActionButton
                             onClick={() => onCreateNewAgendamento(selectedDate)}
@@ -1645,6 +1791,11 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                         />
                     </div>
 
+                    <div
+                        className={viewMode === 'day' ? 'touch-pan-y' : undefined}
+                        onTouchStart={viewMode === 'day' ? handleGridTouchStart : undefined}
+                        onTouchEnd={viewMode === 'day' ? handleDayTouchEnd : undefined}
+                    >
                     <DayAgendaSummary agendamentos={selectedDayAgendamentos} />
 
                     {selectedDayAgendamentos.length > 0 ? (
@@ -1667,6 +1818,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                             />
                         </div>
                     )}
+                    </div>
                 </section>
                 ) : (
                 <section>
