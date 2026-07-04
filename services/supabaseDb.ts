@@ -2,6 +2,7 @@
 // Migração do IndexedDB para Supabase
 import { supabase } from './supabaseClient';
 import { Client, Measurement, UserInfo, Film, SavedPDF, Agendamento, ProposalOption, StandaloneExpense } from '../types';
+import { DEFAULT_PROPOSAL_MESSAGE_TEMPLATES, ProposalMessageTemplate } from '../src/lib/proposalMessages';
 import { mockUserInfo } from './mockData';
 import {
     getCurrentUserId as getSessionUserId,
@@ -786,6 +787,120 @@ export const deleteStandaloneExpense = async (id: number): Promise<void> => {
 
     const { error } = await supabase
         .from('standalone_expenses')
+        .delete()
+        .eq('id', id);
+
+    if (error) throw error;
+};
+
+// ============================================
+// PROPOSAL MESSAGE TEMPLATE FUNCTIONS
+// Modelos de mensagem da proposta, globais por organização.
+// ============================================
+
+const mapRowToProposalMessageTemplate = (row: any): ProposalMessageTemplate => ({
+    id: row.id,
+    title: row.title || '',
+    text: row.body || '',
+    sortOrder: typeof row.sort_order === 'number' ? row.sort_order : Number(row.sort_order || 0),
+});
+
+const seedDefaultProposalMessageTemplates = async (
+    userId: string,
+    organizationId: string | null
+): Promise<ProposalMessageTemplate[]> => {
+    const rows = DEFAULT_PROPOSAL_MESSAGE_TEMPLATES.map((template, index) => ({
+        user_id: userId,
+        organization_id: organizationId,
+        title: template.title,
+        body: template.text,
+        sort_order: index,
+    }));
+
+    const { data, error } = await supabase
+        .from('proposal_message_templates')
+        .insert(rows)
+        .select();
+
+    if (error) {
+        console.error('Error seeding proposal message templates:', error);
+        throw error;
+    }
+
+    return (data || [])
+        .map(mapRowToProposalMessageTemplate)
+        .sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id);
+};
+
+export const getProposalMessageTemplates = async (): Promise<ProposalMessageTemplate[]> => {
+    const userId = await getCurrentUserId();
+    if (!userId) return [];
+
+    const { data, error } = await supabase
+        .from('proposal_message_templates')
+        .select('*')
+        .order('sort_order', { ascending: true })
+        .order('id', { ascending: true });
+
+    if (error) {
+        console.error('Error fetching proposal message templates:', error);
+        throw error;
+    }
+
+    if (data && data.length > 0) {
+        return data.map(mapRowToProposalMessageTemplate);
+    }
+
+    // Organização ainda sem modelos: popula os padrões uma única vez.
+    const orgId = await getEffectiveOrganizationId();
+    return seedDefaultProposalMessageTemplates(userId, orgId);
+};
+
+export const saveProposalMessageTemplate = async (
+    template: Partial<ProposalMessageTemplate> & { title: string; text: string }
+): Promise<ProposalMessageTemplate> => {
+    const userId = await getCurrentUserId();
+    if (!userId) throw new Error('User not authenticated');
+
+    if (template.id) {
+        const { data, error } = await supabase
+            .from('proposal_message_templates')
+            .update({
+                title: template.title,
+                body: template.text,
+                ...(typeof template.sortOrder === 'number' ? { sort_order: template.sortOrder } : {}),
+            })
+            .eq('id', template.id)
+            .select()
+            .single();
+
+        if (error) throw error;
+        return mapRowToProposalMessageTemplate(data);
+    }
+
+    const orgId = await getEffectiveOrganizationId();
+    const { data, error } = await supabase
+        .from('proposal_message_templates')
+        .insert({
+            user_id: userId,
+            organization_id: orgId,
+            title: template.title,
+            body: template.text,
+            sort_order: typeof template.sortOrder === 'number' ? template.sortOrder : 999,
+        })
+        .select()
+        .single();
+
+    if (error) throw error;
+    return mapRowToProposalMessageTemplate(data);
+};
+
+export const deleteProposalMessageTemplate = async (id: number): Promise<void> => {
+    const userId = await getCurrentUserId();
+    if (!userId) throw new Error('User not authenticated');
+
+    const { error } = await supabase
+        .from('proposal_message_templates')
         .delete()
         .eq('id', id);
 

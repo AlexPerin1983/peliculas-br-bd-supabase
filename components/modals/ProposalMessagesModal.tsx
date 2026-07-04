@@ -1,16 +1,20 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
     ArrowRight,
     ChevronDown,
     Copy,
     BriefcaseBusiness,
+    LoaderCircle,
     MessageCircle,
     Pencil,
     PhoneOff,
+    Plus,
     Save,
     Smartphone,
     SlidersHorizontal,
     Tag,
+    Trash2,
     X,
 } from 'lucide-react';
 import { Client, SavedPDF } from '../../types';
@@ -18,7 +22,6 @@ import {
     buildProposalWhatsAppAppUrl,
     buildProposalWhatsAppBusinessUrl,
     calculateFollowUpDiscount,
-    DEFAULT_PROPOSAL_MESSAGE_TEMPLATES,
     fillProposalMessage,
     findUnsupportedProposalTags,
     FollowUpDiscountType,
@@ -26,6 +29,7 @@ import {
     ProposalMessageTemplate,
     ProposalMessageValues,
 } from '../../src/lib/proposalMessages';
+import { useProposalMessageTemplates } from '../../src/hooks/useProposalMessageTemplates';
 import Modal from '../ui/Modal';
 
 interface ProposalMessagesModalProps {
@@ -40,15 +44,6 @@ interface MessageFields {
     discountValue: string;
     commercialNote: string;
 }
-
-const STORAGE_KEY = 'proposal-message-templates:v1';
-const LEGACY_CONDITION_SPECIAL_TEXT = `{{primeiro_nome}}, consegui fazer um ajuste nessa proposta para tentar facilitar o fechamento.
-
-O valor anterior era {{valor_final}}.
-
-Com essa nova condição, consigo deixar por {{valor_especial}}.
-
-Quer que eu veja uma data disponível para instalação?`;
 
 const formatCurrencyBR = (value: number) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
@@ -81,19 +76,189 @@ const STATUS_CHIP_CLASSES: Record<NonNullable<SavedPDF['status']>, string> = {
 const isDesktopViewport = () =>
     typeof window === 'undefined' || !window.matchMedia('(max-width: 639px)').matches;
 
-const loadTemplates = (): ProposalMessageTemplate[] => {
-    if (typeof window === 'undefined') return DEFAULT_PROPOSAL_MESSAGE_TEMPLATES;
-    try {
-        const stored = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || '{}') as Record<string, string>;
-        return DEFAULT_PROPOSAL_MESSAGE_TEMPLATES.map(template => ({
-            ...template,
-            text: typeof stored[template.id] === 'string' && stored[template.id] !== LEGACY_CONDITION_SPECIAL_TEXT
-                ? stored[template.id]
-                : template.text,
-        }));
-    } catch {
-        return DEFAULT_PROPOSAL_MESSAGE_TEMPLATES;
-    }
+interface TemplateEditorState {
+    mode: 'create' | 'edit';
+    id: number | null;
+    title: string;
+    text: string;
+}
+
+/**
+ * Editor de modelo em tela cheia (portal) — abre por cima do bottom sheet para
+ * o texto ter espaço de sobra. Salva globalmente na organização.
+ */
+const ProposalTemplateEditor: React.FC<{
+    initial: TemplateEditorState;
+    canDelete: boolean;
+    isSaving: boolean;
+    onSave: (title: string, text: string) => void;
+    onDelete: () => void;
+    onClose: () => void;
+}> = ({ initial, canDelete, isSaving, onSave, onDelete, onClose }) => {
+    const [title, setTitle] = useState(initial.title);
+    const [text, setText] = useState(initial.text);
+    const [localError, setLocalError] = useState<string | null>(null);
+    const [confirmingDelete, setConfirmingDelete] = useState(false);
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+    const insertTag = (tag: string) => {
+        const textarea = textareaRef.current;
+        const token = `{{${tag}}}`;
+        if (!textarea) {
+            setText(current => current + token);
+            return;
+        }
+        const start = textarea.selectionStart ?? text.length;
+        const end = textarea.selectionEnd ?? text.length;
+        const next = text.slice(0, start) + token + text.slice(end);
+        setText(next);
+        requestAnimationFrame(() => {
+            textarea.focus();
+            const caret = start + token.length;
+            textarea.setSelectionRange(caret, caret);
+        });
+    };
+
+    const handleSave = () => {
+        const trimmedTitle = title.trim();
+        if (!trimmedTitle) {
+            setLocalError('Dê um nome ao modelo.');
+            return;
+        }
+        if (!text.trim()) {
+            setLocalError('Escreva o texto da mensagem.');
+            return;
+        }
+        const unsupported = findUnsupportedProposalTags(text);
+        if (unsupported.length > 0) {
+            setLocalError(`Use apenas as tags fixas. Tag inválida: {{${unsupported[0]}}}`);
+            return;
+        }
+        setLocalError(null);
+        onSave(trimmedTitle, text);
+    };
+
+    return createPortal(
+        <div className="fixed inset-0 z-[10060] flex flex-col bg-[var(--surface)] animate-fade-in">
+            <div
+                className="flex flex-shrink-0 items-center justify-between gap-3 border-b border-[var(--border-subtle)] bg-[var(--surface-raised)] px-4 pb-3"
+                style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.75rem)' }}
+            >
+                <div className="flex min-w-0 items-center gap-2.5">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-[var(--brand-primary-soft)] text-[var(--brand-primary)]">
+                        <Pencil className="h-4 w-4" aria-hidden="true" />
+                    </span>
+                    <h2 className="truncate text-base font-black tracking-[-0.01em] text-[var(--text-strong)]">
+                        {initial.mode === 'create' ? 'Novo modelo' : 'Editar modelo'}
+                    </h2>
+                </div>
+                <button
+                    type="button"
+                    onClick={onClose}
+                    aria-label="Fechar editor"
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)]"
+                >
+                    <X className="h-4 w-4" aria-hidden="true" />
+                </button>
+            </div>
+
+            <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4">
+                <label className="block space-y-1.5">
+                    <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--text-muted)]">Nome do modelo</span>
+                    <input
+                        value={title}
+                        onChange={event => setTitle(event.target.value)}
+                        placeholder="Ex.: Enviar proposta"
+                        className="h-11 w-full rounded-[12px] border border-[var(--border-subtle)] bg-[var(--surface)] px-3.5 text-sm font-bold text-[var(--text-strong)] outline-none transition-[border-color,box-shadow] duration-200 placeholder:font-medium placeholder:text-[var(--text-muted)] focus:border-[var(--brand-primary)] focus:shadow-[0_0_0_3px_rgba(21,94,239,0.10)]"
+                    />
+                </label>
+
+                <div className="space-y-1.5">
+                    <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--text-muted)]">
+                        <Tag className="h-3 w-3 text-[var(--brand-primary)]" aria-hidden="true" />
+                        Toque para inserir
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                        {PROPOSAL_MESSAGE_TAGS.map(tag => (
+                            <button
+                                key={tag}
+                                type="button"
+                                onClick={() => insertTag(tag)}
+                                className="rounded-full border border-blue-100 bg-blue-50 px-2 py-1 text-[10px] font-bold text-blue-700 transition-colors hover:bg-blue-100 active:scale-95 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-300"
+                            >
+                                {`{{${tag}}}`}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                <label className="flex min-h-0 flex-1 flex-col space-y-1.5">
+                    <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--text-muted)]">Mensagem</span>
+                    <textarea
+                        ref={textareaRef}
+                        value={text}
+                        onChange={event => setText(event.target.value)}
+                        placeholder="Escreva o texto da mensagem. Use as tags acima para inserir nome, valor, desconto…"
+                        className="min-h-[220px] w-full flex-1 resize-none rounded-[12px] border border-[var(--border-subtle)] bg-[var(--surface)] px-3.5 py-3 text-sm leading-relaxed text-[var(--text-strong)] outline-none transition-[border-color,box-shadow] duration-200 placeholder:text-[var(--text-muted)] focus:border-[var(--brand-primary)] focus:shadow-[0_0_0_3px_rgba(21,94,239,0.10)]"
+                    />
+                </label>
+
+                {localError && (
+                    <p className="text-xs font-semibold text-red-600 dark:text-red-400" role="alert">{localError}</p>
+                )}
+            </div>
+
+            <div
+                className="flex flex-shrink-0 items-center gap-2 border-t border-[var(--border-subtle)] bg-[var(--surface-raised)] p-3"
+                style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.75rem)' }}
+            >
+                {initial.mode === 'edit' && canDelete && (
+                    confirmingDelete ? (
+                        <div className="flex flex-1 items-center gap-2">
+                            <span className="text-xs font-bold text-[var(--text-body)]">Excluir?</span>
+                            <button
+                                type="button"
+                                onClick={onDelete}
+                                disabled={isSaving}
+                                className="inline-flex h-9 items-center gap-1.5 rounded-[10px] bg-red-600 px-3 text-xs font-bold text-white transition-colors hover:bg-red-700 disabled:opacity-60"
+                            >
+                                <Trash2 className="h-3.5 w-3.5" aria-hidden="true" /> Sim, excluir
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setConfirmingDelete(false)}
+                                className="inline-flex h-9 items-center rounded-[10px] border border-[var(--border-subtle)] bg-[var(--surface)] px-3 text-xs font-bold text-[var(--text-body)] transition-colors hover:bg-[var(--surface-muted)]"
+                            >
+                                Não
+                            </button>
+                        </div>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={() => setConfirmingDelete(true)}
+                            aria-label="Excluir modelo"
+                            title="Excluir modelo"
+                            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] border border-red-200/70 bg-red-50 text-red-600 transition-colors hover:bg-red-100 dark:border-red-900/50 dark:bg-red-950/25 dark:text-red-300"
+                        >
+                            <Trash2 className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                    )
+                )}
+                {!confirmingDelete && (
+                    <button
+                        type="button"
+                        onClick={handleSave}
+                        disabled={isSaving}
+                        className="inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-2 rounded-[12px] bg-[var(--brand-primary)] px-4 text-sm font-bold text-white shadow-[0_10px_22px_rgba(21,94,239,0.22)] transition-all duration-200 hover:bg-[var(--brand-primary-strong)] active:scale-[0.99] disabled:opacity-70"
+                    >
+                        {isSaving ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Save className="h-4 w-4" aria-hidden="true" />}
+                        {initial.mode === 'create' ? 'Criar modelo' : 'Salvar modelo'}
+                    </button>
+                )}
+            </div>
+        </div>,
+        document.body
+    );
 };
 
 const ProposalWhatsAppChooser: React.FC<{
@@ -165,30 +330,41 @@ const ProposalMessagesModal: React.FC<ProposalMessagesModalProps> = ({ isOpen, c
         commercialNote: '',
     });
     const [discountType, setDiscountType] = useState<FollowUpDiscountType>('percentage');
-    const [templates, setTemplates] = useState<ProposalMessageTemplate[]>(loadTemplates);
-    const [activeTemplateId, setActiveTemplateId] = useState(DEFAULT_PROPOSAL_MESSAGE_TEMPLATES[0].id);
-    const [editingId, setEditingId] = useState<string | null>(null);
-    const [draftText, setDraftText] = useState('');
-    const [feedback, setFeedback] = useState<{ id: string; message: string; type: 'success' | 'error' } | null>(null);
+    const [activeTemplateId, setActiveTemplateId] = useState<number | null>(null);
+    const [editor, setEditor] = useState<TemplateEditorState | null>(null);
+    const [isSavingTemplate, setIsSavingTemplate] = useState(false);
+    const [feedback, setFeedback] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
     const [isWhatsAppChooserOpen, setIsWhatsAppChooserOpen] = useState(false);
     const [showPersonalize, setShowPersonalize] = useState(isDesktopViewport);
+
+    const {
+        templates,
+        isLoading: templatesLoading,
+        error: templatesError,
+        createTemplate,
+        updateTemplate,
+        deleteTemplate,
+    } = useProposalMessageTemplates(isOpen && !!pdf);
 
     useEffect(() => {
         if (!isOpen || !pdf) return;
         const firstName = client.nome.trim().split(/\s+/)[0] || '';
-        setFields({
-            firstName,
-            discountValue: '',
-            commercialNote: '',
-        });
+        setFields({ firstName, discountValue: '', commercialNote: '' });
         setDiscountType('percentage');
-        setActiveTemplateId(DEFAULT_PROPOSAL_MESSAGE_TEMPLATES[0].id);
-        setEditingId(null);
-        setDraftText('');
+        setActiveTemplateId(null);
+        setEditor(null);
         setFeedback(null);
         setIsWhatsAppChooserOpen(false);
         setShowPersonalize(isDesktopViewport());
     }, [client.nome, isOpen, pdf]);
+
+    // Mantém um modelo válido selecionado assim que a lista chega/muda.
+    useEffect(() => {
+        if (templates.length === 0) return;
+        setActiveTemplateId(prev =>
+            prev != null && templates.some(t => t.id === prev) ? prev : templates[0].id
+        );
+    }, [templates]);
 
     const originalValue = pdf ? Math.max(0, getOriginalValue(pdf) || 0) : 0;
     const followUpDiscount = useMemo(
@@ -239,138 +415,123 @@ const ProposalMessagesModal: React.FC<ProposalMessagesModalProps> = ({ isOpen, c
         });
     };
 
-    const startEditing = (template: ProposalMessageTemplate) => {
-        setEditingId(template.id);
-        setDraftText(template.text);
-        setFeedback(null);
-    };
+    const activeTemplate: ProposalMessageTemplate | null =
+        templates.find(template => template.id === activeTemplateId) ?? templates[0] ?? null;
+    const activeTemplateIndex = activeTemplate ? templates.findIndex(t => t.id === activeTemplate.id) : -1;
+    const activeRenderedMessage = activeTemplate ? fillProposalMessage(activeTemplate.text, values) : '';
+    const activeWhatsAppAppUrl = buildProposalWhatsAppAppUrl(client.telefone, activeRenderedMessage);
+    const activeWhatsAppBusinessUrl = buildProposalWhatsAppBusinessUrl(client.telefone, activeRenderedMessage);
 
-    const cancelEditing = () => {
-        setEditingId(null);
-        setDraftText('');
-        setFeedback(null);
-    };
-
-    const selectTemplate = (templateId: string) => {
+    const selectTemplate = (templateId: number) => {
         setActiveTemplateId(templateId);
-        setEditingId(null);
-        setDraftText('');
         setFeedback(null);
         setIsWhatsAppChooserOpen(false);
     };
 
-    const saveTemplate = (templateId: string) => {
-        const unsupportedTags = findUnsupportedProposalTags(draftText);
-        if (unsupportedTags.length > 0) {
-            setFeedback({
-                id: templateId,
-                message: `Use apenas as tags fixas. Tag inválida: {{${unsupportedTags[0]}}}`,
-                type: 'error',
-            });
-            return;
-        }
-
-        const updatedTemplates = templates.map(template =>
-            template.id === templateId ? { ...template, text: draftText } : template
-        );
-        setTemplates(updatedTemplates);
-        window.localStorage.setItem(
-            STORAGE_KEY,
-            JSON.stringify(Object.fromEntries(updatedTemplates.map(template => [template.id, template.text])))
-        );
-        setEditingId(null);
-        setDraftText('');
-        setFeedback({ id: templateId, message: 'Texto salvo neste navegador.', type: 'success' });
+    const openCreateEditor = () => {
+        setEditor({ mode: 'create', id: null, title: '', text: '' });
     };
 
-    const copyMessage = async (templateId: string, message: string) => {
+    const openEditEditor = () => {
+        if (!activeTemplate) return;
+        setEditor({ mode: 'edit', id: activeTemplate.id, title: activeTemplate.title, text: activeTemplate.text });
+    };
+
+    const handleSaveTemplate = async (title: string, text: string) => {
+        if (!editor) return;
+        setIsSavingTemplate(true);
         try {
-            await navigator.clipboard.writeText(message);
-            setFeedback({ id: templateId, message: 'Mensagem copiada.', type: 'success' });
-        } catch {
-            setFeedback({ id: templateId, message: 'Não foi possível copiar. Selecione o texto manualmente.', type: 'error' });
+            if (editor.mode === 'create') {
+                const created = await createTemplate(title, text);
+                setActiveTemplateId(created.id);
+                setFeedback({ message: 'Modelo criado.', type: 'success' });
+            } else if (editor.id != null) {
+                await updateTemplate(editor.id, { title, text });
+                setActiveTemplateId(editor.id);
+                setFeedback({ message: 'Modelo salvo para todos os clientes.', type: 'success' });
+            }
+            setEditor(null);
+        } catch (err) {
+            console.error('[proposalTemplates] Falha ao salvar modelo:', err);
+            setFeedback({ message: 'Não foi possível salvar. Verifique a conexão.', type: 'error' });
+        } finally {
+            setIsSavingTemplate(false);
         }
     };
 
-    const activeTemplate = templates.find(template => template.id === activeTemplateId) ?? templates[0];
-    const activeTemplateIndex = templates.findIndex(template => template.id === activeTemplate.id);
-    const isEditingActiveTemplate = editingId === activeTemplate.id;
-    const activeSourceText = isEditingActiveTemplate ? draftText : activeTemplate.text;
-    const activeRenderedMessage = fillProposalMessage(activeSourceText, values);
-    const activeWhatsAppAppUrl = buildProposalWhatsAppAppUrl(client.telefone, activeRenderedMessage);
-    const activeWhatsAppBusinessUrl = buildProposalWhatsAppBusinessUrl(client.telefone, activeRenderedMessage);
-    const activeFeedback = feedback?.id === activeTemplate.id ? feedback : null;
+    const handleDeleteTemplate = async () => {
+        if (!editor || editor.id == null) return;
+        setIsSavingTemplate(true);
+        try {
+            await deleteTemplate(editor.id);
+            setActiveTemplateId(null);
+            setFeedback({ message: 'Modelo excluído.', type: 'success' });
+            setEditor(null);
+        } catch (err) {
+            console.error('[proposalTemplates] Falha ao excluir modelo:', err);
+            setFeedback({ message: 'Não foi possível excluir. Verifique a conexão.', type: 'error' });
+        } finally {
+            setIsSavingTemplate(false);
+        }
+    };
 
-    // Ações principais sempre visíveis no rodapé do modal (fixo no mobile).
+    const copyMessage = async () => {
+        try {
+            await navigator.clipboard.writeText(activeRenderedMessage);
+            setFeedback({ message: 'Mensagem copiada.', type: 'success' });
+        } catch {
+            setFeedback({ message: 'Não foi possível copiar. Selecione o texto manualmente.', type: 'error' });
+        }
+    };
+
     const footer = (
         <div className="w-full space-y-2">
-            {activeFeedback && (
-                <p className={`text-xs font-semibold ${activeFeedback.type === 'error' ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`} role="status">
-                    {activeFeedback.message}
+            {feedback && (
+                <p className={`text-xs font-semibold ${feedback.type === 'error' ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`} role="status">
+                    {feedback.message}
                 </p>
             )}
             <div className="flex items-center gap-2">
-                {isEditingActiveTemplate ? (
-                    <>
-                        <button
-                            type="button"
-                            onClick={cancelEditing}
-                            aria-label="Cancelar edição"
-                            title="Cancelar edição"
-                            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-muted)] transition-colors duration-200 hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)]"
-                        >
-                            <X className="h-4 w-4" aria-hidden="true" />
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => saveTemplate(activeTemplate.id)}
-                            className="inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-2 rounded-[12px] bg-[var(--brand-primary)] px-4 text-sm font-bold text-white shadow-[0_10px_22px_rgba(21,94,239,0.22)] transition-all duration-200 hover:bg-[var(--brand-primary-strong)] active:scale-[0.99]"
-                        >
-                            <Save className="h-4 w-4" aria-hidden="true" />
-                            Salvar texto
-                        </button>
-                    </>
+                <button
+                    type="button"
+                    onClick={() => void copyMessage()}
+                    disabled={!activeTemplate}
+                    aria-label="Copiar mensagem"
+                    title="Copiar mensagem"
+                    className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-muted)] transition-colors duration-200 hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)] disabled:opacity-50"
+                >
+                    <Copy className="h-4 w-4" aria-hidden="true" />
+                </button>
+                <button
+                    type="button"
+                    onClick={openEditEditor}
+                    disabled={!activeTemplate}
+                    aria-label="Editar texto"
+                    title="Editar texto"
+                    className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-muted)] transition-colors duration-200 hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)] disabled:opacity-50"
+                >
+                    <Pencil className="h-4 w-4" aria-hidden="true" />
+                </button>
+                {activeWhatsAppAppUrl && activeWhatsAppBusinessUrl ? (
+                    <button
+                        type="button"
+                        onClick={() => setIsWhatsAppChooserOpen(true)}
+                        disabled={!activeTemplate}
+                        className="inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-2 rounded-[12px] bg-emerald-600 px-3 text-sm font-bold text-white shadow-[0_10px_22px_rgba(5,150,105,0.22)] transition-all duration-200 hover:bg-emerald-700 active:scale-[0.99] disabled:opacity-50"
+                    >
+                        <MessageCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+                        <span className="truncate">Enviar no WhatsApp</span>
+                    </button>
                 ) : (
-                    <>
-                        <button
-                            type="button"
-                            onClick={() => void copyMessage(activeTemplate.id, activeRenderedMessage)}
-                            aria-label="Copiar mensagem"
-                            title="Copiar mensagem"
-                            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-muted)] transition-colors duration-200 hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)]"
-                        >
-                            <Copy className="h-4 w-4" aria-hidden="true" />
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => startEditing(activeTemplate)}
-                            aria-label="Editar texto"
-                            title="Editar texto"
-                            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-muted)] transition-colors duration-200 hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)]"
-                        >
-                            <Pencil className="h-4 w-4" aria-hidden="true" />
-                        </button>
-                        {activeWhatsAppAppUrl && activeWhatsAppBusinessUrl ? (
-                            <button
-                                type="button"
-                                onClick={() => setIsWhatsAppChooserOpen(true)}
-                                className="inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-2 rounded-[12px] bg-emerald-600 px-3 text-sm font-bold text-white shadow-[0_10px_22px_rgba(5,150,105,0.22)] transition-all duration-200 hover:bg-emerald-700 active:scale-[0.99]"
-                            >
-                                <MessageCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
-                                <span className="truncate">Enviar no WhatsApp</span>
-                            </button>
-                        ) : (
-                            <button
-                                type="button"
-                                disabled
-                                title="Cadastre um telefone para o cliente"
-                                className="inline-flex h-11 min-w-0 flex-1 cursor-not-allowed items-center justify-center gap-2 rounded-[12px] bg-slate-300 px-3 text-sm font-bold text-slate-600 opacity-70 dark:bg-slate-700 dark:text-slate-300"
-                            >
-                                <PhoneOff className="h-4 w-4 shrink-0" aria-hidden="true" />
-                                <span className="truncate">Cliente sem telefone</span>
-                            </button>
-                        )}
-                    </>
+                    <button
+                        type="button"
+                        disabled
+                        title="Cadastre um telefone para o cliente"
+                        className="inline-flex h-11 min-w-0 flex-1 cursor-not-allowed items-center justify-center gap-2 rounded-[12px] bg-slate-300 px-3 text-sm font-bold text-slate-600 opacity-70 dark:bg-slate-700 dark:text-slate-300"
+                    >
+                        <PhoneOff className="h-4 w-4 shrink-0" aria-hidden="true" />
+                        <span className="truncate">Cliente sem telefone</span>
+                    </button>
                 )}
             </div>
         </div>
@@ -421,70 +582,82 @@ const ProposalMessagesModal: React.FC<ProposalMessagesModalProps> = ({ isOpen, c
 
                 {/* Modelos prontos */}
                 <section className="space-y-2">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--text-muted)]">Modelo da mensagem</p>
-                    <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="tablist" aria-label="Modelos de mensagem">
-                        {templates.map((template, index) => {
-                            const isActive = template.id === activeTemplate.id;
-                            return (
-                                <button
-                                    key={template.id}
-                                    type="button"
-                                    role="tab"
-                                    aria-selected={isActive}
-                                    onClick={() => selectTemplate(template.id)}
-                                    className={`inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-[11px] font-bold transition-all duration-200 sm:h-10 sm:gap-2 sm:px-3 sm:text-xs ${isActive
-                                        ? 'border-[var(--brand-primary)] bg-[var(--brand-primary)] text-white shadow-[0_8px_18px_rgba(21,94,239,0.22)]'
-                                        : 'border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-body)] hover:border-blue-200 hover:bg-blue-50 dark:hover:border-blue-900/50 dark:hover:bg-blue-950/20'
-                                    }`}
-                                >
-                                    <span className={`flex min-h-[18px] min-w-[18px] items-center justify-center rounded-full text-[9px] sm:min-h-[20px] sm:min-w-[20px] sm:text-[10px] ${isActive ? 'bg-white/18' : 'bg-[var(--surface-muted)] text-[var(--text-muted)]'}`}>{index + 1}</span>
-                                    {template.title}
-                                </button>
-                            );
-                        })}
+                    <div className="flex items-center justify-between gap-2">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--text-muted)]">Modelo da mensagem</p>
+                        {templatesError && <span className="text-[10px] font-semibold text-red-600 dark:text-red-400">Offline</span>}
                     </div>
+
+                    {templatesLoading && templates.length === 0 ? (
+                        <div className="flex items-center gap-2 rounded-[12px] border border-[var(--border-subtle)] bg-[var(--surface)] px-3 py-3 text-xs font-semibold text-[var(--text-muted)]">
+                            <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" /> Carregando modelos…
+                        </div>
+                    ) : templates.length === 0 ? (
+                        <button
+                            type="button"
+                            onClick={openCreateEditor}
+                            className="flex w-full items-center justify-center gap-2 rounded-[12px] border border-dashed border-[var(--border-strong)] bg-[var(--surface)] px-3 py-4 text-sm font-bold text-[var(--brand-primary)] transition-colors hover:bg-blue-50 dark:hover:bg-blue-950/20"
+                        >
+                            <Plus className="h-4 w-4" aria-hidden="true" /> Criar primeiro modelo
+                        </button>
+                    ) : (
+                        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="tablist" aria-label="Modelos de mensagem">
+                            {templates.map((template, index) => {
+                                const isActive = template.id === activeTemplate?.id;
+                                return (
+                                    <button
+                                        key={template.id}
+                                        type="button"
+                                        role="tab"
+                                        aria-selected={isActive}
+                                        onClick={() => selectTemplate(template.id)}
+                                        className={`inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-[11px] font-bold transition-all duration-200 sm:h-10 sm:gap-2 sm:px-3 sm:text-xs ${isActive
+                                            ? 'border-[var(--brand-primary)] bg-[var(--brand-primary)] text-white shadow-[0_8px_18px_rgba(21,94,239,0.22)]'
+                                            : 'border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-body)] hover:border-blue-200 hover:bg-blue-50 dark:hover:border-blue-900/50 dark:hover:bg-blue-950/20'
+                                        }`}
+                                    >
+                                        <span className={`flex min-h-[18px] min-w-[18px] items-center justify-center rounded-full text-[9px] sm:min-h-[20px] sm:min-w-[20px] sm:text-[10px] ${isActive ? 'bg-white/18' : 'bg-[var(--surface-muted)] text-[var(--text-muted)]'}`}>{index + 1}</span>
+                                        {template.title}
+                                    </button>
+                                );
+                            })}
+                            <button
+                                type="button"
+                                onClick={openCreateEditor}
+                                aria-label="Criar novo modelo"
+                                title="Criar novo modelo"
+                                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-dashed border-[var(--border-strong)] bg-[var(--surface)] text-[var(--brand-primary)] transition-colors hover:bg-blue-50 active:scale-95 dark:hover:bg-blue-950/20 sm:h-10 sm:w-10"
+                            >
+                                <Plus className="h-4 w-4" aria-hidden="true" />
+                            </button>
+                        </div>
+                    )}
                 </section>
 
-                {/* Prévia / edição da mensagem */}
-                <article className="overflow-hidden rounded-[14px] border border-[var(--border-subtle)] bg-[var(--surface-raised)] shadow-[var(--shadow-soft)]">
-                    <div className="flex items-center justify-between gap-2 border-b border-[var(--border-subtle)] px-3 py-2 sm:px-4 sm:py-2.5">
-                        <div className="flex min-w-0 items-center gap-2">
-                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[8px] bg-blue-50 text-[10px] font-black text-[var(--brand-primary)] dark:bg-blue-950/40">{activeTemplateIndex + 1}</span>
-                            <h3 className="truncate text-xs font-black text-[var(--text-strong)] sm:text-sm">{activeTemplate.title}</h3>
-                        </div>
-                        <span className="shrink-0 text-[9px] font-bold uppercase tracking-[0.1em] text-[var(--text-soft)]">
-                            {isEditingActiveTemplate ? 'Editando' : 'Prévia'}
-                        </span>
-                    </div>
-
-                    <div className="p-3 sm:p-4">
-                        {isEditingActiveTemplate && (
-                            <div className="mb-3 space-y-2">
-                                <textarea
-                                    value={draftText}
-                                    onChange={event => setDraftText(event.target.value)}
-                                    rows={7}
-                                    aria-label="Editar texto do modelo"
-                                    className="w-full resize-y rounded-[12px] border border-[var(--brand-primary)] bg-[var(--surface)] px-3 py-2.5 text-[13px] leading-relaxed text-[var(--text-strong)] outline-none shadow-[0_0_0_3px_rgba(21,94,239,0.08)] sm:px-3.5 sm:py-3 sm:text-sm"
-                                />
-                                <div className="flex flex-wrap items-center gap-1">
-                                    <span className="mr-0.5 inline-flex items-center gap-1 text-[10px] font-bold text-[var(--text-muted)]">
-                                        <Tag className="h-3 w-3" aria-hidden="true" />
-                                        Tags:
-                                    </span>
-                                    {PROPOSAL_MESSAGE_TAGS.map(tag => (
-                                        <code key={tag} className="rounded-full border border-blue-100 bg-blue-50 px-1.5 py-0.5 text-[9px] font-bold text-blue-700 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-300">{`{{${tag}}}`}</code>
-                                    ))}
-                                </div>
+                {/* Prévia da mensagem */}
+                {activeTemplate && (
+                    <article className="overflow-hidden rounded-[14px] border border-[var(--border-subtle)] bg-[var(--surface-raised)] shadow-[var(--shadow-soft)]">
+                        <div className="flex items-center justify-between gap-2 border-b border-[var(--border-subtle)] px-3 py-2 sm:px-4 sm:py-2.5">
+                            <div className="flex min-w-0 items-center gap-2">
+                                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[8px] bg-blue-50 text-[10px] font-black text-[var(--brand-primary)] dark:bg-blue-950/40">{activeTemplateIndex + 1}</span>
+                                <h3 className="truncate text-xs font-black text-[var(--text-strong)] sm:text-sm">{activeTemplate.title}</h3>
                             </div>
-                        )}
-
-                        <div className="relative overflow-hidden rounded-[12px] border border-blue-100 bg-[linear-gradient(145deg,rgba(239,246,255,0.92),rgba(248,250,252,0.96))] p-3 pl-4 text-[13px] leading-[1.65] text-slate-700 dark:border-blue-900/40 dark:bg-[linear-gradient(145deg,rgba(30,58,138,0.16),rgba(15,23,42,0.42))] dark:text-slate-200 sm:p-4 sm:pl-5 sm:text-sm sm:leading-[1.7]">
-                            <span className="absolute inset-y-3 left-0 w-1 rounded-r-full bg-[var(--brand-primary)]" aria-hidden="true" />
-                            <p className="whitespace-pre-wrap">{activeRenderedMessage}</p>
+                            <button
+                                type="button"
+                                onClick={openEditEditor}
+                                className="inline-flex shrink-0 items-center gap-1 rounded-full border border-[var(--border-subtle)] bg-[var(--surface)] px-2.5 py-1 text-[10px] font-bold text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)]"
+                            >
+                                <Pencil className="h-3 w-3" aria-hidden="true" /> Editar
+                            </button>
                         </div>
-                    </div>
-                </article>
+
+                        <div className="p-3 sm:p-4">
+                            <div className="relative overflow-hidden rounded-[12px] border border-blue-100 bg-[linear-gradient(145deg,rgba(239,246,255,0.92),rgba(248,250,252,0.96))] p-3 pl-4 text-[13px] leading-[1.65] text-slate-700 dark:border-blue-900/40 dark:bg-[linear-gradient(145deg,rgba(30,58,138,0.16),rgba(15,23,42,0.42))] dark:text-slate-200 sm:p-4 sm:pl-5 sm:text-sm sm:leading-[1.7]">
+                                <span className="absolute inset-y-3 left-0 w-1 rounded-r-full bg-[var(--brand-primary)]" aria-hidden="true" />
+                                <p className="whitespace-pre-wrap">{activeRenderedMessage}</p>
+                            </div>
+                        </div>
+                    </article>
+                )}
 
                 {/* Personalização (colapsável) */}
                 <section className="overflow-hidden rounded-[14px] border border-[var(--border-subtle)] bg-[var(--surface)]">
@@ -562,6 +735,16 @@ const ProposalMessagesModal: React.FC<ProposalMessagesModalProps> = ({ isOpen, c
                 </section>
             </div>
         </Modal>
+        {editor && (
+            <ProposalTemplateEditor
+                initial={editor}
+                canDelete={templates.length > 1}
+                isSaving={isSavingTemplate}
+                onSave={(title, text) => void handleSaveTemplate(title, text)}
+                onDelete={() => void handleDeleteTemplate()}
+                onClose={() => setEditor(null)}
+            />
+        )}
         {isWhatsAppChooserOpen && activeWhatsAppAppUrl && activeWhatsAppBusinessUrl && (
             <ProposalWhatsAppChooser
                 clientName={client.nome}

@@ -11,8 +11,16 @@ export const PROPOSAL_MESSAGE_TAGS = [
 export type ProposalMessageTag = (typeof PROPOSAL_MESSAGE_TAGS)[number];
 export type ProposalMessageValues = Record<ProposalMessageTag, string>;
 
+/** Modelo salvo no banco (global da organização). */
 export interface ProposalMessageTemplate {
-    id: string;
+    id: number;
+    title: string;
+    text: string;
+    sortOrder: number;
+}
+
+/** Semente usada só para popular a organização na primeira vez (sem id ainda). */
+export interface ProposalMessageTemplateSeed {
     title: string;
     text: string;
 }
@@ -26,9 +34,8 @@ export interface FollowUpDiscountResult {
     formattedDiscount: string;
 }
 
-export const DEFAULT_PROPOSAL_MESSAGE_TEMPLATES: ProposalMessageTemplate[] = [
+export const DEFAULT_PROPOSAL_MESSAGE_TEMPLATES: ProposalMessageTemplateSeed[] = [
     {
-        id: 'enviar-proposta',
         title: 'Enviar proposta',
         text: `Oi, {{primeiro_nome}}. Tudo bem?
 
@@ -39,7 +46,6 @@ O valor final ficou em {{valor_final}}.
 Você quer que eu veja uma data disponível para instalação ou prefere tirar alguma dúvida antes?`,
     },
     {
-        id: 'confirmar-se-viu',
         title: 'Confirmar se viu',
         text: `Oi, {{primeiro_nome}}. Tudo bem?
 
@@ -48,7 +54,6 @@ Passando só para confirmar se você conseguiu ver a proposta que te enviei.
 Ficou alguma dúvida sobre o serviço, valor ou forma de pagamento?`,
     },
     {
-        id: 'entender-decisao',
         title: 'Entender decisão',
         text: `{{primeiro_nome}}, só para eu te orientar melhor:
 
@@ -63,7 +68,6 @@ O que mais pesa para você decidir agora?
 Qual desses pontos faz mais sentido para você?`,
     },
     {
-        id: 'condicao-especial',
         title: 'Condição especial',
         text: `{{primeiro_nome}}, consegui fazer um ajuste nessa proposta.
 
@@ -74,7 +78,6 @@ Com o desconto de {{desconto_extra}}, consigo deixar por {{valor_especial}}.
 Quer que eu veja uma data disponível para instalação?`,
     },
     {
-        id: 'encerramento',
         title: 'Encerramento',
         text: `{{primeiro_nome}}, vou deixar essa proposta em aberto por enquanto para não ficar te incomodando.
 
