@@ -5,6 +5,9 @@ import {
     ChevronDown,
     Copy,
     BriefcaseBusiness,
+    Eraser,
+    Eye,
+    EyeOff,
     LoaderCircle,
     MessageCircle,
     Pencil,
@@ -30,6 +33,7 @@ import {
     ProposalMessageValues,
 } from '../../src/lib/proposalMessages';
 import { useProposalMessageTemplates } from '../../src/hooks/useProposalMessageTemplates';
+import { useIsMobile } from '../../src/hooks/useIsMobile';
 import Modal from '../ui/Modal';
 
 interface ProposalMessagesModalProps {
@@ -83,6 +87,18 @@ interface TemplateEditorState {
     text: string;
 }
 
+// Rótulos curtos para os chips de tag (o texto completo {{...}} é longo demais
+// no mobile e empilha). Ao tocar, insere a tag real no texto.
+const PROPOSAL_TAG_LABELS: Record<string, string> = {
+    primeiro_nome: 'Nome',
+    nome_cliente: 'Cliente',
+    titulo_orcamento: 'Orçamento',
+    valor_final: 'Valor',
+    desconto_extra: 'Desconto',
+    valor_especial: 'Valor especial',
+    observacao_comercial: 'Observação',
+};
+
 /**
  * Editor de modelo em tela cheia (portal) — abre por cima do bottom sheet para
  * o texto ter espaço de sobra. Salva globalmente na organização.
@@ -91,15 +107,23 @@ const ProposalTemplateEditor: React.FC<{
     initial: TemplateEditorState;
     canDelete: boolean;
     isSaving: boolean;
+    values: ProposalMessageValues;
     onSave: (title: string, text: string) => void;
     onDelete: () => void;
     onClose: () => void;
-}> = ({ initial, canDelete, isSaving, onSave, onDelete, onClose }) => {
+}> = ({ initial, canDelete, isSaving, values, onSave, onDelete, onClose }) => {
+    const isMobile = useIsMobile();
     const [title, setTitle] = useState(initial.title);
     const [text, setText] = useState(initial.text);
     const [localError, setLocalError] = useState<string | null>(null);
     const [confirmingDelete, setConfirmingDelete] = useState(false);
+    const [showPreview, setShowPreview] = useState(false);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+    const clearText = () => {
+        setText('');
+        requestAnimationFrame(() => textareaRef.current?.focus());
+    };
 
     const insertTag = (tag: string) => {
         const textarea = textareaRef.current;
@@ -138,8 +162,8 @@ const ProposalTemplateEditor: React.FC<{
         onSave(trimmedTitle, text);
     };
 
-    return createPortal(
-        <div className="fixed inset-0 z-[10060] flex flex-col bg-[var(--surface)] animate-fade-in">
+    const node = (
+        <div className="fixed inset-0 z-[10060] flex flex-col bg-[var(--surface)] animate-fade-in" data-modal-companion>
             <div
                 className="flex flex-shrink-0 items-center justify-between gap-3 border-b border-[var(--border-subtle)] bg-[var(--surface-raised)] px-4 pb-3"
                 style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.75rem)' }}
@@ -178,30 +202,66 @@ const ProposalTemplateEditor: React.FC<{
                         <Tag className="h-3 w-3 text-[var(--brand-primary)]" aria-hidden="true" />
                         Toque para inserir
                     </span>
-                    <div className="flex flex-wrap gap-1.5">
-                        {PROPOSAL_MESSAGE_TAGS.map(tag => (
-                            <button
-                                key={tag}
-                                type="button"
-                                onClick={() => insertTag(tag)}
-                                className="rounded-full border border-blue-100 bg-blue-50 px-2 py-1 text-[10px] font-bold text-blue-700 transition-colors hover:bg-blue-100 active:scale-95 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-300"
-                            >
-                                {`{{${tag}}}`}
-                            </button>
-                        ))}
+                    {/* Uma linha rolável para não empilhar nem empurrar o texto; cada
+                        chip mostra um exemplo do valor real quando existe. */}
+                    <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                        {PROPOSAL_MESSAGE_TAGS.map(tag => {
+                            const example = (values[tag] || '').trim();
+                            return (
+                                <button
+                                    key={tag}
+                                    type="button"
+                                    onClick={() => insertTag(tag)}
+                                    title={`{{${tag}}}`}
+                                    className="inline-flex shrink-0 items-center gap-1 rounded-full border border-blue-100 bg-blue-50 px-2 py-1 text-[10px] font-bold text-blue-700 transition-colors hover:bg-blue-100 active:scale-95 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-300"
+                                >
+                                    <span>{PROPOSAL_TAG_LABELS[tag] ?? tag}</span>
+                                    {example && <span className="max-w-[88px] truncate font-medium text-blue-500/75 dark:text-blue-300/70">· {example}</span>}
+                                </button>
+                            );
+                        })}
                     </div>
                 </div>
 
                 <label className="flex min-h-0 flex-1 flex-col space-y-1.5">
-                    <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--text-muted)]">Mensagem</span>
+                    <span className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--text-muted)]">Mensagem</span>
+                        {text && (
+                            <button
+                                type="button"
+                                onClick={clearText}
+                                className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold text-[var(--text-muted)] transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/25"
+                            >
+                                <Eraser className="h-3 w-3" aria-hidden="true" /> Limpar
+                            </button>
+                        )}
+                    </span>
                     <textarea
                         ref={textareaRef}
                         value={text}
                         onChange={event => setText(event.target.value)}
                         placeholder="Escreva o texto da mensagem. Use as tags acima para inserir nome, valor, desconto…"
-                        className="min-h-[220px] w-full flex-1 resize-none rounded-[12px] border border-[var(--border-subtle)] bg-[var(--surface)] px-3.5 py-3 text-sm leading-relaxed text-[var(--text-strong)] outline-none transition-[border-color,box-shadow] duration-200 placeholder:text-[var(--text-muted)] focus:border-[var(--brand-primary)] focus:shadow-[0_0_0_3px_rgba(21,94,239,0.10)]"
+                        className="min-h-[160px] w-full flex-1 resize-none rounded-[12px] border border-[var(--border-subtle)] bg-[var(--surface)] px-3.5 py-3 text-sm leading-relaxed text-[var(--text-strong)] outline-none transition-[border-color,box-shadow] duration-200 placeholder:text-[var(--text-muted)] focus:border-[var(--brand-primary)] focus:shadow-[0_0_0_3px_rgba(21,94,239,0.10)]"
                     />
                 </label>
+
+                {/* Prévia ao vivo: mostra como a mensagem fica com as tags preenchidas. */}
+                <div className="flex-shrink-0">
+                    <button
+                        type="button"
+                        onClick={() => setShowPreview(current => !current)}
+                        aria-expanded={showPreview}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border-subtle)] bg-[var(--surface)] px-2.5 py-1 text-[10px] font-bold text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)]"
+                    >
+                        {showPreview ? <EyeOff className="h-3 w-3" aria-hidden="true" /> : <Eye className="h-3 w-3" aria-hidden="true" />}
+                        {showPreview ? 'Ocultar prévia' : 'Ver prévia'}
+                    </button>
+                    {showPreview && (
+                        <div className="mt-1.5 max-h-36 overflow-y-auto whitespace-pre-wrap rounded-[10px] border border-blue-100 bg-blue-50/50 p-2.5 text-[12px] leading-relaxed text-slate-700 dark:border-blue-900/40 dark:bg-blue-950/20 dark:text-slate-200">
+                            {fillProposalMessage(text, values).trim() || 'A prévia da mensagem aparece aqui.'}
+                        </div>
+                    )}
+                </div>
 
                 {localError && (
                     <p className="text-xs font-semibold text-red-600 dark:text-red-400" role="alert">{localError}</p>
@@ -256,9 +316,13 @@ const ProposalTemplateEditor: React.FC<{
                     </button>
                 )}
             </div>
-        </div>,
-        document.body
+        </div>
     );
+
+    // No mobile o editor precisa ficar DENTRO do bottom sheet (vaul), senão o
+    // sheet marca tudo que está fora como inerte e o campo não recebe toque/foco.
+    // No desktop, portamos para o body para ocupar a tela toda (fora do diálogo).
+    return isMobile ? node : createPortal(node, document.body);
 };
 
 const ProposalWhatsAppChooser: React.FC<{
@@ -542,6 +606,9 @@ const ProposalMessagesModal: React.FC<ProposalMessagesModalProps> = ({ isOpen, c
         <Modal
             isOpen={isOpen}
             onClose={onClose}
+            // Enquanto o editor de modelo está aberto, trava o arrastar-para-fechar
+            // do sheet para não perder a edição ao gesticular/rolar sobre as tags.
+            disableClose={editor != null}
             title={(
                 <span className="inline-flex items-center gap-2.5">
                     <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-[var(--brand-primary)] text-white shadow-[0_8px_20px_rgba(21,94,239,0.28)]">
@@ -734,17 +801,19 @@ const ProposalMessagesModal: React.FC<ProposalMessagesModalProps> = ({ isOpen, c
                     )}
                 </section>
             </div>
+            {/* Dentro do Modal para, no mobile, ficar dentro do bottom sheet (não inerte). */}
+            {editor && (
+                <ProposalTemplateEditor
+                    initial={editor}
+                    canDelete={templates.length > 1}
+                    isSaving={isSavingTemplate}
+                    values={values}
+                    onSave={(title, text) => void handleSaveTemplate(title, text)}
+                    onDelete={() => void handleDeleteTemplate()}
+                    onClose={() => setEditor(null)}
+                />
+            )}
         </Modal>
-        {editor && (
-            <ProposalTemplateEditor
-                initial={editor}
-                canDelete={templates.length > 1}
-                isSaving={isSavingTemplate}
-                onSave={(title, text) => void handleSaveTemplate(title, text)}
-                onDelete={() => void handleDeleteTemplate()}
-                onClose={() => setEditor(null)}
-            />
-        )}
         {isWhatsAppChooserOpen && activeWhatsAppAppUrl && activeWhatsAppBusinessUrl && (
             <ProposalWhatsAppChooser
                 clientName={client.nome}
