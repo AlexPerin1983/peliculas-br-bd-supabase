@@ -30,6 +30,7 @@ import {
     ProposalMessageValues,
 } from '../../src/lib/proposalMessages';
 import { useProposalMessageTemplates } from '../../src/hooks/useProposalMessageTemplates';
+import { useIsMobile } from '../../src/hooks/useIsMobile';
 import Modal from '../ui/Modal';
 
 interface ProposalMessagesModalProps {
@@ -95,6 +96,7 @@ const ProposalTemplateEditor: React.FC<{
     onDelete: () => void;
     onClose: () => void;
 }> = ({ initial, canDelete, isSaving, onSave, onDelete, onClose }) => {
+    const isMobile = useIsMobile();
     const [title, setTitle] = useState(initial.title);
     const [text, setText] = useState(initial.text);
     const [localError, setLocalError] = useState<string | null>(null);
@@ -138,8 +140,8 @@ const ProposalTemplateEditor: React.FC<{
         onSave(trimmedTitle, text);
     };
 
-    return createPortal(
-        <div className="fixed inset-0 z-[10060] flex flex-col bg-[var(--surface)] animate-fade-in">
+    const node = (
+        <div className="fixed inset-0 z-[10060] flex flex-col bg-[var(--surface)] animate-fade-in" data-modal-companion>
             <div
                 className="flex flex-shrink-0 items-center justify-between gap-3 border-b border-[var(--border-subtle)] bg-[var(--surface-raised)] px-4 pb-3"
                 style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.75rem)' }}
@@ -256,9 +258,13 @@ const ProposalTemplateEditor: React.FC<{
                     </button>
                 )}
             </div>
-        </div>,
-        document.body
+        </div>
     );
+
+    // No mobile o editor precisa ficar DENTRO do bottom sheet (vaul), senão o
+    // sheet marca tudo que está fora como inerte e o campo não recebe toque/foco.
+    // No desktop, portamos para o body para ocupar a tela toda (fora do diálogo).
+    return isMobile ? node : createPortal(node, document.body);
 };
 
 const ProposalWhatsAppChooser: React.FC<{
@@ -734,17 +740,18 @@ const ProposalMessagesModal: React.FC<ProposalMessagesModalProps> = ({ isOpen, c
                     )}
                 </section>
             </div>
+            {/* Dentro do Modal para, no mobile, ficar dentro do bottom sheet (não inerte). */}
+            {editor && (
+                <ProposalTemplateEditor
+                    initial={editor}
+                    canDelete={templates.length > 1}
+                    isSaving={isSavingTemplate}
+                    onSave={(title, text) => void handleSaveTemplate(title, text)}
+                    onDelete={() => void handleDeleteTemplate()}
+                    onClose={() => setEditor(null)}
+                />
+            )}
         </Modal>
-        {editor && (
-            <ProposalTemplateEditor
-                initial={editor}
-                canDelete={templates.length > 1}
-                isSaving={isSavingTemplate}
-                onSave={(title, text) => void handleSaveTemplate(title, text)}
-                onDelete={() => void handleDeleteTemplate()}
-                onClose={() => setEditor(null)}
-            />
-        )}
         {isWhatsAppChooserOpen && activeWhatsAppAppUrl && activeWhatsAppBusinessUrl && (
             <ProposalWhatsAppChooser
                 clientName={client.nome}
