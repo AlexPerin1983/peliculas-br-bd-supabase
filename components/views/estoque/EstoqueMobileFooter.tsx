@@ -4,6 +4,7 @@ interface EstoqueMobileFooterProps {
     activeTab: 'bobinas' | 'retalhos';
     viewMode: 'grid' | 'list';
     onAdd: () => void;
+    onAI: () => void;
     onScan: () => void;
     onOpenSearch: () => void;
     onOpenFilter: () => void;
@@ -30,6 +31,7 @@ const EstoqueMobileFooter: React.FC<EstoqueMobileFooterProps> = ({
     activeTab,
     viewMode,
     onAdd,
+    onAI,
     onScan,
     onOpenSearch,
     onOpenFilter,
@@ -55,6 +57,17 @@ const EstoqueMobileFooter: React.FC<EstoqueMobileFooterProps> = ({
                             className="flex h-16 w-16 items-center justify-center rounded-2xl border-4 border-white bg-gradient-to-br from-blue-600 to-blue-700 text-white shadow-[0_8px_20px_rgba(21,94,239,0.4)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_12px_24px_rgba(21,94,239,0.5)] active:scale-95 dark:border-slate-900"
                         >
                             <i className="fas fa-plus text-2xl"></i>
+                        </button>
+                    </div>
+
+                    {/* Mini-FAB satélite: adicionar por voz com IA */}
+                    <div className="absolute left-1/2 -top-11 translate-x-[44px]">
+                        <button
+                            onClick={onAI}
+                            aria-label="Adicionar com IA por voz"
+                            className="flex h-12 w-12 items-center justify-center rounded-2xl border-4 border-white bg-gradient-to-br from-violet-600 to-indigo-600 text-white shadow-[0_8px_20px_rgba(109,40,217,0.4)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_12px_24px_rgba(109,40,217,0.5)] active:scale-95 dark:border-slate-900"
+                        >
+                            <i className="fas fa-wand-magic-sparkles text-lg"></i>
                         </button>
                     </div>
 

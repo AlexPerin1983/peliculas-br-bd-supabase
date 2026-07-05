@@ -334,7 +334,12 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
                     />
                 }
             >
-                <EstoqueView films={films} initialAction={initialEstoqueAction} />
+                <EstoqueView
+                    films={films}
+                    initialAction={initialEstoqueAction}
+                    userInfo={userInfo}
+                    onOpenApiKeyModal={() => onOpenApiKeyModal('gemini')}
+                />
             </FeatureGate>,
             estoqueLoadingView
         );

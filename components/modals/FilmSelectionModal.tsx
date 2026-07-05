@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Film } from '../../types';
 import { matchesSearch } from '../../src/lib/textSearch';
 
@@ -304,7 +305,7 @@ const FilmSelectionModal: React.FC<FilmSelectionModalProps> = ({ isOpen, onClose
         return result.map(item => item.film);
     }, [films, debouncedSearchTerm]);
 
-    if (!isOpen) return null;
+    if (!isOpen || typeof document === 'undefined') return null;
 
     const handleSelectFilm = (filmName: string) => {
         onSelect(filmName);
@@ -328,8 +329,8 @@ const FilmSelectionModal: React.FC<FilmSelectionModalProps> = ({ isOpen, onClose
         onDeleteFilm(filmName);
     };
 
-    return (
-        <div className="fixed inset-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm z-[10000] flex flex-col animate-fade-in">
+    return createPortal(
+        <div className="pointer-events-auto fixed inset-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm z-[10060] flex flex-col animate-fade-in" data-modal-companion>
             {/* Header */}
             <div className="flex-shrink-0 p-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 sticky top-0">
                 <div className="flex items-center justify-between gap-4 max-w-3xl mx-auto">
@@ -412,7 +413,8 @@ const FilmSelectionModal: React.FC<FilmSelectionModalProps> = ({ isOpen, onClose
                     animation: fade-in 0.2s ease-out forwards;
                 }
             `}</style>
-        </div>
+        </div>,
+        document.body
     );
 };
 

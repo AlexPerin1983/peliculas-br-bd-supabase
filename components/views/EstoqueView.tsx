@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Bobina, Retalho, Film } from '../../types';
+import { Bobina, Retalho, Film, UserInfo, AIInput } from '../../types';
 import {
     getAllBobinas,
     getAllRetalhos,
@@ -10,6 +10,7 @@ import { getAllCustomFilms } from '../../services/db';
 import { useEstoqueFilters } from '../../src/hooks/useEstoqueFilters';
 import { useEstoqueOperations } from '../../src/hooks/useEstoqueOperations';
 import { useEstoqueForm } from '../../src/hooks/useEstoqueForm';
+import { useEstoqueAI } from '../../src/hooks/useEstoqueAI';
 import EstoqueStatsBar from './estoque/EstoqueStatsBar';
 import EstoqueTopControls from './estoque/EstoqueTopControls';
 import EstoqueBobinasPanel from './estoque/EstoqueBobinasPanel';
@@ -19,6 +20,7 @@ import EstoqueMobileFooter from './estoque/EstoqueMobileFooter';
 import EstoqueStatusSheet from './estoque/EstoqueStatusSheet';
 import { getEstoqueStatusOptions } from './estoque/estoqueStatus';
 import EstoqueAddModal from './estoque/EstoqueAddModal';
+import EstoqueAIModal from './estoque/EstoqueAIModal';
 import EstoqueQrModal from './estoque/EstoqueQrModal';
 import EstoqueDeleteConfirmModal from './estoque/EstoqueDeleteConfirmModal';
 import EstoqueFilmFlow from './estoque/EstoqueFilmFlow';
@@ -36,9 +38,11 @@ let estoqueCache: {
 interface EstoqueViewProps {
     films: Film[];
     initialAction?: { action: 'scan', code: string } | null;
+    userInfo?: UserInfo | null;
+    onOpenApiKeyModal?: () => void;
 }
 
-const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialAction }) => {
+const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialAction, userInfo = null, onOpenApiKeyModal }) => {
     const [activeTab, setActiveTab] = useState<'bobinas' | 'retalhos'>('bobinas');
     const [bobinas, setBobinas] = useState<Bobina[]>(estoqueCache?.bobinas || []);
     const [retalhos, setRetalhos] = useState<Retalho[]>(estoqueCache?.retalhos || []);
@@ -46,6 +50,7 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
     const [loading, setLoading] = useState(!estoqueCache);
     const [films, setFilms] = useState<Film[]>(initialFilms);
     const [showAddModal, setShowAddModal] = useState(false);
+    const [showAIModal, setShowAIModal] = useState(false);
     const [showQRModal, setShowQRModal] = useState<{ type: 'bobina' | 'retalho', item: Bobina | Retalho } | null>(null);
     const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
     const [showScannerModal, setShowScannerModal] = useState(false);
@@ -54,6 +59,7 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
     const [editingFilm, setEditingFilm] = useState<Film | null>(null);
     const [filmNameToAdd, setFilmNameToAdd] = useState<string>('');
     const { form, setters } = useEstoqueForm();
+    const { processEstoqueItem, isProcessing: isProcessingAI } = useEstoqueAI(userInfo);
 
     // Estado para modal de status
     const [showStatusModal, setShowStatusModal] = useState<{ type: 'bobina' | 'retalho', item: Bobina | Retalho } | null>(null);
@@ -155,6 +161,40 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
         qrCodeDataUrl,
     });
 
+    // Sem IA ativada: leva direto para a ativação em vez de barrar com um aviso.
+    const handleOpenAI = () => {
+        if (!userInfo?.aiConfig?.apiKey || userInfo.aiConfig.provider !== 'gemini') {
+            if (onOpenApiKeyModal) {
+                onOpenApiKeyModal();
+                return;
+            }
+        }
+        setShowAIModal(true);
+    };
+
+    // IA por voz/texto: interpreta o item descrito, preenche o formulário e abre
+    // o modal de bobina/retalho já populado para o usuário revisar e confirmar.
+    const handleAIProcess = async (input: AIInput) => {
+        const item = await processEstoqueItem(input, films, activeTab);
+        const tipo = item.tipo === 'bobina' ? 'bobinas' : item.tipo === 'retalho' ? 'retalhos' : activeTab;
+
+        setActiveTab(tipo);
+        setters.setFormFilmId(item.filmId || '');
+        setters.setFormLargura(item.largura || '');
+        setters.setFormComprimento(item.comprimento || '');
+        setters.setFormFornecedor(item.fornecedor || '');
+        setters.setFormLote(item.lote || '');
+        setters.setFormCusto(item.custo || '');
+        setters.setFormLocalizacao(item.localizacao || '');
+        setters.setFormObservacao(item.observacao || '');
+        setters.setFormBobinaId('');
+        setters.setFormDeduzirDaBobina(false);
+        setters.setFormQuantidade(item.quantidade ? String(item.quantidade) : '1');
+
+        setShowAIModal(false);
+        setShowAddModal(true);
+    };
+
     if (loading) {
         return <EstoqueSkeleton />;
     }
@@ -191,6 +231,7 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
                     visibleCount={activeTab === 'bobinas' ? filteredBobinas.length : filteredRetalhos.length}
                     onChangeTab={setActiveTab}
                     onAdd={() => setShowAddModal(true)}
+                    onAI={handleOpenAI}
                     searchTerm={searchTerm}
                     onSearchChange={setSearchTerm}
                     statusFilter={statusFilter}
@@ -259,6 +300,13 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
                 setFormQuantidade={setters.setFormQuantidade}
             />
 
+            <EstoqueAIModal
+                isOpen={showAIModal}
+                onClose={() => setShowAIModal(false)}
+                onProcess={handleAIProcess}
+                isProcessing={isProcessingAI}
+            />
+
             <EstoqueQrModal
                 showQRModal={showQRModal}
                 qrCodeDataUrl={qrCodeDataUrl}
@@ -306,6 +354,7 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
                 activeTab={activeTab}
                 viewMode={viewMode}
                 onAdd={() => setShowAddModal(true)}
+                onAI={handleOpenAI}
                 onScan={() => setShowScannerModal(true)}
                 onOpenSearch={() => setMobileSearchOpen(true)}
                 onOpenFilter={() => setMobileFilterOpen(true)}

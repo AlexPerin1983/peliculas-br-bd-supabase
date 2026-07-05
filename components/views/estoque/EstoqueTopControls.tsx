@@ -10,6 +10,7 @@ interface EstoqueTopControlsProps {
     visibleCount: number;
     onChangeTab: (tab: 'bobinas' | 'retalhos') => void;
     onAdd: () => void;
+    onAI: () => void;
     searchTerm: string;
     onSearchChange: (value: string) => void;
     statusFilter: string;
@@ -38,6 +39,7 @@ const EstoqueTopControls: React.FC<EstoqueTopControlsProps> = ({
     visibleCount,
     onChangeTab,
     onAdd,
+    onAI,
     searchTerm,
     onSearchChange,
     statusFilter,
@@ -196,6 +198,16 @@ const EstoqueTopControls: React.FC<EstoqueTopControlsProps> = ({
                             >
                                 <QrCodeIcon />
                                 <span className="hidden md:inline">Escanear</span>
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={onAI}
+                                className={`${actionButtonClassName} sm:w-auto sm:gap-2 sm:px-3 sm:text-[13px] sm:font-semibold`}
+                                aria-label="Adicionar com IA"
+                            >
+                                <i className="fas fa-wand-magic-sparkles text-[13px]" aria-hidden="true"></i>
+                                <span className="hidden md:inline">Criar com IA</span>
                             </button>
 
                             <button
