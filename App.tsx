@@ -60,6 +60,7 @@ import { getSubscriptionInfo } from './services/subscriptionService';
 import { getFornecedores } from './services/fornecedorService';
 import { matchFilmFromExtractedText } from './services/filmMatchingService';
 import DesktopSidebar from './components/layout/DesktopSidebar';
+import AIQuickFab from './components/AIQuickFab';
 import OnboardingTour from './components/onboarding/OnboardingTour';
 import { seedExampleDataIfNeeded } from './services/seedData';
 import { GEMINI_TEXT_MODEL } from './src/lib/geminiModel';
@@ -334,7 +335,7 @@ const App: React.FC = () => {
     const [isClearAllModalOpen, setIsClearAllModalOpen] = useState(false);
 
     // Deep Linking State
-    const [initialEstoqueAction, setInitialEstoqueAction] = useState<{ action: 'scan', code: string } | null>(null);
+    const [initialEstoqueAction, setInitialEstoqueAction] = useState<{ action: 'scan', code: string } | { action: 'ai', tab: 'bobinas' | 'retalhos' } | null>(null);
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
@@ -2136,6 +2137,20 @@ Regras:
         setIsAIFilmModalOpen(true);
     }, [ensureAiReady]);
 
+    const handleQuickFabEstoqueAI = useCallback((tab: 'bobinas' | 'retalhos') => {
+        if (!ensureAiReady()) return;
+        setInitialEstoqueAction({ action: 'ai', tab });
+        handleTabChange('estoque');
+    }, [ensureAiReady, handleTabChange]);
+
+    const handleClearInitialEstoqueAction = useCallback(() => {
+        setInitialEstoqueAction(null);
+    }, []);
+
+    const handleQuickFabAgenda = useCallback(() => {
+        handleCreateNewAgendamento(new Date());
+    }, [handleCreateNewAgendamento]);
+
     const handleProcessAIMeasurementInput = useCallback(async (input: AIInput) => {
         if (!userInfo?.aiConfig?.apiKey) {
             // Leva direto para a tela de ativacao em vez de um beco sem saida.
@@ -2423,6 +2438,7 @@ Se não conseguir extrair, retorne: []`;
             agendamentos={agendamentos}
             films={films}
             initialEstoqueAction={initialEstoqueAction}
+            onInitialEstoqueActionConsumed={handleClearInitialEstoqueAction}
             selectedClientId={selectedClientId}
             measurements={measurements}
             proposalOptions={proposalOptions}
@@ -2797,6 +2813,16 @@ Se não conseguir extrair, retorne: []`;
                         </div>
                     </main>
 
+
+                      {userInfo?.aiConfig?.quickFab && (
+                          <AIQuickFab
+                              onCreateProposal={handleOpenAIQuickProposalModal}
+                              onCreateClient={handleOpenAIClientModal}
+                              onCreateBobina={() => handleQuickFabEstoqueAI('bobinas')}
+                              onCreateRetalho={() => handleQuickFabEstoqueAI('retalhos')}
+                              onCreateAgenda={handleQuickFabAgenda}
+                          />
+                      )}
 
                       <ModalsContainer {...modalProps} />
                       {billingReturnState && (

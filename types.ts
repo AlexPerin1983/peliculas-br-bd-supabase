@@ -239,6 +239,7 @@ export interface UserInfo {
     aiConfig?: {
         provider: 'gemini' | 'openai' | 'local_ocr';
         apiKey: string;
+        quickFab?: boolean;
     };
     lastSelectedClientId?: number | null; // Novo campo
     socialLinks?: {

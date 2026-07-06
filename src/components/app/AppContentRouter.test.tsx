@@ -22,6 +22,7 @@ describe('AppContentRouter', () => {
     agendamentos: [],
     films: [],
     initialEstoqueAction: null,
+    onInitialEstoqueActionConsumed: vi.fn(),
     selectedClientId: null,
     measurements: [],
     proposalOptions: [],

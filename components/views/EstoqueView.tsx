@@ -37,12 +37,13 @@ let estoqueCache: {
 
 interface EstoqueViewProps {
     films: Film[];
-    initialAction?: { action: 'scan', code: string } | null;
+    initialAction?: { action: 'scan', code: string } | { action: 'ai', tab: 'bobinas' | 'retalhos' } | null;
+    onInitialActionConsumed?: () => void;
     userInfo?: UserInfo | null;
     onOpenApiKeyModal?: () => void;
 }
 
-const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialAction, userInfo = null, onOpenApiKeyModal }) => {
+const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialAction, onInitialActionConsumed, userInfo = null, onOpenApiKeyModal }) => {
     const [activeTab, setActiveTab] = useState<'bobinas' | 'retalhos'>('bobinas');
     const [bobinas, setBobinas] = useState<Bobina[]>(estoqueCache?.bobinas || []);
     const [retalhos, setRetalhos] = useState<Retalho[]>(estoqueCache?.retalhos || []);
@@ -125,12 +126,16 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
         loadData(true);
     }, []); // Executa apenas uma vez no mount
 
-    // Handle deep linking action
+    // Handle deep linking and quick AI actions.
     useEffect(() => {
         if (initialAction?.action === 'scan' && initialAction.code) {
             setShowScannerModal(true);
+        } else if (initialAction?.action === 'ai') {
+            setActiveTab(initialAction.tab);
+            setShowAIModal(true);
+            onInitialActionConsumed?.();
         }
-    }, [initialAction]);
+    }, [initialAction, onInitialActionConsumed]);
 
     const {
         handleShowQR,
