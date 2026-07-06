@@ -36,6 +36,7 @@ export default function EstoqueFilmFlow({
             <FilmSelectionModal
                 isOpen={showFilmSelectionModal}
                 onClose={() => setShowFilmSelectionModal(false)}
+                renderInSheet
                 films={films}
                 onSelect={(filmName) => {
                     setFormFilmId(filmName);

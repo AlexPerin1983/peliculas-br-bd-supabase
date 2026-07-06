@@ -303,7 +303,21 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
                 setFormDeduzirDaBobina={setters.setFormDeduzirDaBobina}
                 formQuantidade={form.formQuantidade}
                 setFormQuantidade={setters.setFormQuantidade}
-            />
+            >
+                <EstoqueFilmFlow
+                    films={films}
+                    showFilmSelectionModal={showFilmSelectionModal}
+                    setShowFilmSelectionModal={setShowFilmSelectionModal}
+                    showFilmModal={showFilmModal}
+                    setShowFilmModal={setShowFilmModal}
+                    editingFilm={editingFilm}
+                    setEditingFilm={setEditingFilm}
+                    filmNameToAdd={filmNameToAdd}
+                    setFilmNameToAdd={setFilmNameToAdd}
+                    setFormFilmId={setters.setFormFilmId}
+                    onReloadData={loadData}
+                />
+            </EstoqueAddModal>
 
             <EstoqueAIModal
                 isOpen={showAIModal}
@@ -319,20 +333,6 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
                 onClose={() => setShowQRModal(null)}
                 onSaveImage={handleSaveImage}
                 onSavePDF={handleSavePDF}
-            />
-
-            <EstoqueFilmFlow
-                films={films}
-                showFilmSelectionModal={showFilmSelectionModal}
-                setShowFilmSelectionModal={setShowFilmSelectionModal}
-                showFilmModal={showFilmModal}
-                setShowFilmModal={setShowFilmModal}
-                editingFilm={editingFilm}
-                setEditingFilm={setEditingFilm}
-                filmNameToAdd={filmNameToAdd}
-                setFilmNameToAdd={setFilmNameToAdd}
-                setFormFilmId={setters.setFormFilmId}
-                onReloadData={loadData}
             />
 
             <EstoqueStatusAndScannerFlow

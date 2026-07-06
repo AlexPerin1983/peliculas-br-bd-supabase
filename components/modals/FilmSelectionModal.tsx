@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Film } from '../../types';
 import { matchesSearch } from '../../src/lib/textSearch';
+import { useIsMobile } from '../../src/hooks/useIsMobile';
 
 interface FilmSelectionModalProps {
     isOpen: boolean;
@@ -12,6 +13,13 @@ interface FilmSelectionModalProps {
     onEditFilm: (film: Film) => void;
     onDeleteFilm: (filmName: string) => void;
     onTogglePin: (filmName: string) => void; // Nova prop para fixar/desfixar
+    /**
+     * No mobile, renderiza o seletor NO LUGAR (dentro do sheet vaul) em vez de
+     * portar para o body. Necessário quando o seletor é aberto por cima de um
+     * bottom sheet: o vaul torna inerte tudo que fica fora do sheet (bloqueia
+     * scroll/foco/toque), então portar para o body deixava a lista travada.
+     */
+    renderInSheet?: boolean;
 }
 
 const FilmListItem: React.FC<{
@@ -255,11 +263,12 @@ const useDebounce = (value: string, delay: number) => {
     return debouncedValue;
 };
 
-const FilmSelectionModal: React.FC<FilmSelectionModalProps> = ({ isOpen, onClose, films, onSelect, onAddNewFilm, onEditFilm, onDeleteFilm, onTogglePin }) => {
+const FilmSelectionModal: React.FC<FilmSelectionModalProps> = ({ isOpen, onClose, films, onSelect, onAddNewFilm, onEditFilm, onDeleteFilm, onTogglePin, renderInSheet = false }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [swipedItemName, setSwipedItemName] = useState<string | null>(null);
     const debouncedSearchTerm = useDebounce(searchTerm, 200);
     const inputRef = useRef<HTMLInputElement>(null);
+    const isMobile = useIsMobile();
 
     useEffect(() => {
         if (isOpen) {
@@ -329,7 +338,7 @@ const FilmSelectionModal: React.FC<FilmSelectionModalProps> = ({ isOpen, onClose
         onDeleteFilm(filmName);
     };
 
-    return createPortal(
+    const node = (
         <div className="pointer-events-auto fixed inset-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm z-[10060] flex flex-col animate-fade-in" data-modal-companion>
             {/* Header */}
             <div className="flex-shrink-0 p-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 sticky top-0">
@@ -413,9 +422,15 @@ const FilmSelectionModal: React.FC<FilmSelectionModalProps> = ({ isOpen, onClose
                     animation: fade-in 0.2s ease-out forwards;
                 }
             `}</style>
-        </div>,
-        document.body
+        </div>
     );
+
+    // No mobile, quando aberto por cima de um bottom sheet, precisa renderizar
+    // DENTRO do sheet (não portar para o body), senão o vaul torna a lista
+    // inerte e o usuário não consegue rolar, buscar nem selecionar.
+    if (isMobile && renderInSheet) return node;
+
+    return createPortal(node, document.body);
 };
 
 export default FilmSelectionModal;

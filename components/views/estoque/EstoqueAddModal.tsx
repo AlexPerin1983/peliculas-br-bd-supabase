@@ -33,6 +33,11 @@ type EstoqueAddModalProps = {
     setFormDeduzirDaBobina: (value: boolean) => void;
     formQuantidade: string;
     setFormQuantidade: (value: string) => void;
+    /**
+     * Seletor de película. Renderizado DENTRO do sheet (mobile) para não ficar
+     * inerte por baixo do vaul. Ver FilmSelectionModal renderInSheet.
+     */
+    children?: React.ReactNode;
 };
 
 const fieldClass = 'ui-field w-full p-3 text-sm placeholder:text-[var(--text-muted)]';
@@ -68,6 +73,7 @@ export default function EstoqueAddModal({
     setFormDeduzirDaBobina,
     formQuantidade,
     setFormQuantidade,
+    children,
 }: EstoqueAddModalProps) {
     const [isOriginSearchOpen, setIsOriginSearchOpen] = useState(false);
     const [originSearchTerm, setOriginSearchTerm] = useState('');
@@ -357,6 +363,9 @@ export default function EstoqueAddModal({
                         className={`${fieldClass} resize-none`}
                     />
                 </div>
+
+                {/* Seletor de película: fica DENTRO do sheet para receber toque/scroll/foco no mobile. */}
+                {children}
             </Modal>
 
             {isOpen && isOriginSearchOpen && typeof document !== 'undefined' && createPortal(
