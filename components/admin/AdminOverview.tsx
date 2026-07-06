@@ -8,6 +8,8 @@ import { Donut } from './charts/Donut';
 
 interface AdminOverviewProps {
     profiles: UserWithSubscription[];
+    allCompaniesCount: number;
+    periodLabel: string;
     engagementRows: EngagementRow[];
     trialUserIds: Set<string>;
     totals: { orcamentos: number; clientes: number; faturamento: number; ativos30d: number; totalUsuarios: number };
@@ -22,18 +24,8 @@ const Card: React.FC<{ icon: React.ComponentType<{ className?: string }>; label:
     </div>
 );
 
-export const AdminOverview: React.FC<AdminOverviewProps> = ({ profiles, engagementRows, trialUserIds, totals, activeWindowDays }) => {
+export const AdminOverview: React.FC<AdminOverviewProps> = ({ profiles, allCompaniesCount, periodLabel, engagementRows, trialUserIds, totals, activeWindowDays }) => {
     const companies = React.useMemo(() => profiles.filter(p => p.role !== 'admin'), [profiles]);
-
-    // Novas empresas no mês corrente
-    const novasNoMes = React.useMemo(() => {
-        const now = new Date();
-        return companies.filter(p => {
-            if (!p.created_at) return false;
-            const d = new Date(p.created_at);
-            return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-        }).length;
-    }, [companies]);
 
     // Cadastros por mês — últimos 6 meses
     const signupsByMonth = React.useMemo<MiniBar[]>(() => {
@@ -85,9 +77,9 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({ profiles, engageme
             {/* KPIs — carrossel no mobile, grid no desktop */}
             <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1 scrollbar-hide snap-x snap-mandatory sm:mx-0 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-6">
                 {[
-                    { icon: Building2, label: 'Empresas', value: formatInt(companies.length) },
+                    { icon: Building2, label: 'Empresas', value: formatInt(allCompaniesCount), sub: 'total da base' },
                     { icon: Activity, label: `Ativas (${activeWindowDays}d)`, value: <span className="text-green-600 dark:text-green-400">{totals.ativos30d}</span>, sub: `de ${companies.length}` },
-                    { icon: UserPlus, label: 'Novas no mês', value: formatInt(novasNoMes), accent: 'text-blue-600 dark:text-blue-400' },
+                    { icon: UserPlus, label: 'Cadastros', value: formatInt(companies.length), accent: 'text-blue-600 dark:text-blue-400', sub: periodLabel },
                     { icon: FileText, label: 'Orçamentos', value: formatInt(totals.orcamentos) },
                     { icon: DollarSign, label: 'Faturamento', value: <span className="text-sm sm:text-base lg:text-xl">{formatMoney(totals.faturamento)}</span> },
                     { icon: Clock, label: 'Em trial', value: <span className="text-amber-600 dark:text-amber-400">{trialUserIds.size}</span> },
