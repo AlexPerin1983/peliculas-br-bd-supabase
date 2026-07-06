@@ -37,7 +37,8 @@ interface AppContentRouterProps {
     clients: Client[];
     agendamentos: Agendamento[];
     films: Film[];
-    initialEstoqueAction: { action: 'scan', code: string } | null;
+    initialEstoqueAction: { action: 'scan', code: string } | { action: 'ai', tab: 'bobinas' | 'retalhos' } | null;
+    onInitialEstoqueActionConsumed?: () => void;
     selectedClientId: number | null;
     measurements: UIMeasurement[];
     proposalOptions: ProposalOption[];
@@ -117,6 +118,7 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
     agendamentos,
     films,
     initialEstoqueAction,
+    onInitialEstoqueActionConsumed,
     selectedClientId,
     measurements,
     proposalOptions,
@@ -337,6 +339,7 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
                 <EstoqueView
                     films={films}
                     initialAction={initialEstoqueAction}
+                    onInitialActionConsumed={onInitialEstoqueActionConsumed}
                     userInfo={userInfo}
                     onOpenApiKeyModal={() => onOpenApiKeyModal('gemini')}
                 />

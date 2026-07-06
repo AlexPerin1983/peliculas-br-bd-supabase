@@ -1027,6 +1027,31 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({
                             <Sparkles className="h-4 w-4" aria-hidden="true" />
                             {formData.aiConfig?.apiKey ? 'Gerenciar Inteligência Artificial' : 'Ativar Inteligência Artificial'}
                         </button>
+
+                        <button
+                            type="button"
+                            role="switch"
+                            aria-checked={!!formData.aiConfig?.quickFab}
+                            onClick={() => setFormData(prev => ({
+                                ...prev,
+                                aiConfig: {
+                                    ...(prev.aiConfig || { provider: 'gemini' as const, apiKey: '' }),
+                                    quickFab: !prev.aiConfig?.quickFab
+                                }
+                            }))}
+                            className={`flex w-full items-center justify-between gap-3 rounded-[var(--radius-control)] border p-3 text-left transition-colors ${formData.aiConfig?.quickFab
+                                ? 'border-[var(--brand-primary)] bg-[rgba(21,94,239,0.06)]'
+                                : 'border-[var(--border-subtle)] bg-[var(--surface-muted)]'
+                                }`}
+                        >
+                            <span className="min-w-0">
+                                <span className="block text-sm font-semibold text-[var(--text-strong)]">Botão flutuante de IA no celular</span>
+                                <span className="block text-xs text-[var(--text-muted)]">Mostra ações rápidas para criar proposta, cliente, bobina, retalho e agendamento.</span>
+                            </span>
+                            <span className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${formData.aiConfig?.quickFab ? 'bg-[var(--brand-primary)]' : 'bg-slate-300 dark:bg-slate-600'}`}>
+                                <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${formData.aiConfig?.quickFab ? 'left-[22px]' : 'left-0.5'}`} />
+                            </span>
+                        </button>
                     </div>
                 </SettingsSection>
             </FeatureGate>
