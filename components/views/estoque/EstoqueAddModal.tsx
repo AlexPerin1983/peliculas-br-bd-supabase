@@ -361,8 +361,9 @@ export default function EstoqueAddModal({
 
             {isOpen && isOriginSearchOpen && typeof document !== 'undefined' && createPortal(
                 <div
-                    className="fixed inset-0 z-[10060] flex flex-col bg-[var(--surface)] animate-fade-in"
+                    className="pointer-events-auto fixed inset-0 z-[10060] flex flex-col bg-[var(--surface)] animate-fade-in"
                     onClick={closeOriginSearch}
+                    data-modal-companion
                 >
                     <div
                         className="flex-shrink-0 border-b border-[var(--border-subtle)] bg-[var(--surface-raised)] p-4"
