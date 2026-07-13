@@ -3,6 +3,7 @@ import { Building2, ImagePlus, Loader2, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { bootstrapOrganization } from '../services/organizationSetupService';
 import { processLogoImage } from '../services/imageProcessing';
+import { formatBrazilianPhone, isValidBrazilianPhone } from '../src/lib/phone';
 
 interface OrganizationSetupProps {
     initialEmail: string;
@@ -36,11 +37,13 @@ export const OrganizationSetup: React.FC<OrganizationSetupProps> = ({
     const [companyName, setCompanyName] = useState(() => suggestCompanyName(initialOwnerName));
     const [ownerName, setOwnerName] = useState(initialOwnerName || '');
     const [phone, setPhone] = useState('');
+    const [phoneTouched, setPhoneTouched] = useState(false);
     const [logo, setLogo] = useState('');
     const [logoLoading, setLogoLoading] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const logoInputRef = useRef<HTMLInputElement>(null);
+    const phoneInputRef = useRef<HTMLInputElement>(null);
 
     const handleLogoChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -59,13 +62,30 @@ export const OrganizationSetup: React.FC<OrganizationSetupProps> = ({
     };
 
     const canSubmit = useMemo(() => {
-        return companyName.trim().length >= 2 && ownerName.trim().length >= 2 && !loading;
-    }, [companyName, ownerName, loading]);
+        return companyName.trim().length >= 2
+            && ownerName.trim().length >= 2
+            && isValidBrazilianPhone(phone)
+            && !loading;
+    }, [companyName, ownerName, phone, loading]);
+
+    const phoneIsInvalid = phoneTouched && !isValidBrazilianPhone(phone);
+    const phoneErrorMessage = phone.trim()
+        ? 'Informe um telefone válido com DDD.'
+        : 'Informe seu telefone para continuar.';
 
     const initials = useMemo(() => getInitials(companyName), [companyName]);
+    const highlightPhoneField = () => {
+        setPhoneTouched(true);
+        phoneInputRef.current?.focus();
+        phoneInputRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+    };
 
     const handleSubmit = async (event: FormEvent) => {
         event.preventDefault();
+        if (!isValidBrazilianPhone(phone)) {
+            highlightPhoneField();
+            return;
+        }
         if (!canSubmit) return;
 
         setLoading(true);
@@ -203,16 +223,36 @@ export const OrganizationSetup: React.FC<OrganizationSetupProps> = ({
 
                         <div className="space-y-2">
                             <label className="text-sm font-semibold text-slate-900" htmlFor="setup-phone">
-                                Telefone
+                                Telefone <span aria-hidden="true" className="text-red-600">*</span>
                             </label>
                             <input
+                                ref={phoneInputRef}
                                 id="setup-phone"
                                 type="tel"
                                 value={phone}
-                                onChange={(event) => setPhone(event.target.value)}
+                                onChange={(event) => setPhone(formatBrazilianPhone(event.target.value))}
+                                onBlur={() => setPhoneTouched(true)}
                                 placeholder="(11) 11111-1111"
-                                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white focus:ring-2 focus:ring-slate-200"
+                                inputMode="numeric"
+                                autoComplete="tel-national"
+                                maxLength={19}
+                                required
+                                aria-invalid={phoneIsInvalid}
+                                aria-describedby="setup-phone-help"
+                                className={`w-full rounded-2xl border px-4 py-3 text-slate-900 outline-none transition focus:bg-white ${phoneIsInvalid
+                                    ? 'border-2 border-red-500 bg-red-50 ring-4 ring-red-100 focus:border-red-600 focus:ring-4 focus:ring-red-100'
+                                    : 'border-slate-200 focus:border-slate-400 focus:ring-slate-200'
+                                    }`}
                             />
+                            <p
+                                id="setup-phone-help"
+                                role={phoneIsInvalid ? 'alert' : undefined}
+                                className={`text-xs ${phoneIsInvalid ? 'font-medium text-red-600' : 'text-slate-500'}`}
+                            >
+                                {phoneIsInvalid
+                                    ? phoneErrorMessage
+                                    : 'Digite o DDD e o número. A formatação é automática.'}
+                            </p>
                         </div>
 
                         <div className="space-y-2">
@@ -238,7 +278,13 @@ export const OrganizationSetup: React.FC<OrganizationSetupProps> = ({
                             <div className="space-y-3">
                                 <button
                                     type="submit"
-                                    disabled={!canSubmit}
+                                    disabled={loading}
+                                    onClick={(event) => {
+                                        if (!isValidBrazilianPhone(phone)) {
+                                            event.preventDefault();
+                                            highlightPhoneField();
+                                        }
+                                    }}
                                     className="flex w-full items-center justify-center rounded-2xl bg-slate-950 px-4 py-3.5 text-sm font-bold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
                                 >
                                     {loading ? 'Criando empresa...' : 'Criar empresa e continuar'}

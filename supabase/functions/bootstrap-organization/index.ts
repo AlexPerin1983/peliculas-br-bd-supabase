@@ -95,11 +95,19 @@ serve(async (req) => {
             user.email?.split('@')[0] ||
             'Responsavel';
         const phone = body.phone?.trim() || '';
+        const phoneDigits = phone.replace(/\D/g, '');
         const normalizedEmail = user.email?.trim().toLowerCase();
 
         if (!companyName || companyName.length < 2) {
             return jsonResponse(
                 { success: false, error: 'Informe um nome de empresa valido' },
+                400
+            );
+        }
+
+        if (!/^[1-9]{2}\d{8,9}$/.test(phoneDigits)) {
+            return jsonResponse(
+                { success: false, error: 'Informe um telefone valido com DDD' },
                 400
             );
         }
