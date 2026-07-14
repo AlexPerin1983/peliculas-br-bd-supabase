@@ -1,0 +1,10 @@
+{
+  "name": "window-films-landing",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npx serve . -l 4174",
+    "build": "node build.mjs"
+  }
+}
