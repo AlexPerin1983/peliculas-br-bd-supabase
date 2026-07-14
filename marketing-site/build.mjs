@@ -16,6 +16,13 @@ for (const entry of await readdir(root, { withFileTypes: true })) {
   await cp(resolve(root, entry.name), resolve(destination, entry.name), { recursive: true });
 }
 
+const brandOutput = resolve(clientOutput, 'assets', 'brand');
+for (const asset of await readdir(brandOutput)) {
+  if (/-v[1-3]\.png$/i.test(asset)) {
+    await rm(resolve(brandOutput, asset), { force: true });
+  }
+}
+
 const serverOutput = resolve(output, 'server');
 await mkdir(serverOutput, { recursive: true });
 await writeFile(
