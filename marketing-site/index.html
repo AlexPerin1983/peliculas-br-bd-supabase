@@ -9,6 +9,7 @@
       content="Orçamentos, clientes, estoque, plano de corte, agenda, PDFs profissionais e inteligência artificial em uma plataforma feita para instaladores de películas."
     />
     <meta name="theme-color" content="#07111f" />
+    <link rel="icon" type="image/png" href="/assets/brand/peliculasbr-icon.png" />
     <meta property="og:title" content="PelículasBR | Trabalhe com mais controle e margem" />
     <meta
       property="og:description"
@@ -83,55 +84,11 @@
             </div>
           </div>
 
-          <div class="product-stage" aria-label="Prévia do sistema PelículasBR">
-            <div class="stage-card stage-card--metric">
-              <span class="stage-card__icon stage-card__icon--green">
-                <svg viewBox="0 0 24 24"><path d="M4 17 9 12l3 3 8-9M16 6h4v4" /></svg>
-              </span>
-              <div><small>Orçamento pronto</small><strong>em poucos minutos</strong></div>
-            </div>
-
-            <div class="dashboard-mockup">
-              <div class="dashboard-mockup__top">
-                <div class="mock-brand"><span></span> Películas<strong>BR</strong></div>
-                <div class="mock-actions"><i></i><i></i><b>AP</b></div>
-              </div>
-              <div class="dashboard-mockup__body">
-                <aside class="mock-sidebar">
-                  <span class="active"></span><span></span><span></span><span></span><span></span>
-                </aside>
-                <div class="mock-main">
-                  <div class="mock-heading"><div><small>Visão geral</small><strong>Sua operação, hoje</strong></div><button>Novo orçamento</button></div>
-                  <div class="mock-metrics">
-                    <article><small>Propostas</small><strong>12</strong><span>este mês</span></article>
-                    <article><small>Em negociação</small><strong>05</strong><span>acompanhar</span></article>
-                    <article><small>Agenda</small><strong>03</strong><span>esta semana</span></article>
-                  </div>
-                  <div class="mock-lower">
-                    <article class="mock-chart">
-                      <div><small>Propostas</small><strong>Movimento da semana</strong></div>
-                      <svg viewBox="0 0 420 145" preserveAspectRatio="none" aria-hidden="true">
-                        <defs><linearGradient id="area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2e7df6" stop-opacity=".35"/><stop offset="1" stop-color="#2e7df6" stop-opacity="0"/></linearGradient></defs>
-                        <path class="area" d="M0 120 C50 112 55 82 105 92 S170 118 212 70 S280 28 315 58 S370 78 420 25 V145 H0Z" />
-                        <path class="line" d="M0 120 C50 112 55 82 105 92 S170 118 212 70 S280 28 315 58 S370 78 420 25" />
-                      </svg>
-                    </article>
-                    <article class="mock-progress"><small>Aproveitamento</small><strong>Plano de corte</strong><div class="donut"><span>92<small>%</small></span></div></article>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="phone-mockup">
-              <div class="phone-mockup__speaker"></div>
-              <img src="/assets/product/app-orcamento-mobile.jpg" alt="Tela de orçamento do PelículasBR no celular" />
-            </div>
-
-            <div class="stage-card stage-card--stock">
-              <span class="stage-card__icon stage-card__icon--blue">
-                <svg viewBox="0 0 24 24"><path d="m4 7 8-4 8 4-8 4-8-4Zm0 5 8 4 8-4M4 17l8 4 8-4" /></svg>
-              </span>
-              <div><small>Estoque organizado</small><strong>bobinas e retalhos</strong></div>
+          <div class="hero-art" aria-label="Mascote PelículasBR apresentando os recursos do sistema">
+            <img src="/assets/brand/hero-mascot-v1.webp" alt="Mascote roxo do PelículasBR ao lado de painéis de gestão" fetchpriority="high" />
+            <div class="hero-art__badge">
+              <span aria-hidden="true">✦</span>
+              <div><small>Uma identidade própria</small><strong>Feita para o seu mercado</strong></div>
             </div>
           </div>
         </div>
@@ -170,13 +127,9 @@
                 <p>Calcule medidas, valores e descontos. Compare opções e gere PDFs com a identidade da sua empresa.</p>
                 <ul><li>Múltiplas opções</li><li>PDF profissional</li><li>Envio fácil</li></ul>
               </div>
-              <div class="proposal-preview" aria-hidden="true">
-                <div class="proposal-preview__head"><span>PROPOSTA</span><b>#0248</b></div>
-                <div class="proposal-preview__client"><small>CLIENTE</small><strong>Projeto Residencial</strong></div>
-                <div class="proposal-preview__row"><i></i><span>Película premium</span><b>32,4 m²</b></div>
-                <div class="proposal-preview__row"><i></i><span>Instalação</span><b>01</b></div>
-                <div class="proposal-preview__total"><span>Total da proposta</span><strong>R$ 4.860</strong></div>
-              </div>
+              <figure class="feature-art feature-art--proposal">
+                <img src="/assets/brand/feature-proposal-mascot-v1.webp" alt="Mascote apresentando uma proposta profissional" />
+              </figure>
             </article>
 
             <article class="solution-card solution-card--dark">
@@ -187,7 +140,9 @@
               <h3>Estoque e corte inteligente</h3>
               <p>Controle bobinas e retalhos e planeje os cortes para aproveitar melhor cada material.</p>
               <a href="/corte-inteligente/">Conhecer o plano de corte <span>→</span></a>
-              <div class="cut-preview" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+              <figure class="feature-art feature-art--cutting">
+                <img src="/assets/brand/feature-cutting-mascot-v1.webp" alt="Mascote apresentando o plano de corte inteligente" />
+              </figure>
             </article>
 
             <article class="solution-card solution-card--blue">
@@ -217,6 +172,18 @@
               </div>
             </article>
           </div>
+        </div>
+      </section>
+
+      <section class="section section--light section--agenda" id="agenda-inteligente">
+        <div class="container agenda-showcase">
+          <div class="agenda-showcase__copy">
+            <span class="kicker">Agenda que acompanha você</span>
+            <h2>Compromissos em dia.<br /><em>Oportunidades também.</em></h2>
+            <p>Organize visitas e instalações, acompanhe cada atendimento e mantenha o follow-up no ritmo certo.</p>
+            <a class="button button--primary" data-app-home href="#">Organizar minha agenda <span>→</span></a>
+          </div>
+          <img src="/assets/brand/feature-agenda-mascot-v1.webp" alt="Mascote PelículasBR apresentando uma agenda visual" />
         </div>
       </section>
 
