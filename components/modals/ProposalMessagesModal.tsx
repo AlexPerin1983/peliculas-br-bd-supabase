@@ -9,6 +9,7 @@ import {
     Eye,
     EyeOff,
     LoaderCircle,
+    Link2,
     MessageCircle,
     Pencil,
     PhoneOff,
@@ -35,6 +36,7 @@ import {
 import { useProposalMessageTemplates } from '../../src/hooks/useProposalMessageTemplates';
 import { useIsMobile } from '../../src/hooks/useIsMobile';
 import Modal from '../ui/Modal';
+import ProposalShareModal from './ProposalShareModal';
 
 interface ProposalMessagesModalProps {
     isOpen: boolean;
@@ -399,6 +401,7 @@ const ProposalMessagesModal: React.FC<ProposalMessagesModalProps> = ({ isOpen, c
     const [isSavingTemplate, setIsSavingTemplate] = useState(false);
     const [feedback, setFeedback] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
     const [isWhatsAppChooserOpen, setIsWhatsAppChooserOpen] = useState(false);
+    const [isShareModalOpen, setIsShareModalOpen] = useState(false);
     const [showPersonalize, setShowPersonalize] = useState(isDesktopViewport);
 
     const {
@@ -419,6 +422,7 @@ const ProposalMessagesModal: React.FC<ProposalMessagesModalProps> = ({ isOpen, c
         setEditor(null);
         setFeedback(null);
         setIsWhatsAppChooserOpen(false);
+        setIsShareModalOpen(false);
         setShowPersonalize(isDesktopViewport());
     }, [client.nome, isOpen, pdf]);
 
@@ -555,6 +559,14 @@ const ProposalMessagesModal: React.FC<ProposalMessagesModalProps> = ({ isOpen, c
                     {feedback.message}
                 </p>
             )}
+            <button
+                type="button"
+                onClick={() => setIsShareModalOpen(true)}
+                className="flex h-11 w-full items-center justify-center gap-2 rounded-[12px] bg-blue-600 px-3 text-sm font-black text-white shadow-[0_10px_22px_rgba(37,99,235,0.20)] transition-colors hover:bg-blue-700"
+            >
+                <Link2 className="h-4 w-4" aria-hidden="true" />
+                Criar link interativo da proposta
+            </button>
             <div className="flex items-center gap-2">
                 <button
                     type="button"
@@ -822,6 +834,12 @@ const ProposalMessagesModal: React.FC<ProposalMessagesModalProps> = ({ isOpen, c
                 onClose={() => setIsWhatsAppChooserOpen(false)}
             />
         )}
+        <ProposalShareModal
+            isOpen={isShareModalOpen}
+            client={client}
+            pdfs={[pdf]}
+            onClose={() => setIsShareModalOpen(false)}
+        />
         </>
     );
 };

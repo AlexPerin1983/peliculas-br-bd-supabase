@@ -28,6 +28,8 @@ import { PROPOSAL_EXPENSE_CATEGORY_OPTIONS, summarizeProposalExpenses } from '..
 import { matchesSearch, normalizeSearchText } from '../../src/lib/textSearch';
 import { buildReviewFollowUpMessage } from '../../src/lib/reviewMessage';
 import { formatGarantiaMaoDeObra, garantiaEmDias } from '../../src/lib/filmWarranty';
+import ProposalShareModal from '../modals/ProposalShareModal';
+import ProposalPortalInbox from '../ProposalPortalInbox';
 
 interface PdfHistoryViewProps {
     pdfs: SavedPDF[];
@@ -2906,8 +2908,9 @@ const PdfHistoryItem: React.FC<{
     onNavigateToOption: (clientId: number, optionId: number) => void;
     isFunnelReference: boolean;
     onSetFunnelReference: (pdf: SavedPDF) => void;
+    onShare: (client: Client, pdf: SavedPDF) => void;
     fitContent?: boolean;
-}> = React.memo(({ pdf, client, agendamento, onDownload, onDelete, onUpdateStatus, onSchedule, films, messageTemplates, googleReviewsLink, isSelected, onToggleSelect, onNavigateToOption, isFunnelReference, onSetFunnelReference, fitContent = false }) => {
+}> = React.memo(({ pdf, client, agendamento, onDownload, onDelete, onUpdateStatus, onSchedule, films, messageTemplates, googleReviewsLink, isSelected, onToggleSelect, onNavigateToOption, isFunnelReference, onSetFunnelReference, onShare, fitContent = false }) => {
     const { showToast } = useFeedback();
     const [copiedMessageKey, setCopiedMessageKey] = useState<string | null>(null);
     const [isMessagesExpanded, setIsMessagesExpanded] = useState(false);
@@ -3017,7 +3020,8 @@ const PdfHistoryItem: React.FC<{
                             onChange={() => onToggleSelect(pdf.id!)}
                             onClick={(e) => e.stopPropagation()}
                             className="h-4 w-4 flex-shrink-0 text-slate-800 border-slate-300 rounded focus:ring-slate-500 cursor-pointer"
-                            aria-label="Selecionar para PDF combinado"
+                            aria-label="Selecionar proposta"
+                            title="Selecionar para enviar várias propostas juntas ou gerar um PDF combinado"
                         />
                         <div className="flex-grow min-w-0">
                             {pdf.proposalOptionName && (
@@ -3178,6 +3182,18 @@ const PdfHistoryItem: React.FC<{
                             {formatNumberBR(pdf.totalPreco)}
                         </p>
                     </div>
+
+                    <button
+                        type="button"
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            onShare(client, pdf);
+                        }}
+                        className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-[12px] bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500/20 dark:bg-blue-500 dark:hover:bg-blue-400"
+                    >
+                        <i className="fas fa-link text-xs" aria-hidden="true" />
+                        Criar link para o cliente
+                    </button>
 
                     <div className="mt-3 space-y-3 border-t border-slate-100 pt-3 dark:border-slate-700/60">
                         {reviewFollowUpMessage ? (
@@ -3937,7 +3953,12 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
     }, [selectedPdfs]);
     const [editableCombinedProposalMessages, setEditableCombinedProposalMessages] = useState<string[]>([]);
     const [combinedWhatsAppMessage, setCombinedWhatsAppMessage] = useState<string | null>(null);
+    const [isCombinedShareOpen, setIsCombinedShareOpen] = useState(false);
+    const [singleProposalShare, setSingleProposalShare] = useState<{ client: Client; pdf: SavedPDF } | null>(null);
     const [copiedCombinedMessageIndex, setCopiedCombinedMessageIndex] = useState<number | null>(null);
+    const handleOpenSingleProposalShare = useCallback((client: Client, pdf: SavedPDF) => {
+        setSingleProposalShare({ client, pdf });
+    }, []);
     const normalizedCombinedClientPhone = useMemo(() => {
         return normalizeWhatsappPhone(selectedClientForCombinedMessages?.telefone);
     }, [selectedClientForCombinedMessages?.telefone]);
@@ -4272,6 +4293,7 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
                                         onNavigateToOption={onNavigateToOption}
                                         isFunnelReference={clientFunnelSummary.opportunities.some(opportunity => opportunity.referencePdf.id === pdf.id)}
                                         onSetFunnelReference={handleSetFunnelReference}
+                                        onShare={handleOpenSingleProposalShare}
                                     />
                                 </div>
                             ))}
@@ -4544,6 +4566,8 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
                 onOpenTemplates={() => setIsTemplateModalOpen(true)}
             />
 
+            <ProposalPortalInbox />
+
             {pdfs.length > 0 ? (
                 <section className="border-0 bg-transparent p-0 shadow-none sm:rounded-[var(--radius-panel)] sm:border sm:border-[var(--border-subtle)] sm:bg-[var(--surface)] sm:p-4 sm:shadow-[var(--shadow-hairline)]">
                     <div className="flex flex-col gap-2 sm:gap-3 xl:flex-row xl:items-center xl:justify-between">
@@ -4648,7 +4672,7 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
                                         {selectedPdfs.length} orçamento{selectedPdfs.length > 1 ? 's' : ''} selecionado{selectedPdfs.length > 1 ? 's' : ''}
                                     </p>
                                     <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
-                                        Combine apenas PDFs do mesmo cliente.
+                                        Envie uma ou várias propostas no mesmo link ou gere um PDF combinado.
                                     </p>
                                 </div>
                                 <button
@@ -4663,7 +4687,7 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
                             </div>
                             {selectedPdfs.length < 2 ? (
                                 <p className="rounded-[12px] border border-blue-100 bg-blue-50/80 px-3 py-2 text-[11px] leading-5 text-blue-900 dark:border-blue-900/50 dark:bg-blue-950/20 dark:text-blue-100">
-                                    Selecione mais um orçamento do mesmo cliente para gerar o PDF combinado e ver as mensagens sugeridas.
+                                    Você já pode criar o link desta proposta. Selecione outra opção do mesmo cliente para reuni-las no mesmo link e gerar o PDF combinado.
                                 </p>
                             ) : (
                                 <div className="space-y-3 rounded-[12px] border border-blue-100 bg-blue-50/80 p-3 text-[11px] leading-5 text-blue-900 dark:border-blue-900/50 dark:bg-blue-950/20 dark:text-blue-100">
@@ -4721,16 +4745,28 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
                                 </div>
                             )}
                         </div>
-                        <ActionButton
-                            onClick={handleGenerateCombined}
-                            disabled={selectedPdfs.length < 2 || !hasOnlySameClientSelectedPdfs}
-                            variant="secondary"
-                            size="sm"
-                            iconClassName="fas fa-file-pdf"
-                            className="w-full sm:w-auto"
-                        >
-                            Gerar PDF Combinado
-                        </ActionButton>
+                        <div className="grid w-full gap-2 sm:w-auto">
+                            <ActionButton
+                                onClick={() => setIsCombinedShareOpen(true)}
+                                disabled={!hasOnlySameClientSelectedPdfs || !selectedClientForCombinedMessages}
+                                variant="primary"
+                                size="sm"
+                                iconClassName="fas fa-link"
+                                className="w-full sm:w-auto"
+                            >
+                                Criar link com selecionadas
+                            </ActionButton>
+                            <ActionButton
+                                onClick={handleGenerateCombined}
+                                disabled={selectedPdfs.length < 2 || !hasOnlySameClientSelectedPdfs}
+                                variant="secondary"
+                                size="sm"
+                                iconClassName="fas fa-file-pdf"
+                                className="w-full sm:w-auto"
+                            >
+                                Gerar PDF Combinado
+                            </ActionButton>
+                        </div>
                     </div>
                 </div>
             )}
@@ -4783,6 +4819,22 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
                 message={combinedWhatsAppMessage}
                 onClose={() => setCombinedWhatsAppMessage(null)}
             />
+            {selectedClientForCombinedMessages ? (
+                <ProposalShareModal
+                    isOpen={isCombinedShareOpen}
+                    client={selectedClientForCombinedMessages}
+                    pdfs={selectedPdfs}
+                    onClose={() => setIsCombinedShareOpen(false)}
+                />
+            ) : null}
+            {singleProposalShare ? (
+                <ProposalShareModal
+                    isOpen
+                    client={singleProposalShare.client}
+                    pdfs={[singleProposalShare.pdf]}
+                    onClose={() => setSingleProposalShare(null)}
+                />
+            ) : null}
             <WhatsAppChooserModal
                 clientName={reviewCampaignWhatsApp?.clientName || 'cliente'}
                 phone={reviewCampaignWhatsApp?.phone || null}
@@ -4898,6 +4950,7 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
                                             onNavigateToOption={onNavigateToOption}
                                             isFunnelReference={funnelSummary.opportunities.some(opportunity => opportunity.referencePdf.id === pdf.id)}
                                             onSetFunnelReference={handleSetFunnelReference}
+                                            onShare={handleOpenSingleProposalShare}
                                             fitContent
                                         />
                                     );

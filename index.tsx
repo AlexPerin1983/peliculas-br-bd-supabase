@@ -17,6 +17,7 @@ import { supabase } from './services/supabaseClient';
 
 const EstoquePublicoView = lazy(() => import('./components/views/EstoquePublicoView'));
 const ServicoPublicoView = lazy(() => import('./components/views/ServicoPublicoView'));
+const ProposalPortalView = lazy(() => import('./components/views/ProposalPortalView'));
 const InviteRegister = lazy(() => import('./components/InviteRegister'));
 
 const rootElement = document.getElementById('root');
@@ -59,6 +60,7 @@ const isEstoquePublico = isPublicEstoque && (
 
 const isPublicServico = urlParams.has('servico') || urlParams.has('s');
 const isServicoPublico = isPublicServico && !isEstoquePublico;
+const isProposalPortal = pathname.startsWith('/proposta') || urlParams.has('proposta');
 
 const isInvitePage = pathname.startsWith('/convite/') || pathname.includes('/convite/');
 const isResetPasswordPath = pathname.startsWith('/reset-password');
@@ -111,7 +113,15 @@ const AppWithPasswordRecovery: React.FC = () => {
 };
 
 const renderApp = () => {
-  if (isServicoPublico) {
+  if (isProposalPortal) {
+    root.render(
+      <ThemeProvider>
+        <Suspense fallback={PublicLoadingFallback}>
+          <ProposalPortalView />
+        </Suspense>
+      </ThemeProvider>
+    );
+  } else if (isServicoPublico) {
     root.render(
       <ThemeProvider>
         <Suspense fallback={PublicLoadingFallback}>
