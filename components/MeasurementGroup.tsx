@@ -4,6 +4,8 @@ import { AMBIENTES, TIPOS_APLICACAO } from '../constants';
 import DynamicSelector from './ui/DynamicSelector';
 import Tooltip from './ui/Tooltip';
 import { calculatePricingAreaM2 } from '../src/lib/pricingArea';
+import { useMeasurementInputMode } from '../src/hooks/useMeasurementInputMode';
+import { normalizeMeasurementInput } from '../src/lib/measurementInputMode';
 
 type UIMeasurement = Measurement & { isNew?: boolean };
 type EditableMeasurementField = 'largura' | 'altura' | 'quantidade';
@@ -46,6 +48,7 @@ interface MeasurementGroupProps {
     compatibleRetalhosCount?: number;
     isCheckingEstoque?: boolean;
     onOpenRetalhoSuggestions?: (measurementId: number) => void;
+    onOpenMeasurementInputSettings: () => void;
 }
 const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
@@ -77,8 +80,10 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
     isModalMode = false,
     compatibleRetalhosCount = 0,
     isCheckingEstoque = false,
-    onOpenRetalhoSuggestions
+    onOpenRetalhoSuggestions,
+    onOpenMeasurementInputSettings
 }) => {
+    const { mode: measurementInputMode } = useMeasurementInputMode();
     const groupRef = useRef<HTMLDivElement>(null);
     const [desktopDraftValues, setDesktopDraftValues] = useState<DesktopDraftValues>({
         largura: String(measurement.largura ?? ''),
@@ -98,9 +103,10 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
     // New Physics & Thresholds
     // New Physics & Thresholds
     const ACTIONS_REVEAL_WIDTH = 160;
+    const LEFT_ACTIONS_REVEAL_WIDTH = 152;
     const SNAP_THRESHOLD = 50;
-    const DELETE_REVEAL_THRESHOLD = -60;
-    const DELETE_AUTO_THRESHOLD = -130;
+    const DELETE_REVEAL_THRESHOLD = -50;
+    const DELETE_AUTO_THRESHOLD = -210;
 
     // We use translateX directly for rendering, but keep track of the "intent" for vibration
     const lastVibrationIntent = useRef<'none' | 'reveal-actions' | 'delete' | 'auto-delete'>('none');
@@ -176,10 +182,10 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
             }
         } else {
             // Left Swipe (Delete)
-            if (newTranslateX < DELETE_REVEAL_THRESHOLD) {
-                // Apply 0.4x resistance after the reveal threshold
-                const extra = newTranslateX - DELETE_REVEAL_THRESHOLD;
-                newTranslateX = DELETE_REVEAL_THRESHOLD + (extra * 0.4);
+            if (newTranslateX < -LEFT_ACTIONS_REVEAL_WIDTH) {
+                // Mantem os dois botoes acessiveis e aplica resistencia depois deles.
+                const extra = newTranslateX + LEFT_ACTIONS_REVEAL_WIDTH;
+                newTranslateX = -LEFT_ACTIONS_REVEAL_WIDTH + (extra * 0.35);
             }
         }
 
@@ -250,9 +256,9 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
         } else if (currentX < DELETE_REVEAL_THRESHOLD) {
             // Snap to reveal delete button
             swipeableRef.current.style.transition = 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)';
-            swipeableRef.current.style.transform = `translateX(${DELETE_REVEAL_THRESHOLD}px)`;
-            currentTranslateX.current = DELETE_REVEAL_THRESHOLD;
-            setTranslateX(DELETE_REVEAL_THRESHOLD);
+            swipeableRef.current.style.transform = `translateX(${-LEFT_ACTIONS_REVEAL_WIDTH}px)`;
+            currentTranslateX.current = -LEFT_ACTIONS_REVEAL_WIDTH;
+            setTranslateX(-LEFT_ACTIONS_REVEAL_WIDTH);
             onSetSwipedItem(measurement.id);
         } else {
             // Snap back to center
@@ -292,6 +298,12 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
         e.stopPropagation();
         onDelete();
         onSetSwipedItem(null);
+    };
+
+    const handleMeasurementInputSettingsClick = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        closeSwipe();
+        onOpenMeasurementInputSettings();
     };
 
     const handleMenuClick = (e: React.MouseEvent) => {
@@ -350,16 +362,7 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
             return;
         }
 
-        const sanitizedValue = sanitizeDecimalInput(rawValue);
-        let finalValue = sanitizedValue;
-
-        if (finalValue.startsWith(',')) {
-            finalValue = `0${finalValue}`;
-        }
-
-        if (finalValue.endsWith(',')) {
-            finalValue = finalValue.slice(0, -1);
-        }
+        const finalValue = normalizeMeasurementInput(rawValue, measurementInputMode);
 
         setDesktopDraftValues(prev => ({ ...prev, [field]: finalValue }));
         handleInputChange(field, finalValue);
@@ -607,7 +610,6 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
 
         const isRightSwipe = translateX > 0;
         const isLeftSwipe = translateX < 0;
-        const absX = Math.abs(translateX);
 
         // Right Swipe: Edit -> Duplicate
         // Right Swipe: Reveal Actions (Duplicate & Edit)
@@ -639,27 +641,28 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
             );
         }
 
-        // Left Swipe: Delete
+        // Left Swipe: measurement input settings + delete
         if (isLeftSwipe) {
-            const isAutoDelete = translateX < DELETE_AUTO_THRESHOLD;
-            const bgClass = 'bg-red-600';
-
-            // For auto-delete, we might want a more intense visual or just the same
-            // The "reveal" logic is handled by the fact that we see this background
-
-            const scale = Math.min(1 + (absX / 300), 1.5);
-
             return (
-                <div
-                    className={`absolute inset-y-0 right-0 flex items-center justify-end pr-6 transition-colors duration-200 ${bgClass} w-full rounded-lg cursor-pointer`}
-                    onClick={handleDeleteClick}
-                    role="button"
-                    aria-label="Confirmar exclusão"
-                >
-                    <div className="flex items-center text-white font-bold gap-3" style={{ transform: `scale(${scale})`, transformOrigin: 'right center' }}>
-                        <span className="text-sm font-medium">Excluir</span>
-                        <i className="fas fa-trash-alt text-xl"></i>
-                    </div>
+                <div className="absolute inset-y-0 right-0 flex h-full overflow-hidden rounded-r-lg" style={{ width: LEFT_ACTIONS_REVEAL_WIDTH }}>
+                    <button
+                        type="button"
+                        onClick={handleMeasurementInputSettingsClick}
+                        className="flex h-full flex-1 flex-col items-center justify-center bg-blue-600 text-white transition-colors hover:bg-blue-700"
+                        aria-label="Configurar forma de digitar medidas"
+                    >
+                        <i className="fas fa-ruler text-lg mb-1"></i>
+                        <span className="text-[9px] font-bold uppercase">Medida</span>
+                    </button>
+                    <button
+                        type="button"
+                        onClick={handleDeleteClick}
+                        className="flex h-full flex-1 flex-col items-center justify-center bg-red-600 text-white transition-colors hover:bg-red-700"
+                        aria-label="Excluir medida"
+                    >
+                        <i className="fas fa-trash-alt text-lg mb-1"></i>
+                        <span className="text-[9px] font-bold uppercase">Excluir</span>
+                    </button>
                 </div>
             );
         }

@@ -1,5 +1,7 @@
 import { useCallback, useState } from 'react';
 import { Measurement, UIMeasurement } from '../../types';
+import { useMeasurementInputMode } from './useMeasurementInputMode';
+import { formatCentimeterDigitsAsMeters, metersValueToCentimeterDigits } from '../lib/measurementInputMode';
 
 export type NumpadConfig = {
     isOpen: boolean;
@@ -30,6 +32,7 @@ export function useMeasurementEditor({
     handleMeasurementsChangeWithPersistence,
     createEmptyMeasurement
 }: UseMeasurementEditorParams) {
+    const { mode: measurementInputMode } = useMeasurementInputMode();
     const [editingMeasurement, setEditingMeasurement] = useState<UIMeasurement | null>(null);
     const [editingMeasurementForDiscount, setEditingMeasurementForDiscount] = useState<UIMeasurement | null>(null);
     const [editingMeasurementBasePrice, setEditingMeasurementBasePrice] = useState<number>(0);
@@ -146,6 +149,16 @@ export function useMeasurementEditor({
             const shouldClear = prev.shouldClearOnNextInput;
             let newValue = prev.currentValue;
             const char = value === ',' ? '.' : value;
+            const isWidthOrHeight = prev.field === 'largura' || prev.field === 'altura';
+
+            if (isWidthOrHeight && measurementInputMode === 'centimeters') {
+                // Neste modo cada tecla representa centimetros inteiros:
+                // 1 -> 0,01 m; 15 -> 0,15 m; 152 -> 1,52 m.
+                if (char === '.') return prev;
+                const currentDigits = shouldClear ? '' : metersValueToCentimeterDigits(prev.currentValue);
+                newValue = formatCentimeterDigitsAsMeters(`${currentDigits}${char}`);
+                return { ...prev, currentValue: newValue, shouldClearOnNextInput: false };
+            }
 
             if (char === '.') {
                 if (prev.field !== 'quantidade') {
@@ -155,7 +168,6 @@ export function useMeasurementEditor({
                 newValue = shouldClear ? char : newValue + char;
             }
 
-            const isWidthOrHeight = prev.field === 'largura' || prev.field === 'altura';
             const matchesPattern = /^\d\.\d{2}$/.test(newValue);
 
             if (isWidthOrHeight && matchesPattern) {
@@ -188,15 +200,27 @@ export function useMeasurementEditor({
 
             return { ...prev, currentValue: newValue, shouldClearOnNextInput: false };
         });
-    }, [measurements, applyMeasurementsInBackground]);
+    }, [measurements, applyMeasurementsInBackground, measurementInputMode]);
 
     const handleNumpadDelete = useCallback(() => {
-        setNumpadConfig(prev => ({
-            ...prev,
-            currentValue: prev.currentValue.slice(0, -1),
-            shouldClearOnNextInput: false
-        }));
-    }, []);
+        setNumpadConfig(prev => {
+            const isWidthOrHeight = prev.field === 'largura' || prev.field === 'altura';
+            if (isWidthOrHeight && measurementInputMode === 'centimeters') {
+                const currentDigits = metersValueToCentimeterDigits(prev.currentValue);
+                return {
+                    ...prev,
+                    currentValue: formatCentimeterDigitsAsMeters(currentDigits.slice(0, -1)),
+                    shouldClearOnNextInput: false
+                };
+            }
+
+            return {
+                ...prev,
+                currentValue: prev.currentValue.slice(0, -1),
+                shouldClearOnNextInput: false
+            };
+        });
+    }, [measurementInputMode]);
 
     const handleNumpadDuplicate = useCallback(() => {
         const { measurementId, field, currentValue } = numpadConfig;

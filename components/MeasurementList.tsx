@@ -7,6 +7,7 @@ import MeasurementGroup from './MeasurementGroup';
 import ConfirmationModal from './modals/ConfirmationModal';
 import RetalhoSuggestionModal from './modals/RetalhoSuggestionModal';
 import ApplicationProgressModal, { getApplicationProgress } from './modals/ApplicationProgressModal';
+import MeasurementInputSettingsModal from './modals/MeasurementInputSettingsModal';
 import { deleteConsumo, deleteRetalho, getAllRetalhos, saveConsumo, saveRetalho } from '../services/estoqueDb';
 import { getCompatibleRetalhosForMeasurement } from '../src/lib/retalhoMatching';
 import { RetalhoConsumptionPlan, planRetalhoConsumption } from '../src/lib/retalhoConsumption';
@@ -16,6 +17,7 @@ import {
     createPastedMeasurementsFromClipboard,
     getMeasurementClipboardCount
 } from '../src/lib/measurementClipboard';
+import { OPEN_MEASUREMENT_INPUT_SETTINGS_EVENT } from '../src/lib/measurementInputMode';
 
 const TOUCH_NUMPAD_MEDIA_QUERY = '(max-width: 767px)';
 
@@ -120,6 +122,7 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
     const [isLoadingRetalhos, setIsLoadingRetalhos] = useState(false);
     const [retalhoMeasurementId, setRetalhoMeasurementId] = useState<number | null>(null);
     const [consumingRetalhoId, setConsumingRetalhoId] = useState<number | null>(null);
+    const [isMeasurementInputSettingsOpen, setIsMeasurementInputSettingsOpen] = useState(false);
     const formattedTotalM2 = totalM2.toFixed(2).replace('.', ',');
     // Progresso do checklist de aplicacao (so leitura; muda apenas via modal).
     const aplicacaoProgress = useMemo(() => getApplicationProgress(measurements), [measurements]);
@@ -164,6 +167,12 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
     useEffect(() => {
         void loadRetalhos();
     }, [loadRetalhos]);
+
+    useEffect(() => {
+        const handleOpenSettings = () => setIsMeasurementInputSettingsOpen(true);
+        window.addEventListener(OPEN_MEASUREMENT_INPUT_SETTINGS_EVENT, handleOpenSettings);
+        return () => window.removeEventListener(OPEN_MEASUREMENT_INPUT_SETTINGS_EVENT, handleOpenSettings);
+    }, []);
 
     useEffect(() => {
         if (firstNewMeasurementRef.current !== null) {
@@ -986,6 +995,7 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
                             compatibleRetalhosCount={(compatibleRetalhosByMeasurement.get(measurement.id) || []).length}
                             isCheckingEstoque={isLoadingRetalhos}
                             onOpenRetalhoSuggestions={handleOpenRetalhoSuggestions}
+                            onOpenMeasurementInputSettings={() => setIsMeasurementInputSettingsOpen(true)}
                         />
                     </React.Fragment>
                 ))}
@@ -1004,6 +1014,11 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
                     confirmButtonVariant="danger"
                 />
             )}
+
+            <MeasurementInputSettingsModal
+                isOpen={isMeasurementInputSettingsOpen}
+                onClose={() => setIsMeasurementInputSettingsOpen(false)}
+            />
 
             <RetalhoSuggestionModal
                 isOpen={retalhoMeasurementId !== null}

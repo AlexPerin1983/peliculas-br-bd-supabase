@@ -2,8 +2,13 @@ import { renderHook } from '@testing-library/react';
 import { act } from 'react';
 import { useMeasurementEditor } from './useMeasurementEditor';
 import { UIMeasurement } from '../../types';
+import { MEASUREMENT_INPUT_MODE_STORAGE_KEY } from '../lib/measurementInputMode';
 
 describe('useMeasurementEditor', () => {
+  beforeEach(() => {
+    localStorage.removeItem(MEASUREMENT_INPUT_MODE_STORAGE_KEY);
+  });
+
   const measurement: UIMeasurement = {
     id: 1,
     largura: '',
@@ -80,6 +85,37 @@ describe('useMeasurementEditor', () => {
       expect.objectContaining({ id: 1, quantidade: 3 })
     ]);
     expect(result.current.numpadConfig.isOpen).toBe(false);
+  });
+
+  it('permite digitar centimetros sem virgula e salva em metros', () => {
+    localStorage.setItem(MEASUREMENT_INPUT_MODE_STORAGE_KEY, 'centimeters');
+    const handleMeasurementsChange = vi.fn();
+
+    const { result } = renderHook(() =>
+      useMeasurementEditor({
+        measurements: [measurement],
+        handleMeasurementsChange,
+        createEmptyMeasurement
+      })
+    );
+
+    act(() => {
+      result.current.handleOpenNumpad(1, 'largura', '');
+      result.current.handleNumpadInput('1');
+      result.current.handleNumpadInput('5');
+      result.current.handleNumpadInput('2');
+    });
+
+    expect(result.current.numpadConfig.currentValue).toBe('1.52');
+
+    act(() => {
+      result.current.handleNumpadDone();
+    });
+
+    expect(handleMeasurementsChange).toHaveBeenCalledWith([
+      expect.objectContaining({ id: 1, largura: '1,52' })
+    ]);
+    expect(result.current.numpadConfig.field).toBe('altura');
   });
 
   it('duplica a medida atual a partir do numpad', () => {

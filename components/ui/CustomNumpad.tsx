@@ -1,4 +1,6 @@
 import React, { forwardRef, useRef, useState } from 'react';
+import { useMeasurementInputMode } from '../../src/hooks/useMeasurementInputMode';
+import { OPEN_MEASUREMENT_INPUT_SETTINGS_EVENT } from '../../src/lib/measurementInputMode';
 
 interface CustomNumpadProps {
     isOpen: boolean;
@@ -13,6 +15,7 @@ interface CustomNumpadProps {
 }
 
 const CustomNumpad = forwardRef<HTMLDivElement, CustomNumpadProps>(({ isOpen, onInput, onDelete, onDone, onClose, onDuplicate, onClear, onAddGroup, activeField }, ref) => {
+    const { mode: measurementInputMode } = useMeasurementInputMode();
     const [isDragging, setIsDragging] = useState(false);
     const [dragY, setDragY] = useState(0);
     const startY = useRef(0);
@@ -91,6 +94,14 @@ const CustomNumpad = forwardRef<HTMLDivElement, CustomNumpadProps>(({ isOpen, on
     const numberClasses = "bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-600 border border-slate-200 dark:border-slate-600 shadow-sm";
     const actionClasses = "bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 shadow-sm";
     const isLastField = activeField === 'quantidade';
+    const isMeasurementField = activeField === 'largura' || activeField === 'altura';
+
+    const openMeasurementInputSettings = () => {
+        onClose();
+        window.setTimeout(() => {
+            window.dispatchEvent(new CustomEvent(OPEN_MEASUREMENT_INPUT_SETTINGS_EVENT));
+        }, 0);
+    };
 
     // Handle clicks outside
     React.useEffect(() => {
@@ -155,6 +166,20 @@ const CustomNumpad = forwardRef<HTMLDivElement, CustomNumpadProps>(({ isOpen, on
                 {/* Numpad Content */}
                 <div className="p-2 pb-3">
                     <div className="max-w-sm mx-auto">
+                        {isMeasurementField ? (
+                            <button
+                                type="button"
+                                onClick={openMeasurementInputSettings}
+                                className="mb-2 flex w-full items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-left text-blue-700 transition hover:bg-blue-100 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-200 dark:hover:bg-blue-950/50"
+                            >
+                                <i className="fas fa-ruler h-7 w-7 shrink-0 rounded-lg bg-blue-600 text-center text-xs leading-7 text-white"></i>
+                                <span className="min-w-0 flex-1">
+                                    <strong className="block text-[11px] font-black">{measurementInputMode === 'centimeters' ? 'Digitando em centímetros' : 'Digitando em metros'}</strong>
+                                    <span className="block text-[10px] opacity-80">{measurementInputMode === 'centimeters' ? '152 vira 1,52 m' : 'Use 1,52 para um metro e cinquenta e dois'}</span>
+                                </span>
+                                <span className="text-[10px] font-black uppercase">Alterar</span>
+                            </button>
+                        ) : null}
                         <div className="grid grid-cols-3 gap-2">
                             <NumpadButton action={() => onInput('1')} className={numberClasses} ariaLabel="Número 1">1</NumpadButton>
                             <NumpadButton action={() => onInput('2')} className={numberClasses} ariaLabel="Número 2">2</NumpadButton>
@@ -168,7 +193,11 @@ const CustomNumpad = forwardRef<HTMLDivElement, CustomNumpadProps>(({ isOpen, on
                             <NumpadButton action={() => onInput('8')} className={numberClasses} ariaLabel="Número 8">8</NumpadButton>
                             <NumpadButton action={() => onInput('9')} className={numberClasses} ariaLabel="Número 9">9</NumpadButton>
 
-                            <NumpadButton action={() => onInput(',')} className={actionClasses} ariaLabel="Vírgula">,</NumpadButton>
+                            {measurementInputMode === 'centimeters' && isMeasurementField ? (
+                                <div className={`flex h-10 items-center justify-center rounded-lg border border-slate-200 text-xs font-black uppercase text-slate-400 dark:border-slate-600 dark:text-slate-500 ${actionClasses}`} aria-label="Entrada em centímetros">cm</div>
+                            ) : (
+                                <NumpadButton action={() => onInput(',')} className={actionClasses} ariaLabel="Vírgula">,</NumpadButton>
+                            )}
                             <NumpadButton action={() => onInput('0')} className={numberClasses} ariaLabel="Número 0">0</NumpadButton>
                             <NumpadButton action={onDelete} className={actionClasses} ariaLabel="Apagar">
                                 <i className="fas fa-backspace text-lg"></i>
