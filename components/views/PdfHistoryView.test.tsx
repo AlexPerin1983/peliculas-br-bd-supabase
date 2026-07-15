@@ -3,10 +3,6 @@ import PdfHistoryView from './PdfHistoryView';
 import { FeedbackProvider } from '../../src/contexts/FeedbackContext';
 import { Agendamento, Client, SavedPDF } from '../../types';
 
-vi.mock('./AgendaPushReminderControl', () => ({
-    default: () => null,
-}));
-
 const client: Client = {
     id: 1,
     nome: 'William',

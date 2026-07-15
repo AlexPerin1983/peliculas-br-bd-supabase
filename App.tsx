@@ -67,7 +67,7 @@ import { GEMINI_TEXT_MODEL } from './src/lib/geminiModel';
 import { createPastedMeasurementsFromClipboard } from './src/lib/measurementClipboard';
 
 
-type ActiveTab = 'dashboard' | 'client' | 'cliente_hub' | 'clients_list' | 'films' | 'settings' | 'history' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores' | 'assistentes';
+type ActiveTab = 'dashboard' | 'client' | 'cliente_hub' | 'clients_list' | 'films' | 'settings' | 'history' | 'proposals' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores' | 'assistentes';
 
 interface BillingReturnState {
     status: BillingReturnStatus;
@@ -263,7 +263,7 @@ const App: React.FC = () => {
     const [pendingServiceStatusMark, setPendingServiceStatusMark] = useState<{ id: number; status: AgendamentoServiceStatus } | null>(null);
     const [activeTab, setActiveTab] = useState<ActiveTab>(() => {
         const saved = localStorage.getItem('peliculas-br-active-tab');
-        if (saved && ['dashboard', 'client', 'films', 'settings', 'history', 'agenda', 'sales', 'admin', 'account', 'estoque', 'qr_code', 'fornecedores', 'assistentes'].includes(saved)) {
+        if (saved && ['dashboard', 'client', 'films', 'settings', 'history', 'proposals', 'agenda', 'sales', 'admin', 'account', 'estoque', 'qr_code', 'fornecedores', 'assistentes'].includes(saved)) {
             return saved as ActiveTab;
         }
         return 'dashboard';
@@ -500,7 +500,7 @@ const App: React.FC = () => {
             setActiveTab('account');
         } else if (
             tabParam &&
-            ['dashboard', 'client', 'films', 'settings', 'history', 'agenda', 'sales', 'account'].includes(tabParam)
+            ['dashboard', 'client', 'films', 'settings', 'history', 'proposals', 'agenda', 'sales', 'account'].includes(tabParam)
         ) {
             setActiveTab(tabParam as ActiveTab);
         }
@@ -2687,13 +2687,13 @@ Se não conseguir extrair, retorne: []`;
     }, [refreshProfile, showToast]);
 
 
-    const wideWorkspaceClass = ['dashboard', 'history', 'estoque', 'films', 'fornecedores', 'agenda', 'settings', 'qr_code', 'account', 'assistentes', 'admin', 'cliente_hub', 'clients_list'].includes(activeTab)
+    const wideWorkspaceClass = ['dashboard', 'history', 'proposals', 'estoque', 'films', 'fornecedores', 'agenda', 'settings', 'qr_code', 'account', 'assistentes', 'admin', 'cliente_hub', 'clients_list'].includes(activeTab)
         ? 'mx-auto w-full max-w-[1480px]'
         : activeTab === 'client'
             ? 'mx-auto w-full max-w-[1480px]'
             : 'container mx-auto w-full max-w-2xl lg:max-w-5xl';
 
-    const useNativeSurface = ['dashboard', 'client', 'cliente_hub', 'clients_list', 'history', 'estoque', 'films', 'fornecedores', 'agenda', 'settings', 'qr_code', 'account', 'assistentes'].includes(activeTab);
+    const useNativeSurface = ['dashboard', 'client', 'cliente_hub', 'clients_list', 'history', 'proposals', 'estoque', 'films', 'fornecedores', 'agenda', 'settings', 'qr_code', 'account', 'assistentes'].includes(activeTab);
 
 
 
@@ -2793,7 +2793,7 @@ Se não conseguir extrair, retorne: []`;
                                         }}
                                         defaultHideMeasurements={!!userInfo?.hideMeasurementsInPdf}
                                     />
-                                ) : ['history', 'agenda'].includes(activeTab) ? (
+                                ) : ['history', 'proposals', 'agenda'].includes(activeTab) ? (
                                     <div className={activeTab === 'history'
                                         ? 'rounded-none bg-transparent'
                                         : 'rounded-none bg-transparent'}

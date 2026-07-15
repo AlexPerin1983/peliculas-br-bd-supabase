@@ -15,6 +15,7 @@ type ActiveTab =
     | 'films'
     | 'settings'
     | 'history'
+    | 'proposals'
     | 'agenda'
     | 'sales'
     | 'admin'
@@ -56,8 +57,9 @@ const SECTION_GERAL: NavItem[] = [
 const SECTION_VENDAS: NavItem[] = [
     { tabId: 'clients_list', icon: 'fas fa-user-friends', label: 'Clientes', hint: 'cadastro e histórico' },
     { tabId: 'client', icon: 'fas fa-file-invoice-dollar', label: 'Orçamento', hint: 'montar e enviar' },
-    { tabId: 'films', icon: 'fas fa-layer-group', label: 'Películas', hint: 'catálogo e seleção' },
+    { tabId: 'proposals', icon: 'fas fa-comments', label: 'Propostas', hint: 'respostas e negociações' },
     { tabId: 'history', icon: 'fas fa-history', label: 'Histórico', hint: 'registros, PDFs e consultas' },
+    { tabId: 'films', icon: 'fas fa-layer-group', label: 'Películas', hint: 'catálogo e seleção' },
 ];
 
 const SECTION_OPERACAO: NavItem[] = [
@@ -82,6 +84,7 @@ const pageLabels: Record<string, string> = {
     estoque: 'Estoque',
     qr_code: 'QR Code',
     agenda: 'Agenda',
+    proposals: 'Propostas',
     history: 'Histórico',
     fornecedores: 'Fornecedores',
     admin: 'Admin',

@@ -19,12 +19,16 @@ const actionMeta = (message: ProposalPortalMessage) => {
     return null;
 };
 
-const ProposalPortalInbox: React.FC = () => {
+interface ProposalPortalInboxProps {
+    defaultOpen?: boolean;
+}
+
+const ProposalPortalInbox: React.FC<ProposalPortalInboxProps> = ({ defaultOpen = false }) => {
     const requestedPortalId = useMemo(() => new URLSearchParams(window.location.search).get('proposalPortal'), []);
     const [portals, setPortals] = useState<CompanyProposalPortal[]>([]);
     const [available, setAvailable] = useState(true);
     const [loading, setLoading] = useState(true);
-    const [open, setOpen] = useState(Boolean(requestedPortalId));
+    const [open, setOpen] = useState(defaultOpen || Boolean(requestedPortalId));
     const [selectedId, setSelectedId] = useState<string | null>(requestedPortalId);
     const [reply, setReply] = useState('');
     const [sending, setSending] = useState(false);
@@ -88,7 +92,7 @@ const ProposalPortalInbox: React.FC = () => {
             </button>
 
             {open ? <div className="grid min-h-[420px] border-t border-[var(--border-subtle)] lg:grid-cols-[300px_minmax(0,1fr)]">
-                <div className="max-h-[520px] overflow-y-auto border-b border-[var(--border-subtle)] bg-[var(--surface-muted)] p-2 lg:border-b-0 lg:border-r">
+                <div className="max-h-[300px] overflow-y-auto border-b border-[var(--border-subtle)] bg-[var(--surface-muted)] p-2 sm:max-h-[380px] lg:max-h-[520px] lg:border-b-0 lg:border-r">
                     {portals.map(portal => <button key={portal.id} type="button" onClick={() => void select(portal)} className={`mb-1 w-full rounded-xl p-3 text-left transition ${selectedId === portal.id ? 'bg-white shadow-sm ring-1 ring-blue-200 dark:bg-slate-800 dark:ring-blue-800' : 'hover:bg-white/70 dark:hover:bg-slate-800/70'}`}>
                         <div className="flex items-center justify-between gap-2"><span className="truncate text-xs font-black text-[var(--text-strong)]">{portal.clientName}</span>{portal.unreadCount > 0 ? <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-600 px-1 text-[9px] font-black text-white">{portal.unreadCount}</span> : null}</div>
                         <p className="mt-1 truncate text-[11px] text-[var(--text-muted)]">{portal.proposals.map(item => item.name).join(', ')}</p>

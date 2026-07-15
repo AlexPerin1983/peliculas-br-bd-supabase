@@ -29,8 +29,6 @@ import { matchesSearch, normalizeSearchText } from '../../src/lib/textSearch';
 import { buildReviewFollowUpMessage } from '../../src/lib/reviewMessage';
 import { formatGarantiaMaoDeObra, garantiaEmDias } from '../../src/lib/filmWarranty';
 import ProposalShareModal from '../modals/ProposalShareModal';
-import ProposalPortalInbox from '../ProposalPortalInbox';
-import AgendaPushReminderControl from './AgendaPushReminderControl';
 
 interface PdfHistoryViewProps {
     pdfs: SavedPDF[];
@@ -4566,9 +4564,6 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
                 onClearSearch={handleClearSearch}
                 onOpenTemplates={() => setIsTemplateModalOpen(true)}
             />
-
-            <AgendaPushReminderControl />
-            <ProposalPortalInbox />
 
             {pdfs.length > 0 ? (
                 <section className="border-0 bg-transparent p-0 shadow-none sm:rounded-[var(--radius-panel)] sm:border sm:border-[var(--border-subtle)] sm:bg-[var(--surface)] sm:p-4 sm:shadow-[var(--shadow-hairline)]">

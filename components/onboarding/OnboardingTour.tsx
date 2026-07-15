@@ -22,7 +22,7 @@ import {
     X
 } from 'lucide-react';
 
-type ActiveTab = 'dashboard' | 'client' | 'films' | 'settings' | 'history' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores';
+type ActiveTab = 'dashboard' | 'client' | 'films' | 'settings' | 'history' | 'proposals' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores';
 
 interface OnboardingTourProps {
     /** Navega para a aba indicada (mesmo handler do menu). */

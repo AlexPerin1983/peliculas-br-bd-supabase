@@ -114,7 +114,7 @@ async function notifyOrganizationAboutProposal(
       icon: '/icon-192x192.png',
       badge: '/icon-192x192.png',
       tag: `proposal-portal-${portal.id}`,
-      url: `/?tab=history&proposalPortal=${portal.id}`,
+      url: `/?tab=proposals&proposalPortal=${portal.id}`,
       requireInteraction: event.kind !== 'message',
       actions: [{ action: 'open-proposals', title: 'Ver resposta' }],
     });

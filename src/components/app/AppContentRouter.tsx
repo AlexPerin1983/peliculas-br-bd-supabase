@@ -14,6 +14,7 @@ const DashboardView = lazy(() => import('../../../components/views/DashboardView
 const AssistentesView = lazy(() => import('../../../components/views/AssistentesView'));
 const UserSettingsView = lazy(() => import('../../../components/views/UserSettingsView'));
 const PdfHistoryView = lazy(() => import('../../../components/views/PdfHistoryView'));
+const ProposalCenterView = lazy(() => import('../../../components/views/ProposalCenterView'));
 const FilmListView = lazy(() => import('../../../components/views/FilmListView'));
 const AgendaView = lazy(() => import('../../../components/views/AgendaView'));
 const EstoqueView = lazy(() => import('../../../components/views/EstoqueView'));
@@ -24,7 +25,7 @@ const ClientListView = lazy(() => import('../../../components/views/ClientListVi
 const AdminUsers = lazy(() => import('../../../components/AdminUsers').then(module => ({ default: module.AdminUsers })));
 const UserAccount = lazy(() => import('../../../components/UserAccount').then(module => ({ default: module.UserAccount })));
 
-type ActiveTab = 'dashboard' | 'client' | 'cliente_hub' | 'clients_list' | 'films' | 'settings' | 'history' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores' | 'assistentes';
+type ActiveTab = 'dashboard' | 'client' | 'cliente_hub' | 'clients_list' | 'films' | 'settings' | 'history' | 'proposals' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores' | 'assistentes';
 
 interface AppContentRouterProps {
     activeTab: ActiveTab;
@@ -289,6 +290,13 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
                 onGenerateCombinedPdf={onGenerateCombinedPdf}
                 onNavigateToOption={onNavigateToOption}
             />,
+            defaultLoadingView
+        );
+    }
+
+    if (activeTab === 'proposals') {
+        return renderDeferred(
+            <ProposalCenterView onOpenHistory={() => onTabChange('history')} />,
             defaultLoadingView
         );
     }

@@ -13,6 +13,7 @@ import {
     LogOut,
     LucideIcon,
     MessageCircle,
+    MessagesSquare,
     PanelLeftClose,
     PanelLeftOpen,
     QrCode,
@@ -28,7 +29,7 @@ import ThemeToggle from '../ui/ThemeToggle';
 import SupportModal from '../modals/SupportModal';
 import * as db from '../../services/db';
 
-type ActiveTab = 'dashboard' | 'client' | 'cliente_hub' | 'clients_list' | 'films' | 'settings' | 'history' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores' | 'assistentes' | 'wa_connector';
+type ActiveTab = 'dashboard' | 'client' | 'cliente_hub' | 'clients_list' | 'films' | 'settings' | 'history' | 'proposals' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores' | 'assistentes' | 'wa_connector';
 
 interface DesktopSidebarProps {
     activeTab: ActiveTab;
@@ -47,11 +48,12 @@ const MAIN_NAV: NavItemConfig[] = [
     { tabId: 'assistentes', icon: Bot, label: 'Assistentes', badge: 'Beta' },
     { tabId: 'clients_list', icon: UsersRound, label: 'Clientes' },
     { tabId: 'client', icon: FileText, label: 'Orçamento' },
+    { tabId: 'proposals', icon: MessagesSquare, label: 'Propostas' },
+    { tabId: 'history', icon: History, label: 'Histórico' },
     { tabId: 'films', icon: Layers3, label: 'Películas' },
     { tabId: 'estoque', icon: Boxes, label: 'Estoque' },
     { tabId: 'qr_code', icon: QrCode, label: 'QR Code' },
     { tabId: 'agenda', icon: CalendarDays, label: 'Agenda' },
-    { tabId: 'history', icon: History, label: 'Histórico' },
     { tabId: 'fornecedores', icon: Truck, label: 'Fornecedores' },
     // Conector de WhatsApp: só aparece localmente quando VITE_WA_CONNECTOR=1 (nunca em produção).
     ...(isWaConnectorEnabled()

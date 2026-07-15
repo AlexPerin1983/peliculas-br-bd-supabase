@@ -40,7 +40,7 @@ import { deleteStandaloneExpense, getAllStandaloneExpenses, saveStandaloneExpens
 import StandaloneExpenseModal from '../modals/StandaloneExpenseModal';
 import AIFinancialAssistantModal, { FinancialAnalysisCache, FinancialSummary } from '../modals/AIFinancialAssistantModal';
 
-type ActiveTab = 'dashboard' | 'client' | 'films' | 'settings' | 'history' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores';
+type ActiveTab = 'dashboard' | 'client' | 'films' | 'settings' | 'history' | 'proposals' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores';
 type PeriodKey =
     | 'custom'
     | 'today'
