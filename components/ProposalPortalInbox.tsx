@@ -57,6 +57,18 @@ const ProposalPortalInbox: React.FC<ProposalPortalInboxProps> = ({ defaultOpen =
         return () => { window.clearInterval(interval); void supabase.removeChannel(channel); };
     }, [refresh]);
 
+    useEffect(() => {
+        const handleOpenPortal = (event: Event) => {
+            const portalId = (event as CustomEvent<{ portalId?: string }>).detail?.portalId;
+            if (!portalId) return;
+            setOpen(true);
+            setSelectedId(portalId);
+        };
+
+        window.addEventListener('proposal-portal-open', handleOpenPortal);
+        return () => window.removeEventListener('proposal-portal-open', handleOpenPortal);
+    }, []);
+
     const unread = useMemo(() => portals.reduce((sum, portal) => sum + portal.unreadCount, 0), [portals]);
     const selected = portals.find(portal => portal.id === selectedId) || null;
 

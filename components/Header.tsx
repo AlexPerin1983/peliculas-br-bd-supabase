@@ -6,6 +6,7 @@ import ThemeToggle from './ui/ThemeToggle';
 import SupportModal from './modals/SupportModal';
 import { isWaConnectorEnabled } from '../src/lib/waConnector';
 import * as db from '../services/db';
+import GlobalNotificationBell from './GlobalNotificationBell';
 
 type ActiveTab =
     | 'dashboard'
@@ -422,6 +423,7 @@ const Header: React.FC<HeaderProps> = ({ activeTab, onTabChange, onGoBack, canGo
 
                 <div className="flex items-center gap-2">
                     {/* No mobile, tema/config/conta saem do topo e ficam no menu lateral. */}
+                    <GlobalNotificationBell onNavigate={onTabChange} />
                     <SyncStatusIndicator />
                 </div>
             </div>
