@@ -12,6 +12,10 @@
     ],
     "rewrites": [
         {
+            "source": "/p/:slug/:code",
+            "destination": "/api/proposta-preview?slug=:slug&code=:code"
+        },
+        {
             "source": "/(.*)",
             "destination": "/index.html"
         }

@@ -60,7 +60,7 @@ const isEstoquePublico = isPublicEstoque && (
 
 const isPublicServico = urlParams.has('servico') || urlParams.has('s');
 const isServicoPublico = isPublicServico && !isEstoquePublico;
-const isProposalPortal = pathname.startsWith('/proposta') || urlParams.has('proposta');
+const isProposalPortal = pathname.startsWith('/proposta') || pathname.startsWith('/p/') || urlParams.has('proposta');
 
 const isInvitePage = pathname.startsWith('/convite/') || pathname.includes('/convite/');
 const isResetPasswordPath = pathname.startsWith('/reset-password');

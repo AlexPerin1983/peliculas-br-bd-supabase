@@ -67,7 +67,7 @@ const ProposalShareModal: React.FC<ProposalShareModalProps> = ({ isOpen, client,
         setBusy(true);
         setError('');
         try {
-            setCreated(await createProposalPortal(pdfs, expiration));
+            setCreated(await createProposalPortal(pdfs, expiration, client.nome));
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Não foi possível criar o link.');
         } finally {

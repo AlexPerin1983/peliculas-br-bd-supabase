@@ -275,7 +275,12 @@ const DecisionAssistantModal: React.FC<{
 };
 
 const ProposalPortalView: React.FC = () => {
-    const token = useMemo(() => new URLSearchParams(window.location.search).get('token') || '', []);
+    const token = useMemo(() => {
+        const queryToken = new URLSearchParams(window.location.search).get('token');
+        if (queryToken) return queryToken;
+        const friendlyMatch = window.location.pathname.match(/^\/p\/[^/]+\/([^/]+)\/?$/);
+        return friendlyMatch ? decodeURIComponent(friendlyMatch[1]) : '';
+    }, []);
     const [data, setData] = useState<PublicProposalPortal | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');

@@ -74,18 +74,33 @@ export const respondToPublicProposal = (
 export interface CreatedProposalPortal {
     portalId: string;
     token: string;
+    shareCode: string;
     expiresAt: string;
     url: string;
 }
 
-export const buildProposalPortalUrl = (token: string) => {
+export const buildProposalClientSlug = (clientName = 'cliente') => {
+    const firstName = clientName.trim().split(/\s+/)[0] || 'cliente';
+    return firstName
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '') || 'cliente';
+};
+
+export const buildProposalPortalUrl = (accessKey: string, clientName?: string) => {
     const url = new URL(window.location.origin);
-    url.pathname = '/proposta';
-    url.searchParams.set('token', token);
+    if (clientName) {
+        url.pathname = `/p/${buildProposalClientSlug(clientName)}/${encodeURIComponent(accessKey)}`;
+    } else {
+        url.pathname = '/proposta';
+        url.searchParams.set('token', accessKey);
+    }
     return url.toString();
 };
 
-export const createProposalPortal = async (pdfs: SavedPDF[], expirationDate: string): Promise<CreatedProposalPortal> => {
+export const createProposalPortal = async (pdfs: SavedPDF[], expirationDate: string, clientName: string): Promise<CreatedProposalPortal> => {
     const pdfIds = pdfs.map(pdf => pdf.id).filter((id): id is number => typeof id === 'number');
     if (pdfIds.length !== pdfs.length || pdfIds.length === 0) {
         throw new Error('Salve as propostas antes de criar o link.');
@@ -104,11 +119,19 @@ export const createProposalPortal = async (pdfs: SavedPDF[], expirationDate: str
     const row = Array.isArray(data) ? data[0] : data;
     if (!row?.portal_token) throw new Error('O link nao foi criado.');
 
+    const { data: portal, error: portalError } = await supabase
+        .from('proposal_portals')
+        .select('share_code')
+        .eq('id', row.portal_id)
+        .single();
+    if (portalError || !portal?.share_code) throw portalError || new Error('O codigo amigavel nao foi criado.');
+
     return {
         portalId: row.portal_id,
         token: row.portal_token,
+        shareCode: portal.share_code,
         expiresAt: row.expires_at,
-        url: buildProposalPortalUrl(row.portal_token),
+        url: buildProposalPortalUrl(portal.share_code, clientName),
     };
 };
 
@@ -122,6 +145,7 @@ export const buildProposalShareMessage = (client: Client, pdfs: SavedPDF[], port
 export interface CompanyProposalPortal {
     id: string;
     token: string;
+    shareCode?: string | null;
     clientId: number;
     clientName: string;
     expiresAt: string;
@@ -137,7 +161,7 @@ export interface CompanyProposalPortal {
 export const loadCompanyProposalPortals = async (): Promise<CompanyProposalPortal[]> => {
     const { data: portals, error } = await supabase
         .from('proposal_portals')
-        .select('id, token, client_id, expires_at, status, last_activity_at, last_read_by_company_at, view_count')
+        .select('id, token, share_code, client_id, expires_at, status, last_activity_at, last_read_by_company_at, view_count')
         .neq('status', 'revoked')
         .order('last_activity_at', { ascending: false });
     if (error) throw error;
@@ -158,6 +182,7 @@ export const loadCompanyProposalPortals = async (): Promise<CompanyProposalPorta
         return {
             id: portal.id,
             token: portal.token,
+            shareCode: portal.share_code,
             clientId: Number(portal.client_id),
             clientName: clientNames.get(Number(portal.client_id)) || 'Cliente',
             expiresAt: portal.expires_at,

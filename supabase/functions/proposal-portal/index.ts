@@ -155,14 +155,24 @@ Deno.serve(async (request) => {
   try {
     const url = new URL(request.url);
     const payload = request.method === 'POST' ? await request.json() : {};
-    const token = cleanText(url.searchParams.get('token') || payload.token, 96);
+    const token = cleanText(url.searchParams.get('token') || payload.token || payload.shareCode, 96);
     if (!token) return json({ error: 'Link de proposta invalido.' }, 400);
 
-    const { data: portal, error: portalError } = await admin
+    let { data: portal, error: portalError } = await admin
       .from('proposal_portals')
-      .select('id, token, organization_id, client_id, expires_at, status, decision_pdf_id, decision_at, view_count, created_at')
+      .select('id, token, share_code, organization_id, client_id, expires_at, status, decision_pdf_id, decision_at, view_count, created_at')
       .eq('token', token)
       .maybeSingle();
+
+    if (!portal && !portalError) {
+      const shareResult = await admin
+        .from('proposal_portals')
+        .select('id, token, share_code, organization_id, client_id, expires_at, status, decision_pdf_id, decision_at, view_count, created_at')
+        .eq('share_code', token)
+        .maybeSingle();
+      portal = shareResult.data;
+      portalError = shareResult.error;
+    }
 
     if (portalError || !portal || portal.status === 'revoked') {
       return json({ error: 'Esta proposta nao esta mais disponivel.' }, 404);
@@ -170,6 +180,32 @@ Deno.serve(async (request) => {
 
     const isExpired = new Date(portal.expires_at).getTime() <= Date.now();
     const action = cleanText(payload.action, 32);
+
+    if (action === 'preview') {
+      const [{ data: client }, { data: organization }] = await Promise.all([
+        admin.from('clients').select('nome').eq('id', portal.client_id).maybeSingle(),
+        admin.from('organizations').select('name, owner_id').eq('id', portal.organization_id).maybeSingle(),
+      ]);
+
+      let companyName = organization?.name || 'Empresa';
+      let companyLogo: string | null = null;
+      if (organization?.owner_id) {
+        const { data: info } = await admin
+          .from('user_info')
+          .select('empresa, logo')
+          .eq('user_id', organization.owner_id)
+          .maybeSingle();
+        companyName = info?.empresa || companyName;
+        companyLogo = info?.logo || null;
+      }
+
+      return json({
+        clientName: client?.nome || 'Cliente',
+        companyName,
+        companyLogo,
+        expiresAt: portal.expires_at,
+      });
+    }
 
     if (request.method === 'GET' || action === 'load') {
       const [{ data: client }, { data: organization }, { data: items }, { data: messages }] = await Promise.all([
