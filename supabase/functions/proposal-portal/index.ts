@@ -24,6 +24,7 @@ interface ProposalPushEvent {
   body?: string;
   offerType?: 'percentage' | 'fixed' | null;
   offerValue?: number | null;
+  conditionValue?: number | null;
 }
 
 interface PushSubscriptionRecord {
@@ -85,7 +86,7 @@ async function notifyOrganizationAboutProposal(
 
     const clientName = cleanText(client?.nome, 80) || 'Cliente';
     const proposalName = cleanText(proposal?.proposal_option_name, 80) || 'Proposta';
-    const proposalValue = Number(proposal?.total_preco || 0);
+    const proposalValue = Number(event.conditionValue ?? proposal?.total_preco ?? 0);
     const note = cleanText(event.body, 140);
 
     let title = `${clientName} respondeu a proposta`;
@@ -175,11 +176,11 @@ Deno.serve(async (request) => {
         admin.from('clients').select('nome').eq('id', portal.client_id).maybeSingle(),
         admin.from('organizations').select('name, owner_id').eq('id', portal.organization_id).maybeSingle(),
         admin.from('proposal_portal_items')
-          .select('position, saved_pdf_id, saved_pdfs(id, proposal_option_name, nome_arquivo, total_preco, total_m2, date, expiration_date, status)')
+          .select('position, saved_pdf_id, condition_original_value, condition_final_value, condition_discount_amount, condition_discount_percent, condition_expires_at, condition_updated_at, saved_pdfs(id, proposal_option_name, nome_arquivo, total_preco, total_m2, date, expiration_date, status)')
           .eq('portal_id', portal.id)
           .order('position'),
         admin.from('proposal_portal_messages')
-          .select('id, saved_pdf_id, sender_type, kind, body, offer_type, offer_value, created_at')
+          .select('id, saved_pdf_id, sender_type, kind, body, offer_type, offer_value, condition_value, created_at')
           .eq('portal_id', portal.id)
           .order('created_at'),
       ]);
@@ -201,36 +202,51 @@ Deno.serve(async (request) => {
       }
 
       const now = new Date().toISOString();
-      const portalUpdate: Record<string, unknown> = {
-        status: isExpired && portal.status === 'active' ? 'expired' : portal.status,
-        updated_at: now,
-      };
+      const portalUpdate: Record<string, unknown> = {};
+      if (isExpired && portal.status === 'active') {
+        portalUpdate.status = 'expired';
+        portalUpdate.updated_at = now;
+      }
       if (request.method === 'GET' || payload.trackView === true) {
         portalUpdate.view_count = (portal.view_count || 0) + 1;
         portalUpdate.last_viewed_at = now;
         if (!portal.view_count) portalUpdate.first_viewed_at = now;
+        portalUpdate.updated_at = now;
       }
-      await admin.from('proposal_portals').update(portalUpdate).eq('id', portal.id);
+      if (Object.keys(portalUpdate).length > 0) {
+        await admin.from('proposal_portals').update(portalUpdate).eq('id', portal.id);
+      }
 
       return json({
         portal: { ...portal, expired: isExpired, status: isExpired && portal.status === 'active' ? 'expired' : portal.status },
         clientName: client?.nome || 'Cliente',
         company,
-        proposals: (items || []).map((item: any) => item.saved_pdfs).filter(Boolean).map((pdf: any) => ({
-          id: pdf.id,
-          proposalOptionName: pdf.proposal_option_name,
-          nomeArquivo: pdf.nome_arquivo,
-          totalPreco: Number(pdf.total_preco || 0),
-          totalM2: Number(pdf.total_m2 || 0),
-          date: pdf.date,
-          expirationDate: pdf.expiration_date,
-          status: pdf.status,
-        })),
+        proposals: (items || []).filter((item: any) => Boolean(item.saved_pdfs)).map((item: any) => {
+          const pdf = item.saved_pdfs;
+          return {
+            id: pdf.id,
+            proposalOptionName: pdf.proposal_option_name,
+            nomeArquivo: pdf.nome_arquivo,
+            totalPreco: Number(pdf.total_preco || 0),
+            totalM2: Number(pdf.total_m2 || 0),
+            date: pdf.date,
+            expirationDate: pdf.expiration_date,
+            status: pdf.status,
+            conditionOriginalValue: item.condition_original_value == null ? null : Number(item.condition_original_value),
+            conditionFinalValue: item.condition_final_value == null ? null : Number(item.condition_final_value),
+            conditionDiscountAmount: item.condition_discount_amount == null ? null : Number(item.condition_discount_amount),
+            conditionDiscountPercent: item.condition_discount_percent == null ? null : Number(item.condition_discount_percent),
+            conditionExpiresAt: item.condition_expires_at,
+            conditionUpdatedAt: item.condition_updated_at,
+          };
+        }),
         messages: messages || [],
       });
     }
 
-    if (isExpired) return json({ error: 'O prazo desta proposta encerrou.' }, 410);
+    // Mesmo depois do prazo, o cliente ainda pode explicar por que nao decidiu.
+    // Downloads e decisoes continuam bloqueados ate a empresa reativar o link.
+    if (isExpired && action !== 'message') return json({ error: 'O prazo desta proposta encerrou.' }, 410);
 
     if (action === 'download') {
       const proposalId = Number(payload.proposalId);
@@ -269,11 +285,18 @@ Deno.serve(async (request) => {
       if (!['approved', 'rejected', 'negotiation'].includes(kind)) return json({ error: 'Resposta invalida.' }, 400);
 
       const { data: item } = await admin.from('proposal_portal_items')
-        .select('saved_pdf_id')
+        .select('saved_pdf_id, condition_final_value, condition_expires_at')
         .eq('portal_id', portal.id)
         .eq('saved_pdf_id', proposalId)
         .maybeSingle();
       if (!item) return json({ error: 'Proposta nao encontrada neste link.' }, 404);
+
+      const conditionExpired = item.condition_expires_at
+        ? new Date(item.condition_expires_at).getTime() <= Date.now()
+        : false;
+      if (kind === 'approved' && conditionExpired) {
+        return json({ error: 'Esta condicao expirou. Converse com a empresa para reativar o valor.' }, 410);
+      }
 
       const offerType = kind === 'negotiation' && ['percentage', 'fixed'].includes(payload.offerType)
         ? payload.offerType : null;
@@ -295,6 +318,9 @@ Deno.serve(async (request) => {
         body: body || null,
         offer_type: offerType,
         offer_value: offerValue,
+        condition_value: kind === 'approved' && item.condition_final_value != null
+          ? Number(item.condition_final_value)
+          : null,
       });
       if (messageError) throw messageError;
 
@@ -314,6 +340,9 @@ Deno.serve(async (request) => {
         body,
         offerType,
         offerValue,
+        conditionValue: kind === 'approved' && item.condition_final_value != null
+          ? Number(item.condition_final_value)
+          : null,
       });
       return json({ ok: true, status: nextStatus });
     }

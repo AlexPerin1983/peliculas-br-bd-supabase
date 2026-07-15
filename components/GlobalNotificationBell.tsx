@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import ReactDOM from 'react-dom';
-import { Bell, CalendarClock, CheckCheck, ChevronRight, MessageCircleMore, X } from 'lucide-react';
+import { Bell, CalendarClock, CheckCheck, ChevronRight, MessageCircleMore, TimerReset, X } from 'lucide-react';
 import * as db from '../services/db';
 import { supabase } from '../services/supabaseClient';
 import {
@@ -9,6 +9,7 @@ import {
     type CompanyProposalPortal,
     type ProposalPortalMessage,
 } from '../src/lib/proposalPortal';
+import { getProposalCondition } from '../src/lib/proposalCondition';
 
 type NotificationTarget = 'proposals' | 'agenda';
 
@@ -18,7 +19,7 @@ interface GlobalNotificationBellProps {
 
 interface NotificationItem {
     id: string;
-    kind: 'proposal' | 'agenda';
+    kind: 'proposal' | 'agenda' | 'discount';
     title: string;
     body: string;
     timestamp: number;
@@ -103,6 +104,25 @@ const GlobalNotificationBell: React.FC<GlobalNotificationBellProps> = ({ onNavig
                 }];
             });
 
+            const discountItems = portals.flatMap((portal: CompanyProposalPortal) => {
+                if (['approved', 'rejected', 'revoked'].includes(portal.status)) return [];
+                return portal.proposals.flatMap(proposal => {
+                    const condition = getProposalCondition(proposal, now);
+                    if (!condition || (!condition.expired && condition.remainingMs > AGENDA_WINDOW_MS)) return [];
+                    return [{
+                        id: `discount:${portal.id}:${proposal.id}:${condition.expiresAt}`,
+                        kind: 'discount' as const,
+                        title: condition.expired
+                            ? `A condição de ${portal.clientName} expirou`
+                            : `O desconto de ${portal.clientName} vence amanhã`,
+                        body: `A proposta de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(condition.finalValue)} ainda não foi aprovada. Toque para agir.`,
+                        timestamp: new Date(condition.expiresAt).getTime(),
+                        target: 'proposals' as const,
+                        portalId: portal.id,
+                    }];
+                });
+            });
+
             const agendaItems = agendamentos
                 .filter(agendamento => {
                     const start = new Date(agendamento.start).getTime();
@@ -122,7 +142,7 @@ const GlobalNotificationBell: React.FC<GlobalNotificationBellProps> = ({ onNavig
                     };
                 });
 
-            setItems([...proposalItems, ...agendaItems].sort((a, b) => {
+            setItems([...proposalItems, ...discountItems, ...agendaItems].sort((a, b) => {
                 const aUnread = seenIds.has(a.id) ? 0 : 1;
                 const bUnread = seenIds.has(b.id) ? 0 : 1;
                 if (aUnread !== bUnread) return bUnread - aUnread;
@@ -167,7 +187,9 @@ const GlobalNotificationBell: React.FC<GlobalNotificationBellProps> = ({ onNavig
     const handleItem = async (item: NotificationItem) => {
         markSeen([item.id]);
         if (item.portalId) {
-            try { await markCompanyProposalPortalRead(item.portalId); } catch (error) { console.error(error); }
+            if (item.kind === 'proposal') {
+                try { await markCompanyProposalPortalRead(item.portalId); } catch (error) { console.error(error); }
+            }
             const nextUrl = new URL(window.location.href);
             nextUrl.searchParams.set('proposalPortal', item.portalId);
             window.history.replaceState({}, '', `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
@@ -179,7 +201,7 @@ const GlobalNotificationBell: React.FC<GlobalNotificationBellProps> = ({ onNavig
 
     const handleMarkAll = async () => {
         markSeen(items.map(item => item.id));
-        const portalIds = Array.from(new Set(items.map(item => item.portalId).filter((id): id is string => Boolean(id))));
+        const portalIds = Array.from(new Set(items.filter(item => item.kind === 'proposal').map(item => item.portalId).filter((id): id is string => Boolean(id))));
         await Promise.allSettled(portalIds.map(portalId => markCompanyProposalPortalRead(portalId)));
         void refresh();
     };
@@ -230,14 +252,14 @@ const GlobalNotificationBell: React.FC<GlobalNotificationBellProps> = ({ onNavig
                                 </div>
                             ) : items.map(item => {
                                 const unread = !seenIds.has(item.id);
-                                const Icon = item.kind === 'proposal' ? MessageCircleMore : CalendarClock;
+                                const Icon = item.kind === 'proposal' ? MessageCircleMore : item.kind === 'discount' ? TimerReset : CalendarClock;
                                 return (
                                     <button key={item.id} type="button" onClick={() => void handleItem(item)} className={`mb-1 flex w-full items-start gap-3 rounded-xl p-3 text-left transition ${unread ? 'bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/25 dark:hover:bg-blue-950/40' : 'hover:bg-slate-50 dark:hover:bg-slate-800/70'}`}>
                                         <span className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${item.kind === 'proposal' ? 'bg-blue-600 text-white' : 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'}`}><Icon className="h-4 w-4" /></span>
                                         <span className="min-w-0 flex-1">
                                             <span className="flex items-center gap-2"><strong className="truncate text-xs font-black text-slate-900 dark:text-white">{item.title}</strong>{unread ? <i className="h-2 w-2 shrink-0 rounded-full bg-blue-600" /> : null}</span>
                                             <span className="mt-1 line-clamp-2 text-[11px] leading-4 text-slate-600 dark:text-slate-300">{item.body}</span>
-                                            <span className="mt-1 block text-[10px] font-semibold text-slate-400">{formatDateTime(item.timestamp)} · {item.kind === 'proposal' ? 'Proposta' : 'Agenda'}</span>
+                                            <span className="mt-1 block text-[10px] font-semibold text-slate-400">{formatDateTime(item.timestamp)} · {item.kind === 'proposal' ? 'Proposta' : item.kind === 'discount' ? 'Desconto' : 'Agenda'}</span>
                                         </span>
                                         <ChevronRight className="mt-3 h-4 w-4 shrink-0 text-slate-400" />
                                     </button>

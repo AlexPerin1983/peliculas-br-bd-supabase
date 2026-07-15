@@ -1,5 +1,21 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { BellRing, CheckCircle2, ChevronDown, ExternalLink, HandCoins, LoaderCircle, MessageCircle, Send, ThumbsDown, X } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import ReactDOM from 'react-dom';
+import {
+    AlertTriangle,
+    BellRing,
+    CalendarClock,
+    CheckCircle2,
+    ChevronDown,
+    ExternalLink,
+    HandCoins,
+    LoaderCircle,
+    MessageCircle,
+    PencilLine,
+    Send,
+    Sparkles,
+    ThumbsDown,
+    X,
+} from 'lucide-react';
 import {
     buildProposalPortalUrl,
     loadCompanyProposalPortals,
@@ -8,20 +24,70 @@ import {
     type CompanyProposalPortal,
     type ProposalPortalMessage,
 } from '../src/lib/proposalPortal';
+import {
+    buildProposalReactivationMessages,
+    formatConditionExpiry,
+    getProposalCondition,
+} from '../src/lib/proposalCondition';
 import { supabase } from '../services/supabaseClient';
+import ProposalConditionModal from './modals/ProposalConditionModal';
 
 const currency = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+const ATTENTION_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+type CompanyProposal = CompanyProposalPortal['proposals'][number];
 
 const actionMeta = (message: ProposalPortalMessage) => {
     if (message.kind === 'approved') return { label: 'Aprovou a proposta', icon: CheckCircle2, color: 'text-emerald-600 bg-emerald-50' };
     if (message.kind === 'rejected') return { label: 'Recusou a proposta', icon: ThumbsDown, color: 'text-red-600 bg-red-50' };
     if (message.kind === 'negotiation') return { label: 'Enviou uma contraproposta', icon: HandCoins, color: 'text-blue-600 bg-blue-50' };
+    if (message.kind === 'condition_extended') return { label: 'Condição prorrogada', icon: CalendarClock, color: 'text-blue-600 bg-blue-50' };
+    if (message.kind === 'condition_updated') return { label: 'Condição atualizada', icon: PencilLine, color: 'text-violet-600 bg-violet-50' };
     return null;
 };
+
+const formatActivity = (value: string) => new Date(value).toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+});
 
 interface ProposalPortalInboxProps {
     defaultOpen?: boolean;
 }
+
+interface ConditionModalState {
+    proposal: CompanyProposal;
+    mode: 'extend' | 'edit';
+}
+
+const ReactivationMessagesModal: React.FC<{
+    portal: CompanyProposalPortal;
+    proposal: CompanyProposal;
+    onChoose: (message: string) => void;
+    onClose: () => void;
+}> = ({ portal, proposal, onChoose, onClose }) => {
+    const condition = getProposalCondition(proposal);
+    if (!condition) return null;
+    const messages = buildProposalReactivationMessages({
+        clientName: portal.clientName,
+        finalValue: condition.finalValue,
+        discountAmount: condition.discountAmount,
+        expiresAt: condition.expiresAt,
+    });
+
+    return ReactDOM.createPortal(
+        <div className="fixed inset-0 z-[10035] flex items-end justify-center sm:items-center" role="dialog" aria-modal="true" aria-label="Mensagens prontas">
+            <button type="button" className="absolute inset-0 bg-slate-950/45 backdrop-blur-[2px]" onClick={onClose} aria-label="Fechar" />
+            <section className="relative w-full max-w-lg rounded-t-[26px] bg-white p-5 shadow-2xl dark:bg-slate-900 sm:mx-4 sm:rounded-[26px]">
+                <div className="flex items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-white"><Sparkles className="h-4 w-4" /></span><div className="min-w-0 flex-1"><p className="text-[10px] font-black uppercase tracking-[.14em] text-blue-600">Reativar conversa</p><h2 className="mt-1 text-xl font-black text-slate-950 dark:text-white">Escolha uma mensagem pronta</h2><p className="mt-1 text-xs text-slate-500">Você poderá editar antes de enviar.</p></div><button type="button" onClick={onClose} aria-label="Fechar" className="flex h-9 w-9 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"><X className="h-4 w-4" /></button></div>
+                <div className="mt-5 space-y-2">{messages.map(item => <button key={item.label} type="button" onClick={() => onChoose(item.text)} className="w-full rounded-2xl border border-slate-200 p-4 text-left transition hover:border-blue-400 hover:bg-blue-50 dark:border-slate-700 dark:hover:bg-blue-950/25"><strong className="text-xs font-black text-slate-900 dark:text-white">{item.label}</strong><span className="mt-1.5 line-clamp-3 block text-[11px] leading-5 text-slate-500 dark:text-slate-400">{item.text}</span></button>)}</div>
+            </section>
+        </div>,
+        document.body
+    );
+};
 
 const ProposalPortalInbox: React.FC<ProposalPortalInboxProps> = ({ defaultOpen = false }) => {
     const requestedPortalId = useMemo(() => new URLSearchParams(window.location.search).get('proposalPortal'), []);
@@ -32,6 +98,9 @@ const ProposalPortalInbox: React.FC<ProposalPortalInboxProps> = ({ defaultOpen =
     const [selectedId, setSelectedId] = useState<string | null>(requestedPortalId);
     const [reply, setReply] = useState('');
     const [sending, setSending] = useState(false);
+    const [conditionModal, setConditionModal] = useState<ConditionModalState | null>(null);
+    const [reactivationProposal, setReactivationProposal] = useState<CompanyProposal | null>(null);
+    const replyRef = useRef<HTMLTextAreaElement>(null);
 
     const refresh = useCallback(async () => {
         try {
@@ -40,7 +109,6 @@ const ProposalPortalInbox: React.FC<ProposalPortalInboxProps> = ({ defaultOpen =
             setAvailable(true);
             setSelectedId(current => current && next.some(item => item.id === current) ? current : next[0]?.id || null);
         } catch (error: any) {
-            // Enquanto a migration ainda nao foi aplicada, nao polui o historico com erro.
             if (String(error?.message || '').includes('proposal_portals')) setAvailable(false);
             else console.error('[proposalPortalInbox] Falha ao carregar:', error);
         } finally {
@@ -53,6 +121,8 @@ const ProposalPortalInbox: React.FC<ProposalPortalInboxProps> = ({ defaultOpen =
         const interval = window.setInterval(() => void refresh(), 30_000);
         const channel = supabase.channel('proposal-portal-inbox')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'proposal_portal_messages' }, () => void refresh())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'proposal_portal_items' }, () => void refresh())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'proposal_portals' }, () => void refresh())
             .subscribe();
         return () => { window.clearInterval(interval); void supabase.removeChannel(channel); };
     }, [refresh]);
@@ -64,13 +134,20 @@ const ProposalPortalInbox: React.FC<ProposalPortalInboxProps> = ({ defaultOpen =
             setOpen(true);
             setSelectedId(portalId);
         };
-
         window.addEventListener('proposal-portal-open', handleOpenPortal);
         return () => window.removeEventListener('proposal-portal-open', handleOpenPortal);
     }, []);
 
     const unread = useMemo(() => portals.reduce((sum, portal) => sum + portal.unreadCount, 0), [portals]);
     const selected = portals.find(portal => portal.id === selectedId) || null;
+    const attentionConditions = useMemo(() => {
+        if (!selected || ['approved', 'rejected'].includes(selected.status)) return [];
+        return selected.proposals
+            .map(proposal => ({ proposal, condition: getProposalCondition(proposal) }))
+            .filter((item): item is { proposal: CompanyProposal; condition: NonNullable<ReturnType<typeof getProposalCondition>> } => (
+                Boolean(item.condition) && (item.condition.expired || item.condition.remainingMs <= ATTENTION_WINDOW_MS)
+            ));
+    }, [selected]);
 
     const select = async (portal: CompanyProposalPortal) => {
         setSelectedId(portal.id);
@@ -93,6 +170,12 @@ const ProposalPortalInbox: React.FC<ProposalPortalInboxProps> = ({ defaultOpen =
         }
     };
 
+    const chooseReadyMessage = (text: string) => {
+        setReply(text);
+        setReactivationProposal(null);
+        window.setTimeout(() => replyRef.current?.focus(), 50);
+    };
+
     if (!available || (!loading && portals.length === 0)) return null;
 
     return (
@@ -104,21 +187,32 @@ const ProposalPortalInbox: React.FC<ProposalPortalInboxProps> = ({ defaultOpen =
             </button>
 
             {open ? <div className="grid min-h-[420px] border-t border-[var(--border-subtle)] lg:grid-cols-[300px_minmax(0,1fr)]">
-                <div className="max-h-[300px] overflow-y-auto border-b border-[var(--border-subtle)] bg-[var(--surface-muted)] p-2 sm:max-h-[380px] lg:max-h-[520px] lg:border-b-0 lg:border-r">
+                <div className="max-h-[300px] overflow-y-auto border-b border-[var(--border-subtle)] bg-[var(--surface-muted)] p-2 sm:max-h-[380px] lg:max-h-[620px] lg:border-b-0 lg:border-r">
                     {portals.map(portal => <button key={portal.id} type="button" onClick={() => void select(portal)} className={`mb-1 w-full rounded-xl p-3 text-left transition ${selectedId === portal.id ? 'bg-white shadow-sm ring-1 ring-blue-200 dark:bg-slate-800 dark:ring-blue-800' : 'hover:bg-white/70 dark:hover:bg-slate-800/70'}`}>
                         <div className="flex items-center justify-between gap-2"><span className="truncate text-xs font-black text-[var(--text-strong)]">{portal.clientName}</span>{portal.unreadCount > 0 ? <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-600 px-1 text-[9px] font-black text-white">{portal.unreadCount}</span> : null}</div>
                         <p className="mt-1 truncate text-[11px] text-[var(--text-muted)]">{portal.proposals.map(item => item.name).join(', ')}</p>
-                        <div className="mt-1 flex items-center justify-between gap-2 text-[10px] font-semibold text-[var(--text-soft)]"><span>{new Date(portal.lastActivityAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span><span className={portal.viewCount > 0 ? 'text-emerald-600' : 'text-amber-600'}>{portal.viewCount > 0 ? `Visualizou ${portal.viewCount}x` : 'Ainda não abriu'}</span></div>
+                        <div className="mt-1 flex items-center justify-between gap-2 text-[10px] font-semibold text-[var(--text-soft)]"><span>{formatActivity(portal.lastActivityAt)}</span><span className={portal.viewCount > 0 ? 'text-emerald-600' : 'text-amber-600'}>{portal.viewCount > 0 ? `Visualizou ${portal.viewCount}x` : 'Ainda não abriu'}</span></div>
                     </button>)}
                 </div>
+
                 {selected ? <div className="flex min-h-0 flex-col bg-[var(--surface)]">
-                    <div className="flex items-center gap-3 border-b border-[var(--border-subtle)] p-3 sm:p-4"><div className="min-w-0 flex-1"><h3 className="truncate text-sm font-black text-[var(--text-strong)]">{selected.clientName}</h3><p className="truncate text-[11px] text-[var(--text-muted)]">{selected.proposals.map(item => `${item.name} · ${currency.format(item.total)}`).join(' | ')}</p></div><a href={buildProposalPortalUrl(selected.token)} target="_blank" rel="noreferrer" className="flex h-9 items-center gap-2 rounded-xl border border-[var(--border-subtle)] px-3 text-[11px] font-bold text-[var(--text-body)]"><ExternalLink className="h-3.5 w-3.5" /> Abrir</a><button type="button" onClick={() => setOpen(false)} className="flex h-9 w-9 items-center justify-center rounded-xl text-[var(--text-muted)] lg:hidden"><X className="h-4 w-4" /></button></div>
+                    <div className="flex items-center gap-3 border-b border-[var(--border-subtle)] p-3 sm:p-4"><div className="min-w-0 flex-1"><h3 className="truncate text-sm font-black text-[var(--text-strong)]">{selected.clientName}</h3><p className="truncate text-[11px] text-[var(--text-muted)]">{selected.proposals.map(item => `${item.name} · ${currency.format(getProposalCondition(item)?.finalValue || item.total)}`).join(' | ')}</p></div><a href={buildProposalPortalUrl(selected.token)} target="_blank" rel="noreferrer" className="flex h-9 items-center gap-2 rounded-xl border border-[var(--border-subtle)] px-3 text-[11px] font-bold text-[var(--text-body)]"><ExternalLink className="h-3.5 w-3.5" /> Abrir</a><button type="button" onClick={() => setOpen(false)} className="flex h-9 w-9 items-center justify-center rounded-xl text-[var(--text-muted)] lg:hidden"><X className="h-4 w-4" /></button></div>
+
+                    {attentionConditions.length > 0 ? <div className="space-y-2 border-b border-amber-200 bg-amber-50/70 p-3 dark:border-amber-900/50 dark:bg-amber-950/15">{attentionConditions.map(({ proposal, condition }) => <article key={proposal.id} className="rounded-2xl border border-amber-200 bg-white p-3 shadow-sm dark:border-amber-900/50 dark:bg-slate-900"><div className="flex items-start gap-3"><span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${condition.expired ? 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'}`}><AlertTriangle className="h-4 w-4" /></span><div className="min-w-0 flex-1"><p className="text-xs font-black text-slate-900 dark:text-white">{condition.expired ? 'Esta condição expirou' : `O desconto de ${selected.clientName} vence amanhã`}</p><p className="mt-1 text-[11px] leading-4 text-slate-500 dark:text-slate-400">A proposta de {currency.format(condition.finalValue)} ainda não foi aprovada. Vencimento: {formatConditionExpiry(condition.expiresAt)}.</p></div></div><div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4"><button type="button" onClick={() => setReactivationProposal(proposal)} className="flex min-h-9 items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-2 py-2 text-[10px] font-black leading-tight text-white"><MessageCircle className="h-3.5 w-3.5 shrink-0" /> Enviar mensagem</button><button type="button" onClick={() => setConditionModal({ proposal, mode: 'extend' })} className="flex min-h-9 items-center justify-center gap-1.5 rounded-xl border border-blue-200 px-2 py-2 text-[10px] font-black leading-tight text-blue-700 dark:border-blue-800 dark:text-blue-300"><CalendarClock className="h-3.5 w-3.5 shrink-0" /> Prorrogar desconto</button><button type="button" onClick={() => setConditionModal({ proposal, mode: 'edit' })} className="flex min-h-9 items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-2 py-2 text-[10px] font-black leading-tight text-slate-700 dark:border-slate-700 dark:text-slate-200"><PencilLine className="h-3.5 w-3.5 shrink-0" /> Alterar condição</button><a href={buildProposalPortalUrl(selected.token)} target="_blank" rel="noreferrer" className="flex min-h-9 items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-2 py-2 text-[10px] font-black leading-tight text-slate-700 dark:border-slate-700 dark:text-slate-200"><ExternalLink className="h-3.5 w-3.5 shrink-0" /> Ver proposta</a></div></article>)}</div> : null}
+
                     <div className="max-h-[360px] min-h-[270px] flex-1 space-y-3 overflow-y-auto bg-[var(--surface-muted)]/55 p-3 sm:p-4">
-                        {selected.messages.length === 0 ? <div className="flex h-full min-h-[240px] flex-col items-center justify-center text-center text-xs text-[var(--text-muted)]"><MessageCircle className="mb-2 h-7 w-7 opacity-40" />O cliente abriu o link, mas ainda não enviou uma resposta.</div> : selected.messages.map(message => { const meta = actionMeta(message); const Icon = meta?.icon; return <div key={message.id} className={`flex ${message.sender_type === 'company' ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[88%] rounded-2xl px-3.5 py-2.5 text-xs leading-5 ${message.sender_type === 'company' ? 'rounded-br-md bg-blue-600 text-white' : 'rounded-bl-md bg-white text-[var(--text-body)] shadow-sm dark:bg-slate-800'}`}>{meta && Icon ? <p className={`mb-1 flex items-center gap-1.5 rounded-lg px-2 py-1 text-[10px] font-black ${meta.color}`}><Icon className="h-3.5 w-3.5" /> {meta.label}</p> : null}{message.offer_value != null ? <p className="font-black">{message.offer_type === 'percentage' ? `${message.offer_value}% de desconto` : `Quer pagar ${currency.format(message.offer_value)}`}</p> : null}{message.body ? <p>{message.body}</p> : null}<p className="mt-1 text-[9px] opacity-55">{new Date(message.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</p></div></div>; })}
+                        {selected.messages.length === 0 ? <div className="flex h-full min-h-[240px] flex-col items-center justify-center text-center text-xs text-[var(--text-muted)]"><MessageCircle className="mb-2 h-7 w-7 opacity-40" />O cliente abriu o link, mas ainda não enviou uma resposta.</div> : selected.messages.map(message => {
+                            const meta = actionMeta(message);
+                            const Icon = meta?.icon;
+                            return <div key={message.id} className={`flex ${message.sender_type === 'company' ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[88%] rounded-2xl px-3.5 py-2.5 text-xs leading-5 ${message.sender_type === 'company' ? 'rounded-br-md bg-blue-600 text-white' : 'rounded-bl-md bg-white text-[var(--text-body)] shadow-sm dark:bg-slate-800'}`}>{meta && Icon ? <p className={`mb-1 flex items-center gap-1.5 rounded-lg px-2 py-1 text-[10px] font-black ${meta.color}`}><Icon className="h-3.5 w-3.5" /> {meta.label}</p> : null}{message.offer_value != null ? <p className="font-black">{message.offer_type === 'percentage' ? `${message.offer_value}% de desconto` : `Quer pagar ${currency.format(message.offer_value)}`}</p> : null}{message.condition_value != null ? <p className="font-black">Valor da condição: {currency.format(message.condition_value)}</p> : null}{message.body ? <p>{message.body}</p> : null}<p className="mt-1 text-[9px] opacity-55">{formatActivity(message.created_at)}</p></div></div>;
+                        })}
                     </div>
-                    <div className="flex gap-2 border-t border-[var(--border-subtle)] p-3"><textarea value={reply} onChange={event => setReply(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send(); } }} rows={1} placeholder="Responder ao cliente…" className="min-h-11 flex-1 resize-none rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] px-3 py-2.5 text-xs text-[var(--text-strong)] outline-none focus:border-blue-500" /><button disabled={sending || !reply.trim()} onClick={() => void send()} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white disabled:opacity-50">{sending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}</button></div>
+                    <div className="flex gap-2 border-t border-[var(--border-subtle)] p-3"><textarea ref={replyRef} value={reply} onChange={event => setReply(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send(); } }} rows={1} placeholder="Responder ao cliente…" className="min-h-11 flex-1 resize-none rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] px-3 py-2.5 text-xs text-[var(--text-strong)] outline-none focus:border-blue-500" /><button disabled={sending || !reply.trim()} onClick={() => void send()} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white disabled:opacity-50">{sending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}</button></div>
                 </div> : null}
             </div> : null}
+
+            {selected && conditionModal ? <ProposalConditionModal isOpen mode={conditionModal.mode} portal={selected} proposal={conditionModal.proposal} onClose={() => setConditionModal(null)} onSaved={refresh} /> : null}
+            {selected && reactivationProposal ? <ReactivationMessagesModal portal={selected} proposal={reactivationProposal} onChoose={chooseReadyMessage} onClose={() => setReactivationProposal(null)} /> : null}
         </section>
     );
 };

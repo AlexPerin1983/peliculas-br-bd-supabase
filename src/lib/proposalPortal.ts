@@ -1,17 +1,20 @@
 import { supabase } from '../../services/supabaseClient';
 import type { Client, SavedPDF } from '../../types';
+import type { ProposalConditionFields } from './proposalCondition';
 
 export type ProposalPortalDecision = 'approved' | 'rejected' | 'negotiation';
 export type ProposalOfferType = 'percentage' | 'fixed';
+export type ProposalPortalMessageKind = 'message' | ProposalPortalDecision | 'condition_extended' | 'condition_updated';
 
 export interface ProposalPortalMessage {
     id: number;
     saved_pdf_id?: number | null;
     sender_type: 'client' | 'company';
-    kind: 'message' | ProposalPortalDecision;
+    kind: ProposalPortalMessageKind;
     body?: string | null;
     offer_type?: ProposalOfferType | null;
     offer_value?: number | null;
+    condition_value?: number | null;
     created_at: string;
 }
 
@@ -33,7 +36,7 @@ export interface PublicProposalPortal {
         logo?: string;
         colors?: { primaria?: string; secundaria?: string };
     };
-    proposals: Array<Pick<SavedPDF, 'id' | 'proposalOptionName' | 'nomeArquivo' | 'totalPreco' | 'totalM2' | 'date' | 'expirationDate' | 'status'>>;
+    proposals: Array<Pick<SavedPDF, 'id' | 'proposalOptionName' | 'nomeArquivo' | 'totalPreco' | 'totalM2' | 'date' | 'expirationDate' | 'status'> & ProposalConditionFields>;
     messages: ProposalPortalMessage[];
 }
 
@@ -126,7 +129,7 @@ export interface CompanyProposalPortal {
     lastActivityAt: string;
     lastReadByCompanyAt?: string | null;
     viewCount: number;
-    proposals: Array<{ id: number; name: string; total: number }>;
+    proposals: Array<{ id: number; name: string; total: number } & ProposalConditionFields>;
     messages: ProposalPortalMessage[];
     unreadCount: number;
 }
@@ -144,8 +147,8 @@ export const loadCompanyProposalPortals = async (): Promise<CompanyProposalPorta
     const clientIds = Array.from(new Set(portals.map(item => item.client_id)));
     const [{ data: clients }, { data: items }, { data: messages }] = await Promise.all([
         supabase.from('clients').select('id, nome').in('id', clientIds),
-        supabase.from('proposal_portal_items').select('portal_id, saved_pdf_id, position, saved_pdfs(proposal_option_name, nome_arquivo, total_preco)').in('portal_id', portalIds).order('position'),
-        supabase.from('proposal_portal_messages').select('id, portal_id, saved_pdf_id, sender_type, kind, body, offer_type, offer_value, created_at').in('portal_id', portalIds).order('created_at'),
+        supabase.from('proposal_portal_items').select('portal_id, saved_pdf_id, position, condition_original_value, condition_final_value, condition_discount_amount, condition_discount_percent, condition_expires_at, saved_pdfs(proposal_option_name, nome_arquivo, total_preco)').in('portal_id', portalIds).order('position'),
+        supabase.from('proposal_portal_messages').select('id, portal_id, saved_pdf_id, sender_type, kind, body, offer_type, offer_value, condition_value, created_at').in('portal_id', portalIds).order('created_at'),
     ]);
 
     const clientNames = new Map((clients || []).map(client => [Number(client.id), client.nome]));
@@ -166,6 +169,11 @@ export const loadCompanyProposalPortals = async (): Promise<CompanyProposalPorta
                 id: Number(item.saved_pdf_id),
                 name: item.saved_pdfs?.proposal_option_name || item.saved_pdfs?.nome_arquivo || `Proposta #${item.saved_pdf_id}`,
                 total: Number(item.saved_pdfs?.total_preco || 0),
+                conditionOriginalValue: item.condition_original_value == null ? null : Number(item.condition_original_value),
+                conditionFinalValue: item.condition_final_value == null ? null : Number(item.condition_final_value),
+                conditionDiscountAmount: item.condition_discount_amount == null ? null : Number(item.condition_discount_amount),
+                conditionDiscountPercent: item.condition_discount_percent == null ? null : Number(item.condition_discount_percent),
+                conditionExpiresAt: item.condition_expires_at,
             })),
             messages: portalMessages,
             unreadCount: portalMessages.filter(message => message.sender_type === 'client' && new Date(message.created_at).getTime() > readAt).length,
@@ -190,4 +198,19 @@ export const sendCompanyProposalMessage = async (portalId: string, body: string)
     });
     if (error) throw error;
     await supabase.from('proposal_portals').update({ last_activity_at: new Date().toISOString() }).eq('id', portalId);
+};
+
+export const updateProposalPortalCondition = async (
+    portalId: string,
+    proposalId: number,
+    expiresAt: string,
+    finalValue?: number
+) => {
+    const { error } = await supabase.rpc('update_proposal_portal_condition', {
+        p_portal_id: portalId,
+        p_saved_pdf_id: proposalId,
+        p_expires_at: expiresAt,
+        p_final_value: finalValue ?? null,
+    });
+    if (error) throw error;
 };
