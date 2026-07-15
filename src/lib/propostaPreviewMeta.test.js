@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { escapeHtml, injectProposalPreview, resolvePreviewImage } from '../../api/proposta-preview.js';
+import { escapeHtml, injectProposalPreview, previewFingerprint, resolvePreviewImage } from '../../api/proposta-preview.js';
 
 describe('prévia amigável da proposta', () => {
     it('usa a logo pública da empresa e personaliza o primeiro nome', () => {
@@ -18,8 +18,12 @@ describe('prévia amigável da proposta', () => {
     });
 
     it('usa o ícone padrão quando a logo não é uma URL pública', () => {
-        expect(resolvePreviewImage('data:image/png;base64,abc', 'https://app.filmstec.shop', 'codigo'))
-            .toBe('https://app.filmstec.shop/api/proposta-logo?code=codigo');
+        expect(resolvePreviewImage('data:image/png;base64,abc', 'https://app.filmstec.shop', 'codigo', 'nova'))
+            .toBe('https://app.filmstec.shop/api/proposta-logo?code=codigo&v=nova');
+    });
+
+    it('muda a versão quando a logo muda', () => {
+        expect(previewFingerprint('logo antiga')).not.toBe(previewFingerprint('logo nova'));
     });
 
     it('protege os metadados contra HTML inserido nos nomes', () => {

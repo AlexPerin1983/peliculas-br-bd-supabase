@@ -141,6 +141,31 @@ async function notifyOrganizationAboutProposal(
   }
 }
 
+const loadCompanyBranding = async (
+  admin: ReturnType<typeof createClient>,
+  organization: { name?: string | null; owner_id?: string | null } | null,
+  createdBy?: string | null,
+) => {
+  const userIds = Array.from(new Set([createdBy, organization?.owner_id].filter(Boolean))) as string[];
+  const { data: infos } = userIds.length
+    ? await admin
+      .from('user_info')
+      .select('user_id, empresa, telefone, email, logo, cores')
+      .in('user_id', userIds)
+    : { data: [] };
+
+  const creatorInfo = (infos || []).find((info: any) => info.user_id === createdBy);
+  const ownerInfo = (infos || []).find((info: any) => info.user_id === organization?.owner_id);
+
+  return {
+    name: creatorInfo?.empresa || ownerInfo?.empresa || organization?.name || 'Empresa',
+    phone: creatorInfo?.telefone || ownerInfo?.telefone || null,
+    email: creatorInfo?.email || ownerInfo?.email || null,
+    logo: creatorInfo?.logo || ownerInfo?.logo || null,
+    colors: creatorInfo?.cores || ownerInfo?.cores || null,
+  };
+};
+
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
@@ -160,14 +185,14 @@ Deno.serve(async (request) => {
 
     let { data: portal, error: portalError } = await admin
       .from('proposal_portals')
-      .select('id, token, share_code, organization_id, client_id, expires_at, status, decision_pdf_id, decision_at, view_count, created_at')
+      .select('id, token, share_code, organization_id, client_id, created_by, expires_at, status, decision_pdf_id, decision_at, view_count, created_at')
       .eq('token', token)
       .maybeSingle();
 
     if (!portal && !portalError) {
       const shareResult = await admin
         .from('proposal_portals')
-        .select('id, token, share_code, organization_id, client_id, expires_at, status, decision_pdf_id, decision_at, view_count, created_at')
+        .select('id, token, share_code, organization_id, client_id, created_by, expires_at, status, decision_pdf_id, decision_at, view_count, created_at')
         .eq('share_code', token)
         .maybeSingle();
       portal = shareResult.data;
@@ -187,22 +212,12 @@ Deno.serve(async (request) => {
         admin.from('organizations').select('name, owner_id').eq('id', portal.organization_id).maybeSingle(),
       ]);
 
-      let companyName = organization?.name || 'Empresa';
-      let companyLogo: string | null = null;
-      if (organization?.owner_id) {
-        const { data: info } = await admin
-          .from('user_info')
-          .select('empresa, logo')
-          .eq('user_id', organization.owner_id)
-          .maybeSingle();
-        companyName = info?.empresa || companyName;
-        companyLogo = info?.logo || null;
-      }
+      const company = await loadCompanyBranding(admin, organization, portal.created_by);
 
       return json({
         clientName: client?.nome || 'Cliente',
-        companyName,
-        companyLogo,
+        companyName: company.name,
+        companyLogo: company.logo,
         expiresAt: portal.expires_at,
       });
     }
@@ -221,21 +236,7 @@ Deno.serve(async (request) => {
           .order('created_at'),
       ]);
 
-      let company: Record<string, unknown> = { name: organization?.name || 'Empresa' };
-      if (organization?.owner_id) {
-        const { data: info } = await admin
-          .from('user_info')
-          .select('empresa, telefone, email, logo, cores')
-          .eq('user_id', organization.owner_id)
-          .maybeSingle();
-        if (info) company = {
-          name: info.empresa || organization.name || 'Empresa',
-          phone: info.telefone,
-          email: info.email,
-          logo: info.logo,
-          colors: info.cores,
-        };
-      }
+      const company = await loadCompanyBranding(admin, organization, portal.created_by);
 
       const now = new Date().toISOString();
       const portalUpdate: Record<string, unknown> = {};

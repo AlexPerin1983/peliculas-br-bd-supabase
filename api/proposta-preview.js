@@ -10,9 +10,19 @@ export const escapeHtml = (value = '') => String(value)
 
 const firstName = (name = 'Cliente') => name.trim().split(/\s+/)[0] || 'Cliente';
 
-export const resolvePreviewImage = (logo, origin, shareCode = '') => {
+export const previewFingerprint = (value = '') => {
+    let hash = 2166136261;
+    const text = String(value);
+    for (let index = 0; index < text.length; index += 1) {
+        hash ^= text.charCodeAt(index);
+        hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0).toString(36);
+};
+
+export const resolvePreviewImage = (logo, origin, shareCode = '', version = previewFingerprint(logo)) => {
     if (String(logo || '').startsWith('data:image/') && shareCode) {
-        return `${origin}/api/proposta-logo?code=${encodeURIComponent(shareCode)}`;
+        return `${origin}/api/proposta-logo?code=${encodeURIComponent(shareCode)}&v=${encodeURIComponent(version)}`;
     }
     try {
         const candidate = new URL(String(logo || ''), origin);
