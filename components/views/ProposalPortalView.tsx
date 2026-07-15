@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+    ArrowLeft,
     Check,
     CheckCircle2,
+    ChevronRight,
     Clock3,
     Download,
     FileText,
@@ -97,12 +99,13 @@ interface ResponseModalProps {
     proposalName: string;
     proposalValue: number;
     busy: boolean;
+    initialBody?: string;
     onClose: () => void;
     onSubmit: (payload: { body?: string; offerType?: ProposalOfferType; offerValue?: number }) => void;
 }
 
-const ResponseModal: React.FC<ResponseModalProps> = ({ kind, proposalName, proposalValue, busy, onClose, onSubmit }) => {
-    const [body, setBody] = useState('');
+const ResponseModal: React.FC<ResponseModalProps> = ({ kind, proposalName, proposalValue, busy, initialBody = '', onClose, onSubmit }) => {
+    const [body, setBody] = useState(initialBody);
     const [offerType, setOfferType] = useState<ProposalOfferType>('fixed');
     const [offerValue, setOfferValue] = useState('');
     const [error, setError] = useState('');
@@ -128,14 +131,14 @@ const ResponseModal: React.FC<ResponseModalProps> = ({ kind, proposalName, propo
 
     return (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-sm sm:items-center sm:p-5" role="dialog" aria-modal="true">
-            <button className="absolute inset-0" onClick={onClose} aria-label="Fechar" />
+            <button className="absolute inset-0" onClick={onClose} aria-label="Fechar janela" />
             <div className="relative w-full max-w-lg rounded-t-[28px] bg-white p-5 shadow-2xl sm:rounded-[24px] sm:p-7">
                 <div className="flex items-start justify-between gap-4">
                     <div>
                         <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-blue-600">{proposalName}</p>
                         <h2 className="mt-1 text-2xl font-bold text-slate-950">{title}</h2>
                     </div>
-                    <button type="button" onClick={onClose} className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500">
+                    <button type="button" onClick={onClose} className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500" aria-label="Fechar">
                         <X className="h-5 w-5" />
                     </button>
                 </div>
@@ -183,29 +186,89 @@ const ResponseModal: React.FC<ResponseModalProps> = ({ kind, proposalName, propo
     );
 };
 
-const CONVERSATION_REASONS = [
-    'Quero uma condição de pagamento',
-    'Preciso de outra data',
-    'Tenho dúvida sobre a película',
-    'Estou comparando propostas',
-    'Preciso decidir com outra pessoa',
-];
+type DecisionAssistantMode = 'adjust' | 'return';
 
-const ConversationReasonModal: React.FC<{
+const ADJUST_REASONS = [
+    { id: 'price', label: 'O valor ficou acima do esperado', hint: 'Informe quanto faria sentido para você.' },
+    { id: 'payment', label: 'Preciso de uma condição de pagamento', hint: 'Parcelamento, entrada ou forma de pagamento.' },
+    { id: 'date', label: 'Preciso realizar em outra data', hint: 'Conte quando seria um bom momento.' },
+    { id: 'comparing', label: 'Estou comparando outras propostas', hint: 'Diga o que mais pesa na comparação.' },
+    { id: 'decision', label: 'Preciso decidir com outra pessoa', hint: 'Combine quando podemos voltar a conversar.' },
+    { id: 'technical', label: 'Tenho dúvida sobre a película', hint: 'Envie sua dúvida diretamente para a empresa.' },
+    { id: 'priority', label: 'Ainda não é prioridade', hint: 'Escolha quando prefere receber um novo contato.' },
+    { id: 'other', label: 'Outro motivo', hint: 'Conte brevemente o que precisa mudar.' },
+] as const;
+
+const RETURN_REASONS = [
+    { id: 'price', label: 'O preço não cabe no momento' },
+    { id: 'competitor', label: 'Escolhi outra empresa' },
+    { id: 'postponed', label: 'Adiei o serviço' },
+    { id: 'condition', label: 'A condição não funcionou para mim' },
+    { id: 'confidence', label: 'Ainda não me senti seguro para decidir' },
+    { id: 'other', label: 'Outro motivo' },
+] as const;
+
+const PAYMENT_CHOICES = ['Preciso parcelar mais', 'Preciso reduzir a entrada', 'Prefiro pagar no Pix', 'Quero outra condição'];
+const COMPARISON_CHOICES = ['Preço', 'Garantia', 'Tipo de película', 'Prazo de execução'];
+const PRIORITY_CHOICES = ['Falar comigo em 7 dias', 'Falar comigo em 15 dias', 'Falar comigo em 30 dias'];
+
+const DecisionAssistantModal: React.FC<{
+    mode: DecisionAssistantMode;
     busy: boolean;
     onClose: () => void;
-    onSelect: (reason: string) => void;
-}> = ({ busy, onClose, onSelect }) => {
-    const [other, setOther] = useState('');
-    const [showOther, setShowOther] = useState(false);
+    onMessage: (body: string) => void;
+    onNegotiate: (body: string) => void;
+    onReject: (body: string) => void;
+}> = ({ mode, busy, onClose, onMessage, onNegotiate, onReject }) => {
+    const [selectedId, setSelectedId] = useState('');
+    const [choice, setChoice] = useState('');
+    const [detail, setDetail] = useState('');
+    const reasons = mode === 'adjust' ? ADJUST_REASONS : RETURN_REASONS;
+    const selected = reasons.find(reason => reason.id === selectedId);
+
+    const selectReason = (id: string) => {
+        setSelectedId(id);
+        setChoice('');
+        setDetail('');
+    };
+
+    const requiresChoice = mode === 'adjust' && ['payment', 'comparing', 'priority'].includes(selectedId);
+    const requiresDetail = selectedId === 'other' || (mode === 'adjust' && ['technical', 'date', 'decision'].includes(selectedId));
+    const canSubmit = Boolean(selected) && (!requiresChoice || Boolean(choice)) && (!requiresDetail || Boolean(detail.trim()));
+
+    const submit = () => {
+        if (!selected || !canSubmit) return;
+        if (mode === 'adjust' && selectedId === 'price') {
+            onNegotiate(`Motivo informado: ${selected.label}.`);
+            return;
+        }
+
+        let complement = choice;
+        if (selectedId === 'date' && detail) complement = `Data desejada: ${new Date(`${detail}T12:00:00`).toLocaleDateString('pt-BR')}`;
+        else if (selectedId === 'decision' && detail) complement = `Podemos voltar a conversar em ${new Date(`${detail}T12:00:00`).toLocaleDateString('pt-BR')}`;
+        else if (detail.trim()) complement = detail.trim();
+
+        const body = `${mode === 'adjust' ? 'Preciso ajustar a proposta' : 'Não vou seguir agora'}: ${selected.label}${complement ? `. ${complement}` : ''}`;
+        if (mode === 'adjust') onMessage(body);
+        else onReject(body);
+    };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/55 backdrop-blur-sm sm:items-center sm:p-5" role="dialog" aria-modal="true" aria-label="Quero conversar">
-            <button type="button" className="absolute inset-0" onClick={onClose} aria-label="Fechar" />
-            <section className="relative w-full max-w-lg rounded-t-[28px] bg-white p-5 shadow-2xl sm:rounded-[24px] sm:p-7">
-                <div className="flex items-start gap-3"><span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-white"><MessageSquareText className="h-5 w-5" /></span><div className="min-w-0 flex-1"><p className="text-xs font-black uppercase tracking-[.14em] text-blue-600">Fale com a empresa</p><h2 className="mt-1 text-2xl font-black text-slate-950">Como podemos ajudar?</h2><p className="mt-1 text-sm leading-5 text-slate-500">Escolha a opção que mais combina com o seu momento.</p></div><button type="button" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-500" aria-label="Fechar"><X className="h-4 w-4" /></button></div>
-                <div className="mt-5 space-y-2">{CONVERSATION_REASONS.map(reason => <button key={reason} type="button" disabled={busy} onClick={() => onSelect(reason)} className="flex min-h-12 w-full items-center justify-between gap-3 rounded-xl border border-slate-200 px-4 py-3 text-left text-sm font-bold text-slate-700 transition hover:border-blue-400 hover:bg-blue-50 disabled:opacity-50"><span>{reason}</span><MessageCircle className="h-4 w-4 shrink-0 text-blue-500" /></button>)}<button type="button" onClick={() => setShowOther(true)} className={`flex min-h-12 w-full items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left text-sm font-bold transition ${showOther ? 'border-blue-500 bg-blue-50 text-blue-800' : 'border-slate-200 text-slate-700 hover:border-blue-400'}`}><span>Outro motivo</span><MessageCircle className="h-4 w-4 shrink-0 text-blue-500" /></button></div>
-                {showOther ? <div className="mt-3"><textarea autoFocus value={other} onChange={event => setOther(event.target.value)} rows={3} placeholder="Conte brevemente como podemos ajudar…" className="w-full resize-none rounded-xl border border-slate-200 p-3 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10" /><button type="button" disabled={busy || !other.trim()} onClick={() => onSelect(`Outro motivo: ${other.trim()}`)} className="mt-2 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 text-sm font-black text-white disabled:opacity-50">{busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Enviar</button></div> : null}
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/55 backdrop-blur-sm sm:items-center sm:p-5" role="dialog" aria-modal="true" aria-label={mode === 'adjust' ? 'Solicitar ajuste' : 'Dar um retorno'}>
+            <button type="button" className="absolute inset-0" onClick={onClose} aria-label="Fechar janela" />
+            <section className="relative max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-[28px] bg-white p-5 shadow-2xl sm:rounded-[24px] sm:p-7">
+                <div className="flex items-start gap-3"><span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white ${mode === 'adjust' ? 'bg-blue-600' : 'bg-slate-700'}`}><MessageSquareText className="h-5 w-5" /></span><div className="min-w-0 flex-1"><p className={`text-xs font-black uppercase tracking-[.14em] ${mode === 'adjust' ? 'text-blue-600' : 'text-slate-500'}`}>Seu próximo passo</p><h2 className="mt-1 text-2xl font-black text-slate-950">{selected ? selected.label : mode === 'adjust' ? 'O que está impedindo sua decisão?' : 'Qual foi o principal motivo?'}</h2><p className="mt-1 text-sm leading-5 text-slate-500">{selected ? 'Só mais uma informação rápida.' : mode === 'adjust' ? 'Escolha a opção que mais combina com o seu momento.' : 'Sua resposta encerra este acompanhamento e evita mensagens desnecessárias.'}</p></div><button type="button" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-500" aria-label="Fechar"><X className="h-4 w-4" /></button></div>
+
+                {!selected ? <div className="mt-5 space-y-2">{reasons.map(reason => <button key={reason.id} type="button" disabled={busy} onClick={() => selectReason(reason.id)} className="flex min-h-14 w-full items-center justify-between gap-3 rounded-xl border border-slate-200 px-4 py-3 text-left transition hover:border-blue-400 hover:bg-blue-50 disabled:opacity-50"><span><strong className="block text-sm text-slate-800">{reason.label}</strong>{'hint' in reason ? <small className="mt-0.5 block text-[11px] font-medium text-slate-500">{reason.hint}</small> : null}</span><ChevronRight className="h-4 w-4 shrink-0 text-blue-500" /></button>)}</div> : <div className="mt-5">
+                    {mode === 'adjust' && selectedId === 'price' ? <div className="rounded-2xl bg-blue-50 p-4 text-sm leading-6 text-blue-900">Você poderá informar o valor que gostaria de pagar ou o percentual de desconto desejado.</div> : null}
+                    {mode === 'adjust' && selectedId === 'payment' ? <div className="grid gap-2">{PAYMENT_CHOICES.map(item => <button key={item} type="button" onClick={() => setChoice(item)} className={`min-h-11 rounded-xl border px-3 text-left text-sm font-bold ${choice === item ? 'border-blue-500 bg-blue-50 text-blue-800' : 'border-slate-200 text-slate-700'}`}>{item}</button>)}</div> : null}
+                    {mode === 'adjust' && selectedId === 'comparing' ? <div><p className="mb-2 text-xs font-bold text-slate-600">O que mais pesa na sua comparação?</p><div className="grid grid-cols-2 gap-2">{COMPARISON_CHOICES.map(item => <button key={item} type="button" onClick={() => setChoice(item)} className={`min-h-11 rounded-xl border px-2 text-xs font-bold ${choice === item ? 'border-blue-500 bg-blue-50 text-blue-800' : 'border-slate-200 text-slate-700'}`}>{item}</button>)}</div></div> : null}
+                    {mode === 'adjust' && selectedId === 'priority' ? <div className="grid gap-2">{PRIORITY_CHOICES.map(item => <button key={item} type="button" onClick={() => setChoice(item)} className={`min-h-11 rounded-xl border px-3 text-left text-sm font-bold ${choice === item ? 'border-blue-500 bg-blue-50 text-blue-800' : 'border-slate-200 text-slate-700'}`}>{item}</button>)}</div> : null}
+                    {mode === 'adjust' && ['date', 'decision'].includes(selectedId) ? <label className="block"><span className="mb-1.5 block text-xs font-bold text-slate-600">{selectedId === 'date' ? 'Quando gostaria de realizar?' : 'Quando podemos voltar a conversar?'}</span><input type="date" value={detail} min={new Date().toISOString().slice(0, 10)} onChange={event => setDetail(event.target.value)} className="h-12 w-full rounded-xl border border-slate-200 px-3 text-sm font-bold outline-none focus:border-blue-500" /></label> : null}
+                    {(mode === 'return' || (mode === 'adjust' && ['technical', 'other'].includes(selectedId))) ? <label className="block"><span className="mb-1.5 block text-xs font-bold text-slate-600">{mode === 'return' && selectedId !== 'other' ? 'Quer acrescentar algo? (opcional)' : 'Conte brevemente'}</span><textarea autoFocus value={detail} onChange={event => setDetail(event.target.value)} rows={3} placeholder={mode === 'return' ? 'Sua observação ajuda a empresa a melhorar.' : 'Escreva sua dúvida ou explique o que precisa mudar.'} className="w-full resize-none rounded-xl border border-slate-200 p-3 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10" /></label> : null}
+
+                    <div className="mt-5 flex gap-2"><button type="button" onClick={() => selectReason('')} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-600" aria-label="Voltar"><ArrowLeft className="h-4 w-4" /></button><button type="button" disabled={busy || !canSubmit} onClick={submit} className={`flex h-12 flex-1 items-center justify-center gap-2 rounded-xl text-sm font-black text-white disabled:opacity-50 ${mode === 'adjust' ? 'bg-blue-600' : 'bg-slate-800'}`}>{busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : mode === 'adjust' && selectedId === 'price' ? <HandCoins className="h-4 w-4" /> : <Send className="h-4 w-4" />} {mode === 'adjust' && selectedId === 'price' ? 'Informar minha condição' : mode === 'adjust' ? 'Enviar para a empresa' : 'Enviar retorno e encerrar'}</button></div>
+                </div>}
             </section>
         </div>
     );
@@ -223,7 +286,8 @@ const ProposalPortalView: React.FC = () => {
     const [downloadingId, setDownloadingId] = useState<number | null>(null);
     const [message, setMessage] = useState('');
     const [confetti, setConfetti] = useState(false);
-    const [conversationReasonOpen, setConversationReasonOpen] = useState(false);
+    const [decisionAssistant, setDecisionAssistant] = useState<DecisionAssistantMode | null>(null);
+    const [responseInitialBody, setResponseInitialBody] = useState('');
 
     const reload = useCallback(async (trackView = false) => {
         if (import.meta.env.DEV && token === 'demo') {
@@ -275,14 +339,14 @@ const ProposalPortalView: React.FC = () => {
     const isDownloadBlocked = !data || data.portal.expired || remaining?.remaining === 0 || data.portal.status === 'revoked';
     const isClosed = isDownloadBlocked || ['approved', 'rejected'].includes(data.portal.status);
     const isApprovalBlocked = isClosed || Boolean(selectedCondition?.expired);
+    const hasFinalDecision = Boolean(data && ['approved', 'rejected', 'revoked'].includes(data.portal.status));
     const brand = data?.company.colors?.primaria || '#155eef';
 
-    const submitResponse = async (payload: { body?: string; offerType?: ProposalOfferType; offerValue?: number }) => {
-        if (!selected?.id || !modal) return;
+    const performResponse = async (kind: ProposalPortalDecision, payload: { body?: string; offerType?: ProposalOfferType; offerValue?: number }) => {
+        if (!selected?.id) return;
         setBusy(true);
         try {
             if (import.meta.env.DEV && token === 'demo') {
-                const kind = modal;
                 const createdAt = new Date().toISOString();
                 setData(current => current ? {
                     ...current,
@@ -294,20 +358,28 @@ const ProposalPortalView: React.FC = () => {
                     window.setTimeout(() => setConfetti(false), 3200);
                 }
                 setModal(null);
+                setDecisionAssistant(null);
+                setResponseInitialBody('');
                 return;
             }
-            await respondToPublicProposal(token, selected.id, modal, payload);
-            if (modal === 'approved') {
+            await respondToPublicProposal(token, selected.id, kind, payload);
+            if (kind === 'approved') {
                 setConfetti(true);
                 window.setTimeout(() => setConfetti(false), 3200);
             }
             setModal(null);
+            setDecisionAssistant(null);
+            setResponseInitialBody('');
             await reload();
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Não foi possível enviar sua resposta.');
         } finally {
             setBusy(false);
         }
+    };
+
+    const submitResponse = (payload: { body?: string; offerType?: ProposalOfferType; offerValue?: number }) => {
+        if (modal) void performResponse(modal, payload);
     };
 
     const sendMessage = async () => {
@@ -330,23 +402,28 @@ const ProposalPortalView: React.FC = () => {
         }
     };
 
-    const sendConversationReason = async (reason: string) => {
+    const sendGuidedMessage = async (body: string) => {
         setBusy(true);
         try {
-            const body = `Quero conversar: ${reason}`;
             if (import.meta.env.DEV && token === 'demo') {
                 setData(current => current ? { ...current, messages: [...current.messages, { id: Date.now(), sender_type: 'client', kind: 'message', body, created_at: new Date().toISOString() }] } : current);
             } else {
                 await sendPublicProposalMessage(token, body);
                 await reload();
             }
-            setConversationReasonOpen(false);
+            setDecisionAssistant(null);
             window.setTimeout(() => document.getElementById('conversa')?.scrollIntoView({ behavior: 'smooth' }), 50);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Não foi possível enviar sua resposta.');
         } finally {
             setBusy(false);
         }
+    };
+
+    const openNegotiationFromAssistant = (body: string) => {
+        setDecisionAssistant(null);
+        setResponseInitialBody(body);
+        setModal('negotiation');
     };
 
     const download = async (proposalId: number) => {
@@ -411,7 +488,19 @@ const ProposalPortalView: React.FC = () => {
                     </div>
                 </section> : null}
 
-                <button type="button" onClick={() => setConversationReasonOpen(true)} className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border border-blue-200 bg-white px-4 text-sm font-black text-blue-700 shadow-sm transition hover:bg-blue-50"><MessageSquareText className="h-4 w-4" /> Quero conversar</button>
+                {!hasFinalDecision ? <section className="mt-5 overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-sm">
+                    <div className="p-5 sm:p-6">
+                        <p className="text-xs font-black uppercase tracking-[.15em] text-blue-600">Seu próximo passo</p>
+                        <h2 className="mt-1 text-2xl font-black text-slate-950">Podemos avançar com esta proposta?</h2>
+                        <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">Esta proposta foi preparada para o seu projeto. Escolha a opção que melhor representa seu momento para a empresa saber como ajudar.</p>
+                        <div className="mt-5 grid gap-2 sm:grid-cols-3">
+                            <button type="button" disabled={isApprovalBlocked} onClick={() => setModal('approved')} className="flex min-h-14 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 text-sm font-black text-white transition hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-500"><ThumbsUp className="h-4 w-4" /> Quero aprovar</button>
+                            <button type="button" onClick={() => setDecisionAssistant('adjust')} className="flex min-h-14 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-black text-white transition hover:bg-blue-700"><MessageSquareText className="h-4 w-4" /> Preciso ajustar algo</button>
+                            <button type="button" onClick={() => setDecisionAssistant('return')} className="flex min-h-14 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50"><CheckCircle2 className="h-4 w-4" /> Dar um retorno</button>
+                        </div>
+                        <p className="mt-3 text-center text-xs font-semibold text-slate-500">Leva menos de 20 segundos. Sua resposta ajuda a empresa a respeitar o seu momento.</p>
+                    </div>
+                </section> : null}
 
                 <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1.55fr)_minmax(300px,.75fr)]">
                     <section>
@@ -433,7 +522,7 @@ const ProposalPortalView: React.FC = () => {
                     <aside className="hidden lg:block">
                         <div className="sticky top-24 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                             <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-slate-400">Sua decisão</p><h2 className="mt-1 text-xl font-bold text-slate-950">{selected?.proposalOptionName || 'Proposta selecionada'}</h2>{selectedCondition ? <p className="mt-2 text-xs font-bold text-slate-400 line-through">{currency.format(selectedCondition.originalValue)}</p> : null}<p className="mt-1 text-2xl font-black text-slate-950">{currency.format(selectedCondition?.finalValue || selected?.totalPreco || 0)}</p>
-                            <div className="mt-5 grid gap-2"><button disabled={isApprovalBlocked} onClick={() => setModal('approved')} className="flex h-12 items-center justify-center gap-2 rounded-xl bg-emerald-600 text-sm font-extrabold text-white disabled:opacity-50"><ThumbsUp className="h-4 w-4" /> {selectedCondition && !selectedCondition.expired ? `Aprovar por ${currency.format(selectedCondition.finalValue)}` : selectedCondition?.expired ? 'Condição expirada' : 'Aprovar'}</button><button disabled={isClosed} onClick={() => setModal('negotiation')} className="flex h-12 items-center justify-center gap-2 rounded-xl bg-blue-600 text-sm font-extrabold text-white disabled:opacity-50"><HandCoins className="h-4 w-4" /> Negociar</button><button disabled={isClosed} onClick={() => setModal('rejected')} className="flex h-12 items-center justify-center gap-2 rounded-xl border border-red-200 text-sm font-extrabold text-red-600 disabled:opacity-50"><ThumbsDown className="h-4 w-4" /> Recusar</button></div>
+                            <div className="mt-5 grid gap-2"><button disabled={isApprovalBlocked} onClick={() => setModal('approved')} className="flex h-12 items-center justify-center gap-2 rounded-xl bg-emerald-600 text-sm font-extrabold text-white disabled:opacity-50"><ThumbsUp className="h-4 w-4" /> {selectedCondition && !selectedCondition.expired ? `Aprovar por ${currency.format(selectedCondition.finalValue)}` : selectedCondition?.expired ? 'Condição expirada' : 'Quero aprovar'}</button><button disabled={hasFinalDecision} onClick={() => setDecisionAssistant('adjust')} className="flex h-12 items-center justify-center gap-2 rounded-xl bg-blue-600 text-sm font-extrabold text-white disabled:opacity-50"><MessageSquareText className="h-4 w-4" /> Solicitar ajuste</button><button disabled={hasFinalDecision} onClick={() => setDecisionAssistant('return')} className="flex h-12 items-center justify-center gap-2 rounded-xl border border-slate-300 text-sm font-extrabold text-slate-700 disabled:opacity-50"><CheckCircle2 className="h-4 w-4" /> Dar um retorno</button></div>
                         </div>
                     </aside>
                 </div>
@@ -452,11 +541,11 @@ const ProposalPortalView: React.FC = () => {
             </main>
 
             <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 p-3 pb-[calc(env(safe-area-inset-bottom,0px)+.75rem)] backdrop-blur-xl lg:hidden">
-                {isClosed ? <div className="flex h-12 items-center justify-center gap-2 rounded-xl bg-slate-100 text-sm font-bold text-slate-600"><CheckCircle2 className="h-5 w-5" /> {statusLabel[data.portal.status]}</div> : <div className="mx-auto grid max-w-xl grid-cols-3 gap-2"><button disabled={isApprovalBlocked} onClick={() => setModal('approved')} className="flex h-12 flex-col items-center justify-center rounded-xl bg-emerald-600 px-1 text-[10px] font-extrabold text-white disabled:bg-slate-300"><ThumbsUp className="h-4 w-4" /> {selectedCondition ? selectedCondition.expired ? 'Expirou' : `Aprovar ${currency.format(selectedCondition.finalValue)}` : 'Aprovar'}</button><button onClick={() => setModal('negotiation')} className="flex h-12 flex-col items-center justify-center rounded-xl bg-blue-600 text-[11px] font-extrabold text-white"><HandCoins className="h-4 w-4" /> Negociar</button><button onClick={() => setModal('rejected')} className="flex h-12 flex-col items-center justify-center rounded-xl bg-red-50 text-[11px] font-extrabold text-red-600"><ThumbsDown className="h-4 w-4" /> Recusar</button></div>}
+                {hasFinalDecision ? <div className="flex h-12 items-center justify-center gap-2 rounded-xl bg-slate-100 text-sm font-bold text-slate-600"><CheckCircle2 className="h-5 w-5" /> {statusLabel[data.portal.status]}</div> : <div className="mx-auto grid max-w-xl grid-cols-3 gap-2"><button disabled={isApprovalBlocked} onClick={() => setModal('approved')} className="flex h-12 flex-col items-center justify-center rounded-xl bg-emerald-600 px-1 text-[10px] font-extrabold text-white disabled:bg-slate-300"><ThumbsUp className="h-4 w-4" /> {selectedCondition ? selectedCondition.expired ? 'Expirou' : `Aprovar ${currency.format(selectedCondition.finalValue)}` : 'Aprovar'}</button><button onClick={() => setDecisionAssistant('adjust')} className="flex h-12 flex-col items-center justify-center rounded-xl bg-blue-600 text-[10px] font-extrabold text-white"><MessageSquareText className="h-4 w-4" /> Pedir ajuste</button><button onClick={() => setDecisionAssistant('return')} className="flex h-12 flex-col items-center justify-center rounded-xl bg-slate-100 text-[10px] font-extrabold text-slate-700"><CheckCircle2 className="h-4 w-4" /> Dar retorno</button></div>}
             </div>
 
-            {modal && selected ? <ResponseModal kind={modal} proposalName={selected.proposalOptionName || selected.nomeArquivo || 'Proposta'} proposalValue={selectedCondition?.finalValue || selected.totalPreco || 0} busy={busy} onClose={() => setModal(null)} onSubmit={payload => void submitResponse(payload)} /> : null}
-            {conversationReasonOpen ? <ConversationReasonModal busy={busy} onClose={() => setConversationReasonOpen(false)} onSelect={reason => void sendConversationReason(reason)} /> : null}
+            {modal && selected ? <ResponseModal kind={modal} proposalName={selected.proposalOptionName || selected.nomeArquivo || 'Proposta'} proposalValue={selectedCondition?.finalValue || selected.totalPreco || 0} busy={busy} initialBody={responseInitialBody} onClose={() => { setModal(null); setResponseInitialBody(''); }} onSubmit={submitResponse} /> : null}
+            {decisionAssistant ? <DecisionAssistantModal mode={decisionAssistant} busy={busy} onClose={() => setDecisionAssistant(null)} onMessage={body => void sendGuidedMessage(body)} onNegotiate={openNegotiationFromAssistant} onReject={body => { if (isDownloadBlocked) void sendGuidedMessage(body); else void performResponse('rejected', { body }); }} /> : null}
         </div>
     );
 };
