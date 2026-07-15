@@ -30,6 +30,7 @@ import { buildReviewFollowUpMessage } from '../../src/lib/reviewMessage';
 import { formatGarantiaMaoDeObra, garantiaEmDias } from '../../src/lib/filmWarranty';
 import ProposalShareModal from '../modals/ProposalShareModal';
 import ProposalPortalInbox from '../ProposalPortalInbox';
+import AgendaPushReminderControl from './AgendaPushReminderControl';
 
 interface PdfHistoryViewProps {
     pdfs: SavedPDF[];
@@ -4566,6 +4567,7 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
                 onOpenTemplates={() => setIsTemplateModalOpen(true)}
             />
 
+            <AgendaPushReminderControl />
             <ProposalPortalInbox />
 
             {pdfs.length > 0 ? (

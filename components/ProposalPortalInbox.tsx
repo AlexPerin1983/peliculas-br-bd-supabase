@@ -20,11 +20,12 @@ const actionMeta = (message: ProposalPortalMessage) => {
 };
 
 const ProposalPortalInbox: React.FC = () => {
+    const requestedPortalId = useMemo(() => new URLSearchParams(window.location.search).get('proposalPortal'), []);
     const [portals, setPortals] = useState<CompanyProposalPortal[]>([]);
     const [available, setAvailable] = useState(true);
     const [loading, setLoading] = useState(true);
-    const [open, setOpen] = useState(false);
-    const [selectedId, setSelectedId] = useState<string | null>(null);
+    const [open, setOpen] = useState(Boolean(requestedPortalId));
+    const [selectedId, setSelectedId] = useState<string | null>(requestedPortalId);
     const [reply, setReply] = useState('');
     const [sending, setSending] = useState(false);
 
@@ -79,7 +80,7 @@ const ProposalPortalInbox: React.FC = () => {
     if (!available || (!loading && portals.length === 0)) return null;
 
     return (
-        <section className={`overflow-hidden rounded-[var(--radius-panel)] border shadow-[var(--shadow-hairline)] ${unread > 0 ? 'border-blue-300 bg-blue-50/70 dark:border-blue-800 dark:bg-blue-950/20' : 'border-[var(--border-subtle)] bg-[var(--surface)]'}`}>
+        <section id="proposal-responses" className={`overflow-hidden rounded-[var(--radius-panel)] border shadow-[var(--shadow-hairline)] ${unread > 0 ? 'border-blue-300 bg-blue-50/70 dark:border-blue-800 dark:bg-blue-950/20' : 'border-[var(--border-subtle)] bg-[var(--surface)]'}`}>
             <button type="button" onClick={() => setOpen(current => !current)} className="flex w-full items-center gap-3 p-4 text-left">
                 <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white"><BellRing className="h-4 w-4" />{unread > 0 ? <i className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-red-500 px-1 text-[9px] font-black not-italic text-white">{unread > 9 ? '9+' : unread}</i> : null}</span>
                 <span className="min-w-0 flex-1"><span className="block text-sm font-black text-[var(--text-strong)]">Respostas das propostas</span><span className="block truncate text-xs text-[var(--text-muted)]">{loading ? 'Buscando respostas…' : unread > 0 ? `${unread} nova${unread > 1 ? 's' : ''} interação${unread > 1 ? 'ões' : ''} de cliente` : `${portals.length} conversa${portals.length > 1 ? 's' : ''} acompanhada${portals.length > 1 ? 's' : ''}`}</span></span>

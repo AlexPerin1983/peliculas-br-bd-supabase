@@ -3,6 +3,10 @@ import PdfHistoryView from './PdfHistoryView';
 import { FeedbackProvider } from '../../src/contexts/FeedbackContext';
 import { Agendamento, Client, SavedPDF } from '../../types';
 
+vi.mock('./AgendaPushReminderControl', () => ({
+    default: () => null,
+}));
+
 const client: Client = {
     id: 1,
     nome: 'William',
@@ -71,8 +75,8 @@ describe('PdfHistoryView', () => {
         expect(screen.getAllByText('Pipeline real').length).toBeGreaterThan(0);
         expect(screen.getAllByText(/R\$\s*1\.500,00/).length).toBeGreaterThan(0);
         expect(screen.getAllByText(/R\$\s*4\.500,00/).length).toBeGreaterThan(0);
-        expect(screen.getByText(/R\$\s*3\.000,00 em alternativas/)).toBeInTheDocument();
-        expect(screen.getByText(/1 oportunidade \/ 3 opções/)).toBeInTheDocument();
+        expect(screen.getAllByText(/R\$\s*3\.000,00 em alternativas/).length).toBeGreaterThan(0);
+        expect(screen.getAllByText(/1 oportunidade \/ 3 opções/).length).toBeGreaterThan(0);
         expect(screen.getByRole('button', { name: /abrir filtro de data/i })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /pendentes:\s*2/i })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /aprovados:\s*1/i })).toBeInTheDocument();

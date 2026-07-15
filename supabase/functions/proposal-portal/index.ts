@@ -1,3 +1,5 @@
+// @deno-types="npm:@types/web-push@3.6.4"
+import webpush from 'npm:web-push@3.6.7';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
@@ -13,6 +15,130 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 
 const cleanText = (value: unknown, max = 2000) =>
   typeof value === 'string' ? value.trim().slice(0, max) : '';
+
+type ProposalPushKind = 'message' | 'approved' | 'rejected' | 'negotiation';
+
+interface ProposalPushEvent {
+  kind: ProposalPushKind;
+  proposalId?: number;
+  body?: string;
+  offerType?: 'percentage' | 'fixed' | null;
+  offerValue?: number | null;
+}
+
+interface PushSubscriptionRecord {
+  id: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+}
+
+function configureWebPush(): void {
+  const publicKey = Deno.env.get('VAPID_PUBLIC_KEY') ?? '';
+  const privateKey = Deno.env.get('VAPID_PRIVATE_KEY') ?? '';
+  const subject = Deno.env.get('VAPID_SUBJECT') ?? 'mailto:suporte@filmstec.shop';
+
+  if (!publicKey || !privateKey) {
+    throw new Error('Chaves VAPID nao configuradas');
+  }
+
+  webpush.setVapidDetails(subject, publicKey, privateKey);
+}
+
+const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', {
+  style: 'currency',
+  currency: 'BRL',
+}).format(value);
+
+async function disableExpiredSubscription(admin: any, subscription: PushSubscriptionRecord, error: unknown) {
+  const statusCode = (error as { statusCode?: number })?.statusCode;
+  if (statusCode !== 404 && statusCode !== 410) return;
+
+  await admin
+    .from('agenda_push_subscriptions')
+    .update({ enabled: false, updated_at: new Date().toISOString() })
+    .eq('id', subscription.id);
+}
+
+async function notifyOrganizationAboutProposal(
+  admin: any,
+  portal: { id: string; organization_id: string; client_id: number },
+  event: ProposalPushEvent,
+) {
+  try {
+    configureWebPush();
+
+    const [{ data: client }, { data: proposal }, { data: subscriptions, error: subscriptionsError }] = await Promise.all([
+      admin.from('clients').select('nome').eq('id', portal.client_id).maybeSingle(),
+      event.proposalId
+        ? admin.from('saved_pdfs').select('proposal_option_name,total_preco').eq('id', event.proposalId).maybeSingle()
+        : Promise.resolve({ data: null }),
+      admin
+        .from('agenda_push_subscriptions')
+        .select('id,endpoint,p256dh,auth')
+        .eq('organization_id', portal.organization_id)
+        .eq('enabled', true),
+    ]);
+
+    if (subscriptionsError) throw subscriptionsError;
+    if (!subscriptions?.length) return;
+
+    const clientName = cleanText(client?.nome, 80) || 'Cliente';
+    const proposalName = cleanText(proposal?.proposal_option_name, 80) || 'Proposta';
+    const proposalValue = Number(proposal?.total_preco || 0);
+    const note = cleanText(event.body, 140);
+
+    let title = `${clientName} respondeu a proposta`;
+    let body = note || 'Abra o Historico para ver a resposta.';
+
+    if (event.kind === 'message') {
+      title = `${clientName} enviou uma mensagem`;
+    } else if (event.kind === 'approved') {
+      title = `${clientName} aprovou a proposta`;
+      body = `${proposalName}${proposalValue > 0 ? ` por ${formatCurrency(proposalValue)}` : ''}.`;
+    } else if (event.kind === 'negotiation') {
+      title = `${clientName} quer negociar`;
+      if (event.offerType === 'percentage' && Number.isFinite(event.offerValue)) {
+        body = `Pediu ${event.offerValue}% de desconto em ${proposalName}.${note ? ` ${note}` : ''}`;
+      } else if (event.offerType === 'fixed' && Number.isFinite(event.offerValue)) {
+        body = `Quer pagar ${formatCurrency(Number(event.offerValue))} em ${proposalName}.${note ? ` ${note}` : ''}`;
+      }
+    } else if (event.kind === 'rejected') {
+      title = `${clientName} recusou a proposta`;
+      body = note ? `Motivo: ${note}` : `${proposalName} foi recusada.`;
+    }
+
+    const pushPayload = JSON.stringify({
+      title,
+      body,
+      icon: '/icon-192x192.png',
+      badge: '/icon-192x192.png',
+      tag: `proposal-portal-${portal.id}`,
+      url: `/?tab=history&proposalPortal=${portal.id}`,
+      requireInteraction: event.kind !== 'message',
+      actions: [{ action: 'open-proposals', title: 'Ver resposta' }],
+    });
+
+    await Promise.all((subscriptions as PushSubscriptionRecord[]).map(async (subscription) => {
+      try {
+        await webpush.sendNotification(
+          {
+            endpoint: subscription.endpoint,
+            keys: { p256dh: subscription.p256dh, auth: subscription.auth },
+          },
+          pushPayload,
+          { TTL: 24 * 60 * 60, urgency: 'high' },
+        );
+      } catch (error) {
+        await disableExpiredSubscription(admin, subscription, error);
+        console.error('[proposal-portal] falha ao enviar push:', error);
+      }
+    }));
+  } catch (error) {
+    // A resposta do cliente deve ser salva mesmo se a notificacao estiver indisponivel.
+    console.error('[proposal-portal] notificacao push indisponivel:', error);
+  }
+}
 
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -133,6 +259,7 @@ Deno.serve(async (request) => {
       });
       if (error) throw error;
       await admin.from('proposal_portals').update({ last_activity_at: new Date().toISOString() }).eq('id', portal.id);
+      await notifyOrganizationAboutProposal(admin, portal, { kind: 'message', body });
       return json({ ok: true });
     }
 
@@ -181,6 +308,13 @@ Deno.serve(async (request) => {
         }).eq('id', portal.id),
         admin.from('saved_pdfs').update({ status: kind === 'approved' ? 'approved' : 'revised' }).eq('id', proposalId),
       ]);
+      await notifyOrganizationAboutProposal(admin, portal, {
+        kind: kind as ProposalPushKind,
+        proposalId,
+        body,
+        offerType,
+        offerValue,
+      });
       return json({ ok: true, status: nextStatus });
     }
 

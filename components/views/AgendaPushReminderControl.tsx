@@ -40,9 +40,9 @@ const getStatusText = (state: AgendaPushState | null, errorMessage: string | nul
     if (!state.supported) return 'Indisponivel neste navegador';
     if (!state.hasPublicKey) return 'Configuracao pendente';
     if (state.permission === 'denied') return 'Bloqueado no navegador';
-    if (state.subscribed && state.dailySummaryEnabled) return `Ativo ${formatReminderLabel(state.reminderMinutes)} + resumo ${state.dailySummaryTime}`;
-    if (state.subscribed) return `Ativo ${formatReminderLabel(state.reminderMinutes)}`;
-    return 'Desativado';
+    if (state.subscribed && state.dailySummaryEnabled) return `Agenda e propostas · ativo ${formatReminderLabel(state.reminderMinutes)} + resumo ${state.dailySummaryTime}`;
+    if (state.subscribed) return `Agenda e propostas · ativo ${formatReminderLabel(state.reminderMinutes)}`;
+    return 'Agenda e propostas · desativado';
 };
 
 interface AgendaPushReminderControlProps {
@@ -189,7 +189,7 @@ const AgendaPushReminderControl: React.FC<AgendaPushReminderControlProps> = ({ o
                         <i className="far fa-bell text-sm" aria-hidden="true"></i>
                     </span>
                     <div className="min-w-0">
-                        <p className="truncate text-sm font-black leading-tight text-[var(--text-strong)]">Alertas</p>
+                        <p className="truncate text-sm font-black leading-tight text-[var(--text-strong)]">Alertas no celular</p>
                         <p className="truncate text-xs font-semibold text-[var(--text-muted)]">{getStatusText(state, errorMessage, successMessage)}</p>
                     </div>
                 </div>
