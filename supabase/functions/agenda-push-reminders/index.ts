@@ -24,6 +24,8 @@ const ENDED_NOTIFICATION_SENTINEL = -1;
 // disparar alertas para agendamentos antigos no primeiro ciclo apos o deploy.
 const ENDED_LOOKBACK_MINUTES = 60;
 const AGENDA_URL = '/?tab=agenda';
+const PROPOSALS_URL = '/?tab=proposals';
+const PROPOSAL_CONDITION_WINDOW_MS = 24 * 60 * 60_000;
 const TIME_ZONE = 'America/Sao_Paulo';
 const RECEIPT_URL = 'https://avlefzsipbqvollukgyt.supabase.co/functions/v1/agenda-push-receipts';
 
@@ -57,9 +59,20 @@ interface PushSubscriptionRecord {
 }
 
 interface PushReceiptTarget {
-  kind: 'reminder' | 'daily-summary';
+  kind: 'reminder' | 'daily-summary' | 'proposal-condition';
   id: string;
   token: string;
+}
+
+interface ProposalConditionReminder {
+  portal_id: string;
+  saved_pdf_id: number;
+  organization_id: string;
+  client_name: string;
+  proposal_name: string;
+  final_value: number;
+  discount_amount: number;
+  expires_at: string;
 }
 
 function jsonResponse(body: Record<string, unknown>, status = 200): Response {
@@ -454,6 +467,73 @@ async function fetchDailySummarySubscriptions(
   return data || [];
 }
 
+async function fetchDueProposalConditions(
+  adminClient: ReturnType<typeof createSupabaseAdminClient>,
+  now: Date,
+): Promise<ProposalConditionReminder[]> {
+  const horizon = new Date(now.getTime() + PROPOSAL_CONDITION_WINDOW_MS);
+  const { data: items, error: itemsError } = await adminClient
+    .from('proposal_portal_items')
+    .select('portal_id,saved_pdf_id,condition_final_value,condition_discount_amount,condition_expires_at')
+    .gt('condition_expires_at', now.toISOString())
+    .lte('condition_expires_at', horizon.toISOString())
+    .not('condition_final_value', 'is', null);
+
+  if (itemsError) throw itemsError;
+  if (!items?.length) return [];
+
+  const portalIds = uniqueValues(items.map((item: Record<string, unknown>) => String(item.portal_id || '')));
+  const pdfIds = [...new Set(items.map((item: Record<string, unknown>) => Number(item.saved_pdf_id)).filter(Number.isFinite))];
+
+  const [{ data: portals, error: portalsError }, { data: pdfs, error: pdfsError }] = await Promise.all([
+    adminClient
+      .from('proposal_portals')
+      .select('id,organization_id,client_id,status')
+      .in('id', portalIds)
+      .in('status', ['active', 'negotiating']),
+    adminClient
+      .from('saved_pdfs')
+      .select('id,proposal_option_name')
+      .in('id', pdfIds),
+  ]);
+
+  if (portalsError) throw portalsError;
+  if (pdfsError) throw pdfsError;
+  if (!portals?.length) return [];
+
+  const clientIds = [...new Set(portals.map((portal: Record<string, unknown>) => Number(portal.client_id)).filter(Number.isFinite))];
+  const { data: clients, error: clientsError } = await adminClient
+    .from('clients')
+    .select('id,nome')
+    .in('id', clientIds);
+
+  if (clientsError) throw clientsError;
+
+  const portalById = new Map(portals.map((portal: Record<string, unknown>) => [String(portal.id), portal]));
+  const pdfById = new Map((pdfs || []).map((pdf: Record<string, unknown>) => [Number(pdf.id), pdf]));
+  const clientById = new Map((clients || []).map((client: Record<string, unknown>) => [Number(client.id), client]));
+
+  return items.flatMap((item: Record<string, unknown>) => {
+    const portal = portalById.get(String(item.portal_id));
+    if (!portal?.organization_id || !item.condition_expires_at) return [];
+
+    const savedPdfId = Number(item.saved_pdf_id);
+    const client = clientById.get(Number(portal.client_id));
+    const pdf = pdfById.get(savedPdfId);
+
+    return [{
+      portal_id: String(item.portal_id),
+      saved_pdf_id: savedPdfId,
+      organization_id: String(portal.organization_id),
+      client_name: String(client?.nome || 'Cliente'),
+      proposal_name: String(pdf?.proposal_option_name || 'Proposta'),
+      final_value: Number(item.condition_final_value || 0),
+      discount_amount: Number(item.condition_discount_amount || 0),
+      expires_at: String(item.condition_expires_at),
+    }];
+  });
+}
+
 // "Orcamentos sem retorno" por usuario: nao aprovados, nao arquivados, sem
 // agendamento vinculado e enviados ha mais de N dias. Defensivo: se a tabela/
 // colunas nao existirem, devolve mapa vazio (so omite a linha de orcamentos).
@@ -796,6 +876,46 @@ function createDailySummaryPayload(
   });
 }
 
+function formatCurrency(value: number): string {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  }).format(value);
+}
+
+function createProposalConditionPayload(
+  condition: ProposalConditionReminder,
+  receipt?: PushReceiptTarget,
+): string {
+  const expiry = new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: TIME_ZONE,
+  }).format(new Date(condition.expires_at));
+  const savings = condition.discount_amount > 0
+    ? ` Economia reservada: ${formatCurrency(condition.discount_amount)}.`
+    : '';
+
+  return JSON.stringify({
+    title: `O desconto de ${condition.client_name} vence amanhã`,
+    body: `A proposta de ${formatCurrency(condition.final_value)} ainda não foi aprovada. Vence em ${expiry}.${savings}`,
+    icon: '/icon-192x192.png',
+    badge: '/icon-192x192.png',
+    tag: `proposal-condition-${condition.portal_id}-${condition.saved_pdf_id}-${new Date(condition.expires_at).getTime()}`,
+    url: `${PROPOSALS_URL}&proposalPortal=${condition.portal_id}`,
+    actions: [
+      { action: 'open-proposals', title: 'Ver proposta' },
+      { action: 'message-client', title: 'Enviar mensagem' },
+    ],
+    timestamp: Date.now(),
+    vibrate: [220, 90, 220],
+    receipt: receipt ? { ...receipt, url: RECEIPT_URL } : null,
+    requireInteraction: true,
+  });
+}
+
 function createTestPayload(): string {
   const sentAt = new Intl.DateTimeFormat('pt-BR', {
     hour: '2-digit',
@@ -931,6 +1051,54 @@ async function markDeliveryFailed(
       status: 'failed',
       failed_at: new Date().toISOString(),
       error_message: error instanceof Error ? error.message : 'Falha ao enviar push',
+    })
+    .eq('id', deliveryId);
+}
+
+async function registerPendingProposalConditionDelivery(
+  adminClient: ReturnType<typeof createSupabaseAdminClient>,
+  condition: ProposalConditionReminder,
+  subscriptionId: string,
+): Promise<{ id: string; token: string } | null> {
+  const { data, error } = await adminClient
+    .from('proposal_condition_push_deliveries')
+    .insert({
+      portal_id: condition.portal_id,
+      saved_pdf_id: condition.saved_pdf_id,
+      subscription_id: subscriptionId,
+      condition_expires_at: condition.expires_at,
+      status: 'pending',
+    })
+    .select('id,receipt_token')
+    .single();
+
+  if (error) {
+    if ((error as { code?: string }).code === '23505') return null;
+    throw error;
+  }
+
+  return {
+    id: data.id as string,
+    token: data.receipt_token as string,
+  };
+}
+
+async function markProposalConditionDelivery(
+  adminClient: ReturnType<typeof createSupabaseAdminClient>,
+  deliveryId: string,
+  status: 'sent' | 'failed',
+  error?: unknown,
+): Promise<void> {
+  await adminClient
+    .from('proposal_condition_push_deliveries')
+    .update(status === 'sent' ? {
+      status,
+      sent_at: new Date().toISOString(),
+      error_message: null,
+    } : {
+      status,
+      failed_at: new Date().toISOString(),
+      error_message: error instanceof Error ? error.message : 'Falha ao enviar alerta da condição',
     })
     .eq('id', deliveryId);
 }
@@ -1080,6 +1248,53 @@ async function handleTestRequest(req: Request): Promise<Response> {
   }, sent > 0 ? 200 : 400);
 }
 
+async function handleProposalConditionTestRequest(req: Request): Promise<Response> {
+  configureWebPush();
+
+  const adminClient = createSupabaseAdminClient();
+  const userId = await getAuthenticatedUserId(req.headers.get('Authorization'));
+  if (!userId) return jsonResponse({ success: false, error: 'Usuario nao autenticado' }, 401);
+
+  const profiles = await fetchProfiles(adminClient, [userId]);
+  const organizationId = profiles.get(userId)?.organization_id ?? null;
+  const subscriptions = await fetchSubscriptions(
+    adminClient,
+    [userId],
+    organizationId ? [organizationId] : [],
+  );
+  const sample: ProposalConditionReminder = {
+    portal_id: 'test',
+    saved_pdf_id: 0,
+    organization_id: organizationId || '',
+    client_name: 'Cliente de teste',
+    proposal_name: 'Proposta de teste',
+    final_value: 4850,
+    discount_amount: 500,
+    expires_at: new Date(Date.now() + PROPOSAL_CONDITION_WINDOW_MS).toISOString(),
+  };
+
+  let sent = 0;
+  let failed = 0;
+  for (const subscription of subscriptions) {
+    try {
+      await sendPushToSubscription(subscription, createProposalConditionPayload(sample));
+      sent += 1;
+    } catch (error) {
+      await disableExpiredSubscription(adminClient, subscription, error);
+      failed += 1;
+      console.error('[agenda-push-reminders] falha ao testar alerta da condição:', error);
+    }
+  }
+
+  return jsonResponse({
+    success: sent > 0,
+    sent,
+    failed,
+    subscriptions: subscriptions.length,
+    error: sent > 0 ? null : 'Nenhum dispositivo ativo recebeu o teste',
+  }, sent > 0 ? 200 : 400);
+}
+
 async function handleDailySummaryTestRequest(req: Request): Promise<Response> {
   configureWebPush();
 
@@ -1221,6 +1436,56 @@ async function processDailySummaries(
   };
 }
 
+async function processProposalConditionNotifications(
+  adminClient: ReturnType<typeof createSupabaseAdminClient>,
+  now: Date,
+): Promise<{ checked: number; sent: number; skipped: number; failed: number }> {
+  const conditions = await fetchDueProposalConditions(adminClient, now);
+  if (conditions.length === 0) return { checked: 0, sent: 0, skipped: 0, failed: 0 };
+
+  const organizationIds = uniqueValues(conditions.map((condition) => condition.organization_id));
+  const subscriptions = await fetchSubscriptions(adminClient, [], organizationIds);
+  let sent = 0;
+  let skipped = 0;
+  let failed = 0;
+
+  for (const condition of conditions) {
+    const scopedSubscriptions = subscriptions.filter(
+      (subscription) => subscription.organization_id === condition.organization_id,
+    );
+
+    for (const subscription of scopedSubscriptions) {
+      const delivery = await registerPendingProposalConditionDelivery(
+        adminClient,
+        condition,
+        subscription.id,
+      );
+
+      if (!delivery) {
+        skipped += 1;
+        continue;
+      }
+
+      try {
+        await sendPushToSubscription(subscription, createProposalConditionPayload(condition, {
+          kind: 'proposal-condition',
+          id: delivery.id,
+          token: delivery.token,
+        }));
+        await markProposalConditionDelivery(adminClient, delivery.id, 'sent');
+        sent += 1;
+      } catch (error) {
+        await markProposalConditionDelivery(adminClient, delivery.id, 'failed', error);
+        await disableExpiredSubscription(adminClient, subscription, error);
+        failed += 1;
+        console.error('[agenda-push-reminders] falha ao enviar alerta da condição:', error);
+      }
+    }
+  }
+
+  return { checked: conditions.length, sent, skipped, failed };
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders, status: 200 });
@@ -1239,6 +1504,10 @@ serve(async (req) => {
 
     if (body?.type === 'daily-summary-test') {
       return await handleDailySummaryTestRequest(req);
+    }
+
+    if (body?.type === 'proposal-condition-test') {
+      return await handleProposalConditionTestRequest(req);
     }
 
     assertCronSecret(req);
@@ -1310,6 +1579,7 @@ serve(async (req) => {
 
     const dailySummary = await processDailySummaries(adminClient, now);
     const endedNotifications = await processEndedNotifications(adminClient, now);
+    const proposalConditions = await processProposalConditionNotifications(adminClient, now);
 
     return jsonResponse({
       success: true,
@@ -1325,6 +1595,10 @@ serve(async (req) => {
       endedSent: endedNotifications.sent,
       endedSkipped: endedNotifications.skipped,
       endedFailed: endedNotifications.failed,
+      proposalConditionsChecked: proposalConditions.checked,
+      proposalConditionsSent: proposalConditions.sent,
+      proposalConditionsSkipped: proposalConditions.skipped,
+      proposalConditionsFailed: proposalConditions.failed,
     });
   } catch (error) {
     console.error('[agenda-push-reminders] erro:', error);

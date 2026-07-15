@@ -8,7 +8,7 @@ const corsHeaders = {
   'Access-Control-Max-Age': '86400',
 };
 
-type ReceiptKind = 'reminder' | 'daily-summary';
+type ReceiptKind = 'reminder' | 'daily-summary' | 'proposal-condition';
 type ReceiptStage = 'received' | 'shown' | 'show_failed' | 'clicked';
 
 function jsonResponse(body: Record<string, unknown>, status = 200): Response {
@@ -38,7 +38,7 @@ function createSupabaseAdminClient() {
 }
 
 function isReceiptKind(value: unknown): value is ReceiptKind {
-  return value === 'reminder' || value === 'daily-summary';
+  return value === 'reminder' || value === 'daily-summary' || value === 'proposal-condition';
 }
 
 function isReceiptStage(value: unknown): value is ReceiptStage {
@@ -91,7 +91,9 @@ serve(async (req) => {
 
     const table = kind === 'daily-summary'
       ? 'agenda_push_daily_summaries'
-      : 'agenda_push_deliveries';
+      : kind === 'proposal-condition'
+        ? 'proposal_condition_push_deliveries'
+        : 'agenda_push_deliveries';
     const adminClient = createSupabaseAdminClient();
     const { data, error } = await adminClient
       .from(table)

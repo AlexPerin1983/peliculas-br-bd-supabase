@@ -4,6 +4,23 @@ const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY || '';
 const DEFAULT_REMINDER_MINUTES = 30;
 const DEFAULT_DAILY_SUMMARY_TIME = '18:00';
 const SERVICE_WORKER_READY_TIMEOUT_MS = 8000;
+const PUSH_REPAIR_INTERVAL_MS = 6 * 60 * 60 * 1000;
+const PUSH_AUTO_REPAIR_DISABLED_KEY = 'peliculas-br-push-auto-repair-disabled';
+let lastPushRepairAttemptAt = 0;
+let pushRepairPromise: Promise<AgendaPushState | null> | null = null;
+
+const isAutoRepairDisabled = () => {
+    try { return localStorage.getItem(PUSH_AUTO_REPAIR_DISABLED_KEY) === '1'; } catch { return false; }
+};
+
+const setAutoRepairDisabled = (disabled: boolean) => {
+    try {
+        if (disabled) localStorage.setItem(PUSH_AUTO_REPAIR_DISABLED_KEY, '1');
+        else localStorage.removeItem(PUSH_AUTO_REPAIR_DISABLED_KEY);
+    } catch {
+        // Armazenamento indisponivel: a assinatura do navegador continua valendo.
+    }
+};
 
 export interface AgendaPushState {
     supported: boolean;
@@ -182,12 +199,52 @@ export async function enableAgendaPushNotifications(): Promise<AgendaPushState> 
         applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
     });
 
+    setAutoRepairDisabled(false);
     await persistSubscription(subscription, true);
     return getAgendaPushState();
 }
 
+/**
+ * Revalida silenciosamente o dispositivo quando o app e aberto ou retomado.
+ * Nao pede permissao: so atua quando o usuario ja autorizou notificacoes.
+ */
+export async function repairAgendaPushSubscription(force = false): Promise<AgendaPushState | null> {
+    if (isAutoRepairDisabled() || !isAgendaPushSupported() || Notification.permission !== 'granted' || !VAPID_PUBLIC_KEY) {
+        return null;
+    }
+
+    if (!force && Date.now() - lastPushRepairAttemptAt < PUSH_REPAIR_INTERVAL_MS) {
+        return null;
+    }
+    if (pushRepairPromise) return pushRepairPromise;
+
+    pushRepairPromise = (async () => {
+        const registration = await getReadyServiceWorkerRegistration();
+        let subscription = await registration.pushManager.getSubscription();
+
+        if (!subscription) {
+            subscription = await registration.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+            });
+        }
+
+        await persistSubscription(subscription, true);
+        lastPushRepairAttemptAt = Date.now();
+        return getAgendaPushState();
+    })();
+
+    try {
+        return await pushRepairPromise;
+    } finally {
+        pushRepairPromise = null;
+    }
+}
+
 export async function disableAgendaPushNotifications(): Promise<AgendaPushState> {
     const subscription = await getCurrentPushSubscription();
+
+    setAutoRepairDisabled(true);
 
     if (subscription) {
         await persistSubscription(subscription, false);
@@ -280,4 +337,14 @@ export async function sendAgendaPushDailySummaryTest(): Promise<void> {
     if (!data.sent) {
         throw new Error('Nenhum dispositivo ativo recebeu o resumo de teste.');
     }
+}
+
+export async function sendProposalConditionPushTest(): Promise<void> {
+    const { data, error } = await supabase.functions.invoke('agenda-push-reminders', {
+        body: { type: 'proposal-condition-test' },
+    });
+
+    if (error) throw new Error(error.message || 'Nao foi possivel enviar o teste de desconto.');
+    if (!data?.success) throw new Error(data?.error || 'Nao foi possivel enviar o teste de desconto.');
+    if (!data.sent) throw new Error('Nenhum dispositivo ativo recebeu o teste de desconto.');
 }

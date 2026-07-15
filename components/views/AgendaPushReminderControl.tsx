@@ -6,6 +6,7 @@ import {
     getAgendaPushState,
     sendAgendaPushDailySummaryTest,
     sendAgendaPushTest,
+    sendProposalConditionPushTest,
     updateAgendaPushDailySummary,
     updateAgendaPushReminderMinutes,
 } from '../../services/agendaPushNotifications';
@@ -51,7 +52,7 @@ interface AgendaPushReminderControlProps {
 
 const AgendaPushReminderControl: React.FC<AgendaPushReminderControlProps> = ({ onActiveChange }) => {
     const [state, setState] = useState<AgendaPushState | null>(null);
-    const [busyAction, setBusyAction] = useState<'toggle' | 'test' | 'reminder' | 'summary' | 'summaryTest' | null>(null);
+    const [busyAction, setBusyAction] = useState<'toggle' | 'test' | 'reminder' | 'summary' | 'summaryTest' | 'conditionTest' | null>(null);
     const [summaryTime, setSummaryTime] = useState('18:00');
     const [reminderMinutes, setReminderMinutes] = useState(30);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -169,6 +170,21 @@ const AgendaPushReminderControl: React.FC<AgendaPushReminderControlProps> = ({ o
             setSuccessMessage('Resumo de teste enviado');
         } catch (error) {
             setErrorMessage(error instanceof Error ? error.message : 'Nao foi possivel enviar o resumo de teste.');
+        } finally {
+            setBusyAction(null);
+        }
+    };
+
+    const handleConditionTest = async () => {
+        setBusyAction('conditionTest');
+        setErrorMessage(null);
+        setSuccessMessage(null);
+
+        try {
+            await sendProposalConditionPushTest();
+            setSuccessMessage('Alerta de desconto enviado');
+        } catch (error) {
+            setErrorMessage(error instanceof Error ? error.message : 'Nao foi possivel testar o alerta de desconto.');
         } finally {
             setBusyAction(null);
         }
@@ -306,6 +322,23 @@ const AgendaPushReminderControl: React.FC<AgendaPushReminderControlProps> = ({ o
                             {busyAction === 'summaryTest' ? '...' : 'Testar resumo'}
                         </button>
                     </div>
+                </div>
+            ) : null}
+
+            {isEnabled && isExpanded ? (
+                <div className="flex flex-col gap-2 border-t border-[var(--border-subtle)] px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                        <p className="text-xs font-black uppercase text-[var(--text-muted)]">Descontos das propostas</p>
+                        <p className="text-xs font-semibold text-[var(--text-muted)]">Aviso nativo automático quando faltar até 24 horas</p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={handleConditionTest}
+                        disabled={isActionDisabled}
+                        className="inline-flex h-9 items-center justify-center rounded-[var(--radius-control)] border border-blue-500/40 bg-blue-50 px-3 text-xs font-black text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-55 dark:border-blue-400/30 dark:bg-blue-950/30 dark:text-blue-200"
+                    >
+                        {busyAction === 'conditionTest' ? '...' : 'Testar desconto'}
+                    </button>
                 </div>
             ) : null}
         </div>

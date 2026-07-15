@@ -3,6 +3,7 @@ import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../services/supabaseClient';
 import { Profile } from '../types';
 import { getSessionScope } from '../services/sessionScope';
+import { repairAgendaPushSubscription } from '../services/agendaPushNotifications';
 
 interface AuthContextType {
     session: Session | null;
@@ -233,6 +234,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             subscription.unsubscribe();
         };
     }, [connectionRetryKey]);
+
+    useEffect(() => {
+        if (!user) return;
+
+        const repairPush = () => {
+            if (document.visibilityState === 'hidden') return;
+            void repairAgendaPushSubscription().catch((error) => {
+                console.warn('[push] Nao foi possivel renovar a assinatura silenciosamente:', error);
+            });
+        };
+
+        repairPush();
+        document.addEventListener('visibilitychange', repairPush);
+        window.addEventListener('pageshow', repairPush);
+
+        return () => {
+            document.removeEventListener('visibilitychange', repairPush);
+            window.removeEventListener('pageshow', repairPush);
+        };
+    }, [user?.id]);
 
     const fetchProfile = async (_userId: string, email: string, options?: { silent?: boolean }) => {
         const silent = options?.silent ?? false;
