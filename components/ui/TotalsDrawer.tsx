@@ -10,6 +10,7 @@ import {
 } from '../../src/lib/proposalAdjustments';
 import type { FilmPriceField } from '../../src/lib/filmPriceOverrides';
 import { resetFilmPriceOverrides, updateFilmPriceOverrides } from '../../src/lib/filmPriceOverrides';
+import { selectAllOnFocus } from '../../src/lib/selectOnFocus';
 
 interface TotalsDrawerProps {
     isOpen: boolean;
@@ -128,52 +129,81 @@ const ProposalPriceInput: React.FC<ProposalPriceInputProps> = ({
     customized,
     onChange,
     onReset,
-}) => (
-    <div className={`rounded-lg border p-2 transition-colors ${customized
-        ? 'border-blue-300 bg-blue-50/80 dark:border-blue-800 dark:bg-blue-950/30'
-        : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900/70'
-    }`}>
-        <div className="flex items-center gap-2">
-            <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5">
-                    <span className="truncate text-[11px] font-semibold text-slate-600 dark:text-slate-300">{label}</span>
-                    {customized && (
-                        <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-blue-700 dark:bg-blue-900/50 dark:text-blue-200">
-                            Personalizado
-                        </span>
-                    )}
-                </div>
-                <span className="mt-0.5 block text-[9px] text-slate-400">
-                    {customized ? `Catálogo: ${formatNumberBR(catalogValue)}/${unit}` : 'Somente neste orçamento'}
-                </span>
+}) => {
+    const displayValue = customized ? value : catalogValue;
+    const inputId = React.useId();
+    const toInputValue = (nextValue: string | number) => String(nextValue ?? '').replace(',', '.');
+    const [draftValue, setDraftValue] = useState(() => toInputValue(displayValue));
+
+    useEffect(() => {
+        setDraftValue(toInputValue(displayValue));
+    }, [displayValue]);
+
+    const handlePriceChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const nextValue = event.target.value;
+        setDraftValue(nextValue);
+        if (!nextValue) return;
+
+        const parsed = Number(nextValue.replace(',', '.'));
+        if (Number.isFinite(parsed) && Math.abs(parsed - catalogValue) < 0.001) {
+            onReset();
+            return;
+        }
+        onChange(nextValue);
+    };
+
+    return (
+        <div className={`rounded-xl border p-2.5 transition-colors ${customized
+            ? 'border-blue-400 bg-blue-50/80 dark:border-blue-700 dark:bg-blue-950/30'
+            : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900/70'
+        }`}>
+            <div className="mb-1.5 flex items-center justify-between gap-3">
+                <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-200" htmlFor={inputId}>
+                    {label} (R$)
+                </label>
+                {customized && (
+                    <button
+                        type="button"
+                        onClick={onReset}
+                        className="inline-flex shrink-0 items-center gap-1 text-[10px] font-bold text-blue-700 dark:text-blue-300"
+                        aria-label={`Restaurar ${label} do catálogo`}
+                    >
+                        <RotateCcw className="h-3 w-3" aria-hidden="true" />
+                        Usar catálogo
+                    </button>
+                )}
             </div>
-            <label className="flex h-9 w-[142px] shrink-0 items-center overflow-hidden rounded-lg border border-slate-200 bg-white focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-950">
-                <span className="pl-2.5 text-xs font-bold text-slate-400">R$</span>
+
+            <div className="flex h-11 w-full items-center overflow-hidden rounded-lg border border-slate-300 bg-white focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/25 dark:border-slate-600 dark:bg-slate-950">
+                <span className="pl-3 text-sm font-bold text-slate-400">R$</span>
                 <input
-                    type="text"
+                    id={inputId}
+                    type="number"
                     inputMode="decimal"
-                    value={customized ? normalizeAdjustmentInputValue(value) : normalizeAdjustmentInputValue(catalogValue)}
-                    onChange={(event) => onChange(normalizeAdjustmentInputValue(event.target.value))}
-                    onBlur={(event) => { if (!event.target.value.trim()) onReset(); }}
+                    enterKeyHint="done"
+                    min="0"
+                    step="0.01"
+                    value={draftValue}
+                    onChange={handlePriceChange}
+                    onFocus={selectAllOnFocus}
+                    onBlur={(event) => {
+                        if (!event.target.value.trim()) setDraftValue(toInputValue(displayValue));
+                    }}
                     aria-label={label}
-                    className="h-full min-w-0 flex-1 bg-transparent px-1.5 text-right text-sm font-black text-slate-900 outline-none dark:text-white"
+                    className="h-full min-w-0 flex-1 bg-transparent px-2 text-lg font-semibold text-slate-900 outline-none dark:text-white"
                 />
-                <span className="pr-2 text-[10px] font-semibold text-slate-400">/{unit}</span>
-            </label>
-            {customized && (
-                <button
-                    type="button"
-                    onClick={onReset}
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-blue-700 transition-colors hover:bg-blue-100 dark:text-blue-300 dark:hover:bg-blue-900/40"
-                    aria-label={`Restaurar ${label} do catálogo`}
-                    title="Restaurar valor do catálogo"
-                >
-                    <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
-                </button>
-            )}
+                <span className="pr-3 text-xs font-semibold text-slate-400">/{unit}</span>
+            </div>
+
+            <div className="mt-1.5 flex items-center justify-between gap-2 text-[9px]">
+                <span className={customized ? 'font-semibold text-blue-600 dark:text-blue-300' : 'text-slate-400'}>
+                    {customized ? 'Preço personalizado neste orçamento' : 'Preço atual do catálogo'}
+                </span>
+                {customized && <span className="shrink-0 text-slate-400">Original: {formatNumberBR(catalogValue)}/{unit}</span>}
+            </div>
         </div>
-    </div>
-);
+    );
+};
 
 interface FilmPricingEditorProps {
     group: any;
@@ -226,7 +256,8 @@ const FilmPricingEditor: React.FC<FilmPricingEditorProps> = ({
             ? 'precoVendaMetroLinear'
             : 'preco';
     const advancedFields = (Object.keys(fields) as FilmPriceField[]).filter(field => field !== primaryField);
-    const hasAnyOverride = !!override && Object.keys(override).length > 0;
+    const overrideCount = override ? Object.keys(override).length : 0;
+    const advancedOverrideCount = advancedFields.filter(field => !!override && Object.prototype.hasOwnProperty.call(override, field)).length;
     const renderField = (field: FilmPriceField) => {
         const config = fields[field];
         const customized = !!override && Object.prototype.hasOwnProperty.call(override, field);
@@ -248,20 +279,17 @@ const FilmPricingEditor: React.FC<FilmPricingEditorProps> = ({
         <div className="space-y-2 rounded-xl border border-blue-100 bg-blue-50/40 p-2 dark:border-blue-900/40 dark:bg-blue-950/10">
             <div className="flex items-center justify-between gap-2 px-0.5">
                 <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                        <span className="text-[11px] font-black text-slate-800 dark:text-slate-100">Preço nesta proposta</span>
-                        {hasAnyOverride && <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">Personalizado</span>}
-                    </div>
+                    <span className="block text-[11px] font-black text-slate-800 dark:text-slate-100">Preço nesta proposta</span>
                     <p className="mt-0.5 text-[9px] text-slate-500 dark:text-slate-400">O catálogo continua com o preço original.</p>
                 </div>
-                {hasAnyOverride && (
+                {overrideCount > 1 && (
                     <button
                         type="button"
                         onClick={onResetAll}
-                        className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-700 dark:text-blue-300"
+                        className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-lg px-2 py-1.5 text-[9px] font-bold text-blue-700 hover:bg-blue-100 dark:text-blue-300 dark:hover:bg-blue-900/40"
                     >
                         <RotateCcw className="h-3 w-3" aria-hidden="true" />
-                        Restaurar tudo
+                        Restaurar preços
                     </button>
                 )}
             </div>
@@ -277,6 +305,11 @@ const FilmPricingEditor: React.FC<FilmPricingEditorProps> = ({
                 <span className="inline-flex items-center gap-2">
                     <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
                     Custos e outros preços
+                    {advancedOverrideCount > 0 && (
+                        <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[8px] font-bold text-blue-700 dark:bg-blue-900/50 dark:text-blue-200">
+                            {advancedOverrideCount} alterado{advancedOverrideCount > 1 ? 's' : ''}
+                        </span>
+                    )}
                 </span>
                 <i className={`fas fa-chevron-down text-[9px] transition-transform ${advancedOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
             </button>
