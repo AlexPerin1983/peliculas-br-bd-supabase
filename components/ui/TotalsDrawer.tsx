@@ -1,13 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Drawer } from 'vaul';
-import { CircleDollarSign, Eye, EyeOff, MinusCircle, Percent, PlusCircle, Shield, ShieldCheck } from 'lucide-react';
+import { CircleDollarSign, Eye, EyeOff, MinusCircle, Percent, PlusCircle, RotateCcw, Shield, ShieldCheck, SlidersHorizontal } from 'lucide-react';
 
-import { ProposalDiscount, Totals } from '../../types';
+import type { FilmPriceOverride, ProposalDiscount, Totals } from '../../types';
 import {
     getProposalAdjustmentInputs,
     normalizeAdjustmentInputValue,
     updateProposalAdjustmentInput,
 } from '../../src/lib/proposalAdjustments';
+import type { FilmPriceField } from '../../src/lib/filmPriceOverrides';
+import { resetFilmPriceOverrides, updateFilmPriceOverrides } from '../../src/lib/filmPriceOverrides';
 
 interface TotalsDrawerProps {
     isOpen: boolean;
@@ -108,6 +110,175 @@ const AdjustmentCard: React.FC<AdjustmentCardProps> = ({
     );
 };
 
+interface ProposalPriceInputProps {
+    label: string;
+    unit: string;
+    value: string | number;
+    catalogValue: number;
+    customized: boolean;
+    onChange: (value: string) => void;
+    onReset: () => void;
+}
+
+const ProposalPriceInput: React.FC<ProposalPriceInputProps> = ({
+    label,
+    unit,
+    value,
+    catalogValue,
+    customized,
+    onChange,
+    onReset,
+}) => (
+    <label className={`block rounded-xl border p-3 transition-colors ${customized
+        ? 'border-blue-300 bg-blue-50/80 dark:border-blue-800 dark:bg-blue-950/30'
+        : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900/70'
+    }`}>
+        <span className="mb-2 flex items-center justify-between gap-2">
+            <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">{label}</span>
+            {customized && (
+                <button
+                    type="button"
+                    onClick={(event) => { event.preventDefault(); onReset(); }}
+                    className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-blue-700 dark:bg-blue-900/50 dark:text-blue-200"
+                    aria-label={`Restaurar ${label} do catálogo`}
+                >
+                    <RotateCcw className="h-2.5 w-2.5" aria-hidden="true" />
+                    Personalizado
+                </button>
+            )}
+        </span>
+        <span className="flex h-11 items-center overflow-hidden rounded-lg border border-slate-200 bg-white focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-950">
+            <span className="pl-3 text-sm font-bold text-slate-400">R$</span>
+            <input
+                type="text"
+                inputMode="decimal"
+                value={customized ? normalizeAdjustmentInputValue(value) : normalizeAdjustmentInputValue(catalogValue)}
+                onChange={(event) => onChange(normalizeAdjustmentInputValue(event.target.value))}
+                onBlur={(event) => { if (!event.target.value.trim()) onReset(); }}
+                aria-label={label}
+                className="h-full min-w-0 flex-1 bg-transparent px-2 text-right text-base font-black text-slate-900 outline-none dark:text-white"
+            />
+            <span className="pr-3 text-xs font-semibold text-slate-400">/{unit}</span>
+        </span>
+        {customized && (
+            <span className="mt-1.5 block text-[10px] text-blue-600 dark:text-blue-300">
+                Catálogo: {formatNumberBR(catalogValue)}/{unit}
+            </span>
+        )}
+    </label>
+);
+
+interface FilmPricingEditorProps {
+    group: any;
+    isLaborOnly: boolean;
+    override?: FilmPriceOverride;
+    advancedOpen: boolean;
+    onToggleAdvanced: () => void;
+    onChange: (field: FilmPriceField, value: string | undefined) => void;
+    onResetAll: () => void;
+}
+
+const FilmPricingEditor: React.FC<FilmPricingEditorProps> = ({
+    group,
+    isLaborOnly,
+    override,
+    advancedOpen,
+    onToggleAdvanced,
+    onChange,
+    onResetAll,
+}) => {
+    const fields: Record<FilmPriceField, { label: string; unit: string; value: number; catalogValue: number }> = {
+        preco: {
+            label: 'Preço de venda por m²',
+            unit: 'm²',
+            value: group.unitPriceMaterial,
+            catalogValue: group.catalogUnitPriceMaterial,
+        },
+        maoDeObra: {
+            label: 'Mão de obra por m²',
+            unit: 'm²',
+            value: group.unitPriceLabor,
+            catalogValue: group.catalogUnitPriceLabor,
+        },
+        precoMetroLinear: {
+            label: 'Custo por metro linear',
+            unit: 'm',
+            value: group.unitPriceLinearMeter,
+            catalogValue: group.catalogUnitPriceLinearMeter,
+        },
+        precoVendaMetroLinear: {
+            label: 'Venda por metro linear',
+            unit: 'm',
+            value: group.unitSalePriceLinearMeter,
+            catalogValue: group.catalogUnitSalePriceLinearMeter,
+        },
+    };
+    const primaryField: FilmPriceField = isLaborOnly
+        ? 'maoDeObra'
+        : group.filmPricingMode === 'linear'
+            ? 'precoVendaMetroLinear'
+            : 'preco';
+    const advancedFields = (Object.keys(fields) as FilmPriceField[]).filter(field => field !== primaryField);
+    const hasAnyOverride = !!override && Object.keys(override).length > 0;
+    const renderField = (field: FilmPriceField) => {
+        const config = fields[field];
+        const customized = !!override && Object.prototype.hasOwnProperty.call(override, field);
+        return (
+            <ProposalPriceInput
+                key={field}
+                label={config.label}
+                unit={config.unit}
+                value={customized ? override?.[field] ?? '' : config.value}
+                catalogValue={config.catalogValue}
+                customized={customized}
+                onChange={(value) => onChange(field, value)}
+                onReset={() => onChange(field, undefined)}
+            />
+        );
+    };
+
+    return (
+        <div className="space-y-2 rounded-xl border border-blue-100 bg-blue-50/40 p-2.5 dark:border-blue-900/40 dark:bg-blue-950/10">
+            <div className="flex items-center justify-between gap-2 px-0.5">
+                <div>
+                    <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-black text-slate-800 dark:text-slate-100">Preço nesta proposta</span>
+                        {hasAnyOverride && <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">Personalizado</span>}
+                    </div>
+                    <p className="mt-0.5 text-[10px] text-slate-500 dark:text-slate-400">Não altera o catálogo da película.</p>
+                </div>
+                {hasAnyOverride && (
+                    <button
+                        type="button"
+                        onClick={onResetAll}
+                        className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-700 dark:text-blue-300"
+                    >
+                        <RotateCcw className="h-3 w-3" aria-hidden="true" />
+                        Restaurar tudo
+                    </button>
+                )}
+            </div>
+
+            {renderField(primaryField)}
+
+            <button
+                type="button"
+                onClick={onToggleAdvanced}
+                aria-expanded={advancedOpen}
+                className="flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-[11px] font-semibold text-slate-600 hover:bg-white/70 dark:text-slate-300 dark:hover:bg-slate-900/50"
+            >
+                <span className="inline-flex items-center gap-2">
+                    <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
+                    Custos e outros preços
+                </span>
+                <i className={`fas fa-chevron-down text-[9px] transition-transform ${advancedOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
+            </button>
+
+            {advancedOpen && <div className="grid gap-2">{advancedFields.map(renderField)}</div>}
+        </div>
+    );
+};
+
 export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
     isOpen,
     onClose,
@@ -123,6 +294,7 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
     onSelectOption
 }) => {
     const [openGroup, setOpenGroup] = useState<string | null>(null);
+    const [advancedPriceGroup, setAdvancedPriceGroup] = useState<string | null>(null);
     const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
     const hasMultipleOptions = options.length > 1 && !!onSelectOption;
@@ -189,6 +361,25 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
             next[filmName] = 'linear';
         }
         onUpdateGeneralDiscount({ ...generalDiscount, filmPricingModes: next });
+    };
+
+    const setFilmPrice = (filmName: string, field: FilmPriceField, value: string | undefined) => {
+        onUpdateGeneralDiscount({
+            ...generalDiscount,
+            filmPriceOverrides: updateFilmPriceOverrides(
+                generalDiscount.filmPriceOverrides,
+                filmName,
+                field,
+                value,
+            ),
+        });
+    };
+
+    const resetFilmPrices = (filmName: string) => {
+        onUpdateGeneralDiscount({
+            ...generalDiscount,
+            filmPriceOverrides: resetFilmPriceOverrides(generalDiscount.filmPriceOverrides, filmName),
+        });
     };
 
     const toggleGroup = (filmName: string) => {
@@ -327,6 +518,16 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                                                                 </div>
                                                             </div>
                                                         )}
+
+                                                        <FilmPricingEditor
+                                                            group={group}
+                                                            isLaborOnly={isLaborOnly}
+                                                            override={generalDiscount.filmPriceOverrides?.[group.filmName]}
+                                                            advancedOpen={advancedPriceGroup === group.filmName}
+                                                            onToggleAdvanced={() => setAdvancedPriceGroup(current => current === group.filmName ? null : group.filmName)}
+                                                            onChange={(field, value) => setFilmPrice(group.filmName, field, value)}
+                                                            onResetAll={() => resetFilmPrices(group.filmName)}
+                                                        />
 
                                                         {group.filmPricingMode === 'linear' && (
                                                             <div className="flex items-center justify-between rounded-lg bg-blue-50 px-2 py-1.5 dark:bg-blue-900/20">

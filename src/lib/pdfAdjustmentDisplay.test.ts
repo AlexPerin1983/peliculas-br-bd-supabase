@@ -138,4 +138,24 @@ describe('buildPdfAdjustmentDisplay', () => {
         expect(embeddedTotal).toBeCloseTo(10);
         expect(display.lineItems.map(item => item.embeddedIncreaseAmount)).toEqual([3.34, 3.33, 3.33]);
     });
+
+    it('usa o preço personalizado da proposta nas linhas do PDF', () => {
+        const display = buildPdfAdjustmentDisplay({
+            measurements: [buildMeasurement({ id: 1, largura: '2', altura: '1' })],
+            films,
+            pricingMode: 'complete',
+            generalAdjustment: {
+                filmPriceOverrides: { Blackout: { preco: '85' } }
+            },
+            totals: {
+                subtotal: 170,
+                totalItemDiscount: 0,
+                generalDiscountAmount: 0,
+                finalTotal: 170
+            }
+        });
+
+        expect(display.lineItems[0].basePrice).toBeCloseTo(170);
+        expect(display.lineItems[0].displayFinalItemPrice).toBeCloseTo(170);
+    });
 });

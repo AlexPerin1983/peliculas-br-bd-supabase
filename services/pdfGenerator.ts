@@ -1,4 +1,4 @@
-import { Client, UserInfo, Measurement, Film, ProposalPaymentConfig, ProposalPricingMode, SavedPDF, Totals } from '../types';
+import type { Client, UserInfo, Measurement, Film, FilmPriceOverrides, ProposalPaymentConfig, ProposalPricingMode, SavedPDF, Totals } from '../types';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { calculatePricingAreaM2 } from '../src/lib/pricingArea';
@@ -20,6 +20,7 @@ interface GeneralDiscount {
     increaseType?: 'percentage' | 'fixed' | 'none';
     pricingMode?: ProposalPricingMode;
     filmPricingModes?: { [filmName: string]: 'area' | 'linear' };
+    filmPriceOverrides?: FilmPriceOverrides;
     hideMeasurements?: boolean;
     incluirTermoResponsabilidade?: boolean;
 }
@@ -127,6 +128,7 @@ export const regeneratePDFFromSaved = async (client: Client, userInfo: UserInfo,
         increaseType: pdf.generalDiscount?.increaseType,
         pricingMode: pdf.generalDiscount?.pricingMode === 'labor_only' ? 'labor_only' : 'complete',
         filmPricingModes: pdf.generalDiscount?.filmPricingModes,
+        filmPriceOverrides: pdf.generalDiscount?.filmPriceOverrides,
         hideMeasurements: pdf.generalDiscount?.hideMeasurements,
         incluirTermoResponsabilidade: pdf.generalDiscount?.incluirTermoResponsabilidade,
     };
@@ -160,6 +162,7 @@ export const generateCombinedPDF = async (client: Client, userInfo: UserInfo, sa
             increaseType: pdf.generalDiscount?.increaseType,
             pricingMode: pdf.generalDiscount?.pricingMode === 'labor_only' ? 'labor_only' : 'complete',
             filmPricingModes: pdf.generalDiscount?.filmPricingModes,
+            filmPriceOverrides: pdf.generalDiscount?.filmPriceOverrides,
             hideMeasurements: pdf.generalDiscount?.hideMeasurements,
             incluirTermoResponsabilidade: pdf.generalDiscount?.incluirTermoResponsabilidade,
         } as GeneralDiscount,

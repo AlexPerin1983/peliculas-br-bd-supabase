@@ -1,9 +1,11 @@
-import type { Film, FilmPricingModes, Measurement, ProposalAdjustmentOperation, ProposalPricingMode, Totals } from '../../types';
+import type { Film, FilmPriceOverrides, FilmPricingModes, Measurement, ProposalAdjustmentOperation, ProposalPricingMode, Totals } from '../../types';
 import { calculatePricingAreaM2 } from './pricingArea';
+import { resolveFilmPrices } from './filmPriceOverrides';
 
 type PdfGeneralAdjustment = {
     operation?: ProposalAdjustmentOperation;
     filmPricingModes?: FilmPricingModes;
+    filmPriceOverrides?: FilmPriceOverrides;
 };
 
 type PdfDisplayTotals = Pick<Totals, 'subtotal' | 'totalItemDiscount' | 'generalDiscountAmount' | 'finalTotal' | 'generalIncreaseAmount' | 'generalFinalDiscountAmount' | 'groupedTotals'>;
@@ -61,11 +63,17 @@ const distributeAmount = (amount: number, weights: number[]) => {
     return floorShares.map(cents => cents / 100);
 };
 
-const getPricePerM2 = (film: Film | undefined, pricingMode: ProposalPricingMode) => {
+const getPricePerM2 = (
+    film: Film | undefined,
+    filmName: string,
+    pricingMode: ProposalPricingMode,
+    overrides?: FilmPriceOverrides,
+) => {
     if (!film) return 0;
-    if (pricingMode === 'labor_only') return film.maoDeObra || 0;
-    if (film.preco > 0) return film.preco;
-    return film.maoDeObra && film.maoDeObra > 0 ? film.maoDeObra : 0;
+    const prices = resolveFilmPrices(film, overrides, filmName);
+    if (pricingMode === 'labor_only') return prices.maoDeObra;
+    if (prices.preco > 0) return prices.preco;
+    return prices.maoDeObra > 0 ? prices.maoDeObra : 0;
 };
 
 const calculateItemDiscountAmount = (measurement: Measurement, basePrice: number) => {
@@ -101,6 +109,7 @@ export const buildPdfAdjustmentDisplay = ({
     totals: PdfDisplayTotals;
 }): PdfAdjustmentDisplay => {
     const filmPricingModes = generalAdjustment?.filmPricingModes || {};
+    const filmPriceOverrides = generalAdjustment?.filmPriceOverrides;
     const groupedTotals = totals.groupedTotals || {};
     const isLinearFilm = (filmName: string) => (
         pricingMode !== 'labor_only' && filmPricingModes[filmName] === 'linear'
@@ -114,7 +123,7 @@ export const buildPdfAdjustmentDisplay = ({
         const film = films.find(item => item.nome === measurement.pelicula);
         const linear = isLinearFilm(measurement.pelicula);
         // No modo metro linear o preço por linha é distribuído da venda da película (abaixo).
-        const basePrice = linear ? 0 : getPricePerM2(film, pricingMode) * m2;
+        const basePrice = linear ? 0 : getPricePerM2(film, measurement.pelicula, pricingMode, filmPriceOverrides) * m2;
         const itemDiscountAmount = linear ? 0 : calculateItemDiscountAmount(measurement, basePrice);
         const finalItemPrice = Math.max(0, basePrice - itemDiscountAmount);
 

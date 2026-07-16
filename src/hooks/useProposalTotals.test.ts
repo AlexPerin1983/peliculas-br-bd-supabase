@@ -475,4 +475,82 @@ describe('useProposalTotals', () => {
     expect(result.current.subtotal).toBeCloseTo(60);
     expect(result.current.groupedTotals?.Adesivo.filmPricingMode).toBe('area');
   });
+
+  it('recalcula a proposta com preços personalizados sem alterar o catálogo', () => {
+    const films: Film[] = [{
+      nome: 'Jateada',
+      preco: 100,
+      maoDeObra: 35,
+      precoMetroLinear: 25,
+      precoVendaMetroLinear: 80
+    }];
+    const measurements: UIMeasurement[] = [{
+      id: 1,
+      largura: '2',
+      altura: '1',
+      quantidade: 1,
+      ambiente: 'Sala',
+      tipoAplicacao: 'Interna',
+      pelicula: 'Jateada',
+      active: true
+    }];
+
+    const { result } = renderHook(() => useProposalTotals({
+      measurements,
+      films,
+      generalDiscount: {
+        value: '0',
+        type: 'percentage',
+        pricingMode: 'complete',
+        filmPriceOverrides: {
+          Jateada: { preco: '85', maoDeObra: '30', precoMetroLinear: '20' }
+        }
+      }
+    }));
+
+    expect(result.current.subtotal).toBeCloseTo(170);
+    expect(result.current.finalTotal).toBeCloseTo(170);
+    expect(result.current.totalMaterial).toBeCloseTo(170);
+    expect(result.current.totalLabor).toBeCloseTo(60);
+    expect(result.current.groupedTotals?.Jateada.unitPriceMaterial).toBe(85);
+    expect(result.current.groupedTotals?.Jateada.catalogUnitPriceMaterial).toBe(100);
+    expect(films[0].preco).toBe(100);
+  });
+
+  it('usa a venda e o custo personalizados no modo metro linear', () => {
+    const films: Film[] = [{
+      nome: 'Jateada',
+      preco: 100,
+      precoMetroLinear: 25,
+      precoVendaMetroLinear: 80
+    }];
+    const measurements: UIMeasurement[] = [{
+      id: 1,
+      largura: '1',
+      altura: '1',
+      quantidade: 1,
+      ambiente: 'Sala',
+      tipoAplicacao: 'Interna',
+      pelicula: 'Jateada',
+      active: true
+    }];
+
+    const { result } = renderHook(() => useProposalTotals({
+      measurements,
+      films,
+      generalDiscount: {
+        value: '0',
+        type: 'percentage',
+        pricingMode: 'complete',
+        filmPricingModes: { Jateada: 'linear' },
+        filmPriceOverrides: {
+          Jateada: { precoVendaMetroLinear: '60', precoMetroLinear: '20' }
+        }
+      }
+    }));
+
+    expect(result.current.finalTotal).toBeCloseTo(result.current.totalLinearMeters * 60);
+    expect(result.current.linearMeterCost).toBeCloseTo(result.current.totalLinearMeters * 20);
+    expect(result.current.groupedTotals?.Jateada.unitSalePriceLinearMeter).toBe(60);
+  });
 });

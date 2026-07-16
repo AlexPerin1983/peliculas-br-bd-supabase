@@ -227,4 +227,35 @@ describe('useProposalEditor', () => {
       { id: 'traffic', category: 'paid_traffic', amount: '20' }
     ]);
   });
+
+  it('carrega e preserva preços personalizados da opção salva', async () => {
+    mockedDb.getProposalOptions.mockResolvedValue([{
+      id: 70,
+      name: 'Atacado',
+      measurements: [],
+      generalDiscount: {
+        value: '',
+        type: 'percentage',
+        filmPriceOverrides: {
+          Blackout: { preco: '85', maoDeObra: '30' }
+        }
+      }
+    }]);
+
+    const { result } = buildHook();
+    await act(async () => {});
+
+    expect(result.current.generalDiscount.filmPriceOverrides).toEqual({
+      Blackout: { preco: '85', maoDeObra: '30' }
+    });
+
+    act(() => {
+      result.current.handleGeneralDiscountChange({
+        ...result.current.generalDiscount,
+        discountValue: '5'
+      });
+    });
+
+    expect(result.current.generalDiscount.filmPriceOverrides?.Blackout.preco).toBe('85');
+  });
 });

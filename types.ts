@@ -72,6 +72,17 @@ export type FilmPricingMode = 'area' | 'linear';
 
 export type FilmPricingModes = { [filmName: string]: FilmPricingMode };
 
+export interface FilmPriceOverride {
+    preco?: string | number;
+    maoDeObra?: string | number;
+    precoMetroLinear?: string | number;
+    precoVendaMetroLinear?: string | number;
+}
+
+// As películas ainda são identificadas pelo nome no editor da proposta.
+// O override pertence somente à opção/orçamento e nunca altera o catálogo.
+export type FilmPriceOverrides = { [filmName: string]: FilmPriceOverride };
+
 export type ProposalExpenseCategory = 'paid_traffic' | 'transport' | 'food' | 'tools' | 'material' | 'other';
 
 export interface ProposalFuelExpenseDetails {
@@ -129,6 +140,7 @@ export interface ProposalDiscount {
     increaseType?: 'percentage' | 'fixed';
     pricingMode?: ProposalPricingMode;
     filmPricingModes?: FilmPricingModes;
+    filmPriceOverrides?: FilmPriceOverrides;
     expenses?: ProposalExpense[];
     // Override por orçamento da ocultação de medidas no PDF (undefined = usa o padrão global do UserInfo).
     hideMeasurements?: boolean;
@@ -146,6 +158,7 @@ export interface SavedProposalDiscount {
     increaseType?: 'percentage' | 'fixed' | 'none';
     pricingMode?: ProposalPricingMode;
     filmPricingModes?: FilmPricingModes;
+    filmPriceOverrides?: FilmPriceOverrides;
     expenses?: ProposalExpense[];
     expenseSnapshot?: ProposalExpenseSnapshot;
     hideMeasurements?: boolean;
@@ -303,6 +316,10 @@ export interface Totals {
             filmPricingMode: FilmPricingMode;
             unitSalePriceLinearMeter: number;
             linearSaleSubtotal: number;
+            catalogUnitPriceMaterial: number;
+            catalogUnitPriceLabor: number;
+            catalogUnitPriceLinearMeter: number;
+            catalogUnitSalePriceLinearMeter: number;
         };
     };
 }
