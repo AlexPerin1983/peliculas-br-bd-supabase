@@ -539,11 +539,30 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                                                 <span className="truncate text-sm font-medium text-slate-800 dark:text-slate-100">{client.nome}</span>
                                                 {client.pinned && <i className="fas fa-star text-[10px] text-amber-400" aria-hidden="true"></i>}
                                             </div>
-                                            {subtitle && <p className="truncate text-xs text-slate-400 dark:text-slate-500">{subtitle}</p>}
+                                            <p className="truncate text-xs text-slate-400 dark:text-slate-500">
+                                                {subtitle || 'Sem telefone ou local informado'}
+                                            </p>
                                         </div>
                                     </div>
                                 );
                             }}
+                            renderSearchAction={(searchTerm) => (
+                                <li className="sticky bottom-0 border-t border-blue-100 bg-blue-50/95 p-3 backdrop-blur dark:border-blue-900/60 dark:bg-slate-900/95">
+                                    <p className="mb-2 text-center text-xs text-slate-600 dark:text-slate-300">
+                                        Não é nenhum destes clientes?
+                                    </p>
+                                    <ActionButton
+                                        type="button"
+                                        onClick={() => onAddNewClient(searchTerm)}
+                                        variant="secondary"
+                                        size="sm"
+                                        className="w-full border-blue-200 text-blue-700 dark:border-blue-800 dark:text-blue-300"
+                                    >
+                                        <i className="fas fa-user-plus" aria-hidden="true"></i>
+                                        Cadastrar novo “{searchTerm}”
+                                    </ActionButton>
+                                </li>
+                            )}
                             renderNoResults={(searchTerm) => (
                                 <li className="p-3 text-center">
                                     <p className="text-sm text-slate-500 mb-3">
@@ -555,8 +574,8 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                                         variant="secondary"
                                         size="sm"
                                     >
-                                        <i className="fas fa-plus"></i>
-                                        Adicionar "{searchTerm}"
+                                        <i className="fas fa-user-plus" aria-hidden="true"></i>
+                                        Cadastrar novo “{searchTerm}”
                                     </ActionButton>
                                 </li>
                             )}

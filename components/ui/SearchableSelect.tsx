@@ -16,6 +16,8 @@ interface SearchableSelectProps<T> {
     onFocus?: () => void;
     autoFocus?: boolean;
     renderNoResults?: (searchTerm: string) => React.ReactNode;
+    /** Ação exibida após os resultados quando há uma busca (ex.: cadastrar outro cliente). */
+    renderSearchAction?: (searchTerm: string, resultCount: number) => React.ReactNode;
     onMagicClick?: (searchTerm: string) => void;
     /** Conteúdo customizado de cada item (ex.: avatar + nome + telefone). */
     renderOption?: (option: T, isSelected: boolean) => React.ReactNode;
@@ -38,6 +40,7 @@ const SearchableSelect = <T extends { [key: string]: any }>({
     onFocus,
     autoFocus = false,
     renderNoResults,
+    renderSearchAction,
     onMagicClick,
     renderOption,
     searchFields,
@@ -199,6 +202,7 @@ const SearchableSelect = <T extends { [key: string]: any }>({
                             </li>
                         );
                     })}
+                    {debouncedSearchTerm && renderSearchAction?.(debouncedSearchTerm, filteredOptions.length)}
                 </>
             );
         }
