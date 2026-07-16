@@ -129,43 +129,50 @@ const ProposalPriceInput: React.FC<ProposalPriceInputProps> = ({
     onChange,
     onReset,
 }) => (
-    <label className={`block rounded-xl border p-3 transition-colors ${customized
+    <div className={`rounded-lg border p-2 transition-colors ${customized
         ? 'border-blue-300 bg-blue-50/80 dark:border-blue-800 dark:bg-blue-950/30'
         : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900/70'
     }`}>
-        <span className="mb-2 flex items-center justify-between gap-2">
-            <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">{label}</span>
+        <div className="flex items-center gap-2">
+            <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                    <span className="truncate text-[11px] font-semibold text-slate-600 dark:text-slate-300">{label}</span>
+                    {customized && (
+                        <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-blue-700 dark:bg-blue-900/50 dark:text-blue-200">
+                            Personalizado
+                        </span>
+                    )}
+                </div>
+                <span className="mt-0.5 block text-[9px] text-slate-400">
+                    {customized ? `Catálogo: ${formatNumberBR(catalogValue)}/${unit}` : 'Somente neste orçamento'}
+                </span>
+            </div>
+            <label className="flex h-9 w-[142px] shrink-0 items-center overflow-hidden rounded-lg border border-slate-200 bg-white focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-950">
+                <span className="pl-2.5 text-xs font-bold text-slate-400">R$</span>
+                <input
+                    type="text"
+                    inputMode="decimal"
+                    value={customized ? normalizeAdjustmentInputValue(value) : normalizeAdjustmentInputValue(catalogValue)}
+                    onChange={(event) => onChange(normalizeAdjustmentInputValue(event.target.value))}
+                    onBlur={(event) => { if (!event.target.value.trim()) onReset(); }}
+                    aria-label={label}
+                    className="h-full min-w-0 flex-1 bg-transparent px-1.5 text-right text-sm font-black text-slate-900 outline-none dark:text-white"
+                />
+                <span className="pr-2 text-[10px] font-semibold text-slate-400">/{unit}</span>
+            </label>
             {customized && (
                 <button
                     type="button"
-                    onClick={(event) => { event.preventDefault(); onReset(); }}
-                    className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-blue-700 dark:bg-blue-900/50 dark:text-blue-200"
+                    onClick={onReset}
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-blue-700 transition-colors hover:bg-blue-100 dark:text-blue-300 dark:hover:bg-blue-900/40"
                     aria-label={`Restaurar ${label} do catálogo`}
+                    title="Restaurar valor do catálogo"
                 >
-                    <RotateCcw className="h-2.5 w-2.5" aria-hidden="true" />
-                    Personalizado
+                    <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
                 </button>
             )}
-        </span>
-        <span className="flex h-11 items-center overflow-hidden rounded-lg border border-slate-200 bg-white focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-950">
-            <span className="pl-3 text-sm font-bold text-slate-400">R$</span>
-            <input
-                type="text"
-                inputMode="decimal"
-                value={customized ? normalizeAdjustmentInputValue(value) : normalizeAdjustmentInputValue(catalogValue)}
-                onChange={(event) => onChange(normalizeAdjustmentInputValue(event.target.value))}
-                onBlur={(event) => { if (!event.target.value.trim()) onReset(); }}
-                aria-label={label}
-                className="h-full min-w-0 flex-1 bg-transparent px-2 text-right text-base font-black text-slate-900 outline-none dark:text-white"
-            />
-            <span className="pr-3 text-xs font-semibold text-slate-400">/{unit}</span>
-        </span>
-        {customized && (
-            <span className="mt-1.5 block text-[10px] text-blue-600 dark:text-blue-300">
-                Catálogo: {formatNumberBR(catalogValue)}/{unit}
-            </span>
-        )}
-    </label>
+        </div>
+    </div>
 );
 
 interface FilmPricingEditorProps {
@@ -238,14 +245,14 @@ const FilmPricingEditor: React.FC<FilmPricingEditorProps> = ({
     };
 
     return (
-        <div className="space-y-2 rounded-xl border border-blue-100 bg-blue-50/40 p-2.5 dark:border-blue-900/40 dark:bg-blue-950/10">
+        <div className="space-y-2 rounded-xl border border-blue-100 bg-blue-50/40 p-2 dark:border-blue-900/40 dark:bg-blue-950/10">
             <div className="flex items-center justify-between gap-2 px-0.5">
-                <div>
+                <div className="min-w-0">
                     <div className="flex items-center gap-2">
                         <span className="text-[11px] font-black text-slate-800 dark:text-slate-100">Preço nesta proposta</span>
                         {hasAnyOverride && <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">Personalizado</span>}
                     </div>
-                    <p className="mt-0.5 text-[10px] text-slate-500 dark:text-slate-400">Não altera o catálogo da película.</p>
+                    <p className="mt-0.5 text-[9px] text-slate-500 dark:text-slate-400">O catálogo continua com o preço original.</p>
                 </div>
                 {hasAnyOverride && (
                     <button
@@ -265,7 +272,7 @@ const FilmPricingEditor: React.FC<FilmPricingEditorProps> = ({
                 type="button"
                 onClick={onToggleAdvanced}
                 aria-expanded={advancedOpen}
-                className="flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-[11px] font-semibold text-slate-600 hover:bg-white/70 dark:text-slate-300 dark:hover:bg-slate-900/50"
+                className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-[10px] font-semibold text-slate-600 hover:bg-white/70 dark:text-slate-300 dark:hover:bg-slate-900/50"
             >
                 <span className="inline-flex items-center gap-2">
                     <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
@@ -295,6 +302,7 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
 }) => {
     const [openGroup, setOpenGroup] = useState<string | null>(null);
     const [advancedPriceGroup, setAdvancedPriceGroup] = useState<string | null>(null);
+    const [adjustmentsOpen, setAdjustmentsOpen] = useState(false);
     const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
     const hasMultipleOptions = options.length > 1 && !!onSelectOption;
@@ -328,10 +336,9 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
     const finalDiscountAmount = totals.generalFinalDiscountAmount || 0;
 
     useEffect(() => {
-        if (totals.groupedTotals && Object.keys(totals.groupedTotals).length > 0 && !openGroup) {
-            setOpenGroup(Object.keys(totals.groupedTotals)[0]);
-        }
-    }, [totals.groupedTotals, openGroup]);
+        setOpenGroup(null);
+        setAdvancedPriceGroup(null);
+    }, [activeOptionId]);
 
     const isLaborOnly = generalDiscount.pricingMode === 'labor_only';
     const filmPricingModes = generalDiscount.filmPricingModes || {};
@@ -392,19 +399,25 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                 <Drawer.Overlay className="fixed inset-0 bg-black/40 z-50" />
                 <Drawer.Content className="fixed bottom-0 left-0 right-0 z-50 flex h-[100dvh] max-h-[100dvh] flex-col border-t border-slate-200 bg-white outline-none dark:border-slate-700 dark:bg-slate-900">
                     <div
-                        className="flex-1 overflow-y-auto bg-white p-4 dark:bg-slate-900"
-                        style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.5rem)' }}
+                        className="flex-1 overflow-y-auto overscroll-contain bg-white px-3 dark:bg-slate-900 sm:px-4"
+                        style={{
+                            paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.35rem)',
+                            paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)',
+                        }}
                         onTouchStart={handleTouchStart}
                         onTouchEnd={handleTouchEnd}
                     >
-                        <div className="mx-auto mb-6 h-1.5 w-12 flex-shrink-0 rounded-full bg-slate-300 dark:bg-slate-700" />
+                        <div className="mx-auto mb-2 h-1 w-10 flex-shrink-0 rounded-full bg-slate-300 dark:bg-slate-700" />
 
-                        <div className="mx-auto max-w-md space-y-6 pb-8">
-                            <div className="flex items-center justify-between">
-                                <h2 className="text-xl font-bold text-slate-900 dark:text-white">Resumo de Valores</h2>
+                        <div className="mx-auto max-w-md space-y-4">
+                            <div className="flex min-h-10 items-center justify-between">
+                                <div>
+                                    <h2 className="text-lg font-bold leading-tight text-slate-900 dark:text-white">Resumo de Valores</h2>
+                                    <p className="mt-0.5 text-[10px] text-slate-500 dark:text-slate-400">Confira, ajuste e gere o PDF.</p>
+                                </div>
                                 <button
                                     onClick={onClose}
-                                    className="p-2 text-slate-400 transition-colors hover:text-slate-600 dark:hover:text-slate-200"
+                                    className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
                                     aria-label="Fechar"
                                 >
                                     <i className="fas fa-times text-lg" />
@@ -412,24 +425,24 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                             </div>
 
                             {hasMultipleOptions && (
-                                <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-800/60">
+                                <div className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 p-1.5 dark:border-slate-700 dark:bg-slate-800/60">
                                     <button
                                         type="button"
                                         onClick={() => goToOption(-1)}
                                         disabled={activeOptionIndex <= 0}
                                         aria-label="Oportunidade anterior"
-                                        className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-white text-slate-600 shadow-sm transition-all active:scale-90 disabled:opacity-30 dark:bg-slate-900 dark:text-slate-300"
+                                        className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-white text-slate-600 shadow-sm transition-all active:scale-90 disabled:opacity-30 dark:bg-slate-900 dark:text-slate-300"
                                     >
                                         <i className="fas fa-chevron-left text-sm" />
                                     </button>
                                     <div className="flex min-w-0 flex-1 flex-col items-center">
-                                        <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">
-                                            Oportunidade {activeOptionIndex + 1} de {options.length}
+                                        <span className="text-[9px] font-medium uppercase tracking-[0.12em] text-slate-400 dark:text-slate-500">
+                                            Opção {activeOptionIndex + 1} de {options.length}
                                         </span>
                                         <span className="max-w-full truncate text-sm font-bold text-slate-900 dark:text-white">
                                             {activeOptionIndex >= 0 ? options[activeOptionIndex].name : '—'}
                                         </span>
-                                        <div className="mt-1.5 flex items-center gap-1.5">
+                                        <div className="mt-1 flex items-center gap-1">
                                             {options.map((option, idx) => (
                                                 <button
                                                     key={option.id}
@@ -447,30 +460,33 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                                         onClick={() => goToOption(1)}
                                         disabled={activeOptionIndex >= options.length - 1}
                                         aria-label="Próxima oportunidade"
-                                        className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-white text-slate-600 shadow-sm transition-all active:scale-90 disabled:opacity-30 dark:bg-slate-900 dark:text-slate-300"
+                                        className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-white text-slate-600 shadow-sm transition-all active:scale-90 disabled:opacity-30 dark:bg-slate-900 dark:text-slate-300"
                                     >
                                         <i className="fas fa-chevron-right text-sm" />
                                     </button>
                                 </div>
                             )}
 
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 dark:border-slate-700/50 dark:bg-slate-800/40">
-                                    <span className="mb-1 block text-[11px] font-medium uppercase tracking-[0.14em] text-slate-400">Área Total</span>
-                                    <span className="text-lg font-semibold text-slate-900 dark:text-white">{totals.totalM2.toFixed(2)} m²</span>
+                            <div className={`grid divide-slate-200 rounded-xl border border-slate-200 bg-slate-50 dark:divide-slate-700 dark:border-slate-700 dark:bg-slate-800/40 ${totals.totalLinearMeters > 0 ? 'grid-cols-2 divide-x' : 'grid-cols-1'}`}>
+                                <div className="px-3 py-2.5">
+                                    <span className="block text-[9px] font-medium uppercase tracking-[0.12em] text-slate-400">Área Total</span>
+                                    <span className="mt-0.5 block text-base font-bold text-slate-900 dark:text-white">{totals.totalM2.toFixed(2)} m²</span>
                                 </div>
                                 {totals.totalLinearMeters > 0 && (
-                                    <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 dark:border-slate-700/50 dark:bg-slate-800/40">
-                                        <span className="mb-1 block text-[11px] font-medium uppercase tracking-[0.14em] text-slate-400">Metro Linear</span>
-                                        <span className="text-lg font-semibold text-slate-900 dark:text-white">{totals.totalLinearMeters.toFixed(2)} m</span>
+                                    <div className="px-3 py-2.5">
+                                        <span className="block text-[9px] font-medium uppercase tracking-[0.12em] text-slate-400">Metro Linear</span>
+                                        <span className="mt-0.5 block text-base font-bold text-slate-900 dark:text-white">{totals.totalLinearMeters.toFixed(2)} m</span>
                                     </div>
                                 )}
                             </div>
 
                             {totals.groupedTotals && Object.keys(totals.groupedTotals).length > 0 && (
-                                <div className="space-y-3">
-                                    <h3 className="px-1 text-[11px] font-medium uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Detalhamento por Película</h3>
-                                    <div className="custom-scrollbar max-h-[300px] space-y-2 overflow-y-auto pr-1">
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between px-1">
+                                        <h3 className="text-[10px] font-medium uppercase tracking-[0.12em] text-slate-400 dark:text-slate-500">Películas e preços</h3>
+                                        <span className="text-[9px] text-slate-400">Toque para editar</span>
+                                    </div>
+                                    <div className="space-y-2">
                                         {Object.values(totals.groupedTotals).map((group: any) => (
                                             <div
                                                 key={group.filmName}
@@ -478,7 +494,7 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                                             >
                                                 <button
                                                     onClick={() => toggleGroup(group.filmName)}
-                                                    className="flex w-full items-center justify-between p-3 text-left transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/50"
+                                                    className="flex w-full items-center justify-between px-3 py-2.5 text-left transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/50"
                                                 >
                                                     <div className="mr-2 flex min-w-0 flex-1 flex-col">
                                                         <span className="truncate text-sm font-semibold text-slate-900 dark:text-white">
@@ -492,9 +508,9 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                                                 </button>
 
                                                 {openGroup === group.filmName && (
-                                                    <div className="space-y-2 border-t border-slate-100 bg-slate-50/50 px-3 pb-3 pt-1 dark:border-slate-700/50 dark:bg-slate-800/50">
+                                                    <div className="space-y-2 border-t border-slate-100 bg-slate-50/50 p-2 dark:border-slate-700/50 dark:bg-slate-800/50">
                                                         {!isLaborOnly && (
-                                                            <div className="flex items-center justify-between gap-2 pt-1">
+                                                            <div className="flex items-center justify-between gap-2">
                                                                 <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Cobrar por</span>
                                                                 <div className="grid grid-cols-2 rounded-lg border border-slate-200 bg-slate-100 p-0.5 dark:border-slate-700 dark:bg-slate-900">
                                                                     {(['area', 'linear'] as const).map((mode) => {
@@ -505,7 +521,7 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                                                                                 type="button"
                                                                                 onClick={() => setFilmPricingMode(group.filmName, mode)}
                                                                                 aria-pressed={active}
-                                                                                className={`rounded-md px-2.5 py-1 text-[11px] font-bold transition-all ${
+                                                                                className={`rounded-md px-2.5 py-1.5 text-[10px] font-bold transition-all ${
                                                                                     active
                                                                                         ? 'bg-blue-600 text-white shadow dark:bg-blue-500'
                                                                                         : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
@@ -574,9 +590,9 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                                 </div>
                             )}
 
-                            <div className="space-y-3 rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-4 shadow-[var(--shadow-soft)]">
-                                <h3 className="text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--text-soft)]">Resumo de Custos</h3>
-                                <div className="space-y-2">
+                            <div className="space-y-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-3 shadow-[var(--shadow-soft)]">
+                                <h3 className="text-[10px] font-medium uppercase tracking-[0.12em] text-[var(--text-soft)]">Resumo de Custos</h3>
+                                <div className="space-y-1.5">
                                     <div className="flex items-center justify-between">
                                         <span className="text-xs text-[var(--text-muted)]">Total Material</span>
                                         <span className="text-sm font-semibold text-[var(--text-strong)]">{formatNumberBR(totals.totalMaterial)}</span>
@@ -614,138 +630,130 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                                 </div>
                             </div>
 
-                            <div className="space-y-4">
-                                <div className="flex items-center justify-between">
-                                    <label className="text-sm font-bold text-slate-700 dark:text-slate-300">
-                                        Ajuste Geral
-                                    </label>
+                            <div className="rounded-xl border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/40">
+                                <button
+                                    type="button"
+                                    onClick={() => setAdjustmentsOpen(open => !open)}
+                                    aria-expanded={adjustmentsOpen}
+                                    className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left"
+                                >
+                                    <span>
+                                        <span className="block text-sm font-bold text-slate-700 dark:text-slate-200">Acréscimo e desconto</span>
+                                        <span className="block text-[10px] text-slate-500 dark:text-slate-400">
+                                            {hiddenIncreaseAmount > 0 || finalDiscountAmount > 0 ? 'Existe um ajuste aplicado' : 'Opcional · toque para configurar'}
+                                        </span>
+                                    </span>
                                     {(hiddenIncreaseAmount > 0 || finalDiscountAmount > 0) && (
-                                        <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                                        <span className="ml-auto rounded-full bg-white px-2 py-1 text-[10px] font-bold text-slate-600 dark:bg-slate-900 dark:text-slate-300">
                                             +{formatNumberBR(hiddenIncreaseAmount)} / -{formatNumberBR(finalDiscountAmount)}
                                         </span>
                                     )}
-                                </div>
+                                    <i className={`fas fa-chevron-down text-[10px] text-slate-400 transition-transform ${adjustmentsOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
+                                </button>
 
-                                <AdjustmentCard
-                                    kind="increase"
-                                    title="Acréscimo embutido"
-                                    description="Infla o m² no PDF sem mostrar uma linha separada."
-                                    amount={hiddenIncreaseAmount}
-                                    tone="blue"
-                                    input={adjustmentInputs.increase}
-                                    onUpdate={(input) => updateAdjustment('increase', input)}
-                                />
-                                <AdjustmentCard
-                                    kind="discount"
-                                    title="Desconto final"
-                                    description="Aplica desconto depois do acréscimo embutido."
-                                    amount={finalDiscountAmount}
-                                    tone="emerald"
-                                    input={adjustmentInputs.discount}
-                                    onUpdate={(input) => updateAdjustment('discount', input)}
-                                />
+                                {adjustmentsOpen && (
+                                    <div className="space-y-3 border-t border-slate-200 p-2.5 dark:border-slate-700">
+                                        <AdjustmentCard
+                                            kind="increase"
+                                            title="Acréscimo embutido"
+                                            description="Aumenta o valor sem criar uma linha separada no PDF."
+                                            amount={hiddenIncreaseAmount}
+                                            tone="blue"
+                                            input={adjustmentInputs.increase}
+                                            onUpdate={(input) => updateAdjustment('increase', input)}
+                                        />
+                                        <AdjustmentCard
+                                            kind="discount"
+                                            title="Desconto final"
+                                            description="Aplica o desconto sobre o valor final."
+                                            amount={finalDiscountAmount}
+                                            tone="emerald"
+                                            input={adjustmentInputs.discount}
+                                            onUpdate={(input) => updateAdjustment('discount', input)}
+                                        />
 
-                                {totals.totalItemDiscount > 0 && (
-                                    <div className="flex items-center justify-between px-1 text-sm text-red-500 dark:text-red-400">
-                                        <span>Descontos nos itens</span>
-                                        <span className="font-bold">-{formatNumberBR(totals.totalItemDiscount)}</span>
+                                        {totals.totalItemDiscount > 0 && (
+                                            <div className="flex items-center justify-between px-1 text-sm text-red-500 dark:text-red-400">
+                                                <span>Descontos nos itens</span>
+                                                <span className="font-bold">-{formatNumberBR(totals.totalItemDiscount)}</span>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </div>
 
-                            <div className="border-t-2 border-slate-100 pt-6 dark:border-slate-800">
+                            <div className="rounded-xl bg-slate-900 px-3 py-3 text-white dark:bg-slate-950">
                                 <div className="flex items-center justify-between gap-4">
                                     <div className="flex flex-col">
-                                        <span className="text-sm font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Total Final</span>
-                                        <span className="text-xs text-slate-400 dark:text-slate-500">Valor total do orçamento</span>
+                                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total do orçamento</span>
+                                        <span className="text-[9px] text-slate-500">Valor que sairá no PDF</span>
                                     </div>
-                                    <span className="text-right text-4xl font-black tracking-tight text-slate-900 dark:text-white">
+                                    <span className="text-right text-2xl font-black tracking-tight text-white">
                                         {formatNumberBR(totals.finalTotal)}
                                     </span>
                                 </div>
                             </div>
-                        </div>
-                    </div>
 
-                    <div
-                        className="flex-shrink-0 border-t border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900"
-                        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)' }}
-                    >
-                        {/* Anti-cópia: oculta dimensões e m² no PDF */}
-                        <button
-                            type="button"
-                            onClick={toggleHideMeasurements}
-                            role="switch"
-                            aria-checked={hideMeasurements}
-                            className={`mb-3 flex w-full items-center justify-between gap-3 rounded-xl border p-3 text-left transition-colors ${hideMeasurements
-                                ? 'border-blue-200 bg-blue-50 dark:border-blue-900/40 dark:bg-blue-950/30'
-                                : 'border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60'
-                                }`}
-                        >
-                            <span className="flex items-center gap-2.5">
-                                <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${hideMeasurements ? 'bg-blue-500 text-white' : 'bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-300'}`}>
-                                    {hideMeasurements ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                                </span>
-                                <span className="min-w-0">
-                                    <span className="block text-sm font-semibold text-slate-800 dark:text-slate-100">Ocultar medidas no PDF</span>
-                                    <span className="block text-[11px] text-slate-500">Esconde dimensões e m² (anti-cópia)</span>
-                                </span>
-                            </span>
-                            <span className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${hideMeasurements ? 'bg-blue-500' : 'bg-slate-300 dark:bg-slate-600'}`}>
-                                <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${hideMeasurements ? 'left-[22px]' : 'left-0.5'}`} />
-                            </span>
-                        </button>
-                        {/* Termo de Responsabilidade (integridade dos vidros) no PDF */}
-                        <button
-                            type="button"
-                            onClick={toggleIncluirTermo}
-                            role="switch"
-                            aria-checked={incluirTermo}
-                            className={`mb-3 flex w-full items-center justify-between gap-3 rounded-xl border p-3 text-left transition-colors ${incluirTermo
-                                ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-900/40 dark:bg-emerald-950/30'
-                                : 'border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60'
-                                }`}
-                        >
-                            <span className="flex items-center gap-2.5">
-                                <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${incluirTermo ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-300'}`}>
-                                    {incluirTermo ? <ShieldCheck className="h-4 w-4" /> : <Shield className="h-4 w-4" />}
-                                </span>
-                                <span className="min-w-0">
-                                    <span className="block text-sm font-semibold text-slate-800 dark:text-slate-100">Termo de responsabilidade</span>
-                                    <span className="block text-[11px] text-slate-500">Isenção por quebras em vidros já fragilizados</span>
-                                </span>
-                            </span>
-                            <span className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${incluirTermo ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`}>
-                                <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${incluirTermo ? 'left-[22px]' : 'left-0.5'}`} />
-                            </span>
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => { onClose(); onGeneratePdf(); }}
-                            disabled={isGeneratingPdf}
-                            className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 text-sm font-bold text-white transition-all active:scale-95 disabled:opacity-60 dark:bg-blue-500"
-                        >
-                            <i className={`fas ${isGeneratingPdf ? 'fa-spinner fa-spin' : 'fa-file-pdf'}`} aria-hidden="true" />
-                            <span>{isGeneratingPdf ? 'Gerando PDF...' : 'Salvar PDF'}</span>
-                        </button>
+                            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800/50">
+                                <div className="border-b border-slate-100 px-3 py-2 dark:border-slate-700">
+                                    <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">Opções do PDF</span>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={toggleHideMeasurements}
+                                    role="switch"
+                                    aria-checked={hideMeasurements}
+                                    className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left transition-colors hover:bg-slate-50 dark:hover:bg-slate-800"
+                                >
+                                    <span className="flex min-w-0 items-center gap-2.5">
+                                        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${hideMeasurements ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300'}`}>
+                                            {hideMeasurements ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                        </span>
+                                        <span className="min-w-0">
+                                            <span className="block text-xs font-semibold text-slate-800 dark:text-slate-100">Ocultar medidas</span>
+                                            <span className="block truncate text-[9px] text-slate-500">Protege dimensões e m² contra cópia</span>
+                                        </span>
+                                    </span>
+                                    <span className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${hideMeasurements ? 'bg-blue-500' : 'bg-slate-300 dark:bg-slate-600'}`}>
+                                        <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${hideMeasurements ? 'left-[18px]' : 'left-0.5'}`} />
+                                    </span>
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={toggleIncluirTermo}
+                                    role="switch"
+                                    aria-checked={incluirTermo}
+                                    className="flex w-full items-center justify-between gap-3 border-t border-slate-100 px-3 py-2.5 text-left transition-colors hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
+                                >
+                                    <span className="flex min-w-0 items-center gap-2.5">
+                                        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${incluirTermo ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/50 dark:text-emerald-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300'}`}>
+                                            {incluirTermo ? <ShieldCheck className="h-3.5 w-3.5" /> : <Shield className="h-3.5 w-3.5" />}
+                                        </span>
+                                        <span className="min-w-0">
+                                            <span className="block text-xs font-semibold text-slate-800 dark:text-slate-100">Termo de responsabilidade</span>
+                                            <span className="block truncate text-[9px] text-slate-500">Inclui a proteção sobre vidros fragilizados</span>
+                                        </span>
+                                    </span>
+                                    <span className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${incluirTermo ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`}>
+                                        <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${incluirTermo ? 'left-[18px]' : 'left-0.5'}`} />
+                                    </span>
+                                </button>
+                            </div>
+
+                            <button
+                                type="button"
+                                onClick={() => { onClose(); onGeneratePdf(); }}
+                                disabled={isGeneratingPdf}
+                                className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 text-sm font-bold text-white shadow-sm transition-all active:scale-[0.98] disabled:opacity-60 dark:bg-blue-500"
+                            >
+                                <i className={`fas ${isGeneratingPdf ? 'fa-spinner fa-spin' : 'fa-file-pdf'}`} aria-hidden="true" />
+                                <span>{isGeneratingPdf ? 'Gerando PDF...' : 'Gerar e salvar PDF'}</span>
+                            </button>
+                        </div>
                     </div>
                 </Drawer.Content>
             </Drawer.Portal>
-            <style>{`
-                .custom-scrollbar::-webkit-scrollbar {
-                    width: 4px;
-                }
-                .custom-scrollbar::-webkit-scrollbar-track {
-                    background: transparent;
-                }
-                .custom-scrollbar::-webkit-scrollbar-thumb {
-                    background: #cbd5e1;
-                    border-radius: 10px;
-                }
-                .dark .custom-scrollbar::-webkit-scrollbar-thumb {
-                    background: #475569;
-                }
-            `}</style>
         </Drawer.Root>
     );
 };

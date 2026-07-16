@@ -74,6 +74,8 @@ describe('TotalsDrawer preço personalizado', () => {
         };
         const { rerender } = render(<TotalsDrawer {...props} />);
 
+        expect(screen.queryByLabelText('Preço de venda por m²')).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: /Jateada/ }));
         const priceInput = await screen.findByLabelText('Preço de venda por m²');
         expect(priceInput).toHaveValue('100');
         fireEvent.change(priceInput, { target: { value: '85' } });
@@ -89,6 +91,7 @@ describe('TotalsDrawer preço personalizado', () => {
         rerender(<TotalsDrawer {...props} generalDiscount={customizedDiscount} />);
 
         expect(screen.getAllByText('Personalizado').length).toBeGreaterThan(0);
+        expect(screen.getByRole('button', { name: 'Gerar e salvar PDF' })).toBeInTheDocument();
         fireEvent.click(screen.getByLabelText('Restaurar Preço de venda por m² do catálogo'));
 
         await waitFor(() => expect(onUpdate).toHaveBeenLastCalledWith(expect.objectContaining({
