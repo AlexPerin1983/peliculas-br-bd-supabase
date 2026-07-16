@@ -92,7 +92,9 @@ describe('TotalsDrawer preço personalizado', () => {
 
         expect(screen.getByText('Preço personalizado neste orçamento')).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Gerar e salvar PDF' })).toBeInTheDocument();
-        fireEvent.click(screen.getByLabelText('Restaurar Preço de venda por m² do catálogo'));
+        const catalogPriceButton = screen.getByRole('button', { name: /Usar preço original do catálogo.*100,00/ });
+        expect(catalogPriceButton).toHaveTextContent(/100,00/);
+        fireEvent.click(catalogPriceButton);
 
         await waitFor(() => expect(onUpdate).toHaveBeenLastCalledWith(expect.objectContaining({
             filmPriceOverrides: undefined

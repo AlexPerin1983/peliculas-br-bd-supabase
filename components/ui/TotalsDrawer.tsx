@@ -165,11 +165,12 @@ const ProposalPriceInput: React.FC<ProposalPriceInputProps> = ({
                     <button
                         type="button"
                         onClick={onReset}
-                        className="inline-flex shrink-0 items-center gap-1 text-[10px] font-bold text-blue-700 dark:text-blue-300"
-                        aria-label={`Restaurar ${label} do catálogo`}
+                        className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-blue-100/80 px-2 py-1 text-[10px] font-bold text-blue-700 transition-colors hover:bg-blue-200 dark:bg-blue-900/50 dark:text-blue-200 dark:hover:bg-blue-900"
+                        aria-label={`Usar preço original do catálogo: ${formatNumberBR(catalogValue)}`}
+                        title="Substituir pelo preço original do catálogo"
                     >
                         <RotateCcw className="h-3 w-3" aria-hidden="true" />
-                        Usar catálogo
+                        {formatNumberBR(catalogValue)}
                     </button>
                 )}
             </div>
@@ -195,11 +196,10 @@ const ProposalPriceInput: React.FC<ProposalPriceInputProps> = ({
                 <span className="pr-3 text-xs font-semibold text-slate-400">/{unit}</span>
             </div>
 
-            <div className="mt-1.5 flex items-center justify-between gap-2 text-[9px]">
+            <div className="mt-1.5 text-[9px]">
                 <span className={customized ? 'font-semibold text-blue-600 dark:text-blue-300' : 'text-slate-400'}>
                     {customized ? 'Preço personalizado neste orçamento' : 'Preço atual do catálogo'}
                 </span>
-                {customized && <span className="shrink-0 text-slate-400">Original: {formatNumberBR(catalogValue)}/{unit}</span>}
             </div>
         </div>
     );
