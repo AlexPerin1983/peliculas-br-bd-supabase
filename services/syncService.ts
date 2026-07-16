@@ -41,8 +41,49 @@ const POSTGRES_INTEGER_MAX = 2147483647;
 // está lento/indisponível (cada falha adia a próxima tentativa automática).
 let consecutiveSyncFailures = 0;
 let nextSyncAllowedAt = 0;
+let syncRetryTimer: ReturnType<typeof setTimeout> | null = null;
 const SYNC_BACKOFF_BASE_MS = 5_000;
 const SYNC_BACKOFF_MAX_MS = 5 * 60_000;
+
+function clearScheduledSyncRetry(): void {
+    if (syncRetryTimer !== null) {
+        clearTimeout(syncRetryTimer);
+        syncRetryTimer = null;
+    }
+}
+
+function scheduleSyncRetry(delay: number): void {
+    clearScheduledSyncRetry();
+
+    // Evita que timers de módulos isolados atravessem os testes. No aplicativo,
+    // a tentativa acontece automaticamente quando o intervalo termina.
+    if (!isOnline || import.meta.env.MODE === 'test') {
+        return;
+    }
+
+    syncRetryTimer = setTimeout(() => {
+        syncRetryTimer = null;
+        if (isOnline) {
+            void syncAllPending({ force: true });
+        }
+    }, delay);
+}
+
+function isLikelyNetworkError(error: unknown): boolean {
+    const message = error instanceof Error
+        ? error.message
+        : typeof error === 'object' && error !== null && 'message' in error
+            ? String((error as { message?: unknown }).message || '')
+            : String(error || '');
+    const normalized = message.toLowerCase();
+
+    return normalized.includes('failed to fetch')
+        || normalized.includes('networkerror')
+        || normalized.includes('network error')
+        || normalized.includes('load failed')
+        || normalized.includes('err_network')
+        || normalized.includes('falha de rede');
+}
 
 export interface SyncStatus {
     isOnline: boolean;
@@ -416,6 +457,7 @@ function handleOnline(): void {
     // Volta de conexão: zera o backoff e força uma tentativa imediata.
     consecutiveSyncFailures = 0;
     nextSyncAllowedAt = 0;
+    clearScheduledSyncRetry();
     notifyListeners();
     syncAllPending({ force: true });
 }
@@ -423,6 +465,7 @@ function handleOnline(): void {
 function handleOffline(): void {
     isOnline = false;
     currentStatus.isOnline = false;
+    clearScheduledSyncRetry();
     notifyListeners();
 }
 
@@ -442,10 +485,16 @@ export async function syncAllPending(options?: { force?: boolean }): Promise<voi
         return;
     }
 
+    if (options?.force) {
+        clearScheduledSyncRetry();
+    }
+
     syncInProgress = true;
     currentStatus.syncInProgress = true;
     currentStatus.error = null;
     notifyListeners();
+
+    let shouldScheduleRetry = false;
 
     try {
         const queue = await offlineDb.syncQueue.orderBy('timestamp').toArray();
@@ -473,6 +522,14 @@ export async function syncAllPending(options?: { force?: boolean }): Promise<voi
 
                 if (isAuthError(error)) {
                     currentStatus.error = 'Sessao expirada. Faca login novamente para continuar sincronizando.';
+                    shouldScheduleRetry = false;
+                    break;
+                }
+
+                shouldScheduleRetry = true;
+                if (isLikelyNetworkError(error)) {
+                    // Sem resposta do servidor, os próximos itens provavelmente
+                    // falhariam também. Preservamos a fila e aguardamos o retry.
                     break;
                 }
             }
@@ -483,6 +540,7 @@ export async function syncAllPending(options?: { force?: boolean }): Promise<voi
     } catch (error: any) {
         console.error('[SyncService] Erro geral na sincronizacao:', error);
         currentStatus.error = error.message;
+        shouldScheduleRetry = !isAuthError(error);
     } finally {
         syncInProgress = false;
         currentStatus.syncInProgress = false;
@@ -495,10 +553,14 @@ export async function syncAllPending(options?: { force?: boolean }): Promise<voi
                 SYNC_BACKOFF_MAX_MS
             );
             nextSyncAllowedAt = Date.now() + delay;
+            if (shouldScheduleRetry) {
+                scheduleSyncRetry(delay);
+            }
         } else {
             // Sucesso: limpa o backoff.
             consecutiveSyncFailures = 0;
             nextSyncAllowedAt = 0;
+            clearScheduledSyncRetry();
         }
 
         notifyListeners();

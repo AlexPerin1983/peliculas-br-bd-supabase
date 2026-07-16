@@ -24,11 +24,23 @@ const formatSyncErrorMessage = (error: string | null | undefined): string | null
         return 'Sessão expirada. Faça login novamente para continuar sincronizando.';
     }
 
-    if (normalized.includes('falha de rede')) {
-        return 'Falha de rede. Verifique sua conexão e tente novamente.';
+    if (
+        normalized.includes('failed to fetch')
+        || normalized.includes('networkerror')
+        || normalized.includes('network error')
+        || normalized.includes('load failed')
+        || normalized.includes('err_network')
+        || normalized.includes('falha de rede')
+    ) {
+        return 'Conexão instável com o servidor. Seus dados estão salvos neste celular e tentaremos novamente automaticamente.';
     }
 
     return error;
+};
+
+const isConnectionFailure = (error: string | null | undefined): boolean => {
+    if (!error) return false;
+    return formatSyncErrorMessage(error)?.startsWith('Conexão instável') ?? false;
 };
 
 const formatSyncItemLabel = (table: string): string => {
@@ -43,6 +55,12 @@ const formatSyncItemLabel = (table: string): string => {
 
     return labels[table] || table;
 };
+
+const formatSyncActionLabel = (action: 'create' | 'update' | 'delete'): string => ({
+    create: 'enviar',
+    update: 'atualizar',
+    delete: 'excluir'
+}[action]);
 
 const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({ showDetails = false }) => {
     const [status, setStatus] = useState<SyncStatus>({
@@ -65,6 +83,9 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({ showDetails =
         await forcSync();
     };
 
+    const hasConnectionFailure = isConnectionFailure(status.error)
+        || status.failedItems.some(item => isConnectionFailure(item.lastError));
+
     // Não mostrar nada se está online e não tem pendentes
     if (status.isOnline && status.pendingCount === 0 && status.failedCount === 0 && !showDetails) {
         return null;
@@ -76,6 +97,9 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({ showDetails =
         }
         if (!status.isOnline) {
             return <WifiOff className="w-4 h-4 text-red-500" />;
+        }
+        if (status.failedCount > 0 && hasConnectionFailure) {
+            return <CloudOff className="w-4 h-4 text-amber-500" />;
         }
         if (status.failedCount > 0) {
             return <AlertCircle className="w-4 h-4 text-red-500" />;
@@ -92,6 +116,7 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({ showDetails =
     const getStatusText = () => {
         if (status.syncInProgress) return 'Sincronizando...';
         if (!status.isOnline) return 'Offline';
+        if (status.failedCount > 0 && hasConnectionFailure) return 'Salvo no celular';
         if (status.failedCount > 0) return `${status.failedCount} erro${status.failedCount > 1 ? 's' : ''}`;
         if (status.pendingCount > 0) return `${status.pendingCount} pendente${status.pendingCount > 1 ? 's' : ''}`;
         if (status.error) return 'Erro';
@@ -101,6 +126,7 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({ showDetails =
     const getStatusColor = () => {
         if (status.syncInProgress) return 'bg-blue-100 dark:bg-blue-900/30 border-blue-300 dark:border-blue-700';
         if (!status.isOnline) return 'bg-red-100 dark:bg-red-900/30 border-red-300 dark:border-red-700';
+        if (status.failedCount > 0 && hasConnectionFailure) return 'bg-amber-100 dark:bg-amber-900/30 border-amber-300 dark:border-amber-700';
         if (status.failedCount > 0) return 'bg-red-100 dark:bg-red-900/30 border-red-300 dark:border-red-700';
         if (status.pendingCount > 0) return 'bg-yellow-100 dark:bg-yellow-900/30 border-yellow-300 dark:border-yellow-700';
         if (status.error) return 'bg-red-100 dark:bg-red-900/30 border-red-300 dark:border-red-700';
@@ -163,28 +189,31 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({ showDetails =
                         )}
 
                         {friendlyError && (
-                            <div className="p-2 bg-red-50 dark:bg-red-900/20 rounded-lg">
-                                <p className="text-xs text-red-600 dark:text-red-400">{friendlyError}</p>
+                            <div className={`rounded-lg p-2 ${hasConnectionFailure ? 'bg-amber-50 dark:bg-amber-900/20' : 'bg-red-50 dark:bg-red-900/20'}`}>
+                                <p className={`text-xs ${hasConnectionFailure ? 'text-amber-700 dark:text-amber-300' : 'text-red-600 dark:text-red-400'}`}>{friendlyError}</p>
                             </div>
                         )}
 
                         {status.failedItems.length > 0 && (
                             <div className="space-y-2">
-                                {status.failedItems.map(item => (
-                                    <div
-                                        key={item.id}
-                                        className="p-2 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-100 dark:border-red-900/40"
-                                    >
-                                        <p className="text-xs font-medium text-red-700 dark:text-red-300">
-                                            {item.table} • {item.action} • tentativa {item.retryCount}
-                                        </p>
-                                        {item.lastError && (
-                                            <p className="mt-1 text-xs text-red-600 dark:text-red-400 line-clamp-2">
-                                                {item.lastError}
+                                {status.failedItems.map(item => {
+                                    const itemHasConnectionFailure = isConnectionFailure(item.lastError);
+                                    return (
+                                        <div
+                                            key={item.id}
+                                            className={`rounded-lg border p-2 ${itemHasConnectionFailure ? 'border-amber-100 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-900/20' : 'border-red-100 bg-red-50 dark:border-red-900/40 dark:bg-red-900/20'}`}
+                                        >
+                                            <p className={`text-xs font-medium ${itemHasConnectionFailure ? 'text-amber-800 dark:text-amber-200' : 'text-red-700 dark:text-red-300'}`}>
+                                                {formatSyncItemLabel(item.table)} • {formatSyncActionLabel(item.action)} • tentativa {item.retryCount}
                                             </p>
-                                        )}
-                                    </div>
-                                ))}
+                                            {item.lastError && (
+                                                <p className={`mt-1 line-clamp-2 text-xs ${itemHasConnectionFailure ? 'text-amber-700 dark:text-amber-300' : 'text-red-600 dark:text-red-400'}`}>
+                                                    {formatSyncErrorMessage(item.lastError)}
+                                                </p>
+                                            )}
+                                        </div>
+                                    );
+                                })}
                             </div>
                         )}
 
@@ -195,7 +224,7 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({ showDetails =
                                 className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
                             >
                                 <RefreshCw className={`w-4 h-4 ${status.syncInProgress ? 'animate-spin' : ''}`} />
-                                {status.syncInProgress ? 'Sincronizando...' : 'Sincronizar Agora'}
+                                {status.syncInProgress ? 'Sincronizando...' : hasConnectionFailure ? 'Tentar agora' : 'Sincronizar Agora'}
                             </button>
                         )}
                     </div>

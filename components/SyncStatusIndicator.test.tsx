@@ -59,17 +59,41 @@ describe('SyncStatusIndicator', () => {
 
     render(<SyncStatusIndicator />);
 
-    fireEvent.click(screen.getByRole('button', { name: /1 erro/i }));
+    fireEvent.click(screen.getByRole('button', { name: /salvo no celular/i }));
 
     expect(screen.getByText('Conexão')).toBeInTheDocument();
-    expect(screen.getByText(/clients.*update.*tentativa 2/i)).toBeInTheDocument();
-    expect(screen.getByText('Falha de rede')).toBeInTheDocument();
+    expect(screen.getByText(/clientes.*atualizar.*tentativa 2/i)).toBeInTheDocument();
+    expect(screen.getByText(/conexão instável com o servidor/i)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /sincronizar agora/i }));
+    fireEvent.click(screen.getByRole('button', { name: /tentar agora/i }));
 
     await waitFor(() => {
       expect(mockedForcSync).toHaveBeenCalled();
     });
+  });
+
+  it('traduz Failed to fetch e informa que o PDF continua salvo no celular', () => {
+    mockedSubscribeSyncStatus.mockImplementation(listener => {
+      listener(buildStatus({
+        failedCount: 1,
+        error: 'savedPdfs: Failed to fetch',
+        failedItems: [{
+          id: 9,
+          table: 'savedPdfs',
+          action: 'create',
+          retryCount: 1,
+          lastError: 'savedPdfs: Failed to fetch',
+          lastAttemptAt: Date.now()
+        }]
+      }));
+      return vi.fn();
+    });
+
+    render(<SyncStatusIndicator />);
+    fireEvent.click(screen.getByRole('button', { name: /salvo no celular/i }));
+
+    expect(screen.getByText(/pdfs.*enviar.*tentativa 1/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/seus dados estão salvos neste celular/i)).toHaveLength(2);
   });
 
   it('mostra estado offline e nao exibe botao de sincronizacao', () => {
