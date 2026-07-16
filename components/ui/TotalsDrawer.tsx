@@ -337,6 +337,7 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
     const [advancedPriceGroup, setAdvancedPriceGroup] = useState<string | null>(null);
     const [adjustmentsOpen, setAdjustmentsOpen] = useState(false);
     const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+    const scrollRef = useRef<HTMLDivElement>(null);
 
     const hasMultipleOptions = options.length > 1 && !!onSelectOption;
     const activeOptionIndex = options.findIndex((option) => option.id === activeOptionId);
@@ -372,6 +373,60 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
         setOpenGroup(null);
         setAdvancedPriceGroup(null);
     }, [activeOptionId]);
+
+    // O sheet ocupa a tela inteira. Deixamos o navegador controlar o teclado e
+    // mantemos o campo focado dentro da parte realmente visível do viewport.
+    useEffect(() => {
+        if (!isOpen) return;
+        const container = scrollRef.current;
+        const viewport = window.visualViewport;
+        if (!container || !viewport) return;
+
+        const defaultBottomPadding = 'calc(env(safe-area-inset-bottom, 0px) + 1rem)';
+        const keyboardHeight = () => Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
+        const syncKeyboardSpace = () => {
+            const height = keyboardHeight();
+            container.style.paddingBottom = height > 120
+                ? `calc(env(safe-area-inset-bottom, 0px) + ${height}px)`
+                : defaultBottomPadding;
+        };
+        const ensureInputVisible = (target: HTMLElement) => {
+            const visibleTop = container.getBoundingClientRect().top + 12;
+            const visibleBottom = viewport.offsetTop + viewport.height - 16;
+            const rect = target.getBoundingClientRect();
+            if (rect.bottom > visibleBottom) container.scrollTop += rect.bottom - visibleBottom + 8;
+            else if (rect.top < visibleTop) container.scrollTop -= visibleTop - rect.top;
+        };
+        const onFocusIn = (event: FocusEvent) => {
+            const target = event.target as HTMLElement | null;
+            if (!target || !/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
+
+            let handled = false;
+            const positionField = () => {
+                if (handled) return;
+                handled = true;
+                syncKeyboardSpace();
+                requestAnimationFrame(() => ensureInputVisible(target));
+                viewport.removeEventListener('resize', positionField);
+            };
+
+            if (keyboardHeight() > 120) requestAnimationFrame(positionField);
+            else {
+                viewport.addEventListener('resize', positionField);
+                window.setTimeout(positionField, 450);
+            }
+        };
+
+        container.addEventListener('focusin', onFocusIn);
+        viewport.addEventListener('resize', syncKeyboardSpace);
+        viewport.addEventListener('scroll', syncKeyboardSpace);
+        return () => {
+            container.removeEventListener('focusin', onFocusIn);
+            viewport.removeEventListener('resize', syncKeyboardSpace);
+            viewport.removeEventListener('scroll', syncKeyboardSpace);
+            container.style.paddingBottom = defaultBottomPadding;
+        };
+    }, [isOpen]);
 
     const isLaborOnly = generalDiscount.pricingMode === 'labor_only';
     const filmPricingModes = generalDiscount.filmPricingModes || {};
@@ -427,11 +482,12 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
     };
 
     return (
-        <Drawer.Root open={isOpen} onOpenChange={(open) => !open && onClose()}>
+        <Drawer.Root open={isOpen} onOpenChange={(open) => !open && onClose()} repositionInputs={false}>
             <Drawer.Portal>
                 <Drawer.Overlay className="fixed inset-0 bg-black/40 z-50" />
                 <Drawer.Content className="fixed bottom-0 left-0 right-0 z-50 flex h-[100dvh] max-h-[100dvh] flex-col border-t border-slate-200 bg-white outline-none dark:border-slate-700 dark:bg-slate-900">
                     <div
+                        ref={scrollRef}
                         className="flex-1 overflow-y-auto overscroll-contain bg-white px-3 dark:bg-slate-900 sm:px-4"
                         style={{
                             paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.35rem)',
