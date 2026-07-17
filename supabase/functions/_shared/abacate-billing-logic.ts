@@ -210,6 +210,8 @@ export function calculateNextSemiannualExpiry(params: {
     const baseDate =
         currentExpiry && currentExpiry.getTime() > now.getTime() ? currentExpiry : now;
     const nextDate = new Date(baseDate);
-    nextDate.setMonth(nextDate.getMonth() + 6);
+    // Datas de cobranca chegam em UTC. Usar setMonth() aplica o fuso local do
+    // runtime e pode recuar um dia (por exemplo, 01/12 vira 31/05 no Brasil).
+    nextDate.setUTCMonth(nextDate.getUTCMonth() + 6);
     return nextDate.toISOString();
 }

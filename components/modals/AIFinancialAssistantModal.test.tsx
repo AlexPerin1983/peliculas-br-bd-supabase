@@ -76,7 +76,7 @@ describe('AIFinancialAssistantModal', () => {
             />
         );
 
-        expect(screen.getByText(/configure o provedor/i)).toBeInTheDocument();
+        expect(screen.getByText(/ative a inteligência artificial/i)).toBeInTheDocument();
         expect(generateContent).not.toHaveBeenCalled();
     });
 

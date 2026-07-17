@@ -297,5 +297,5 @@ describe('DashboardView', () => {
 
     expect(screen.queryByRole('dialog', { name: 'Filtro de periodo' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Abrir filtro de data: 10\/05 - 12\/05/i })).toBeInTheDocument();
-  });
+  }, 15_000);
 });

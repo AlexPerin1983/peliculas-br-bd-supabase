@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import ClientModal from './modals/ClientModal';
 import ClientSelectionModal from './modals/ClientSelectionModal';
 import PaymentMethodsModal from './modals/PaymentMethodsModal';
@@ -6,14 +6,14 @@ import FilmModal from './modals/FilmModal';
 import ConfirmationModal from './modals/ConfirmationModal';
 import FilmSelectionModal from './modals/FilmSelectionModal';
 import EditMeasurementModal from './modals/EditMeasurementModal';
-import AgendamentoModal from './modals/AgendamentoModal';
+const AgendamentoModal = lazy(() => import('./modals/AgendamentoModal'));
 import DiscountModal from './modals/DiscountModal';
 import GeneralDiscountModal from './modals/GeneralDiscountModal';
-import AIMeasurementModal from './modals/AIMeasurementModal';
-import AIClientModal from './modals/AIClientModal';
-import AIFilmModal from './modals/AIFilmModal';
-import AIQuickProposalModal from './modals/AIQuickProposalModal';
-import ApiKeyModal from './modals/ApiKeyModal';
+const AIMeasurementModal = lazy(() => import('./modals/AIMeasurementModal'));
+const AIClientModal = lazy(() => import('./modals/AIClientModal'));
+const AIFilmModal = lazy(() => import('./modals/AIFilmModal'));
+const AIQuickProposalModal = lazy(() => import('./modals/AIQuickProposalModal'));
+const ApiKeyModal = lazy(() => import('./modals/ApiKeyModal'));
 import PdfGenerationStatusModal from './modals/PdfGenerationStatusModal';
 import ImageGalleryModal from './modals/ImageGalleryModal';
 import { Client, Film, UserInfo, SavedPDF, Agendamento, ProposalOption, SchedulingInfo, ProposalDiscount } from '../types';
@@ -209,6 +209,7 @@ interface ModalsContainerProps {
 
 export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
     return (
+        <Suspense fallback={null}>
         <>
             {/* Client Modal */}
             {props.isClientModalOpen && (
@@ -674,5 +675,6 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
                 />
             )}
         </>
+        </Suspense>
     );
 };

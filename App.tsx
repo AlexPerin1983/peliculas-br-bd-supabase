@@ -1,31 +1,14 @@
 import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense, useRef } from 'react';
 import './src/estoque-dark-mode.css';
-import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 import { Client, Measurement, UserInfo, Film, PaymentMethods, SavedPDF, Agendamento, AgendamentoServiceStatus, SchedulingInfo, ExtractedClientData, UIMeasurement, ProposalExpense, ProposalOption, ProposalDiscount, AIInput } from './types';
 import { CuttingOptimizer } from './utils/CuttingOptimizer';
 import * as db from './services/db';
 import { supabase } from './services/supabaseClient';
 // pdfGenerator será importado dinamicamente para code splitting
 import Header from './components/Header';
-import ClientModal from './components/modals/ClientModal';
-import ClientSelectionModal from './components/modals/ClientSelectionModal';
 import PaymentMethodsModal from './components/modals/PaymentMethodsModal';
-import FilmModal from './components/modals/FilmModal';
-import ConfirmationModal from './components/modals/ConfirmationModal';
 import CustomNumpad from './components/ui/CustomNumpad';
-import FilmSelectionModal from './components/modals/FilmSelectionModal';
-import PdfGenerationStatusModal from './components/modals/PdfGenerationStatusModal';
-import EditMeasurementModal from './components/modals/EditMeasurementModal';
-import InfoModal from './components/modals/InfoModal';
-import AgendamentoModal from './components/modals/AgendamentoModal';
-import DiscountModal from './components/modals/DiscountModal';
-import GeneralDiscountModal from './components/modals/GeneralDiscountModal';
 import ProposalExpensesModal from './components/modals/ProposalExpensesModal';
-import AIMeasurementModal from './components/modals/AIMeasurementModal';
-import AIClientModal from './components/modals/AIClientModal';
-import AIFilmModal from './components/modals/AIFilmModal';
-import ApiKeyModal from './components/modals/ApiKeyModal';
-import ImageGalleryModal from './components/modals/ImageGalleryModal';
 import LocationImportModal from './components/modals/LocationImportModal';
 import UpdateNotification from './components/UpdateNotification';
 import UpdateBanner from './components/UpdateBanner';
@@ -1229,6 +1212,7 @@ const App: React.FC = () => {
         }
 
         try {
+            const { GoogleGenerativeAI } = await import('@google/generative-ai');
             const genAI = new GoogleGenerativeAI(userInfo!.aiConfig!.apiKey);
             const model = genAI.getGenerativeModel({
                 model: GEMINI_TEXT_MODEL,
@@ -1399,6 +1383,7 @@ const App: React.FC = () => {
             throw new Error("Chave de API do Gemini não configurada.");
         }
 
+        const { GoogleGenerativeAI, SchemaType } = await import('@google/generative-ai');
         const genAI = new GoogleGenerativeAI(userInfo.aiConfig.apiKey);
         const model = genAI.getGenerativeModel({
             model: GEMINI_TEXT_MODEL,
@@ -1593,6 +1578,7 @@ Regras:
         setIsProcessingAI(true);
 
         try {
+            const { GoogleGenerativeAI } = await import('@google/generative-ai');
             const genAI = new GoogleGenerativeAI(userInfo.aiConfig.apiKey);
             const model = genAI.getGenerativeModel({ model: GEMINI_TEXT_MODEL });
 
@@ -1637,6 +1623,7 @@ Regras:
 
     const processWithGemini = async (input: { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob }) => {
         try {
+            const { GoogleGenerativeAI, SchemaType } = await import('@google/generative-ai');
             const genAI = new GoogleGenerativeAI(userInfo!.aiConfig!.apiKey);
             const model = genAI.getGenerativeModel({
                 model: GEMINI_TEXT_MODEL,
@@ -2169,6 +2156,7 @@ Regras:
 
         setIsProcessingAI(true);
         try {
+            const { GoogleGenerativeAI } = await import('@google/generative-ai');
             const genAI = new GoogleGenerativeAI(userInfo.aiConfig.apiKey);
             const model = genAI.getGenerativeModel({ model: GEMINI_TEXT_MODEL });
 
