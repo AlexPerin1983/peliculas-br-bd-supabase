@@ -35,6 +35,8 @@ interface AppContentRouterProps {
     isOwner: boolean;
     isInstalled: boolean;
     allSavedPdfs: SavedPDF[];
+    hasLoadedAllPdfs: boolean;
+    onRequireAllPdfs: () => Promise<void>;
     historyPdfs: SavedPDF[];
     historyHasMore: boolean;
     isHistoryPageLoading: boolean;
@@ -120,6 +122,8 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
     isOwner,
     isInstalled,
     allSavedPdfs,
+    hasLoadedAllPdfs,
+    onRequireAllPdfs,
     historyPdfs,
     historyHasMore,
     isHistoryPageLoading,
@@ -259,6 +263,8 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
         return renderDeferred(
             <DashboardView
                 allSavedPdfs={allSavedPdfs}
+                usePagedPdfData={!hasLoadedAllPdfs}
+                onRequireAllPdfs={onRequireAllPdfs}
                 clients={clients}
                 agendamentos={agendamentos}
                 films={films}

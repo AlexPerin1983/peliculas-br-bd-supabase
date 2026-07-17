@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import DashboardView from './DashboardView';
 import { SavedPDF, StandaloneExpense } from '../../types';
 import { getAllServicosPrestados } from '../../services/servicosService';
-import { deleteStandaloneExpense, getAllStandaloneExpenses, saveStandaloneExpense } from '../../services/db';
+import { deleteStandaloneExpense, getAllStandaloneExpenses, getPDFPage, saveStandaloneExpense } from '../../services/db';
 
 vi.mock('../../services/servicosService', () => ({
   getAllServicosPrestados: vi.fn()
@@ -11,7 +11,8 @@ vi.mock('../../services/servicosService', () => ({
 vi.mock('../../services/db', () => ({
   getAllStandaloneExpenses: vi.fn(),
   saveStandaloneExpense: vi.fn(),
-  deleteStandaloneExpense: vi.fn()
+  deleteStandaloneExpense: vi.fn(),
+  getPDFPage: vi.fn()
 }));
 
 describe('DashboardView', () => {
@@ -102,6 +103,7 @@ describe('DashboardView', () => {
     vi.mocked(getAllStandaloneExpenses).mockResolvedValue(standaloneExpenses);
     vi.mocked(saveStandaloneExpense).mockImplementation(async expense => ({ ...expense, id: 102 }));
     vi.mocked(deleteStandaloneExpense).mockResolvedValue(undefined);
+    vi.mocked(getPDFPage).mockResolvedValue({ pdfs: [], hasMore: false, nextOffset: 0 });
   });
 
   it('resume orcamentos, gastos, agenda e servicos', async () => {
@@ -142,6 +144,32 @@ describe('DashboardView', () => {
     expect(screen.getAllByText('Cliente A').length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Pelicula X/).length).toBeGreaterThan(0);
     expect(await screen.findByText('Servicos QR recentes')).toBeInTheDocument();
+  });
+
+  it('busca apenas os periodos necessarios quando o historico completo foi adiado', async () => {
+    vi.mocked(getPDFPage).mockImplementation(async query => ({
+      pdfs: query?.status ? [] : [pdfs[0]],
+      hasMore: false,
+      nextOffset: 1
+    }));
+
+    render(
+      <DashboardView
+        allSavedPdfs={[]}
+        usePagedPdfData
+        clients={[]}
+        agendamentos={[]}
+        films={[]}
+        onTabChange={vi.fn()}
+        onOpenAIQuickProposal={vi.fn()}
+        onOpenClientModal={vi.fn()}
+      />
+    );
+
+    await waitFor(() => expect(getPDFPage).toHaveBeenCalled());
+    expect(vi.mocked(getPDFPage).mock.calls.some(([query]) => Boolean(query?.startDate && query?.endDate))).toBe(true);
+    expect(vi.mocked(getPDFPage).mock.calls.some(([query]) => query?.status === 'pending')).toBe(true);
+    expect(vi.mocked(getPDFPage).mock.calls.some(([query]) => query?.status === 'revised')).toBe(true);
   });
 
   it('aciona atalhos principais', () => {

@@ -17,7 +17,7 @@ interface UseAppBootstrapParams {
     setHistoryHasMore: Dispatch<SetStateAction<boolean>>;
     setHistoryNextOffset: Dispatch<SetStateAction<number>>;
     setHasLoadedAllPdfs: Dispatch<SetStateAction<boolean>>;
-    loadHistoryFirst?: boolean;
+    initialPdfLoad?: 'all' | 'history' | 'deferred';
     setAgendamentos: Dispatch<SetStateAction<Agendamento[]>>;
     setHasLoadedHistory: Dispatch<SetStateAction<boolean>>;
     setHasLoadedAgendamentos: Dispatch<SetStateAction<boolean>>;
@@ -36,7 +36,7 @@ export function useAppBootstrap({
     setHistoryHasMore,
     setHistoryNextOffset,
     setHasLoadedAllPdfs,
-    loadHistoryFirst = false,
+    initialPdfLoad = 'all',
     setAgendamentos,
     setHasLoadedHistory,
     setHasLoadedAgendamentos
@@ -210,7 +210,11 @@ export function useAppBootstrap({
                 db.getUserInfo(),
                 loadClients(),
                 loadFilms(),
-                loadHistoryFirst ? loadPdfHistoryPage({ reset: true }) : loadAllPdfs(),
+                initialPdfLoad === 'history'
+                    ? loadPdfHistoryPage({ reset: true })
+                    : initialPdfLoad === 'deferred'
+                        ? Promise.resolve()
+                        : loadAllPdfs(),
                 loadAgendamentos()
             ]);
 
@@ -246,7 +250,7 @@ export function useAppBootstrap({
         authUserId,
         loadAgendamentos,
         loadAllPdfs,
-        loadHistoryFirst,
+        initialPdfLoad,
         loadClients,
         loadFilms,
         loadPdfHistoryPage,

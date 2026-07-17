@@ -257,7 +257,10 @@ const App: React.FC = () => {
         }
         return 'dashboard';
     });
-    const loadHistoryFirstRef = useRef(activeTab === 'history');
+    const initialPdfLoadRef = useRef<'all' | 'history' | 'deferred'>(
+        activeTab === 'history' ? 'history' : activeTab === 'dashboard' ? 'deferred' : 'all'
+    );
+    const historyPageRequestedRef = useRef(activeTab === 'history');
     const [billingReturnState, setBillingReturnState] = useState<BillingReturnState | null>(null);
     const [isBillingReturnVisible, setIsBillingReturnVisible] = useState(false);
     // Pilha de abas visitadas para o botao "voltar" estilo navegacao nativa.
@@ -696,7 +699,7 @@ const App: React.FC = () => {
         setHistoryHasMore,
         setHistoryNextOffset,
         setHasLoadedAllPdfs,
-        loadHistoryFirst: loadHistoryFirstRef.current,
+        initialPdfLoad: initialPdfLoadRef.current,
         setAgendamentos,
         setHasLoadedHistory,
         setHasLoadedAgendamentos
@@ -740,7 +743,7 @@ const App: React.FC = () => {
     }, [hasLoadedAllPdfs, historyHasMore, historyNextOffset, isHistoryPageLoading]);
 
     useEffect(() => {
-        if (!authUser?.id || activeTab === 'history' || hasLoadedAllPdfs || isLoading || isLoadingAllPdfsRef.current) return;
+        if (!authUser?.id || activeTab === 'history' || activeTab === 'dashboard' || hasLoadedAllPdfs || isLoading || isLoadingAllPdfsRef.current) return;
 
         isLoadingAllPdfsRef.current = true;
         setIsLoading(true);
@@ -751,6 +754,16 @@ const App: React.FC = () => {
                 setIsLoading(false);
             });
     }, [activeTab, authUser?.id, hasLoadedAllPdfs, isLoading, loadAllPdfs]);
+
+    useEffect(() => {
+        if (!authUser?.id || activeTab !== 'history' || hasLoadedAllPdfs || isLoading || historyPageRequestedRef.current) return;
+
+        historyPageRequestedRef.current = true;
+        setIsHistoryPageLoading(true);
+        loadPdfHistoryPage({ reset: true })
+            .catch(error => console.error('Erro ao carregar primeira pagina do historico:', error))
+            .finally(() => setIsHistoryPageLoading(false));
+    }, [activeTab, authUser?.id, hasLoadedAllPdfs, isLoading, loadPdfHistoryPage]);
 
     const {
         proposalOptions,
@@ -2487,6 +2500,8 @@ Se não conseguir extrair, retorne: []`;
             isOwner={isOwner}
             isInstalled={isInstalled}
             allSavedPdfs={allSavedPdfs}
+            hasLoadedAllPdfs={hasLoadedAllPdfs}
+            onRequireAllPdfs={loadAllPdfs}
             historyPdfs={hasLoadedAllPdfs ? allSavedPdfs : historyPdfs}
             historyHasMore={!hasLoadedAllPdfs && historyHasMore}
             isHistoryPageLoading={isHistoryPageLoading}

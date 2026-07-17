@@ -36,7 +36,7 @@ import {
 } from 'lucide-react';
 import { Agendamento, Client, Film, ProposalExpenseCategory, SavedPDF, StandaloneExpense } from '../../types';
 import { getAllServicosPrestados, ServicoPrestado } from '../../services/servicosService';
-import { deleteStandaloneExpense, getAllStandaloneExpenses, saveStandaloneExpense } from '../../services/db';
+import { deleteStandaloneExpense, getAllStandaloneExpenses, getPDFPage, saveStandaloneExpense } from '../../services/db';
 import StandaloneExpenseModal from '../modals/StandaloneExpenseModal';
 import AIFinancialAssistantModal, { FinancialAnalysisCache, FinancialSummary } from '../modals/AIFinancialAssistantModal';
 
@@ -70,6 +70,8 @@ interface DashboardViewProps {
     onCreateProposal?: () => void;
     aiConfig?: { provider: 'gemini' | 'openai' | 'local_ocr'; apiKey: string };
     onOpenApiKeyModal?: (provider: 'gemini' | 'openai') => void;
+    usePagedPdfData?: boolean;
+    onRequireAllPdfs?: () => Promise<void>;
 }
 
 const DESKTOP_PERIOD_OPTIONS: { key: PeriodKey; label: string }[] = [
@@ -751,7 +753,9 @@ const DashboardView: React.FC<DashboardViewProps> = ({
     onOpenClientModal,
     onCreateProposal,
     aiConfig,
-    onOpenApiKeyModal
+    onOpenApiKeyModal,
+    usePagedPdfData = false,
+    onRequireAllPdfs
 }) => {
     const [period, setPeriod] = useState<PeriodKey>('today');
     const [isFinAssistantOpen, setIsFinAssistantOpen] = useState(false);
@@ -773,6 +777,9 @@ const DashboardView: React.FC<DashboardViewProps> = ({
     const [standaloneExpenses, setStandaloneExpenses] = useState<StandaloneExpense[]>([]);
     const [isStandaloneExpenseModalOpen, setIsStandaloneExpenseModalOpen] = useState(false);
     const [isSavingStandaloneExpense, setIsSavingStandaloneExpense] = useState(false);
+    const [isPreparingExpenseModal, setIsPreparingExpenseModal] = useState(false);
+    const [pagedDashboardPdfs, setPagedDashboardPdfs] = useState<SavedPDF[]>([]);
+    const [isLoadingDashboardPdfs, setIsLoadingDashboardPdfs] = useState(usePagedPdfData);
 
     useEffect(() => {
         (window as any).fbq?.('track', 'ViewContent', {
@@ -867,11 +874,75 @@ const DashboardView: React.FC<DashboardViewProps> = ({
     );
     const periodRange = useMemo(() => getPeriodRange(period, customRange), [customRange, period]);
 
+    const previousRange = useMemo<DateRange | null>(() => {
+        if (!periodRange) return null;
+        const lengthMs = periodRange.end.getTime() - periodRange.start.getTime();
+        const end = new Date(periodRange.start.getTime() - 1);
+        const start = new Date(end.getTime() - lengthMs);
+        return { start, end };
+    }, [periodRange]);
+
+    useEffect(() => {
+        if (!usePagedPdfData) {
+            setIsLoadingDashboardPdfs(false);
+            return;
+        }
+
+        let cancelled = false;
+        const fetchAllPages = async (query: Parameters<typeof getPDFPage>[0]) => {
+            const collected: SavedPDF[] = [];
+            let offset = 0;
+            let hasMore = true;
+
+            while (hasMore) {
+                const page = await getPDFPage({ ...query, offset, limit: 100 });
+                collected.push(...page.pdfs);
+                hasMore = page.hasMore && page.nextOffset > offset;
+                offset = page.nextOffset;
+            }
+
+            return collected;
+        };
+
+        const rangeQuery = (range: DateRange | null) => range
+            ? { startDate: range.start.toISOString(), endDate: range.end.toISOString() }
+            : {};
+
+        setIsLoadingDashboardPdfs(true);
+        Promise.all([
+            fetchAllPages(rangeQuery(periodRange)),
+            previousRange ? fetchAllPages(rangeQuery(previousRange)) : Promise.resolve([]),
+            periodRange ? fetchAllPages({ status: 'pending' }) : Promise.resolve([]),
+            periodRange ? fetchAllPages({ status: 'revised' }) : Promise.resolve([])
+        ])
+            .then(groups => {
+                if (cancelled) return;
+                const byId = new Map<number | undefined, SavedPDF>();
+                groups.flat().forEach(pdf => byId.set(pdf.id, pdf));
+                setPagedDashboardPdfs(
+                    [...byId.values()].sort((a, b) => (parseDate(b.date)?.getTime() || 0) - (parseDate(a.date)?.getTime() || 0))
+                );
+            })
+            .catch(error => {
+                console.error('Erro ao carregar orcamentos por periodo no dashboard:', error);
+                if (!cancelled) setPagedDashboardPdfs([]);
+            })
+            .finally(() => {
+                if (!cancelled) setIsLoadingDashboardPdfs(false);
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [periodRange, previousRange, usePagedPdfData]);
+
+    const dashboardPdfs = usePagedPdfData ? pagedDashboardPdfs : allSavedPdfs;
+
     const periodPdfs = useMemo(() => {
-        return allSavedPdfs
+        return dashboardPdfs
             .filter(pdf => isWithinRange(parseDate(pdf.date), periodRange))
             .sort((a, b) => (parseDate(b.date)?.getTime() || 0) - (parseDate(a.date)?.getTime() || 0));
-    }, [allSavedPdfs, periodRange]);
+    }, [dashboardPdfs, periodRange]);
 
     const periodServicos = useMemo(() => {
         return servicos.filter(servico => isWithinRange(parseDate(servico.data_servico || servico.created_at), periodRange));
@@ -931,7 +1002,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
 
     const expenseRhythm = useMemo(() => {
         const sumProposalExpensesInRange = (range: DateRange | null) =>
-            allSavedPdfs
+            dashboardPdfs
                 .filter(pdf => isWithinRange(parseDate(pdf.date), range))
                 .reduce((sum, pdf) => sum + getOperationalExpenses(pdf), 0);
         const sumStandaloneExpensesInRange = (range: DateRange | null) =>
@@ -948,7 +1019,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
             periodExpenses,
             dailyAverage: periodExpenses / daysInPeriod
         };
-    }, [allSavedPdfs, periodRange, standaloneExpenses]);
+    }, [dashboardPdfs, periodRange, standaloneExpenses]);
 
     const categoryTotals = useMemo(() => {
         const totals = new Map<string, { label: string; value: number }>();
@@ -1044,7 +1115,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
         return Array.from({ length: visibleDays }, (_, index) => {
             const day = addDays(start, index);
             const dayRange = getDayRange(day);
-            const dayPdfs = allSavedPdfs.filter(pdf => isWithinRange(parseDate(pdf.date), dayRange));
+            const dayPdfs = dashboardPdfs.filter(pdf => isWithinRange(parseDate(pdf.date), dayRange));
             const dayStandaloneExpenses = standaloneExpenses.filter(expense => isWithinRange(parseDate(expense.date), dayRange));
             const revenue = dayPdfs.reduce((sum, pdf) => sum + getPdfValue(pdf), 0);
             const expenses = dayPdfs.reduce((sum, pdf) => sum + getOperationalExpenses(pdf), 0)
@@ -1057,19 +1128,19 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                 expenses
             };
         });
-    }, [allSavedPdfs, periodRange, standaloneExpenses]);
+    }, [dashboardPdfs, periodRange, standaloneExpenses]);
 
     const pendingOlderThanSevenDays = useMemo(() => {
         const threshold = addDays(new Date(), -7).getTime();
-        return allSavedPdfs.filter(pdf => {
+        return dashboardPdfs.filter(pdf => {
             const date = parseDate(pdf.date);
             return getPdfStatus(pdf) === 'pending' && !!date && date.getTime() < threshold;
         }).length;
-    }, [allSavedPdfs]);
+    }, [dashboardPdfs]);
 
     const expiredProposalCount = useMemo(() => {
-        return allSavedPdfs.filter(isPdfExpired).length;
-    }, [allSavedPdfs]);
+        return dashboardPdfs.filter(isPdfExpired).length;
+    }, [dashboardPdfs]);
 
     // Central de "Acoes do dia": pendencias que valem a pena abrir o app todo dia.
     // Tudo derivado dos dados que ja temos em memoria (zero consulta nova).
@@ -1091,7 +1162,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
 
         // 2) Orcamentos sem retorno: nao aprovados, enviados ha +5 dias e cujo
         //    cliente nao tem agendamento criado depois (proxy de conversao).
-        const stalledProposals = allSavedPdfs.filter(pdf => {
+        const stalledProposals = dashboardPdfs.filter(pdf => {
             if (getPdfStatus(pdf) === 'approved') return false;
             const date = parseDate(pdf.date);
             if (!date || date.getTime() >= fiveDaysAgoMs) return false;
@@ -1122,7 +1193,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
         });
 
         return { todayAppointments, stalledProposals, pendingReviews, dormantClients };
-    }, [agendamentos, allSavedPdfs, clients]);
+    }, [agendamentos, dashboardPdfs, clients]);
 
     const maxCategoryValue = categoryTotals[0]?.value || 0;
     const maxEvolutionValue = Math.max(
@@ -1130,26 +1201,16 @@ const DashboardView: React.FC<DashboardViewProps> = ({
         ...evolutionItems.map(item => Math.max(item.revenue, item.expenses))
     );
     const statusTotal = Math.max(periodStats.generatedCount, 1);
-    const hasAnyData = allSavedPdfs.length > 0 || clients.length > 0 || agendamentos.length > 0 || servicos.length > 0 || standaloneExpenses.length > 0;
+    const hasAnyData = dashboardPdfs.length > 0 || clients.length > 0 || agendamentos.length > 0 || servicos.length > 0 || standaloneExpenses.length > 0;
     const customDateSummary = `${formatDateInputLabel(customStartDate)} - ${formatDateInputLabel(customEndDate)}`;
     const periodDisplayLabel = period === 'custom' ? `Personalizada: ${customDateSummary}` : PERIOD_LABELS[period];
     const mobilePeriodTriggerLabel = period === 'custom' ? customDateSummary : PERIOD_LABELS[period];
-
-    // Periodo anterior equivalente: mesmo tamanho, imediatamente antes do atual.
-    // Serve para o Assistente Financeiro responder perguntas de comparacao.
-    const previousRange = useMemo<DateRange | null>(() => {
-        if (!periodRange) return null;
-        const lengthMs = periodRange.end.getTime() - periodRange.start.getTime();
-        const end = new Date(periodRange.start.getTime() - 1);
-        const start = new Date(end.getTime() - lengthMs);
-        return { start, end };
-    }, [periodRange]);
 
     // Numeros do periodo anterior, calculados em memoria (zero consulta nova).
     const comparisonStats = useMemo(() => {
         if (!previousRange) return null;
 
-        const prevPdfs = allSavedPdfs.filter(pdf => isWithinRange(parseDate(pdf.date), previousRange));
+        const prevPdfs = dashboardPdfs.filter(pdf => isWithinRange(parseDate(pdf.date), previousRange));
         const prevStandalone = standaloneExpenses.filter(expense => isWithinRange(parseDate(expense.date), previousRange));
         const prevStandaloneTotal = prevStandalone.reduce((sum, expense) => sum + parseNumber(expense.amount), 0);
 
@@ -1193,7 +1254,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                 .filter(item => item.value > 0)
                 .sort((a, b) => b.value - a.value)
         };
-    }, [previousRange, allSavedPdfs, standaloneExpenses]);
+    }, [previousRange, dashboardPdfs, standaloneExpenses]);
 
     const daysInPeriod = useMemo(() => {
         if (!periodRange) return 1;
@@ -1365,6 +1426,18 @@ const DashboardView: React.FC<DashboardViewProps> = ({
         }
     };
 
+    const handleOpenStandaloneExpense = async () => {
+        if (usePagedPdfData && onRequireAllPdfs) {
+            setIsPreparingExpenseModal(true);
+            try {
+                await onRequireAllPdfs();
+            } finally {
+                setIsPreparingExpenseModal(false);
+            }
+        }
+        setIsStandaloneExpenseModalOpen(true);
+    };
+
     const handleDeleteStandaloneExpense = async (expense: StandaloneExpense) => {
         if (!expense.id) return;
 
@@ -1437,6 +1510,12 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                     />
                 </div>
             </div>
+
+            {(isLoadingDashboardPdfs || isPreparingExpenseModal) && (
+                <div className="rounded-[var(--radius-card)] bg-[var(--surface-muted)] px-3 py-2 text-xs font-semibold text-[var(--text-muted)]">
+                    {isPreparingExpenseModal ? 'Preparando dados dos orcamentos...' : 'Atualizando indicadores do periodo...'}
+                </div>
+            )}
 
             <MobilePeriodSelector
                 isOpen={isMobilePeriodOpen}
@@ -1815,7 +1894,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                         <div className="flex items-center gap-2">
                             <button
                                 type="button"
-                                onClick={() => setIsStandaloneExpenseModalOpen(true)}
+                                onClick={handleOpenStandaloneExpense}
                                 className="inline-flex h-9 items-center justify-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] px-3 text-xs font-bold text-[var(--text-strong)] transition-colors hover:bg-[var(--surface)]"
                             >
                                 <Plus className="h-4 w-4" aria-hidden="true" />
@@ -2014,7 +2093,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                     icon={<ReceiptText className="h-4 w-4" aria-hidden="true" />}
                     label="Nova despesa"
                     description="Custo sem proposta"
-                    onClick={() => setIsStandaloneExpenseModalOpen(true)}
+                    onClick={handleOpenStandaloneExpense}
                     tone="amber"
                 />
                 <QuickAction
@@ -2045,7 +2124,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                 onAddClient={() => onOpenClientModal('add')}
                 onOpenAIQuickProposal={onOpenAIQuickProposal}
                 onOpenAgenda={() => onTabChange('agenda')}
-                onOpenExpense={() => setIsStandaloneExpenseModalOpen(true)}
+                onOpenExpense={handleOpenStandaloneExpense}
             />
         </div>
     );

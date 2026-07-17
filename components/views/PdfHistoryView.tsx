@@ -4808,7 +4808,13 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
                         )}
                     </>
                 ) : (
-                    searchTerm ? (
+                    isLoadingMoreServerPdfs ? (
+                        <ContentState
+                            iconClassName="fas fa-spinner fa-spin"
+                            title="Carregando historico"
+                            description="Buscando os orcamentos mais recentes..."
+                        />
+                    ) : searchTerm ? (
                         <ContentState
                             compact
                             iconClassName="fas fa-search"

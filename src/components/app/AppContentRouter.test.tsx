@@ -18,6 +18,8 @@ describe('AppContentRouter', () => {
     isOwner: false,
     isInstalled: false,
     allSavedPdfs: [],
+    hasLoadedAllPdfs: true,
+    onRequireAllPdfs: vi.fn().mockResolvedValue(undefined),
     historyPdfs: [],
     historyHasMore: false,
     isHistoryPageLoading: false,
