@@ -258,4 +258,33 @@ describe('useProposalEditor', () => {
 
     expect(result.current.generalDiscount.filmPriceOverrides?.Blackout.preco).toBe('85');
   });
+
+  it('remove o preço personalizado ao restaurar o valor do catálogo', async () => {
+    mockedDb.getProposalOptions.mockResolvedValue([{
+      id: 71,
+      name: 'Restaurar catalogo',
+      measurements: [],
+      generalDiscount: {
+        value: '',
+        type: 'percentage',
+        filmPriceOverrides: {
+          Blackout: { preco: '120' }
+        }
+      }
+    }]);
+
+    const { result } = buildHook();
+    await act(async () => {});
+
+    expect(result.current.generalDiscount.filmPriceOverrides?.Blackout.preco).toBe('120');
+
+    act(() => {
+      result.current.handleGeneralDiscountChange({
+        ...result.current.generalDiscount,
+        filmPriceOverrides: undefined
+      });
+    });
+
+    expect(result.current.generalDiscount.filmPriceOverrides).toBeUndefined();
+  });
 });

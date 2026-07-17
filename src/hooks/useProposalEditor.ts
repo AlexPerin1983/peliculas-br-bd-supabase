@@ -73,7 +73,11 @@ const normalizeGeneralDiscount = (
                 ? 'labor_only'
                 : 'complete',
         filmPricingModes: discount?.filmPricingModes ?? fallback?.filmPricingModes,
-        filmPriceOverrides: discount?.filmPriceOverrides ?? fallback?.filmPriceOverrides,
+        // `undefined` explícito significa que o usuário restaurou o catálogo.
+        // Não podemos usar `?? fallback` nesse caso, senão o override antigo volta.
+        filmPriceOverrides: discount && Object.prototype.hasOwnProperty.call(discount, 'filmPriceOverrides')
+            ? discount.filmPriceOverrides
+            : fallback?.filmPriceOverrides,
         expenses: normalizeProposalExpenses(discount?.expenses ?? fallback?.expenses),
         hideMeasurements: discount?.hideMeasurements ?? fallback?.hideMeasurements,
         incluirTermoResponsabilidade: discount?.incluirTermoResponsabilidade ?? fallback?.incluirTermoResponsabilidade,
