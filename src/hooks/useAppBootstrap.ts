@@ -1,7 +1,6 @@
 import { Dispatch, SetStateAction, useCallback, useEffect, useRef } from 'react';
 import { Agendamento, Client, Film, SavedPDF, UserInfo } from '../../types';
 import * as db from '../../services/db';
-import * as estoqueDb from '../../services/estoqueDb';
 import { initSyncService, subscribeSyncStatus } from '../../services/syncService';
 import { redirectToCanonicalHostIfNeeded } from '../lib/canonicalHost';
 
@@ -182,10 +181,7 @@ export function useAppBootstrap({
                 loadClients(),
                 loadFilms(),
                 loadAllPdfs(),
-                loadAgendamentos(),
-                estoqueDb.getAllBobinas(),
-                estoqueDb.getAllRetalhos(),
-                estoqueDb.getEstoqueStats()
+                loadAgendamentos()
             ]);
 
             if (isCancelled) {

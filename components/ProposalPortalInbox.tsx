@@ -34,6 +34,7 @@ import ProposalConditionModal from './modals/ProposalConditionModal';
 
 const currency = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 const ATTENTION_WINDOW_MS = 24 * 60 * 60 * 1000;
+const FALLBACK_REFRESH_INTERVAL_MS = 5 * 60_000;
 
 type CompanyProposal = CompanyProposalPortal['proposals'][number];
 
@@ -118,13 +119,21 @@ const ProposalPortalInbox: React.FC<ProposalPortalInboxProps> = ({ defaultOpen =
 
     useEffect(() => {
         void refresh();
-        const interval = window.setInterval(() => void refresh(), 30_000);
+        const refreshWhenVisible = () => {
+            if (document.visibilityState === 'visible') void refresh();
+        };
+        const interval = window.setInterval(refreshWhenVisible, FALLBACK_REFRESH_INTERVAL_MS);
+        document.addEventListener('visibilitychange', refreshWhenVisible);
         const channel = supabase.channel('proposal-portal-inbox')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'proposal_portal_messages' }, () => void refresh())
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'proposal_portal_items' }, () => void refresh())
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'proposal_portals' }, () => void refresh())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'proposal_portal_messages' }, refreshWhenVisible)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'proposal_portal_items' }, refreshWhenVisible)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'proposal_portals' }, refreshWhenVisible)
             .subscribe();
-        return () => { window.clearInterval(interval); void supabase.removeChannel(channel); };
+        return () => {
+            window.clearInterval(interval);
+            document.removeEventListener('visibilitychange', refreshWhenVisible);
+            void supabase.removeChannel(channel);
+        };
     }, [refresh]);
 
     useEffect(() => {

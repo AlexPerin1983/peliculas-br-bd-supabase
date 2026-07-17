@@ -9,6 +9,8 @@ interface ProposalCenterViewProps {
     onOpenHistory: () => void;
 }
 
+const FALLBACK_REFRESH_INTERVAL_MS = 5 * 60_000;
+
 const ProposalCenterView: React.FC<ProposalCenterViewProps> = ({ onOpenHistory }) => {
     const [portals, setPortals] = useState<CompanyProposalPortal[]>([]);
     const [loading, setLoading] = useState(true);
@@ -28,14 +30,19 @@ const ProposalCenterView: React.FC<ProposalCenterViewProps> = ({ onOpenHistory }
 
     useEffect(() => {
         void refresh();
-        const interval = window.setInterval(() => void refresh(), 30_000);
+        const refreshWhenVisible = () => {
+            if (document.visibilityState === 'visible') void refresh();
+        };
+        const interval = window.setInterval(refreshWhenVisible, FALLBACK_REFRESH_INTERVAL_MS);
+        document.addEventListener('visibilitychange', refreshWhenVisible);
         const channel = supabase.channel('proposal-center-summary')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'proposal_portals' }, () => void refresh())
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'proposal_portal_messages' }, () => void refresh())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'proposal_portals' }, refreshWhenVisible)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'proposal_portal_messages' }, refreshWhenVisible)
             .subscribe();
 
         return () => {
             window.clearInterval(interval);
+            document.removeEventListener('visibilitychange', refreshWhenVisible);
             void supabase.removeChannel(channel);
         };
     }, [refresh]);

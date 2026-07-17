@@ -65,6 +65,10 @@ const formatDateTime = (timestamp: number) => new Intl.DateTimeFormat('pt-BR', {
     minute: '2-digit',
 }).format(timestamp);
 
+// O Realtime continua sendo o caminho principal. Este intervalo e apenas uma
+// contingencia para recuperar algum evento que nao tenha chegado.
+const FALLBACK_REFRESH_INTERVAL_MS = 5 * 60_000;
+
 const GlobalNotificationBell: React.FC<GlobalNotificationBellProps> = ({ onNavigate }) => {
     const [items, setItems] = useState<NotificationItem[]>([]);
     const [seenIds, setSeenIds] = useState<Set<string>>(() => readSeenIds());
@@ -158,12 +162,15 @@ const GlobalNotificationBell: React.FC<GlobalNotificationBellProps> = ({ onNavig
 
     useEffect(() => {
         void refresh();
-        const interval = window.setInterval(() => void refresh(), 30_000);
-        const handleVisibility = () => { if (document.visibilityState === 'visible') void refresh(); };
+        const refreshWhenVisible = () => {
+            if (document.visibilityState === 'visible') void refresh();
+        };
+        const interval = window.setInterval(refreshWhenVisible, FALLBACK_REFRESH_INTERVAL_MS);
+        const handleVisibility = refreshWhenVisible;
         document.addEventListener('visibilitychange', handleVisibility);
         const channel = supabase.channel('global-notification-center')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'proposal_portal_messages' }, () => void refresh())
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'agendamentos' }, () => void refresh())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'proposal_portal_messages' }, refreshWhenVisible)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'agendamentos' }, refreshWhenVisible)
             .subscribe();
 
         return () => {
