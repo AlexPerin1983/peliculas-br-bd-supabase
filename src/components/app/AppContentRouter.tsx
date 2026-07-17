@@ -314,6 +314,7 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
                 onRescheduleAgendamento={onRescheduleAgendamento}
                 onCreateNewAgendamento={onCreateNewAgendamento}
                 googleReviewsLink={userInfo?.socialLinks?.googleReviews}
+                userInfo={userInfo}
             />,
             defaultLoadingView
         );

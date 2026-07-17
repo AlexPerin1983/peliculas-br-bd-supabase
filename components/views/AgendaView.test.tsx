@@ -101,4 +101,15 @@ describe('AgendaView', () => {
 
         expect(screen.queryByRole('link', { name: /navegar ate endereco/i })).not.toBeInTheDocument();
     });
+
+    it('permite gerar recibo somente para atendimento concluido com valor', () => {
+        renderAgenda([clientWithAddress], [{ ...appointment, serviceStatus: 'completed', valorFinal: 380 }]);
+
+        const receiptButtons = screen.getAllByRole('button', { name: /gerar recibo do servi/i });
+        fireEvent.click(receiptButtons[0]);
+
+        expect(screen.getByRole('heading', { name: /gerar recibo/i })).toBeInTheDocument();
+        expect(screen.getAllByText(/380,00/).length).toBeGreaterThan(0);
+        expect(screen.getByDisplayValue(/fornecimento e aplica/i)).toBeInTheDocument();
+    });
 });

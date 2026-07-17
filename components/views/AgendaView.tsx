@@ -1,12 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Drawer } from 'vaul';
-import { Agendamento, AgendamentoServiceStatus, Client, SavedPDF } from '../../types';
+import { Agendamento, AgendamentoServiceStatus, Client, SavedPDF, UserInfo } from '../../types';
 import ActionButton from '../ui/ActionButton';
 import ContentState from '../ui/ContentState';
 import Modal from '../ui/Modal';
 import AgendaPushReminderControl from './AgendaPushReminderControl';
 import { getAgendaPushState } from '../../services/agendaPushNotifications';
 import { parseCurrencyInput } from '../../src/lib/proposalExpenses';
+import ReceiptModal from '../modals/ReceiptModal';
 import {
     buildReviewFollowUpMessage,
     buildShortReviewMessage,
@@ -29,6 +30,7 @@ interface AgendaViewProps {
     onRescheduleAgendamento: (agendamento: Agendamento) => void;
     onCreateNewAgendamento: (date: Date) => void;
     googleReviewsLink?: string;
+    userInfo?: UserInfo | null;
 }
 
 type AgendamentoWithStatus = Agendamento & { status?: SavedPDF['status'] };
@@ -751,9 +753,10 @@ const AppointmentCard: React.FC<{
     onContinueAgendamento: (agendamento: Agendamento) => void;
     onReschedule: (agendamento: Agendamento) => void;
     googleReviewsLink?: string;
+    userInfo?: UserInfo | null;
     reviewStars: number;
     onUpdateReviewRating: (agendamentoId: number, stars: number) => void;
-}> = ({ agendamento, client, linkedPdf, onEdit, onUpdateServiceStatus, onCompleteWithValue, onContinueAgendamento, onReschedule, googleReviewsLink, reviewStars, onUpdateReviewRating }) => {
+}> = ({ agendamento, client, linkedPdf, onEdit, onUpdateServiceStatus, onCompleteWithValue, onContinueAgendamento, onReschedule, googleReviewsLink, userInfo, reviewStars, onUpdateReviewRating }) => {
     const status = agendamento.status || 'pending';
     const meta = STATUS_META[status] || STATUS_META.pending;
     const serviceStatus = agendamento.serviceStatus || 'scheduled';
@@ -763,6 +766,7 @@ const AppointmentCard: React.FC<{
     const [finalValueInput, setFinalValueInput] = useState('');
     const [isChoosingWhatsapp, setIsChoosingWhatsapp] = useState(false);
     const [isRequestingReview, setIsRequestingReview] = useState(false);
+    const [isReceiptOpen, setIsReceiptOpen] = useState(false);
 
     // Valor exibido/editado: vem do orcamento vinculado ou, sem orcamento, do
     // valor avulso guardado no proprio agendamento.
@@ -975,6 +979,16 @@ const AppointmentCard: React.FC<{
                                     <span>{hasCurrentValue ? 'Editar valor' : 'Adicionar valor'}</span>
                                 </button>
                             </div>
+                            {hasCurrentValue ? (
+                                <button
+                                    type="button"
+                                    onClick={() => setIsReceiptOpen(true)}
+                                    className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-[var(--radius-control)] bg-blue-600 px-3 text-xs font-bold text-white shadow-sm transition-colors hover:bg-blue-700"
+                                >
+                                    <i className="fas fa-receipt text-[12px]" aria-hidden="true"></i>
+                                    <span>Gerar recibo do serviço</span>
+                                </button>
+                            ) : null}
                             {!isReviewed ? (
                                 <button
                                     type="button"
@@ -999,6 +1013,18 @@ const AppointmentCard: React.FC<{
                     stars={reviewStars}
                     onRate={(value) => { if (agendamento.id != null) onUpdateReviewRating(agendamento.id, value); }}
                     onClose={() => setIsRequestingReview(false)}
+                />
+            ) : null}
+
+            {hasCurrentValue ? (
+                <ReceiptModal
+                    isOpen={isReceiptOpen}
+                    onClose={() => setIsReceiptOpen(false)}
+                    agendamento={agendamento}
+                    client={client}
+                    linkedPdf={linkedPdf}
+                    userInfo={userInfo}
+                    amount={currentValue!}
                 />
             ) : null}
 
@@ -1296,7 +1322,7 @@ const AgendaQuickButton: React.FC<{
 
 const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
 
-const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, onEditAgendamento, onUpdateServiceStatus, onCompleteAgendamentoWithValue, onContinueAgendamento, onRescheduleAgendamento, onCreateNewAgendamento, googleReviewsLink }) => {
+const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, onEditAgendamento, onUpdateServiceStatus, onCompleteAgendamentoWithValue, onContinueAgendamento, onRescheduleAgendamento, onCreateNewAgendamento, googleReviewsLink, userInfo }) => {
     const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState(new Date());
     const [reviewRatings, setReviewRatings] = useState<Record<number, number>>(() => readAllReviewRatings());
@@ -1802,7 +1828,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                         <div className="space-y-3">
                             {selectedDayAgendamentos.map((agendamento) => {
                                 const client = clientsById.get(agendamento.clienteId);
-                                return <AppointmentCard key={agendamento.id} agendamento={agendamento} client={client} linkedPdf={agendamento.pdfId ? pdfById.get(agendamento.pdfId) : undefined} onEdit={onEditAgendamento} onUpdateServiceStatus={onUpdateServiceStatus} onCompleteWithValue={onCompleteAgendamentoWithValue} onContinueAgendamento={onContinueAgendamento} onReschedule={onRescheduleAgendamento} googleReviewsLink={googleReviewsLink} reviewStars={agendamento.id != null ? (reviewRatings[agendamento.id] || 0) : 0} onUpdateReviewRating={handleUpdateReviewRating} />;
+                                return <AppointmentCard key={agendamento.id} agendamento={agendamento} client={client} linkedPdf={agendamento.pdfId ? pdfById.get(agendamento.pdfId) : undefined} onEdit={onEditAgendamento} onUpdateServiceStatus={onUpdateServiceStatus} onCompleteWithValue={onCompleteAgendamentoWithValue} onContinueAgendamento={onContinueAgendamento} onReschedule={onRescheduleAgendamento} googleReviewsLink={googleReviewsLink} userInfo={userInfo} reviewStars={agendamento.id != null ? (reviewRatings[agendamento.id] || 0) : 0} onUpdateReviewRating={handleUpdateReviewRating} />;
                             })}
                         </div>
                     ) : (
@@ -1853,7 +1879,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                                     </div>
                                     {items.map((agendamento) => {
                                         const client = clientsById.get(agendamento.clienteId);
-                                        return <AppointmentCard key={agendamento.id} agendamento={agendamento} client={client} linkedPdf={agendamento.pdfId ? pdfById.get(agendamento.pdfId) : undefined} onEdit={onEditAgendamento} onUpdateServiceStatus={onUpdateServiceStatus} onCompleteWithValue={onCompleteAgendamentoWithValue} onContinueAgendamento={onContinueAgendamento} onReschedule={onRescheduleAgendamento} googleReviewsLink={googleReviewsLink} reviewStars={agendamento.id != null ? (reviewRatings[agendamento.id] || 0) : 0} onUpdateReviewRating={handleUpdateReviewRating} />;
+                                        return <AppointmentCard key={agendamento.id} agendamento={agendamento} client={client} linkedPdf={agendamento.pdfId ? pdfById.get(agendamento.pdfId) : undefined} onEdit={onEditAgendamento} onUpdateServiceStatus={onUpdateServiceStatus} onCompleteWithValue={onCompleteAgendamentoWithValue} onContinueAgendamento={onContinueAgendamento} onReschedule={onRescheduleAgendamento} googleReviewsLink={googleReviewsLink} userInfo={userInfo} reviewStars={agendamento.id != null ? (reviewRatings[agendamento.id] || 0) : 0} onUpdateReviewRating={handleUpdateReviewRating} />;
                                     })}
                                 </div>
                             ))}
@@ -1966,7 +1992,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                         <div className="space-y-3">
                             {selectedDayAgendamentos.map((agendamento) => {
                                 const client = clientsById.get(agendamento.clienteId);
-                                return <AppointmentCard key={agendamento.id} agendamento={agendamento} client={client} linkedPdf={agendamento.pdfId ? pdfById.get(agendamento.pdfId) : undefined} onEdit={onEditAgendamento} onUpdateServiceStatus={onUpdateServiceStatus} onCompleteWithValue={onCompleteAgendamentoWithValue} onContinueAgendamento={onContinueAgendamento} onReschedule={onRescheduleAgendamento} googleReviewsLink={googleReviewsLink} reviewStars={agendamento.id != null ? (reviewRatings[agendamento.id] || 0) : 0} onUpdateReviewRating={handleUpdateReviewRating} />;
+                                return <AppointmentCard key={agendamento.id} agendamento={agendamento} client={client} linkedPdf={agendamento.pdfId ? pdfById.get(agendamento.pdfId) : undefined} onEdit={onEditAgendamento} onUpdateServiceStatus={onUpdateServiceStatus} onCompleteWithValue={onCompleteAgendamentoWithValue} onContinueAgendamento={onContinueAgendamento} onReschedule={onRescheduleAgendamento} googleReviewsLink={googleReviewsLink} userInfo={userInfo} reviewStars={agendamento.id != null ? (reviewRatings[agendamento.id] || 0) : 0} onUpdateReviewRating={handleUpdateReviewRating} />;
                             })}
                         </div>
                     ) : (
