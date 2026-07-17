@@ -1,4 +1,4 @@
-import { Dispatch, SetStateAction, useCallback } from 'react';
+import { Dispatch, SetStateAction, useCallback, useState } from 'react';
 import * as db from '../../services/db';
 import { Client, Film, ProposalDiscount, ProposalOption, ProposalPaymentConfig, SavedPDF, Totals, UIMeasurement, UserInfo } from '../../types';
 import { clampValidityDays } from '../lib/proposalValidity';
@@ -61,6 +61,11 @@ export function usePdfActions({
     handleShowInfo,
     handleSaveChanges
 }: UsePdfActionsParams) {
+    const [latestGeneratedPdf, setLatestGeneratedPdf] = useState<{
+        blob: Blob;
+        filename: string;
+        clientName: string;
+    } | null>(null);
     const downloadBlob = useCallback((blobOrBase64: Blob | string, filename: string) => {
         let blob: Blob;
 
@@ -99,6 +104,24 @@ export function usePdfActions({
         document.body.removeChild(anchor);
         URL.revokeObjectURL(url);
     }, []);
+
+    const handleShareGeneratedPdf = useCallback(async (): Promise<'shared' | 'downloaded' | 'unavailable'> => {
+        if (!latestGeneratedPdf) return 'unavailable';
+
+        const { blob, filename, clientName } = latestGeneratedPdf;
+        const file = new File([blob], filename, { type: 'application/pdf' });
+        if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
+            await navigator.share({
+                title: `Proposta de serviço - ${clientName}`,
+                text: `Olá, ${clientName}. Segue o PDF com os detalhes do serviço.`,
+                files: [file],
+            });
+            return 'shared';
+        }
+
+        downloadBlob(blob, filename);
+        return 'downloaded';
+    }, [downloadBlob, latestGeneratedPdf]);
 
     const handleDownloadPdf = useCallback(async (pdf: SavedPDF, filename: string) => {
         let blob = pdf.pdfBlob;
@@ -147,6 +170,7 @@ export function usePdfActions({
         }
 
         setPdfGenerationStatus('generating');
+        setLatestGeneratedPdf(null);
 
         try {
             const { generatePDF } = await import('../../services/pdfGenerator');
@@ -202,6 +226,11 @@ export function usePdfActions({
             };
 
             const savedPdf = await db.savePDF(pdfToSave);
+            setLatestGeneratedPdf({
+                blob: pdfBlob,
+                filename,
+                clientName: selectedClient.nome,
+            });
             downloadBlob(pdfBlob, filename);
             setAllSavedPdfs(previous => [savedPdf, ...previous]);
             if (typeof window !== 'undefined' && selectedClientId != null) {
@@ -269,6 +298,7 @@ export function usePdfActions({
         }
 
         setPdfGenerationStatus('generating');
+        setLatestGeneratedPdf(null);
 
         try {
             const client = clients.find(item => item.id === selectedPdfs[0].clienteId);
@@ -281,6 +311,7 @@ export function usePdfActions({
             const firstOptionName = selectedPdfs[0].proposalOptionName || 'Opcao';
             const filename = `orcamento_combinado_${sanitizeForFilename(client.nome).replace(/\s+/g, '_').toLowerCase()}_${sanitizeForFilename(firstOptionName).replace(/\s+/g, '_').toLowerCase()}_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.pdf`;
 
+            setLatestGeneratedPdf({ blob: pdfBlob, filename, clientName: client.nome });
             downloadBlob(pdfBlob, filename);
             setPdfGenerationStatus('success');
         } catch (error) {
@@ -292,6 +323,8 @@ export function usePdfActions({
 
     return {
         handleDownloadPdf,
+        handleShareGeneratedPdf,
+        canShareGeneratedPdf: latestGeneratedPdf !== null,
         handleGeneratePdf,
         handleGeneratePdfWithSaveCheck,
         handleConfirmSaveBeforePdf,

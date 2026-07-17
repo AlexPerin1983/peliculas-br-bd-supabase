@@ -1145,6 +1145,8 @@ const App: React.FC = () => {
 
     const {
         handleDownloadPdf,
+        handleShareGeneratedPdf,
+        canShareGeneratedPdf,
         handleGeneratePdfWithSaveCheck,
         handleConfirmSaveBeforePdf,
         handleGenerateCombinedPdf
@@ -2603,6 +2605,8 @@ Se não conseguir extrair, retorne: []`;
         pdfGenerationStatus,
         handleClosePdfStatusModal,
         handleGoToHistoryFromPdf,
+        handleShareGeneratedPdf,
+        canShareGeneratedPdf,
         isProcessingAI,
         isAIQuickProposalModalOpen,
         setIsAIQuickProposalModalOpen,

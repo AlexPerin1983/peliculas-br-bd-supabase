@@ -110,6 +110,8 @@ interface ModalsContainerProps {
     pdfGenerationStatus: 'idle' | 'generating' | 'success';
     handleClosePdfStatusModal: () => void;
     handleGoToHistoryFromPdf: () => void;
+    handleShareGeneratedPdf: () => Promise<'shared' | 'downloaded' | 'unavailable'>;
+    canShareGeneratedPdf: boolean;
 
     // Edit Measurement Modal
     editingMeasurement: UIMeasurement | null;
@@ -473,6 +475,8 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
                     status={props.pdfGenerationStatus as 'generating' | 'success'}
                     onClose={props.handleClosePdfStatusModal}
                     onGoToHistory={props.handleGoToHistoryFromPdf}
+                    onShare={props.handleShareGeneratedPdf}
+                    canShare={props.canShareGeneratedPdf}
                 />
             )}
 

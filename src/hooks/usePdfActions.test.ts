@@ -198,6 +198,33 @@ describe('usePdfActions', () => {
     expect(handleShowInfo).not.toHaveBeenCalled();
   });
 
+  it('compartilha o ultimo PDF gerado pelo menu nativo', async () => {
+    createAnchor();
+    const nativeShare = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'share', { configurable: true, value: nativeShare });
+    Object.defineProperty(navigator, 'canShare', { configurable: true, value: vi.fn().mockReturnValue(true) });
+    const pdfBlob = new Blob(['pdf'], { type: 'application/pdf' });
+    const pdfModule = await import('../../services/pdfGenerator');
+    vi.mocked(pdfModule.generatePDF).mockResolvedValue(pdfBlob);
+    mockedDb.savePDF.mockResolvedValue({
+      id: 102,
+      clienteId: 12,
+      date: new Date().toISOString(),
+      totalPreco: 190,
+      totalM2: 2,
+      nomeArquivo: 'teste.pdf'
+    });
+    const { result } = buildHook();
+
+    await act(async () => { await result.current.handleGeneratePdf(); });
+    expect(result.current.canShareGeneratedPdf).toBe(true);
+    await act(async () => { await result.current.handleShareGeneratedPdf(); });
+
+    expect(nativeShare).toHaveBeenCalledWith(expect.objectContaining({
+      files: expect.arrayContaining([expect.any(File)])
+    }));
+  });
+
   it('avisa quando faltam dados obrigatorios para gerar PDF', async () => {
     const handleShowInfo = vi.fn();
     const { result } = buildHook({
