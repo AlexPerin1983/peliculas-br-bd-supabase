@@ -13,6 +13,11 @@ interface UseAppBootstrapParams {
     setUserInfo: Dispatch<SetStateAction<UserInfo | null>>;
     setFilms: Dispatch<SetStateAction<Film[]>>;
     setAllSavedPdfs: Dispatch<SetStateAction<SavedPDF[]>>;
+    setHistoryPdfs: Dispatch<SetStateAction<SavedPDF[]>>;
+    setHistoryHasMore: Dispatch<SetStateAction<boolean>>;
+    setHistoryNextOffset: Dispatch<SetStateAction<number>>;
+    setHasLoadedAllPdfs: Dispatch<SetStateAction<boolean>>;
+    loadHistoryFirst?: boolean;
     setAgendamentos: Dispatch<SetStateAction<Agendamento[]>>;
     setHasLoadedHistory: Dispatch<SetStateAction<boolean>>;
     setHasLoadedAgendamentos: Dispatch<SetStateAction<boolean>>;
@@ -27,11 +32,18 @@ export function useAppBootstrap({
     setUserInfo,
     setFilms,
     setAllSavedPdfs,
+    setHistoryPdfs,
+    setHistoryHasMore,
+    setHistoryNextOffset,
+    setHasLoadedAllPdfs,
+    loadHistoryFirst = false,
     setAgendamentos,
     setHasLoadedHistory,
     setHasLoadedAgendamentos
 }: UseAppBootstrapParams) {
     const lastSelectedClientIdRef = useRef<number | null | undefined>(lastSelectedClientId);
+    const historyNextOffsetRef = useRef(0);
+    const hasLoadedAllPdfsRef = useRef(false);
 
     useEffect(() => {
         lastSelectedClientIdRef.current = lastSelectedClientId;
@@ -79,7 +91,25 @@ export function useAppBootstrap({
     const loadAllPdfs = useCallback(async () => {
         const pdfs = await db.getAllPDFs();
         setAllSavedPdfs(pdfs);
-    }, [setAllSavedPdfs]);
+        hasLoadedAllPdfsRef.current = true;
+        setHasLoadedAllPdfs(true);
+    }, [setAllSavedPdfs, setHasLoadedAllPdfs]);
+
+    const loadPdfHistoryPage = useCallback(async (options?: { reset?: boolean }) => {
+        const reset = options?.reset === true;
+        const requestedOffset = reset ? 0 : historyNextOffsetRef.current;
+
+        const page = await db.getPDFPage({ offset: requestedOffset, limit: 50 });
+        setHistoryPdfs(current => {
+            if (reset) return page.pdfs;
+            const byId = new Map(current.map(pdf => [pdf.id, pdf]));
+            page.pdfs.forEach(pdf => byId.set(pdf.id, pdf));
+            return [...byId.values()].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        });
+        setHistoryHasMore(page.hasMore);
+        historyNextOffsetRef.current = page.nextOffset;
+        setHistoryNextOffset(page.nextOffset);
+    }, [setHistoryHasMore, setHistoryNextOffset, setHistoryPdfs]);
 
     const loadAgendamentos = useCallback(async () => {
         const data = await db.getAllAgendamentos();
@@ -100,10 +130,10 @@ export function useAppBootstrap({
 
         await Promise.all([
             loadClients(undefined, false),
-            loadAllPdfs(),
+            hasLoadedAllPdfsRef.current ? loadAllPdfs() : loadPdfHistoryPage({ reset: true }),
             loadAgendamentos()
         ]);
-    }, [loadAgendamentos, loadAllPdfs, loadClients]);
+    }, [loadAgendamentos, loadAllPdfs, loadClients, loadPdfHistoryPage]);
 
     useEffect(() => {
         initSyncService();
@@ -180,7 +210,7 @@ export function useAppBootstrap({
                 db.getUserInfo(),
                 loadClients(),
                 loadFilms(),
-                loadAllPdfs(),
+                loadHistoryFirst ? loadPdfHistoryPage({ reset: true }) : loadAllPdfs(),
                 loadAgendamentos()
             ]);
 
@@ -216,8 +246,10 @@ export function useAppBootstrap({
         authUserId,
         loadAgendamentos,
         loadAllPdfs,
+        loadHistoryFirst,
         loadClients,
         loadFilms,
+        loadPdfHistoryPage,
         setHasLoadedAgendamentos,
         setHasLoadedHistory,
         setIsLoading,
@@ -228,6 +260,7 @@ export function useAppBootstrap({
         loadClients,
         loadFilms,
         loadAllPdfs,
+        loadPdfHistoryPage,
         loadAgendamentos
     };
 }

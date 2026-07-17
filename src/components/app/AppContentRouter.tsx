@@ -35,6 +35,11 @@ interface AppContentRouterProps {
     isOwner: boolean;
     isInstalled: boolean;
     allSavedPdfs: SavedPDF[];
+    historyPdfs: SavedPDF[];
+    historyHasMore: boolean;
+    isHistoryPageLoading: boolean;
+    onLoadMoreHistoryPdfs: () => Promise<void>;
+    onEnsureCompleteHistory: () => Promise<void>;
     clients: Client[];
     agendamentos: Agendamento[];
     films: Film[];
@@ -115,6 +120,11 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
     isOwner,
     isInstalled,
     allSavedPdfs,
+    historyPdfs,
+    historyHasMore,
+    isHistoryPageLoading,
+    onLoadMoreHistoryPdfs,
+    onEnsureCompleteHistory,
     clients,
     agendamentos,
     films,
@@ -278,7 +288,11 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
     if (activeTab === 'history') {
         return renderDeferred(
             <PdfHistoryView
-                pdfs={allSavedPdfs}
+                pdfs={historyPdfs}
+                hasMoreServerPdfs={historyHasMore}
+                isLoadingMoreServerPdfs={isHistoryPageLoading}
+                onLoadMoreServerPdfs={onLoadMoreHistoryPdfs}
+                onEnsureCompleteServerHistory={onEnsureCompleteHistory}
                 clients={clients}
                 agendamentos={agendamentos}
                 films={films}

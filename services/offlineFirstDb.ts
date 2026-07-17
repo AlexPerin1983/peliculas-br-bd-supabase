@@ -527,6 +527,60 @@ export async function getAllPDFs(): Promise<SavedPDF[]> {
     }
 }
 
+export async function getPDFPage(
+    query: supabaseDb.PDFPageQuery = {}
+): Promise<supabaseDb.PDFPageResult> {
+    const offset = Math.max(0, Math.trunc(query.offset || 0));
+    const limit = Math.min(100, Math.max(1, Math.trunc(query.limit || 50)));
+
+    try {
+        const localPdfs = await offlineDb.getAllPdfsLocal();
+
+        if (isOnlineNow()) {
+            const remotePage = await supabaseDb.getPDFPage({ ...query, offset, limit });
+            if (offset > 0) return remotePage;
+
+            const merged = mergeUnsyncedLocalPdfs(remotePage.pdfs, localPdfs);
+            return {
+                pdfs: merged.slice(0, limit),
+                hasMore: remotePage.hasMore || merged.length > limit,
+                // O cursor acompanha somente as linhas remotas. PDFs locais
+                // pendentes nao podem deslocar a proxima pagina do Supabase.
+                nextOffset: remotePage.nextOffset
+            };
+        }
+
+        const normalizedSearch = query.search?.trim().toLocaleLowerCase('pt-BR') || '';
+        const filtered = sortPdfsByDateDesc(localPdfs.map(stripPdfSyncMetadata)).filter(pdf => {
+            const timestamp = new Date(pdf.date).getTime();
+            if (query.startDate && timestamp < new Date(query.startDate).getTime()) return false;
+            if (query.endDate && timestamp > new Date(query.endDate).getTime()) return false;
+            if (query.status && pdf.status !== query.status) return false;
+            if (normalizedSearch) {
+                const haystack = `${pdf.clientName || ''} ${pdf.nomeArquivo || ''}`.toLocaleLowerCase('pt-BR');
+                if (!haystack.includes(normalizedSearch)) return false;
+            }
+            return true;
+        });
+        const pdfs = filtered.slice(offset, offset + limit);
+
+        return {
+            pdfs,
+            hasMore: offset + pdfs.length < filtered.length,
+            nextOffset: offset + pdfs.length
+        };
+    } catch (error) {
+        console.error('[OfflineFirst] Erro ao buscar pagina de PDFs, usando cache local:', error);
+        const localPdfs = await offlineDb.getAllPdfsLocal();
+        const pdfs = sortPdfsByDateDesc(localPdfs.map(stripPdfSyncMetadata)).slice(offset, offset + limit);
+        return {
+            pdfs,
+            hasMore: offset + pdfs.length < localPdfs.length,
+            nextOffset: offset + pdfs.length
+        };
+    }
+}
+
 export async function savePDF(pdf: SavedPDF): Promise<SavedPDF> {
     const localPdf = await offlineDb.savePdfLocal(pdf);
 

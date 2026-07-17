@@ -510,6 +510,23 @@ export const deleteCustomFilm = async (filmName: string): Promise<void> => {
 // SAVED PDF FUNCTIONS
 // ============================================
 
+export interface PDFPageQuery {
+    offset?: number;
+    limit?: number;
+    startDate?: string;
+    endDate?: string;
+    search?: string;
+    status?: SavedPDF['status'];
+}
+
+export interface PDFPageResult {
+    pdfs: SavedPDF[];
+    hasMore: boolean;
+    nextOffset: number;
+}
+
+const SAVED_PDF_LIST_COLUMNS = 'id, client_id, client_name, date, expiration_date, total_preco, total_m2, subtotal, general_discount_amount, general_discount, nome_arquivo, measurements, status, agendamento_id, proposal_option_name, proposal_option_id, archived_at';
+
 export const savePDF = async (pdfData: Omit<SavedPDF, 'id'>): Promise<SavedPDF> => {
     const userId = await getCurrentUserId();
     if (!userId) throw new Error('User not authenticated');
@@ -614,7 +631,7 @@ export const getAllPDFs = async (): Promise<SavedPDF[]> => {
     // N?O buscamos o pdf_blob aqui para performance
     const { data, error } = await supabase
         .from('saved_pdfs')
-        .select('id, client_id, client_name, date, expiration_date, total_preco, total_m2, subtotal, general_discount_amount, general_discount, nome_arquivo, measurements, status, agendamento_id, proposal_option_name, proposal_option_id, archived_at')
+        .select(SAVED_PDF_LIST_COLUMNS)
         .order('date', { ascending: false });
 
     if (error) {
@@ -624,6 +641,57 @@ export const getAllPDFs = async (): Promise<SavedPDF[]> => {
 
     const pdfs = await Promise.all((data || []).map(row => mapRowToPDF(row)));
     return pdfs;
+};
+
+export const getPDFPage = async ({
+    offset = 0,
+    limit = 50,
+    startDate,
+    endDate,
+    search,
+    status
+}: PDFPageQuery = {}): Promise<PDFPageResult> => {
+    const userId = await getCurrentUserId();
+    if (!userId) return { pdfs: [], hasMore: false, nextOffset: 0 };
+
+    const safeOffset = Math.max(0, Math.trunc(offset));
+    const safeLimit = Math.min(100, Math.max(1, Math.trunc(limit)));
+    let query = supabase
+        .from('saved_pdfs')
+        .select(SAVED_PDF_LIST_COLUMNS)
+        .order('date', { ascending: false })
+        .order('id', { ascending: false })
+        // Busca um item extra para descobrir se existe outra pagina, evitando
+        // uma consulta COUNT em cada clique de "Carregar mais".
+        .range(safeOffset, safeOffset + safeLimit);
+
+    if (startDate) query = query.gte('date', startDate);
+    if (endDate) query = query.lte('date', endDate);
+    if (status) query = query.eq('status', status);
+
+    const normalizedSearch = search?.trim();
+    if (normalizedSearch) {
+        // Caracteres que alteram a sintaxe do filtro PostgREST sao removidos;
+        // a busca continua aceitando nomes, arquivos, datas e valores comuns.
+        const escapedSearch = normalizedSearch.replace(/[,%()]/g, ' ').trim();
+        if (escapedSearch) {
+            query = query.or(`client_name.ilike.%${escapedSearch}%,nome_arquivo.ilike.%${escapedSearch}%`);
+        }
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    const rows = data || [];
+    const hasMore = rows.length > safeLimit;
+    const visibleRows = hasMore ? rows.slice(0, safeLimit) : rows;
+    const pdfs = await Promise.all(visibleRows.map(row => mapRowToPDF(row)));
+
+    return {
+        pdfs,
+        hasMore,
+        nextOffset: safeOffset + pdfs.length
+    };
 };
 
 export const getPDFBlob = async (id: number): Promise<Blob | null> => {
@@ -659,7 +727,7 @@ export const getPDFsForClient = async (clientId: number): Promise<SavedPDF[]> =>
     // N?O buscamos o pdf_blob aqui para reduzir egress (blob sob demanda via getPDFBlob)
     const { data, error } = await supabase
         .from('saved_pdfs')
-        .select('id, client_id, client_name, date, expiration_date, total_preco, total_m2, subtotal, general_discount_amount, general_discount, nome_arquivo, measurements, status, agendamento_id, proposal_option_name, proposal_option_id, archived_at')
+        .select(SAVED_PDF_LIST_COLUMNS)
         .eq('client_id', clientId)
         .order('date', { ascending: false });
 

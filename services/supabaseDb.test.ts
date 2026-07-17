@@ -129,4 +129,27 @@ describe('supabaseDb PDF updates', () => {
       end
     }));
   });
+
+  it('pagina PDFs usando um registro extra para indicar a proxima pagina', async () => {
+    const rangeMock = vi.fn().mockResolvedValue({
+      data: [
+        { id: 3, client_id: 1, client_name: 'C', date: '2026-07-03', total_preco: 30, total_m2: 1, nome_arquivo: 'c.pdf', measurements: [] },
+        { id: 2, client_id: 1, client_name: 'B', date: '2026-07-02', total_preco: 20, total_m2: 1, nome_arquivo: 'b.pdf', measurements: [] },
+        { id: 1, client_id: 1, client_name: 'A', date: '2026-07-01', total_preco: 10, total_m2: 1, nome_arquivo: 'a.pdf', measurements: [] }
+      ],
+      error: null
+    });
+    const secondOrderMock = vi.fn().mockReturnValue({ range: rangeMock });
+    const firstOrderMock = vi.fn().mockReturnValue({ order: secondOrderMock });
+    const pageSelectMock = vi.fn().mockReturnValue({ order: firstOrderMock });
+    fromMock.mockReturnValue({ select: pageSelectMock });
+
+    const { getPDFPage } = await import('./supabaseDb');
+    const result = await getPDFPage({ offset: 0, limit: 2 });
+
+    expect(rangeMock).toHaveBeenCalledWith(0, 2);
+    expect(result.pdfs.map(pdf => pdf.id)).toEqual([3, 2]);
+    expect(result.hasMore).toBe(true);
+    expect(result.nextOffset).toBe(2);
+  });
 });

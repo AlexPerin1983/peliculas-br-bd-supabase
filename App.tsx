@@ -241,6 +241,12 @@ const App: React.FC = () => {
     const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
     const [films, setFilms] = useState<Film[]>([]);
     const [allSavedPdfs, setAllSavedPdfs] = useState<SavedPDF[]>([]);
+    const [historyPdfs, setHistoryPdfs] = useState<SavedPDF[]>([]);
+    const [historyHasMore, setHistoryHasMore] = useState(false);
+    const [historyNextOffset, setHistoryNextOffset] = useState(0);
+    const [hasLoadedAllPdfs, setHasLoadedAllPdfs] = useState(false);
+    const [isHistoryPageLoading, setIsHistoryPageLoading] = useState(false);
+    const isLoadingAllPdfsRef = useRef(false);
     const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
     // Marcacao de status operacional vinda de uma notificacao push (deep link/acao).
     const [pendingServiceStatusMark, setPendingServiceStatusMark] = useState<{ id: number; status: AgendamentoServiceStatus } | null>(null);
@@ -251,6 +257,7 @@ const App: React.FC = () => {
         }
         return 'dashboard';
     });
+    const loadHistoryFirstRef = useRef(activeTab === 'history');
     const [billingReturnState, setBillingReturnState] = useState<BillingReturnState | null>(null);
     const [isBillingReturnVisible, setIsBillingReturnVisible] = useState(false);
     // Pilha de abas visitadas para o botao "voltar" estilo navegacao nativa.
@@ -674,6 +681,7 @@ const App: React.FC = () => {
         loadClients,
         loadFilms,
         loadAllPdfs,
+        loadPdfHistoryPage,
         loadAgendamentos
     } = useAppBootstrap({
         authUserId: needsOrganizationSetup ? undefined : authUser?.id,
@@ -684,10 +692,65 @@ const App: React.FC = () => {
         setUserInfo,
         setFilms,
         setAllSavedPdfs,
+        setHistoryPdfs,
+        setHistoryHasMore,
+        setHistoryNextOffset,
+        setHasLoadedAllPdfs,
+        loadHistoryFirst: loadHistoryFirstRef.current,
         setAgendamentos,
         setHasLoadedHistory,
         setHasLoadedAgendamentos
     });
+
+    const handleLoadMoreHistoryPdfs = useCallback(async () => {
+        if (isHistoryPageLoading || !historyHasMore || hasLoadedAllPdfs) return;
+        setIsHistoryPageLoading(true);
+        try {
+            await loadPdfHistoryPage();
+        } finally {
+            setIsHistoryPageLoading(false);
+        }
+    }, [hasLoadedAllPdfs, historyHasMore, isHistoryPageLoading, loadPdfHistoryPage]);
+
+    const handleEnsureCompleteHistory = useCallback(async () => {
+        if (isHistoryPageLoading || !historyHasMore || hasLoadedAllPdfs) return;
+        setIsHistoryPageLoading(true);
+        try {
+            let offset = historyNextOffset;
+            let hasMore = true;
+            const loaded: SavedPDF[] = [];
+
+            while (hasMore) {
+                const page = await db.getPDFPage({ offset, limit: 100 });
+                loaded.push(...page.pdfs);
+                offset = page.nextOffset;
+                hasMore = page.hasMore;
+            }
+
+            setHistoryPdfs(current => {
+                const byId = new Map(current.map(pdf => [pdf.id, pdf]));
+                loaded.forEach(pdf => byId.set(pdf.id, pdf));
+                return [...byId.values()].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            });
+            setHistoryNextOffset(offset);
+            setHistoryHasMore(false);
+        } finally {
+            setIsHistoryPageLoading(false);
+        }
+    }, [hasLoadedAllPdfs, historyHasMore, historyNextOffset, isHistoryPageLoading]);
+
+    useEffect(() => {
+        if (!authUser?.id || activeTab === 'history' || hasLoadedAllPdfs || isLoading || isLoadingAllPdfsRef.current) return;
+
+        isLoadingAllPdfsRef.current = true;
+        setIsLoading(true);
+        loadAllPdfs()
+            .catch(error => console.error('Erro ao carregar dados completos de orcamentos:', error))
+            .finally(() => {
+                isLoadingAllPdfsRef.current = false;
+                setIsLoading(false);
+            });
+    }, [activeTab, authUser?.id, hasLoadedAllPdfs, isLoading, loadAllPdfs]);
 
     const {
         proposalOptions,
@@ -2424,6 +2487,11 @@ Se não conseguir extrair, retorne: []`;
             isOwner={isOwner}
             isInstalled={isInstalled}
             allSavedPdfs={allSavedPdfs}
+            historyPdfs={hasLoadedAllPdfs ? allSavedPdfs : historyPdfs}
+            historyHasMore={!hasLoadedAllPdfs && historyHasMore}
+            isHistoryPageLoading={isHistoryPageLoading}
+            onLoadMoreHistoryPdfs={handleLoadMoreHistoryPdfs}
+            onEnsureCompleteHistory={handleEnsureCompleteHistory}
             clients={clients}
             agendamentos={agendamentos}
             films={films}

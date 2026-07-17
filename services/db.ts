@@ -35,6 +35,7 @@ export {
     savePDF,
     updatePDF,
     getAllPDFs,
+    getPDFPage,
     getPDFsForClient,
     getPDFBlob,
     deletePDF,

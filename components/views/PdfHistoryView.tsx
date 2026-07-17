@@ -32,6 +32,10 @@ import ProposalShareModal from '../modals/ProposalShareModal';
 
 interface PdfHistoryViewProps {
     pdfs: SavedPDF[];
+    hasMoreServerPdfs?: boolean;
+    isLoadingMoreServerPdfs?: boolean;
+    onLoadMoreServerPdfs?: () => Promise<void>;
+    onEnsureCompleteServerHistory?: () => Promise<void>;
     clients: Client[];
     agendamentos: Agendamento[];
     films: Film[];
@@ -3555,7 +3559,7 @@ const PdfHistoryMobileFooter: React.FC<{
     );
 };
 
-const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendamentos, films, googleReviewsLink, onDelete, onDownload, onUpdateStatus, onSchedule, onGenerateCombinedPdf, onNavigateToOption }) => {
+const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs = false, isLoadingMoreServerPdfs = false, onLoadMoreServerPdfs, onEnsureCompleteServerHistory, clients, agendamentos, films, googleReviewsLink, onDelete, onDownload, onUpdateStatus, onSchedule, onGenerateCombinedPdf, onNavigateToOption }) => {
     const { showToast } = useFeedback();
     const [pendingFocusClientId] = useState<number | null>(() => readInitialHistoryFocusClient());
     const [expandedClientId, setExpandedClientId] = useState<number | null>(pendingFocusClientId);
@@ -3610,6 +3614,12 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
     const [draftMessageTemplates, setDraftMessageTemplates] = useState<string[]>(messageTemplates);
     const searchInputRef = useRef<HTMLInputElement | null>(null);
     const deferredSearchTerm = React.useDeferredValue(searchTerm);
+
+    useEffect(() => {
+        const needsCompleteHistory = Boolean(searchTerm.trim()) || focusFilter !== 'all' || period !== 'month';
+        if (!needsCompleteHistory || !hasMoreServerPdfs || isLoadingMoreServerPdfs) return;
+        void onEnsureCompleteServerHistory?.();
+    }, [focusFilter, hasMoreServerPdfs, isLoadingMoreServerPdfs, onEnsureCompleteServerHistory, period, searchTerm]);
 
     const customRange = useMemo(() => getCustomDateRange(customStartDate, customEndDate), [customEndDate, customStartDate]);
     const periodRange = useMemo(() => getPeriodRange(period, customRange), [customRange, period]);
@@ -3855,8 +3865,16 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
         return filteredGroupedHistory.slice(0, visibleCount);
     }, [filteredGroupedHistory, visibleCount]);
 
-    const handleLoadMore = () => {
-        setVisibleCount(prev => prev + 10);
+    const handleLoadMore = async () => {
+        const hasHiddenLoadedGroups = visibleCount < filteredGroupedHistory.length;
+        if (hasHiddenLoadedGroups) {
+            setVisibleCount(prev => prev + 10);
+        }
+
+        const reachesEndOfLoadedGroups = visibleCount + 10 >= filteredGroupedHistory.length;
+        if (reachesEndOfLoadedGroups && hasMoreServerPdfs && onLoadMoreServerPdfs) {
+            await onLoadMoreServerPdfs();
+        }
     };
 
     const handleToggleExpand = (clientId: number) => {
@@ -4776,14 +4794,15 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, clients, agendame
                             ))}
                         </div>
 
-                        {visibleCount < filteredGroupedHistory.length && (
+                        {(visibleCount < filteredGroupedHistory.length || hasMoreServerPdfs) && (
                             <div className="flex justify-center pt-3 sm:pt-4">
                                 <ActionButton
                                     onClick={handleLoadMore}
                                     variant="secondary"
                                     iconClassName="fas fa-chevron-down"
+                                    disabled={isLoadingMoreServerPdfs}
                                 >
-                                    Carregar mais
+                                    {isLoadingMoreServerPdfs ? 'Carregando...' : 'Carregar mais'}
                                 </ActionButton>
                             </div>
                         )}

@@ -29,6 +29,8 @@ const renderHistory = (
         clients?: Client[];
         agendamentos?: Agendamento[];
         googleReviewsLink?: string;
+        hasMoreServerPdfs?: boolean;
+        onLoadMoreServerPdfs?: () => Promise<void>;
     } = {}
 ) => render(
     <FeedbackProvider>
@@ -38,6 +40,8 @@ const renderHistory = (
             agendamentos={options.agendamentos || []}
             films={[]}
             googleReviewsLink={options.googleReviewsLink}
+            hasMoreServerPdfs={options.hasMoreServerPdfs}
+            onLoadMoreServerPdfs={options.onLoadMoreServerPdfs}
             onDelete={vi.fn()}
             onDownload={vi.fn()}
             onUpdateStatus={vi.fn()}
@@ -123,5 +127,17 @@ describe('PdfHistoryView', () => {
         fireEvent.click(screen.getByRole('button', { name: /pendentes:\s*0/i }));
 
         expect(screen.queryByText('Fila de avaliacao')).not.toBeInTheDocument();
+    });
+
+    it('busca a proxima pagina no servidor ao clicar em Carregar mais', () => {
+        const onLoadMoreServerPdfs = vi.fn().mockResolvedValue(undefined);
+        renderHistory([makePdf({ id: 20 })], {
+            hasMoreServerPdfs: true,
+            onLoadMoreServerPdfs,
+        });
+
+        fireEvent.click(screen.getByRole('button', { name: 'Carregar mais' }));
+
+        expect(onLoadMoreServerPdfs).toHaveBeenCalledTimes(1);
     });
 });
