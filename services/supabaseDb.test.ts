@@ -152,4 +152,28 @@ describe('supabaseDb PDF updates', () => {
     expect(result.hasMore).toBe(true);
     expect(result.nextOffset).toBe(2);
   });
+
+  it('pagina clientes recentes e informa quando existe outra pagina', async () => {
+    const rangeMock = vi.fn().mockResolvedValue({
+      data: [
+        { id: 3, nome: 'Cliente C', telefone: '', email: '', cpf_cnpj: '', pinned: false, last_updated: '2026-07-03' },
+        { id: 2, nome: 'Cliente B', telefone: '', email: '', cpf_cnpj: '', pinned: false, last_updated: '2026-07-02' },
+        { id: 1, nome: 'Cliente A', telefone: '', email: '', cpf_cnpj: '', pinned: false, last_updated: '2026-07-01' }
+      ],
+      error: null
+    });
+    const thirdOrderMock = vi.fn().mockReturnValue({ range: rangeMock });
+    const secondOrderMock = vi.fn().mockReturnValue({ order: thirdOrderMock });
+    const firstOrderMock = vi.fn().mockReturnValue({ order: secondOrderMock });
+    const pageSelectMock = vi.fn().mockReturnValue({ order: firstOrderMock });
+    fromMock.mockReturnValue({ select: pageSelectMock });
+
+    const { getClientPage } = await import('./supabaseDb');
+    const result = await getClientPage({ offset: 0, limit: 2 });
+
+    expect(rangeMock).toHaveBeenCalledWith(0, 2);
+    expect(result.clients.map(client => client.id)).toEqual([3, 2]);
+    expect(result.hasMore).toBe(true);
+    expect(result.nextOffset).toBe(2);
+  });
 });

@@ -6,6 +6,8 @@
 export {
     // Client functions
     getAllClients,
+    getClientPage,
+    getClientDashboardStats,
     saveClient,
     deleteClient,
 

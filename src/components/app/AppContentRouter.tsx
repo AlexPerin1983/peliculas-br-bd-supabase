@@ -43,6 +43,14 @@ interface AppContentRouterProps {
     onLoadMoreHistoryPdfs: () => Promise<void>;
     onEnsureCompleteHistory: () => Promise<void>;
     clients: Client[];
+    clientListClients: Client[];
+    hasLoadedAllClients: boolean;
+    clientListHasMore: boolean;
+    isClientListLoading: boolean;
+    onLoadMoreClientList: () => Promise<void>;
+    onSearchClientList: (term: string) => Promise<void>;
+    clientTotalCount: number;
+    dormantClientCount: number;
     agendamentos: Agendamento[];
     films: Film[];
     initialEstoqueAction: { action: 'scan', code: string } | { action: 'ai', tab: 'bobinas' | 'retalhos' } | null;
@@ -130,6 +138,14 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
     onLoadMoreHistoryPdfs,
     onEnsureCompleteHistory,
     clients,
+    clientListClients,
+    hasLoadedAllClients,
+    clientListHasMore,
+    isClientListLoading,
+    onLoadMoreClientList,
+    onSearchClientList,
+    clientTotalCount,
+    dormantClientCount,
     agendamentos,
     films,
     initialEstoqueAction,
@@ -265,6 +281,9 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
                 allSavedPdfs={allSavedPdfs}
                 usePagedPdfData={!hasLoadedAllPdfs}
                 onRequireAllPdfs={onRequireAllPdfs}
+                useDeferredClientData={!hasLoadedAllClients}
+                clientTotalCount={clientTotalCount}
+                dormantClientCount={dormantClientCount}
                 clients={clients}
                 agendamentos={agendamentos}
                 films={films}
@@ -409,12 +428,16 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
     if (activeTab === 'clients_list') {
         return renderDeferred(
             <ClientListView
-                clients={clients}
+                clients={hasLoadedAllClients ? clients : clientListClients}
                 pdfs={allSavedPdfs}
-                isLoading={isClientsLoading}
+                isLoading={isClientsLoading || isClientListLoading}
                 onOpenClient={onOpenClientFromList}
                 onAddClient={() => onOpenClientModal('add')}
                 onTogglePin={(id) => onTogglePin?.(id)}
+                hasMoreServerClients={!hasLoadedAllClients && clientListHasMore}
+                isLoadingMoreClients={isClientListLoading}
+                onLoadMoreClients={onLoadMoreClientList}
+                onSearchClients={hasLoadedAllClients ? undefined : onSearchClientList}
             />,
             defaultLoadingView
         );

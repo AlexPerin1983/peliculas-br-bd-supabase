@@ -68,4 +68,17 @@ describe('ClientListView', () => {
         fireEvent.click(screen.getByText('Adicionar cliente'));
         expect(props.onAddClient).toHaveBeenCalled();
     });
+
+    it('busca a proxima pagina de clientes no servidor', () => {
+        const props = {
+            ...baseProps(),
+            hasMoreServerClients: true,
+            onLoadMoreClients: vi.fn().mockResolvedValue(undefined),
+        };
+        render(<ClientListView {...props} />);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Carregar mais' }));
+
+        expect(props.onLoadMoreClients).toHaveBeenCalledTimes(1);
+    });
 });

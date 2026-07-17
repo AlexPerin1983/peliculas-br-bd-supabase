@@ -72,6 +72,9 @@ interface DashboardViewProps {
     onOpenApiKeyModal?: (provider: 'gemini' | 'openai') => void;
     usePagedPdfData?: boolean;
     onRequireAllPdfs?: () => Promise<void>;
+    useDeferredClientData?: boolean;
+    clientTotalCount?: number;
+    dormantClientCount?: number;
 }
 
 const DESKTOP_PERIOD_OPTIONS: { key: PeriodKey; label: string }[] = [
@@ -755,7 +758,10 @@ const DashboardView: React.FC<DashboardViewProps> = ({
     aiConfig,
     onOpenApiKeyModal,
     usePagedPdfData = false,
-    onRequireAllPdfs
+    onRequireAllPdfs,
+    useDeferredClientData = false,
+    clientTotalCount = clients.length,
+    dormantClientCount = 0
 }) => {
     const [period, setPeriod] = useState<PeriodKey>('today');
     const [isFinAssistantOpen, setIsFinAssistantOpen] = useState(false);
@@ -1201,7 +1207,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
         ...evolutionItems.map(item => Math.max(item.revenue, item.expenses))
     );
     const statusTotal = Math.max(periodStats.generatedCount, 1);
-    const hasAnyData = dashboardPdfs.length > 0 || clients.length > 0 || agendamentos.length > 0 || servicos.length > 0 || standaloneExpenses.length > 0;
+    const hasAnyData = dashboardPdfs.length > 0 || clientTotalCount > 0 || agendamentos.length > 0 || servicos.length > 0 || standaloneExpenses.length > 0;
     const customDateSummary = `${formatDateInputLabel(customStartDate)} - ${formatDateInputLabel(customEndDate)}`;
     const periodDisplayLabel = period === 'custom' ? `Personalizada: ${customDateSummary}` : PERIOD_LABELS[period];
     const mobilePeriodTriggerLabel = period === 'custom' ? customDateSummary : PERIOD_LABELS[period];
@@ -1455,7 +1461,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
     const todayCount = dailyActions.todayAppointments.length;
     const stalledCount = dailyActions.stalledProposals.length;
     const reviewCount = dailyActions.pendingReviews.length;
-    const dormantCount = dailyActions.dormantClients.length;
+    const dormantCount = useDeferredClientData ? dormantClientCount : dailyActions.dormantClients.length;
     const totalActions = todayCount + stalledCount + reviewCount + dormantCount;
     const todayActionSubtitle = dailyActions.todayAppointments
         .slice(0, 2)
@@ -2099,7 +2105,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                 <QuickAction
                     icon={<UsersRound className="h-4 w-4" aria-hidden="true" />}
                     label="Clientes"
-                    description={`${clients.length} cadastrados`}
+                    description={`${clientTotalCount} cadastrados`}
                     onClick={() => onTabChange('client')}
                     tone="slate"
                 />

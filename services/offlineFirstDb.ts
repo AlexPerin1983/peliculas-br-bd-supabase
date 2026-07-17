@@ -527,6 +527,90 @@ export async function getAllPDFs(): Promise<SavedPDF[]> {
     }
 }
 
+const stripClientSyncMetadata = (localClient: offlineDb.LocalClient): Client => {
+    const { _localId, _syncStatus, _lastModified, _syncedAt, _remoteId, ...client } = localClient;
+    return { ...client, id: getPublicClientId(localClient) };
+};
+
+const sortClientsForPage = (clients: Client[]): Client[] => [...clients].sort((a, b) => {
+    if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+    const updatedDiff = (new Date(b.lastUpdated || 0).getTime() || 0) - (new Date(a.lastUpdated || 0).getTime() || 0);
+    return updatedDiff || (b.id || 0) - (a.id || 0);
+});
+
+export async function getClientPage(
+    query: supabaseDb.ClientPageQuery = {}
+): Promise<supabaseDb.ClientPageResult> {
+    const offset = Math.max(0, Math.trunc(query.offset || 0));
+    const limit = Math.min(100, Math.max(1, Math.trunc(query.limit || 50)));
+    const localClients = await offlineDb.getAllClientsLocal();
+
+    try {
+        if (isOnlineNow()) {
+            const remotePage = await supabaseDb.getClientPage({ ...query, offset, limit });
+            const now = Date.now();
+            if (remotePage.clients.length > 0) {
+                await offlineDb.offlineDb.clients.bulkPut(remotePage.clients.map(client => ({
+                    ...client,
+                    _localId: `remote_${client.id}`,
+                    _syncStatus: 'synced' as const,
+                    _lastModified: now,
+                    _remoteId: client.id
+                })));
+            }
+
+            if (offset > 0) return remotePage;
+            const pending = localClients
+                .filter(client => client._syncStatus === 'pending' || client._syncStatus === 'error')
+                .map(stripClientSyncMetadata);
+            const pendingIds = new Set(pending.map(client => client.id).filter(isPersistedIntegerId));
+            const merged = sortClientsForPage([
+                ...pending,
+                ...remotePage.clients.filter(client => !client.id || !pendingIds.has(client.id))
+            ]);
+
+            return {
+                clients: merged.slice(0, limit),
+                hasMore: remotePage.hasMore || merged.length > limit,
+                nextOffset: remotePage.nextOffset
+            };
+        }
+    } catch (error) {
+        console.error('[OfflineFirst] Erro ao buscar pagina de clientes, usando cache local:', error);
+    }
+
+    const normalizedSearch = query.search?.trim().toLocaleLowerCase('pt-BR') || '';
+    const filtered = sortClientsForPage(localClients.map(stripClientSyncMetadata)).filter(client => {
+        if (!normalizedSearch) return true;
+        return `${client.nome} ${client.telefone} ${client.email}`.toLocaleLowerCase('pt-BR').includes(normalizedSearch);
+    });
+    const clients = filtered.slice(offset, offset + limit);
+    return {
+        clients,
+        hasMore: offset + clients.length < filtered.length,
+        nextOffset: offset + clients.length
+    };
+}
+
+export async function getClientDashboardStats(): Promise<supabaseDb.ClientDashboardStats> {
+    try {
+        if (isOnlineNow()) return await supabaseDb.getClientDashboardStats();
+    } catch (error) {
+        console.error('[OfflineFirst] Erro ao buscar resumo de clientes, usando cache local:', error);
+    }
+
+    const clients = (await offlineDb.getAllClientsLocal()).map(stripClientSyncMetadata);
+    const threshold = Date.now() - 30 * 86_400_000;
+    return {
+        totalCount: clients.length,
+        dormantCount: clients.filter(client => {
+            if (!client.telefone) return false;
+            const updatedAt = client.lastUpdated ? new Date(client.lastUpdated).getTime() : 0;
+            return !updatedAt || updatedAt < threshold;
+        }).length
+    };
+}
+
 export async function getPDFPage(
     query: supabaseDb.PDFPageQuery = {}
 ): Promise<supabaseDb.PDFPageResult> {

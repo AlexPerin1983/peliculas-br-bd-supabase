@@ -231,6 +231,12 @@ const App: React.FC = () => {
 
     const [isLoading, setIsLoading] = useState(true);
     const [clients, setClients] = useState<Client[]>([]);
+    const [clientListClients, setClientListClients] = useState<Client[]>([]);
+    const [clientListHasMore, setClientListHasMore] = useState(false);
+    const [, setClientListNextOffset] = useState(0);
+    const [hasLoadedAllClients, setHasLoadedAllClients] = useState(false);
+    const [isClientListLoading, setIsClientListLoading] = useState(false);
+    const [clientDashboardStats, setClientDashboardStats] = useState({ totalCount: 0, dormantCount: 0 });
     const [selectedClientId, setSelectedClientId] = useState<number | null>(() => {
         // Restauracao instantanea do cliente selecionado (espelho local do valor
         // que tambem fica salvo no Supabase em UserInfo.lastSelectedClientId).
@@ -260,7 +266,11 @@ const App: React.FC = () => {
     const initialPdfLoadRef = useRef<'all' | 'history' | 'deferred'>(
         activeTab === 'history' ? 'history' : activeTab === 'dashboard' ? 'deferred' : 'all'
     );
+    const initialClientLoadRef = useRef<'all' | 'page' | 'deferred'>(
+        activeTab === 'clients_list' ? 'page' : activeTab === 'dashboard' ? 'deferred' : 'all'
+    );
     const historyPageRequestedRef = useRef(activeTab === 'history');
+    const clientListRequestedRef = useRef(activeTab === 'clients_list');
     const [billingReturnState, setBillingReturnState] = useState<BillingReturnState | null>(null);
     const [isBillingReturnVisible, setIsBillingReturnVisible] = useState(false);
     // Pilha de abas visitadas para o botao "voltar" estilo navegacao nativa.
@@ -682,6 +692,7 @@ const App: React.FC = () => {
 
     const {
         loadClients,
+        loadClientListPage,
         loadFilms,
         loadAllPdfs,
         loadPdfHistoryPage,
@@ -691,6 +702,11 @@ const App: React.FC = () => {
         lastSelectedClientId: userInfo?.lastSelectedClientId,
         setIsLoading,
         setClients,
+        setClientListClients,
+        setClientListHasMore,
+        setClientListNextOffset,
+        setHasLoadedAllClients,
+        initialClientLoad: initialClientLoadRef.current,
         setSelectedClientId,
         setUserInfo,
         setFilms,
@@ -714,6 +730,26 @@ const App: React.FC = () => {
             setIsHistoryPageLoading(false);
         }
     }, [hasLoadedAllPdfs, historyHasMore, isHistoryPageLoading, loadPdfHistoryPage]);
+
+    const handleLoadMoreClientList = useCallback(async () => {
+        if (isClientListLoading || !clientListHasMore || hasLoadedAllClients) return;
+        setIsClientListLoading(true);
+        try {
+            await loadClientListPage();
+        } finally {
+            setIsClientListLoading(false);
+        }
+    }, [clientListHasMore, hasLoadedAllClients, isClientListLoading, loadClientListPage]);
+
+    const handleSearchClientList = useCallback(async (term: string) => {
+        if (hasLoadedAllClients) return;
+        setIsClientListLoading(true);
+        try {
+            await loadClientListPage({ reset: true, search: term });
+        } finally {
+            setIsClientListLoading(false);
+        }
+    }, [hasLoadedAllClients, loadClientListPage]);
 
     const handleEnsureCompleteHistory = useCallback(async () => {
         if (isHistoryPageLoading || !historyHasMore || hasLoadedAllPdfs) return;
@@ -743,17 +779,45 @@ const App: React.FC = () => {
     }, [hasLoadedAllPdfs, historyHasMore, historyNextOffset, isHistoryPageLoading]);
 
     useEffect(() => {
-        if (!authUser?.id || activeTab === 'history' || activeTab === 'dashboard' || hasLoadedAllPdfs || isLoading || isLoadingAllPdfsRef.current) return;
+        if (!authUser?.id || isLoading || isLoadingAllPdfsRef.current) return;
+
+        const needsAllPdfs = activeTab !== 'history' && activeTab !== 'dashboard' && !hasLoadedAllPdfs;
+        const needsAllClients = activeTab !== 'dashboard' && activeTab !== 'clients_list' && !hasLoadedAllClients;
+        if (!needsAllPdfs && !needsAllClients) return;
 
         isLoadingAllPdfsRef.current = true;
         setIsLoading(true);
-        loadAllPdfs()
-            .catch(error => console.error('Erro ao carregar dados completos de orcamentos:', error))
+        Promise.all([
+            needsAllPdfs ? loadAllPdfs() : Promise.resolve(),
+            needsAllClients ? loadClients() : Promise.resolve()
+        ])
+            .catch(error => console.error('Erro ao carregar dados completos da tela:', error))
             .finally(() => {
                 isLoadingAllPdfsRef.current = false;
                 setIsLoading(false);
             });
-    }, [activeTab, authUser?.id, hasLoadedAllPdfs, isLoading, loadAllPdfs]);
+    }, [activeTab, authUser?.id, hasLoadedAllClients, hasLoadedAllPdfs, isLoading, loadAllPdfs, loadClients]);
+
+    useEffect(() => {
+        if (!authUser?.id || hasLoadedAllClients) {
+            if (hasLoadedAllClients) {
+                const threshold = Date.now() - 30 * 86_400_000;
+                setClientDashboardStats({
+                    totalCount: clients.length,
+                    dormantCount: clients.filter(client => {
+                        if (!client.telefone) return false;
+                        const updatedAt = client.lastUpdated ? new Date(client.lastUpdated).getTime() : 0;
+                        return !updatedAt || updatedAt < threshold;
+                    }).length
+                });
+            }
+            return;
+        }
+
+        db.getClientDashboardStats()
+            .then(setClientDashboardStats)
+            .catch(error => console.error('Erro ao carregar resumo de clientes:', error));
+    }, [authUser?.id, clients, hasLoadedAllClients]);
 
     useEffect(() => {
         if (!authUser?.id || activeTab !== 'history' || hasLoadedAllPdfs || isLoading || historyPageRequestedRef.current) return;
@@ -764,6 +828,16 @@ const App: React.FC = () => {
             .catch(error => console.error('Erro ao carregar primeira pagina do historico:', error))
             .finally(() => setIsHistoryPageLoading(false));
     }, [activeTab, authUser?.id, hasLoadedAllPdfs, isLoading, loadPdfHistoryPage]);
+
+    useEffect(() => {
+        if (!authUser?.id || activeTab !== 'clients_list' || hasLoadedAllClients || isLoading || clientListRequestedRef.current) return;
+
+        clientListRequestedRef.current = true;
+        setIsClientListLoading(true);
+        loadClientListPage({ reset: true })
+            .catch(error => console.error('Erro ao carregar primeira pagina de clientes:', error))
+            .finally(() => setIsClientListLoading(false));
+    }, [activeTab, authUser?.id, hasLoadedAllClients, isLoading, loadClientListPage]);
 
     const {
         proposalOptions,
@@ -1157,6 +1231,23 @@ const App: React.FC = () => {
         handleOpenAgendamentoModal,
         handleShowInfo
     });
+
+    const handleToggleClientPinForCurrentData = useCallback(async (clientId: number) => {
+        if (hasLoadedAllClients) {
+            await handleToggleClientPin(clientId);
+            return;
+        }
+
+        const client = clientListClients.find(item => item.id === clientId);
+        if (!client) return;
+        const isPinned = !client.pinned;
+        await db.saveClient({
+            ...client,
+            pinned: isPinned,
+            pinnedAt: isPinned ? Date.now() : undefined
+        });
+        await loadClientListPage({ reset: true });
+    }, [clientListClients, handleToggleClientPin, hasLoadedAllClients, loadClientListPage]);
 
     const handleDeleteClient = useCallback(() => {
         if (numpadConfig.isOpen) {
@@ -2072,10 +2163,18 @@ Regras:
         handleTabChange('cliente_hub');
     }, [handleTabChange]);
 
-    const handleOpenClientFromList = useCallback((clientId: number) => {
+    const handleOpenClientFromList = useCallback(async (clientId: number) => {
+        if (!hasLoadedAllClients) {
+            setIsLoading(true);
+            try {
+                await loadClients(clientId);
+            } finally {
+                setIsLoading(false);
+            }
+        }
         setSelectedClientId(clientId);
         handleTabChange('cliente_hub');
-    }, [handleTabChange]);
+    }, [handleTabChange, hasLoadedAllClients, loadClients]);
 
     const handleGoBack = useCallback(() => {
         if (numpadConfig.isOpen) {
@@ -2116,12 +2215,20 @@ Regras:
         setIsClientModalOpen(true);
     }, [handleCloseAgendamentoModal]);
 
-    const handleOpenClientSelectionModal = useCallback(() => {
+    const handleOpenClientSelectionModal = useCallback(async () => {
         if (numpadConfig.isOpen) {
             handleNumpadClose();
         }
+        if (!hasLoadedAllClients) {
+            setIsLoading(true);
+            try {
+                await loadClients();
+            } finally {
+                setIsLoading(false);
+            }
+        }
         setIsClientSelectionModalOpen(true);
-    }, [numpadConfig.isOpen, handleNumpadClose]);
+    }, [hasLoadedAllClients, loadClients, numpadConfig.isOpen, handleNumpadClose]);
 
     const handleOpenApiKeyModal = useCallback((provider: 'gemini' | 'openai') => {
         setApiKeyModalProvider(provider);
@@ -2508,6 +2615,14 @@ Se não conseguir extrair, retorne: []`;
             onLoadMoreHistoryPdfs={handleLoadMoreHistoryPdfs}
             onEnsureCompleteHistory={handleEnsureCompleteHistory}
             clients={clients}
+            clientListClients={clientListClients}
+            hasLoadedAllClients={hasLoadedAllClients}
+            clientListHasMore={clientListHasMore}
+            isClientListLoading={isClientListLoading}
+            onLoadMoreClientList={handleLoadMoreClientList}
+            onSearchClientList={handleSearchClientList}
+            clientTotalCount={clientDashboardStats.totalCount}
+            dormantClientCount={clientDashboardStats.dormantCount}
             agendamentos={agendamentos}
             films={films}
             initialEstoqueAction={initialEstoqueAction}
@@ -2574,7 +2689,7 @@ Se não conseguir extrair, retorne: []`;
             onDeleteMeasurement={handleDeleteMeasurementFromGroup}
             onDeleteMeasurementImmediate={handleImmediateDeleteMeasurement}
             onPasteCopiedMeasurements={handlePasteCopiedMeasurements}
-            onTogglePin={handleToggleClientPin}
+            onTogglePin={handleToggleClientPinForCurrentData}
             onAddNewClient={handleAddNewClientFromSelection}
             isClientsLoading={isLoading}
         />
@@ -2826,7 +2941,7 @@ Se não conseguir extrair, retorne: []`;
 
                                 {activeTab === 'client' ? (
                                     <AppClientWorkspace
-                                        clientsCount={clients.length}
+                                        clientsCount={hasLoadedAllClients ? clients.length : clientDashboardStats.totalCount}
                                         selectedClient={selectedClient}
                                         clientTransitionKey={clientTransitionKey}
                                         proposalOptions={proposalOptions}

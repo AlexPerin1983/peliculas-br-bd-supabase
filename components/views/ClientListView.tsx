@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronRight, FileText, Pin, Plus, Search, UserPlus, UserRound, X } from 'lucide-react';
 import { Client, SavedPDF } from '../../types';
 import ActionButton from '../ui/ActionButton';
@@ -13,6 +13,10 @@ interface ClientListViewProps {
     onOpenClient: (id: number) => void;
     onAddClient: () => void;
     onTogglePin: (id: number) => void;
+    hasMoreServerClients?: boolean;
+    isLoadingMoreClients?: boolean;
+    onLoadMoreClients?: () => Promise<void>;
+    onSearchClients?: (term: string) => Promise<void>;
 }
 
 interface ClientStats {
@@ -30,9 +34,27 @@ const ClientListView: React.FC<ClientListViewProps> = ({
     onOpenClient,
     onAddClient,
     onTogglePin,
+    hasMoreServerClients = false,
+    isLoadingMoreClients = false,
+    onLoadMoreClients,
+    onSearchClients,
 }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [visibleCount, setVisibleCount] = useState(20);
+    const initialSearchRef = useRef(true);
+
+    useEffect(() => {
+        if (!onSearchClients) return;
+        if (initialSearchRef.current) {
+            initialSearchRef.current = false;
+            return;
+        }
+
+        const timer = window.setTimeout(() => {
+            void onSearchClients(searchTerm.trim());
+        }, 300);
+        return () => window.clearTimeout(timer);
+    }, [onSearchClients, searchTerm]);
 
     const statsMap = useMemo(() => {
         const map = new Map<number, ClientStats>();
@@ -67,6 +89,15 @@ const ClientListView: React.FC<ClientListViewProps> = ({
     }, [clients, searchTerm]);
 
     const displayedClients = useMemo(() => filteredClients.slice(0, visibleCount), [filteredClients, visibleCount]);
+
+    const handleLoadMore = async () => {
+        const hasHiddenLoadedClients = visibleCount < filteredClients.length;
+        if (hasHiddenLoadedClients) setVisibleCount(previous => previous + 20);
+
+        if (visibleCount + 20 >= filteredClients.length && hasMoreServerClients && onLoadMoreClients) {
+            await onLoadMoreClients();
+        }
+    };
 
     return (
         <div className="mx-auto w-full max-w-3xl space-y-4 animate-fade-in">
@@ -190,15 +221,16 @@ const ClientListView: React.FC<ClientListViewProps> = ({
                         })}
                     </div>
 
-                    {visibleCount < filteredClients.length && (
+                    {(visibleCount < filteredClients.length || hasMoreServerClients) && (
                         <div className="flex justify-center pt-2">
                             <ActionButton
-                                onClick={() => setVisibleCount(prev => prev + 20)}
+                                onClick={handleLoadMore}
                                 variant="secondary"
                                 size="md"
                                 icon={<Plus className="h-4 w-4" aria-hidden="true" />}
+                                disabled={isLoadingMoreClients}
                             >
-                                Carregar mais
+                                {isLoadingMoreClients ? 'Carregando...' : 'Carregar mais'}
                             </ActionButton>
                         </div>
                     )}

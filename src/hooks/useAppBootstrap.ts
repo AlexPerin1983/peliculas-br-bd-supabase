@@ -9,6 +9,11 @@ interface UseAppBootstrapParams {
     lastSelectedClientId?: number | null;
     setIsLoading: Dispatch<SetStateAction<boolean>>;
     setClients: Dispatch<SetStateAction<Client[]>>;
+    setClientListClients: Dispatch<SetStateAction<Client[]>>;
+    setClientListHasMore: Dispatch<SetStateAction<boolean>>;
+    setClientListNextOffset: Dispatch<SetStateAction<number>>;
+    setHasLoadedAllClients: Dispatch<SetStateAction<boolean>>;
+    initialClientLoad?: 'all' | 'page' | 'deferred';
     setSelectedClientId: Dispatch<SetStateAction<number | null>>;
     setUserInfo: Dispatch<SetStateAction<UserInfo | null>>;
     setFilms: Dispatch<SetStateAction<Film[]>>;
@@ -28,6 +33,11 @@ export function useAppBootstrap({
     lastSelectedClientId,
     setIsLoading,
     setClients,
+    setClientListClients,
+    setClientListHasMore,
+    setClientListNextOffset,
+    setHasLoadedAllClients,
+    initialClientLoad = 'all',
     setSelectedClientId,
     setUserInfo,
     setFilms,
@@ -44,6 +54,10 @@ export function useAppBootstrap({
     const lastSelectedClientIdRef = useRef<number | null | undefined>(lastSelectedClientId);
     const historyNextOffsetRef = useRef(0);
     const hasLoadedAllPdfsRef = useRef(false);
+    const clientListNextOffsetRef = useRef(0);
+    const clientListSearchRef = useRef('');
+    const clientListRequestIdRef = useRef(0);
+    const hasLoadedAllClientsRef = useRef(false);
 
     useEffect(() => {
         lastSelectedClientIdRef.current = lastSelectedClientId;
@@ -62,6 +76,8 @@ export function useAppBootstrap({
         }
 
         setClients(finalClients);
+        hasLoadedAllClientsRef.current = true;
+        setHasLoadedAllClients(true);
 
         let idToSelect = clientIdToSelect;
         const lastKnownSelectedClientId = lastSelectedClientIdRef.current;
@@ -80,7 +96,27 @@ export function useAppBootstrap({
         } else {
             setSelectedClientId(null);
         }
-    }, [setClients, setSelectedClientId]);
+    }, [setClients, setHasLoadedAllClients, setSelectedClientId]);
+
+    const loadClientListPage = useCallback(async (options?: { reset?: boolean; search?: string }) => {
+        const reset = options?.reset === true;
+        const search = options?.search ?? clientListSearchRef.current;
+        const requestedOffset = reset ? 0 : clientListNextOffsetRef.current;
+        const requestId = ++clientListRequestIdRef.current;
+        const page = await db.getClientPage({ offset: requestedOffset, limit: 50, search });
+        if (requestId !== clientListRequestIdRef.current) return;
+
+        clientListSearchRef.current = search;
+        clientListNextOffsetRef.current = page.nextOffset;
+        setClientListClients(current => {
+            if (reset) return page.clients;
+            const byId = new Map(current.map(client => [client.id, client]));
+            page.clients.forEach(client => byId.set(client.id, client));
+            return [...byId.values()];
+        });
+        setClientListHasMore(page.hasMore);
+        setClientListNextOffset(page.nextOffset);
+    }, [setClientListClients, setClientListHasMore, setClientListNextOffset]);
 
     const loadFilms = useCallback(async () => {
         const customFilms = await db.getAllCustomFilms();
@@ -129,11 +165,15 @@ export function useAppBootstrap({
         lastRefreshAtRef.current = now;
 
         await Promise.all([
-            loadClients(undefined, false),
+            hasLoadedAllClientsRef.current
+                ? loadClients(undefined, false)
+                : initialClientLoad === 'page'
+                    ? loadClientListPage({ reset: true })
+                    : Promise.resolve(),
             hasLoadedAllPdfsRef.current ? loadAllPdfs() : loadPdfHistoryPage({ reset: true }),
             loadAgendamentos()
         ]);
-    }, [loadAgendamentos, loadAllPdfs, loadClients, loadPdfHistoryPage]);
+    }, [initialClientLoad, loadAgendamentos, loadAllPdfs, loadClientListPage, loadClients, loadPdfHistoryPage]);
 
     useEffect(() => {
         initSyncService();
@@ -208,7 +248,11 @@ export function useAppBootstrap({
 
             const [loadedUserInfo] = await Promise.all([
                 db.getUserInfo(),
-                loadClients(),
+                initialClientLoad === 'page'
+                    ? loadClientListPage({ reset: true })
+                    : initialClientLoad === 'deferred'
+                        ? Promise.resolve()
+                        : loadClients(),
                 loadFilms(),
                 initialPdfLoad === 'history'
                     ? loadPdfHistoryPage({ reset: true })
@@ -250,8 +294,11 @@ export function useAppBootstrap({
         authUserId,
         loadAgendamentos,
         loadAllPdfs,
+        initialClientLoad,
         initialPdfLoad,
+        loadClientListPage,
         loadClients,
+        loadClientListPage,
         loadFilms,
         loadPdfHistoryPage,
         setHasLoadedAgendamentos,

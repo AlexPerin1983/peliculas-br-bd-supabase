@@ -53,6 +53,25 @@ export const getOwnerUserId = async (): Promise<string | null> => {
 // CLIENT FUNCTIONS
 // ============================================
 
+export interface ClientPageQuery {
+    offset?: number;
+    limit?: number;
+    search?: string;
+}
+
+export interface ClientPageResult {
+    clients: Client[];
+    hasMore: boolean;
+    nextOffset: number;
+}
+
+export interface ClientDashboardStats {
+    totalCount: number;
+    dormantCount: number;
+}
+
+const CLIENT_LIST_COLUMNS = 'id, nome, telefone, email, cpf_cnpj, cep, logradouro, numero, complemento, bairro, cidade, uf, last_updated, pinned, pinned_at';
+
 export const getAllClients = async (): Promise<Client[]> => {
     const userId = await getCurrentUserId();
     if (!userId) return [];
@@ -641,6 +660,67 @@ export const getAllPDFs = async (): Promise<SavedPDF[]> => {
 
     const pdfs = await Promise.all((data || []).map(row => mapRowToPDF(row)));
     return pdfs;
+};
+
+export const getClientPage = async ({
+    offset = 0,
+    limit = 50,
+    search
+}: ClientPageQuery = {}): Promise<ClientPageResult> => {
+    const userId = await getCurrentUserId();
+    if (!userId) return { clients: [], hasMore: false, nextOffset: 0 };
+
+    const safeOffset = Math.max(0, Math.trunc(offset));
+    const safeLimit = Math.min(100, Math.max(1, Math.trunc(limit)));
+    let query = supabase
+        .from('clients')
+        .select(CLIENT_LIST_COLUMNS)
+        .order('pinned', { ascending: false, nullsFirst: false })
+        .order('last_updated', { ascending: false, nullsFirst: false })
+        .order('id', { ascending: false })
+        .range(safeOffset, safeOffset + safeLimit);
+
+    const normalizedSearch = search?.trim().replace(/[,%()]/g, ' ').trim();
+    if (normalizedSearch) {
+        query = query.or(`nome.ilike.%${normalizedSearch}%,telefone.ilike.%${normalizedSearch}%,email.ilike.%${normalizedSearch}%`);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    const rows = data || [];
+    const hasMore = rows.length > safeLimit;
+    const visibleRows = hasMore ? rows.slice(0, safeLimit) : rows;
+
+    return {
+        clients: visibleRows.map(mapRowToClient),
+        hasMore,
+        nextOffset: safeOffset + visibleRows.length
+    };
+};
+
+export const getClientDashboardStats = async (): Promise<ClientDashboardStats> => {
+    const userId = await getCurrentUserId();
+    if (!userId) return { totalCount: 0, dormantCount: 0 };
+
+    const dormantThreshold = new Date(Date.now() - 30 * 86_400_000).toISOString();
+    const [totalResult, dormantResult] = await Promise.all([
+        supabase.from('clients').select('id', { count: 'exact', head: true }),
+        supabase
+            .from('clients')
+            .select('id', { count: 'exact', head: true })
+            .not('telefone', 'is', null)
+            .neq('telefone', '')
+            .or(`last_updated.lt.${dormantThreshold},last_updated.is.null`)
+    ]);
+
+    if (totalResult.error) throw totalResult.error;
+    if (dormantResult.error) throw dormantResult.error;
+
+    return {
+        totalCount: totalResult.count || 0,
+        dormantCount: dormantResult.count || 0
+    };
 };
 
 export const getPDFPage = async ({
