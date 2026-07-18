@@ -150,7 +150,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose, onData
             );
         } catch (err) {
             console.error('Erro ao iniciar scanner:', err);
-            setError('Não foi possível acessar a c?mera. Verifique as permissões.');
+            setError('Não foi possível acessar a câmera. Verifique as permissões.');
             setScanning(false);
         }
     };
@@ -291,8 +291,8 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose, onData
             <div className="modal-content scanner-modal" onClick={e => e.stopPropagation()}>
                 <div className="modal-header">
                     <h2>
-                        {scanning ? 'ðŸ“± Escanear QR Code' :
-                            result ? `ðŸ“¦ ${result.type === 'bobina' ? 'Bobina' : 'Retalho'}` :
+                        {scanning ? 'Escanear QR Code' :
+                            result ? `${result.type === 'bobina' ? 'Bobina' : 'Retalho'}` :
                                 'Erro'}
                     </h2>
                     <button className="close-btn" onClick={handleClose}>×</button>
@@ -302,7 +302,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose, onData
                     {scanning && (
                         <>
                             <div id="qr-reader" ref={containerRef} className="qr-scanner-container"></div>
-                            <p className="scanner-hint">Aponte a c?mera para o QR Code</p>
+                            <p className="scanner-hint">Aponte a câmera para o QR Code</p>
                         </>
                     )}
 
@@ -351,7 +351,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose, onData
                                                 <span className="value">{(result.data as Bobina).comprimentoTotalM} m</span>
                                             </div>
                                             <div className="info-item highlight">
-                                                <span className="label">ðŸŽ¯ Restante</span>
+                                                <span className="label">Restante</span>
                                                 <span className="value">{(result.data as Bobina).comprimentoRestanteM.toFixed(2)} m</span>
                                             </div>
                                             <div className="info-item">
@@ -459,7 +459,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose, onData
                             {/* Bobina de origem (quando escaneia retalho) */}
                             {result.type === 'retalho' && result.parentBobina && (
                                 <div className="history-section parent-section">
-                                    <h4>ðŸ“¦ Bobina de Origem</h4>
+                                    <h4>Bobina de Origem</h4>
                                     <div className="history-item parent-item">
                                         <div className="history-main">
                                             <span className="history-metros">{result.parentBobina.filmId}</span>
@@ -476,7 +476,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose, onData
                             {/* Histórico de consumos */}
                             {result.type === 'bobina' && result.consumos && result.consumos.length > 0 && (
                                 <div className="history-section">
-                                    <h4>ðŸ“‹ Histórico de Consumos ({result.consumos.length})</h4>
+                                    <h4>Histórico de Consumos ({result.consumos.length})</h4>
                                     <div className="history-list">
                                         {result.consumos.map(consumo => (
                                             <div key={consumo.id} className="history-item">
@@ -486,7 +486,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose, onData
                                                 </div>
                                                 <div className="history-details">
                                                     {consumo.clientName && (
-                                                        <span className="history-client">ðŸ‘¤ {consumo.clientName}</span>
+                                                        <span className="history-client">Cliente: {consumo.clientName}</span>
                                                     )}
                                                     <span className="history-date">{formatDate(consumo.dataConsumo)}</span>
                                                 </div>
@@ -510,7 +510,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose, onData
                                     </button>
                                 )}
                                 <button className="btn-secondary" onClick={handleScanAgain}>
-                                    ðŸ“± Escanear Outro
+                                    Escanear Outro
                                 </button>
                             </div>
                         </div>
