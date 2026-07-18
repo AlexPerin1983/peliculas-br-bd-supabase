@@ -1,5 +1,5 @@
-import React, { FormEvent, useMemo, useRef, useState } from 'react';
-import { Building2, ImagePlus, Loader2, X } from 'lucide-react';
+import React, { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { Building2, Check, ImagePlus, Loader2, Sparkles, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { bootstrapOrganization } from '../services/organizationSetupService';
 import { processLogoImage } from '../services/imageProcessing';
@@ -10,6 +10,12 @@ interface OrganizationSetupProps {
     initialOwnerName?: string;
     onCompleted: (organizationName: string, logo?: string) => Promise<void> | void;
 }
+
+const PREPARATION_STEPS = [
+    'Criando sua empresa',
+    'Configurando seu espaço de trabalho',
+    'Preparando exemplos para você começar'
+];
 
 // Iniciais da empresa para o avatar (logo provisória).
 function getInitials(name: string) {
@@ -34,9 +40,30 @@ export const OrganizationSetup: React.FC<OrganizationSetupProps> = ({
     const [logo, setLogo] = useState('');
     const [logoLoading, setLogoLoading] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [preparationStep, setPreparationStep] = useState(0);
+    const [isTakingLonger, setIsTakingLonger] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const logoInputRef = useRef<HTMLInputElement>(null);
     const phoneInputRef = useRef<HTMLInputElement>(null);
+    const submissionInFlightRef = useRef(false);
+
+    useEffect(() => {
+        if (!loading) {
+            setPreparationStep(0);
+            setIsTakingLonger(false);
+            return;
+        }
+
+        const workspaceTimer = window.setTimeout(() => setPreparationStep(1), 1400);
+        const examplesTimer = window.setTimeout(() => setPreparationStep(2), 3600);
+        const longerTimer = window.setTimeout(() => setIsTakingLonger(true), 10000);
+
+        return () => {
+            window.clearTimeout(workspaceTimer);
+            window.clearTimeout(examplesTimer);
+            window.clearTimeout(longerTimer);
+        };
+    }, [loading]);
 
     const handleLogoChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -75,28 +102,29 @@ export const OrganizationSetup: React.FC<OrganizationSetupProps> = ({
 
     const handleSubmit = async (event: FormEvent) => {
         event.preventDefault();
+        if (submissionInFlightRef.current) return;
         if (!isValidBrazilianPhone(phone)) {
             highlightPhoneField();
             return;
         }
         if (!canSubmit) return;
 
+        submissionInFlightRef.current = true;
         setLoading(true);
         setError(null);
-
-        const result = await bootstrapOrganization({
-            companyName: companyName.trim(),
-            ownerName: ownerName.trim(),
-            phone: phone.trim()
-        });
-
-        if (!result.success) {
-            setError(result.error);
-            setLoading(false);
-            return;
-        }
-
         try {
+            const result = await bootstrapOrganization({
+                companyName: companyName.trim(),
+                ownerName: ownerName.trim(),
+                phone: phone.trim()
+            });
+
+            if (!result.success) {
+                setError(result.error);
+                return;
+            }
+
+            setPreparationStep(PREPARATION_STEPS.length);
             await onCompleted(result.organizationName, logo || undefined);
         } catch (completionError) {
             setError(
@@ -105,9 +133,90 @@ export const OrganizationSetup: React.FC<OrganizationSetupProps> = ({
                     : 'A empresa foi criada, mas não conseguimos atualizar a tela.'
             );
         } finally {
+            submissionInFlightRef.current = false;
             setLoading(false);
         }
     };
+
+    if (loading) {
+        const preparationFinished = preparationStep >= PREPARATION_STEPS.length;
+
+        return (
+            <div className="flex min-h-[100dvh] w-full items-center justify-center bg-[radial-gradient(circle_at_top,rgba(14,165,233,0.16),transparent_32%),linear-gradient(180deg,#f8fafc_0%,#eef2ff_100%)] px-4 py-8">
+                <div
+                    className="w-full max-w-lg overflow-hidden rounded-[2rem] border border-white/80 bg-white px-6 py-9 shadow-[0_30px_80px_rgba(15,23,42,0.14)] sm:px-10 sm:py-11"
+                    role="status"
+                    aria-live="polite"
+                >
+                    <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-950 text-white shadow-[0_14px_35px_rgba(15,23,42,0.25)]">
+                        {preparationFinished ? (
+                            <Check className="h-8 w-8" aria-hidden="true" />
+                        ) : (
+                            <Sparkles className="h-7 w-7 animate-pulse" aria-hidden="true" />
+                        )}
+                    </div>
+
+                    <div className="mt-6 text-center">
+                        <h2 className="text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">
+                            {preparationFinished ? 'Tudo pronto!' : 'Preparando seu espaço'}
+                        </h2>
+                        <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-slate-500">
+                            {preparationFinished
+                                ? 'Seu painel está sendo aberto automaticamente.'
+                                : `Estamos deixando a ${companyName.trim()} pronta para você começar.`}
+                        </p>
+                    </div>
+
+                    <div className="mt-8 space-y-3" aria-label="Etapas da preparação">
+                        {PREPARATION_STEPS.map((step, index) => {
+                            const isComplete = preparationStep > index;
+                            const isActive = preparationStep === index;
+
+                            return (
+                                <div
+                                    key={step}
+                                    className={`flex items-center gap-3 rounded-2xl border px-4 py-3.5 transition-all duration-500 ${
+                                        isActive
+                                            ? 'border-sky-200 bg-sky-50 text-slate-950 shadow-sm'
+                                            : isComplete
+                                                ? 'border-emerald-100 bg-emerald-50/70 text-slate-700'
+                                                : 'border-slate-100 bg-slate-50/70 text-slate-400'
+                                    }`}
+                                >
+                                    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
+                                        isActive
+                                            ? 'bg-sky-600 text-white'
+                                            : isComplete
+                                                ? 'bg-emerald-600 text-white'
+                                                : 'bg-slate-200 text-slate-500'
+                                    }`}>
+                                        {isActive ? (
+                                            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                                        ) : isComplete ? (
+                                            <Check className="h-4 w-4" aria-hidden="true" />
+                                        ) : (
+                                            <span className="text-xs font-bold">{index + 1}</span>
+                                        )}
+                                    </span>
+                                    <span className="text-sm font-semibold">{step}</span>
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    <div className="mt-7 min-h-12 text-center">
+                        {isTakingLonger && !preparationFinished ? (
+                            <p className="rounded-2xl bg-amber-50 px-4 py-3 text-xs font-medium leading-5 text-amber-800">
+                                Está levando um pouco mais que o normal, mas continuamos preparando tudo. Não feche esta tela.
+                            </p>
+                        ) : (
+                            <p className="text-xs text-slate-400">Você será levado ao painel automaticamente.</p>
+                        )}
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-[100dvh] w-full overflow-y-auto bg-[radial-gradient(circle_at_top,rgba(14,165,233,0.12),transparent_28%),linear-gradient(180deg,#f8fafc_0%,#eef2ff_100%)] px-3 py-3 sm:px-6 sm:py-6 lg:flex lg:items-center lg:justify-center lg:py-8">

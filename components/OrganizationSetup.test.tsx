@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrganizationSetup } from './OrganizationSetup';
 import { bootstrapOrganization } from '../services/organizationSetupService';
@@ -81,5 +81,85 @@ describe('OrganizationSetup', () => {
             });
         });
         expect(onCompleted).toHaveBeenCalledWith('Empresa do Alex', undefined);
+    });
+
+    it('mostra imediatamente a preparação e orienta quando a criação demora', async () => {
+        vi.useFakeTimers();
+        let finishBootstrap: ((result: {
+            success: true;
+            organizationId: string;
+            organizationName: string;
+        }) => void) | undefined;
+
+        vi.mocked(bootstrapOrganization).mockReturnValue(new Promise((resolve) => {
+            finishBootstrap = resolve;
+        }));
+
+        const onCompleted = vi.fn();
+        const { unmount } = render(
+            <OrganizationSetup
+                initialEmail="contato@empresa.com"
+                initialOwnerName="Alex"
+                onCompleted={onCompleted}
+            />
+        );
+
+        fireEvent.change(screen.getByLabelText('Nome da empresa'), {
+            target: { value: 'Películas do Alex' }
+        });
+        fireEvent.change(screen.getByLabelText(/Telefone/), {
+            target: { value: '83996476052' }
+        });
+        fireEvent.click(screen.getByRole('button', { name: 'Criar empresa e continuar' }));
+
+        expect(screen.getByRole('heading', { name: 'Preparando seu espaço' })).toBeInTheDocument();
+        expect(screen.getByText('Criando sua empresa')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Criar empresa e continuar' })).not.toBeInTheDocument();
+
+        await act(async () => {
+            vi.advanceTimersByTime(10000);
+        });
+
+        expect(screen.getByText(/Está levando um pouco mais que o normal/)).toBeInTheDocument();
+        expect(screen.getByText('Preparando exemplos para você começar')).toBeInTheDocument();
+
+        await act(async () => {
+            finishBootstrap?.({
+                success: true,
+                organizationId: 'org-1',
+                organizationName: 'Películas do Alex'
+            });
+            await Promise.resolve();
+        });
+
+        expect(onCompleted).toHaveBeenCalledTimes(1);
+        unmount();
+        vi.useRealTimers();
+    });
+
+    it('volta ao formulário com uma mensagem clara quando a criação falha', async () => {
+        vi.mocked(bootstrapOrganization).mockResolvedValue({
+            success: false,
+            error: 'Não foi possível criar a empresa agora. Tente novamente.'
+        });
+
+        render(
+            <OrganizationSetup
+                initialEmail="contato@empresa.com"
+                initialOwnerName="Alex"
+                onCompleted={vi.fn()}
+            />
+        );
+
+        fireEvent.change(screen.getByLabelText('Nome da empresa'), {
+            target: { value: 'Películas do Alex' }
+        });
+        fireEvent.change(screen.getByLabelText(/Telefone/), {
+            target: { value: '83996476052' }
+        });
+        fireEvent.click(screen.getByRole('button', { name: 'Criar empresa e continuar' }));
+
+        expect(await screen.findByText('Não foi possível criar a empresa agora. Tente novamente.')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Criar empresa e continuar' })).toBeEnabled();
     });
 });
