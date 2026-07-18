@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabaseClient';
 import { User, Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react';
-import { clearSignupPendingLogin, markSignupPendingLogin } from '../src/lib/signupFlow';
+import { clearSignupInProgress, markSignupInProgress } from '../src/lib/signupFlow';
 
 const LOGIN_TIMEOUT_MS = 25_000;
 const withLoginTimeout = async <T,>(promise: Promise<T>): Promise<T> => {
@@ -126,10 +126,10 @@ export const Login: React.FC = () => {
                     throw new Error('As senhas não coincidem');
                 }
 
-                // O Supabase cria uma sessão automaticamente quando a confirmação de
-                // email está desativada. Durante o cadastro, seguramos essa transição
-                // para manter a sequência explícita: criar conta -> fazer login -> empresa.
-                markSignupPendingLogin();
+                // Identifica a sessão automática como parte de um novo cadastro. Assim,
+                // o AuthContext pode abrir os dados da empresa sem reaproveitar o cache
+                // visual de outra conta usada anteriormente no mesmo navegador.
+                markSignupInProgress();
                 try {
                     const { data, error } = await withLoginTimeout(
                         supabase.auth.signUp({
@@ -210,25 +210,11 @@ export const Login: React.FC = () => {
                         .catch(() => {});
                     }
 
-                    if (data.session) {
-                        const { error: signOutError } = await withLoginTimeout(
-                            supabase.auth.signOut({ scope: 'local' })
-                        );
-                        if (signOutError) throw signOutError;
+                    if (data.user && !data.session) {
+                        setMessage({ type: 'success', text: 'Cadastro realizado. Verifique seu email para confirmar.' });
                     }
-
-                    setPassword('');
-                    setConfirmPassword('');
-                    setFullName('');
-                    setIsSignUp(false);
-                    setMessage({
-                        type: 'success',
-                        text: data.session
-                            ? 'Cadastro realizado! Agora faça login para continuar.'
-                            : 'Cadastro realizado. Verifique seu email para confirmar e depois faça login.'
-                    });
                 } finally {
-                    clearSignupPendingLogin();
+                    clearSignupInProgress();
                 }
             } else {
                 const { error } = await withLoginTimeout(

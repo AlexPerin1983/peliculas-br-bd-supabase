@@ -1,24 +1,24 @@
-const SIGNUP_PENDING_LOGIN_KEY = 'peliculas-br-signup-pending-login';
+const SIGNUP_IN_PROGRESS_KEY = 'peliculas-br-signup-in-progress';
 
-export function markSignupPendingLogin() {
+export function markSignupInProgress() {
     try {
-        sessionStorage.setItem(SIGNUP_PENDING_LOGIN_KEY, '1');
+        sessionStorage.setItem(SIGNUP_IN_PROGRESS_KEY, '1');
     } catch {
         // O fluxo continua mesmo quando o armazenamento da aba não está disponível.
     }
 }
 
-export function clearSignupPendingLogin() {
+export function clearSignupInProgress() {
     try {
-        sessionStorage.removeItem(SIGNUP_PENDING_LOGIN_KEY);
+        sessionStorage.removeItem(SIGNUP_IN_PROGRESS_KEY);
     } catch {
         // Sem ação necessária.
     }
 }
 
-export function isSignupPendingLogin() {
+export function isSignupInProgress() {
     try {
-        return sessionStorage.getItem(SIGNUP_PENDING_LOGIN_KEY) === '1';
+        return sessionStorage.getItem(SIGNUP_IN_PROGRESS_KEY) === '1';
     } catch {
         return false;
     }

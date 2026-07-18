@@ -4,7 +4,7 @@ import { supabase } from '../services/supabaseClient';
 import { Profile } from '../types';
 import { getSessionScope } from '../services/sessionScope';
 import { repairAgendaPushSubscription } from '../services/agendaPushNotifications';
-import { isSignupPendingLogin } from '../src/lib/signupFlow';
+import { isSignupInProgress } from '../src/lib/signupFlow';
 
 interface AuthContextType {
     session: Session | null;
@@ -123,14 +123,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // reabrimos direto na interface, sem a tela "Conectando sua conta".
     const initialSession = readPersistedSession();
     const initialScope = readCachedScope();
-    const canHydrate = Boolean(initialSession && initialScope);
+    const canHydrate = Boolean(
+        initialSession
+        && initialScope?.profile
+        && initialScope.profile.id === initialSession.user.id
+    );
+    const hydratedScope = canHydrate ? initialScope : null;
 
     const [session, setSession] = useState<Session | null>(initialSession);
     const [user, setUser] = useState<User | null>(initialSession?.user ?? null);
-    const [profile, setProfile] = useState<Profile | null>(initialScope?.profile ?? null);
-    const [memberStatus, setMemberStatus] = useState<'pending' | 'active' | 'blocked' | null>(initialScope?.memberStatus ?? null);
-    const [memberRole, setMemberRole] = useState<'owner' | 'admin' | 'member' | null>(initialScope?.memberRole ?? null);
-    const [isOwner, setIsOwner] = useState(initialScope?.isOwner ?? false);
+    const [profile, setProfile] = useState<Profile | null>(hydratedScope?.profile ?? null);
+    const [memberStatus, setMemberStatus] = useState<'pending' | 'active' | 'blocked' | null>(hydratedScope?.memberStatus ?? null);
+    const [memberRole, setMemberRole] = useState<'owner' | 'admin' | 'member' | null>(hydratedScope?.memberRole ?? null);
+    const [isOwner, setIsOwner] = useState(hydratedScope?.isOwner ?? false);
     // So bloqueia com o spinner quando nao temos dados em cache para mostrar.
     const [loading, setLoading] = useState(!canHydrate);
     const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
@@ -139,7 +144,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Indica se ja temos dados utilizaveis do usuario (perfil) para decidir se a
     // revalidacao em segundo plano deve ou nao re-bloquear a interface.
-    const hasUsableScopeRef = useRef<boolean>(Boolean(initialScope?.profile));
+    const hasUsableScopeRef = useRef<boolean>(Boolean(hydratedScope?.profile));
+    const activeUserIdRef = useRef<string | null>(initialSession?.user.id ?? null);
 
     useEffect(() => {
         let isMounted = true;
@@ -163,6 +169,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
                 setSession(session);
                 setUser(session?.user ?? null);
+                activeUserIdRef.current = session?.user.id ?? null;
                 setIsPasswordRecovery(hasRecoveryContextInUrl(!!session));
                 if (session?.user) {
                     fetchProfile(session.user.id, session.user.email!, { silent: silentBoot });
@@ -199,13 +206,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loadInitialSession();
 
         const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-            // O cadastro por email pode emitir SIGNED_IN automaticamente. Nesse caso,
-            // a tela de login é mantida até a própria pessoa entrar com a conta criada.
-            if (event === 'SIGNED_IN' && session?.user && isSignupPendingLogin()) {
-                setLoading(false);
-                return;
-            }
-
             if (event === 'PASSWORD_RECOVERY') {
                 console.log('[AuthContext] PASSWORD_RECOVERY event detected');
                 setIsPasswordRecovery(true);
@@ -213,10 +213,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 setIsPasswordRecovery(true);
             }
 
+            const incomingUser = session?.user ?? null;
+            const userChanged = Boolean(incomingUser && activeUserIdRef.current !== incomingUser.id);
+            const automaticSignup = event === 'SIGNED_IN' && Boolean(incomingUser) && isSignupInProgress();
+
+            if (userChanged) {
+                clearCachedScope();
+                hasUsableScopeRef.current = false;
+                setProfile(null);
+                setMemberStatus(null);
+                setMemberRole(null);
+                setIsOwner(false);
+            }
+
+            activeUserIdRef.current = incomingUser?.id ?? null;
             setSession(session);
-            setUser(session?.user ?? null);
+            setUser(incomingUser);
             if (session?.user) {
                 setConnectionError(null);
+                if (automaticSignup) {
+                    // Um cadastro novo ainda não possui empresa. Liberamos o formulário
+                    // imediatamente e atualizamos o perfil em segundo plano.
+                    setLoading(false);
+                    fetchProfile(session.user.id, session.user.email!, { silent: true });
+                    return;
+                }
                 // Eventos como TOKEN_REFRESHED/SIGNED_IN disparam ao reabrir o app.
                 // Se ja temos perfil, atualizamos em segundo plano sem re-bloquear
                 // a interface com a tela "Conectando sua conta".
@@ -318,6 +339,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setProfile(null);
         setSession(null);
         setUser(null);
+        activeUserIdRef.current = null;
         setMemberStatus(null);
         setMemberRole(null);
         setIsOwner(false);

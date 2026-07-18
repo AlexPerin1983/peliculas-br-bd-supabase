@@ -34,7 +34,7 @@ describe('Login - sequência de novo cadastro', () => {
         authMocks.signOut.mockResolvedValue({ error: null });
     });
 
-    it('volta ao login após criar a conta, sem avançar direto para a empresa', async () => {
+    it('mantém a sessão automática criada pelo cadastro', async () => {
         authMocks.signUp.mockResolvedValue({
             data: {
                 user: { id: 'user-1' },
@@ -59,13 +59,10 @@ describe('Login - sequência de novo cadastro', () => {
         fireEvent.change(passwordInputs[1], { target: { value: 'senha123' } });
         fireEvent.click(screen.getByRole('button', { name: 'Cadastrar', exact: true }));
 
-        expect(await screen.findByText('Cadastro realizado! Agora faça login para continuar.')).toBeInTheDocument();
-        expect(screen.getByRole('heading', { name: 'Fazer Login' })).toBeInTheDocument();
-        expect(screen.getByPlaceholderText('peliculasbr@gmail.com')).toHaveValue('cliente@teste.com');
-
         await waitFor(() => {
-            expect(authMocks.signOut).toHaveBeenCalledWith({ scope: 'local' });
+            expect(authMocks.signUp).toHaveBeenCalledTimes(1);
+            expect(sessionStorage.getItem('peliculas-br-signup-in-progress')).toBeNull();
         });
-        expect(sessionStorage.getItem('peliculas-br-signup-pending-login')).toBeNull();
+        expect(authMocks.signOut).not.toHaveBeenCalled();
     });
 });
