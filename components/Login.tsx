@@ -460,7 +460,16 @@ export const Login: React.FC = () => {
                         className="w-full py-4 px-6 bg-[#020617] hover:bg-black text-white font-bold rounded-2xl transition-all shadow-xl shadow-slate-200/50 flex items-center justify-center gap-2 group disabled:opacity-70"
                     >
                         {loading ? (
-                            <div className="h-5 w-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            <>
+                                <div className="h-5 w-5 rounded-full border-2 border-white/30 border-t-white animate-spin" aria-hidden="true" />
+                                <span>
+                                    {showForgotPassword
+                                        ? 'Enviando email...'
+                                        : isSignUp
+                                            ? 'Criando sua conta...'
+                                            : 'Entrando...'}
+                                </span>
+                            </>
                         ) : (
                             <>
                                 <span>{showForgotPassword ? 'Enviar Email' : (isSignUp ? 'Cadastrar' : 'Entrar')}</span>
