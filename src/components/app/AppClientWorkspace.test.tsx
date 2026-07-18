@@ -168,4 +168,17 @@ describe('AppClientWorkspace', () => {
     expect(baseProps.onGeneratePdf).toHaveBeenCalledTimes(2);
     expect(screen.getByText('CuttingOptimizationPanel')).toBeInTheDocument();
   });
+
+  it('identifica os dados de exemplo e oferece o cadastro do primeiro cliente real', () => {
+    render(
+      <AppClientWorkspace
+        {...baseProps}
+        selectedClient={{ id: 1, nome: 'Maria Silva (Cliente Exemplo)' } as any}
+      />
+    );
+
+    expect(screen.getByText('Este é um orçamento de demonstração')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Cadastrar meu primeiro cliente' }));
+    expect(baseProps.onAddClient).toHaveBeenCalledTimes(1);
+  });
 });

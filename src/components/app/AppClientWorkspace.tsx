@@ -425,9 +425,27 @@ export const AppClientWorkspace: React.FC<AppClientWorkspaceProps> = ({
     }
 
     const hasDesktopCommandCenter = Boolean(selectedClientId);
+    const isExampleClient = selectedClient?.nome?.includes('(Cliente Exemplo)') ?? false;
 
     return (
         <>
+            {isExampleClient && (
+                <section className="mb-4 flex flex-col gap-3 rounded-[var(--radius-panel)] border border-blue-200 bg-blue-50 p-4 text-blue-950 shadow-[var(--shadow-hairline)] dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-100 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <p className="text-sm font-black">Este é um orçamento de demonstração</p>
+                        <p className="mt-1 text-sm leading-5 text-blue-800 dark:text-blue-200">
+                            Use-o para conhecer a ferramenta. Quando estiver pronto, cadastre seu primeiro cliente real.
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={onAddClient}
+                        className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-blue-700 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-blue-800 active:scale-[0.99]"
+                    >
+                        Cadastrar meu primeiro cliente
+                    </button>
+                </section>
+            )}
             <section className={hasDesktopCommandCenter ? 'grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px] xl:grid-cols-[minmax(0,1fr)_400px] lg:items-start' : 'space-y-4 sm:space-y-5'}>
                 <div className="min-w-0 space-y-4 sm:space-y-5">
                     <div className="relative z-20">

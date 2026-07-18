@@ -11,15 +11,6 @@ interface OrganizationSetupProps {
     onCompleted: (organizationName: string, logo?: string) => Promise<void> | void;
 }
 
-// Sugere "Empresa do {primeiro nome}" a partir do nome do dono. Sem nome
-// utilizável, deixa vazio (o usuário digita; o botão fica travado até lá).
-function suggestCompanyName(ownerName?: string) {
-    const first = (ownerName || '').trim().split(/\s+/)[0] || '';
-    if (!first || first.includes('@')) return '';
-    const formatted = first.charAt(0).toUpperCase() + first.slice(1);
-    return `Empresa do ${formatted}`;
-}
-
 // Iniciais da empresa para o avatar (logo provisória).
 function getInitials(name: string) {
     const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -34,7 +25,9 @@ export const OrganizationSetup: React.FC<OrganizationSetupProps> = ({
     onCompleted
 }) => {
     const { signOut } = useAuth();
-    const [companyName, setCompanyName] = useState(() => suggestCompanyName(initialOwnerName));
+    // O nome comercial é uma informação importante do PDF. Deixamos em branco
+    // para o dono informar a marca real, em vez de salvar um nome provisório.
+    const [companyName, setCompanyName] = useState('');
     const [ownerName, setOwnerName] = useState(initialOwnerName || '');
     const [phone, setPhone] = useState('');
     const [phoneTouched, setPhoneTouched] = useState(false);

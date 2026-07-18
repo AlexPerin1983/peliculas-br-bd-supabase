@@ -273,6 +273,7 @@ const App: React.FC = () => {
     const clientListRequestedRef = useRef(activeTab === 'clients_list');
     const [billingReturnState, setBillingReturnState] = useState<BillingReturnState | null>(null);
     const [isBillingReturnVisible, setIsBillingReturnVisible] = useState(false);
+    const [forceOnboardingTour, setForceOnboardingTour] = useState(false);
     // Pilha de abas visitadas para o botao "voltar" estilo navegacao nativa.
     const [tabHistory, setTabHistory] = useState<ActiveTab[]>([]);
 
@@ -2869,6 +2870,13 @@ Se não conseguir extrair, retorne: []`;
             }
         }
 
+        // Um cadastro novo nunca deve herdar a última tela usada por outra conta
+        // neste navegador. Começa no Dashboard e abre o guia de primeiros passos.
+        setActiveTab('dashboard');
+        setTabHistory([]);
+        setForceOnboardingTour(true);
+        localStorage.setItem('peliculas-br-active-tab', 'dashboard');
+
         await refreshProfile();
         showToast(`Empresa "${organizationName}" criada com sucesso.`, {
             tone: 'success',
@@ -2903,7 +2911,7 @@ Se não conseguir extrair, retorne: []`;
                 ) : (
                     <>
                 <DesktopSidebar activeTab={activeTab} onTabChange={handleTabChange} />
-                <OnboardingTour onNavigate={handleTabChange} />
+                <OnboardingTour onNavigate={handleTabChange} forceOpen={forceOnboardingTour} />
 
                 <div className="flex-grow flex flex-col min-w-0 h-full overflow-hidden">
                     <UpdateBanner />

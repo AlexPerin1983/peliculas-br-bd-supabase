@@ -27,6 +27,8 @@ type ActiveTab = 'dashboard' | 'client' | 'films' | 'settings' | 'history' | 'pr
 interface OnboardingTourProps {
     /** Navega para a aba indicada (mesmo handler do menu). */
     onNavigate: (tab: ActiveTab) => void;
+    /** Força a abertura logo após a criação de uma nova empresa. */
+    forceOpen?: boolean;
 }
 
 interface TourStep {
@@ -283,7 +285,7 @@ const TourDemo: React.FC<{ kind: 'reorder' | 'swipe' }> = ({ kind }) => (
     </div>
 );
 
-const OnboardingTour: React.FC<OnboardingTourProps> = ({ onNavigate }) => {
+const OnboardingTour: React.FC<OnboardingTourProps> = ({ onNavigate, forceOpen = false }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [stepIndex, setStepIndex] = useState(0);
     const [rect, setRect] = useState<Rect | null>(null);
@@ -317,12 +319,12 @@ const OnboardingTour: React.FC<OnboardingTourProps> = ({ onNavigate }) => {
         } catch {
             done = false;
         }
-        if (!done) {
+        if (forceOpen || !done) {
             // Pequeno atraso para a interface estabilizar antes de destacar elementos.
             const timer = window.setTimeout(() => setIsOpen(true), 600);
             return () => window.clearTimeout(timer);
         }
-    }, []);
+    }, [forceOpen]);
 
     // Permite reabrir o tour de qualquer lugar: window.dispatchEvent(new Event('peliculas-br-open-tour')).
     useEffect(() => {

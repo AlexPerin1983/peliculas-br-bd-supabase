@@ -68,11 +68,14 @@ describe('OrganizationSetup', () => {
         fireEvent.change(screen.getByLabelText(/Telefone/), {
             target: { value: '83996476052' }
         });
+        fireEvent.change(screen.getByLabelText('Nome da empresa'), {
+            target: { value: 'Películas do Alex' }
+        });
         fireEvent.click(screen.getByRole('button', { name: 'Criar empresa e continuar' }));
 
         await waitFor(() => {
             expect(bootstrapOrganization).toHaveBeenCalledWith({
-                companyName: 'Empresa do Alex',
+                companyName: 'Películas do Alex',
                 ownerName: 'Alex',
                 phone: '(83) 99647-6052'
             });
