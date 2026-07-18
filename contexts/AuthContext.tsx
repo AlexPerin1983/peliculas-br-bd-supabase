@@ -232,12 +232,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (session?.user) {
                 setConnectionError(null);
                 if (automaticSignup) {
-                    // Um cadastro novo ainda não possui empresa. Liberamos o formulário
-                    // imediatamente e atualizamos o perfil em segundo plano.
+                    // A new account does not need a profile query at this stage.
+                    // The company bootstrap persists it before the dashboard opens.
                     setLoading(false);
-                    window.setTimeout(() => {
-                        void fetchProfile(session.user.id, session.user.email!, { silent: true });
-                    }, 0);
                     return;
                 }
                 // Eventos como TOKEN_REFRESHED/SIGNED_IN disparam ao reabrir o app.
