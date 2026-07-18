@@ -4,6 +4,7 @@ import { supabase } from '../services/supabaseClient';
 import { Profile } from '../types';
 import { getSessionScope } from '../services/sessionScope';
 import { repairAgendaPushSubscription } from '../services/agendaPushNotifications';
+import { isSignupPendingLogin } from '../src/lib/signupFlow';
 
 interface AuthContextType {
     session: Session | null;
@@ -198,6 +199,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loadInitialSession();
 
         const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+            // O cadastro por email pode emitir SIGNED_IN automaticamente. Nesse caso,
+            // a tela de login é mantida até a própria pessoa entrar com a conta criada.
+            if (event === 'SIGNED_IN' && session?.user && isSignupPendingLogin()) {
+                setLoading(false);
+                return;
+            }
+
             if (event === 'PASSWORD_RECOVERY') {
                 console.log('[AuthContext] PASSWORD_RECOVERY event detected');
                 setIsPasswordRecovery(true);

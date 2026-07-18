@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabaseClient';
 import { User, Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react';
+import { clearSignupPendingLogin, markSignupPendingLogin } from '../src/lib/signupFlow';
 
 const LOGIN_TIMEOUT_MS = 25_000;
 const withLoginTimeout = async <T,>(promise: Promise<T>): Promise<T> => {
@@ -125,22 +126,27 @@ export const Login: React.FC = () => {
                     throw new Error('As senhas não coincidem');
                 }
 
-                const { data, error } = await withLoginTimeout(
-                    supabase.auth.signUp({
-                        email,
-                        password,
-                        options: {
-                            data: {
-                                full_name: fullName,
+                // O Supabase cria uma sessão automaticamente quando a confirmação de
+                // email está desativada. Durante o cadastro, seguramos essa transição
+                // para manter a sequência explícita: criar conta -> fazer login -> empresa.
+                markSignupPendingLogin();
+                try {
+                    const { data, error } = await withLoginTimeout(
+                        supabase.auth.signUp({
+                            email,
+                            password,
+                            options: {
+                                data: {
+                                    full_name: fullName,
+                                }
                             }
-                        }
-                    })
-                );
+                        })
+                    );
 
-                if (error) throw error;
+                    if (error) throw error;
 
-                if (data.user) {
-                    const userId = data.user.id;
+                    if (data.user) {
+                        const userId = data.user.id;
                     // Cada evento tem seu proprio event_id, compartilhado entre o Pixel
                     // (browser) e a CAPI (servidor) para a Meta deduplicar em vez de contar 2x.
                     const genEventId = () =>
@@ -202,10 +208,27 @@ export const Login: React.FC = () => {
                             }
                         })
                         .catch(() => {});
-                }
+                    }
 
-                if (data.user && !data.session) {
-                    setMessage({ type: 'success', text: 'Cadastro realizado. Verifique seu email para confirmar.' });
+                    if (data.session) {
+                        const { error: signOutError } = await withLoginTimeout(
+                            supabase.auth.signOut({ scope: 'local' })
+                        );
+                        if (signOutError) throw signOutError;
+                    }
+
+                    setPassword('');
+                    setConfirmPassword('');
+                    setFullName('');
+                    setIsSignUp(false);
+                    setMessage({
+                        type: 'success',
+                        text: data.session
+                            ? 'Cadastro realizado! Agora faça login para continuar.'
+                            : 'Cadastro realizado. Verifique seu email para confirmar e depois faça login.'
+                    });
+                } finally {
+                    clearSignupPendingLogin();
                 }
             } else {
                 const { error } = await withLoginTimeout(
