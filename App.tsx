@@ -3012,7 +3012,7 @@ Se não conseguir extrair, retorne: []`;
                     </main>
 
 
-                      {userInfo?.aiConfig?.quickFab && (
+                      {userInfo?.aiConfig?.quickFab && activeTab !== 'estoque' && (
                           <AIQuickFab
                               onCreateProposal={handleOpenAIQuickProposalModal}
                               onCreateClient={handleOpenAIClientModal}
