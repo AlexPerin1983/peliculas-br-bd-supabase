@@ -16,7 +16,9 @@ import EstoqueTopControls from './estoque/EstoqueTopControls';
 import EstoqueBobinasPanel from './estoque/EstoqueBobinasPanel';
 import EstoqueRetalhosPanel from './estoque/EstoqueRetalhosPanel';
 import EstoqueRetalhoMedidaSearch from './estoque/EstoqueRetalhoMedidaSearch';
-import EstoqueMobileFooter from './estoque/EstoqueMobileFooter';
+import EstoqueMobileHeader from './estoque/EstoqueMobileHeader';
+import EstoqueMobileAddSheet from './estoque/EstoqueMobileAddSheet';
+import EstoqueItemSheet, { EstoqueSelectedItem } from './estoque/EstoqueItemSheet';
 import EstoqueStatusSheet from './estoque/EstoqueStatusSheet';
 import { getEstoqueStatusOptions } from './estoque/estoqueStatus';
 import EstoqueAddModal from './estoque/EstoqueAddModal';
@@ -66,8 +68,10 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
     const [showStatusModal, setShowStatusModal] = useState<{ type: 'bobina' | 'retalho', item: Bobina | Retalho } | null>(null);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState<{ type: 'bobina' | 'retalho', id: number } | null>(null);
     const [isGenerating, setIsGenerating] = useState(false);
-    const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
     const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
+    const [mobileMode, setMobileMode] = useState<'items' | 'summary'>('items');
+    const [mobileAddOpen, setMobileAddOpen] = useState(false);
+    const [selectedMobileItem, setSelectedMobileItem] = useState<EstoqueSelectedItem | null>(null);
     const {
         searchTerm,
         setSearchTerm,
@@ -177,6 +181,17 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
         setShowAIModal(true);
     };
 
+    const handleTabChange = (tab: 'bobinas' | 'retalhos') => {
+        setActiveTab(tab);
+        setStatusFilter('todos');
+    };
+
+    const handleMobileManualAdd = (tab: 'bobinas' | 'retalhos') => {
+        setActiveTab(tab);
+        setMobileMode('items');
+        setShowAddModal(true);
+    };
+
     // IA por voz/texto: interpreta o item descrito, preenche o formulário e abre
     // o modal de bobina/retalho já populado para o usuário revisar e confirmar.
     const handleAIProcess = async (input: AIInput) => {
@@ -211,6 +226,7 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
             onShowQR={handleShowQR}
             onChangeStatus={handleChangeStatus}
             onDelete={handleDelete}
+            onOpenDetails={setSelectedMobileItem}
             getStatusLabel={getStatusLabel}
             getStatusColor={getStatusColor}
         />
@@ -221,36 +237,51 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
             onShowQR={handleShowQR}
             onChangeStatus={handleChangeStatus}
             onDelete={handleDelete}
+            onOpenDetails={setSelectedMobileItem}
             getStatusLabel={getStatusLabel}
             getStatusColor={getStatusColor}
         />
     );
 
     return (
-        <div className="estoque-view flex flex-col gap-5 pb-28 sm:pb-0">
+        <div className="estoque-view flex flex-col gap-4 pb-28 sm:gap-5 sm:pb-0">
             <div className="order-1 sm:order-2">
-                <EstoqueTopControls
+                <EstoqueMobileHeader
                     activeTab={activeTab}
+                    mode={mobileMode}
                     bobinasCount={bobinas.length}
                     retalhosCount={retalhos.length}
-                    visibleCount={activeTab === 'bobinas' ? filteredBobinas.length : filteredRetalhos.length}
-                    onChangeTab={setActiveTab}
-                    onAdd={() => setShowAddModal(true)}
-                    onAI={handleOpenAI}
                     searchTerm={searchTerm}
+                    filterActive={statusFilter !== 'todos'}
+                    onChangeTab={handleTabChange}
+                    onChangeMode={setMobileMode}
                     onSearchChange={setSearchTerm}
-                    statusFilter={statusFilter}
-                    onStatusFilterChange={setStatusFilter}
-                    viewMode={viewMode}
-                    onViewModeChange={setViewMode}
-                    onScan={() => setShowScannerModal(true)}
-                    mobileSearchOpen={mobileSearchOpen}
-                    onCloseMobileSearch={() => setMobileSearchOpen(false)}
+                    onOpenFilter={() => setMobileFilterOpen(true)}
                 />
+                <div className="hidden sm:block">
+                    <EstoqueTopControls
+                        activeTab={activeTab}
+                        bobinasCount={bobinas.length}
+                        retalhosCount={retalhos.length}
+                        visibleCount={activeTab === 'bobinas' ? filteredBobinas.length : filteredRetalhos.length}
+                        onChangeTab={handleTabChange}
+                        onAdd={() => setShowAddModal(true)}
+                        onAI={handleOpenAI}
+                        searchTerm={searchTerm}
+                        onSearchChange={setSearchTerm}
+                        statusFilter={statusFilter}
+                        onStatusFilterChange={setStatusFilter}
+                        viewMode={viewMode}
+                        onViewModeChange={setViewMode}
+                        onScan={() => setShowScannerModal(true)}
+                        mobileSearchOpen={false}
+                        onCloseMobileSearch={() => undefined}
+                    />
+                </div>
             </div>
 
             {activeTab === 'retalhos' && (
-                <div className="order-2 sm:order-3">
+                <div className={`${mobileMode === 'items' ? 'order-2' : 'hidden'} sm:order-3 sm:block`}>
                     <EstoqueRetalhoMedidaSearch
                         larguraCm={medidaLarguraCm}
                         comprimentoCm={medidaComprimentoCm}
@@ -263,12 +294,12 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
                 </div>
             )}
 
-            <div className="order-2 sm:order-3">
+            <div className={`${mobileMode === 'items' ? 'order-2' : 'hidden'} sm:order-3 sm:block`}>
                 {activePanel}
             </div>
 
             {stats ? (
-                <div className="order-3 sm:order-1">
+                <div className={`${mobileMode === 'summary' ? 'order-2' : 'hidden'} sm:order-1 sm:block`}>
                     <EstoqueStatsBar stats={stats} />
                 </div>
             ) : null}
@@ -354,17 +385,35 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
                 onConfirm={handleConfirmDelete}
             />
 
-            {/* Ações rápidas (mobile) */}
-            <EstoqueMobileFooter
-                activeTab={activeTab}
-                viewMode={viewMode}
-                onAdd={() => setShowAddModal(true)}
-                onAI={handleOpenAI}
+            {/* Ação principal de cadastro (mobile) */}
+            <div className="fixed inset-x-4 z-40 sm:hidden" style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)' }}>
+                <button
+                    type="button"
+                    onClick={() => setMobileAddOpen(true)}
+                    className="flex h-14 w-full items-center justify-center gap-2.5 rounded-2xl border border-blue-400/30 bg-[var(--brand-primary)] text-[14px] font-semibold text-white shadow-[0_12px_28px_rgba(21,94,239,0.38)] active:scale-[.99]"
+                >
+                    <i className="fas fa-plus text-[15px]" aria-hidden="true" />
+                    Cadastrar material
+                </button>
+            </div>
+
+            <EstoqueMobileAddSheet
+                open={mobileAddOpen}
+                onOpenChange={setMobileAddOpen}
+                onAddBobina={() => handleMobileManualAdd('bobinas')}
+                onAddRetalho={() => handleMobileManualAdd('retalhos')}
+                onAddWithAI={handleOpenAI}
                 onScan={() => setShowScannerModal(true)}
-                onOpenSearch={() => setMobileSearchOpen(true)}
-                onOpenFilter={() => setMobileFilterOpen(true)}
-                onToggleView={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
-                filterActive={statusFilter !== 'todos'}
+            />
+
+            <EstoqueItemSheet
+                selected={selectedMobileItem}
+                onClose={() => setSelectedMobileItem(null)}
+                onShowQR={({ type, item }) => handleShowQR(type, item)}
+                onChangeStatus={({ type, item }) => handleChangeStatus(type, item)}
+                onDelete={({ type, item }) => item.id != null && handleDelete(type, item.id)}
+                getStatusLabel={getStatusLabel}
+                getStatusColor={getStatusColor}
             />
 
             <EstoqueStatusSheet

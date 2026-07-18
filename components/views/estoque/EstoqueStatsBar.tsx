@@ -67,11 +67,11 @@ const EstoqueStatsBar: React.FC<EstoqueStatsBarProps> = ({ stats }) => {
                     </p>
                 </div>
 
-                <div className="mt-2 flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+                <div className="mt-2 grid grid-cols-2 gap-2">
                     {items.map((item) => (
                         <article
                             key={item.label}
-                            className="relative min-w-[138px] overflow-hidden rounded-[var(--radius-card)] border border-[var(--border-subtle)] bg-[var(--surface)] p-3 shadow-[var(--shadow-hairline)]"
+                            className="relative min-w-0 overflow-hidden rounded-[var(--radius-card)] border border-[var(--border-subtle)] bg-[var(--surface)] p-3 shadow-[var(--shadow-hairline)]"
                         >
                             <span className={`absolute inset-x-0 top-0 h-1 ${item.accent}`} aria-hidden="true" />
                             <div className="flex items-start justify-between gap-3">
