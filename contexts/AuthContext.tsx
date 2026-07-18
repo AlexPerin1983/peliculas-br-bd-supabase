@@ -235,7 +235,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     // Um cadastro novo ainda não possui empresa. Liberamos o formulário
                     // imediatamente e atualizamos o perfil em segundo plano.
                     setLoading(false);
-                    fetchProfile(session.user.id, session.user.email!, { silent: true });
+                    window.setTimeout(() => {
+                        void fetchProfile(session.user.id, session.user.email!, { silent: true });
+                    }, 0);
                     return;
                 }
                 // Eventos como TOKEN_REFRESHED/SIGNED_IN disparam ao reabrir o app.
@@ -245,7 +247,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 if (!silent) {
                     setLoading(true);
                 }
-                fetchProfile(session.user.id, session.user.email!, { silent });
+                // O callback de autenticação precisa terminar antes de qualquer chamada
+                // que possa consultar novamente a sessão do Supabase. Caso contrário,
+                // login e logout podem ficar aguardando o mesmo bloqueio interno.
+                window.setTimeout(() => {
+                    void fetchProfile(session.user.id, session.user.email!, { silent });
+                }, 0);
             } else {
                 clearCachedScope();
                 hasUsableScopeRef.current = false;
