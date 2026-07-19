@@ -95,40 +95,9 @@ export const useNumpad = (
                 newValue = shouldClear ? char : newValue + char;
             }
 
-            const isWidthOrHeight = prev.field === 'largura' || prev.field === 'altura';
-            const matchesPattern = /^\d\.\d{2}$/.test(newValue);
-
-            if (isWidthOrHeight && matchesPattern) {
-                const finalValue = newValue.replace('.', ',');
-                const measurementsWithSavedValue = measurements.map(m =>
-                    m.id === prev.measurementId ? { ...m, [prev.field!]: finalValue } : m
-                );
-                onMeasurementsChange(measurementsWithSavedValue);
-
-                const fieldSequence: Array<'largura' | 'altura' | 'quantidade'> = ['largura', 'altura', 'quantidade'];
-                const currentIndex = fieldSequence.indexOf(prev.field!);
-                const nextIndex = currentIndex + 1;
-
-                if (nextIndex < fieldSequence.length) {
-                    const nextField = fieldSequence[nextIndex];
-                    const currentMeasurement = measurementsWithSavedValue.find(m => m.id === prev.measurementId);
-                    const nextValueForField = currentMeasurement ? currentMeasurement[nextField] : '';
-                    
-                    return {
-                        isOpen: true,
-                        measurementId: prev.measurementId,
-                        field: nextField,
-                        currentValue: String(nextValueForField).replace(',', '.'),
-                        shouldClearOnNextInput: true,
-                    };
-                } else {
-                    return { isOpen: false, measurementId: null, field: null, currentValue: '', shouldClearOnNextInput: false };
-                }
-            }
-
             return { ...prev, currentValue: newValue, shouldClearOnNextInput: false };
         });
-    }, [measurements, onMeasurementsChange]);
+    }, []);
 
     const handleDelete = useCallback(() => {
         setNumpadConfig(prev => ({ 

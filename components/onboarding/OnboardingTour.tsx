@@ -55,82 +55,34 @@ const ALL_STEPS: TourStep[] = [
     {
         id: 'welcome',
         icon: Sparkles,
-        title: 'Bem-vindo ao Películas BR',
-        body: 'Em menos de 1 minuto mostramos os passos principais para você criar seu primeiro orçamento. Pode pular quando quiser.'
-    },
-    {
-        id: 'empresa',
-        icon: Building2,
-        title: 'Configure sua empresa',
-        body: 'Preencha nome, telefone, logo e cores em Configurações. Esses dados aparecem automaticamente nos seus orçamentos em PDF.',
-        tip: 'Capriche aqui: é o que dá cara profissional às propostas.',
-        tab: 'settings',
-        target: 'nav-settings'
+        title: 'Crie seu primeiro orçamento real',
+        body: 'Vamos focar só no essencial: cliente, medidas e PDF. Você pode conhecer agenda, estoque e configurações depois.',
+        tip: 'Leva cerca de 2 minutos e você pode pular quando quiser.'
     },
     {
         id: 'cliente',
         icon: UserPlus,
-        title: 'Cadastre um cliente',
-        body: 'Tudo começa por aqui. Adicione nome e telefone do cliente para depois montar o orçamento dele.',
+        title: '1. Cadastre um cliente real',
+        body: 'Toque em adicionar cliente. Para começar, basta informar o nome; telefone, documento e endereço são opcionais.',
+        tip: 'Use alguém para quem você realmente possa enviar este primeiro orçamento.',
         tab: 'client',
         target: 'nav-client'
-    },
-    {
-        id: 'peliculas',
-        icon: Layers3,
-        title: 'Cadastre suas películas',
-        body: 'Monte seu catálogo com nome, tipo e preço por m². Elas ficam prontas para usar nas medidas do orçamento.',
-        tab: 'films',
-        target: 'nav-films'
     },
     {
         id: 'orcamento',
         icon: Ruler,
-        title: 'Monte o orçamento',
-        body: 'Dentro do cliente, adicione as medidas (largura, altura, quantidade) e escolha a película. O valor é calculado sozinho.',
+        title: '2. Informe as medidas',
+        body: 'Abra o cliente, digite largura, altura e quantidade e confirme cada campo pela seta. Depois escolha uma película.',
+        tip: 'O valor do orçamento é calculado automaticamente.',
         tab: 'client',
         target: 'nav-client'
     },
     {
-        id: 'reordenar',
-        icon: MoveVertical,
-        title: 'Reordene as medidas',
-        body: 'No celular, toque e segure uma medida e arraste para cima ou para baixo para mudar a ordem da lista.',
-        tab: 'client',
-        mobileOnly: true,
-        demo: 'reorder'
-    },
-    {
-        id: 'gestos',
-        icon: ArrowLeftRight,
-        title: 'Deslize para agir rápido',
-        body: 'Arraste uma medida para o lado: para a direita aparecem Duplicar e Editar; para a esquerda, Excluir.',
-        tab: 'client',
-        mobileOnly: true,
-        demo: 'swipe'
-    },
-    {
-        id: 'agenda',
-        icon: CalendarDays,
-        title: 'Organize a agenda',
-        body: 'Agende instalações e acompanhe os atendimentos do dia direto pela Agenda.',
-        tab: 'agenda',
-        target: 'nav-agenda'
-    },
-    {
-        id: 'historico',
-        icon: History,
-        title: 'Acompanhe os PDFs',
-        body: 'Todo orçamento gerado fica salvo no Histórico para você consultar ou reenviar quando precisar.',
-        tab: 'history',
-        target: 'nav-history'
-    },
-    {
         id: 'gerar-pdf',
         icon: FileText,
-        title: 'Gere seu PDF',
-        body: 'Quando o orçamento estiver pronto, é só tocar em "Gerar PDF" para criar a proposta profissional e enviar ao cliente.',
-        tip: 'Já deixamos um cliente e um orçamento de exemplo para você testar agora mesmo.',
+        title: '3. Gere e envie o PDF',
+        body: 'Revise o valor e toque em "Gerar PDF". A proposta fica salva no Histórico para consultar ou reenviar.',
+        tip: 'Pronto: depois disso, explore agenda, estoque e personalização no seu ritmo.',
         tab: 'client',
         target: 'generate-pdf'
     }

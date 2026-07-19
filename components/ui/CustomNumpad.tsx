@@ -96,6 +96,13 @@ const CustomNumpad = forwardRef<HTMLDivElement, CustomNumpadProps>(({ isOpen, on
     const isLastField = activeField === 'quantidade';
     const isMeasurementField = activeField === 'largura' || activeField === 'altura';
 
+    const fieldLabels = {
+        largura: { title: 'Largura', step: '1 de 3', next: 'Ir para altura' },
+        altura: { title: 'Altura', step: '2 de 3', next: 'Ir para quantidade' },
+        quantidade: { title: 'Quantidade', step: '3 de 3', next: 'Concluir medida' },
+    } as const;
+    const activeFieldLabel = activeField ? fieldLabels[activeField] : null;
+
     const openMeasurementInputSettings = () => {
         onClose();
         window.setTimeout(() => {
@@ -166,6 +173,14 @@ const CustomNumpad = forwardRef<HTMLDivElement, CustomNumpadProps>(({ isOpen, on
                 {/* Numpad Content */}
                 <div className="p-2 pb-3">
                     <div className="max-w-sm mx-auto">
+                        {activeFieldLabel ? (
+                            <div className="mb-2 flex items-center justify-between px-1" aria-live="polite">
+                                <strong className="text-sm text-slate-800 dark:text-slate-100">
+                                    Digite a {activeFieldLabel.title.toLowerCase()}
+                                </strong>
+                                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Etapa {activeFieldLabel.step}</span>
+                            </div>
+                        ) : null}
                         {isMeasurementField ? (
                             <button
                                 type="button"
@@ -212,7 +227,7 @@ const CustomNumpad = forwardRef<HTMLDivElement, CustomNumpadProps>(({ isOpen, on
                             <IconButton action={onAddGroup} ariaLabel="Novo grupo" icon="fas fa-plus" />
                             <IconButton
                                 action={onDone}
-                                ariaLabel={isLastField ? "Confirmar entrada" : "Próximo campo"}
+                                ariaLabel={activeFieldLabel?.next || (isLastField ? "Confirmar entrada" : "Próximo campo")}
                                 icon={isLastField ? "fas fa-check" : "fas fa-arrow-right"}
                                 isPrimary
                             />

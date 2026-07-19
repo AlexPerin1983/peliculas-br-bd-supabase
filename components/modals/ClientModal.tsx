@@ -76,6 +76,7 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSave, mode
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [emailSuggestion, setEmailSuggestion] = useState<string | null>(null);
+    const [showOptionalFields, setShowOptionalFields] = useState(false);
     const numberInputRef = useRef<HTMLInputElement>(null);
 
     const handleCepBlur = async (cepValue?: string) => {
@@ -239,6 +240,9 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSave, mode
             }
 
             setFormData(finalFormState);
+            const optionalFields: Array<keyof typeof finalFormState> = ['email', 'cpfCnpj', 'cep', 'logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'uf'];
+            const hasOptionalDetails = optionalFields.some(field => String(finalFormState[field] || '').trim() !== '');
+            setShowOptionalFields(mode === 'edit' || Boolean(aiData) || hasOptionalDetails);
 
             // 3. Se houver CEP (do cliente existente ou da IA), aciona a busca do ViaCEP
             if (cepToSearch || (mode === 'edit' && client?.cep)) {
@@ -314,6 +318,18 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSave, mode
                 <fieldset disabled={isBusy} className="space-y-4">
                     <Input id="nome" label="Nome do Cliente" type="text" value={formData.nome} onChange={handleChange} required placeholder="Ex: João da Silva" />
                     <Input id="telefone" label="Telefone" type="tel" value={formData.telefone} onChange={handleChange} placeholder="(XX) XXXXX-XXXX" maxLength={15} />
+                    {!showOptionalFields && mode === 'add' ? (
+                        <button
+                            type="button"
+                            onClick={() => setShowOptionalFields(true)}
+                            className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 px-3 py-3 text-sm font-semibold text-slate-600 transition-colors hover:border-blue-400 hover:text-blue-600 dark:border-slate-600 dark:text-slate-300"
+                            aria-expanded={showOptionalFields}
+                        >
+                            <i className="fas fa-plus" aria-hidden="true"></i>
+                            Adicionar CPF, endereço e email (opcional)
+                        </button>
+                    ) : null}
+                    {showOptionalFields ? <>
                     <Input
                         id="cpfCnpj"
                         label="CPF/CNPJ"
@@ -372,6 +388,7 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSave, mode
                         {emailSuggestion && <div className="mt-1 text-left"><button type="button" onClick={handleEmailSuggestionClick} className="text-sm text-slate-500 hover:text-slate-800 transition-colors p-1 rounded">Sugestão: <span className="font-semibold">{emailSuggestion}</span></button></div>}
                         <div className="mt-2 flex flex-wrap gap-1.5">{popularDomains.map(domain => <button key={domain} type="button" onClick={() => handleDomainTagClick(domain)} className="px-2.5 py-1 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold rounded-full hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">@{domain}</button>)}</div>
                     </div>
+                    </> : null}
                 </fieldset>
 
                 {error && (
