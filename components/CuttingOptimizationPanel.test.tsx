@@ -85,22 +85,25 @@ describe('CuttingOptimizationPanel roll widths', () => {
       />
     );
 
-    const selectors = await screen.findAllByRole('combobox', { name: 'Largura da bobina' });
-    expect(selectors[0]).toHaveTextContent('1,00 m');
-    expect(selectors[0]).toHaveTextContent('1,22 m');
-    expect(selectors[0]).toHaveTextContent('1,50 m');
-    expect(selectors[0]).toHaveTextContent('1,52 m');
-    expect(selectors[0]).toHaveTextContent('1,82 m');
-    expect(selectors[0]).toHaveTextContent('Personalizada');
+    const triggers = await screen.findAllByRole('button', { name: 'Selecionar largura da bobina' });
+    fireEvent.click(triggers[0]);
 
-    fireEvent.change(selectors[0], { target: { value: '122' } });
+    expect(screen.getByRole('dialog', { name: 'Escolher largura da bobina' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '1,00 m' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '1,22 m' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '1,50 m' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '1,52 m' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '1,82 m' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '1,22 m' }));
     expect(onCuttingSettingsChange).toHaveBeenLastCalledWith('Color Stable', {
       rollWidthCm: 122,
       bladeWidthMm: 0,
       respectGrain: false,
     });
 
-    fireEvent.change(selectors[0], { target: { value: 'custom' } });
+    fireEvent.click(triggers[0]);
+    fireEvent.click(screen.getByRole('button', { name: /Personalizada/i }));
     expect(screen.getAllByRole('spinbutton', { name: /largura personalizada/i }).length).toBeGreaterThan(0);
   });
 });

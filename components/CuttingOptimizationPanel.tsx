@@ -6,7 +6,7 @@ import ConfirmationModal from './modals/ConfirmationModal';
 import Modal from './ui/Modal';
 import { useSubscription } from '../contexts/SubscriptionContext';
 import { PremiumFeatureSection } from './subscription/PremiumFeatureSection';
-import { Loader2, Maximize2, Minus, Plus, RotateCcw, Save, X } from 'lucide-react';
+import { Check, ChevronDown, Loader2, Maximize2, Minus, Plus, RotateCcw, Save, X } from 'lucide-react';
 import {
     buildFilmCuttingMeasurementSignature,
     CUTTING_ROLL_WIDTH_PRESETS_CM,
@@ -49,6 +49,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
     const [activeFilm, setActiveFilm] = useState<string>(uniqueFilms[0]);
     const [filmSettings, setFilmSettings] = useState<Record<string, LocalFilmSettings>>({});
     const [customRollWidthFilms, setCustomRollWidthFilms] = useState<Record<string, boolean>>({});
+    const [isRollWidthPickerOpen, setIsRollWidthPickerOpen] = useState(false);
 
     useEffect(() => {
         const nextSettings: Record<string, LocalFilmSettings> = {};
@@ -84,6 +85,9 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
         );
     const rollWidthSelection = isCustomRollWidth ? 'custom' : currentSettings.rollWidth;
 
+    const selectedRollWidthLabel = `${(Number(currentSettings.rollWidth) / 100).toLocaleString('pt-BR', {
+        minimumFractionDigits: 2,
+    })} m`;
     const updateCurrentSettings = (key: keyof LocalFilmSettings, value: string | boolean) => {
         const nextSettings = { ...currentSettings, [key]: value } as LocalFilmSettings;
         setFilmSettings(prev => ({ ...prev, [activeFilm]: nextSettings }));
@@ -100,6 +104,8 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
     };
 
     const handleRollWidthSelection = (value: string) => {
+        setIsRollWidthPickerOpen(false);
+
         if (value === 'custom') {
             setCustomRollWidthFilms(prev => ({ ...prev, [activeFilm]: true }));
             return;
@@ -1161,17 +1167,16 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                     <div className="grid min-w-0 grid-cols-2 divide-x divide-slate-200 dark:divide-slate-800">
                                         <div className="block px-3 py-2">
                                             <span className="block text-[10px] font-bold text-slate-500">Bobina</span>
-                                            <select
-                                                aria-label="Largura da bobina"
-                                                value={rollWidthSelection}
-                                                onChange={event => handleRollWidthSelection(event.target.value)}
-                                                className="mt-0.5 h-7 w-full border-0 bg-transparent p-0 text-[15px] font-semibold text-slate-900 outline-none focus:ring-0 dark:text-white"
+                                            <button
+                                                type="button"
+                                                aria-label="Selecionar largura da bobina"
+                                                aria-haspopup="dialog"
+                                                onClick={() => setIsRollWidthPickerOpen(true)}
+                                                className="mt-0.5 flex h-7 w-full items-center justify-between gap-1 rounded-md bg-blue-50 px-2 text-[14px] font-bold text-blue-700 transition active:scale-[0.98] dark:bg-blue-500/10 dark:text-blue-200"
                                             >
-                                                {CUTTING_ROLL_WIDTH_PRESETS_CM.map(width => (
-                                                    <option key={width} value={String(width)}>{(width / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} m</option>
-                                                ))}
-                                                <option value="custom">Personalizada</option>
-                                            </select>
+                                                <span>{selectedRollWidthLabel}</span>
+                                                <ChevronDown className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                                            </button>
                                             {isCustomRollWidth && (
                                                 <span className="mt-1 flex items-end gap-1 rounded-md bg-slate-50 px-1.5 dark:bg-slate-900">
                                                     <input
@@ -1291,12 +1296,16 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                 <div className="flex flex-wrap items-center gap-2 p-2">
                                     <div className="flex min-w-[180px] flex-col rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 transition-colors focus-within:border-blue-500 focus-within:bg-white dark:border-slate-700 dark:bg-slate-950/60 dark:focus-within:border-blue-400 dark:focus-within:bg-slate-950">
                                         <span className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Largura da bobina</span>
-                                        <select aria-label="Largura da bobina" value={rollWidthSelection} onChange={event => handleRollWidthSelection(event.target.value)} className="mt-0.5 border-0 bg-transparent p-0 text-base font-bold text-slate-900 outline-none focus:ring-0 dark:text-white">
-                                            {CUTTING_ROLL_WIDTH_PRESETS_CM.map(width => (
-                                                <option key={width} value={String(width)}>{(width / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} m</option>
-                                            ))}
-                                            <option value="custom">Personalizada</option>
-                                        </select>
+                                        <button
+                                            type="button"
+                                            aria-label="Selecionar largura da bobina"
+                                            aria-haspopup="dialog"
+                                            onClick={() => setIsRollWidthPickerOpen(true)}
+                                            className="mt-1 flex h-8 items-center justify-between gap-3 rounded-lg bg-blue-50 px-2.5 text-base font-bold text-blue-700 transition hover:bg-blue-100 active:scale-[0.99] dark:bg-blue-500/10 dark:text-blue-200 dark:hover:bg-blue-500/15"
+                                        >
+                                            <span>{selectedRollWidthLabel}</span>
+                                            <ChevronDown className="h-4 w-4" aria-hidden="true" />
+                                        </button>
                                         {isCustomRollWidth && (
                                             <span className="mt-1 flex items-baseline gap-1">
                                                 <input
@@ -1998,6 +2007,77 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                 <span>{warningMessage}</span>
                             </div>
                         </Modal>
+
+                        {isRollWidthPickerOpen && createPortal(
+                            <div className="fixed inset-0 z-[99998] flex items-end justify-center sm:items-center sm:p-6">
+                                <button
+                                    type="button"
+                                    aria-label="Fechar seleção de largura"
+                                    onClick={() => setIsRollWidthPickerOpen(false)}
+                                    className="absolute inset-0 bg-slate-950/55 backdrop-blur-[2px]"
+                                />
+                                <section
+                                    role="dialog"
+                                    aria-modal="true"
+                                    aria-label="Escolher largura da bobina"
+                                    className="relative z-10 w-full max-w-md rounded-t-[28px] border border-white/70 bg-white px-4 pb-[calc(env(safe-area-inset-bottom,0px)+18px)] pt-3 shadow-[0_-24px_70px_rgba(15,23,42,0.28)] dark:border-slate-700 dark:bg-slate-900 sm:rounded-[28px] sm:p-5"
+                                >
+                                    <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-slate-300 dark:bg-slate-600 sm:hidden" />
+                                    <div className="flex items-start justify-between gap-4">
+                                        <div>
+                                            <span className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-600 dark:text-blue-300">Plano de corte</span>
+                                            <h3 className="mt-1 text-xl font-black tracking-tight text-slate-950 dark:text-white">Largura da bobina</h3>
+                                            <p className="mt-1 text-sm leading-5 text-slate-500 dark:text-slate-400">Escolha a bobina usada para calcular o encaixe e o metro linear.</p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            aria-label="Fechar"
+                                            onClick={() => setIsRollWidthPickerOpen(false)}
+                                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500 transition active:scale-95 dark:bg-slate-800 dark:text-slate-300"
+                                        >
+                                            <X className="h-5 w-5" aria-hidden="true" />
+                                        </button>
+                                    </div>
+
+                                    <div className="mt-5 grid grid-cols-2 gap-2.5">
+                                        {CUTTING_ROLL_WIDTH_PRESETS_CM.map(width => {
+                                            const value = String(width);
+                                            const selected = rollWidthSelection === value;
+                                            return (
+                                                <button
+                                                    key={width}
+                                                    type="button"
+                                                    aria-pressed={selected}
+                                                    onClick={() => handleRollWidthSelection(value)}
+                                                    className={`flex min-h-14 items-center justify-between rounded-2xl border px-4 text-left transition active:scale-[0.98] ${selected
+                                                        ? 'border-blue-600 bg-blue-600 text-white shadow-[0_12px_28px_rgba(37,99,235,0.28)]'
+                                                        : 'border-slate-200 bg-slate-50 text-slate-800 hover:border-blue-300 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-100'
+                                                        }`}
+                                                >
+                                                    <span className="text-lg font-black tabular-nums">{(width / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} m</span>
+                                                    <span className={`flex h-6 w-6 items-center justify-center rounded-full ${selected ? 'bg-white/20' : 'bg-white dark:bg-slate-700'}`}>
+                                                        {selected ? <Check className="h-4 w-4" aria-hidden="true" /> : <span className="h-2 w-2 rounded-full bg-slate-300 dark:bg-slate-500" />}
+                                                    </span>
+                                                </button>
+                                            );
+                                        })}
+                                        <button
+                                            type="button"
+                                            aria-pressed={isCustomRollWidth}
+                                            onClick={() => handleRollWidthSelection('custom')}
+                                            className={`col-span-2 flex min-h-14 items-center justify-between rounded-2xl border px-4 text-left transition active:scale-[0.98] ${isCustomRollWidth
+                                                ? 'border-blue-600 bg-blue-600 text-white shadow-[0_12px_28px_rgba(37,99,235,0.28)]'
+                                                : 'border-dashed border-slate-300 bg-white text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200'
+                                                }`}
+                                        >
+                                            <span><strong className="block text-base">Personalizada</strong><small className={`mt-0.5 block text-xs ${isCustomRollWidth ? 'text-blue-100' : 'text-slate-400'}`}>Digite uma largura diferente em centímetros</small></span>
+                                            <ChevronDown className="h-5 w-5 -rotate-90" aria-hidden="true" />
+                                        </button>
+                                    </div>
+                                </section>
+                            </div>,
+                            document.body
+                        )}
 
                         {/* Fullscreen Modal */}
                         {isFullscreen && result && createPortal(
