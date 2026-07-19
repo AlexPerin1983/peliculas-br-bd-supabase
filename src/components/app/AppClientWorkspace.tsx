@@ -495,6 +495,16 @@ export const AppClientWorkspace: React.FC<AppClientWorkspaceProps> = ({
                                     clientId={selectedClientId ?? undefined}
                                     optionId={activeOptionId ?? undefined}
                                     films={films}
+                                    cuttingSettings={generalDiscount.filmCuttingSettings}
+                                    onCuttingSettingsChange={(filmName, settings) => {
+                                        onUpdateGeneralDiscount({
+                                            ...generalDiscount,
+                                            filmCuttingSettings: {
+                                                ...generalDiscount.filmCuttingSettings,
+                                                [filmName]: settings,
+                                            },
+                                        });
+                                    }}
                                 />
                             </div>
                         )}

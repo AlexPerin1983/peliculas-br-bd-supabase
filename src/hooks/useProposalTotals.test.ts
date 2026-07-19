@@ -554,3 +554,56 @@ describe('useProposalTotals', () => {
     expect(result.current.groupedTotals?.Jateada.unitSalePriceLinearMeter).toBe(60);
   });
 });
+
+describe('useProposalTotals cutting widths', () => {
+  it('usa a largura escolhida no plano de corte para calcular metro linear e custo', () => {
+    const films: Film[] = [
+      {
+        nome: 'Color Stable',
+        preco: 220,
+        precoMetroLinear: 110,
+      },
+    ];
+    const measurements: UIMeasurement[] = [
+      {
+        id: 1,
+        largura: '0,70',
+        altura: '1,00',
+        quantidade: 2,
+        ambiente: 'Janela',
+        tipoAplicacao: 'Interna',
+        pelicula: 'Color Stable',
+        active: true,
+      },
+    ];
+
+    const at152 = renderHook(() => useProposalTotals({
+      measurements,
+      films,
+      generalDiscount: {
+        value: '0',
+        type: 'percentage',
+        filmCuttingSettings: {
+          'Color Stable': { rollWidthCm: 152, bladeWidthMm: 0, respectGrain: false },
+        },
+      },
+    }));
+    const at122 = renderHook(() => useProposalTotals({
+      measurements,
+      films,
+      generalDiscount: {
+        value: '0',
+        type: 'percentage',
+        filmCuttingSettings: {
+          'Color Stable': { rollWidthCm: 122, bladeWidthMm: 0, respectGrain: false },
+        },
+      },
+    }));
+
+    expect(at152.result.current.totalLinearMeters).toBeCloseTo(1);
+    expect(at122.result.current.totalLinearMeters).toBeCloseTo(1.4);
+    expect(at152.result.current.linearMeterCost).toBeCloseTo(110);
+    expect(at122.result.current.linearMeterCost).toBeCloseTo(154);
+    expect(at122.result.current.groupedTotals?.['Color Stable'].totalLinearMeters).toBeCloseTo(1.4);
+  });
+});

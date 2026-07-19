@@ -1,18 +1,26 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { Measurement, Film } from '../types';
+import { Measurement, Film, FilmCuttingPlanSettings, FilmCuttingPlanSettingsMap } from '../types';
 import { CuttingOptimizer, OptimizationResult, Rect } from '../utils/CuttingOptimizer';
 import ConfirmationModal from './modals/ConfirmationModal';
 import Modal from './ui/Modal';
 import { useSubscription } from '../contexts/SubscriptionContext';
 import { PremiumFeatureSection } from './subscription/PremiumFeatureSection';
 import { Loader2, Maximize2, Minus, Plus, RotateCcw, Save, X } from 'lucide-react';
+import {
+    buildFilmCuttingMeasurementSignature,
+    CUTTING_ROLL_WIDTH_PRESETS_CM,
+    normalizeFilmCuttingSettings,
+} from '../src/lib/proposalCutting';
+
 
 interface CuttingOptimizationPanelProps {
     measurements: Measurement[];
     clientId?: number;
     optionId?: number;
     films: Film[];
+    cuttingSettings?: FilmCuttingPlanSettingsMap;
+    onCuttingSettingsChange?: (filmName: string, settings: FilmCuttingPlanSettings) => void;
 }
 
 const FULLSCREEN_SIDE_GUTTER_PX = 96;
@@ -20,9 +28,14 @@ const FULLSCREEN_VERTICAL_GUTTER_PX = 96;
 const FULLSCREEN_MIN_FIT_SCALE = 1.25;
 const FULLSCREEN_MAX_FIT_SCALE = 12;
 
-const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ measurements, clientId, optionId, films }) => {
+const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ measurements, clientId, optionId, films, cuttingSettings, onCuttingSettingsChange }) => {
     // Verificar acesso ao módulo de corte inteligente
     const { canUseCorteInteligente } = useSubscription();
+    const onCuttingSettingsChangeRef = useRef(onCuttingSettingsChange);
+    useEffect(() => {
+        onCuttingSettingsChangeRef.current = onCuttingSettingsChange;
+    }, [onCuttingSettingsChange]);
+
 
     const uniqueFilms = useMemo(() => {
         const films = new Set(measurements.filter(m => m.active).map(m => m.pelicula));
@@ -30,36 +43,70 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
         return sorted.length > 0 ? sorted : ['Padrão'];
     }, [measurements]);
 
-    const [activeFilm, setActiveFilm] = useState<string>(uniqueFilms[0]);
-    const [filmSettings, setFilmSettings] = useState<Record<string, { rollWidth: string, bladeWidth: string, respectGrain: boolean }>>({});
+    type LocalFilmSettings = { rollWidth: string; bladeWidth: string; respectGrain: boolean };
 
-    // Initialize settings for new films
+    const uniqueFilmsKey = uniqueFilms.join('|');
+    const [activeFilm, setActiveFilm] = useState<string>(uniqueFilms[0]);
+    const [filmSettings, setFilmSettings] = useState<Record<string, LocalFilmSettings>>({});
+    const [customRollWidthFilms, setCustomRollWidthFilms] = useState<Record<string, boolean>>({});
+
     useEffect(() => {
-        setFilmSettings(prev => {
-            const newSettings = { ...prev };
-            let changed = false;
-            uniqueFilms.forEach(film => {
-                if (!newSettings[film]) {
-                    newSettings[film] = { rollWidth: '152', bladeWidth: '0', respectGrain: false };
-                    changed = true;
-                }
-            });
-            return changed ? newSettings : prev;
+        const nextSettings: Record<string, LocalFilmSettings> = {};
+        const nextCustomWidths: Record<string, boolean> = {};
+
+        uniqueFilms.forEach(filmName => {
+            const saved = normalizeFilmCuttingSettings(cuttingSettings?.[filmName]);
+            nextSettings[filmName] = {
+                rollWidth: String(saved.rollWidthCm),
+                bladeWidth: String(saved.bladeWidthMm),
+                respectGrain: saved.respectGrain,
+            };
+            nextCustomWidths[filmName] = !CUTTING_ROLL_WIDTH_PRESETS_CM.includes(
+                saved.rollWidthCm as typeof CUTTING_ROLL_WIDTH_PRESETS_CM[number]
+            );
         });
 
-        // Ensure activeFilm is valid
+        setFilmSettings(nextSettings);
+        setCustomRollWidthFilms(nextCustomWidths);
+    }, [clientId, optionId, uniqueFilmsKey]);
+
+    useEffect(() => {
         if (!uniqueFilms.includes(activeFilm) && uniqueFilms.length > 0) {
             setActiveFilm(uniqueFilms[0]);
         }
-    }, [uniqueFilms, activeFilm]);
+    }, [uniqueFilmsKey, activeFilm]);
 
-    const currentSettings = filmSettings[activeFilm] || { rollWidth: '152', bladeWidth: '0', respectGrain: false };
+    const defaultSettings: LocalFilmSettings = { rollWidth: '152', bladeWidth: '0', respectGrain: false };
+    const currentSettings = filmSettings[activeFilm] || defaultSettings;
+    const isCustomRollWidth = customRollWidthFilms[activeFilm]
+        || !CUTTING_ROLL_WIDTH_PRESETS_CM.includes(
+            Number(currentSettings.rollWidth) as typeof CUTTING_ROLL_WIDTH_PRESETS_CM[number]
+        );
+    const rollWidthSelection = isCustomRollWidth ? 'custom' : currentSettings.rollWidth;
 
-    const updateCurrentSettings = (key: keyof typeof currentSettings, value: any) => {
-        setFilmSettings(prev => ({
-            ...prev,
-            [activeFilm]: { ...(prev[activeFilm] || { rollWidth: '152', bladeWidth: '0', respectGrain: false }), [key]: value }
-        }));
+    const updateCurrentSettings = (key: keyof LocalFilmSettings, value: string | boolean) => {
+        const nextSettings = { ...currentSettings, [key]: value } as LocalFilmSettings;
+        setFilmSettings(prev => ({ ...prev, [activeFilm]: nextSettings }));
+
+        const rollWidthCm = parseFloat(nextSettings.rollWidth);
+        const bladeWidthMm = parseFloat(nextSettings.bladeWidth);
+        if (Number.isFinite(rollWidthCm) && rollWidthCm > 0) {
+            onCuttingSettingsChangeRef.current?.(activeFilm, {
+                rollWidthCm,
+                bladeWidthMm: Number.isFinite(bladeWidthMm) && bladeWidthMm >= 0 ? bladeWidthMm : 0,
+                respectGrain: nextSettings.respectGrain,
+            });
+        }
+    };
+
+    const handleRollWidthSelection = (value: string) => {
+        if (value === 'custom') {
+            setCustomRollWidthFilms(prev => ({ ...prev, [activeFilm]: true }));
+            return;
+        }
+
+        setCustomRollWidthFilms(prev => ({ ...prev, [activeFilm]: false }));
+        updateCurrentSettings('rollWidth', value);
     };
     const [result, setResult] = useState<OptimizationResult | null>(null);
     const [isOptionsOpen, setIsOptionsOpen] = useState(false);
@@ -668,6 +715,14 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
             lastParamsRef.current = fullParams;
             setIsOptimizing(false);
 
+            onCuttingSettingsChangeRef.current?.(activeFilm, {
+                rollWidthCm: width,
+                bladeWidthMm: Number.isFinite(spacing) && spacing >= 0 ? spacing : 0,
+                respectGrain: currentSettings.respectGrain,
+                totalLinearMeters: newResult.totalHeight / 100,
+                measurementSignature: buildFilmCuttingMeasurementSignature(measurements, activeFilm),
+            });
+
             if (saveToHistory && newResult) {
                 const newId = Date.now().toString();
                 setHistory(prev => [
@@ -1104,20 +1159,34 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                             <div className="sm:hidden overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_14px_34px_rgba(15,23,42,0.10)] dark:border-slate-700/80 dark:bg-slate-950 dark:shadow-[0_14px_34px_rgba(2,6,23,0.26)]">
                                 <div className="grid grid-cols-[minmax(0,1fr)_92px] border-b border-slate-200 dark:border-slate-800">
                                     <div className="grid min-w-0 grid-cols-2 divide-x divide-slate-200 dark:divide-slate-800">
-                                        <label className="block px-3 py-2">
+                                        <div className="block px-3 py-2">
                                             <span className="block text-[10px] font-bold text-slate-500">Bobina</span>
-                                            <span className="mt-0.5 flex items-end gap-1">
-                                                <input
-                                                    type="number"
-                                                    inputMode="decimal"
-                                                    value={currentSettings.rollWidth}
-                                                    onChange={e => updateCurrentSettings('rollWidth', e.target.value)}
-                                                    placeholder="152"
-                                                    className="h-7 min-w-0 flex-1 border-0 bg-transparent p-0 text-[17px] font-semibold leading-none text-slate-900 outline-none focus:ring-0 dark:text-white"
-                                                />
-                                                <span className="pb-0.5 text-[10px] font-medium text-slate-500">cm</span>
-                                            </span>
-                                        </label>
+                                            <select
+                                                aria-label="Largura da bobina"
+                                                value={rollWidthSelection}
+                                                onChange={event => handleRollWidthSelection(event.target.value)}
+                                                className="mt-0.5 h-7 w-full border-0 bg-transparent p-0 text-[15px] font-semibold text-slate-900 outline-none focus:ring-0 dark:text-white"
+                                            >
+                                                {CUTTING_ROLL_WIDTH_PRESETS_CM.map(width => (
+                                                    <option key={width} value={String(width)}>{(width / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} m</option>
+                                                ))}
+                                                <option value="custom">Personalizada</option>
+                                            </select>
+                                            {isCustomRollWidth && (
+                                                <span className="mt-1 flex items-end gap-1 rounded-md bg-slate-50 px-1.5 dark:bg-slate-900">
+                                                    <input
+                                                        aria-label="Largura personalizada da bobina em cent�metros"
+                                                        type="number"
+                                                        inputMode="decimal"
+                                                        value={currentSettings.rollWidth}
+                                                        onChange={event => updateCurrentSettings('rollWidth', event.target.value)}
+                                                        placeholder="Ex.: 135"
+                                                        className="h-7 min-w-0 flex-1 border-0 bg-transparent p-0 text-[15px] font-semibold text-slate-900 outline-none focus:ring-0 dark:text-white"
+                                                    />
+                                                    <span className="pb-1 text-[10px] font-medium text-slate-500">cm</span>
+                                                </span>
+                                            )}
+                                        </div>
                                         <label className="block px-3 py-2">
                                             <span className="block text-[10px] font-bold text-slate-500">Sangria</span>
                                             <span className="mt-0.5 flex items-end gap-1">
@@ -1220,13 +1289,29 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                             {/* Desktop: barra de configuração */}
                             <div className="hidden sm:block rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
                                 <div className="flex flex-wrap items-center gap-2 p-2">
-                                    <label className="flex min-w-[150px] cursor-text flex-col rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 transition-colors focus-within:border-blue-500 focus-within:bg-white dark:border-slate-700 dark:bg-slate-950/60 dark:focus-within:border-blue-400 dark:focus-within:bg-slate-950">
+                                    <div className="flex min-w-[180px] flex-col rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 transition-colors focus-within:border-blue-500 focus-within:bg-white dark:border-slate-700 dark:bg-slate-950/60 dark:focus-within:border-blue-400 dark:focus-within:bg-slate-950">
                                         <span className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Largura da bobina</span>
-                                        <span className="mt-0.5 flex items-baseline gap-1">
-                                            <input type="number" inputMode="decimal" value={currentSettings.rollWidth} onChange={e => updateCurrentSettings('rollWidth', e.target.value)} placeholder="152" className="w-20 border-0 bg-transparent p-0 text-base font-bold tabular-nums text-slate-900 outline-none focus:ring-0 dark:text-white" />
-                                            <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500">cm</span>
-                                        </span>
-                                    </label>
+                                        <select aria-label="Largura da bobina" value={rollWidthSelection} onChange={event => handleRollWidthSelection(event.target.value)} className="mt-0.5 border-0 bg-transparent p-0 text-base font-bold text-slate-900 outline-none focus:ring-0 dark:text-white">
+                                            {CUTTING_ROLL_WIDTH_PRESETS_CM.map(width => (
+                                                <option key={width} value={String(width)}>{(width / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} m</option>
+                                            ))}
+                                            <option value="custom">Personalizada</option>
+                                        </select>
+                                        {isCustomRollWidth && (
+                                            <span className="mt-1 flex items-baseline gap-1">
+                                                <input
+                                                    aria-label="Largura personalizada da bobina em cent�metros"
+                                                    type="number"
+                                                    inputMode="decimal"
+                                                    value={currentSettings.rollWidth}
+                                                    onChange={event => updateCurrentSettings('rollWidth', event.target.value)}
+                                                    placeholder="Ex.: 135"
+                                                    className="w-24 border-0 bg-transparent p-0 text-base font-bold tabular-nums text-slate-900 outline-none focus:ring-0 dark:text-white"
+                                                />
+                                                <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500">cm</span>
+                                            </span>
+                                        )}
+                                    </div>
                                     <label className="flex min-w-[130px] cursor-text flex-col rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 transition-colors focus-within:border-blue-500 focus-within:bg-white dark:border-slate-700 dark:bg-slate-950/60 dark:focus-within:border-blue-400 dark:focus-within:bg-slate-950" title="Espaçamento entre os cortes (sangria)">
                                         <span className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Sangria do corte</span>
                                         <span className="mt-0.5 flex items-baseline gap-1">

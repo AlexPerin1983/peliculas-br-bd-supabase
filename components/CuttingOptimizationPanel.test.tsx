@@ -59,3 +59,48 @@ describe('CuttingOptimizationPanel fullscreen', () => {
     });
   });
 });
+
+describe('CuttingOptimizationPanel roll widths', () => {
+  it('oferece larguras prontas e envia a largura escolhida para a proposta', async () => {
+    const onCuttingSettingsChange = vi.fn();
+
+    render(
+      <CuttingOptimizationPanel
+        measurements={[
+          {
+            id: 1,
+            largura: '0,70',
+            altura: '1,00',
+            quantidade: 2,
+            ambiente: 'Janela',
+            tipoAplicacao: 'vidro',
+            pelicula: 'Color Stable',
+            active: true,
+          },
+        ]}
+        clientId={1}
+        optionId={1}
+        films={[{ nome: 'Color Stable', preco: 100, precoMetroLinear: 110 }]}
+        onCuttingSettingsChange={onCuttingSettingsChange}
+      />
+    );
+
+    const selectors = await screen.findAllByRole('combobox', { name: 'Largura da bobina' });
+    expect(selectors[0]).toHaveTextContent('1,00 m');
+    expect(selectors[0]).toHaveTextContent('1,22 m');
+    expect(selectors[0]).toHaveTextContent('1,50 m');
+    expect(selectors[0]).toHaveTextContent('1,52 m');
+    expect(selectors[0]).toHaveTextContent('1,82 m');
+    expect(selectors[0]).toHaveTextContent('Personalizada');
+
+    fireEvent.change(selectors[0], { target: { value: '122' } });
+    expect(onCuttingSettingsChange).toHaveBeenLastCalledWith('Color Stable', {
+      rollWidthCm: 122,
+      bladeWidthMm: 0,
+      respectGrain: false,
+    });
+
+    fireEvent.change(selectors[0], { target: { value: 'custom' } });
+    expect(screen.getAllByRole('spinbutton', { name: /largura personalizada/i }).length).toBeGreaterThan(0);
+  });
+});

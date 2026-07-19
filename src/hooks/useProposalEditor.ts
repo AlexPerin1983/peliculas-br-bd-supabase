@@ -78,6 +78,7 @@ const normalizeGeneralDiscount = (
         filmPriceOverrides: discount && Object.prototype.hasOwnProperty.call(discount, 'filmPriceOverrides')
             ? discount.filmPriceOverrides
             : fallback?.filmPriceOverrides,
+        filmCuttingSettings: discount?.filmCuttingSettings ?? fallback?.filmCuttingSettings,
         expenses: normalizeProposalExpenses(discount?.expenses ?? fallback?.expenses),
         hideMeasurements: discount?.hideMeasurements ?? fallback?.hideMeasurements,
         incluirTermoResponsabilidade: discount?.incluirTermoResponsabilidade ?? fallback?.incluirTermoResponsabilidade,

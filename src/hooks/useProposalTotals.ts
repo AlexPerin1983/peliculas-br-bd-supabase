@@ -5,6 +5,10 @@ import { summarizeProposalExpenses } from '../lib/proposalExpenses';
 import { calculatePricingAreaM2 } from '../lib/pricingArea';
 import { calculateProposalAdjustmentAmounts } from '../lib/proposalAdjustments';
 import { getCatalogFilmPrices, resolveFilmPrices } from '../lib/filmPriceOverrides';
+import {
+    buildFilmCuttingMeasurementSignature,
+    normalizeFilmCuttingSettings,
+} from '../lib/proposalCutting';
 
 type DiscountType = ProposalDiscount;
 
@@ -131,11 +135,19 @@ export function useProposalTotals({
         Object.entries(groupedByFilm).forEach(([filmName, filmMeasurements]) => {
             const film = films.find(item => item.nome === filmName);
             const prices = resolveFilmPrices(film, filmPriceOverrides, filmName);
+            const cuttingSettings = normalizeFilmCuttingSettings(
+                generalDiscount.filmCuttingSettings?.[filmName]
+            );
+            const measurementSignature = buildFilmCuttingMeasurementSignature(
+                measurements,
+                filmName
+            );
+
 
             const optimizer = new CuttingOptimizer({
-                rollWidth: 152,
-                bladeWidth: 0,
-                allowRotation: true
+                rollWidth: cuttingSettings.rollWidthCm,
+                bladeWidth: cuttingSettings.bladeWidthMm / 10,
+                allowRotation: !cuttingSettings.respectGrain
             });
 
             filmMeasurements.forEach(measurement => {
@@ -151,7 +163,12 @@ export function useProposalTotals({
             });
 
             const optimizationResult = optimizer.optimize();
-            const linearMeters = optimizationResult.totalHeight / 100;
+            const hasCurrentPlanResult = cuttingSettings.measurementSignature === measurementSignature
+                && Number.isFinite(cuttingSettings.totalLinearMeters)
+                && (cuttingSettings.totalLinearMeters || 0) >= 0;
+            const linearMeters = hasCurrentPlanResult
+                ? cuttingSettings.totalLinearMeters!
+                : optimizationResult.totalHeight / 100;
             totalLinearMeters += linearMeters;
 
             if (groupedTotals[filmName]) {

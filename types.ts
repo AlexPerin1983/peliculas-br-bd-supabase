@@ -130,6 +130,16 @@ export interface ProposalExpenseSnapshot {
 
 export type ProposalAdjustmentOperation = 'discount' | 'increase';
 
+export interface FilmCuttingPlanSettings {
+    rollWidthCm: number;
+    bladeWidthMm: number;
+    respectGrain: boolean;
+    totalLinearMeters?: number;
+    measurementSignature?: string;
+}
+
+export type FilmCuttingPlanSettingsMap = Record<string, FilmCuttingPlanSettings>;
+
 export interface ProposalDiscount {
     value: string;
     type: 'percentage' | 'fixed';
@@ -141,6 +151,7 @@ export interface ProposalDiscount {
     pricingMode?: ProposalPricingMode;
     filmPricingModes?: FilmPricingModes;
     filmPriceOverrides?: FilmPriceOverrides;
+    filmCuttingSettings?: FilmCuttingPlanSettingsMap;
     expenses?: ProposalExpense[];
     // Override por orçamento da ocultação de medidas no PDF (undefined = usa o padrão global do UserInfo).
     hideMeasurements?: boolean;
@@ -159,6 +170,7 @@ export interface SavedProposalDiscount {
     pricingMode?: ProposalPricingMode;
     filmPricingModes?: FilmPricingModes;
     filmPriceOverrides?: FilmPriceOverrides;
+    filmCuttingSettings?: FilmCuttingPlanSettingsMap;
     expenses?: ProposalExpense[];
     expenseSnapshot?: ProposalExpenseSnapshot;
     hideMeasurements?: boolean;
