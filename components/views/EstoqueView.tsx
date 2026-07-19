@@ -86,6 +86,8 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
         medidaComprimentoCm,
         setMedidaComprimentoCm,
         buscandoPorMedida,
+        larguraBuscaCm,
+        comprimentoBuscaCm,
         limparBuscaPorMedida
     } = useEstoqueFilters(bobinas, retalhos);
 
@@ -234,6 +236,7 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
         <EstoqueRetalhosPanel
             viewMode={viewMode}
             filteredRetalhos={filteredRetalhos}
+            searchDimensions={buscandoPorMedida ? { larguraCm: larguraBuscaCm, comprimentoCm: comprimentoBuscaCm } : undefined}
             onShowQR={handleShowQR}
             onChangeStatus={handleChangeStatus}
             onDelete={handleDelete}

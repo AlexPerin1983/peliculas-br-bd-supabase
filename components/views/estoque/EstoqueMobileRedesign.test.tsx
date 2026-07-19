@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import EstoqueMobileHeader from './EstoqueMobileHeader';
 import EstoqueMobileAddSheet from './EstoqueMobileAddSheet';
 import EstoqueBobinasPanel from './EstoqueBobinasPanel';
+import EstoqueRetalhosPanel from './EstoqueRetalhosPanel';
 
 describe('redesenho mobile do estoque', () => {
     it('alterna entre itens e resumo e mantém busca e filtro acessíveis', () => {
@@ -65,6 +66,38 @@ describe('redesenho mobile do estoque', () => {
         expect(mobileRow).toBeDefined();
         fireEvent.click(mobileRow!);
         expect(onOpenDetails).toHaveBeenCalledWith({ type: 'bobina', item: bobina });
+    });
+
+    it('agrupa retalhos por película e destaca o melhor encaixe por medida', () => {
+        const onOpenDetails = vi.fn();
+        const retalhos = [
+            { id: 68, filmId: 'Jateada', codigoQr: 'retalho-68', larguraCm: 100, comprimentoCm: 110, areaM2: 1.1, status: 'disponivel' as const, localizacao: 'Carro' },
+            { id: 63, filmId: 'Jateada', codigoQr: 'retalho-63', larguraCm: 105, comprimentoCm: 210, areaM2: 2.205, status: 'disponivel' as const },
+            { id: 70, filmId: 'Carbono', codigoQr: 'retalho-70', larguraCm: 120, comprimentoCm: 120, areaM2: 1.44, status: 'disponivel' as const, localizacao: 'Estante' },
+        ];
+
+        render(
+            <EstoqueRetalhosPanel
+                viewMode="list"
+                filteredRetalhos={retalhos}
+                searchDimensions={{ larguraCm: 100, comprimentoCm: 100 }}
+                onShowQR={vi.fn()}
+                onChangeStatus={vi.fn()}
+                onDelete={vi.fn()}
+                onOpenDetails={onOpenDetails}
+                getStatusLabel={() => 'Disponível'}
+                getStatusColor={() => '#22c55e'}
+            />
+        );
+
+        expect(screen.getByText('2 retalhos')).toBeInTheDocument();
+        expect(screen.getByText('Melhor encaixe')).toBeInTheDocument();
+        expect(screen.getByText('Sem localização')).toBeInTheDocument();
+        expect(screen.getAllByText('1,00 × 1,10 m').length).toBeGreaterThan(0);
+
+        const mobileRow = screen.getAllByRole('button').find(button => button.textContent?.includes('#68'));
+        fireEvent.click(mobileRow!);
+        expect(onOpenDetails).toHaveBeenCalledWith({ type: 'retalho', item: retalhos[0] });
     });
 
     it('oferece as quatro entradas do cadastro em uma única folha', () => {

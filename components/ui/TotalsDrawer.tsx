@@ -336,6 +336,7 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
     const [openGroup, setOpenGroup] = useState<string | null>(null);
     const [advancedPriceGroup, setAdvancedPriceGroup] = useState<string | null>(null);
     const [adjustmentsOpen, setAdjustmentsOpen] = useState(false);
+    const [keyboardOffset, setKeyboardOffset] = useState(0);
     const touchStartRef = useRef<{ x: number; y: number } | null>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -368,6 +369,7 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
     const adjustmentInputs = getProposalAdjustmentInputs(generalDiscount);
     const hiddenIncreaseAmount = totals.generalIncreaseAmount || 0;
     const finalDiscountAmount = totals.generalFinalDiscountAmount || 0;
+    const hasAdjustments = hiddenIncreaseAmount > 0 || finalDiscountAmount > 0;
 
     useEffect(() => {
         setOpenGroup(null);
@@ -386,6 +388,7 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
         const keyboardHeight = () => Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
         const syncKeyboardSpace = () => {
             const height = keyboardHeight();
+            setKeyboardOffset(height > 120 ? height : 0);
             container.style.paddingBottom = height > 120
                 ? `calc(env(safe-area-inset-bottom, 0px) + ${height}px)`
                 : defaultBottomPadding;
@@ -425,6 +428,7 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
             viewport.removeEventListener('resize', syncKeyboardSpace);
             viewport.removeEventListener('scroll', syncKeyboardSpace);
             container.style.paddingBottom = defaultBottomPadding;
+            setKeyboardOffset(0);
         };
     }, [isOpen]);
 
@@ -488,10 +492,9 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                 <Drawer.Content className="fixed bottom-0 left-0 right-0 z-50 flex h-[100dvh] max-h-[100dvh] flex-col border-t border-slate-200 bg-white outline-none dark:border-slate-700 dark:bg-slate-900">
                     <div
                         ref={scrollRef}
-                        className="flex-1 overflow-y-auto overscroll-contain bg-white px-3 dark:bg-slate-900 sm:px-4"
+                        className="flex-1 overflow-y-auto overscroll-contain bg-white px-3 pb-24 dark:bg-slate-900 sm:px-4 sm:pb-4"
                         style={{
                             paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.35rem)',
-                            paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)',
                         }}
                         onTouchStart={handleTouchStart}
                         onTouchEnd={handleTouchEnd}
@@ -726,22 +729,30 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                                     aria-expanded={adjustmentsOpen}
                                     className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left"
                                 >
-                                    <span>
-                                        <span className="block text-sm font-bold text-slate-700 dark:text-slate-200">Acréscimo e desconto</span>
+                                    <span className="min-w-0 flex-1">
+                                        <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                            <span className="text-sm font-bold text-slate-700 dark:text-slate-200">Acréscimo e desconto</span>
+                                            {!adjustmentsOpen && hiddenIncreaseAmount > 0 && (
+                                                <span className="text-[11px] font-bold text-blue-600 dark:text-blue-300">+{formatNumberBR(hiddenIncreaseAmount)}</span>
+                                            )}
+                                            {!adjustmentsOpen && finalDiscountAmount > 0 && (
+                                                <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-300">−{formatNumberBR(finalDiscountAmount)}</span>
+                                            )}
+                                        </span>
                                         <span className="block text-[10px] text-slate-500 dark:text-slate-400">
-                                            {hiddenIncreaseAmount > 0 || finalDiscountAmount > 0 ? 'Existe um ajuste aplicado' : 'Opcional · toque para configurar'}
+                                            {hasAdjustments ? 'Toque para editar os ajustes' : 'Opcional · toque para configurar'}
                                         </span>
                                     </span>
-                                    {(hiddenIncreaseAmount > 0 || finalDiscountAmount > 0) && (
-                                        <span className="ml-auto rounded-full bg-white px-2 py-1 text-[10px] font-bold text-slate-600 dark:bg-slate-900 dark:text-slate-300">
-                                            +{formatNumberBR(hiddenIncreaseAmount)} / -{formatNumberBR(finalDiscountAmount)}
-                                        </span>
-                                    )}
                                     <i className={`fas fa-chevron-down text-[10px] text-slate-400 transition-transform ${adjustmentsOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
                                 </button>
 
                                 {adjustmentsOpen && (
                                     <div className="space-y-3 border-t border-slate-200 p-2.5 dark:border-slate-700">
+                                        <div className="sticky top-2 z-10 flex items-center justify-between gap-3 rounded-xl bg-slate-900 px-3 py-2.5 text-white shadow-lg shadow-slate-900/15 dark:bg-slate-950 sm:hidden" aria-live="polite">
+                                            <span className="text-[9px] font-bold uppercase tracking-[0.1em] text-slate-400">Total atualizado</span>
+                                            <strong className="shrink-0 text-xl font-black tracking-tight">{formatNumberBR(totals.finalTotal)}</strong>
+                                        </div>
+
                                         <AdjustmentCard
                                             kind="increase"
                                             title="Acréscimo embutido"
@@ -771,7 +782,7 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                                 )}
                             </div>
 
-                            <div className="rounded-xl bg-slate-900 px-3 py-3 text-white dark:bg-slate-950">
+                            <div className="hidden rounded-xl bg-slate-900 px-3 py-3 text-white dark:bg-slate-950 sm:block">
                                 <div className="flex items-center justify-between gap-4">
                                     <div className="flex flex-col">
                                         <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total do orçamento</span>
@@ -830,15 +841,27 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                                 </button>
                             </div>
 
-                            <button
-                                type="button"
-                                onClick={() => { onClose(); onGeneratePdf(); }}
-                                disabled={isGeneratingPdf}
-                                className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 text-sm font-bold text-white shadow-sm transition-all active:scale-[0.98] disabled:opacity-60 dark:bg-blue-500"
+                            {keyboardOffset === 0 && <div
+                                className="fixed inset-x-0 bottom-0 z-20 border-t border-slate-200 bg-white/95 px-3 py-2 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95 sm:static sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none"
                             >
-                                <i className={`fas ${isGeneratingPdf ? 'fa-spinner fa-spin' : 'fa-file-pdf'}`} aria-hidden="true" />
-                                <span>{isGeneratingPdf ? 'Gerando PDF...' : 'Gerar e salvar PDF'}</span>
-                            </button>
+                                <div className={`mx-auto grid max-w-md gap-2 sm:block ${adjustmentsOpen ? 'grid-cols-1' : 'grid-cols-[minmax(0,0.95fr)_minmax(0,1.2fr)]'}`}>
+                                    {!adjustmentsOpen && <div className="flex h-12 min-w-0 flex-col justify-center rounded-xl bg-slate-900 px-3 text-white shadow-sm dark:bg-slate-950 sm:hidden" aria-live="polite">
+                                        <span className="block text-[8px] font-bold uppercase tracking-[0.08em] text-slate-400">Total atualizado</span>
+                                        <span className="block truncate text-[17px] font-black leading-tight">{formatNumberBR(totals.finalTotal)}</span>
+                                    </div>}
+                                    <button
+                                        type="button"
+                                        aria-label="Gerar e salvar PDF"
+                                        onClick={() => { onClose(); onGeneratePdf(); }}
+                                        disabled={isGeneratingPdf}
+                                        className="flex h-12 min-w-0 items-center justify-center gap-2 rounded-xl bg-blue-600 px-3 text-sm font-bold text-white shadow-sm transition-all active:scale-[0.98] disabled:opacity-60 dark:bg-blue-500 sm:h-11 sm:w-full"
+                                    >
+                                        <i className={`fas ${isGeneratingPdf ? 'fa-spinner fa-spin' : 'fa-file-pdf'}`} aria-hidden="true" />
+                                        <span className="sm:hidden">{isGeneratingPdf ? 'Gerando...' : 'Gerar PDF'}</span>
+                                        <span className="hidden sm:inline">{isGeneratingPdf ? 'Gerando PDF...' : 'Gerar e salvar PDF'}</span>
+                                    </button>
+                                </div>
+                            </div>}
                         </div>
                     </div>
                 </Drawer.Content>

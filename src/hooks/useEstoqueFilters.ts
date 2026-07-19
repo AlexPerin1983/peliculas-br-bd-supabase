@@ -89,6 +89,8 @@ export function useEstoqueFilters(bobinas: Bobina[], retalhos: Retalho[]) {
         medidaComprimentoCm,
         setMedidaComprimentoCm,
         buscandoPorMedida,
+        larguraBuscaCm: larguraCm,
+        comprimentoBuscaCm: comprimentoCm,
         limparBuscaPorMedida
     };
 }
