@@ -284,6 +284,7 @@ export type AgendamentoServiceStatus = 'scheduled' | 'completed' | 'partial' | '
 export interface Agendamento {
     id?: number;
     pdfId?: number;
+    pdfIds?: number[];
     clienteId: number;
     clienteNome: string;
     start: string; // ISO string for date and time

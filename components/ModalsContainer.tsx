@@ -344,6 +344,7 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
                     onDelete={props.handleRequestDeleteAgendamento}
                     schedulingInfo={props.schedulingInfo}
                     clients={props.clients}
+                    savedPdfs={props.allSavedPdfs}
                     onAddNewClient={props.handleAddNewClientFromAgendamento}
                     userInfo={props.userInfo}
                     agendamentos={props.agendamentos}

@@ -326,6 +326,10 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
                 onDownload={onDownloadPdf}
                 onUpdateStatus={onUpdatePdfStatus}
                 onSchedule={onSchedulePdf}
+                onOpenInAgenda={(agendamento) => {
+                    onTabChange('agenda');
+                    onEditAgendamento(agendamento);
+                }}
                 onGenerateCombinedPdf={onGenerateCombinedPdf}
                 onNavigateToOption={onNavigateToOption}
             />,

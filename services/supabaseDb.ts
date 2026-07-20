@@ -1187,6 +1187,7 @@ export const saveAgendamento = async (agendamento: Agendamento | Omit<Agendament
     const agendamentoData = {
         user_id: userId,
         pdf_id: agendamento.pdfId,
+        pdf_ids: agendamento.pdfIds?.length ? agendamento.pdfIds : (agendamento.pdfId ? [agendamento.pdfId] : []),
         client_id: agendamento.clienteId,
         client_name: agendamento.clienteNome,
         start: agendamento.start,
@@ -1215,6 +1216,11 @@ export const saveAgendamento = async (agendamento: Agendamento | Omit<Agendament
         return rest;
     };
 
+    const stripPdfIds = <T extends { pdf_ids?: unknown }>(payload: T) => {
+        const { pdf_ids, ...rest } = payload;
+        return rest;
+    };
+
     const id = 'id' in agendamento && agendamento.id ? agendamento.id : undefined;
 
     const runQuery = (payload: Record<string, unknown>) => {
@@ -1226,6 +1232,11 @@ export const saveAgendamento = async (agendamento: Agendamento | Omit<Agendament
 
     let payload: Record<string, unknown> = agendamentoData;
     let { data, error } = await runQuery(payload);
+
+    if (error && isPdfIdsColumnError(error)) {
+        payload = stripPdfIds(payload);
+        ({ data, error } = await runQuery(payload));
+    }
 
     if (error && isValorFinalColumnError(error)) {
         payload = stripValorFinal(payload);
@@ -1271,13 +1282,26 @@ export const getAgendamentoByPdfId = async (pdfId: number): Promise<Agendamento 
         .eq('pdf_id', pdfId)
         .single();
 
-    if (error || !data) return undefined;
-    return mapRowToAgendamento(data);
+    if (data) return mapRowToAgendamento(data);
+    if (isPdfIdsColumnError(error)) return undefined;
+
+    const { data: linkedData, error: linkedError } = await supabase
+        .from('agendamentos')
+        .select('*')
+        .contains('pdf_ids', [pdfId])
+        .limit(1)
+        .maybeSingle();
+
+    if (linkedError || !linkedData) return undefined;
+    return mapRowToAgendamento(linkedData);
 };
 
 const mapRowToAgendamento = (row: any): Agendamento => ({
     id: row.id,
     pdfId: row.pdf_id,
+    pdfIds: Array.isArray(row.pdf_ids) && row.pdf_ids.length > 0
+        ? row.pdf_ids.map(Number).filter(Number.isFinite)
+        : (row.pdf_id ? [row.pdf_id] : []),
     clienteId: row.client_id,
     clienteNome: row.client_name,
     start: row.start ?? row.start_time,
@@ -1286,6 +1310,25 @@ const mapRowToAgendamento = (row: any): Agendamento => ({
     serviceStatus: row.service_status || 'scheduled',
     valorFinal: row.valor_final ?? undefined
 });
+
+const isPdfIdsColumnError = (error: unknown): boolean => {
+    const details = [
+        (error as { message?: string })?.message,
+        (error as { details?: string })?.details,
+        (error as { hint?: string })?.hint,
+        (error as { code?: string })?.code
+    ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+    return details.includes('pdf_ids')
+        && (
+            details.includes('column')
+            || details.includes('schema cache')
+            || details.includes('could not find')
+        );
+};
 
 const isServiceStatusColumnError = (error: unknown): boolean => {
     const details = [

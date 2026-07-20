@@ -31,6 +31,7 @@ const renderHistory = (
         googleReviewsLink?: string;
         hasMoreServerPdfs?: boolean;
         onLoadMoreServerPdfs?: () => Promise<void>;
+        onOpenInAgenda?: (agendamento: Agendamento) => void;
     } = {}
 ) => render(
     <FeedbackProvider>
@@ -46,6 +47,7 @@ const renderHistory = (
             onDownload={vi.fn()}
             onUpdateStatus={vi.fn()}
             onSchedule={vi.fn()}
+            onOpenInAgenda={options.onOpenInAgenda || vi.fn()}
             onGenerateCombinedPdf={vi.fn()}
             onNavigateToOption={vi.fn()}
         />
@@ -57,6 +59,42 @@ describe('PdfHistoryView', () => {
         vi.useFakeTimers();
         vi.setSystemTime(new Date('2026-05-23T12:00:00.000Z'));
         window.localStorage.clear();
+    });
+    it('abre diretamente na agenda uma proposta aprovada que ja esta agendada', () => {
+        const onOpenInAgenda = vi.fn();
+        const agendamento: Agendamento = {
+            id: 77,
+            pdfId: 30,
+            clienteId: 1,
+            clienteNome: 'William',
+            start: '2026-05-25T18:00:00.000Z',
+            end: '2026-05-25T20:00:00.000Z',
+        };
+
+        renderHistory(
+            [
+                makePdf({
+                    id: 30,
+                    status: 'approved',
+                    proposalOptionName: 'Proposta agendada',
+                }),
+                makePdf({
+                    id: 31,
+                    status: 'approved',
+                    proposalOptionName: 'Proposta sem agenda',
+                }),
+            ],
+            {
+                agendamentos: [agendamento],
+                onOpenInAgenda,
+            }
+        );
+
+        const shortcut = screen.getByRole('button', { name: 'Abrir agendamento na agenda' });
+        fireEvent.click(shortcut);
+
+        expect(onOpenInAgenda).toHaveBeenCalledTimes(1);
+        expect(onOpenInAgenda).toHaveBeenCalledWith(agendamento);
     });
 
     afterEach(() => {

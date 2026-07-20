@@ -44,6 +44,7 @@ interface PdfHistoryViewProps {
     onDownload: (pdf: SavedPDF, filename: string) => void;
     onUpdateStatus: (pdfId: number, status: SavedPDF['status']) => void;
     onSchedule: (info: { pdf: SavedPDF; agendamento?: Agendamento } | { agendamento: Agendamento; pdf?: SavedPDF }) => void;
+    onOpenInAgenda: (agendamento: Agendamento) => void;
     onGenerateCombinedPdf: (pdfs: SavedPDF[]) => void;
     onNavigateToOption: (clientId: number, optionId: number) => void;
 }
@@ -2905,6 +2906,7 @@ const PdfHistoryItem: React.FC<{
     onSchedule: (info: { pdf: SavedPDF; agendamento?: Agendamento } | { agendamento: Agendamento; pdf?: SavedPDF }) => void;
     films: Film[];
     messageTemplates: string[];
+    onOpenInAgenda: (agendamento: Agendamento) => void;
     googleReviewsLink?: string;
     isSelected: boolean;
     onToggleSelect: (id: number) => void;
@@ -2913,7 +2915,7 @@ const PdfHistoryItem: React.FC<{
     onSetFunnelReference: (pdf: SavedPDF) => void;
     onShare: (client: Client, pdf: SavedPDF) => void;
     fitContent?: boolean;
-}> = React.memo(({ pdf, client, agendamento, onDownload, onDelete, onUpdateStatus, onSchedule, films, messageTemplates, googleReviewsLink, isSelected, onToggleSelect, onNavigateToOption, isFunnelReference, onSetFunnelReference, onShare, fitContent = false }) => {
+}> = React.memo(({ pdf, client, agendamento, onDownload, onDelete, onUpdateStatus, onSchedule, onOpenInAgenda, films, messageTemplates, googleReviewsLink, isSelected, onToggleSelect, onNavigateToOption, isFunnelReference, onSetFunnelReference, onShare, fitContent = false }) => {
     const { showToast } = useFeedback();
     const [copiedMessageKey, setCopiedMessageKey] = useState<string | null>(null);
     const [isMessagesExpanded, setIsMessagesExpanded] = useState(false);
@@ -3134,6 +3136,20 @@ const PdfHistoryItem: React.FC<{
                             <i className="fas fa-check text-[10px]" aria-hidden="true" />
                             Aprovado
                         </button>
+                        {pdf.status === 'approved' && agendamento ? (
+                            <button
+                                type="button"
+                                onClick={(event) => {
+                                    event.stopPropagation();
+                                    onOpenInAgenda(agendamento);
+                                }}
+                                aria-label="Abrir agendamento na agenda"
+                                title="Abrir na agenda"
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-blue-200 bg-blue-50 text-blue-600 transition-colors hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-300 dark:hover:bg-blue-900/40"
+                            >
+                                <CalendarDays className="h-4 w-4" aria-hidden="true" />
+                            </button>
+                        ) : null}
                     </div>
 
                     {/* Row 3: filmes */}
@@ -3559,7 +3575,7 @@ const PdfHistoryMobileFooter: React.FC<{
     );
 };
 
-const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs = false, isLoadingMoreServerPdfs = false, onLoadMoreServerPdfs, onEnsureCompleteServerHistory, clients, agendamentos, films, googleReviewsLink, onDelete, onDownload, onUpdateStatus, onSchedule, onGenerateCombinedPdf, onNavigateToOption }) => {
+const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs = false, isLoadingMoreServerPdfs = false, onLoadMoreServerPdfs, onEnsureCompleteServerHistory, clients, agendamentos, films, googleReviewsLink, onDelete, onDownload, onUpdateStatus, onSchedule, onOpenInAgenda, onGenerateCombinedPdf, onNavigateToOption }) => {
     const { showToast } = useFeedback();
     const [pendingFocusClientId] = useState<number | null>(() => readInitialHistoryFocusClient());
     const [expandedClientId, setExpandedClientId] = useState<number | null>(pendingFocusClientId);
@@ -3717,9 +3733,10 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
 
     const agendamentosByPdfId = useMemo(() => {
         return agendamentos.reduce((acc, ag) => {
-            if (ag.pdfId) {
-                acc[ag.pdfId] = ag;
-            }
+            const linkedIds = ag.pdfIds?.length ? ag.pdfIds : (ag.pdfId ? [ag.pdfId] : []);
+            linkedIds.forEach((pdfId) => {
+                acc[pdfId] = ag;
+            });
             return acc;
         }, {} as Record<number, Agendamento>);
     }, [agendamentos]);
@@ -4302,6 +4319,7 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
                                         onDelete={onDelete}
                                         onUpdateStatus={onUpdateStatus}
                                         onSchedule={onSchedule}
+                                        onOpenInAgenda={onOpenInAgenda}
                                         films={films}
                                         messageTemplates={messageTemplates}
                                         googleReviewsLink={googleReviewsLink}
@@ -4964,6 +4982,7 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
                                             onDelete={onDelete}
                                             onUpdateStatus={onUpdateStatus}
                                             onSchedule={onSchedule}
+                                            onOpenInAgenda={onOpenInAgenda}
                                             films={films}
                                             messageTemplates={messageTemplates}
                                             googleReviewsLink={googleReviewsLink}

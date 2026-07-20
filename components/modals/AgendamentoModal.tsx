@@ -15,6 +15,7 @@ interface AgendamentoModalProps {
     onDelete: (agendamento: Agendamento) => void;
     schedulingInfo: SchedulingInfo;
     clients: Client[];
+    savedPdfs: SavedPDF[];
     onAddNewClient: (clientName: string) => void;
     userInfo: UserInfo | null;
     agendamentos: Agendamento[];
@@ -105,7 +106,7 @@ const getWorkingEndLabel = (scheduleStart: string, scheduleEnd: string): string 
     return scheduleEnd;
 };
 
-const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, onSave, onDelete, schedulingInfo, clients, onAddNewClient, userInfo, agendamentos, onOpenApiKeyModal }) => {
+const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, onSave, onDelete, schedulingInfo, clients, savedPdfs, onAddNewClient, userInfo, agendamentos, onOpenApiKeyModal }) => {
     const agendamento = schedulingInfo.agendamento;
     const pdf = 'pdf' in schedulingInfo ? schedulingInfo.pdf : undefined;
 
@@ -118,6 +119,7 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
     const [notes, setNotes] = useState('');
     const [serviceStatus, setServiceStatus] = useState<AgendamentoServiceStatus>('scheduled');
     const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
+    const [selectedProposalIds, setSelectedProposalIds] = useState<number[]>([]);
     const [validationError, setValidationError] = useState<string | null>(null);
     const [isSuggesting, setIsSuggesting] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
@@ -153,6 +155,22 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
             return (a.nome || '').localeCompare(b.nome || '');
         });
     }, [clients]);
+    const clientProposals = useMemo(() => (
+        savedPdfs
+            .filter((item) => item.clienteId === selectedClientId && typeof item.id === 'number')
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    ), [savedPdfs, selectedClientId]);
+
+    const proposalIdsScheduledElsewhere = useMemo(() => {
+        const ids = new Set<number>();
+        agendamentos.forEach((item) => {
+            if (isEditing && item.id === agendamento?.id) return;
+            const linkedIds = item.pdfIds?.length ? item.pdfIds : (item.pdfId ? [item.pdfId] : []);
+            linkedIds.forEach((id) => ids.add(id));
+        });
+        return ids;
+    }, [agendamentos, agendamento?.id, isEditing]);
+
 
     useEffect(() => {
         if (isOpen) {
@@ -161,6 +179,11 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
             setIsSaving(false);
             const initialClientId = agendamento?.clienteId || pdf?.clienteId || null;
             setSelectedClientId(initialClientId);
+            const initialProposalIds = agendamento?.pdfIds?.length
+                ? agendamento.pdfIds
+                : (pdf?.id ? [pdf.id] : (agendamento?.pdfId ? [agendamento.pdfId] : []));
+            setSelectedProposalIds(initialProposalIds);
+
             setServiceStatus(agendamento?.serviceStatus || 'scheduled');
 
             if (isEditing && agendamento?.start && agendamento?.end) {
@@ -380,6 +403,8 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
             setValidationError(`Todos os ${maxAppointments} colaboradores já estão ocupados neste horário.`);
             return;
         }
+        const proposalIds = selectedProposalIds.filter((id, index, ids) => ids.indexOf(id) === index);
+
 
         const agendamentoPayload: Omit<Agendamento, 'id'> | Agendamento = {
             clienteId: client.id!,
@@ -387,7 +412,8 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
             start: startDateTime.toISOString(),
             end: endDateTime.toISOString(),
             notes: notes,
-            pdfId: pdf?.id || agendamento?.pdfId,
+            pdfId: proposalIds[0],
+            pdfIds: proposalIds,
             serviceStatus,
         };
 
@@ -519,7 +545,13 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                         <SearchableSelect
                             options={sortedClients}
                             value={selectedClientId}
-                            onChange={(id) => setSelectedClientId(id as number | null)}
+                            onChange={(id) => {
+                                const nextClientId = id as number | null;
+                                setSelectedClientId(nextClientId);
+                                setSelectedProposalIds((current) => current.filter((proposalId) => (
+                                    savedPdfs.some((item) => item.id === proposalId && item.clienteId === nextClientId)
+                                )));
+                            }}
                             displayField="nome"
                             valueField="id"
                             placeholder="Selecione ou digite um nome"
@@ -582,7 +614,7 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                         />
                     </div>
 
-                    {pdf && (
+                    {pdf && clientProposals.length === 0 && (
                         <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-600 space-y-2">
                             <div className="flex justify-between items-center">
                                 <h4 className="text-sm font-semibold text-slate-600 dark:text-slate-400">Orçamento Associado</h4>
@@ -594,6 +626,88 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                             </div>
                         </div>
                     )}
+                    {selectedClientId ? (
+                        <section className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-600 dark:bg-slate-800/70">
+                            <div className="flex items-start justify-between gap-3">
+                                <div>
+                                    <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Propostas do cliente</h4>
+                                    <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                                        Selecione uma ou mais para levar os dados para a agenda.
+                                    </p>
+                                </div>
+                                {selectedProposalIds.length > 0 ? (
+                                    <span className="shrink-0 rounded-full bg-blue-100 px-2 py-1 text-xs font-semibold text-blue-700 dark:bg-blue-950/50 dark:text-blue-300">
+                                        {selectedProposalIds.length} selecionada{selectedProposalIds.length > 1 ? 's' : ''}
+                                    </span>
+                                ) : null}
+                            </div>
+
+                            {clientProposals.length > 0 ? (
+                                <>
+                                    <div className="mt-3 max-h-64 space-y-2 overflow-y-auto pr-0.5">
+                                        {clientProposals.map((proposal) => {
+                                            const proposalId = proposal.id as number;
+                                            const isSelected = selectedProposalIds.includes(proposalId);
+                                            const isScheduledElsewhere = proposalIdsScheduledElsewhere.has(proposalId) && !isSelected;
+                                            const proposalName = proposal.proposalOptionName || proposal.nomeArquivo || ('Proposta #' + proposalId);
+
+                                            return (
+                                                <label
+                                                    key={proposalId}
+                                                    className={'flex items-center gap-3 rounded-lg border p-3 transition-colors ' + (
+                                                        isScheduledElsewhere
+                                                            ? 'cursor-not-allowed border-slate-200 bg-slate-100 opacity-60 dark:border-slate-700 dark:bg-slate-900/40'
+                                                            : isSelected
+                                                                ? 'cursor-pointer border-blue-400 bg-blue-50 dark:border-blue-700 dark:bg-blue-950/30'
+                                                                : 'cursor-pointer border-slate-200 bg-white hover:border-blue-300 dark:border-slate-700 dark:bg-slate-900/60'
+                                                    )}
+                                                >
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={isSelected}
+                                                        disabled={isScheduledElsewhere}
+                                                        onChange={() => setSelectedProposalIds((current) => (
+                                                            current.includes(proposalId)
+                                                                ? current.filter((id) => id !== proposalId)
+                                                                : [...current, proposalId]
+                                                        ))}
+                                                        aria-label={'Selecionar ' + proposalName}
+                                                        className="h-5 w-5 shrink-0 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                                    />
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">{proposalName}</span>
+                                                            <StatusBadge status={proposal.status} />
+                                                        </div>
+                                                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                                                            {new Date(proposal.date).toLocaleDateString('pt-BR')} &middot; {formatCurrency(proposal.totalPreco)}
+                                                        </p>
+                                                        {isScheduledElsewhere ? (
+                                                            <p className="mt-1 text-[11px] font-medium text-amber-700 dark:text-amber-300">J&aacute; vinculada a outro agendamento</p>
+                                                        ) : null}
+                                                    </div>
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+                                    {selectedProposalIds.length > 1 ? (
+                                        <div className="mt-3 flex items-center justify-between border-t border-slate-200 pt-3 text-sm dark:border-slate-700">
+                                            <span className="font-medium text-slate-500 dark:text-slate-400">Total das propostas</span>
+                                            <strong className="text-slate-800 dark:text-slate-100">
+                                                {formatCurrency(clientProposals
+                                                    .filter((proposal) => selectedProposalIds.includes(proposal.id as number))
+                                                    .reduce((total, proposal) => total + proposal.totalPreco, 0))}
+                                            </strong>
+                                        </div>
+                                    ) : null}
+                                </>
+                            ) : (
+                                <p className="mt-3 rounded-lg bg-white px-3 py-2 text-sm text-slate-500 dark:bg-slate-900/60 dark:text-slate-400">
+                                    Este cliente ainda n&atilde;o possui propostas geradas.
+                                </p>
+                            )}
+                        </section>
+                    ) : null}
 
                     <div>
                         <div className="flex justify-between items-center mb-1">

@@ -86,6 +86,7 @@ describe('supabaseDb PDF updates', () => {
       data: {
         id: 55,
         pdf_id: 91,
+        pdf_ids: [91, 92],
         client_id: 12,
         client_name: 'Cliente Agenda',
         start,
@@ -101,6 +102,7 @@ describe('supabaseDb PDF updates', () => {
     const { saveAgendamento } = await import('./supabaseDb');
     const saved = await saveAgendamento({
       pdfId: 91,
+      pdfIds: [91, 92],
       clienteId: 12,
       clienteNome: 'Cliente Agenda',
       start,
@@ -112,6 +114,7 @@ describe('supabaseDb PDF updates', () => {
     expect(insertMock).toHaveBeenCalledWith(expect.objectContaining({
       user_id: 'user-1',
       pdf_id: 91,
+      pdf_ids: [91, 92],
       client_id: 12,
       client_name: 'Cliente Agenda',
       start,
@@ -123,6 +126,7 @@ describe('supabaseDb PDF updates', () => {
     expect(saved).toEqual(expect.objectContaining({
       id: 55,
       pdfId: 91,
+      pdfIds: [91, 92],
       clienteId: 12,
       clienteNome: 'Cliente Agenda',
       start,

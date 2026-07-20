@@ -43,14 +43,29 @@ export function useSchedulingFlow({
         try {
             const savedAgendamento = await db.saveAgendamento(agendamentoData);
 
-            if (savedAgendamento.pdfId) {
-                const allPdfsFromDb = await db.getAllPDFs();
-                const pdfToUpdate = allPdfsFromDb.find(pdf => pdf.id === savedAgendamento.pdfId);
+            const linkedProposalIds = savedAgendamento.pdfIds?.length
+                ? savedAgendamento.pdfIds
+                : (savedAgendamento.pdfId ? [savedAgendamento.pdfId] : []);
 
-                if (pdfToUpdate && pdfToUpdate.agendamentoId !== savedAgendamento.id) {
-                    await db.updatePDF({ ...pdfToUpdate, agendamentoId: savedAgendamento.id });
+            const allPdfsFromDb = await db.getAllPDFs();
+            const linkedProposalIdSet = new Set(linkedProposalIds);
+            const pdfsToUpdate = allPdfsFromDb.filter((item) => (
+                (typeof item.id === 'number' && linkedProposalIdSet.has(item.id))
+                || item.agendamentoId === savedAgendamento.id
+            ));
+
+            await Promise.all(pdfsToUpdate.map((item) => {
+                const shouldLink = typeof item.id === 'number' && linkedProposalIdSet.has(item.id);
+                if (shouldLink) {
+                    return item.agendamentoId === savedAgendamento.id
+                        ? Promise.resolve()
+                        : db.updatePDF({ ...item, agendamentoId: savedAgendamento.id });
                 }
-            }
+
+                const updatedPdf = { ...item };
+                delete updatedPdf.agendamentoId;
+                return db.updatePDF(updatedPdf);
+            }));
 
             await Promise.all([loadAgendamentos(), loadAllPdfs()]);
             handleCloseAgendamentoModal();
@@ -86,12 +101,15 @@ export function useSchedulingFlow({
         const previousValorFinal = agendamento.valorFinal;
 
         const linkedPdf = agendamento.pdfId ? allSavedPdfs.find(pdf => pdf.id === agendamento.pdfId) : undefined;
+        const linkedProposalIds = agendamento.pdfIds?.length ? agendamento.pdfIds : (agendamento.pdfId ? [agendamento.pdfId] : []);
+        const hasMultipleLinkedProposals = linkedProposalIds.length > 1;
+
         const hasValidValue = Number.isFinite(finalValue) && finalValue > 0;
         // Com orcamento vinculado: o valor sobrescreve o orcamento.
-        const shouldUpdatePdf = Boolean(linkedPdf && hasValidValue && finalValue !== linkedPdf!.totalPreco);
+        const shouldUpdatePdf = Boolean(linkedPdf && !hasMultipleLinkedProposals && hasValidValue && finalValue !== linkedPdf!.totalPreco);
         // Sem orcamento vinculado: o valor fica guardado no proprio agendamento
         // para entrar no resultado financeiro como servico avulso.
-        const shouldStoreValorFinal = !linkedPdf && hasValidValue && finalValue !== agendamento.valorFinal;
+        const shouldStoreValorFinal = (!linkedPdf || hasMultipleLinkedProposals) && hasValidValue && finalValue !== agendamento.valorFinal;
 
         const nextValorFinal = shouldStoreValorFinal ? finalValue : agendamento.valorFinal;
 
@@ -137,15 +155,19 @@ export function useSchedulingFlow({
         try {
             const agendamentoId = agendamentoToDelete.id;
             const allPdfsFromDb = await db.getAllPDFs();
-            const pdfToUnlink = allPdfsFromDb.find(pdf => pdf.agendamentoId === agendamentoId);
+            const pdfsToUnlink = allPdfsFromDb.filter((pdf) => pdf.agendamentoId === agendamentoId);
 
             await db.deleteAgendamento(agendamentoId);
 
-            if (pdfToUnlink) {
-                const updatedPdf = { ...pdfToUnlink };
-                delete updatedPdf.agendamentoId;
-                await db.updatePDF(updatedPdf);
-                setAllSavedPdfs(previous => previous.map(pdf => pdf.id === updatedPdf.id ? updatedPdf : pdf));
+            if (pdfsToUnlink.length > 0) {
+                const updatedPdfs = pdfsToUnlink.map((item) => {
+                    const updatedPdf = { ...item };
+                    delete updatedPdf.agendamentoId;
+                    return updatedPdf;
+                });
+                await Promise.all(updatedPdfs.map((item) => db.updatePDF(item)));
+                const updatedById = new Map(updatedPdfs.map((item) => [item.id, item]));
+                setAllSavedPdfs((previous) => previous.map((item) => updatedById.get(item.id) || item));
             }
 
             setAgendamentos(previous => previous.filter(agendamento => agendamento.id !== agendamentoId));

@@ -33,7 +33,7 @@ interface AgendaViewProps {
     userInfo?: UserInfo | null;
 }
 
-type AgendamentoWithStatus = Agendamento & { status?: SavedPDF['status'] };
+type AgendamentoWithStatus = Agendamento & { status?: SavedPDF['status']; proposalNames?: string[]; proposalTotal?: number };
 
 const SERVICE_STATUS_META: Record<AgendamentoServiceStatus, {
     text: string;
@@ -760,6 +760,7 @@ const AppointmentCard: React.FC<{
     const status = agendamento.status || 'pending';
     const meta = STATUS_META[status] || STATUS_META.pending;
     const serviceStatus = agendamento.serviceStatus || 'scheduled';
+    const linkedProposalCount = agendamento.pdfIds?.length || (agendamento.pdfId ? 1 : 0);
     const hasEnded = new Date(agendamento.end).getTime() < Date.now();
     const showEndedPrompt = serviceStatus === 'scheduled' && hasEnded;
     const [isConfirmingValue, setIsConfirmingValue] = useState(false);
@@ -770,7 +771,7 @@ const AppointmentCard: React.FC<{
 
     // Valor exibido/editado: vem do orcamento vinculado ou, sem orcamento, do
     // valor avulso guardado no proprio agendamento.
-    const currentValue = linkedPdf ? linkedPdf.totalPreco : agendamento.valorFinal;
+    const currentValue = agendamento.valorFinal ?? (linkedProposalCount > 1 ? agendamento.proposalTotal : linkedPdf?.totalPreco);
     const hasCurrentValue = typeof currentValue === 'number' && Number.isFinite(currentValue);
 
     const openValuePanel = () => {
@@ -887,6 +888,13 @@ const AppointmentCard: React.FC<{
                                         <i className="far fa-clock text-[10px]" aria-hidden="true"></i>
                                         {duration}
                                     </span>
+                                    {linkedProposalCount > 0 ? (
+                                        <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2 py-1 text-xs font-bold text-blue-700 dark:bg-blue-950/35 dark:text-blue-300">
+                                            <i className="fas fa-file-invoice text-[10px]" aria-hidden="true"></i>
+                                            {linkedProposalCount} proposta{linkedProposalCount > 1 ? 's' : ''}
+                                        </span>
+                                    ) : null}
+
                                     {bairro ? (
                                         <span className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-[var(--surface-muted)] px-2 py-1 text-xs font-bold text-[var(--text-muted)]" title={clientAddress}>
                                             <i className="fas fa-map-marker-alt text-[10px]" aria-hidden="true"></i>
@@ -896,6 +904,13 @@ const AppointmentCard: React.FC<{
                                 </div>
                             </div>
                         </div>
+                        {agendamento.proposalNames?.length ? (
+                            <p className="mt-2 flex items-start gap-1.5 text-xs font-semibold text-blue-700 dark:text-blue-300">
+                                <i className="fas fa-file-invoice mt-0.5 shrink-0 text-[10px]" aria-hidden="true"></i>
+                                <span className="line-clamp-2">{agendamento.proposalNames.join(' ? ')}</span>
+                            </p>
+                        ) : null}
+
 
                         {agendamento.notes ? (
                             <p className="mt-3 line-clamp-2 rounded-[var(--radius-control)] bg-[var(--surface-muted)] px-3 py-2 text-sm leading-5 text-[var(--text-muted)] whitespace-pre-wrap">
@@ -1375,12 +1390,28 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
 
     const agendamentosWithStatus = useMemo<AgendamentoWithStatus[]>(() => (
         agendamentos
-            .map((agendamento) => ({
-                ...agendamento,
-                status: agendamento.pdfId ? (pdfStatusMap.get(agendamento.pdfId) || 'pending') : 'pending',
-            }))
+            .map((agendamento) => {
+                const linkedIds = agendamento.pdfIds?.length ? agendamento.pdfIds : (agendamento.pdfId ? [agendamento.pdfId] : []);
+                const statuses = linkedIds.map((id) => pdfStatusMap.get(id) || 'pending');
+                const status = statuses.includes('approved')
+                    ? 'approved'
+                    : (statuses.includes('revised') ? 'revised' : 'pending');
+                const linkedPdfs = linkedIds
+                    .map((id) => pdfById.get(id))
+                    .filter((item): item is SavedPDF => Boolean(item));
+                const proposalNames = linkedPdfs.map((item) => item.proposalOptionName || item.nomeArquivo || ('Proposta #' + item.id));
+                const proposalTotal = linkedPdfs.reduce((total, item) => total + item.totalPreco, 0);
+
+
+                return {
+                    ...agendamento,
+                    status,
+                    proposalNames,
+                    proposalTotal,
+                };
+            })
             .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())
-    ), [agendamentos, pdfStatusMap]);
+    ), [agendamentos, pdfById, pdfStatusMap]);
 
     const agendamentosByDate = useMemo(() => {
         const map = new Map<string, AgendamentoWithStatus[]>();
