@@ -936,16 +936,23 @@ const renderPdfContent = async (
         };
         const calculateParceladoComJuros = (total: number, method: PaymentMethod) => {
             const parcelas_max = method.parcelas_max;
-            if (!parcelas_max || parcelas_max === 0) return 0;
+            if (!parcelas_max || parcelas_max === 0) return { installmentValue: 0, customerTotal: 0 };
+            let rawInstallment = 0;
             if (method.calculation_mode === 'operator_fee') {
                 const fee = Number(method.operator_fee_rates?.[String(parcelas_max)]) || 0;
-                if (fee >= 100) return 0;
-                return (total / (1 - fee / 100)) / parcelas_max;
+                if (fee >= 100) return { installmentValue: 0, customerTotal: 0 };
+                rawInstallment = (total / (1 - fee / 100)) / parcelas_max;
+            } else {
+                const i = (Number(method.juros) || 0) / 100;
+                rawInstallment = i === 0
+                    ? total / parcelas_max
+                    : total * (i * Math.pow(1 + i, parcelas_max)) / (Math.pow(1 + i, parcelas_max) - 1);
             }
-            const i = (Number(method.juros) || 0) / 100;
-            if (i === 0) return total / parcelas_max;
-            const parcela = total * (i * Math.pow(1 + i, parcelas_max)) / (Math.pow(1 + i, parcelas_max) - 1);
-            return parcela;
+            const installmentValue = Math.ceil((rawInstallment - Number.EPSILON) * 100) / 100;
+            return {
+                installmentValue,
+                customerTotal: Math.round((installmentValue * parcelas_max + Number.EPSILON) * 100) / 100,
+            };
         };
         const calculateAdiantamento = (total: number, porcentagem?: number | null) => {
             if (!porcentagem) return 0;
@@ -969,10 +976,13 @@ const renderPdfContent = async (
                         break;
                     case 'parcelado_com_juros':
                         const vpc = calculateParceladoComJuros(total, method);
-                        const appliedRate = method.calculation_mode === 'operator_fee'
-                            ? method.operator_fee_rates?.[String(method.parcelas_max || 0)] || 0
-                            : method.juros || 0;
-                        lines.push(`  • Parcelado c/ Juros: ${method.parcelas_max || 0}x de R$ ${formatNumberBR(vpc)} (Taxa de ${appliedRate}%)`);
+                        if (method.calculation_mode === 'operator_fee') {
+                            lines.push(`  • Cartão parcelado: ${method.parcelas_max || 0}x de R$ ${formatNumberBR(vpc.installmentValue)}`);
+                            lines.push(`    Total no cartão: R$ ${formatNumberBR(vpc.customerTotal)}`);
+                        } else {
+                            lines.push(`  • Parcelado c/ Juros: ${method.parcelas_max || 0}x de R$ ${formatNumberBR(vpc.installmentValue)} (juros de ${method.juros || 0}% ao mês)`);
+                            lines.push(`    Total parcelado: R$ ${formatNumberBR(vpc.customerTotal)}`);
+                        }
                         break;
                     case 'adiantamento':
                         const va = calculateAdiantamento(total, method.porcentagem);
@@ -1043,10 +1053,13 @@ const renderPdfContent = async (
                         break;
                     case 'parcelado_com_juros':
                         const valorParcelaComJuros = calculateParceladoComJuros(finalTotalForPayment, method);
-                        const appliedRate = method.calculation_mode === 'operator_fee'
-                            ? method.operator_fee_rates?.[String(method.parcelas_max || 0)] || 0
-                            : method.juros || 0;
-                        paymentLines.push(`• Parcelado c/ Juros: ${method.parcelas_max || 0}x de R$ ${formatNumberBR(valorParcelaComJuros)} (Taxa de ${appliedRate}%)`);
+                        if (method.calculation_mode === 'operator_fee') {
+                            paymentLines.push(`• Cartão parcelado: ${method.parcelas_max || 0}x de R$ ${formatNumberBR(valorParcelaComJuros.installmentValue)}`);
+                            paymentLines.push(`  Total no cartão: R$ ${formatNumberBR(valorParcelaComJuros.customerTotal)}`);
+                        } else {
+                            paymentLines.push(`• Parcelado c/ Juros: ${method.parcelas_max || 0}x de R$ ${formatNumberBR(valorParcelaComJuros.installmentValue)} (juros de ${method.juros || 0}% ao mês)`);
+                            paymentLines.push(`  Total parcelado: R$ ${formatNumberBR(valorParcelaComJuros.customerTotal)}`);
+                        }
                         break;
                     case 'adiantamento':
                         const valorAdiantamento = calculateAdiantamento(finalTotalForPayment, method.porcentagem);
