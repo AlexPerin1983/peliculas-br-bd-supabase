@@ -640,6 +640,7 @@ export async function getPDFPage(
             if (query.startDate && timestamp < new Date(query.startDate).getTime()) return false;
             if (query.endDate && timestamp > new Date(query.endDate).getTime()) return false;
             if (query.status && pdf.status !== query.status) return false;
+            if (!query.status && query.statuses?.length && !query.statuses.includes(pdf.status)) return false;
             if (normalizedSearch) {
                 const haystack = `${pdf.clientName || ''} ${pdf.nomeArquivo || ''}`.toLocaleLowerCase('pt-BR');
                 if (!haystack.includes(normalizedSearch)) return false;

@@ -148,7 +148,7 @@ describe('DashboardView', () => {
 
   it('busca apenas os periodos necessarios quando o historico completo foi adiado', async () => {
     vi.mocked(getPDFPage).mockImplementation(async query => ({
-      pdfs: query?.status ? [] : [pdfs[0]],
+      pdfs: query?.statuses ? [] : [pdfs[0]],
       hasMore: false,
       nextOffset: 1
     }));
@@ -166,10 +166,11 @@ describe('DashboardView', () => {
       />
     );
 
-    await waitFor(() => expect(getPDFPage).toHaveBeenCalled());
+    await waitFor(() => expect(getPDFPage).toHaveBeenCalledTimes(2));
     expect(vi.mocked(getPDFPage).mock.calls.some(([query]) => Boolean(query?.startDate && query?.endDate))).toBe(true);
-    expect(vi.mocked(getPDFPage).mock.calls.some(([query]) => query?.status === 'pending')).toBe(true);
-    expect(vi.mocked(getPDFPage).mock.calls.some(([query]) => query?.status === 'revised')).toBe(true);
+    expect(vi.mocked(getPDFPage).mock.calls.some(([query]) => (
+      query?.statuses?.join(',') === 'pending,revised'
+    ))).toBe(true);
   });
 
   it('aciona atalhos principais', () => {
@@ -326,4 +327,31 @@ describe('DashboardView', () => {
     expect(screen.queryByRole('dialog', { name: 'Filtro de periodo' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Abrir filtro de data: 10\/05 - 12\/05/i })).toBeInTheDocument();
   }, 15_000);
+
+  it('mantem o dashboard disponivel e permite repetir uma consulta que falhou', async () => {
+    vi.mocked(getPDFPage)
+      .mockRejectedValueOnce(new Error('falha temporaria'))
+      .mockResolvedValue({ pdfs: [], hasMore: false, nextOffset: 0 });
+
+    render(
+      <DashboardView
+        allSavedPdfs={[]}
+        usePagedPdfData
+        clients={[]}
+        agendamentos={[]}
+        films={[]}
+        onTabChange={vi.fn()}
+        onOpenAIQuickProposal={vi.fn()}
+        onOpenClientModal={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeInTheDocument();
+    expect(await screen.findByText(/Nao foi possivel atualizar os indicadores/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tentar novamente' }));
+
+    await waitFor(() => expect(getPDFPage).toHaveBeenCalledTimes(4));
+    await waitFor(() => expect(screen.queryByText(/Nao foi possivel atualizar os indicadores/i)).not.toBeInTheDocument());
+  });
 });

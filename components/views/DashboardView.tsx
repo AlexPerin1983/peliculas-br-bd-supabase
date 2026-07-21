@@ -701,6 +701,20 @@ const EmptyLine: React.FC<{ title: string; description: string }> = ({ title, de
     </div>
 );
 
+const LoadErrorNotice: React.FC<{ message: string; onRetry: () => void }> = ({ message, onRetry }) => (
+    <div role="status" className="flex items-center gap-3 rounded-[var(--radius-card)] border border-amber-200 bg-amber-50 px-3 py-2.5 text-amber-900 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-100">
+        <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
+        <span className="min-w-0 flex-1 text-xs font-semibold">{message}</span>
+        <button
+            type="button"
+            onClick={onRetry}
+            className="shrink-0 rounded-lg border border-amber-300 bg-white px-2.5 py-1.5 text-xs font-bold text-amber-900 transition-colors hover:bg-amber-100 dark:border-amber-300/30 dark:bg-transparent dark:text-amber-100"
+        >
+            Tentar novamente
+        </button>
+    </div>
+);
+
 const HISTORY_FOCUS_FILTER_KEY = 'peliculas-br-history-focus-filter';
 
 // Notas de avaliacao salvas pela Agenda (0/ausente = ainda nao avaliado).
@@ -786,6 +800,12 @@ const DashboardView: React.FC<DashboardViewProps> = ({
     const [isPreparingExpenseModal, setIsPreparingExpenseModal] = useState(false);
     const [pagedDashboardPdfs, setPagedDashboardPdfs] = useState<SavedPDF[]>([]);
     const [isLoadingDashboardPdfs, setIsLoadingDashboardPdfs] = useState(usePagedPdfData);
+    const [servicesError, setServicesError] = useState(false);
+    const [servicesRetryKey, setServicesRetryKey] = useState(0);
+    const [standaloneExpensesError, setStandaloneExpensesError] = useState(false);
+    const [standaloneExpensesRetryKey, setStandaloneExpensesRetryKey] = useState(0);
+    const [dashboardPdfsError, setDashboardPdfsError] = useState(false);
+    const [dashboardPdfsRetryKey, setDashboardPdfsRetryKey] = useState(0);
 
     useEffect(() => {
         (window as any).fbq?.('track', 'ViewContent', {
@@ -799,15 +819,17 @@ const DashboardView: React.FC<DashboardViewProps> = ({
 
         const loadServicos = async () => {
             try {
+                if (isMounted) {
+                    setServicesError(false);
+                    setIsLoadingServicos(true);
+                }
                 const data = await getAllServicosPrestados();
                 if (isMounted) {
                     setServicos(data);
                 }
             } catch (error) {
                 console.error('Erro ao carregar servicos no dashboard:', error);
-                if (isMounted) {
-                    setServicos([]);
-                }
+                if (isMounted) setServicesError(true);
             } finally {
                 if (isMounted) {
                     setIsLoadingServicos(false);
@@ -820,22 +842,21 @@ const DashboardView: React.FC<DashboardViewProps> = ({
         return () => {
             isMounted = false;
         };
-    }, []);
+    }, [servicesRetryKey]);
 
     useEffect(() => {
         let isMounted = true;
 
         const loadStandaloneExpenses = async () => {
             try {
+                if (isMounted) setStandaloneExpensesError(false);
                 const data = await getAllStandaloneExpenses();
                 if (isMounted) {
                     setStandaloneExpenses(data);
                 }
             } catch (error) {
                 console.error('Erro ao carregar despesas avulsas no dashboard:', error);
-                if (isMounted) {
-                    setStandaloneExpenses([]);
-                }
+                if (isMounted) setStandaloneExpensesError(true);
             }
         };
 
@@ -844,7 +865,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
         return () => {
             isMounted = false;
         };
-    }, []);
+    }, [standaloneExpensesRetryKey]);
 
     useEffect(() => {
         if (!isMobilePeriodOpen || typeof document === 'undefined') return;
@@ -891,6 +912,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
     useEffect(() => {
         if (!usePagedPdfData) {
             setIsLoadingDashboardPdfs(false);
+            setDashboardPdfsError(false);
             return;
         }
 
@@ -914,12 +936,16 @@ const DashboardView: React.FC<DashboardViewProps> = ({
             ? { startDate: range.start.toISOString(), endDate: range.end.toISOString() }
             : {};
 
+        const combinedRange = periodRange ? {
+            start: previousRange?.start || periodRange.start,
+            end: periodRange.end
+        } : null;
+
         setIsLoadingDashboardPdfs(true);
+        setDashboardPdfsError(false);
         Promise.all([
-            fetchAllPages(rangeQuery(periodRange)),
-            previousRange ? fetchAllPages(rangeQuery(previousRange)) : Promise.resolve([]),
-            periodRange ? fetchAllPages({ status: 'pending' }) : Promise.resolve([]),
-            periodRange ? fetchAllPages({ status: 'revised' }) : Promise.resolve([])
+            fetchAllPages(rangeQuery(combinedRange)),
+            periodRange ? fetchAllPages({ statuses: ['pending', 'revised'] }) : Promise.resolve([])
         ])
             .then(groups => {
                 if (cancelled) return;
@@ -931,7 +957,9 @@ const DashboardView: React.FC<DashboardViewProps> = ({
             })
             .catch(error => {
                 console.error('Erro ao carregar orcamentos por periodo no dashboard:', error);
-                if (!cancelled) setPagedDashboardPdfs([]);
+                if (!cancelled) {
+                    setDashboardPdfsError(true);
+                }
             })
             .finally(() => {
                 if (!cancelled) setIsLoadingDashboardPdfs(false);
@@ -940,7 +968,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
         return () => {
             cancelled = true;
         };
-    }, [periodRange, previousRange, usePagedPdfData]);
+    }, [dashboardPdfsRetryKey, periodRange, previousRange, usePagedPdfData]);
 
     const dashboardPdfs = usePagedPdfData ? pagedDashboardPdfs : allSavedPdfs;
 
@@ -1522,6 +1550,19 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                     {isPreparingExpenseModal ? 'Preparando dados dos orcamentos...' : 'Atualizando indicadores do periodo...'}
                 </div>
             )}
+            {dashboardPdfsError && (
+                <LoadErrorNotice
+                    message="Nao foi possivel atualizar os indicadores. Os demais recursos continuam disponiveis."
+                    onRetry={() => setDashboardPdfsRetryKey(value => value + 1)}
+                />
+            )}
+            {standaloneExpensesError && (
+                <LoadErrorNotice
+                    message="Nao foi possivel atualizar as despesas avulsas."
+                    onRetry={() => setStandaloneExpensesRetryKey(value => value + 1)}
+                />
+            )}
+
 
             <MobilePeriodSelector
                 isOpen={isMobilePeriodOpen}
@@ -2072,10 +2113,16 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                                 </span>
                             </div>
                         ))}
-                        {!isLoadingServicos && periodServicos.length === 0 && (
+                        {!isLoadingServicos && !servicesError && periodServicos.length === 0 && (
                             <EmptyLine
                                 title="Sem servicos QR"
                                 description="Registre servicos finalizados no modulo QR para criar historico de entrega e garantia."
+                            />
+                        )}
+                        {servicesError && !isLoadingServicos && (
+                            <LoadErrorNotice
+                                message="Nao foi possivel atualizar os servicos QR."
+                                onRetry={() => setServicesRetryKey(value => value + 1)}
                             />
                         )}
                         {isLoadingServicos && (

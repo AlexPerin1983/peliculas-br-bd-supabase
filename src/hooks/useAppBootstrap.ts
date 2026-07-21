@@ -242,47 +242,82 @@ export function useAppBootstrap({
                 return;
             }
 
-            if (!isCancelled) {
-                setIsLoading(true);
-            }
-
-            const [loadedUserInfo] = await Promise.all([
-                db.getUserInfo(),
-                initialClientLoad === 'page'
-                    ? loadClientListPage({ reset: true })
-                    : initialClientLoad === 'deferred'
-                        ? Promise.resolve()
-                        : loadClients(),
-                loadFilms(),
-                initialPdfLoad === 'history'
-                    ? loadPdfHistoryPage({ reset: true })
-                    : initialPdfLoad === 'deferred'
-                        ? Promise.resolve()
-                        : loadAllPdfs(),
-                loadAgendamentos()
-            ]);
-
-            if (isCancelled) {
-                return;
-            }
-
-            setHasLoadedHistory(true);
-            setHasLoadedAgendamentos(true);
-            setUserInfo(loadedUserInfo);
-
             const migrationKey = 'peliculas-br-bd-pdf_migration_v1';
-            const migrationCompleted = localStorage.getItem(migrationKey);
-
-            if (!migrationCompleted) {
+            const runMigration = async () => {
+                if (localStorage.getItem(migrationKey)) return;
                 try {
                     await db.migratePDFsWithProposalOptionId();
                     localStorage.setItem(migrationKey, 'true');
                 } catch (error) {
                     console.error('Erro na migracao automatica:', error);
                 }
+            };
+
+            const isProgressiveDashboard = initialClientLoad === 'deferred'
+                && initialPdfLoad === 'deferred';
+
+            if (isProgressiveDashboard) {
+                // O dashboard pode aparecer imediatamente. Cada conjunto secundario
+                // atualiza seu proprio estado quando chegar, sem segurar a tela toda.
+                setIsLoading(false);
+
+                const backgroundTasks = [
+                    db.getUserInfo().then(loadedUserInfo => {
+                        if (!isCancelled) setUserInfo(loadedUserInfo);
+                    }),
+                    db.getAllCustomFilms().then(customFilms => {
+                        if (!isCancelled) {
+                            setFilms([...customFilms].sort((a, b) => a.nome.localeCompare(b.nome)));
+                        }
+                    }),
+                    db.getAllAgendamentos().then(data => {
+                        if (!isCancelled) {
+                            setAgendamentos(data);
+                            setHasLoadedAgendamentos(true);
+                        }
+                    })
+                ];
+
+                const results = await Promise.allSettled(backgroundTasks);
+                results.forEach((result, index) => {
+                    if (result.status === 'rejected') {
+                        const labels = ['perfil', 'peliculas', 'agenda'];
+                        console.error(`Erro ao carregar ${labels[index]} em segundo plano:`, result.reason);
+                    }
+                });
+
+                if (!isCancelled) {
+                    setHasLoadedHistory(true);
+                    void runMigration();
+                }
+                return;
             }
 
-            setIsLoading(false);
+            setIsLoading(true);
+            try {
+                const [loadedUserInfo] = await Promise.all([
+                    db.getUserInfo(),
+                    initialClientLoad === 'page'
+                        ? loadClientListPage({ reset: true })
+                        : loadClients(),
+                    loadFilms(),
+                    initialPdfLoad === 'history'
+                        ? loadPdfHistoryPage({ reset: true })
+                        : loadAllPdfs(),
+                    loadAgendamentos()
+                ]);
+
+                if (isCancelled) return;
+
+                setHasLoadedHistory(true);
+                setHasLoadedAgendamentos(true);
+                setUserInfo(loadedUserInfo);
+                await runMigration();
+            } catch (error) {
+                console.error('Erro ao carregar os dados iniciais:', error);
+            } finally {
+                if (!isCancelled) setIsLoading(false);
+            }
         };
 
         bootstrap();

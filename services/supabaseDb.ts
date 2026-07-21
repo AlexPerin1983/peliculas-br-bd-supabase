@@ -536,6 +536,7 @@ export interface PDFPageQuery {
     endDate?: string;
     search?: string;
     status?: SavedPDF['status'];
+    statuses?: SavedPDF['status'][];
 }
 
 export interface PDFPageResult {
@@ -729,7 +730,8 @@ export const getPDFPage = async ({
     startDate,
     endDate,
     search,
-    status
+    status,
+    statuses
 }: PDFPageQuery = {}): Promise<PDFPageResult> => {
     const userId = await getCurrentUserId();
     if (!userId) return { pdfs: [], hasMore: false, nextOffset: 0 };
@@ -747,6 +749,7 @@ export const getPDFPage = async ({
 
     if (startDate) query = query.gte('date', startDate);
     if (endDate) query = query.lte('date', endDate);
+    if (!status && statuses?.length) query = query.in('status', statuses);
     if (status) query = query.eq('status', status);
 
     const normalizedSearch = search?.trim();
