@@ -237,88 +237,58 @@ const ResponseModal: React.FC<ResponseModalProps> = ({ kind, proposalName, propo
     );
 };
 
-type DecisionAssistantMode = 'adjust' | 'return';
+type ConversationReason = 'negotiate' | 'question' | 'later' | 'decline';
 
-const ADJUST_REASONS = [
-    { id: 'price', label: 'O valor ficou acima do esperado', hint: 'Informe quanto faria sentido para você.' },
-    { id: 'payment', label: 'Preciso de uma condição de pagamento', hint: 'Parcelamento, entrada ou forma de pagamento.' },
-    { id: 'date', label: 'Preciso realizar em outra data', hint: 'Conte quando seria um bom momento.' },
-    { id: 'comparing', label: 'Estou comparando outras propostas', hint: 'Diga o que mais pesa na comparação.' },
-    { id: 'decision', label: 'Preciso decidir com outra pessoa', hint: 'Combine quando podemos voltar a conversar.' },
-    { id: 'technical', label: 'Tenho dúvida sobre a película', hint: 'Envie sua dúvida diretamente para a empresa.' },
-    { id: 'priority', label: 'Ainda não é prioridade', hint: 'Escolha quando prefere receber um novo contato.' },
-    { id: 'other', label: 'Outro motivo', hint: 'Conte brevemente o que precisa mudar.' },
-] as const;
+const CONVERSATION_REASONS: Array<{ id: ConversationReason; label: string; hint: string }> = [
+    { id: 'negotiate', label: 'Quero ajustar a proposta', hint: 'Valor, pagamento, prazo ou algum detalhe.' },
+    { id: 'question', label: 'Tenho uma dúvida', hint: 'Fale diretamente com a empresa.' },
+    { id: 'later', label: 'Prefiro falar mais tarde', hint: 'Escolha quando deseja retomar.' },
+    { id: 'decline', label: 'Não vou seguir agora', hint: 'Encerre este acompanhamento sem complicação.' },
+];
 
-const RETURN_REASONS = [
-    { id: 'price', label: 'O preço não cabe no momento' },
-    { id: 'competitor', label: 'Escolhi outra empresa' },
-    { id: 'postponed', label: 'Adiei o serviço' },
-    { id: 'condition', label: 'A condição não funcionou para mim' },
-    { id: 'confidence', label: 'Ainda não me senti seguro para decidir' },
-    { id: 'other', label: 'Outro motivo' },
-] as const;
-
-const PAYMENT_CHOICES = ['Preciso parcelar mais', 'Preciso reduzir a entrada', 'Prefiro pagar no Pix', 'Quero outra condição'];
-const COMPARISON_CHOICES = ['Preço', 'Garantia', 'Tipo de película', 'Prazo de execução'];
-const PRIORITY_CHOICES = ['Falar comigo em 7 dias', 'Falar comigo em 15 dias', 'Falar comigo em 30 dias'];
+const FOLLOW_UP_OPTIONS = ['Em 7 dias', 'Em 15 dias', 'Em 30 dias'];
 
 const DecisionAssistantModal: React.FC<{
-    mode: DecisionAssistantMode;
     busy: boolean;
     onClose: () => void;
     onMessage: (body: string) => void;
     onNegotiate: (body: string) => void;
     onReject: (body: string) => void;
-}> = ({ mode, busy, onClose, onMessage, onNegotiate, onReject }) => {
-    const [selectedId, setSelectedId] = useState('');
+}> = ({ busy, onClose, onMessage, onNegotiate, onReject }) => {
+    const [selectedId, setSelectedId] = useState<ConversationReason | ''>('');
     const [choice, setChoice] = useState('');
     const [detail, setDetail] = useState('');
-    const reasons = mode === 'adjust' ? ADJUST_REASONS : RETURN_REASONS;
-    const selected = reasons.find(reason => reason.id === selectedId);
+    const selected = CONVERSATION_REASONS.find(reason => reason.id === selectedId);
 
-    const selectReason = (id: string) => {
+    const selectReason = (id: ConversationReason | '') => {
         setSelectedId(id);
         setChoice('');
         setDetail('');
     };
 
-    const requiresChoice = mode === 'adjust' && ['payment', 'comparing', 'priority'].includes(selectedId);
-    const requiresDetail = selectedId === 'other' || (mode === 'adjust' && ['technical', 'date', 'decision'].includes(selectedId));
-    const canSubmit = Boolean(selected) && (!requiresChoice || Boolean(choice)) && (!requiresDetail || Boolean(detail.trim()));
+    const canSubmit = Boolean(selected)
+        && (selectedId !== 'later' || Boolean(choice))
+        && (!['negotiate', 'question'].includes(selectedId) || Boolean(detail.trim()));
 
     const submit = () => {
         if (!selected || !canSubmit) return;
-        if (mode === 'adjust' && selectedId === 'price') {
-            onNegotiate(`Motivo informado: ${selected.label}.`);
-            return;
-        }
-
-        let complement = choice;
-        if (selectedId === 'date' && detail) complement = `Data desejada: ${new Date(`${detail}T12:00:00`).toLocaleDateString('pt-BR')}`;
-        else if (selectedId === 'decision' && detail) complement = `Podemos voltar a conversar em ${new Date(`${detail}T12:00:00`).toLocaleDateString('pt-BR')}`;
-        else if (detail.trim()) complement = detail.trim();
-
-        const body = `${mode === 'adjust' ? 'Preciso ajustar a proposta' : 'Não vou seguir agora'}: ${selected.label}${complement ? `. ${complement}` : ''}`;
-        if (mode === 'adjust') onMessage(body);
-        else onReject(body);
+        if (selectedId === 'negotiate') onNegotiate(`Quero ajustar a proposta: ${detail.trim()}`);
+        else if (selectedId === 'question') onMessage(`Tenho uma dúvida sobre a proposta: ${detail.trim()}`);
+        else if (selectedId === 'later') onMessage(`Prefiro falar mais tarde: ${choice}.`);
+        else onReject(detail.trim() ? `Não vou seguir agora: ${detail.trim()}` : 'Não vou seguir com esta proposta neste momento.');
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/55 backdrop-blur-sm sm:items-center sm:p-5" role="dialog" aria-modal="true" aria-label={mode === 'adjust' ? 'Solicitar ajuste' : 'Dar um retorno'}>
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/55 backdrop-blur-sm sm:items-center sm:p-5" role="dialog" aria-modal="true" aria-label="Conversar com a empresa">
             <button type="button" className="absolute inset-0" onClick={onClose} aria-label="Fechar janela" />
             <section className="relative max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-[28px] bg-white p-5 shadow-2xl sm:rounded-[24px] sm:p-7">
-                <div className="flex items-start gap-3"><span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white ${mode === 'adjust' ? 'bg-blue-600' : 'bg-slate-700'}`}><MessageSquareText className="h-5 w-5" /></span><div className="min-w-0 flex-1"><p className={`text-xs font-black uppercase tracking-[.14em] ${mode === 'adjust' ? 'text-blue-600' : 'text-slate-500'}`}>Seu próximo passo</p><h2 className="mt-1 text-2xl font-black text-slate-950">{selected ? selected.label : mode === 'adjust' ? 'O que está impedindo sua decisão?' : 'Qual foi o principal motivo?'}</h2><p className="mt-1 text-sm leading-5 text-slate-500">{selected ? 'Só mais uma informação rápida.' : mode === 'adjust' ? 'Escolha a opção que mais combina com o seu momento.' : 'Sua resposta encerra este acompanhamento e evita mensagens desnecessárias.'}</p></div><button type="button" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-500" aria-label="Fechar"><X className="h-4 w-4" /></button></div>
+                <div className="flex items-start gap-3"><span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-white"><MessageSquareText className="h-5 w-5" /></span><div className="min-w-0 flex-1"><p className="text-xs font-black uppercase tracking-[.14em] text-blue-600">Converse com a empresa</p><h2 className="mt-1 text-2xl font-black text-slate-950">{selected ? selected.label : 'Como podemos ajudar?'}</h2><p className="mt-1 text-sm leading-5 text-slate-500">{selected ? 'Só mais uma informação rápida.' : 'Escolha a opção que melhor representa seu momento.'}</p></div><button type="button" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-500" aria-label="Fechar"><X className="h-4 w-4" /></button></div>
 
-                {!selected ? <div className="mt-5 space-y-2">{reasons.map(reason => <button key={reason.id} type="button" disabled={busy} onClick={() => selectReason(reason.id)} className="flex min-h-14 w-full items-center justify-between gap-3 rounded-xl border border-slate-200 px-4 py-3 text-left transition hover:border-blue-400 hover:bg-blue-50 disabled:opacity-50"><span><strong className="block text-sm text-slate-800">{reason.label}</strong>{'hint' in reason ? <small className="mt-0.5 block text-[11px] font-medium text-slate-500">{reason.hint}</small> : null}</span><ChevronRight className="h-4 w-4 shrink-0 text-blue-500" /></button>)}</div> : <div className="mt-5">
-                    {mode === 'adjust' && selectedId === 'price' ? <div className="rounded-2xl bg-blue-50 p-4 text-sm leading-6 text-blue-900">Você poderá informar o valor que gostaria de pagar ou o percentual de desconto desejado.</div> : null}
-                    {mode === 'adjust' && selectedId === 'payment' ? <div className="grid gap-2">{PAYMENT_CHOICES.map(item => <button key={item} type="button" onClick={() => setChoice(item)} className={`min-h-11 rounded-xl border px-3 text-left text-sm font-bold ${choice === item ? 'border-blue-500 bg-blue-50 text-blue-800' : 'border-slate-200 text-slate-700'}`}>{item}</button>)}</div> : null}
-                    {mode === 'adjust' && selectedId === 'comparing' ? <div><p className="mb-2 text-xs font-bold text-slate-600">O que mais pesa na sua comparação?</p><div className="grid grid-cols-2 gap-2">{COMPARISON_CHOICES.map(item => <button key={item} type="button" onClick={() => setChoice(item)} className={`min-h-11 rounded-xl border px-2 text-xs font-bold ${choice === item ? 'border-blue-500 bg-blue-50 text-blue-800' : 'border-slate-200 text-slate-700'}`}>{item}</button>)}</div></div> : null}
-                    {mode === 'adjust' && selectedId === 'priority' ? <div className="grid gap-2">{PRIORITY_CHOICES.map(item => <button key={item} type="button" onClick={() => setChoice(item)} className={`min-h-11 rounded-xl border px-3 text-left text-sm font-bold ${choice === item ? 'border-blue-500 bg-blue-50 text-blue-800' : 'border-slate-200 text-slate-700'}`}>{item}</button>)}</div> : null}
-                    {mode === 'adjust' && ['date', 'decision'].includes(selectedId) ? <label className="block"><span className="mb-1.5 block text-xs font-bold text-slate-600">{selectedId === 'date' ? 'Quando gostaria de realizar?' : 'Quando podemos voltar a conversar?'}</span><input type="date" value={detail} min={new Date().toISOString().slice(0, 10)} onChange={event => setDetail(event.target.value)} className="h-12 w-full rounded-xl border border-slate-200 px-3 text-sm font-bold outline-none focus:border-blue-500" /></label> : null}
-                    {(mode === 'return' || (mode === 'adjust' && ['technical', 'other'].includes(selectedId))) ? <label className="block"><span className="mb-1.5 block text-xs font-bold text-slate-600">{mode === 'return' && selectedId !== 'other' ? 'Quer acrescentar algo? (opcional)' : 'Conte brevemente'}</span><textarea autoFocus value={detail} onChange={event => setDetail(event.target.value)} rows={3} placeholder={mode === 'return' ? 'Sua observação ajuda a empresa a melhorar.' : 'Escreva sua dúvida ou explique o que precisa mudar.'} className="w-full resize-none rounded-xl border border-slate-200 p-3 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10" /></label> : null}
+                {!selected ? <div className="mt-5 space-y-2">{CONVERSATION_REASONS.map(reason => <button key={reason.id} type="button" disabled={busy} onClick={() => selectReason(reason.id)} className="flex min-h-14 w-full items-center justify-between gap-3 rounded-xl border border-slate-200 px-4 py-3 text-left transition hover:border-blue-400 hover:bg-blue-50 disabled:opacity-50"><span><strong className="block text-sm text-slate-800">{reason.label}</strong><small className="mt-0.5 block text-[11px] font-medium text-slate-500">{reason.hint}</small></span><ChevronRight className="h-4 w-4 shrink-0 text-blue-500" /></button>)}</div> : <div className="mt-5">
+                    {selectedId === 'later' ? <div className="grid gap-2">{FOLLOW_UP_OPTIONS.map(item => <button key={item} type="button" onClick={() => setChoice(item)} className={`min-h-11 rounded-xl border px-3 text-left text-sm font-bold ${choice === item ? 'border-blue-500 bg-blue-50 text-blue-800' : 'border-slate-200 text-slate-700'}`}>{item}</button>)}</div> : null}
+                    {selectedId !== 'later' ? <label className="block"><span className="mb-1.5 block text-xs font-bold text-slate-600">{selectedId === 'decline' ? 'Quer contar o motivo? (opcional)' : selectedId === 'question' ? 'Qual é a sua dúvida?' : 'O que gostaria de ajustar?'}</span><textarea autoFocus value={detail} onChange={event => setDetail(event.target.value)} rows={3} placeholder={selectedId === 'decline' ? 'Sua observação ajuda a empresa a melhorar.' : selectedId === 'question' ? 'Escreva sua dúvida.' : 'Ex.: valor, forma de pagamento ou prazo.'} className="w-full resize-none rounded-xl border border-slate-200 p-3 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10" /></label> : null}
 
-                    <div className="mt-5 flex gap-2"><button type="button" onClick={() => selectReason('')} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-600" aria-label="Voltar"><ArrowLeft className="h-4 w-4" /></button><button type="button" disabled={busy || !canSubmit} onClick={submit} className={`flex h-12 flex-1 items-center justify-center gap-2 rounded-xl text-sm font-black text-white disabled:opacity-50 ${mode === 'adjust' ? 'bg-blue-600' : 'bg-slate-800'}`}>{busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : mode === 'adjust' && selectedId === 'price' ? <HandCoins className="h-4 w-4" /> : <Send className="h-4 w-4" />} {mode === 'adjust' && selectedId === 'price' ? 'Informar minha condição' : mode === 'adjust' ? 'Enviar para a empresa' : 'Enviar retorno e encerrar'}</button></div>
+                    <div className="mt-5 flex gap-2"><button type="button" onClick={() => selectReason('')} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-600" aria-label="Voltar"><ArrowLeft className="h-4 w-4" /></button><button type="button" disabled={busy || !canSubmit} onClick={submit} className={`flex h-12 flex-1 items-center justify-center gap-2 rounded-xl text-sm font-black text-white disabled:opacity-50 ${selectedId === 'decline' ? 'bg-slate-800' : 'bg-blue-600'}`}>{busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : selectedId === 'decline' ? <CheckCircle2 className="h-4 w-4" /> : <Send className="h-4 w-4" />} {selectedId === 'decline' ? 'Enviar retorno e encerrar' : 'Enviar para a empresa'}</button></div>
                 </div>}
             </section>
         </div>
@@ -342,7 +312,7 @@ const ProposalPortalView: React.FC = () => {
     const [downloadingId, setDownloadingId] = useState<number | null>(null);
     const [message, setMessage] = useState('');
     const [confetti, setConfetti] = useState(false);
-    const [decisionAssistant, setDecisionAssistant] = useState<DecisionAssistantMode | null>(null);
+    const [decisionAssistant, setDecisionAssistant] = useState(false);
     const [responseInitialBody, setResponseInitialBody] = useState('');
     const [selectedPaymentKey, setSelectedPaymentKey] = useState('');
     const [showAllPayments, setShowAllPayments] = useState(false);
@@ -467,7 +437,7 @@ const ProposalPortalView: React.FC = () => {
                     window.setTimeout(() => setConfetti(false), 3200);
                 }
                 setModal(null);
-                setDecisionAssistant(null);
+                setDecisionAssistant(false);
                 setResponseInitialBody('');
                 return;
             }
@@ -477,7 +447,7 @@ const ProposalPortalView: React.FC = () => {
                 window.setTimeout(() => setConfetti(false), 3200);
             }
             setModal(null);
-            setDecisionAssistant(null);
+            setDecisionAssistant(false);
             setResponseInitialBody('');
             await reload();
         } catch (err) {
@@ -520,19 +490,13 @@ const ProposalPortalView: React.FC = () => {
                 await sendPublicProposalMessage(token, body);
                 await reload();
             }
-            setDecisionAssistant(null);
+            setDecisionAssistant(false);
             window.setTimeout(() => document.getElementById('conversa')?.scrollIntoView({ behavior: 'smooth' }), 50);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Não foi possível enviar sua resposta.');
         } finally {
             setBusy(false);
         }
-    };
-
-    const openNegotiationFromAssistant = (body: string) => {
-        setDecisionAssistant(null);
-        setResponseInitialBody(body);
-        setModal('negotiation');
     };
 
     const download = async (proposalId: number) => {
@@ -661,11 +625,10 @@ const ProposalPortalView: React.FC = () => {
                         <div className="p-4 sm:p-5">
                             <p className="text-[11px] font-black uppercase tracking-[.15em] text-blue-600">Responder proposta</p>
                             <h2 className="mt-1 text-xl font-extrabold text-slate-950">Como deseja continuar?</h2>
-                            <p className="mt-1 text-sm leading-5 text-slate-500">{selectedPayment ? `Pagamento escolhido: ${selectedPayment.label}.` : paymentOptions.length > 0 ? 'Escolha acima como prefere pagar ou solicite um ajuste.' : 'Escolha uma opção. Leva menos de 20 segundos.'}</p>
-                            <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                            <p className="mt-1 text-sm leading-5 text-slate-500">{selectedPayment ? `Pagamento escolhido: ${selectedPayment.label}.` : paymentOptions.length > 0 ? 'Escolha acima como prefere pagar ou converse com a empresa.' : 'Aprove agora ou converse com a empresa.'}</p>
+                            <div className="mt-4 grid gap-2 sm:grid-cols-2">
                                 <button type="button" disabled={isApprovalBlocked} onClick={startApproval} className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-center text-sm font-bold text-white transition hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-500"><ThumbsUp className="h-4 w-4 shrink-0" /> {approvalLabel}</button>
-                                <button type="button" onClick={() => setDecisionAssistant('adjust')} className="flex h-12 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-bold text-white transition hover:bg-blue-700"><MessageSquareText className="h-4 w-4" /> Pedir ajuste</button>
-                                <button type="button" onClick={() => setDecisionAssistant('return')} className="flex h-12 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50"><CheckCircle2 className="h-4 w-4" /> Dar retorno</button>
+                                <button type="button" onClick={() => setDecisionAssistant(true)} className="flex h-12 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-bold text-white transition hover:bg-blue-700"><MessageSquareText className="h-4 w-4" /> Conversar com a empresa</button>
                             </div>
                         </div>
                     </section> : null}
@@ -673,7 +636,7 @@ const ProposalPortalView: React.FC = () => {
                     <aside className="hidden">
                         <div className="sticky top-24 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                             <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-slate-400">Sua decisão</p><h2 className="mt-1 text-xl font-bold text-slate-950">{selected?.proposalOptionName || 'Proposta selecionada'}</h2>{selectedCondition ? <p className="mt-2 text-xs font-bold text-slate-400 line-through">{currency.format(selectedCondition.originalValue)}</p> : null}<p className="mt-1 text-2xl font-black text-slate-950">{currency.format(selectedCondition?.finalValue || selected?.totalPreco || 0)}</p>
-                            <div className="mt-5 grid gap-2"><button disabled={isApprovalBlocked} onClick={startApproval} className="flex h-12 items-center justify-center gap-2 rounded-xl bg-emerald-600 text-sm font-extrabold text-white disabled:opacity-50"><ThumbsUp className="h-4 w-4" /> {approvalLabel}</button><button disabled={hasFinalDecision} onClick={() => setDecisionAssistant('adjust')} className="flex h-12 items-center justify-center gap-2 rounded-xl bg-blue-600 text-sm font-extrabold text-white disabled:opacity-50"><MessageSquareText className="h-4 w-4" /> Solicitar ajuste</button><button disabled={hasFinalDecision} onClick={() => setDecisionAssistant('return')} className="flex h-12 items-center justify-center gap-2 rounded-xl border border-slate-300 text-sm font-extrabold text-slate-700 disabled:opacity-50"><CheckCircle2 className="h-4 w-4" /> Dar um retorno</button></div>
+                            <div className="mt-5 grid gap-2"><button disabled={isApprovalBlocked} onClick={startApproval} className="flex h-12 items-center justify-center gap-2 rounded-xl bg-emerald-600 text-sm font-extrabold text-white disabled:opacity-50"><ThumbsUp className="h-4 w-4" /> {approvalLabel}</button><button disabled={hasFinalDecision} onClick={() => setDecisionAssistant(true)} className="flex h-12 items-center justify-center gap-2 rounded-xl bg-blue-600 text-sm font-extrabold text-white disabled:opacity-50"><MessageSquareText className="h-4 w-4" /> Conversar com a empresa</button></div>
                         </div>
                     </aside>
                 </div>
@@ -693,7 +656,7 @@ const ProposalPortalView: React.FC = () => {
             </main>
 
             {modal && selected ? <ResponseModal kind={modal} proposalName={selected.proposalOptionName || selected.nomeArquivo || 'Proposta'} proposalValue={selectedCondition?.finalValue || selected.totalPreco || 0} paymentOptions={paymentOptions} initialPaymentKey={selectedPaymentKey} busy={busy} initialBody={responseInitialBody} onClose={() => { setModal(null); setResponseInitialBody(''); }} onSubmit={submitResponse} /> : null}
-            {decisionAssistant ? <DecisionAssistantModal mode={decisionAssistant} busy={busy} onClose={() => setDecisionAssistant(null)} onMessage={body => void sendGuidedMessage(body)} onNegotiate={openNegotiationFromAssistant} onReject={body => { if (isDownloadBlocked) void sendGuidedMessage(body); else void performResponse('rejected', { body }); }} /> : null}
+            {decisionAssistant ? <DecisionAssistantModal busy={busy} onClose={() => setDecisionAssistant(false)} onMessage={body => void sendGuidedMessage(body)} onNegotiate={body => { if (isDownloadBlocked) void sendGuidedMessage(body); else void performResponse('negotiation', { body }); }} onReject={body => { if (isDownloadBlocked) void sendGuidedMessage(body); else void performResponse('rejected', { body }); }} /> : null}
         </div>
     );
 };
