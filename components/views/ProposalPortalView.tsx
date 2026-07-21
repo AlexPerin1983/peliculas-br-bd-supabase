@@ -418,8 +418,12 @@ const ProposalPortalView: React.FC = () => {
 
     useEffect(() => {
         setSelectedPaymentKey(current => paymentOptions.some(option => `${option.methodType}:${option.installments}` === current) ? current : '');
+    }, [paymentOptions]);
+
+    useEffect(() => {
+        setSelectedPaymentKey('');
         setShowAllPayments(false);
-    }, [selected?.id, paymentOptions]);
+    }, [selected?.id]);
 
     const approvalLabel = selectedPayment
         ? selectedPayment.installments > 1
