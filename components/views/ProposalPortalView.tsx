@@ -103,16 +103,17 @@ interface ResponseModalProps {
     busy: boolean;
     initialBody?: string;
     paymentOptions?: ProposalPaymentSelection[];
+    initialPaymentKey?: string;
     onClose: () => void;
     onSubmit: (payload: { body?: string; offerType?: ProposalOfferType; offerValue?: number; paymentChoice?: ProposalPaymentChoice }) => void;
 }
 
-const ResponseModal: React.FC<ResponseModalProps> = ({ kind, proposalName, proposalValue, busy, initialBody = '', paymentOptions = [], onClose, onSubmit }) => {
+const ResponseModal: React.FC<ResponseModalProps> = ({ kind, proposalName, proposalValue, busy, initialBody = '', paymentOptions = [], initialPaymentKey = '', onClose, onSubmit }) => {
     const [body, setBody] = useState(initialBody);
     const [offerType, setOfferType] = useState<ProposalOfferType>('fixed');
     const [offerValue, setOfferValue] = useState('');
     const [error, setError] = useState('');
-    const [paymentKey, setPaymentKey] = useState('');
+    const [paymentKey, setPaymentKey] = useState(initialPaymentKey);
 
     const submit = () => {
         if (kind === 'rejected' && !body.trim()) {
@@ -343,6 +344,8 @@ const ProposalPortalView: React.FC = () => {
     const [confetti, setConfetti] = useState(false);
     const [decisionAssistant, setDecisionAssistant] = useState<DecisionAssistantMode | null>(null);
     const [responseInitialBody, setResponseInitialBody] = useState('');
+    const [selectedPaymentKey, setSelectedPaymentKey] = useState('');
+    const [showAllPayments, setShowAllPayments] = useState(false);
 
     const reload = useCallback(async (trackView = false) => {
         if (import.meta.env.DEV && token === 'demo') {
@@ -401,6 +404,37 @@ const ProposalPortalView: React.FC = () => {
         () => buildProposalPaymentOptions(selectedCondition?.finalValue || selected?.totalPreco || 0, selected?.paymentConfig?.paymentMethods || []),
         [selected, selectedCondition?.finalValue],
     );
+    const selectedPayment = paymentOptions.find(option => `${option.methodType}:${option.installments}` === selectedPaymentKey);
+    const featuredPaymentOptions = useMemo(() => {
+        const pix = paymentOptions.find(option => option.methodType === 'pix');
+        const cardOptions = paymentOptions.filter(option => option.methodType === 'parcelado_sem_juros' || option.methodType === 'parcelado_com_juros');
+        const longestCard = cardOptions.at(-1);
+        const featured = [pix, longestCard].filter((option, index, list): option is ProposalPaymentSelection =>
+            Boolean(option) && list.findIndex(item => item?.methodType === option?.methodType && item?.installments === option?.installments) === index
+        );
+        return featured.length > 0 ? featured : paymentOptions.slice(0, 1);
+    }, [paymentOptions]);
+    const displayedPaymentOptions = showAllPayments ? paymentOptions : featuredPaymentOptions;
+
+    useEffect(() => {
+        setSelectedPaymentKey(current => paymentOptions.some(option => `${option.methodType}:${option.installments}` === current) ? current : '');
+        setShowAllPayments(false);
+    }, [selected?.id, paymentOptions]);
+
+    const approvalLabel = selectedPayment
+        ? selectedPayment.installments > 1
+            ? `Aprovar em ${selectedPayment.installments}x de ${currency.format(selectedPayment.installmentValue)}`
+            : `Aprovar no ${selectedPayment.methodType === 'pix' ? 'Pix' : 'boleto'} por ${currency.format(selectedPayment.customerTotal)}`
+        : paymentOptions.length > 0 ? 'Escolher forma de pagamento' : 'Aprovar proposta';
+
+    const startApproval = () => {
+        if (paymentOptions.length > 0 && !selectedPayment) {
+            setShowAllPayments(true);
+            window.setTimeout(() => document.getElementById('formas-pagamento')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 30);
+            return;
+        }
+        setModal('approved');
+    };
 
     const performResponse = async (kind: ProposalPortalDecision, payload: { body?: string; offerType?: ProposalOfferType; offerValue?: number; paymentChoice?: ProposalPaymentChoice }) => {
         if (!selected?.id) return;
@@ -543,22 +577,8 @@ const ProposalPortalView: React.FC = () => {
                             <div className="sm:text-right"><p className="text-[10px] font-black uppercase tracking-[.12em] text-slate-400">Valor final</p><p className="mt-1 text-2xl font-black text-slate-950">{currency.format(selectedCondition.finalValue)}</p></div>
                         </div>
 
-                        <button type="button" disabled={isApprovalBlocked} onClick={() => setModal('approved')} className="mt-4 flex h-13 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 text-sm font-black text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700 disabled:bg-slate-300 disabled:shadow-none"><ThumbsUp className="h-4 w-4" /> {selectedCondition.expired ? 'Condição expirada' : `Aprovar por ${currency.format(selectedCondition.finalValue)}`}</button>
+                        <button type="button" disabled={isApprovalBlocked} onClick={startApproval} className="mt-4 flex h-13 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 text-sm font-black text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700 disabled:bg-slate-300 disabled:shadow-none"><ThumbsUp className="h-4 w-4" /> {selectedCondition.expired ? 'Condição expirada' : approvalLabel}</button>
                         <p className="mt-3 text-center text-xs font-semibold leading-5 text-slate-500">{selectedCondition.expired ? 'A empresa pode reativar ou criar uma nova condição sem apagar este histórico.' : 'Ao aprovar dentro do prazo, o valor com desconto fica garantido para você.'}</p>
-                    </div>
-                </section> : null}
-
-                {!hasFinalDecision ? <section className="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white">
-                    <div className="p-4 sm:p-5">
-                        <p className="text-[11px] font-black uppercase tracking-[.15em] text-blue-600">Responder proposta</p>
-                        <h2 className="mt-1 text-xl font-extrabold text-slate-950">Como deseja continuar?</h2>
-                        <p className="mt-1 text-sm leading-5 text-slate-500">Escolha uma opção. Leva menos de 20 segundos.</p>
-                        <div className="mt-4 grid gap-2 sm:grid-cols-3">
-                            <button type="button" disabled={isApprovalBlocked} onClick={() => setModal('approved')} className="flex h-12 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 text-sm font-bold text-white transition hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-500"><ThumbsUp className="h-4 w-4" /> Aprovar</button>
-                            <button type="button" onClick={() => setDecisionAssistant('adjust')} className="flex h-12 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-bold text-white transition hover:bg-blue-700"><MessageSquareText className="h-4 w-4" /> Pedir ajuste</button>
-                            <button type="button" onClick={() => setDecisionAssistant('return')} className="flex h-12 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50"><CheckCircle2 className="h-4 w-4" /> Dar retorno</button>
-                        </div>
-                        <p className="sr-only">Sua resposta ajuda a empresa a respeitar o seu momento.</p>
                     </div>
                 </section> : null}
 
@@ -579,10 +599,66 @@ const ProposalPortalView: React.FC = () => {
                         </div>
                     </section>
 
+                    {paymentOptions.length > 0 && !hasFinalDecision ? (
+                        <section id="formas-pagamento" className="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                            <div className="border-b border-slate-100 p-4 sm:p-5">
+                                <p className="text-[11px] font-black uppercase tracking-[.15em] text-blue-600">Forma de pagamento</p>
+                                <h2 className="mt-1 text-xl font-extrabold text-slate-950">Como prefere pagar?</h2>
+                                <p className="mt-1 text-sm leading-5 text-slate-500">Escolha uma condição antes de aprovar. Você ainda poderá conferir tudo na confirmação.</p>
+                            </div>
+                            <div className="space-y-2 p-4 sm:p-5">
+                                {displayedPaymentOptions.map(option => {
+                                    const key = `${option.methodType}:${option.installments}`;
+                                    const active = selectedPaymentKey === key;
+                                    return (
+                                        <button
+                                            key={key}
+                                            type="button"
+                                            onClick={() => setSelectedPaymentKey(key)}
+                                            className={`flex w-full items-center justify-between gap-3 rounded-xl border p-3.5 text-left transition ${active ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-500/10' : 'border-slate-200 bg-white hover:border-blue-300'}`}
+                                        >
+                                            <span className="flex min-w-0 items-center gap-3">
+                                                <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${active ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300'}`}>
+                                                    {active ? <Check className="h-3 w-3" /> : null}
+                                                </span>
+                                                <span>
+                                                    <span className="block text-sm font-extrabold text-slate-950">{option.label}</span>
+                                                    {option.discountPercent > 0 ? <span className="mt-0.5 block text-xs font-bold text-emerald-700">Economize {currency.format(option.baseTotal - option.customerTotal)}</span> : option.installments > 1 ? <span className="mt-0.5 block text-xs text-slate-500">Total no cartão: {currency.format(option.customerTotal)}</span> : null}
+                                                </span>
+                                            </span>
+                                            <span className="shrink-0 text-right text-sm font-black text-slate-950">
+                                                {option.installments > 1 ? <><span className="block">{option.installments}x de</span><span className="block text-blue-700">{currency.format(option.installmentValue)}</span></> : currency.format(option.customerTotal)}
+                                            </span>
+                                        </button>
+                                    );
+                                })}
+                                {paymentOptions.length > featuredPaymentOptions.length ? (
+                                    <button type="button" onClick={() => setShowAllPayments(current => !current)} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-extrabold text-blue-700 hover:bg-blue-50">
+                                        {showAllPayments ? 'Mostrar apenas as principais' : `Ver todas as ${paymentOptions.length} opções`}
+                                        <ChevronRight className={`h-4 w-4 transition ${showAllPayments ? '-rotate-90' : 'rotate-90'}`} />
+                                    </button>
+                                ) : null}
+                            </div>
+                        </section>
+                    ) : null}
+
+                    {!hasFinalDecision ? <section className="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                        <div className="p-4 sm:p-5">
+                            <p className="text-[11px] font-black uppercase tracking-[.15em] text-blue-600">Responder proposta</p>
+                            <h2 className="mt-1 text-xl font-extrabold text-slate-950">Como deseja continuar?</h2>
+                            <p className="mt-1 text-sm leading-5 text-slate-500">{selectedPayment ? `Pagamento escolhido: ${selectedPayment.label}.` : paymentOptions.length > 0 ? 'Escolha acima como prefere pagar ou solicite um ajuste.' : 'Escolha uma opção. Leva menos de 20 segundos.'}</p>
+                            <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                                <button type="button" disabled={isApprovalBlocked} onClick={startApproval} className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-center text-sm font-bold text-white transition hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-500"><ThumbsUp className="h-4 w-4 shrink-0" /> {approvalLabel}</button>
+                                <button type="button" onClick={() => setDecisionAssistant('adjust')} className="flex h-12 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-bold text-white transition hover:bg-blue-700"><MessageSquareText className="h-4 w-4" /> Pedir ajuste</button>
+                                <button type="button" onClick={() => setDecisionAssistant('return')} className="flex h-12 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50"><CheckCircle2 className="h-4 w-4" /> Dar retorno</button>
+                            </div>
+                        </div>
+                    </section> : null}
+
                     <aside className="hidden">
                         <div className="sticky top-24 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                             <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-slate-400">Sua decisão</p><h2 className="mt-1 text-xl font-bold text-slate-950">{selected?.proposalOptionName || 'Proposta selecionada'}</h2>{selectedCondition ? <p className="mt-2 text-xs font-bold text-slate-400 line-through">{currency.format(selectedCondition.originalValue)}</p> : null}<p className="mt-1 text-2xl font-black text-slate-950">{currency.format(selectedCondition?.finalValue || selected?.totalPreco || 0)}</p>
-                            <div className="mt-5 grid gap-2"><button disabled={isApprovalBlocked} onClick={() => setModal('approved')} className="flex h-12 items-center justify-center gap-2 rounded-xl bg-emerald-600 text-sm font-extrabold text-white disabled:opacity-50"><ThumbsUp className="h-4 w-4" /> {selectedCondition && !selectedCondition.expired ? `Aprovar por ${currency.format(selectedCondition.finalValue)}` : selectedCondition?.expired ? 'Condição expirada' : 'Quero aprovar'}</button><button disabled={hasFinalDecision} onClick={() => setDecisionAssistant('adjust')} className="flex h-12 items-center justify-center gap-2 rounded-xl bg-blue-600 text-sm font-extrabold text-white disabled:opacity-50"><MessageSquareText className="h-4 w-4" /> Solicitar ajuste</button><button disabled={hasFinalDecision} onClick={() => setDecisionAssistant('return')} className="flex h-12 items-center justify-center gap-2 rounded-xl border border-slate-300 text-sm font-extrabold text-slate-700 disabled:opacity-50"><CheckCircle2 className="h-4 w-4" /> Dar um retorno</button></div>
+                            <div className="mt-5 grid gap-2"><button disabled={isApprovalBlocked} onClick={startApproval} className="flex h-12 items-center justify-center gap-2 rounded-xl bg-emerald-600 text-sm font-extrabold text-white disabled:opacity-50"><ThumbsUp className="h-4 w-4" /> {approvalLabel}</button><button disabled={hasFinalDecision} onClick={() => setDecisionAssistant('adjust')} className="flex h-12 items-center justify-center gap-2 rounded-xl bg-blue-600 text-sm font-extrabold text-white disabled:opacity-50"><MessageSquareText className="h-4 w-4" /> Solicitar ajuste</button><button disabled={hasFinalDecision} onClick={() => setDecisionAssistant('return')} className="flex h-12 items-center justify-center gap-2 rounded-xl border border-slate-300 text-sm font-extrabold text-slate-700 disabled:opacity-50"><CheckCircle2 className="h-4 w-4" /> Dar um retorno</button></div>
                         </div>
                     </aside>
                 </div>
@@ -601,7 +677,7 @@ const ProposalPortalView: React.FC = () => {
                 </section>
             </main>
 
-            {modal && selected ? <ResponseModal kind={modal} proposalName={selected.proposalOptionName || selected.nomeArquivo || 'Proposta'} proposalValue={selectedCondition?.finalValue || selected.totalPreco || 0} paymentOptions={paymentOptions} busy={busy} initialBody={responseInitialBody} onClose={() => { setModal(null); setResponseInitialBody(''); }} onSubmit={submitResponse} /> : null}
+            {modal && selected ? <ResponseModal kind={modal} proposalName={selected.proposalOptionName || selected.nomeArquivo || 'Proposta'} proposalValue={selectedCondition?.finalValue || selected.totalPreco || 0} paymentOptions={paymentOptions} initialPaymentKey={selectedPaymentKey} busy={busy} initialBody={responseInitialBody} onClose={() => { setModal(null); setResponseInitialBody(''); }} onSubmit={submitResponse} /> : null}
             {decisionAssistant ? <DecisionAssistantModal mode={decisionAssistant} busy={busy} onClose={() => setDecisionAssistant(null)} onMessage={body => void sendGuidedMessage(body)} onNegotiate={openNegotiationFromAssistant} onReject={body => { if (isDownloadBlocked) void sendGuidedMessage(body); else void performResponse('rejected', { body }); }} /> : null}
         </div>
     );
