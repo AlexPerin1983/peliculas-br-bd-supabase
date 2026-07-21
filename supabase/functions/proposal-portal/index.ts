@@ -260,17 +260,22 @@ Deno.serve(async (request) => {
     const token = cleanText(url.searchParams.get('token') || payload.token || payload.shareCode, 96);
     if (!token) return json({ error: 'Link de proposta invalido.' }, 400);
 
+    const portalColumns = 'id, token, share_code, organization_id, client_id, created_by, expires_at, status, decision_pdf_id, decision_at, view_count, last_activity_at, created_at';
+    const looksLikeLegacyToken = /^[a-f0-9]{48}$/i.test(token);
+    const primaryLookupColumn = looksLikeLegacyToken ? 'token' : 'share_code';
+    const fallbackLookupColumn = looksLikeLegacyToken ? 'share_code' : 'token';
+
     let { data: portal, error: portalError } = await admin
       .from('proposal_portals')
-      .select('id, token, share_code, organization_id, client_id, created_by, expires_at, status, decision_pdf_id, decision_at, view_count, created_at')
-      .eq('token', token)
+      .select(portalColumns)
+      .eq(primaryLookupColumn, token)
       .maybeSingle();
 
     if (!portal && !portalError) {
       const shareResult = await admin
         .from('proposal_portals')
-        .select('id, token, share_code, organization_id, client_id, created_by, expires_at, status, decision_pdf_id, decision_at, view_count, created_at')
-        .eq('share_code', token)
+        .select(portalColumns)
+        .eq(fallbackLookupColumn, token)
         .maybeSingle();
       portal = shareResult.data;
       portalError = shareResult.error;
@@ -300,6 +305,20 @@ Deno.serve(async (request) => {
     }
 
     if (request.method === 'GET' || action === 'load') {
+      const knownActivityAt = cleanText(payload.knownActivityAt, 64);
+      const currentActivityAt = cleanText(portal.last_activity_at, 64);
+      const needsExpiryTransition = isExpired && portal.status === 'active';
+      if (
+        action === 'load'
+        && payload.trackView !== true
+        && knownActivityAt
+        && currentActivityAt
+        && knownActivityAt === currentActivityAt
+        && !needsExpiryTransition
+      ) {
+        return json({ unchanged: true, lastActivityAt: currentActivityAt });
+      }
+
       const [{ data: client }, { data: organization }, { data: items }, { data: messages }] = await Promise.all([
         admin.from('clients').select('nome').eq('id', portal.client_id).maybeSingle(),
         admin.from('organizations').select('name, owner_id').eq('id', portal.organization_id).maybeSingle(),

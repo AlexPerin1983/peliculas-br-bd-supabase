@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     ArrowLeft,
     Check,
@@ -346,6 +346,7 @@ const ProposalPortalView: React.FC = () => {
     const [responseInitialBody, setResponseInitialBody] = useState('');
     const [selectedPaymentKey, setSelectedPaymentKey] = useState('');
     const [showAllPayments, setShowAllPayments] = useState(false);
+    const portalActivityRef = useRef<string | undefined>(undefined);
 
     const reload = useCallback(async (trackView = false) => {
         if (import.meta.env.DEV && token === 'demo') {
@@ -361,7 +362,13 @@ const ProposalPortalView: React.FC = () => {
             return;
         }
         try {
-            const next = await loadPublicProposalPortal(token, trackView);
+            const next = await loadPublicProposalPortal(token, trackView, trackView ? undefined : portalActivityRef.current);
+            if ('unchanged' in next) {
+                portalActivityRef.current = next.lastActivityAt;
+                setError('');
+                return;
+            }
+            portalActivityRef.current = next.portal.last_activity_at;
             setData(next);
             setSelectedId(current => current ?? next.proposals[0]?.id ?? null);
             setError('');
@@ -381,12 +388,16 @@ const ProposalPortalView: React.FC = () => {
         if (import.meta.env.DEV && token === 'demo') return;
         const interval = window.setInterval(() => {
             if (document.visibilityState === 'visible') void reload(false);
-        }, 5_000);
+        }, 30_000);
         const handleVisibility = () => { if (document.visibilityState === 'visible') void reload(false); };
         document.addEventListener('visibilitychange', handleVisibility);
+        window.addEventListener('focus', handleVisibility);
+        window.addEventListener('online', handleVisibility);
         return () => {
             window.clearInterval(interval);
             document.removeEventListener('visibilitychange', handleVisibility);
+            window.removeEventListener('focus', handleVisibility);
+            window.removeEventListener('online', handleVisibility);
         };
     }, [reload, token]);
 

@@ -27,6 +27,7 @@ export interface PublicProposalPortal {
         status: 'active' | 'approved' | 'rejected' | 'negotiating' | 'expired' | 'revoked';
         decision_pdf_id?: number | null;
         decision_at?: string | null;
+        last_activity_at?: string;
         expired: boolean;
     };
     clientName: string;
@@ -41,6 +42,11 @@ export interface PublicProposalPortal {
     messages: ProposalPortalMessage[];
 }
 
+export interface PublicProposalPortalUnchanged {
+    unchanged: true;
+    lastActivityAt: string;
+}
+
 const invokePublicPortal = async <T>(body: Record<string, unknown>): Promise<T> => {
     const { data, error } = await supabase.functions.invoke('proposal-portal', { body });
     if (error) throw new Error(error.message || 'Nao foi possivel acessar a proposta.');
@@ -48,8 +54,13 @@ const invokePublicPortal = async <T>(body: Record<string, unknown>): Promise<T> 
     return data as T;
 };
 
-export const loadPublicProposalPortal = (token: string, trackView = false) =>
-    invokePublicPortal<PublicProposalPortal>({ token, action: 'load', trackView });
+export const loadPublicProposalPortal = (token: string, trackView = false, knownActivityAt?: string) =>
+    invokePublicPortal<PublicProposalPortal | PublicProposalPortalUnchanged>({
+        token,
+        action: 'load',
+        trackView,
+        knownActivityAt,
+    });
 
 export const downloadPublicProposal = async (token: string, proposalId: number) => {
     const result = await invokePublicPortal<{ url: string }>({ token, action: 'download', proposalId });
