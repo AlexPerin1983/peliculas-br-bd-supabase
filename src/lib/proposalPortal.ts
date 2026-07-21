@@ -1,5 +1,5 @@
 import { supabase } from '../../services/supabaseClient';
-import type { Client, SavedPDF } from '../../types';
+import type { Client, ProposalPaymentChoice, ProposalPaymentSelection, SavedPDF } from '../../types';
 import type { ProposalConditionFields } from './proposalCondition';
 
 export type ProposalPortalDecision = 'approved' | 'rejected' | 'negotiation';
@@ -15,6 +15,7 @@ export interface ProposalPortalMessage {
     offer_type?: ProposalOfferType | null;
     offer_value?: number | null;
     condition_value?: number | null;
+    payment_selection?: ProposalPaymentSelection | null;
     created_at: string;
 }
 
@@ -36,7 +37,7 @@ export interface PublicProposalPortal {
         logo?: string;
         colors?: { primaria?: string; secundaria?: string };
     };
-    proposals: Array<Pick<SavedPDF, 'id' | 'proposalOptionName' | 'nomeArquivo' | 'totalPreco' | 'totalM2' | 'date' | 'expirationDate' | 'status'> & ProposalConditionFields>;
+    proposals: Array<Pick<SavedPDF, 'id' | 'proposalOptionName' | 'nomeArquivo' | 'totalPreco' | 'totalM2' | 'date' | 'expirationDate' | 'status' | 'paymentConfig'> & ProposalConditionFields>;
     messages: ProposalPortalMessage[];
 }
 
@@ -62,7 +63,7 @@ export const respondToPublicProposal = (
     token: string,
     proposalId: number,
     kind: ProposalPortalDecision,
-    options: { body?: string; offerType?: ProposalOfferType; offerValue?: number } = {}
+    options: { body?: string; offerType?: ProposalOfferType; offerValue?: number; paymentChoice?: ProposalPaymentChoice } = {}
 ) => invokePublicPortal<{ ok: true; status: PublicProposalPortal['portal']['status'] }>({
     token,
     action: 'respond',
@@ -119,19 +120,21 @@ export const createProposalPortal = async (pdfs: SavedPDF[], expirationDate: str
     const row = Array.isArray(data) ? data[0] : data;
     if (!row?.portal_token) throw new Error('O link nao foi criado.');
 
-    const { data: portal, error: portalError } = await supabase
-        .from('proposal_portals')
-        .select('share_code')
-        .eq('id', row.portal_id)
-        .single();
-    if (portalError || !portal?.share_code) throw portalError || new Error('O codigo amigavel nao foi criado.');
+    // The RPC already confirms that the portal was committed. Building the URL
+    // from that response avoids a second read that can briefly fail because of
+    // schema cache/RLS propagation and incorrectly report a failed creation.
+    // Newer RPC versions may also return portal_share_code; older deployments
+    // remain fully compatible by using the secure portal token.
+    const accessKey = typeof row.portal_share_code === 'string' && row.portal_share_code.trim()
+        ? row.portal_share_code
+        : row.portal_token;
 
     return {
         portalId: row.portal_id,
         token: row.portal_token,
-        shareCode: portal.share_code,
+        shareCode: accessKey,
         expiresAt: row.expires_at,
-        url: buildProposalPortalUrl(portal.share_code, clientName),
+        url: buildProposalPortalUrl(accessKey, clientName),
     };
 };
 
@@ -172,7 +175,7 @@ export const loadCompanyProposalPortals = async (): Promise<CompanyProposalPorta
     const [{ data: clients }, { data: items }, { data: messages }] = await Promise.all([
         supabase.from('clients').select('id, nome').in('id', clientIds),
         supabase.from('proposal_portal_items').select('portal_id, saved_pdf_id, position, condition_original_value, condition_final_value, condition_discount_amount, condition_discount_percent, condition_expires_at, saved_pdfs(proposal_option_name, nome_arquivo, total_preco)').in('portal_id', portalIds).order('position'),
-        supabase.from('proposal_portal_messages').select('id, portal_id, saved_pdf_id, sender_type, kind, body, offer_type, offer_value, condition_value, created_at').in('portal_id', portalIds).order('created_at'),
+        supabase.from('proposal_portal_messages').select('id, portal_id, saved_pdf_id, sender_type, kind, body, offer_type, offer_value, condition_value, payment_selection, created_at').in('portal_id', portalIds).order('created_at'),
     ]);
 
     const clientNames = new Map((clients || []).map(client => [Number(client.id), client.nome]));

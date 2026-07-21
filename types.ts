@@ -212,6 +212,8 @@ export interface PaymentMethod {
     parcelas_max?: number | null;
     juros?: number | null;
     porcentagem?: number | null;
+    calculation_mode?: 'monthly_interest' | 'operator_fee';
+    operator_fee_rates?: Record<string, number>;
     texto?: string;
     chave_pix?: string;
     tipo_chave_pix?: 'cpf' | 'cnpj' | 'telefone' | 'email' | 'aleatoria' | null;
@@ -223,6 +225,21 @@ export type PaymentMethods = PaymentMethod[];
 export interface ProposalPaymentConfig {
     paymentMethods: PaymentMethods;
     prazoPagamento: string;
+}
+
+export interface ProposalPaymentChoice {
+    methodType: 'pix' | 'boleto' | 'parcelado_sem_juros' | 'parcelado_com_juros';
+    installments: number;
+}
+
+export interface ProposalPaymentSelection extends ProposalPaymentChoice {
+    label: string;
+    calculationMode: 'cash' | 'no_interest' | 'monthly_interest' | 'operator_fee';
+    baseTotal: number;
+    customerTotal: number;
+    installmentValue: number;
+    ratePercent: number;
+    discountPercent: number;
 }
 
 export interface Employee {
@@ -358,6 +375,7 @@ export interface SavedPDF {
     totalLinearMeters?: number;
     linearMeterCost?: number;
     archivedAt?: string | null; // Quando o arquivo foi removido do Storage (orçamento vencido). PDF é regenerado sob demanda.
+    paymentConfig?: ProposalPaymentConfig;
 }
 export type SchedulingInfo = {
     pdf: SavedPDF;

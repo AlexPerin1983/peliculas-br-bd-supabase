@@ -222,7 +222,8 @@ export function usePdfActions({
                 measurements: activeMeasurements.map(({ isNew, ...rest }) => rest),
                 status: 'pending',
                 proposalOptionName: activeOption!.name,
-                proposalOptionId: activeOption!.id
+                proposalOptionId: activeOption!.id,
+                paymentConfig: proposalPaymentConfig
             };
 
             const savedPdf = await db.savePDF(pdfToSave);

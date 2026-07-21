@@ -103,6 +103,20 @@ const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({
         }
     };
 
+    const handleOperatorRateChange = (installments: number, value: string) => {
+        const sanitized = value.replace(/[^0-9,.]/g, '').replace(',', '.');
+        const nextRates = { ...(methods.comJuros.operator_fee_rates || {}) };
+        if (sanitized === '' || sanitized === '.') {
+            delete nextRates[String(installments)];
+        } else {
+            const parsed = Number(sanitized);
+            if (Number.isFinite(parsed) && parsed >= 0 && parsed < 100) {
+                nextRates[String(installments)] = parsed;
+            }
+        }
+        handleInputChange('comJuros', 'operator_fee_rates', nextRates);
+    };
+
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
         if (isSaving) return;
@@ -250,6 +264,18 @@ const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({
                                 onChange={e => handleInputChange('pix', 'nome_responsavel_pix', (e.target as HTMLInputElement).value)}
                                 placeholder="Nome completo do titular da chave"
                             />
+                            <Input
+                                id="desconto_pix"
+                                label="Desconto à vista (%):"
+                                type="number"
+                                min="0"
+                                max="100"
+                                step="0.01"
+                                value={String(methods.pix.porcentagem ?? '')}
+                                onChange={e => handleNumericInputChange('pix', 'porcentagem', e.target.value, true)}
+                                placeholder="0"
+                            />
+                            <p className="text-xs leading-relaxed text-[var(--text-muted)]">O desconto será aplicado automaticamente no valor exibido ao cliente no link da proposta.</p>
                         </div>
                     ))}
                     {renderMethod('boleto', 'Boleto Bancario')}
@@ -267,25 +293,73 @@ const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({
                     ))}
 
                     {renderMethod('comJuros', 'Parcelado c/ Juros', (
-                        <div className="grid grid-cols-2 gap-3 items-end">
+                        <div className="space-y-4">
+                            <div>
+                                <p className="mb-2 text-sm font-semibold text-[var(--text-strong)]">Como calcular?</p>
+                                <div className="grid grid-cols-2 gap-2 rounded-xl bg-[var(--surface-muted)] p-1">
+                                    <button
+                                        type="button"
+                                        onClick={() => handleInputChange('comJuros', 'calculation_mode', 'operator_fee')}
+                                        className={`min-h-10 rounded-lg px-2 text-xs font-bold transition ${(methods.comJuros.calculation_mode || 'monthly_interest') === 'operator_fee' ? 'bg-white text-blue-700 shadow-sm dark:bg-slate-800' : 'text-[var(--text-muted)]'}`}
+                                    >
+                                        Taxa da operadora
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleInputChange('comJuros', 'calculation_mode', 'monthly_interest')}
+                                        className={`min-h-10 rounded-lg px-2 text-xs font-bold transition ${(methods.comJuros.calculation_mode || 'monthly_interest') === 'monthly_interest' ? 'bg-white text-blue-700 shadow-sm dark:bg-slate-800' : 'text-[var(--text-muted)]'}`}
+                                    >
+                                        Juros mensais
+                                    </button>
+                                </div>
+                            </div>
                             <Input
                                 id="parcelas_com_juros"
-                                label="N Maximo de Parcelas:"
+                                label="Máximo de parcelas:"
                                 type="number"
                                 min="1"
+                                max="12"
                                 step="1"
                                 value={String(methods.comJuros.parcelas_max || '')}
                                 onChange={e => handleNumericInputChange('comJuros', 'parcelas_max', e.target.value)}
                             />
-                            <Input
-                                id="taxa_juros"
-                                label="Taxa de Juros (%):"
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                value={String(methods.comJuros.juros ?? '')}
-                                onChange={e => handleNumericInputChange('comJuros', 'juros', e.target.value, true)}
-                            />
+                            {(methods.comJuros.calculation_mode || 'monthly_interest') === 'monthly_interest' ? (
+                                <Input
+                                    id="taxa_juros"
+                                    label="Taxa de juros ao mês (%):"
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    value={String(methods.comJuros.juros ?? '')}
+                                    onChange={e => handleNumericInputChange('comJuros', 'juros', e.target.value, true)}
+                                />
+                            ) : (
+                                <div>
+                                    <p className="text-sm font-semibold text-[var(--text-strong)]">Taxa total cobrada pela operadora</p>
+                                    <p className="mt-1 text-xs leading-relaxed text-[var(--text-muted)]">Preencha a taxa de cada parcela. O sistema calcula o valor que o cliente paga para você receber o total do orçamento.</p>
+                                    <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                                        {Array.from({ length: Math.min(12, Math.max(1, Number(methods.comJuros.parcelas_max) || 12)) }, (_, index) => index + 1).map(installments => (
+                                            <label key={installments} className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] p-2">
+                                                <span className="block text-xs font-bold text-[var(--text-muted)]">{installments}x</span>
+                                                <div className="mt-1 flex items-center gap-1">
+                                                    <input
+                                                        aria-label={`Taxa para ${installments} parcelas`}
+                                                        type="number"
+                                                        min="0"
+                                                        max="99.99"
+                                                        step="0.01"
+                                                        value={String(methods.comJuros.operator_fee_rates?.[String(installments)] ?? '')}
+                                                        onChange={event => handleOperatorRateChange(installments, event.target.value)}
+                                                        className="min-w-0 flex-1 bg-transparent text-sm font-bold text-[var(--text-strong)] outline-none"
+                                                        placeholder="0,00"
+                                                    />
+                                                    <span className="text-xs font-bold text-[var(--text-muted)]">%</span>
+                                                </div>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     ))}
 

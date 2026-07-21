@@ -545,7 +545,7 @@ export interface PDFPageResult {
     nextOffset: number;
 }
 
-const SAVED_PDF_LIST_COLUMNS = 'id, client_id, client_name, date, expiration_date, total_preco, total_m2, subtotal, general_discount_amount, general_discount, nome_arquivo, measurements, status, agendamento_id, proposal_option_name, proposal_option_id, archived_at';
+const SAVED_PDF_LIST_COLUMNS = 'id, client_id, client_name, date, expiration_date, total_preco, total_m2, subtotal, general_discount_amount, general_discount, nome_arquivo, measurements, status, agendamento_id, proposal_option_name, proposal_option_id, archived_at, payment_config';
 
 export const savePDF = async (pdfData: Omit<SavedPDF, 'id'>): Promise<SavedPDF> => {
     const userId = await getCurrentUserId();
@@ -576,7 +576,8 @@ export const savePDF = async (pdfData: Omit<SavedPDF, 'id'>): Promise<SavedPDF> 
         status: pdfData.status || 'pending',
         agendamento_id: pdfData.agendamentoId,
         proposal_option_name: pdfData.proposalOptionName,
-        proposal_option_id: pdfData.proposalOptionId
+        proposal_option_id: pdfData.proposalOptionId,
+        payment_config: pdfData.paymentConfig
     };
 
     const { data, error } = await supabase
@@ -615,7 +616,8 @@ export const updatePDF = async (pdfData: SavedPDF): Promise<SavedPDF> => {
         status: pdfData.status,
         agendamento_id: pdfData.agendamentoId,
         proposal_option_name: pdfData.proposalOptionName,
-        proposal_option_id: pdfData.proposalOptionId
+        proposal_option_id: pdfData.proposalOptionId,
+        payment_config: pdfData.paymentConfig
     };
 
     const normalizedPdfBlob = normalizePdfBlobInput(pdfData.pdfBlob);
@@ -1143,7 +1145,8 @@ const mapRowToPDF = async (row: any): Promise<SavedPDF> => ({
     agendamentoId: row.agendamento_id,
     proposalOptionName: row.proposal_option_name,
     proposalOptionId: row.proposal_option_id,
-    archivedAt: row.archived_at ?? null
+    archivedAt: row.archived_at ?? null,
+    paymentConfig: row.payment_config ?? undefined
 });
 
 // ============================================

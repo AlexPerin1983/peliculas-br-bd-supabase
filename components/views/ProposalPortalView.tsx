@@ -28,6 +28,8 @@ import {
     sendPublicProposalMessage,
 } from '../../src/lib/proposalPortal';
 import { formatConditionExpiry, getProposalCondition } from '../../src/lib/proposalCondition';
+import { buildProposalPaymentOptions } from '../../src/lib/paymentConditions';
+import type { ProposalPaymentChoice, ProposalPaymentSelection } from '../../types';
 
 const currency = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -100,15 +102,17 @@ interface ResponseModalProps {
     proposalValue: number;
     busy: boolean;
     initialBody?: string;
+    paymentOptions?: ProposalPaymentSelection[];
     onClose: () => void;
-    onSubmit: (payload: { body?: string; offerType?: ProposalOfferType; offerValue?: number }) => void;
+    onSubmit: (payload: { body?: string; offerType?: ProposalOfferType; offerValue?: number; paymentChoice?: ProposalPaymentChoice }) => void;
 }
 
-const ResponseModal: React.FC<ResponseModalProps> = ({ kind, proposalName, proposalValue, busy, initialBody = '', onClose, onSubmit }) => {
+const ResponseModal: React.FC<ResponseModalProps> = ({ kind, proposalName, proposalValue, busy, initialBody = '', paymentOptions = [], onClose, onSubmit }) => {
     const [body, setBody] = useState(initialBody);
     const [offerType, setOfferType] = useState<ProposalOfferType>('fixed');
     const [offerValue, setOfferValue] = useState('');
     const [error, setError] = useState('');
+    const [paymentKey, setPaymentKey] = useState('');
 
     const submit = () => {
         if (kind === 'rejected' && !body.trim()) {
@@ -122,6 +126,21 @@ const ResponseModal: React.FC<ResponseModalProps> = ({ kind, proposalName, propo
                 return;
             }
             onSubmit({ body: body.trim(), offerType, offerValue: parsed });
+            return;
+        }
+        if (kind === 'approved' && paymentOptions.length > 0) {
+            const selectedPayment = paymentOptions.find(option => `${option.methodType}:${option.installments}` === paymentKey);
+            if (!selectedPayment) {
+                setError('Escolha como deseja pagar para continuar.');
+                return;
+            }
+            onSubmit({
+                body: body.trim(),
+                paymentChoice: {
+                    methodType: selectedPayment.methodType,
+                    installments: selectedPayment.installments,
+                },
+            });
             return;
         }
         onSubmit({ body: body.trim() });
@@ -144,9 +163,40 @@ const ResponseModal: React.FC<ResponseModalProps> = ({ kind, proposalName, propo
                 </div>
 
                 {kind === 'approved' ? (
-                    <div className="mt-6 rounded-2xl bg-emerald-50 p-4 text-sm leading-6 text-emerald-900">
-                        Ao confirmar, a empresa será avisada imediatamente e esta proposta ficará marcada como aprovada no sistema.
-                    </div>
+                    <>
+                        <div className="mt-6 rounded-2xl bg-emerald-50 p-4 text-sm leading-6 text-emerald-900">
+                            Ao confirmar, a empresa será avisada imediatamente e esta proposta ficará marcada como aprovada no sistema.
+                        </div>
+                        {paymentOptions.length > 0 ? (
+                            <div className="mt-5">
+                                <p className="text-sm font-extrabold text-slate-950">Como você prefere pagar?</p>
+                                <p className="mt-1 text-xs leading-5 text-slate-500">Escolha uma condição para ver e registrar o valor final.</p>
+                                <div className="mt-3 max-h-[260px] space-y-2 overflow-y-auto pr-1">
+                                    {paymentOptions.map(option => {
+                                        const key = `${option.methodType}:${option.installments}`;
+                                        const selected = paymentKey === key;
+                                        return (
+                                            <button
+                                                key={key}
+                                                type="button"
+                                                onClick={() => { setPaymentKey(key); setError(''); }}
+                                                className={`flex w-full items-center justify-between gap-3 rounded-xl border p-3 text-left transition ${selected ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-500/10' : 'border-slate-200 bg-white hover:border-slate-300'}`}
+                                            >
+                                                <span>
+                                                    <span className="block text-sm font-extrabold text-slate-900">{option.label}</span>
+                                                    {option.discountPercent > 0 ? <span className="mt-0.5 block text-xs font-bold text-emerald-700">Você economiza {currency.format(option.baseTotal - option.customerTotal)}</span> : null}
+                                                </span>
+                                                <span className="shrink-0 text-right">
+                                                    <span className="block text-sm font-black text-slate-950">{option.installments > 1 ? `${option.installments}x de ${currency.format(option.installmentValue)}` : currency.format(option.customerTotal)}</span>
+                                                    {option.installments > 1 ? <span className="text-[11px] font-semibold text-slate-500">total {currency.format(option.customerTotal)}</span> : null}
+                                                </span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        ) : null}
+                    </>
                 ) : null}
 
                 {kind === 'negotiation' ? (
@@ -321,7 +371,7 @@ const ProposalPortalView: React.FC = () => {
 
     useEffect(() => { void reload(true); }, [reload]);
     useEffect(() => {
-        const interval = window.setInterval(() => setNow(Date.now()), 1000);
+        const interval = window.setInterval(() => setNow(Date.now()), 30_000);
         return () => window.clearInterval(interval);
     }, []);
     useEffect(() => {
@@ -347,7 +397,12 @@ const ProposalPortalView: React.FC = () => {
     const hasFinalDecision = Boolean(data && ['approved', 'rejected', 'revoked'].includes(data.portal.status));
     const brand = data?.company.colors?.primaria || '#155eef';
 
-    const performResponse = async (kind: ProposalPortalDecision, payload: { body?: string; offerType?: ProposalOfferType; offerValue?: number }) => {
+    const paymentOptions = useMemo(
+        () => buildProposalPaymentOptions(selectedCondition?.finalValue || selected?.totalPreco || 0, selected?.paymentConfig?.paymentMethods || []),
+        [selected, selectedCondition?.finalValue],
+    );
+
+    const performResponse = async (kind: ProposalPortalDecision, payload: { body?: string; offerType?: ProposalOfferType; offerValue?: number; paymentChoice?: ProposalPaymentChoice }) => {
         if (!selected?.id) return;
         setBusy(true);
         try {
@@ -383,7 +438,7 @@ const ProposalPortalView: React.FC = () => {
         }
     };
 
-    const submitResponse = (payload: { body?: string; offerType?: ProposalOfferType; offerValue?: number }) => {
+    const submitResponse = (payload: { body?: string; offerType?: ProposalOfferType; offerValue?: number; paymentChoice?: ProposalPaymentChoice }) => {
         if (modal) void performResponse(modal, payload);
     };
 
@@ -447,7 +502,7 @@ const ProposalPortalView: React.FC = () => {
     if (!data) return <div className="flex min-h-screen items-center justify-center bg-slate-50 p-6"><div className="max-w-md rounded-3xl bg-white p-8 text-center shadow-xl"><FileText className="mx-auto h-10 w-10 text-slate-400" /><h1 className="mt-4 text-2xl font-bold text-slate-950">Proposta indisponível</h1><p className="mt-2 text-sm leading-6 text-slate-500">{error}</p></div></div>;
 
     return (
-        <div className="min-h-screen bg-[#f4f7fb] pb-28 text-slate-900 sm:pb-10" style={{ '--portal-brand': brand } as React.CSSProperties}>
+        <div className="min-h-screen bg-slate-50 pb-8 text-slate-900" style={{ '--portal-brand': brand } as React.CSSProperties}>
             {confetti ? <Confetti /> : null}
             <style>{`@keyframes portal-confetti { 0% { transform: translateY(-5vh) rotate(0); opacity: 1; } 100% { transform: translateY(110vh) rotate(760deg); opacity: .1; } }`}</style>
 
@@ -457,19 +512,19 @@ const ProposalPortalView: React.FC = () => {
                         {data.company.logo ? <img src={data.company.logo} alt={data.company.name} className="h-10 w-10 rounded-xl object-contain" /> : <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--portal-brand)] text-lg font-black text-white">{data.company.name.charAt(0)}</div>}
                         <div className="min-w-0"><p className="truncate text-sm font-extrabold text-slate-950">{data.company.name}</p><p className="flex items-center gap-1 text-[11px] font-semibold text-emerald-700"><ShieldCheck className="h-3.5 w-3.5" /> Proposta segura</p></div>
                     </div>
-                    <div className={`rounded-xl px-3 py-2 text-right ${remaining?.remaining ? 'bg-blue-50 text-blue-900' : 'bg-red-50 text-red-800'}`}>
+                    <div className={`rounded-lg border px-2.5 py-1.5 text-right ${remaining?.remaining ? 'border-slate-200 bg-slate-50 text-slate-700' : 'border-red-100 bg-red-50 text-red-800'}`}>
                         <p className="flex items-center justify-end gap-1 text-[10px] font-bold uppercase tracking-[0.12em]"><Clock3 className="h-3.5 w-3.5" /> {remaining?.remaining ? 'Prazo restante' : 'Prazo encerrado'}</p>
-                        {remaining?.remaining ? <p className="mt-0.5 font-mono text-sm font-black tabular-nums sm:text-base">{remaining.days}d {String(remaining.hours).padStart(2, '0')}:{String(remaining.minutes).padStart(2, '0')}:{String(remaining.seconds).padStart(2, '0')}</p> : null}
+                        {remaining?.remaining ? <p className="mt-0.5 text-xs font-extrabold tabular-nums sm:text-sm">{remaining.days}d {String(remaining.hours).padStart(2, '0')}h {String(remaining.minutes).padStart(2, '0')}min</p> : null}
                     </div>
                 </div>
             </header>
 
-            <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
-                <section className="overflow-hidden rounded-[28px] bg-slate-950 p-6 text-white shadow-2xl shadow-slate-300/50 sm:p-9">
+            <main className="mx-auto max-w-3xl px-4 py-5 sm:px-6 sm:py-8">
+                <section className="border-b border-slate-200 pb-5">
                     <div className="max-w-3xl">
-                        <span className="inline-flex rounded-full bg-white/10 px-3 py-1 text-xs font-bold text-white/80">{statusLabel[data.portal.status]}</span>
-                        <h1 className="mt-4 text-3xl font-bold tracking-tight sm:text-5xl">Olá, {data.clientName.split(/\s+/)[0]}.</h1>
-                        <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300 sm:text-base">Preparamos {data.proposals.length === 1 ? 'uma proposta' : `${data.proposals.length} opções`} para você analisar com calma. Compare os valores, baixe o PDF e responda por aqui.</p>
+                        <span className="inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-bold text-blue-700">{statusLabel[data.portal.status]}</span>
+                        <h1 className="mt-3 text-2xl font-extrabold tracking-tight text-slate-950 sm:text-3xl">Olá, {data.clientName.split(/\s+/)[0]}. Sua proposta está pronta.</h1>
+                        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">Confira os valores, baixe o PDF e responda quando estiver pronto.</p>
                     </div>
                 </section>
 
@@ -493,28 +548,28 @@ const ProposalPortalView: React.FC = () => {
                     </div>
                 </section> : null}
 
-                {!hasFinalDecision ? <section className="mt-5 overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-sm">
-                    <div className="p-5 sm:p-6">
-                        <p className="text-xs font-black uppercase tracking-[.15em] text-blue-600">Seu próximo passo</p>
-                        <h2 className="mt-1 text-2xl font-black text-slate-950">Podemos avançar com esta proposta?</h2>
-                        <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">Esta proposta foi preparada para o seu projeto. Escolha a opção que melhor representa seu momento para a empresa saber como ajudar.</p>
-                        <div className="mt-5 grid gap-2 sm:grid-cols-3">
-                            <button type="button" disabled={isApprovalBlocked} onClick={() => setModal('approved')} className="flex min-h-14 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 text-sm font-black text-white transition hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-500"><ThumbsUp className="h-4 w-4" /> Quero aprovar</button>
-                            <button type="button" onClick={() => setDecisionAssistant('adjust')} className="flex min-h-14 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-black text-white transition hover:bg-blue-700"><MessageSquareText className="h-4 w-4" /> Preciso ajustar algo</button>
-                            <button type="button" onClick={() => setDecisionAssistant('return')} className="flex min-h-14 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50"><CheckCircle2 className="h-4 w-4" /> Dar um retorno</button>
+                {!hasFinalDecision ? <section className="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                    <div className="p-4 sm:p-5">
+                        <p className="text-[11px] font-black uppercase tracking-[.15em] text-blue-600">Responder proposta</p>
+                        <h2 className="mt-1 text-xl font-extrabold text-slate-950">Como deseja continuar?</h2>
+                        <p className="mt-1 text-sm leading-5 text-slate-500">Escolha uma opção. Leva menos de 20 segundos.</p>
+                        <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                            <button type="button" disabled={isApprovalBlocked} onClick={() => setModal('approved')} className="flex h-12 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 text-sm font-bold text-white transition hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-500"><ThumbsUp className="h-4 w-4" /> Aprovar</button>
+                            <button type="button" onClick={() => setDecisionAssistant('adjust')} className="flex h-12 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-bold text-white transition hover:bg-blue-700"><MessageSquareText className="h-4 w-4" /> Pedir ajuste</button>
+                            <button type="button" onClick={() => setDecisionAssistant('return')} className="flex h-12 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50"><CheckCircle2 className="h-4 w-4" /> Dar retorno</button>
                         </div>
-                        <p className="mt-3 text-center text-xs font-semibold text-slate-500">Leva menos de 20 segundos. Sua resposta ajuda a empresa a respeitar o seu momento.</p>
+                        <p className="sr-only">Sua resposta ajuda a empresa a respeitar o seu momento.</p>
                     </div>
                 </section> : null}
 
-                <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1.55fr)_minmax(300px,.75fr)]">
+                <div className="mt-6">
                     <section>
                         <div className="mb-3 flex items-end justify-between"><div><p className="text-xs font-extrabold uppercase tracking-[0.14em] text-blue-600">Suas opções</p><h2 className="mt-1 text-2xl font-bold text-slate-950">Escolha a melhor proposta</h2></div><span className="hidden text-xs font-bold text-slate-400 sm:inline">{data.proposals.length} {data.proposals.length === 1 ? 'opção' : 'opções'}</span></div>
                         <div className="space-y-3">
                             {data.proposals.map((proposal, index) => {
                                 const active = proposal.id === selected?.id;
                                 const proposalCondition = getProposalCondition(proposal, now);
-                                return <article key={proposal.id} className={`rounded-2xl border bg-white p-4 shadow-sm transition sm:p-5 ${active ? 'border-blue-500 ring-4 ring-blue-500/10' : 'border-slate-200'}`}>
+                                return <article key={proposal.id} className={`rounded-2xl border bg-white p-4 transition sm:p-5 ${active ? 'border-blue-500 ring-2 ring-blue-500/10' : 'border-slate-200'}`}>
                                     <button type="button" onClick={() => setSelectedId(proposal.id!)} className="w-full text-left">
                                         <div className="flex items-start gap-3"><span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sm font-black ${active ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500'}`}>{index + 1}</span><div className="min-w-0 flex-1"><h3 className="truncate text-base font-extrabold text-slate-950">{proposal.proposalOptionName || proposal.nomeArquivo || `Proposta ${index + 1}`}</h3><p className="mt-0.5 text-xs text-slate-500">{proposal.totalM2 ? `${proposal.totalM2.toFixed(2).replace('.', ',')} m²` : 'Detalhes completos no PDF'}</p></div><div className="shrink-0 text-right">{proposalCondition ? <p className="text-[10px] font-bold text-slate-400 line-through">{currency.format(proposalCondition.originalValue)}</p> : null}<p className="text-lg font-black text-slate-950">{currency.format(proposalCondition?.finalValue || proposal.totalPreco || 0)}</p>{proposalCondition?.expired ? <p className="text-[9px] font-black uppercase text-red-500">Expirou</p> : null}</div></div>
                                     </button>
@@ -524,7 +579,7 @@ const ProposalPortalView: React.FC = () => {
                         </div>
                     </section>
 
-                    <aside className="hidden lg:block">
+                    <aside className="hidden">
                         <div className="sticky top-24 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                             <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-slate-400">Sua decisão</p><h2 className="mt-1 text-xl font-bold text-slate-950">{selected?.proposalOptionName || 'Proposta selecionada'}</h2>{selectedCondition ? <p className="mt-2 text-xs font-bold text-slate-400 line-through">{currency.format(selectedCondition.originalValue)}</p> : null}<p className="mt-1 text-2xl font-black text-slate-950">{currency.format(selectedCondition?.finalValue || selected?.totalPreco || 0)}</p>
                             <div className="mt-5 grid gap-2"><button disabled={isApprovalBlocked} onClick={() => setModal('approved')} className="flex h-12 items-center justify-center gap-2 rounded-xl bg-emerald-600 text-sm font-extrabold text-white disabled:opacity-50"><ThumbsUp className="h-4 w-4" /> {selectedCondition && !selectedCondition.expired ? `Aprovar por ${currency.format(selectedCondition.finalValue)}` : selectedCondition?.expired ? 'Condição expirada' : 'Quero aprovar'}</button><button disabled={hasFinalDecision} onClick={() => setDecisionAssistant('adjust')} className="flex h-12 items-center justify-center gap-2 rounded-xl bg-blue-600 text-sm font-extrabold text-white disabled:opacity-50"><MessageSquareText className="h-4 w-4" /> Solicitar ajuste</button><button disabled={hasFinalDecision} onClick={() => setDecisionAssistant('return')} className="flex h-12 items-center justify-center gap-2 rounded-xl border border-slate-300 text-sm font-extrabold text-slate-700 disabled:opacity-50"><CheckCircle2 className="h-4 w-4" /> Dar um retorno</button></div>
@@ -532,24 +587,21 @@ const ProposalPortalView: React.FC = () => {
                     </aside>
                 </div>
 
-                <section id="conversa" className="mt-8 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                    <div className="border-b border-slate-100 p-5"><h2 className="text-xl font-bold text-slate-950">Conversa com a empresa</h2><p className="mt-1 text-xs text-slate-500">Suas mensagens e respostas ficam registradas junto com a proposta.</p></div>
-                    <div className="max-h-[420px] space-y-3 overflow-y-auto bg-slate-50/70 p-4 sm:p-5">
-                        {data.messages.length === 0 ? <div className="py-8 text-center text-sm text-slate-400"><MessageCircle className="mx-auto mb-2 h-7 w-7" /> Ainda não há mensagens. Se precisar, fale com a empresa por aqui.</div> : data.messages.map(item => <div key={item.id} className={`flex ${item.sender_type === 'client' ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[86%] rounded-2xl px-4 py-3 text-sm leading-6 ${item.sender_type === 'client' ? 'rounded-br-md bg-blue-600 text-white' : 'rounded-bl-md bg-white text-slate-700 shadow-sm'}`}>
+                <section id="conversa" className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                    <div className="border-b border-slate-100 p-4 sm:p-5"><h2 className="text-lg font-extrabold text-slate-950">Fale com a empresa</h2><p className="mt-1 text-xs text-slate-500">Tire uma dúvida ou envie uma observação.</p></div>
+                    <div className="max-h-[300px] space-y-3 overflow-y-auto bg-slate-50/70 p-4">
+                        {data.messages.length === 0 ? <div className="py-5 text-center text-sm text-slate-400"><MessageCircle className="mx-auto mb-2 h-6 w-6" /> Nenhuma mensagem ainda.</div> : data.messages.map(item => <div key={item.id} className={`flex ${item.sender_type === 'client' ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[86%] rounded-2xl px-4 py-3 text-sm leading-6 ${item.sender_type === 'client' ? 'rounded-br-md bg-blue-600 text-white' : 'rounded-bl-md bg-white text-slate-700 shadow-sm'}`}>
                             {item.kind !== 'message' ? <p className="mb-1 text-[10px] font-black uppercase tracking-[0.12em] opacity-75">{item.kind === 'approved' ? 'Proposta aprovada' : item.kind === 'rejected' ? 'Proposta recusada' : item.kind === 'negotiation' ? 'Contraproposta enviada' : item.kind === 'condition_extended' ? 'Condição prorrogada' : 'Condição atualizada'}</p> : null}
                             {item.offer_value != null ? <p className="font-extrabold">{item.offer_type === 'percentage' ? `${item.offer_value}% de desconto` : `Valor desejado: ${currency.format(item.offer_value)}`}</p> : null}
                             {item.condition_value != null ? <p className="font-extrabold">Valor da condição: {currency.format(item.condition_value)}</p> : null}
+                            {item.payment_selection ? <p className="font-extrabold">{item.payment_selection.installments > 1 ? `${item.payment_selection.installments}x de ${currency.format(item.payment_selection.installmentValue)} · total ${currency.format(item.payment_selection.customerTotal)}` : `${item.payment_selection.label}: ${currency.format(item.payment_selection.customerTotal)}`}</p> : null}
                             {item.body ? <p>{item.body}</p> : null}<p className="mt-1 text-[10px] opacity-60">{new Date(item.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</p></div></div>)}
                     </div>
                     <div className="flex gap-2 border-t border-slate-100 p-3 sm:p-4"><textarea value={message} onChange={event => setMessage(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void sendMessage(); } }} rows={1} placeholder="Digite sua mensagem…" className="min-h-11 flex-1 resize-none rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-blue-500" /><button type="button" disabled={busy || !message.trim()} onClick={() => void sendMessage()} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white disabled:opacity-50"><Send className="h-4 w-4" /></button></div>
                 </section>
             </main>
 
-            <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 p-3 pb-[calc(env(safe-area-inset-bottom,0px)+.75rem)] backdrop-blur-xl lg:hidden">
-                {hasFinalDecision ? <div className="flex h-12 items-center justify-center gap-2 rounded-xl bg-slate-100 text-sm font-bold text-slate-600"><CheckCircle2 className="h-5 w-5" /> {statusLabel[data.portal.status]}</div> : <div className="mx-auto grid max-w-xl grid-cols-3 gap-2"><button disabled={isApprovalBlocked} onClick={() => setModal('approved')} className="flex h-12 flex-col items-center justify-center rounded-xl bg-emerald-600 px-1 text-[10px] font-extrabold text-white disabled:bg-slate-300"><ThumbsUp className="h-4 w-4" /> {selectedCondition ? selectedCondition.expired ? 'Expirou' : `Aprovar ${currency.format(selectedCondition.finalValue)}` : 'Aprovar'}</button><button onClick={() => setDecisionAssistant('adjust')} className="flex h-12 flex-col items-center justify-center rounded-xl bg-blue-600 text-[10px] font-extrabold text-white"><MessageSquareText className="h-4 w-4" /> Pedir ajuste</button><button onClick={() => setDecisionAssistant('return')} className="flex h-12 flex-col items-center justify-center rounded-xl bg-slate-100 text-[10px] font-extrabold text-slate-700"><CheckCircle2 className="h-4 w-4" /> Dar retorno</button></div>}
-            </div>
-
-            {modal && selected ? <ResponseModal kind={modal} proposalName={selected.proposalOptionName || selected.nomeArquivo || 'Proposta'} proposalValue={selectedCondition?.finalValue || selected.totalPreco || 0} busy={busy} initialBody={responseInitialBody} onClose={() => { setModal(null); setResponseInitialBody(''); }} onSubmit={submitResponse} /> : null}
+            {modal && selected ? <ResponseModal kind={modal} proposalName={selected.proposalOptionName || selected.nomeArquivo || 'Proposta'} proposalValue={selectedCondition?.finalValue || selected.totalPreco || 0} paymentOptions={paymentOptions} busy={busy} initialBody={responseInitialBody} onClose={() => { setModal(null); setResponseInitialBody(''); }} onSubmit={submitResponse} /> : null}
             {decisionAssistant ? <DecisionAssistantModal mode={decisionAssistant} busy={busy} onClose={() => setDecisionAssistant(null)} onMessage={body => void sendGuidedMessage(body)} onNegotiate={openNegotiationFromAssistant} onReject={body => { if (isDownloadBlocked) void sendGuidedMessage(body); else void performResponse('rejected', { body }); }} /> : null}
         </div>
     );

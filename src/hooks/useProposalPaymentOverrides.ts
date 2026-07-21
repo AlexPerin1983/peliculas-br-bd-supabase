@@ -10,7 +10,10 @@ type StoredProposalPaymentOverride = ProposalPaymentConfig & {
 type StoredProposalPaymentOverrides = Record<string, StoredProposalPaymentOverride>;
 
 const clonePaymentMethods = (methods: ProposalPaymentConfig['paymentMethods'] = []) =>
-    methods.map(method => ({ ...method }));
+    methods.map(method => ({
+        ...method,
+        operator_fee_rates: method.operator_fee_rates ? { ...method.operator_fee_rates } : undefined,
+    }));
 
 const sanitizeOptionKey = (optionName: string) => optionName.trim().toLowerCase();
 

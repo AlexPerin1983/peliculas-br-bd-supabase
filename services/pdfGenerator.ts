@@ -8,6 +8,7 @@ import { createDefaultLogo } from './defaultLogo';
 import { clampValidityDays } from '../src/lib/proposalValidity';
 import { formatGarantiaMaoDeObra } from '../src/lib/filmWarranty';
 import { DEFAULT_TERMO_RESPONSABILIDADE } from '../src/lib/termoResponsabilidade';
+import type { PaymentMethod } from '../types';
 
 // Define GeneralDiscount locally since it's not exported from types.ts
 interface GeneralDiscount {
@@ -933,9 +934,15 @@ const renderPdfContent = async (
             if (!parcelas_max || parcelas_max === 0) return 0;
             return total / parcelas_max;
         };
-        const calculateParceladoComJuros = (total: number, parcelas_max?: number | null, juros?: number | null) => {
-            if (!parcelas_max || parcelas_max === 0 || !juros) return 0;
-            const i = juros / 100;
+        const calculateParceladoComJuros = (total: number, method: PaymentMethod) => {
+            const parcelas_max = method.parcelas_max;
+            if (!parcelas_max || parcelas_max === 0) return 0;
+            if (method.calculation_mode === 'operator_fee') {
+                const fee = Number(method.operator_fee_rates?.[String(parcelas_max)]) || 0;
+                if (fee >= 100) return 0;
+                return (total / (1 - fee / 100)) / parcelas_max;
+            }
+            const i = (Number(method.juros) || 0) / 100;
             if (i === 0) return total / parcelas_max;
             const parcela = total * (i * Math.pow(1 + i, parcelas_max)) / (Math.pow(1 + i, parcelas_max) - 1);
             return parcela;
@@ -951,7 +958,7 @@ const renderPdfContent = async (
             paymentMethods?.filter(m => m.ativo).forEach(method => {
                 switch (method.tipo) {
                     case 'pix':
-                        lines.push(`  • Pix: R$ ${formatNumberBR(total)}`);
+                        lines.push(`  • Pix: R$ ${formatNumberBR(total * (1 - (Number(method.porcentagem) || 0) / 100))}${method.porcentagem ? ` (${method.porcentagem}% de desconto)` : ''}`);
                         break;
                     case 'boleto':
                         lines.push(`  • Boleto Bancário: R$ ${formatNumberBR(total)}`);
@@ -961,8 +968,11 @@ const renderPdfContent = async (
                         lines.push(`  • Parcelado s/ Juros: ${method.parcelas_max || 0}x de R$ ${formatNumberBR(vps)}`);
                         break;
                     case 'parcelado_com_juros':
-                        const vpc = calculateParceladoComJuros(total, method.parcelas_max, method.juros);
-                        lines.push(`  • Parcelado c/ Juros: ${method.parcelas_max || 0}x de R$ ${formatNumberBR(vpc)} (Taxa de ${method.juros || 0}%)`);
+                        const vpc = calculateParceladoComJuros(total, method);
+                        const appliedRate = method.calculation_mode === 'operator_fee'
+                            ? method.operator_fee_rates?.[String(method.parcelas_max || 0)] || 0
+                            : method.juros || 0;
+                        lines.push(`  • Parcelado c/ Juros: ${method.parcelas_max || 0}x de R$ ${formatNumberBR(vpc)} (Taxa de ${appliedRate}%)`);
                         break;
                     case 'adiantamento':
                         const va = calculateAdiantamento(total, method.porcentagem);
@@ -1009,7 +1019,7 @@ const renderPdfContent = async (
             singlePaymentConfig.paymentMethods?.filter(m => m.ativo).forEach(method => {
                 switch (method.tipo) {
                     case 'pix':
-                        paymentLines.push(`• Pix: R$ ${formatNumberBR(finalTotalForPayment)}`);
+                        paymentLines.push(`• Pix: R$ ${formatNumberBR(finalTotalForPayment * (1 - (Number(method.porcentagem) || 0) / 100))}${method.porcentagem ? ` (${method.porcentagem}% de desconto)` : ''}`);
                         if (method.chave_pix) {
                             let tipoChaveDisplay = '';
                             switch (method.tipo_chave_pix) {
@@ -1032,8 +1042,11 @@ const renderPdfContent = async (
                         paymentLines.push(`• Parcelado s/ Juros: ${method.parcelas_max || 0}x de R$ ${formatNumberBR(valorParcelaSemJuros)}`);
                         break;
                     case 'parcelado_com_juros':
-                        const valorParcelaComJuros = calculateParceladoComJuros(finalTotalForPayment, method.parcelas_max, method.juros);
-                        paymentLines.push(`• Parcelado c/ Juros: ${method.parcelas_max || 0}x de R$ ${formatNumberBR(valorParcelaComJuros)} (Taxa de ${method.juros || 0}%)`);
+                        const valorParcelaComJuros = calculateParceladoComJuros(finalTotalForPayment, method);
+                        const appliedRate = method.calculation_mode === 'operator_fee'
+                            ? method.operator_fee_rates?.[String(method.parcelas_max || 0)] || 0
+                            : method.juros || 0;
+                        paymentLines.push(`• Parcelado c/ Juros: ${method.parcelas_max || 0}x de R$ ${formatNumberBR(valorParcelaComJuros)} (Taxa de ${appliedRate}%)`);
                         break;
                     case 'adiantamento':
                         const valorAdiantamento = calculateAdiantamento(finalTotalForPayment, method.porcentagem);

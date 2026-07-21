@@ -16,6 +16,83 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 const cleanText = (value: unknown, max = 2000) =>
   typeof value === 'string' ? value.trim().slice(0, max) : '';
 
+const roundMoney = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
+const ceilMoney = (value: number) => Math.ceil((value - Number.EPSILON) * 100) / 100;
+
+const buildPaymentOptions = (totalValue: unknown, paymentConfig: any) => {
+  const total = Math.max(0, Number(totalValue) || 0);
+  const methods = Array.isArray(paymentConfig?.paymentMethods) ? paymentConfig.paymentMethods : [];
+  const options: any[] = [];
+  const addCash = (method: any) => {
+    const discountPercent = Math.min(99.99, Math.max(0, Number(method.porcentagem) || 0));
+    const customerTotal = roundMoney(total * (1 - discountPercent / 100));
+    options.push({
+      methodType: method.tipo,
+      installments: 1,
+      label: method.tipo === 'pix'
+        ? discountPercent > 0 ? `Pix à vista com ${discountPercent}% de desconto` : 'Pix à vista'
+        : 'Boleto à vista',
+      calculationMode: 'cash',
+      baseTotal: roundMoney(total),
+      customerTotal,
+      installmentValue: customerTotal,
+      ratePercent: 0,
+      discountPercent,
+    });
+  };
+  methods.filter((method: any) => method.ativo && ['pix', 'boleto'].includes(method.tipo)).forEach(addCash);
+
+  const noInterest = methods.find((method: any) => method.ativo && method.tipo === 'parcelado_sem_juros');
+  const noInterestMax = noInterest ? Math.min(12, Math.max(1, Math.trunc(Number(noInterest.parcelas_max) || 1))) : 0;
+  for (let installments = 1; installments <= noInterestMax; installments += 1) {
+    const installmentValue = ceilMoney(total / installments);
+    options.push({
+      methodType: 'parcelado_sem_juros',
+      installments,
+      label: `${installments}x sem juros`,
+      calculationMode: 'no_interest',
+      baseTotal: roundMoney(total),
+      customerTotal: roundMoney(installmentValue * installments),
+      installmentValue,
+      ratePercent: 0,
+      discountPercent: 0,
+    });
+  }
+
+  const withInterest = methods.find((method: any) => method.ativo && method.tipo === 'parcelado_com_juros');
+  if (withInterest) {
+    const max = Math.min(12, Math.max(1, Math.trunc(Number(withInterest.parcelas_max) || 1)));
+    for (let installments = noInterestMax + 1; installments <= max; installments += 1) {
+      const mode = withInterest.calculation_mode || 'monthly_interest';
+      let ratePercent = 0;
+      let rawInstallment = total / installments;
+      if (mode === 'operator_fee') {
+        if (withInterest.operator_fee_rates?.[String(installments)] == null) continue;
+        ratePercent = Math.min(99.99, Math.max(0, Number(withInterest.operator_fee_rates[String(installments)]) || 0));
+        rawInstallment = (total / (1 - ratePercent / 100)) / installments;
+      } else {
+        ratePercent = Math.max(0, Number(withInterest.juros) || 0);
+        const monthlyRate = ratePercent / 100;
+        const power = Math.pow(1 + monthlyRate, installments);
+        rawInstallment = monthlyRate > 0 ? total * (monthlyRate * power) / (power - 1) : total / installments;
+      }
+      const installmentValue = ceilMoney(rawInstallment);
+      options.push({
+        methodType: 'parcelado_com_juros',
+        installments,
+        label: `${installments}x no cartão`,
+        calculationMode: mode,
+        baseTotal: roundMoney(total),
+        customerTotal: roundMoney(installmentValue * installments),
+        installmentValue,
+        ratePercent,
+        discountPercent: 0,
+      });
+    }
+  }
+  return options;
+};
+
 type ProposalPushKind = 'message' | 'approved' | 'rejected' | 'negotiation';
 
 interface ProposalPushEvent {
@@ -227,11 +304,11 @@ Deno.serve(async (request) => {
         admin.from('clients').select('nome').eq('id', portal.client_id).maybeSingle(),
         admin.from('organizations').select('name, owner_id').eq('id', portal.organization_id).maybeSingle(),
         admin.from('proposal_portal_items')
-          .select('position, saved_pdf_id, condition_original_value, condition_final_value, condition_discount_amount, condition_discount_percent, condition_expires_at, condition_updated_at, saved_pdfs(id, proposal_option_name, nome_arquivo, total_preco, total_m2, date, expiration_date, status)')
+          .select('position, saved_pdf_id, condition_original_value, condition_final_value, condition_discount_amount, condition_discount_percent, condition_expires_at, condition_updated_at, saved_pdfs(id, proposal_option_name, nome_arquivo, total_preco, total_m2, date, expiration_date, status, payment_config)')
           .eq('portal_id', portal.id)
           .order('position'),
         admin.from('proposal_portal_messages')
-          .select('id, saved_pdf_id, sender_type, kind, body, offer_type, offer_value, condition_value, created_at')
+          .select('id, saved_pdf_id, sender_type, kind, body, offer_type, offer_value, condition_value, payment_selection, created_at')
           .eq('portal_id', portal.id)
           .order('created_at'),
       ]);
@@ -269,6 +346,7 @@ Deno.serve(async (request) => {
             date: pdf.date,
             expirationDate: pdf.expiration_date,
             status: pdf.status,
+            paymentConfig: pdf.payment_config || undefined,
             conditionOriginalValue: item.condition_original_value == null ? null : Number(item.condition_original_value),
             conditionFinalValue: item.condition_final_value == null ? null : Number(item.condition_final_value),
             conditionDiscountAmount: item.condition_discount_amount == null ? null : Number(item.condition_discount_amount),
@@ -322,7 +400,7 @@ Deno.serve(async (request) => {
       if (!['approved', 'rejected', 'negotiation'].includes(kind)) return json({ error: 'Resposta invalida.' }, 400);
 
       const { data: item } = await admin.from('proposal_portal_items')
-        .select('saved_pdf_id, condition_final_value, condition_expires_at')
+        .select('saved_pdf_id, condition_final_value, condition_expires_at, saved_pdfs(total_preco, payment_config)')
         .eq('portal_id', portal.id)
         .eq('saved_pdf_id', proposalId)
         .maybeSingle();
@@ -345,6 +423,23 @@ Deno.serve(async (request) => {
       const body = cleanText(payload.body);
       if (kind === 'rejected' && !body) return json({ error: 'Conte o motivo da recusa.' }, 400);
 
+      const pdf = (item as any).saved_pdfs;
+      const approvedValue = item.condition_final_value != null
+        ? Number(item.condition_final_value)
+        : Number(pdf?.total_preco || 0);
+      const paymentOptions = buildPaymentOptions(approvedValue, pdf?.payment_config);
+      let paymentSelection = null;
+      if (kind === 'approved' && paymentOptions.length > 0) {
+        const requestedMethod = cleanText(payload.paymentChoice?.methodType, 40);
+        const requestedInstallments = Number(payload.paymentChoice?.installments);
+        paymentSelection = paymentOptions.find(option =>
+          option.methodType === requestedMethod && option.installments === requestedInstallments
+        ) || null;
+        if (!paymentSelection) {
+          return json({ error: 'Escolha como deseja pagar antes de aprovar.' }, 400);
+        }
+      }
+
       const now = new Date().toISOString();
       const nextStatus = kind === 'approved' ? 'approved' : kind === 'rejected' ? 'rejected' : 'negotiating';
       const { error: messageError } = await admin.from('proposal_portal_messages').insert({
@@ -358,6 +453,7 @@ Deno.serve(async (request) => {
         condition_value: kind === 'approved' && item.condition_final_value != null
           ? Number(item.condition_final_value)
           : null,
+        payment_selection: kind === 'approved' ? paymentSelection : null,
       });
       if (messageError) throw messageError;
 
