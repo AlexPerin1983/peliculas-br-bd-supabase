@@ -48,6 +48,7 @@ import OnboardingTour from './components/onboarding/OnboardingTour';
 import { seedExampleDataIfNeeded } from './services/seedData';
 import { GEMINI_TEXT_MODEL } from './src/lib/geminiModel';
 import { createPastedMeasurementsFromClipboard } from './src/lib/measurementClipboard';
+import { canAccessAppTab } from './src/lib/appAccess';
 
 
 type ActiveTab = 'dashboard' | 'client' | 'cliente_hub' | 'clients_list' | 'films' | 'settings' | 'history' | 'proposals' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores' | 'assistentes';
@@ -281,6 +282,12 @@ const App: React.FC = () => {
     useEffect(() => {
         localStorage.setItem('peliculas-br-active-tab', activeTab);
     }, [activeTab]);
+
+    useEffect(() => {
+        if (canAccessAppTab(activeTab, isAdmin)) return;
+        setActiveTab('dashboard');
+        setTabHistory(history => history.filter(tab => canAccessAppTab(tab, isAdmin)));
+    }, [activeTab, isAdmin]);
 
     // Persist selected client to localStorage para reabrir no mesmo cliente.
     useEffect(() => {
@@ -2143,6 +2150,8 @@ Regras:
     }, []);
 
     const handleTabChange = useCallback((tab: ActiveTab) => {
+        if (!canAccessAppTab(tab, isAdmin)) return;
+
         if (numpadConfig.isOpen) {
             handleNumpadClose();
         }
@@ -2158,7 +2167,7 @@ Regras:
         if (tab === 'qr_code' && !hasModule('qr_servicos')) {
             setShowQrUpgradeModal(true);
         }
-    }, [numpadConfig.isOpen, handleNumpadClose, hasModule]);
+    }, [numpadConfig.isOpen, handleNumpadClose, hasModule, isAdmin]);
 
     const handleOpenClientHub = useCallback(() => {
         handleTabChange('cliente_hub');
@@ -2602,6 +2611,7 @@ Se não conseguir extrair, retorne: []`;
     const tabContent = (
         <AppContentRouter
             activeTab={activeTab}
+            isAdmin={isAdmin}
             isLoading={isLoading}
             userInfo={userInfo}
             organizationId={organizationId || undefined}

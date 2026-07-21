@@ -7,6 +7,7 @@ import SupportModal from './modals/SupportModal';
 import { isWaConnectorEnabled } from '../src/lib/waConnector';
 import * as db from '../services/db';
 import GlobalNotificationBell from './GlobalNotificationBell';
+import { canAccessAppTab } from '../src/lib/appAccess';
 
 type ActiveTab =
     | 'dashboard'
@@ -336,7 +337,7 @@ const Header: React.FC<HeaderProps> = ({ activeTab, onTabChange, onGoBack, canGo
         : [];
 
     const navSections: NavSection[] = [
-        { id: 'geral', label: 'Geral', items: SECTION_GERAL },
+        { id: 'geral', label: 'Geral', items: SECTION_GERAL.filter(item => canAccessAppTab(item.tabId, isAdmin)) },
         { id: 'vendas', label: 'Vendas', items: SECTION_VENDAS },
         { id: 'operacao', label: 'Operação', items: [...SECTION_OPERACAO, ...waItems] },
         { id: 'sistema', label: 'Sistema', items: [...adminItems, ...SECTION_SISTEMA] },

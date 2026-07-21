@@ -9,6 +9,7 @@ import { NumpadConfig } from '../../hooks/useMeasurementEditor';
 import ActionButton from '../../../components/ui/ActionButton';
 import ContentState from '../../../components/ui/ContentState';
 import { getMeasurementClipboardCount } from '../../lib/measurementClipboard';
+import { canAccessAppTab } from '../../lib/appAccess';
 
 const DashboardView = lazy(() => import('../../../components/views/DashboardView'));
 const AssistentesView = lazy(() => import('../../../components/views/AssistentesView'));
@@ -29,6 +30,7 @@ type ActiveTab = 'dashboard' | 'client' | 'cliente_hub' | 'clients_list' | 'film
 
 interface AppContentRouterProps {
     activeTab: ActiveTab;
+    isAdmin: boolean;
     isLoading: boolean;
     userInfo: UserInfo | null;
     organizationId?: string;
@@ -124,6 +126,7 @@ interface AppContentRouterProps {
 
 export const AppContentRouter: React.FC<AppContentRouterProps> = ({
     activeTab,
+    isAdmin,
     isLoading,
     userInfo,
     organizationId,
@@ -299,6 +302,8 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
     }
 
     if (activeTab === 'assistentes') {
+        if (!canAccessAppTab(activeTab, isAdmin)) return null;
+
         return renderDeferred(
             <AssistentesView
                 allSavedPdfs={allSavedPdfs}

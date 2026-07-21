@@ -12,6 +12,7 @@ vi.mock('../../../components/subscription/SubscriptionComponents', () => ({
 describe('AppContentRouter', () => {
   const baseProps = {
     activeTab: 'client' as const,
+    isAdmin: false,
     isLoading: false,
     userInfo: null,
     organizationId: undefined,
@@ -129,5 +130,16 @@ describe('AppContentRouter', () => {
     expect(screen.getByText(/Registre largura, altura, quantidade e pel[ií]cula/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Adicionar Medida/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Buscar por Localizacao/i })).not.toBeInTheDocument();
+  });
+
+  it('bloqueia Assistentes para usuarios comuns', () => {
+    const { container } = render(
+      <AppContentRouter
+        {...baseProps}
+        activeTab="assistentes"
+      />
+    );
+
+    expect(container).toBeEmptyDOMElement();
   });
 });

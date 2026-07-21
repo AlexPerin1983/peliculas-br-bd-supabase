@@ -28,6 +28,7 @@ import SyncStatusIndicator from '../SyncStatusIndicator';
 import ThemeToggle from '../ui/ThemeToggle';
 import SupportModal from '../modals/SupportModal';
 import * as db from '../../services/db';
+import { canAccessAppTab } from '../../src/lib/appAccess';
 
 type ActiveTab = 'dashboard' | 'client' | 'cliente_hub' | 'clients_list' | 'films' | 'settings' | 'history' | 'proposals' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores' | 'assistentes' | 'wa_connector';
 
@@ -210,7 +211,7 @@ const DesktopSidebar: React.FC<DesktopSidebarProps> = ({ activeTab, onTabChange 
 
             <nav className={`${isCollapsed ? 'px-3' : 'px-3'} flex-grow space-y-1 overflow-y-auto py-4`}>
                 {renderSectionLabel('Principal')}
-                {MAIN_NAV.map(item => (
+                {MAIN_NAV.filter(item => canAccessAppTab(item.tabId, isAdmin)).map(item => (
                     <NavItem key={item.tabId} {...item} />
                 ))}
 
