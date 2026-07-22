@@ -164,7 +164,6 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
     useEffect(() => {
         if (isOpen) {
             setValidationError(null);
-            setAiSuggestions(null);
             setIsSaving(false);
             const initialClientId = agendamento?.clienteId || pdf?.clienteId || null;
             setSelectedClientId(initialClientId);
