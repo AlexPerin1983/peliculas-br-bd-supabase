@@ -1,7 +1,6 @@
 import { useState, useCallback } from 'react';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { UserInfo, Film, AIInput } from '../../types';
-import { GEMINI_TEXT_MODEL } from '../lib/geminiModel';
+import { createGeminiModel } from '../../services/geminiGateway';
 
 export interface ExtractedEstoqueItem {
     tipo?: 'bobina' | 'retalho';
@@ -66,14 +65,13 @@ export const useEstoqueAI = (userInfo: UserInfo | null) => {
         films: Film[],
         activeTab: 'bobinas' | 'retalhos'
     ): Promise<ExtractedEstoqueItem> => {
-        if (userInfo?.aiConfig?.provider !== 'gemini' || !userInfo.aiConfig.apiKey) {
-            throw new Error("Configure o provedor Gemini e sua chave de API na aba 'Empresa' para usar esta funcionalidade.");
+        if (userInfo?.aiConfig?.provider && userInfo.aiConfig.provider !== 'gemini') {
+            throw new Error('Altere o provedor de IA para Gemini para usar esta funcionalidade.');
         }
 
         setIsProcessing(true);
         try {
-            const genAI = new GoogleGenerativeAI(userInfo.aiConfig.apiKey);
-            const model = genAI.getGenerativeModel({ model: GEMINI_TEXT_MODEL });
+            const model = createGeminiModel({ apiKey: userInfo?.aiConfig?.apiKey, feature: 'stock_extraction' });
 
             const parts: any[] = [buildPrompt(films, activeTab)];
             if (input.text) parts.push(input.text);

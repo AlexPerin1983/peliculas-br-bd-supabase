@@ -7,7 +7,6 @@ import SupportModal from './modals/SupportModal';
 import { isWaConnectorEnabled } from '../src/lib/waConnector';
 import * as db from '../services/db';
 import GlobalNotificationBell from './GlobalNotificationBell';
-import { canAccessAppTab } from '../src/lib/appAccess';
 
 type ActiveTab =
     | 'dashboard'
@@ -25,7 +24,6 @@ type ActiveTab =
     | 'estoque'
     | 'qr_code'
     | 'fornecedores'
-    | 'assistentes'
     | 'wa_connector';
 
 interface HeaderProps {
@@ -53,7 +51,6 @@ interface NavSection {
 // leitura mais profissional no mobile. Admin e WhatsApp local entram em runtime.
 const SECTION_GERAL: NavItem[] = [
     { tabId: 'dashboard', icon: 'fas fa-chart-line', label: 'Dashboard', hint: 'visao geral do negocio' },
-    { tabId: 'assistentes', icon: 'fas fa-robot', label: 'Assistentes', hint: 'IA para o seu negocio', badge: 'Beta' },
 ];
 
 const SECTION_VENDAS: NavItem[] = [
@@ -78,7 +75,6 @@ const SECTION_SISTEMA: NavItem[] = [
 
 const pageLabels: Record<string, string> = {
     dashboard: 'Dashboard',
-    assistentes: 'Assistentes',
     clients_list: 'Clientes',
     client: 'Orçamento',
     cliente_hub: 'Ficha do cliente',
@@ -337,7 +333,7 @@ const Header: React.FC<HeaderProps> = ({ activeTab, onTabChange, onGoBack, canGo
         : [];
 
     const navSections: NavSection[] = [
-        { id: 'geral', label: 'Geral', items: SECTION_GERAL.filter(item => canAccessAppTab(item.tabId, isAdmin)) },
+        { id: 'geral', label: 'Geral', items: SECTION_GERAL },
         { id: 'vendas', label: 'Vendas', items: SECTION_VENDAS },
         { id: 'operacao', label: 'Operação', items: [...SECTION_OPERACAO, ...waItems] },
         { id: 'sistema', label: 'Sistema', items: [...adminItems, ...SECTION_SISTEMA] },

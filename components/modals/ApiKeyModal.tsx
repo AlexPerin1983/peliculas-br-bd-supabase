@@ -11,7 +11,6 @@ import {
     UserPlus,
     Ruler,
     Layers,
-    LineChart,
     Lock,
     Gift,
 } from 'lucide-react';
@@ -23,6 +22,7 @@ interface ApiKeyModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSave: (apiKey: string) => Promise<void>;
+    onDelete: () => Promise<void>;
     currentApiKey?: string;
     provider?: 'gemini';
 }
@@ -42,10 +42,9 @@ const AI_FEATURES = [
     { icon: UserPlus, title: 'Cadastro de clientes', desc: 'Cria a ficha do cliente a partir de um texto colado.' },
     { icon: Ruler, title: 'Leitura de medidas', desc: 'Interpreta medidas e preenche os ambientes sozinha.' },
     { icon: Layers, title: 'Cadastro de películas', desc: 'Completa as especificações técnicas automaticamente.' },
-    { icon: LineChart, title: 'Assistente financeiro', desc: 'Analisa seus números e responde perguntas do dia a dia.' },
 ] as const;
 
-const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onSave, currentApiKey }) => {
+const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onSave, onDelete, currentApiKey }) => {
     const [step, setStep] = useState(currentApiKey ? 2 : 0);
     const [apiKey, setApiKey] = useState(currentApiKey || '');
     const [isSaving, setIsSaving] = useState(false);
@@ -73,6 +72,18 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onSave, curr
         }
     };
 
+    const handleDelete = async () => {
+        if (isSaving) return;
+        setIsSaving(true);
+        setSaveError(null);
+        try {
+            await onDelete();
+        } catch (err: any) {
+            setSaveError(err?.message || 'Não foi possível remover a chave pessoal. Tente novamente.');
+            setIsSaving(false);
+        }
+    };
+
     const helpLink = (
         <a
             href={`https://wa.me/${SUPPORT_PHONE}?text=${HELP_MESSAGE}`}
@@ -88,9 +99,11 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onSave, curr
     );
 
     const footer = (
-        <div className="flex w-full items-center justify-between gap-3">
-            {helpLink}
-            <div className="flex items-center gap-2">
+        <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="order-2 flex justify-center sm:order-1 sm:justify-start">
+                {helpLink}
+            </div>
+            <div className="order-1 grid w-full grid-cols-1 gap-2 sm:order-2 sm:flex sm:w-auto sm:items-center">
                 {step === 0 && (
                     <>
                         <ActionButton onClick={onClose} variant="ghost" size="sm">Agora não</ActionButton>
@@ -117,9 +130,10 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onSave, curr
                             </ActionButton>
                         )}
                         {currentApiKey && (
-                            <ActionButton onClick={onClose} disabled={isSaving} variant="ghost" size="sm">Cancelar</ActionButton>
+                            <ActionButton className="w-full sm:w-auto" onClick={handleDelete} disabled={isSaving} variant="danger" size="sm">Remover chave</ActionButton>
                         )}
                         <ActionButton
+                            className="w-full sm:w-auto"
                             type="submit"
                             form="apiKeyForm"
                             disabled={isSaving || !apiKey.trim()}
@@ -129,7 +143,7 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onSave, curr
                             size="sm"
                             icon={<ShieldCheck className="h-4 w-4" />}
                         >
-                            Ativar Inteligência Artificial
+                            Salvar chave pessoal
                         </ActionButton>
                     </>
                 )}
@@ -141,7 +155,7 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onSave, curr
         <Modal
             isOpen={isOpen}
             onClose={isSaving ? () => {} : onClose}
-            title="Inteligência Artificial"
+            title="Chave pessoal do Gemini"
             footer={footer}
             disableClose={isSaving}
         >
@@ -192,10 +206,10 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onSave, curr
                             <Sparkles className="h-7 w-7" style={{ color: 'var(--brand-primary)' }} />
                         </div>
                         <h3 className="text-lg font-bold tracking-[-0.01em] text-[var(--text-strong)]">
-                            Deixe a IA fazer o trabalho repetitivo
+                            Continue usando a IA sem depender do limite compartilhado
                         </h3>
                         <p className="mx-auto mt-1.5 max-w-sm text-sm leading-relaxed text-[var(--text-muted)]">
-                            Conecte sua chave gratuita do Google e libere os recursos inteligentes do PelículasBR.
+                            O aplicativo já oferece IA compartilhada. Adicione sua chave pessoal para continuar quando a cota compartilhada estiver indisponível.
                         </p>
                     </div>
 

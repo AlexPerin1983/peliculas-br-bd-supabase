@@ -1,9 +1,8 @@
 import { useState, useCallback } from 'react';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { UserInfo, Film } from '../../types';
 import { performOCR } from '../lib/ocr';
 import { extractClientFromOCR, extractMeasurementsFromOCR } from '../lib/parsePrint';
-import { GEMINI_TEXT_MODEL } from '../lib/geminiModel';
+import { createGeminiModel } from '../../services/geminiGateway';
 
 // Interface para dados extraídos de clientes (copiada do App.tsx)
 interface ExtractedClientData {
@@ -46,13 +45,9 @@ export const useAIProcessing = (
     const processClientDataWithGemini = async (
         input: { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob }
     ): Promise<ExtractedClientData | null> => {
-        if (!userInfo?.aiConfig?.apiKey) {
-            throw new Error("Chave de API do Gemini não configurada.");
-        }
 
         try {
-            const genAI = new GoogleGenerativeAI(userInfo.aiConfig.apiKey);
-            const model = genAI.getGenerativeModel({ model: GEMINI_TEXT_MODEL });
+            const model = createGeminiModel({ apiKey: userInfo?.aiConfig?.apiKey, feature: 'client_extraction' });
 
             const prompt = `
                 Você é um assistente especialista em extração de dados de clientes.Sua tarefa é extrair o máximo de informações de contato, endereço completo(incluindo CEP, logradouro, número, bairro, cidade e UF) e documento(CPF ou CNPJ) de um cliente a partir da entrada fornecida(texto, imagem ou áudio).
@@ -187,17 +182,11 @@ export const useAIProcessing = (
             }
         }
 
-        // Modo Gemini/OpenAI requer API key
-        if (!userInfo?.aiConfig?.apiKey || !userInfo?.aiConfig?.provider) {
-            showError("Por favor, configure seu provedor e chave de API na aba 'Empresa' para usar esta funcionalidade.");
-            return null;
-        }
-
         setIsProcessingAI(true);
         let extractedData: ExtractedClientData | null = null;
 
         try {
-            if (userInfo.aiConfig.provider === 'gemini') {
+            if (!userInfo?.aiConfig?.provider || userInfo.aiConfig.provider === 'gemini') {
                 extractedData = await processClientDataWithGemini(input);
             } else if (userInfo.aiConfig.provider === 'openai') {
                 if (input.type === 'audio') {
@@ -289,17 +278,10 @@ export const useAIProcessing = (
             }
         }
 
-        // Gemini/OpenAI mode
-        if (!userInfo?.aiConfig?.apiKey || !userInfo?.aiConfig?.provider) {
-            showError("Por favor, configure seu provedor e chave de API na aba 'Empresa' para usar esta funcionalidade.");
-            return null;
-        }
-
         setIsProcessingAI(true);
 
         try {
-            const genAI = new GoogleGenerativeAI(userInfo.aiConfig.apiKey);
-            const model = genAI.getGenerativeModel({ model: GEMINI_TEXT_MODEL });
+            const model = createGeminiModel({ apiKey: userInfo?.aiConfig?.apiKey, feature: 'film_extraction' });
 
             const prompt = `Você é um assistente especialista em extração de dados de películas automotivas (insulfilm). Sua tarefa é extrair o máximo de informações técnicas de películas a partir da entrada fornecida (texto ou imagem). Retorne APENAS um objeto JSON válido, sem markdown. Campos: nome, preco (apenas números), uv (%), ir (%), vtl (%), tser (%), espessura (micras), garantiaFabricante (anos), precoMetroLinear. Se algum campo não for encontrado, N?O inclua no JSON.`;
 
@@ -387,17 +369,10 @@ export const useAIProcessing = (
             }
         }
 
-        // Gemini/OpenAI mode
-        if (!userInfo?.aiConfig?.apiKey || !userInfo?.aiConfig?.provider) {
-            showError("Por favor, configure seu provedor e chave de API na aba 'Empresa' para usar esta funcionalidade.");
-            return null;
-        }
-
         setIsProcessingAI(true);
 
         try {
-            const genAI = new GoogleGenerativeAI(userInfo.aiConfig.apiKey);
-            const model = genAI.getGenerativeModel({ model: GEMINI_TEXT_MODEL });
+            const model = createGeminiModel({ apiKey: userInfo?.aiConfig?.apiKey, feature: 'measurement_extraction' });
 
             const prompt = `Você é um assistente especialista em extração de medidas de janelas/vidros para instalação de películas automotivas (insulfilm).
 

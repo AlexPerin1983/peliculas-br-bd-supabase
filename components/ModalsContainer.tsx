@@ -151,6 +151,7 @@ interface ModalsContainerProps {
     isApiKeyModalOpen: boolean;
     setIsApiKeyModalOpen: (value: boolean) => void;
     handleSaveApiKey: (key: string) => void;
+    handleDeleteApiKey: () => void;
     apiKeyModalProvider: 'gemini';
 
     // Image Gallery Modal
@@ -348,7 +349,6 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
                     onAddNewClient={props.handleAddNewClientFromAgendamento}
                     userInfo={props.userInfo}
                     agendamentos={props.agendamentos}
-                    onOpenApiKeyModal={() => props.setIsApiKeyModalOpen(true)}
                 />
             )}
 
@@ -557,6 +557,7 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
                     isOpen={props.isApiKeyModalOpen}
                     onClose={() => props.setIsApiKeyModalOpen(false)}
                     onSave={props.handleSaveApiKey}
+                    onDelete={props.handleDeleteApiKey}
                     currentApiKey={props.userInfo.aiConfig?.provider === props.apiKeyModalProvider ? props.userInfo.aiConfig?.apiKey : ''}
                     provider={props.apiKeyModalProvider}
                 />

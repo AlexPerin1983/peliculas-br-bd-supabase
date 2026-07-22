@@ -132,14 +132,4 @@ describe('AppContentRouter', () => {
     expect(screen.queryByRole('button', { name: /Buscar por Localizacao/i })).not.toBeInTheDocument();
   });
 
-  it('bloqueia Assistentes para usuarios comuns', () => {
-    const { container } = render(
-      <AppContentRouter
-        {...baseProps}
-        activeTab="assistentes"
-      />
-    );
-
-    expect(container).toBeEmptyDOMElement();
-  });
 });

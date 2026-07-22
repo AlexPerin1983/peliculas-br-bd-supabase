@@ -9,10 +9,8 @@ import { NumpadConfig } from '../../hooks/useMeasurementEditor';
 import ActionButton from '../../../components/ui/ActionButton';
 import ContentState from '../../../components/ui/ContentState';
 import { getMeasurementClipboardCount } from '../../lib/measurementClipboard';
-import { canAccessAppTab } from '../../lib/appAccess';
 
 const DashboardView = lazy(() => import('../../../components/views/DashboardView'));
-const AssistentesView = lazy(() => import('../../../components/views/AssistentesView'));
 const UserSettingsView = lazy(() => import('../../../components/views/UserSettingsView'));
 const PdfHistoryView = lazy(() => import('../../../components/views/PdfHistoryView'));
 const ProposalCenterView = lazy(() => import('../../../components/views/ProposalCenterView'));
@@ -26,11 +24,10 @@ const ClientListView = lazy(() => import('../../../components/views/ClientListVi
 const AdminUsers = lazy(() => import('../../../components/AdminUsers').then(module => ({ default: module.AdminUsers })));
 const UserAccount = lazy(() => import('../../../components/UserAccount').then(module => ({ default: module.UserAccount })));
 
-type ActiveTab = 'dashboard' | 'client' | 'cliente_hub' | 'clients_list' | 'films' | 'settings' | 'history' | 'proposals' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores' | 'assistentes';
+type ActiveTab = 'dashboard' | 'client' | 'cliente_hub' | 'clients_list' | 'films' | 'settings' | 'history' | 'proposals' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores';
 
 interface AppContentRouterProps {
     activeTab: ActiveTab;
-    isAdmin: boolean;
     isLoading: boolean;
     userInfo: UserInfo | null;
     organizationId?: string;
@@ -126,7 +123,6 @@ interface AppContentRouterProps {
 
 export const AppContentRouter: React.FC<AppContentRouterProps> = ({
     activeTab,
-    isAdmin,
     isLoading,
     userInfo,
     organizationId,
@@ -294,22 +290,6 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
                 onOpenAIQuickProposal={onOpenAIQuickProposal}
                 onOpenClientModal={onOpenClientModal}
                 onCreateProposal={onCreateProposal}
-                aiConfig={userInfo?.aiConfig}
-                onOpenApiKeyModal={onOpenApiKeyModal}
-            />,
-            defaultLoadingView
-        );
-    }
-
-    if (activeTab === 'assistentes') {
-        if (!canAccessAppTab(activeTab, isAdmin)) return null;
-
-        return renderDeferred(
-            <AssistentesView
-                allSavedPdfs={allSavedPdfs}
-                clients={clients}
-                aiConfig={userInfo?.aiConfig}
-                onOpenApiKeyModal={onOpenApiKeyModal}
             />,
             defaultLoadingView
         );

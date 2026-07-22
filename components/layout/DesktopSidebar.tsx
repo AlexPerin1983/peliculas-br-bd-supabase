@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-    Bot,
     Boxes,
     CalendarDays,
     CircleUserRound,
@@ -28,9 +27,8 @@ import SyncStatusIndicator from '../SyncStatusIndicator';
 import ThemeToggle from '../ui/ThemeToggle';
 import SupportModal from '../modals/SupportModal';
 import * as db from '../../services/db';
-import { canAccessAppTab } from '../../src/lib/appAccess';
 
-type ActiveTab = 'dashboard' | 'client' | 'cliente_hub' | 'clients_list' | 'films' | 'settings' | 'history' | 'proposals' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores' | 'assistentes' | 'wa_connector';
+type ActiveTab = 'dashboard' | 'client' | 'cliente_hub' | 'clients_list' | 'films' | 'settings' | 'history' | 'proposals' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores' | 'wa_connector';
 
 interface DesktopSidebarProps {
     activeTab: ActiveTab;
@@ -46,7 +44,6 @@ interface NavItemConfig {
 
 const MAIN_NAV: NavItemConfig[] = [
     { tabId: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-    { tabId: 'assistentes', icon: Bot, label: 'Assistentes', badge: 'Beta' },
     { tabId: 'clients_list', icon: UsersRound, label: 'Clientes' },
     { tabId: 'client', icon: FileText, label: 'Orçamento' },
     { tabId: 'proposals', icon: MessagesSquare, label: 'Propostas' },
@@ -211,7 +208,7 @@ const DesktopSidebar: React.FC<DesktopSidebarProps> = ({ activeTab, onTabChange 
 
             <nav className={`${isCollapsed ? 'px-3' : 'px-3'} flex-grow space-y-1 overflow-y-auto py-4`}>
                 {renderSectionLabel('Principal')}
-                {MAIN_NAV.filter(item => canAccessAppTab(item.tabId, isAdmin)).map(item => (
+                {MAIN_NAV.map(item => (
                     <NavItem key={item.tabId} {...item} />
                 ))}
 

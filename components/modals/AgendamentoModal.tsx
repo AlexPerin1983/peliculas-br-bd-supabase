@@ -4,8 +4,6 @@ import Modal from '../ui/Modal';
 import ActionButton from '../ui/ActionButton';
 import Input from '../ui/Input';
 import SearchableSelect from '../ui/SearchableSelect';
-import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
-import { GEMINI_TEXT_MODEL } from '../../src/lib/geminiModel';
 import * as db from '../../services/db';
 
 interface AgendamentoModalProps {
@@ -19,14 +17,7 @@ interface AgendamentoModalProps {
     onAddNewClient: (clientName: string) => void;
     userInfo: UserInfo | null;
     agendamentos: Agendamento[];
-    onOpenApiKeyModal?: () => void;
 }
-
-type AISuggestion = {
-    startTime: string;
-    endTime: string;
-    reason: string;
-};
 
 const StatusBadge: React.FC<{ status?: SavedPDF['status'] }> = ({ status = 'pending' }) => {
     const statusInfo = {
@@ -106,7 +97,7 @@ const getWorkingEndLabel = (scheduleStart: string, scheduleEnd: string): string 
     return scheduleEnd;
 };
 
-const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, onSave, onDelete, schedulingInfo, clients, savedPdfs, onAddNewClient, userInfo, agendamentos, onOpenApiKeyModal }) => {
+const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, onSave, onDelete, schedulingInfo, clients, savedPdfs, onAddNewClient, userInfo, agendamentos }) => {
     const agendamento = schedulingInfo.agendamento;
     const pdf = 'pdf' in schedulingInfo ? schedulingInfo.pdf : undefined;
 
@@ -121,9 +112,7 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
     const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
     const [selectedProposalIds, setSelectedProposalIds] = useState<number[]>([]);
     const [validationError, setValidationError] = useState<string | null>(null);
-    const [isSuggesting, setIsSuggesting] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
-    const [aiSuggestions, setAiSuggestions] = useState<AISuggestion[] | null>(null);
     // Capacidade = nº de colaboradores ATIVOS da organização (dono + convidados).
     // Org-wide e igual em qualquer conta logada (corrige a antiga contagem por
     // "Equipe" manual, que não crescia ao convidar e variava por conta).
@@ -236,112 +225,6 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
         return { capacity: teamCapacity, busy, free: teamCapacity - busy };
     }, [agendamentos, date, startTime, endTime, isEditing, agendamento?.id, teamCapacity]);
 
-    const handleAISuggestion = async () => {
-        setIsSuggesting(true);
-        setValidationError(null);
-        setAiSuggestions(null);
-
-        if (!userInfo?.aiConfig?.apiKey || userInfo.aiConfig.provider !== 'gemini') {
-            // Sem IA ativada: leva direto para a ativacao em vez de barrar com um aviso.
-            setIsSuggesting(false);
-            if (onOpenApiKeyModal) {
-                onOpenApiKeyModal();
-            } else {
-                setValidationError("Ative a Inteligência Artificial nas Configurações para usar a sugestão automática.");
-            }
-            return;
-        }
-        if (!selectedClientId || !date) {
-            setValidationError("Selecione um cliente e uma data para obter sugestões.");
-            setIsSuggesting(false);
-            return;
-        }
-
-        const client = clients.find(c => c.id === selectedClientId);
-        const clientAddress = client ? formatClientAddress(client) : '';
-        if (!client || !clientAddress.trim()) {
-            setValidationError("O cliente selecionado precisa ter um endereço cadastrado para a otimização de rota.");
-            setIsSuggesting(false);
-            return;
-        }
-
-        try {
-            const companyAddress = userInfo?.endereco || 'Endereço da empresa não configurado';
-            const newClientAddress = clientAddress;
-            const clientsById: Map<number, Client> = new Map(clients.filter(c => c.id != null).map(c => [c.id!, c]));
-
-            const appointmentsOnDate = agendamentos
-                .filter(ag => new Date(ag.start).toDateString() === new Date(date + 'T12:00:00Z').toDateString())
-                .map(ag => {
-                    const agClient = clientsById.get(ag.clienteId);
-                    return {
-                        start: new Date(ag.start).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-                        end: new Date(ag.end).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-                        address: agClient ? formatClientAddress(agClient) : 'Endereço desconhecido'
-                    };
-                });
-
-            const prompt = `
-                Você é um especialista em logística e agendamento. Sua tarefa é encontrar os melhores horários para um novo agendamento para minimizar o tempo total de deslocamento do dia.
-
-                **Contexto:**
-                - A base da empresa fica em: "${companyAddress}".
-                - O horário de trabalho é das ${userInfo.workingHours?.start || '08:00'} às ${userInfo.workingHours?.end || '18:00'}.
-                - O novo agendamento é para um cliente no endereço: "${newClientAddress}". A duração do serviço será de aproximadamente 2 horas.
-                - A data do agendamento é ${new Date(date + 'T12:00:00Z').toLocaleDateString('pt-BR')}.
-
-                **Agenda existente para este dia:**
-                ${appointmentsOnDate.length > 0 ? appointmentsOnDate.map(ag => `- Das ${ag.start} às ${ag.end} em "${ag.address}"`).join('\n') : 'Nenhum agendamento para este dia.'}
-
-                **Sua Tarefa:**
-                1. Analise a localização geográfica da base da empresa, dos agendamentos existentes e do novo agendamento.
-                2. Sugira 3 horários ideais (início e fim) para o novo agendamento de 2 horas.
-                3. Priorize horários que agrupem agendamentos em locais próximos para criar uma rota lógica e eficiente. Considere o deslocamento a partir da base no início do dia, entre agendamentos, e de volta para a base no final do dia.
-                4. Para cada sugestão, forneça uma breve justificativa (ex: "Logo após o agendamento no bairro vizinho", "Primeiro horário para otimizar a rota da manhã").
-
-                **Formato da Resposta:**
-                Responda APENAS com um objeto JSON válido que corresponda ao schema fornecido.
-            `;
-
-            const genAI = new GoogleGenerativeAI(userInfo.aiConfig.apiKey);
-            const model = genAI.getGenerativeModel({
-                model: GEMINI_TEXT_MODEL,
-                generationConfig: {
-                    responseMimeType: "application/json",
-                    responseSchema: {
-                        type: SchemaType.ARRAY,
-                        items: {
-                            type: SchemaType.OBJECT,
-                            properties: {
-                                startTime: { type: SchemaType.STRING, description: 'Horário de início sugerido no formato "HH:mm".' },
-                                endTime: { type: SchemaType.STRING, description: 'Horário de término sugerido no formato "HH:mm".' },
-                                reason: { type: SchemaType.STRING, description: 'Breve justificativa para a sugestão.' },
-                            },
-                            required: ['startTime', 'endTime', 'reason']
-                        }
-                    }
-                }
-            });
-
-            const result = await model.generateContent(prompt);
-            const response = await result.response;
-            const suggestions = JSON.parse(response.text());
-            setAiSuggestions(suggestions);
-
-        } catch (error) {
-            console.error("Erro ao obter sugestões da IA:", error);
-            setValidationError(`Ocorreu um erro ao comunicar com a IA. Detalhes: ${error instanceof Error ? error.message : String(error)}`);
-        } finally {
-            setIsSuggesting(false);
-        }
-    };
-
-    const handleApplySuggestion = (suggestion: AISuggestion) => {
-        setStartTime(suggestion.startTime);
-        setEndTime(suggestion.endTime);
-        setAiSuggestions(null);
-    };
-
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
         if (isSaving) return;
@@ -431,7 +314,7 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
     };
 
     const handleDelete = () => {
-        if (isSaving || isSuggesting) return;
+        if (isSaving) return;
         if (isEditing && agendamento) {
             onDelete(agendamento as Agendamento);
         }
@@ -511,7 +394,7 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                 <ActionButton
                     type="button"
                     onClick={handleDelete}
-                    disabled={isSaving || isSuggesting}
+                    disabled={isSaving}
                     variant="danger"
                     size="sm"
                 >
@@ -522,7 +405,7 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
             <ActionButton
                 type="submit"
                 form="agendamentoForm"
-                disabled={isSaving || isSuggesting}
+                disabled={isSaving}
                 loading={isSaving}
                 loadingText="Salvando..."
                 variant="primary"
@@ -710,21 +593,8 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                     ) : null}
 
                     <div>
-                        <div className="flex justify-between items-center mb-1">
+                        <div className="mb-1">
                             <label htmlFor="date" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Data</label>
-                            <button
-                                type="button"
-                                onClick={handleAISuggestion}
-                                disabled={isSuggesting || !date || !selectedClientId}
-                                className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                {isSuggesting ? (
-                                    <i className="fas fa-spinner fa-spin"></i>
-                                ) : (
-                                    <i className="fas fa-magic-sparkles"></i>
-                                )}
-                                Sugerir com IA
-                            </button>
                         </div>
                         <Input
                             id="date"
@@ -736,23 +606,6 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                             className={inputClassName}
                         />
                     </div>
-
-                    {aiSuggestions && aiSuggestions.length > 0 && (
-                        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg space-y-2">
-                            <h4 className="text-sm font-semibold text-blue-800">Sugestões da IA:</h4>
-                            {aiSuggestions.map((sug, index) => (
-                                <button
-                                    key={index}
-                                    type="button"
-                                    onClick={() => handleApplySuggestion(sug)}
-                                    className="w-full text-left p-2 bg-white rounded-md border border-blue-200 hover:bg-blue-100 transition-colors"
-                                >
-                                    <p className="font-semibold text-slate-800">{sug.startTime} - {sug.endTime}</p>
-                                    <p className="text-xs text-slate-600">{sug.reason}</p>
-                                </button>
-                            ))}
-                        </div>
-                    )}
 
                     <div className="grid grid-cols-2 gap-4">
                         <Input id="startTime" label="Início" type="time" value={startTime} onChange={(e) => setStartTime((e.target as HTMLInputElement).value)} required className={inputClassName} />

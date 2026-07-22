@@ -172,9 +172,8 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
         qrCodeDataUrl,
     });
 
-    // Sem IA ativada: leva direto para a ativação em vez de barrar com um aviso.
     const handleOpenAI = () => {
-        if (!userInfo?.aiConfig?.apiKey || userInfo.aiConfig.provider !== 'gemini') {
+        if (userInfo?.aiConfig?.provider && userInfo.aiConfig.provider !== 'gemini') {
             if (onOpenApiKeyModal) {
                 onOpenApiKeyModal();
                 return;

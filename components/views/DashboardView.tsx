@@ -23,7 +23,6 @@ import {
     Plus,
     QrCode,
     ReceiptText,
-    Sparkles,
     Star,
     Trash2,
     TrendingUp,
@@ -38,7 +37,6 @@ import { Agendamento, Client, Film, ProposalExpenseCategory, SavedPDF, Standalon
 import { getAllServicosPrestados, ServicoPrestado } from '../../services/servicosService';
 import { deleteStandaloneExpense, getAllStandaloneExpenses, getPDFPage, saveStandaloneExpense } from '../../services/db';
 import StandaloneExpenseModal from '../modals/StandaloneExpenseModal';
-import AIFinancialAssistantModal, { FinancialAnalysisCache, FinancialSummary } from '../modals/AIFinancialAssistantModal';
 
 type ActiveTab = 'dashboard' | 'client' | 'films' | 'settings' | 'history' | 'proposals' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores';
 type PeriodKey =
@@ -68,8 +66,6 @@ interface DashboardViewProps {
     onOpenAIQuickProposal: () => void;
     onOpenClientModal: (mode: 'add' | 'edit') => void;
     onCreateProposal?: () => void;
-    aiConfig?: { provider: 'gemini' | 'openai' | 'local_ocr'; apiKey: string };
-    onOpenApiKeyModal?: (provider: 'gemini' | 'openai') => void;
     usePagedPdfData?: boolean;
     onRequireAllPdfs?: () => Promise<void>;
     useDeferredClientData?: boolean;
@@ -769,8 +765,6 @@ const DashboardView: React.FC<DashboardViewProps> = ({
     onOpenAIQuickProposal,
     onOpenClientModal,
     onCreateProposal,
-    aiConfig,
-    onOpenApiKeyModal,
     usePagedPdfData = false,
     onRequireAllPdfs,
     useDeferredClientData = false,
@@ -778,8 +772,6 @@ const DashboardView: React.FC<DashboardViewProps> = ({
     dormantClientCount = 0
 }) => {
     const [period, setPeriod] = useState<PeriodKey>('today');
-    const [isFinAssistantOpen, setIsFinAssistantOpen] = useState(false);
-    const [finAnalysisCache, setFinAnalysisCache] = useState<FinancialAnalysisCache | null>(null);
     const [customStartDate, setCustomStartDate] = useState(() => toDateInputValue(addDays(new Date(), -6)));
     const [customEndDate, setCustomEndDate] = useState(() => toDateInputValue(new Date()));
     const [isMobilePeriodOpen, setIsMobilePeriodOpen] = useState(false);
@@ -1240,85 +1232,6 @@ const DashboardView: React.FC<DashboardViewProps> = ({
     const periodDisplayLabel = period === 'custom' ? `Personalizada: ${customDateSummary}` : PERIOD_LABELS[period];
     const mobilePeriodTriggerLabel = period === 'custom' ? customDateSummary : PERIOD_LABELS[period];
 
-    // Numeros do periodo anterior, calculados em memoria (zero consulta nova).
-    const comparisonStats = useMemo(() => {
-        if (!previousRange) return null;
-
-        const prevPdfs = dashboardPdfs.filter(pdf => isWithinRange(parseDate(pdf.date), previousRange));
-        const prevStandalone = standaloneExpenses.filter(expense => isWithinRange(parseDate(expense.date), previousRange));
-        const prevStandaloneTotal = prevStandalone.reduce((sum, expense) => sum + parseNumber(expense.amount), 0);
-
-        const totalValue = prevPdfs.reduce((sum, pdf) => sum + getPdfValue(pdf), 0);
-        const approvedValue = prevPdfs
-            .filter(pdf => getPdfStatus(pdf) === 'approved')
-            .reduce((sum, pdf) => sum + getPdfValue(pdf), 0);
-        const proposalExpenses = prevPdfs.reduce((sum, pdf) => sum + getOperationalExpenses(pdf), 0);
-        const expenses = proposalExpenses + prevStandaloneTotal;
-        const estimatedProfit = prevPdfs.reduce((sum, pdf) => sum + getEstimatedProfit(pdf), 0) - prevStandaloneTotal;
-
-        const categoryMap = new Map<string, { label: string; value: number }>();
-        const addCategory = (key: string, label: string, value: number) => {
-            const previous = categoryMap.get(key) || { label, value: 0 };
-            categoryMap.set(key, { label: previous.label || label, value: previous.value + value });
-        };
-        prevPdfs.forEach(pdf => {
-            const snapshotCategories = pdf.generalDiscount?.expenseSnapshot?.expensesByCategory || [];
-            if (snapshotCategories.length) {
-                snapshotCategories.forEach(category => {
-                    addCategory(category.category, category.label || EXPENSE_CATEGORY_LABELS[category.category] || 'Gasto', parseNumber(category.total));
-                });
-                return;
-            }
-            (pdf.generalDiscount?.expenses || []).forEach(expense => {
-                addCategory(expense.category, EXPENSE_CATEGORY_LABELS[expense.category] || 'Gasto', parseNumber(expense.amount));
-            });
-        });
-        prevStandalone.forEach(expense => {
-            addCategory(expense.category, EXPENSE_CATEGORY_LABELS[expense.category] || 'Gasto avulso', parseNumber(expense.amount));
-        });
-
-        return {
-            periodoAnterior: formatRangeButtonLabel(previousRange),
-            faturamentoTotal: totalValue,
-            faturamentoAprovado: approvedValue,
-            despesas: expenses,
-            lucroEstimado: estimatedProfit,
-            margemEstimada: totalValue > 0 ? (estimatedProfit / totalValue) * 100 : 0,
-            gastosPorCategoria: Array.from(categoryMap.values())
-                .filter(item => item.value > 0)
-                .sort((a, b) => b.value - a.value)
-        };
-    }, [previousRange, dashboardPdfs, standaloneExpenses]);
-
-    const daysInPeriod = useMemo(() => {
-        if (!periodRange) return 1;
-        return Math.max(1, Math.ceil((periodRange.end.getTime() - periodRange.start.getTime()) / 86400000));
-    }, [periodRange]);
-
-    // Resumo financeiro reaproveitando os agregados ja calculados acima.
-    // Nenhuma consulta nova ao banco: tudo ja esta em memoria.
-    const financialSummary = useMemo<FinancialSummary>(() => ({
-        periodo: periodDisplayLabel,
-        faturamentoTotal: periodStats.totalValue,
-        faturamentoAprovado: periodStats.approvedValue,
-        faturamentoPendente: periodStats.pendingValue,
-        despesas: periodStats.expenses,
-        lucroEstimado: periodStats.estimatedProfit,
-        margemEstimada: periodStats.estimatedMargin,
-        ticketMedio: periodStats.averageTicket,
-        taxaAprovacao: periodStats.conversionRate,
-        orcamentosGerados: periodStats.generatedCount,
-        orcamentosAprovados: periodStats.approvedCount,
-        orcamentosPendentes: periodStats.pendingCount,
-        totalM2: periodStats.totalM2,
-        gastoDiarioMedio: expenseRhythm.dailyAverage,
-        diasNoPeriodo: daysInPeriod,
-        faturamentoDiarioMedio: periodStats.totalValue / daysInPeriod,
-        gastosPorCategoria: categoryTotals.map(item => ({ label: item.label, value: item.value })),
-        melhorCliente: topClient,
-        peliculaMaisUsada: topFilm,
-        comparativo: comparisonStats
-    }), [periodDisplayLabel, periodStats, expenseRhythm, categoryTotals, topClient, topFilm, comparisonStats, daysInPeriod]);
     const desktopRangeButtonLabel = formatRangeButtonLabel(periodRange);
 
     const syncDesktopDraftFromPeriod = (nextPeriod: PeriodKey) => {
@@ -1585,17 +1498,6 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                 isSaving={isSavingStandaloneExpense}
             />
 
-            <AIFinancialAssistantModal
-                isOpen={isFinAssistantOpen}
-                onClose={() => setIsFinAssistantOpen(false)}
-                summary={financialSummary}
-                apiKey={aiConfig?.apiKey}
-                provider={aiConfig?.provider}
-                cache={finAnalysisCache}
-                onCached={setFinAnalysisCache}
-                onActivateAI={onOpenApiKeyModal ? () => onOpenApiKeyModal('gemini') : undefined}
-            />
-
             <section className="ui-card p-3 sm:p-4">
                 <div className="mb-3 flex items-center justify-between gap-2">
                     <div className="min-w-0">
@@ -1831,23 +1733,6 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                             <h2 className="mt-1 text-lg font-bold text-[var(--text-strong)]">Resumo financeiro</h2>
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    // Sem IA ativada: leva direto para a ativacao em vez de abrir
-                                    // o assistente num estado vazio sem saida.
-                                    if (!aiConfig?.apiKey && onOpenApiKeyModal) {
-                                        onOpenApiKeyModal('gemini');
-                                        return;
-                                    }
-                                    setIsFinAssistantOpen(true);
-                                }}
-                                className="inline-flex h-9 items-center justify-center gap-2 rounded-[var(--radius-control)] border border-blue-100 bg-blue-50 px-3 text-xs font-bold text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-300 sm:h-10 sm:text-sm"
-                            >
-                                <Sparkles className="h-4 w-4" aria-hidden="true" />
-                                <span className="hidden sm:inline">Analisar com IA</span>
-                                <span className="sm:hidden">IA</span>
-                            </button>
                             <button
                                 type="button"
                                 onClick={() => onTabChange('history')}

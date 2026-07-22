@@ -995,7 +995,7 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({
             >
                 <SettingsSection
                     title="Inteligência Artificial"
-                    subtitle="Configure o provedor de IA"
+                    subtitle="IA compartilhada e chave pessoal"
                     icon={<Bot className="w-5 h-5" />}
                     badge="Beta"
                     saveState={getSectionSaveState('ai')}
@@ -1006,7 +1006,7 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({
                             <p className="flex items-start gap-2 text-xs leading-relaxed text-[var(--text-body)]">
                                 <Sparkles className="mt-0.5 h-4 w-4 shrink-0" style={{ color: 'var(--brand-primary)' }} aria-hidden="true" />
                                 <span>
-                                    O app usa o <strong>Google Gemini</strong>, a inteligência artificial do Google, para trabalhar por você — preenchendo orçamentos, fichas de clientes e muito mais. É grátis e a ativação leva uns 2 minutinhos.
+                                    O app usa o <strong>Google Gemini</strong>, a inteligência artificial do Google, para trabalhar por você — preenchendo orçamentos, fichas de clientes e muito mais. O aplicativo já usa uma chave compartilhada. Você pode cadastrar sua chave pessoal como alternativa quando o limite compartilhado for atingido.
                                 </span>
                             </p>
                         </div>
@@ -1025,7 +1025,7 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({
                             className={`${primaryButtonClassName} w-full`}
                         >
                             <Sparkles className="h-4 w-4" aria-hidden="true" />
-                            {formData.aiConfig?.apiKey ? 'Gerenciar Inteligência Artificial' : 'Ativar Inteligência Artificial'}
+                            {formData.aiConfig?.apiKey ? 'Gerenciar minha chave pessoal' : 'Adicionar minha chave pessoal'}
                         </button>
 
                         <button

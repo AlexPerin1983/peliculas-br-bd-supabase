@@ -46,12 +46,11 @@ import DesktopSidebar from './components/layout/DesktopSidebar';
 import AIQuickFab from './components/AIQuickFab';
 import OnboardingTour from './components/onboarding/OnboardingTour';
 import { seedExampleDataIfNeeded } from './services/seedData';
-import { GEMINI_TEXT_MODEL } from './src/lib/geminiModel';
 import { createPastedMeasurementsFromClipboard } from './src/lib/measurementClipboard';
-import { canAccessAppTab } from './src/lib/appAccess';
+import { createGeminiModel, GLOBAL_GEMINI_UNAVAILABLE_EVENT } from './services/geminiGateway';
 
 
-type ActiveTab = 'dashboard' | 'client' | 'cliente_hub' | 'clients_list' | 'films' | 'settings' | 'history' | 'proposals' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores' | 'assistentes';
+type ActiveTab = 'dashboard' | 'client' | 'cliente_hub' | 'clients_list' | 'films' | 'settings' | 'history' | 'proposals' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores';
 
 interface BillingReturnState {
     status: BillingReturnStatus;
@@ -222,7 +221,7 @@ const formatModuleIdLabel = (moduleId: string | null): string => {
 };
 
 const App: React.FC = () => {
-    const { isAdmin, user: authUser, organizationId, isOwner, refreshProfile } = useAuth();
+    const { user: authUser, organizationId, isOwner, refreshProfile } = useAuth();
     const { showError } = useError();
     const { showAlert, showToast } = useFeedback();
     const { deferredPrompt, promptInstall, isInstalled } = usePwaInstallPrompt();
@@ -259,7 +258,7 @@ const App: React.FC = () => {
     const [pendingServiceStatusMark, setPendingServiceStatusMark] = useState<{ id: number; status: AgendamentoServiceStatus } | null>(null);
     const [activeTab, setActiveTab] = useState<ActiveTab>(() => {
         const saved = localStorage.getItem('peliculas-br-active-tab');
-        if (saved && ['dashboard', 'client', 'films', 'settings', 'history', 'proposals', 'agenda', 'sales', 'admin', 'account', 'estoque', 'qr_code', 'fornecedores', 'assistentes'].includes(saved)) {
+        if (saved && ['dashboard', 'client', 'films', 'settings', 'history', 'proposals', 'agenda', 'sales', 'admin', 'account', 'estoque', 'qr_code', 'fornecedores'].includes(saved)) {
             return saved as ActiveTab;
         }
         return 'dashboard';
@@ -283,11 +282,6 @@ const App: React.FC = () => {
         localStorage.setItem('peliculas-br-active-tab', activeTab);
     }, [activeTab]);
 
-    useEffect(() => {
-        if (canAccessAppTab(activeTab, isAdmin)) return;
-        setActiveTab('dashboard');
-        setTabHistory(history => history.filter(tab => canAccessAppTab(tab, isAdmin)));
-    }, [activeTab, isAdmin]);
 
     // Persist selected client to localStorage para reabrir no mesmo cliente.
     useEffect(() => {
@@ -402,6 +396,16 @@ const App: React.FC = () => {
     const [isProcessingAI, setIsProcessingAI] = useState(false);
     const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
     const [apiKeyModalProvider, setApiKeyModalProvider] = useState<'gemini' | 'openai'>('gemini');
+
+    useEffect(() => {
+        const handleGlobalGeminiUnavailable = () => {
+            setApiKeyModalProvider('gemini');
+            setIsApiKeyModalOpen(true);
+            showToast('O limite da IA compartilhada foi atingido. Para continuar agora, use sua chave pessoal do Gemini.', { tone: 'warning', duration: 5500 });
+        };
+        window.addEventListener(GLOBAL_GEMINI_UNAVAILABLE_EVENT, handleGlobalGeminiUnavailable);
+        return () => window.removeEventListener(GLOBAL_GEMINI_UNAVAILABLE_EVENT, handleGlobalGeminiUnavailable);
+    }, [showToast]);
     const [isGeneralDiscountModalOpen, setIsGeneralDiscountModalOpen] = useState(false);
     const [isProposalExpensesModalOpen, setIsProposalExpensesModalOpen] = useState(false);
     const [isDuplicateAllModalOpen, setIsDuplicateAllModalOpen] = useState(false);
@@ -1382,16 +1386,8 @@ const App: React.FC = () => {
     };
 
     const processClientDataWithGemini = async (input: AIInput): Promise<ExtractedClientData | null> => {
-        if (!userInfo?.aiConfig?.apiKey) {
-            throw new Error("Chave de API do Gemini não configurada.");
-        }
-
         try {
-            const { GoogleGenerativeAI } = await import('@google/generative-ai');
-            const genAI = new GoogleGenerativeAI(userInfo!.aiConfig!.apiKey);
-            const model = genAI.getGenerativeModel({
-                model: GEMINI_TEXT_MODEL,
-            });
+            const model = createGeminiModel({ apiKey: userInfo?.aiConfig?.apiKey, feature: 'client_extraction' });
 
             const prompt = `
                 Você é um assistente especialista em extração de dados de clientes.Sua tarefa é extrair o máximo de informações de contato, endereço completo(incluindo CEP, logradouro, número, bairro, cidade e UF) e documento(CPF ou CNPJ) de um cliente a partir da entrada fornecida(texto, imagem ou áudio).
@@ -1554,14 +1550,10 @@ const App: React.FC = () => {
     const processQuickProposalWithGemini = async (
         input: AIInput
     ): Promise<QuickProposalExtraction> => {
-        if (!userInfo?.aiConfig?.apiKey) {
-            throw new Error("Chave de API do Gemini não configurada.");
-        }
-
-        const { GoogleGenerativeAI, SchemaType } = await import('@google/generative-ai');
-        const genAI = new GoogleGenerativeAI(userInfo.aiConfig.apiKey);
-        const model = genAI.getGenerativeModel({
-            model: GEMINI_TEXT_MODEL,
+        const { Type: SchemaType } = await import('@google/genai');
+        const model = createGeminiModel({
+            apiKey: userInfo?.aiConfig?.apiKey,
+            feature: 'quick_proposal',
             generationConfig: {
                 responseMimeType: "application/json",
                 responseSchema: {
@@ -1651,8 +1643,8 @@ Regras:
     };
 
     const handleProcessAIQuickProposalInput = useCallback(async (input: AIInput) => {
-        if (!userInfo?.aiConfig?.apiKey || userInfo.aiConfig.provider !== 'gemini') {
-            handleShowInfo("A proposta rapida usa o Gemini. Configure o provedor e a chave de API na aba 'Empresa'.");
+        if (userInfo?.aiConfig?.provider && userInfo.aiConfig.provider !== 'gemini') {
+            handleShowInfo('A proposta rápida usa o Gemini. Altere o provedor de IA para continuar.');
             return;
         }
 
@@ -1703,12 +1695,6 @@ Regras:
     }, [userInfo, createEmptyMeasurement, films, loadClients, handleShowInfo, showToast]);
 
     const handleProcessAIClientInput = useCallback(async (input: AIInput) => {
-        if (!userInfo?.aiConfig?.apiKey) {
-            // Sem IA ativada: leva direto para a tela de ativacao em vez de um beco sem saida.
-            setApiKeyModalProvider('gemini');
-            setIsApiKeyModalOpen(true);
-            return;
-        }
 
         const hasContent = (input.text && input.text.trim()) || (input.images && input.images.length > 0) || !!input.audio;
         if (!hasContent) {
@@ -1737,12 +1723,6 @@ Regras:
     }, [userInfo, showError]);
 
     const handleProcessAIFilmInput = useCallback(async (input: AIInput) => {
-        if (!userInfo?.aiConfig?.apiKey) {
-            // Sem IA ativada: leva direto para a tela de ativacao em vez de um beco sem saida.
-            setApiKeyModalProvider('gemini');
-            setIsApiKeyModalOpen(true);
-            return;
-        }
 
         const hasContent = (input.text && input.text.trim()) || (input.images && input.images.length > 0) || !!input.audio;
         if (!hasContent) {
@@ -1753,9 +1733,7 @@ Regras:
         setIsProcessingAI(true);
 
         try {
-            const { GoogleGenerativeAI } = await import('@google/generative-ai');
-            const genAI = new GoogleGenerativeAI(userInfo.aiConfig.apiKey);
-            const model = genAI.getGenerativeModel({ model: GEMINI_TEXT_MODEL });
+            const model = createGeminiModel({ apiKey: userInfo?.aiConfig?.apiKey, feature: 'film_extraction' });
 
             const prompt = `Você é um assistente especialista em extração de dados de películas automotivas (insulfilm). Sua tarefa é extrair o máximo de informações técnicas de películas a partir da entrada fornecida (texto, imagem ou áudio). Retorne APENAS um objeto JSON válido, sem markdown. Campos: nome, preco (apenas números), uv (%), ir (%), vtl (%), tser (%), espessura (micras), garantiaFabricante (anos), precoMetroLinear. Se algum campo não for encontrado, N?O inclua no JSON.`;
 
@@ -1798,10 +1776,10 @@ Regras:
 
     const processWithGemini = async (input: { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob }) => {
         try {
-            const { GoogleGenerativeAI, SchemaType } = await import('@google/generative-ai');
-            const genAI = new GoogleGenerativeAI(userInfo!.aiConfig!.apiKey);
-            const model = genAI.getGenerativeModel({
-                model: GEMINI_TEXT_MODEL,
+            const { Type: SchemaType } = await import('@google/genai');
+            const model = createGeminiModel({
+                apiKey: userInfo?.aiConfig?.apiKey,
+                feature: 'measurement_extraction',
                 generationConfig: {
                     responseMimeType: "application/json",
                     responseSchema: {
@@ -2046,14 +2024,6 @@ Regras:
             return;
         }
 
-        // Modo Gemini/OpenAI - requer IA ativada
-        if (!userInfo?.aiConfig?.apiKey) {
-            // Leva direto para a tela de ativacao em vez de um beco sem saida.
-            setApiKeyModalProvider('gemini');
-            setIsApiKeyModalOpen(true);
-            return;
-        }
-
         setIsProcessingAI(true);
 
         try {
@@ -2150,8 +2120,6 @@ Regras:
     }, []);
 
     const handleTabChange = useCallback((tab: ActiveTab) => {
-        if (!canAccessAppTab(tab, isAdmin)) return;
-
         if (numpadConfig.isOpen) {
             handleNumpadClose();
         }
@@ -2167,7 +2135,7 @@ Regras:
         if (tab === 'qr_code' && !hasModule('qr_servicos')) {
             setShowQrUpgradeModal(true);
         }
-    }, [numpadConfig.isOpen, handleNumpadClose, hasModule, isAdmin]);
+    }, [numpadConfig.isOpen, handleNumpadClose, hasModule]);
 
     const handleOpenClientHub = useCallback(() => {
         handleTabChange('cliente_hub');
@@ -2262,21 +2230,27 @@ Regras:
         }
     }, [userInfo, apiKeyModalProvider]);
 
-    // Porteiro único da IA: garante que o recurso está liberado (modulo comprado)
-    // e que a IA foi ativada (chave configurada). Se faltar algo, leva o usuario
-    // direto para a tela certa — upgrade ou ativacao — em vez de deixar ele
-    // abrir a funcao, digitar tudo e so depois descobrir que falta configurar.
+    const handleDeleteApiKey = useCallback(async () => {
+        if (!userInfo) return;
+        const nextAiConfig = {
+            ...(userInfo.aiConfig || { provider: 'gemini' as const }),
+            provider: 'gemini' as const,
+            apiKey: ''
+        };
+        const updatedUserInfo = await db.updateAIConfigOnly(nextAiConfig);
+        setUserInfo(updatedUserInfo || { ...userInfo, aiConfig: nextAiConfig, isFallback: false });
+        setIsApiKeyModalOpen(false);
+        showToast('Chave pessoal removida. Agora a IA compartilhada será usada.', { tone: 'success', duration: 3500 });
+    }, [userInfo, showToast]);
+
+    // A chave compartilhada dispensa configuracao individual.
     const ensureAiReady = useCallback((): boolean => {
         if (!hasModule('ia_ocr')) {
             setShowIaUpgradeModal(true);
             return false;
         }
-        if (!userInfo?.aiConfig?.apiKey) {
-            handleOpenApiKeyModal('gemini');
-            return false;
-        }
         return true;
-    }, [hasModule, userInfo, handleOpenApiKeyModal]);
+    }, [hasModule]);
 
     const handleSaveGeneralDiscount = useCallback((discount: ProposalDiscount) => {
         handleGeneralDiscountChange(discount);
@@ -2334,12 +2308,6 @@ Regras:
     }, [handleCreateNewAgendamento]);
 
     const handleProcessAIMeasurementInput = useCallback(async (input: AIInput) => {
-        if (!userInfo?.aiConfig?.apiKey) {
-            // Leva direto para a tela de ativacao em vez de um beco sem saida.
-            setApiKeyModalProvider('gemini');
-            setIsApiKeyModalOpen(true);
-            return;
-        }
 
         const hasContent = (input.text && input.text.trim()) || (input.images && input.images.length > 0) || !!input.audio;
         if (!hasContent) {
@@ -2349,9 +2317,7 @@ Regras:
 
         setIsProcessingAI(true);
         try {
-            const { GoogleGenerativeAI } = await import('@google/generative-ai');
-            const genAI = new GoogleGenerativeAI(userInfo.aiConfig.apiKey);
-            const model = genAI.getGenerativeModel({ model: GEMINI_TEXT_MODEL });
+            const model = createGeminiModel({ apiKey: userInfo?.aiConfig?.apiKey, feature: 'measurement_extraction' });
 
             const prompt = `Você é um assistente especialista em extração de medidas de janelas/vidros para instalação de películas.
 
@@ -2611,7 +2577,6 @@ Se não conseguir extrair, retorne: []`;
     const tabContent = (
         <AppContentRouter
             activeTab={activeTab}
-            isAdmin={isAdmin}
             isLoading={isLoading}
             userInfo={userInfo}
             organizationId={organizationId || undefined}
@@ -2820,6 +2785,7 @@ Se não conseguir extrair, retorne: []`;
         isApiKeyModalOpen,
         setIsApiKeyModalOpen,
         handleSaveApiKey,
+        handleDeleteApiKey,
         apiKeyModalProvider,
         isGalleryOpen,
         handleCloseGallery,
@@ -2895,13 +2861,13 @@ Se não conseguir extrair, retorne: []`;
     }, [refreshProfile, showToast]);
 
 
-    const wideWorkspaceClass = ['dashboard', 'history', 'proposals', 'estoque', 'films', 'fornecedores', 'agenda', 'settings', 'qr_code', 'account', 'assistentes', 'admin', 'cliente_hub', 'clients_list'].includes(activeTab)
+    const wideWorkspaceClass = ['dashboard', 'history', 'proposals', 'estoque', 'films', 'fornecedores', 'agenda', 'settings', 'qr_code', 'account', 'admin', 'cliente_hub', 'clients_list'].includes(activeTab)
         ? 'mx-auto w-full max-w-[1480px]'
         : activeTab === 'client'
             ? 'mx-auto w-full max-w-[1480px]'
             : 'container mx-auto w-full max-w-2xl lg:max-w-5xl';
 
-    const useNativeSurface = ['dashboard', 'client', 'cliente_hub', 'clients_list', 'history', 'proposals', 'estoque', 'films', 'fornecedores', 'agenda', 'settings', 'qr_code', 'account', 'assistentes'].includes(activeTab);
+    const useNativeSurface = ['dashboard', 'client', 'cliente_hub', 'clients_list', 'history', 'proposals', 'estoque', 'films', 'fornecedores', 'agenda', 'settings', 'qr_code', 'account'].includes(activeTab);
 
 
 
@@ -3152,6 +3118,3 @@ Se não conseguir extrair, retorne: []`;
 };
 
 export default App;
-
-
-
