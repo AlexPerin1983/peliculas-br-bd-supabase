@@ -183,6 +183,27 @@ describe('useProposalEditor', () => {
     expect(result.current.isDirty).toBe(false);
   });
 
+  it('não bloqueia o salvamento enquanto a lista de clientes atualiza pela rede', async () => {
+    mockedDb.getProposalOptions.mockResolvedValue([]);
+    mockedDb.saveProposalOptions.mockResolvedValue(undefined as any);
+    const loadClients = vi.fn().mockReturnValue(new Promise<void>(() => {}));
+    const { result } = buildHook(1, loadClients);
+
+    await act(async () => {});
+
+    act(() => {
+      result.current.addProposalOption();
+    });
+
+    await act(async () => {
+      await result.current.handleSaveChanges();
+    });
+
+    expect(mockedDb.saveProposalOptions).toHaveBeenCalled();
+    expect(loadClients).toHaveBeenCalledWith(1, false);
+    expect(result.current.isDirty).toBe(false);
+  });
+
   it('permite trocar o modo de cobranca da opcao ativa', async () => {
     mockedDb.getProposalOptions.mockResolvedValue([]);
 

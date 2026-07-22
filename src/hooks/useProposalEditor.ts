@@ -159,7 +159,12 @@ export function useProposalEditor({
         if (selectedClientId && currentProposalOptions.length > 0) {
             await db.saveProposalOptions(selectedClientId, currentProposalOptions);
             setIsDirty(false);
-            await loadClients(selectedClientId, false);
+            // O orçamento já está seguro no banco local neste ponto. A
+            // atualização da lista pode depender da rede e não deve bloquear
+            // a geração do PDF (principalmente em conexões instáveis).
+            void loadClients(selectedClientId, false).catch(error => {
+                console.error('Erro ao atualizar clientes após salvar o orçamento:', error);
+            });
         }
     }, [selectedClientId, loadClients]);
 

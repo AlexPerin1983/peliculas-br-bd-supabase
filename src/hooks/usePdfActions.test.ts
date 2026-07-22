@@ -294,4 +294,27 @@ describe('usePdfActions', () => {
     expect(setIsSaveBeforePdfModalOpen).toHaveBeenCalledWith(false);
     expect(setPdfGenerationStatus).toHaveBeenCalledWith('success');
   });
+
+  it('mantem o modal aberto e informa quando o save anterior ao PDF falha', async () => {
+    const handleSaveChanges = vi.fn().mockRejectedValue(new Error('falha local'));
+    const setIsSaveBeforePdfModalOpen = vi.fn();
+    const handleShowInfo = vi.fn();
+    const pdfModule = await import('../../services/pdfGenerator');
+    const { result } = buildHook({
+      handleSaveChanges,
+      setIsSaveBeforePdfModalOpen,
+      handleShowInfo
+    });
+
+    await act(async () => {
+      await result.current.handleConfirmSaveBeforePdf();
+    });
+
+    expect(setIsSaveBeforePdfModalOpen).not.toHaveBeenCalledWith(false);
+    expect(pdfModule.generatePDF).not.toHaveBeenCalled();
+    expect(handleShowInfo).toHaveBeenCalledWith(
+      'Não foi possível salvar o orçamento. Tente novamente.'
+    );
+    expect(result.current.isSavingBeforePdf).toBe(false);
+  });
 });

@@ -66,6 +66,7 @@ export function usePdfActions({
         filename: string;
         clientName: string;
     } | null>(null);
+    const [isSavingBeforePdf, setIsSavingBeforePdf] = useState(false);
     const downloadBlob = useCallback((blobOrBase64: Blob | string, filename: string) => {
         let blob: Blob;
 
@@ -288,10 +289,26 @@ export function usePdfActions({
     }, [selectedClient, userInfo, activeOption, handleShowInfo, setIsSaveBeforePdfModalOpen, executePdfGeneration]);
 
     const handleConfirmSaveBeforePdf = useCallback(async () => {
-        await handleSaveChanges();
-        setIsSaveBeforePdfModalOpen(false);
-        await executePdfGeneration();
-    }, [handleSaveChanges, setIsSaveBeforePdfModalOpen, executePdfGeneration]);
+        if (isSavingBeforePdf) return;
+
+        setIsSavingBeforePdf(true);
+        try {
+            await handleSaveChanges();
+            setIsSaveBeforePdfModalOpen(false);
+            await executePdfGeneration();
+        } catch (error) {
+            console.error('Erro ao salvar o orçamento antes de gerar o PDF:', error);
+            handleShowInfo('Não foi possível salvar o orçamento. Tente novamente.');
+        } finally {
+            setIsSavingBeforePdf(false);
+        }
+    }, [
+        isSavingBeforePdf,
+        handleSaveChanges,
+        setIsSaveBeforePdfModalOpen,
+        executePdfGeneration,
+        handleShowInfo
+    ]);
 
     const handleGenerateCombinedPdf = useCallback(async (selectedPdfs: SavedPDF[]) => {
         if (!userInfo || selectedPdfs.length === 0) {
@@ -326,6 +343,7 @@ export function usePdfActions({
         handleDownloadPdf,
         handleShareGeneratedPdf,
         canShareGeneratedPdf: latestGeneratedPdf !== null,
+        isSavingBeforePdf,
         handleGeneratePdf,
         handleGeneratePdfWithSaveCheck,
         handleConfirmSaveBeforePdf,
