@@ -2,21 +2,48 @@ import { vi } from 'vitest';
 import type { SavedPDF } from '../../types';
 import { createProposalPortal, loadPublicProposalPortal } from './proposalPortal';
 
-const { rpcMock, fromMock, functionsInvokeMock } = vi.hoisted(() => ({
+const {
+    rpcMock,
+    fromMock,
+    functionsInvokeMock,
+    isOnlineNowMock,
+    syncAllPendingMock,
+    findLocalPdfMock,
+} = vi.hoisted(() => ({
     rpcMock: vi.fn(),
     fromMock: vi.fn(),
     functionsInvokeMock: vi.fn(),
+    isOnlineNowMock: vi.fn(() => true),
+    syncAllPendingMock: vi.fn(),
+    findLocalPdfMock: vi.fn(),
 }));
 
 vi.mock('../../services/supabaseClient', () => ({
     supabase: { rpc: rpcMock, from: fromMock, functions: { invoke: functionsInvokeMock } },
 }));
 
+vi.mock('../../services/syncService', () => ({
+    isOnlineNow: isOnlineNowMock,
+    syncAllPending: syncAllPendingMock,
+}));
+
+vi.mock('../../services/offlineDb', () => ({
+    offlineDb: {
+        savedPdfs: {
+            filter: vi.fn(() => ({ first: findLocalPdfMock })),
+        },
+    },
+}));
+
 import { beforeEach, describe, expect, it } from 'vitest';
 import { buildProposalClientSlug, buildProposalPortalUrl } from './proposalPortal';
 
 describe('links amigáveis de proposta', () => {
-    beforeEach(() => window.history.replaceState({}, '', '/'));
+    beforeEach(() => {
+        vi.clearAllMocks();
+        isOnlineNowMock.mockReturnValue(true);
+        window.history.replaceState({}, '', '/');
+    });
 
     it('usa apenas o primeiro nome sem acentos no endereço', () => {
         expect(buildProposalClientSlug('Vinícius Ferreira')).toBe('vinicius');
@@ -50,6 +77,23 @@ describe('links amigáveis de proposta', () => {
         const result = await createProposalPortal([{ id: 43 } as SavedPDF], '2099-12-31', 'Elaine');
 
         expect(result.url).toBe('http://localhost:3000/p/elaine/codigo-curto');
+    });
+
+    it('aguarda o ID remoto do PDF recem-gerado antes de criar o portal', async () => {
+        findLocalPdfMock
+            .mockResolvedValueOnce({ _localId: 'local_123_pdf', id: -123, _syncStatus: 'pending' })
+            .mockResolvedValue({ _localId: 'local_123_pdf', id: 91, _remoteId: 91, _syncStatus: 'synced' });
+        rpcMock.mockResolvedValue({
+            data: [{ portal_id: 'portal-3', portal_token: 'token-seguro', expires_at: '2099-12-31T23:59:59.000Z' }],
+            error: null,
+        });
+
+        await createProposalPortal([{ id: -123 } as SavedPDF], '2099-12-31', 'Elaine');
+
+        expect(syncAllPendingMock).toHaveBeenCalledWith({ force: true });
+        expect(rpcMock).toHaveBeenCalledWith('create_proposal_portal', expect.objectContaining({
+            p_pdf_ids: [91],
+        }));
     });
 
     it('envia a última atividade conhecida nas verificações leves', async () => {

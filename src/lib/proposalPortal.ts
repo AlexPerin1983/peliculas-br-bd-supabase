@@ -1,4 +1,6 @@
 import { supabase } from '../../services/supabaseClient';
+import { offlineDb } from '../../services/offlineDb';
+import { isOnlineNow, syncAllPending } from '../../services/syncService';
 import type { Client, ProposalPaymentChoice, ProposalPaymentSelection, SavedPDF } from '../../types';
 import type { ProposalConditionFields } from './proposalCondition';
 
@@ -112,6 +114,62 @@ export const buildProposalPortalUrl = (accessKey: string, clientName?: string) =
     return url.toString();
 };
 
+const POSTGRES_INTEGER_MAX = 2_147_483_647;
+const PDF_SYNC_TIMEOUT_MS = 15_000;
+const PDF_SYNC_POLL_MS = 120;
+
+const isPersistedPdfId = (value: unknown): value is number => (
+    typeof value === 'number'
+    && Number.isInteger(value)
+    && value > 0
+    && value <= POSTGRES_INTEGER_MAX
+);
+
+const getTemporaryPdfId = (localId?: string): number | undefined => {
+    if (!localId) return undefined;
+    const timestamp = Number.parseInt(localId.split('_')[1] || '', 10);
+    return Number.isFinite(timestamp) ? -timestamp : undefined;
+};
+
+const resolvePersistedPdfId = async (pdfId: number): Promise<number | undefined> => {
+    if (isPersistedPdfId(pdfId)) return pdfId;
+
+    const localPdf = await offlineDb.savedPdfs
+        .filter(item => (
+            item.id === pdfId
+            || item._remoteId === pdfId
+            || getTemporaryPdfId(item._localId) === pdfId
+        ))
+        .first();
+
+    if (isPersistedPdfId(localPdf?._remoteId)) return localPdf._remoteId;
+    if (isPersistedPdfId(localPdf?.id)) return localPdf.id;
+    return undefined;
+};
+
+export const resolvePersistedProposalPdfIds = async (pdfIds: number[]): Promise<number[]> => {
+    const resolvedImmediately = await Promise.all(pdfIds.map(resolvePersistedPdfId));
+    if (resolvedImmediately.every(isPersistedPdfId)) return resolvedImmediately;
+
+    if (!isOnlineNow()) {
+        throw new Error('Conecte-se \u00e0 internet para terminar de salvar o or\u00e7amento e criar o link.');
+    }
+
+    // A geracao do PDF dispara a sincronizacao em segundo plano. Se ela ja
+    // estiver em andamento, syncAllPending retorna cedo; por isso aguardamos o
+    // IndexedDB receber os IDs remotos em vez de exigir recarga da pagina.
+    await syncAllPending({ force: true });
+    const deadline = Date.now() + PDF_SYNC_TIMEOUT_MS;
+
+    while (Date.now() < deadline) {
+        const resolved = await Promise.all(pdfIds.map(resolvePersistedPdfId));
+        if (resolved.every(isPersistedPdfId)) return resolved;
+        await new Promise(resolve => window.setTimeout(resolve, PDF_SYNC_POLL_MS));
+    }
+
+    throw new Error('O or\u00e7amento ainda est\u00e1 sendo salvo. Aguarde alguns segundos e tente criar o link novamente.');
+};
+
 export const createProposalPortal = async (pdfs: SavedPDF[], expirationDate: string, clientName: string): Promise<CreatedProposalPortal> => {
     const pdfIds = pdfs.map(pdf => pdf.id).filter((id): id is number => typeof id === 'number');
     if (pdfIds.length !== pdfs.length || pdfIds.length === 0) {
@@ -123,8 +181,9 @@ export const createProposalPortal = async (pdfs: SavedPDF[], expirationDate: str
         throw new Error('Escolha uma validade futura.');
     }
 
+    const persistedPdfIds = await resolvePersistedProposalPdfIds(pdfIds);
     const { data, error } = await supabase.rpc('create_proposal_portal', {
-        p_pdf_ids: pdfIds,
+        p_pdf_ids: persistedPdfIds,
         p_expires_at: expiresAt.toISOString(),
     });
     if (error) throw error;
