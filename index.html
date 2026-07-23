@@ -90,6 +90,168 @@
       }
     }
   </script>
+  <script>
+    // Recupera com seguranca quando uma versao antiga do PWA tenta abrir um
+    // bundle que deixou de existir apos uma publicacao. Mantem IndexedDB,
+    // localStorage e toda a fila offline do usuario intactos.
+    (function () {
+      var RECOVERY_KEY = 'peliculas-br-asset-recovery-at';
+      var RECOVERY_WINDOW_MS = 2 * 60 * 1000;
+      var CACHE_PREFIX = 'peliculas-br-bd-';
+      var recoveryInProgress = false;
+
+      function getLastRecoveryAt() {
+        try {
+          return Number(window.sessionStorage.getItem(RECOVERY_KEY) || 0);
+        } catch (_error) {
+          return 0;
+        }
+      }
+
+      function setLastRecoveryAt(value) {
+        try {
+          window.sessionStorage.setItem(RECOVERY_KEY, String(value));
+        } catch (_error) {
+          // O modo privado pode bloquear sessionStorage; a guarda em memoria
+          // ainda impede mais de uma tentativa nesta pagina.
+        }
+      }
+
+      function clearRecoveryGuard() {
+        try {
+          window.sessionStorage.removeItem(RECOVERY_KEY);
+        } catch (_error) {}
+      }
+
+      function clearTechnicalCaches() {
+        if (!('caches' in window)) return Promise.resolve();
+
+        return window.caches.keys()
+          .then(function (names) {
+            return Promise.all(names
+              .filter(function (name) { return name.indexOf(CACHE_PREFIX) === 0; })
+              .map(function (name) { return window.caches.delete(name); }));
+          })
+          .catch(function () {});
+      }
+
+      function replaceWithFreshUrl() {
+        var url = new URL(window.location.href);
+        url.searchParams.set('_app_refresh', String(Date.now()));
+        window.location.replace(url.toString());
+      }
+
+      function showRecoveryScreen() {
+        function render() {
+          if (document.getElementById('pwa-recovery-screen')) return;
+
+          var screen = document.createElement('div');
+          screen.id = 'pwa-recovery-screen';
+          screen.setAttribute('role', 'alert');
+          screen.style.cssText = [
+            'position:fixed',
+            'inset:0',
+            'z-index:2147483647',
+            'display:flex',
+            'align-items:center',
+            'justify-content:center',
+            'padding:24px',
+            'background:#f8fafc',
+            'font-family:Roboto,Arial,sans-serif',
+            'color:#1e293b'
+          ].join(';');
+          screen.innerHTML = [
+            '<div style="width:100%;max-width:420px;text-align:center">',
+            '<div style="margin:0 auto 18px;width:56px;height:56px;border-radius:18px;background:#dbeafe;color:#2563eb;display:flex;align-items:center;justify-content:center;font-size:28px">&#8635;</div>',
+            '<h1 style="margin:0 0 10px;font-size:22px;line-height:1.25">Vamos atualizar o aplicativo</h1>',
+            '<p style="margin:0 0 22px;color:#64748b;font-size:15px;line-height:1.5">Uma nova versão foi publicada. Seus dados e trabalhos offline serão preservados.</p>',
+            '<button id="pwa-recovery-button" type="button" style="width:100%;border:0;border-radius:14px;padding:14px 18px;background:#2563eb;color:#fff;font-size:16px;font-weight:600;cursor:pointer">Atualizar aplicativo</button>',
+            '</div>'
+          ].join('');
+          document.body.appendChild(screen);
+
+          document.getElementById('pwa-recovery-button').addEventListener('click', function () {
+            clearRecoveryGuard();
+            clearTechnicalCaches().then(replaceWithFreshUrl);
+          });
+        }
+
+        if (document.body) {
+          render();
+        } else {
+          document.addEventListener('DOMContentLoaded', render, { once: true });
+        }
+      }
+
+      function recoverFromStaleAssets(reason) {
+        if (window.__isLocalDevHost || recoveryInProgress) return;
+
+        recoveryInProgress = true;
+        var now = Date.now();
+        var lastRecoveryAt = getLastRecoveryAt();
+
+        if (lastRecoveryAt && now - lastRecoveryAt < RECOVERY_WINDOW_MS) {
+          console.error('Falha ao carregar a nova versao depois da recuperacao:', reason);
+          showRecoveryScreen();
+          return;
+        }
+
+        console.warn('Atualizando arquivos tecnicos do aplicativo:', reason);
+        setLastRecoveryAt(now);
+
+        clearTechnicalCaches()
+          .then(function () {
+            if (!('serviceWorker' in navigator)) return;
+            return navigator.serviceWorker.getRegistration()
+              .then(function (registration) {
+                return registration ? registration.update() : undefined;
+              })
+              .catch(function () {});
+          })
+          .then(replaceWithFreshUrl)
+          .catch(showRecoveryScreen);
+      }
+
+      function isAssetUrl(value) {
+        return typeof value === 'string' && value.indexOf('/assets/') !== -1;
+      }
+
+      function isStaleModuleMessage(value) {
+        var message = String(value || '').toLowerCase();
+        return message.indexOf('failed to fetch dynamically imported module') !== -1
+          || message.indexOf('error loading dynamically imported module') !== -1
+          || message.indexOf('importing a module script failed') !== -1
+          || message.indexOf('chunkloaderror') !== -1;
+      }
+
+      window.addEventListener('vite:preloadError', function (event) {
+        event.preventDefault();
+        recoverFromStaleAssets('vite:preloadError');
+      });
+
+      window.addEventListener('error', function (event) {
+        var target = event.target;
+        var resourceUrl = target && (target.src || target.href);
+        var isAssetSyntaxError = isAssetUrl(event.filename)
+          && String(event.message || '').toLowerCase().indexOf('unexpected token') !== -1;
+        if (isAssetUrl(resourceUrl) || isAssetSyntaxError
+          || (isAssetUrl(event.filename) && isStaleModuleMessage(event.message))) {
+          recoverFromStaleAssets(resourceUrl || event.filename || event.message);
+        }
+      }, true);
+
+      window.addEventListener('unhandledrejection', function (event) {
+        var reason = event.reason;
+        var message = reason && reason.message ? reason.message : reason;
+        if (isStaleModuleMessage(message)) {
+          event.preventDefault();
+          recoverFromStaleAssets(message);
+        }
+      });
+
+      window.__recoverPeliculasApp = recoverFromStaleAssets;
+    })();
+  </script>
   <script type="module" src="/index.tsx"></script>
   <script>
     // Service Worker Registration with Auto-Update

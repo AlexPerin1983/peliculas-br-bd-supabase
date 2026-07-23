@@ -16,7 +16,7 @@
             "destination": "/api/proposta-preview?slug=:slug&code=:code"
         },
         {
-            "source": "/(.*)",
+            "source": "/((?!assets/).*)",
             "destination": "/index.html"
         }
     ]

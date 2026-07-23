@@ -1,7 +1,7 @@
 // Service Worker com Auto-Atualização
 // ========================================
 // VERSÃO: Mude este número para forçar atualização nos clientes
-const SW_VERSION = 'v2.5.0';
+const SW_VERSION = 'v2.6.0';
 const CACHE_NAME = `peliculas-br-bd-${SW_VERSION}`;
 
 // Lista de recursos essenciais para cache offline
@@ -87,9 +87,41 @@ self.addEventListener('fetch', (event) => {
 
     // NETWORK FIRST para TUDO (HTML, JS, CSS, etc)
     // Isso resolve o problema de versões antigas ficarem em cache
+    const isHashedAsset = url.pathname.startsWith('/assets/');
+    const isJavaScriptAsset = isHashedAsset && /\.m?js$/i.test(url.pathname);
+    const isCssAsset = isHashedAsset && /\.css$/i.test(url.pathname);
+
+    const hasExpectedAssetContentType = (response) => {
+        if (!isHashedAsset) return true;
+
+        const contentType = (response.headers.get('content-type') || '').toLowerCase();
+        if (isJavaScriptAsset) {
+            return contentType.includes('javascript');
+        }
+        if (isCssAsset) {
+            return contentType.includes('text/css');
+        }
+
+        return !contentType.includes('text/html');
+    };
+
     event.respondWith(
         fetch(request)
             .then((response) => {
+                // Um bundle antigo inexistente pode cair no fallback da SPA e receber
+                // index.html com status 200. Nunca devolvemos nem armazenamos HTML como
+                // JavaScript/CSS: o erro aciona a recuperacao segura no index.
+                if (response && response.status === 200 && !hasExpectedAssetContentType(response)) {
+                    return new Response('', {
+                        status: 502,
+                        statusText: 'Invalid asset response',
+                        headers: {
+                            'Cache-Control': 'no-store',
+                            'Content-Type': 'text/plain; charset=utf-8'
+                        }
+                    });
+                }
+
                 // Se a resposta for válida, atualiza o cache
                 if (response && response.status === 200) {
                     const responseToCache = response.clone();
