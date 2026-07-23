@@ -928,6 +928,7 @@ describe('syncService', () => {
       data: {
         _localId: 'agenda_local_1',
         pdfId: -1779229179078,
+        pdfIds: [-1779229179078],
         clienteId: -1779229179000,
         clienteNome: 'Cliente Agenda',
         start: '2026-05-20T09:00:00.000Z',
@@ -995,6 +996,7 @@ describe('syncService', () => {
 
     expect(saveAgendamentoRemoteMock).toHaveBeenCalledWith(expect.objectContaining({
       pdfId: 91,
+      pdfIds: [91],
       clienteId: 12,
       clienteNome: 'Cliente Agenda'
     }));
@@ -1010,6 +1012,7 @@ describe('syncService', () => {
       data: {
         _localId: 'agenda_local_2',
         pdfId: -1779229179078,
+        pdfIds: [-1779229179078],
         clienteId: -1779229179000,
         clienteNome: 'Cliente sem remoto',
         start: '2026-05-20T09:00:00.000Z',
@@ -1070,6 +1073,7 @@ describe('syncService', () => {
 
     const payload = saveAgendamentoRemoteMock.mock.calls[0][0];
     expect(payload).not.toHaveProperty('pdfId');
+    expect(payload).not.toHaveProperty('pdfIds');
     expect(payload).not.toHaveProperty('clienteId');
     expect(payload.clienteNome).toBe('Cliente sem remoto');
     expect(deleteMock).toHaveBeenCalledWith(10);

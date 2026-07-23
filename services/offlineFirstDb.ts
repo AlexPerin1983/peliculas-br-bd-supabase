@@ -891,7 +891,12 @@ export async function getAllAgendamentos(): Promise<Agendamento[]> {
 }
 
 export async function saveAgendamento(agendamento: Agendamento): Promise<Agendamento> {
-    if (isOnlineNow()) {
+    const linkedProposalIds = agendamento.pdfIds?.length
+        ? agendamento.pdfIds
+        : (agendamento.pdfId != null ? [agendamento.pdfId] : []);
+    const hasOnlyPersistedProposalIds = linkedProposalIds.every(isPersistedIntegerId);
+
+    if (isOnlineNow() && hasOnlyPersistedProposalIds) {
         try {
             const savedAgendamento = await supabaseDb.saveAgendamento(agendamento);
             await offlineDb.offlineDb.agendamentos.put({

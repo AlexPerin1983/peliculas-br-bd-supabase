@@ -196,4 +196,59 @@ describe('offlineFirstDb userInfo', () => {
       })
     ]);
   });
+
+  it('enfileira agendamento enquanto a proposta ainda tem ID temporario', async () => {
+    const temporaryPdfId = -1784805973427;
+    const saveAgendamentoLocalMock = vi.fn().mockResolvedValue({
+      _localId: 'local_1784806000000_agendamento',
+      _syncStatus: 'pending',
+      _lastModified: Date.now(),
+      pdfId: temporaryPdfId,
+      pdfIds: [temporaryPdfId],
+      clienteId: 12,
+      clienteNome: 'Cliente Agenda',
+      start: '2026-07-23T09:00:00.000Z',
+      end: '2026-07-23T10:00:00.000Z'
+    });
+    const updateMock = vi.fn();
+    const saveAgendamentoRemoteMock = vi.fn();
+    const syncAllPendingMock = vi.fn().mockResolvedValue(undefined);
+
+    vi.doMock('./offlineDb', () => ({
+      saveAgendamentoLocal: saveAgendamentoLocalMock,
+      offlineDb: {
+        agendamentos: {
+          update: updateMock,
+          put: vi.fn()
+        }
+      }
+    }));
+
+    vi.doMock('./supabaseDb', () => ({
+      saveAgendamento: saveAgendamentoRemoteMock
+    }));
+
+    vi.doMock('./syncService', () => ({
+      isOnlineNow: vi.fn().mockReturnValue(true),
+      syncAllPending: syncAllPendingMock
+    }));
+
+    const { saveAgendamento } = await import('./offlineFirstDb');
+    const result = await saveAgendamento({
+      pdfId: temporaryPdfId,
+      pdfIds: [temporaryPdfId],
+      clienteId: 12,
+      clienteNome: 'Cliente Agenda',
+      start: '2026-07-23T09:00:00.000Z',
+      end: '2026-07-23T10:00:00.000Z'
+    });
+
+    expect(saveAgendamentoRemoteMock).not.toHaveBeenCalled();
+    expect(saveAgendamentoLocalMock).toHaveBeenCalled();
+    expect(syncAllPendingMock).toHaveBeenCalled();
+    expect(updateMock).toHaveBeenCalledWith('local_1784806000000_agendamento', {
+      id: -1784806000000
+    });
+    expect(result.id).toBe(-1784806000000);
+  });
 });

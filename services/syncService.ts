@@ -279,6 +279,18 @@ async function normalizeAgendamentoReferences(agendamento: any): Promise<any> {
         }
     }
 
+    if (Array.isArray(payload.pdfIds)) {
+        const resolvedPdfIds = (await Promise.all(
+            payload.pdfIds.map((pdfId: unknown) => resolveLocalRemoteId('savedPdfs', pdfId))
+        )).filter(isPersistedIntegerId);
+
+        if (resolvedPdfIds.length > 0) {
+            payload.pdfIds = Array.from(new Set(resolvedPdfIds));
+        } else {
+            delete payload.pdfIds;
+        }
+    }
+
     if ('clienteId' in payload) {
         const resolvedClientId = await resolveClientRemoteId(payload.clienteId, payload.clienteNome || payload.clientName);
         if (resolvedClientId) {

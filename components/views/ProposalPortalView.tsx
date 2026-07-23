@@ -19,6 +19,7 @@ import {
     X,
 } from 'lucide-react';
 import {
+    buildProposalDecisionWhatsAppMessage,
     downloadPublicProposal,
     loadPublicProposalPortal,
     type ProposalOfferType,
@@ -29,6 +30,7 @@ import {
 } from '../../src/lib/proposalPortal';
 import { formatConditionExpiry, getProposalCondition } from '../../src/lib/proposalCondition';
 import { buildProposalPaymentOptions } from '../../src/lib/paymentConditions';
+import { buildProposalWhatsAppUrl } from '../../src/lib/proposalMessages';
 import type { ProposalPaymentChoice, ProposalPaymentSelection } from '../../types';
 
 const currency = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -397,6 +399,29 @@ const ProposalPortalView: React.FC = () => {
     }, [paymentOptions]);
     const displayedPaymentOptions = showAllPayments ? paymentOptions : featuredPaymentOptions;
 
+    const latestDecision = useMemo(() => (
+        [...(data?.messages || [])].reverse().find(message => (
+            message.sender_type === 'client'
+            && ['approved', 'rejected', 'negotiation'].includes(message.kind)
+        ))
+    ), [data?.messages]);
+    const decisionProposal = latestDecision
+        ? data?.proposals.find(proposal => proposal.id === latestDecision.saved_pdf_id)
+        : undefined;
+    const decisionWhatsAppUrl = useMemo(() => {
+        if (!data || !latestDecision || !decisionProposal) return null;
+        const proposalCondition = getProposalCondition(decisionProposal, now);
+        const message = buildProposalDecisionWhatsAppMessage({
+            clientName: data.clientName,
+            companyName: data.company.name,
+            proposalName: decisionProposal.proposalOptionName || decisionProposal.nomeArquivo || 'Proposta',
+            proposalValue: latestDecision.condition_value ?? proposalCondition?.finalValue ?? decisionProposal.totalPreco ?? 0,
+            decision: latestDecision,
+            portalUrl: window.location.href,
+        });
+        return buildProposalWhatsAppUrl(data.company.phone || undefined, message);
+    }, [data, decisionProposal, latestDecision, now]);
+
     useEffect(() => {
         setSelectedPaymentKey(current => paymentOptions.some(option => `${option.methodType}:${option.installments}` === current) ? current : '');
     }, [paymentOptions]);
@@ -632,6 +657,19 @@ const ProposalPortalView: React.FC = () => {
                             </div>
                         </div>
                     </section> : null}
+
+                    {latestDecision && decisionWhatsAppUrl ? (
+                        <section className="mt-5 overflow-hidden rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-green-50">
+                            <div className="p-4 sm:p-5">
+                                <p className="text-[11px] font-black uppercase tracking-[.15em] text-emerald-700">{'Pr\u00f3ximo passo'}</p>
+                                <h2 className="mt-1 text-xl font-extrabold text-slate-950">Continuar com {data.company.name} no WhatsApp</h2>
+                                <p className="mt-1 text-sm leading-6 text-slate-600">{'Sua decis\u00e3o j\u00e1 foi registrada. A mensagem leva um resumo e o link desta proposta para a empresa consultar rapidamente.'}</p>
+                                <a href={decisionWhatsAppUrl} target="_blank" rel="noreferrer" className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 text-sm font-extrabold text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700">
+                                    <MessageCircle className="h-4 w-4" /> Abrir conversa no WhatsApp
+                                </a>
+                            </div>
+                        </section>
+                    ) : null}
 
                     <aside className="hidden">
                         <div className="sticky top-24 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">

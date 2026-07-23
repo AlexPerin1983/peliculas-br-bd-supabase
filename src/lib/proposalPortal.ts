@@ -215,6 +215,55 @@ export const buildProposalShareMessage = (client: Client, pdfs: SavedPDF[], port
     return `${firstName}, preparei ${optionText}. Você pode visualizar, baixar o PDF e responder pelo link abaixo:\n\n${portalUrl}\n\nA proposta fica disponível até ${expiry}.`;
 };
 
+export const buildProposalDecisionWhatsAppMessage = ({
+    clientName,
+    companyName,
+    proposalName,
+    proposalValue,
+    decision,
+    portalUrl,
+}: {
+    clientName: string;
+    companyName: string;
+    proposalName: string;
+    proposalValue: number;
+    decision: ProposalPortalMessage;
+    portalUrl: string;
+}) => {
+    const decisionLabel = decision.kind === 'approved'
+        ? 'Aprovada'
+        : decision.kind === 'rejected'
+            ? 'Recusada'
+            : 'Quero negociar';
+    const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency: 'BRL',
+    }).format(value);
+    const lines = [
+        `Ol\u00e1, equipe ${companyName}.`,
+        '',
+        `Sou ${clientName} e acabei de responder \u00e0 proposta:`,
+        `- Proposta: ${proposalName}`,
+        `- Decis\u00e3o: ${decisionLabel}`,
+        `- Valor: ${formatCurrency(proposalValue || 0)}`,
+    ];
+
+    if (decision.kind === 'negotiation' && decision.offer_value != null) {
+        lines.push(decision.offer_type === 'percentage'
+            ? `- Condi\u00e7\u00e3o sugerida: ${decision.offer_value}% de desconto`
+            : `- Valor sugerido: ${formatCurrency(decision.offer_value)}`);
+    }
+    if (decision.payment_selection?.label) {
+        lines.push(`- Pagamento escolhido: ${decision.payment_selection.label}`);
+    }
+    if (decision.body?.trim()) {
+        lines.push(`- Observa\u00e7\u00e3o: ${decision.body.trim()}`);
+    }
+
+    lines.push('', `Abrir proposta: ${portalUrl}`);
+    return lines.join('\n');
+};
+
 export interface CompanyProposalPortal {
     id: string;
     token: string;

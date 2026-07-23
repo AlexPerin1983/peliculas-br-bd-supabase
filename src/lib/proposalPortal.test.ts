@@ -36,7 +36,7 @@ vi.mock('../../services/offlineDb', () => ({
 }));
 
 import { beforeEach, describe, expect, it } from 'vitest';
-import { buildProposalClientSlug, buildProposalPortalUrl } from './proposalPortal';
+import { buildProposalClientSlug, buildProposalDecisionWhatsAppMessage, buildProposalPortalUrl } from './proposalPortal';
 
 describe('links amigáveis de proposta', () => {
     beforeEach(() => {
@@ -54,6 +54,31 @@ describe('links amigáveis de proposta', () => {
     it('mantém o formato antigo quando não há nome', () => {
         expect(buildProposalPortalUrl('token-antigo'))
             .toBe('http://localhost:3000/proposta?token=token-antigo');
+    });
+
+    it('monta o resumo da decisao com o link publico para o WhatsApp', () => {
+        const message = buildProposalDecisionWhatsAppMessage({
+            clientName: 'Ana Souza',
+            companyName: 'Filmes Teste',
+            proposalName: 'Controle solar',
+            proposalValue: 336,
+            decision: {
+                id: 1,
+                sender_type: 'client',
+                kind: 'negotiation',
+                offer_type: 'fixed',
+                offer_value: 300,
+                body: 'Podemos fechar hoje?',
+                created_at: '2026-07-23T10:00:00.000Z',
+            },
+            portalUrl: 'https://app.filmstec.shop/p/ana/codigo',
+        });
+
+        expect(message).toContain('Ana Souza');
+        expect(message).toContain('Controle solar');
+        expect(message).toContain('Quero negociar');
+        expect(message).toContain('R$\u00a0300,00');
+        expect(message).toContain('https://app.filmstec.shop/p/ana/codigo');
     });
 
     it('entrega o link assim que a RPC cria o portal, sem uma segunda leitura', async () => {
