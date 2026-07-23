@@ -31,6 +31,8 @@ interface HeaderProps {
     onTabChange: (tab: ActiveTab) => void;
     onGoBack?: () => void;
     canGoBack?: boolean;
+    onMenuOpenChange?: (isOpen: boolean) => void;
+    closeMenuRequest?: number;
 }
 
 interface NavItem {
@@ -95,7 +97,14 @@ type MenuRenderState = 'closed' | 'opening' | 'open' | 'closing';
 const SWIPE_CLOSE_THRESHOLD = 72;
 const MAX_SWIPE_TRANSLATE = 240;
 
-const Header: React.FC<HeaderProps> = ({ activeTab, onTabChange, onGoBack, canGoBack = false }) => {
+const Header: React.FC<HeaderProps> = ({
+    activeTab,
+    onTabChange,
+    onGoBack,
+    canGoBack = false,
+    onMenuOpenChange,
+    closeMenuRequest = 0,
+}) => {
     const { isAdmin, user, signOut } = useAuth();
     const [menuState, setMenuState] = useState<MenuRenderState>('closed');
     const [isSupportOpen, setIsSupportOpen] = useState(false);
@@ -112,6 +121,20 @@ const Header: React.FC<HeaderProps> = ({ activeTab, onTabChange, onGoBack, canGo
     const shellRef = useRef<HTMLElement | null>(null);
 
     const isMenuMounted = menuState !== 'closed';
+
+    useEffect(() => {
+        onMenuOpenChange?.(isMenuMounted);
+
+        return () => {
+            if (isMenuMounted) onMenuOpenChange?.(false);
+        };
+    }, [isMenuMounted, onMenuOpenChange]);
+
+    useEffect(() => {
+        if (closeMenuRequest > 0) {
+            setMenuState(current => (current === 'closed' ? current : 'closing'));
+        }
+    }, [closeMenuRequest]);
     const isMenuVisible = menuState === 'open';
 
     useEffect(() => {

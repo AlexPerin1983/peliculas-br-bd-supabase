@@ -423,6 +423,8 @@ const App: React.FC = () => {
     const [galleryInitialIndex, setGalleryInitialIndex] = useState(0);
     const [isSaveBeforePdfModalOpen, setIsSaveBeforePdfModalOpen] = useState(false);
     const [isExitConfirmModalOpen, setIsExitConfirmModalOpen] = useState(false);
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const [closeMobileMenuRequest, setCloseMobileMenuRequest] = useState(0);
 
     // Undo states
     
@@ -973,6 +975,20 @@ const App: React.FC = () => {
                 return;
             }
 
+            // Com o menu lateral aberto, o botao Voltar deve apenas recolher o menu.
+            // A contagem para sair do app comeca somente no proximo toque.
+            if (isMobileMenuOpen) {
+                event.preventDefault();
+                setCloseMobileMenuRequest(current => current + 1);
+                backButtonPressedOnce.current = false;
+                if (backButtonTimeout.current) {
+                    clearTimeout(backButtonTimeout.current);
+                    backButtonTimeout.current = null;
+                }
+                window.history.pushState(null, '', window.location.pathname);
+                return;
+            }
+
             // Se algum modal estiver aberto, não mostra confirmação de saída
             if (isClientModalOpen || isPaymentModalOpen || isProposalPaymentModalOpen || isProposalExpensesModalOpen || isFilmModalOpen || editingMeasurement ||
                 isFilmSelectionModalOpen || isGalleryOpen || schedulingInfo) {
@@ -1015,7 +1031,7 @@ const App: React.FC = () => {
                 clearTimeout(backButtonTimeout.current);
             }
         };
-    }, [numpadConfig.isOpen, isClientModalOpen, isPaymentModalOpen, isProposalPaymentModalOpen, isProposalExpensesModalOpen, isFilmModalOpen, editingMeasurement,
+    }, [numpadConfig.isOpen, isMobileMenuOpen, isClientModalOpen, isPaymentModalOpen, isProposalPaymentModalOpen, isProposalExpensesModalOpen, isFilmModalOpen, editingMeasurement,
         isFilmSelectionModalOpen, isGalleryOpen, schedulingInfo, handleNumpadClose, showToast]);
 
     useEffect(() => {
@@ -2903,6 +2919,8 @@ Se não conseguir extrair, retorne: []`;
                                         onTabChange={handleTabChange}
                                         onGoBack={handleGoBack}
                                         canGoBack={tabHistory.length > 0}
+                                        onMenuOpenChange={setIsMobileMenuOpen}
+                                        closeMenuRequest={closeMobileMenuRequest}
                                     />
                                 </div>
                             </div>
