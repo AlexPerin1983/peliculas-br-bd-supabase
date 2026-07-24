@@ -230,15 +230,29 @@ export const buildProposalDecisionWhatsAppMessage = ({
     decision: ProposalPortalMessage;
     portalUrl: string;
 }) => {
+    const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency: 'BRL',
+    }).format(value);
+
+    if (decision.kind === 'approved') {
+        const paymentText = decision.payment_selection?.label
+            ? `, com pagamento via ${decision.payment_selection.label}`
+            : '';
+        return [
+            `Ol\u00e1, equipe ${companyName}!`,
+            `Sou ${clientName} e aprovei a proposta de ${proposalName}, no valor de ${formatCurrency(proposalValue || 0)}${paymentText}.`,
+            'Podemos agendar o servi\u00e7o?',
+            '',
+            `Ver proposta: ${portalUrl}`,
+        ].join('\n');
+    }
+
     const decisionLabel = decision.kind === 'approved'
         ? 'Aprovada'
         : decision.kind === 'rejected'
             ? 'Recusada'
             : 'Quero negociar';
-    const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', {
-        style: 'currency',
-        currency: 'BRL',
-    }).format(value);
     const lines = [
         `Ol\u00e1, equipe ${companyName}.`,
         '',

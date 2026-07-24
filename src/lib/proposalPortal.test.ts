@@ -81,6 +81,37 @@ describe('links amigáveis de proposta', () => {
         expect(message).toContain('https://app.filmstec.shop/p/ana/codigo');
     });
 
+    it('usa uma mensagem humana e direta quando a proposta foi aprovada', () => {
+        const message = buildProposalDecisionWhatsAppMessage({
+            clientName: 'Teste 2',
+            companyName: 'Pel\u00edculas BR',
+            proposalName: 'Controle solar',
+            proposalValue: 0.25,
+            decision: {
+                id: 2,
+                sender_type: 'client',
+                kind: 'approved',
+                payment_selection: {
+                    method_type: 'pix',
+                    installments: 1,
+                    label: 'Pix \u00e0 vista',
+                    customer_total: 0.25,
+                    installment_value: 0.25,
+                },
+                created_at: '2026-07-23T10:00:00.000Z',
+            },
+            portalUrl: 'https://app.filmstec.shop/p/teste/codigo',
+        });
+
+        expect(message).toBe([
+            'Ol\u00e1, equipe Pel\u00edculas BR!',
+            'Sou Teste 2 e aprovei a proposta de Controle solar, no valor de R$\u00a00,25, com pagamento via Pix \u00e0 vista.',
+            'Podemos agendar o servi\u00e7o?',
+            '',
+            'Ver proposta: https://app.filmstec.shop/p/teste/codigo',
+        ].join('\n'));
+    });
+
     it('entrega o link assim que a RPC cria o portal, sem uma segunda leitura', async () => {
         rpcMock.mockResolvedValue({
             data: [{ portal_id: 'portal-1', portal_token: 'token-seguro', expires_at: '2099-12-31T23:59:59.000Z' }],

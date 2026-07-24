@@ -662,10 +662,16 @@ const ProposalPortalView: React.FC = () => {
                         <section className="mt-5 overflow-hidden rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-green-50">
                             <div className="p-4 sm:p-5">
                                 <p className="text-[11px] font-black uppercase tracking-[.15em] text-emerald-700">{'Pr\u00f3ximo passo'}</p>
-                                <h2 className="mt-1 text-xl font-extrabold text-slate-950">Continuar com {data.company.name} no WhatsApp</h2>
-                                <p className="mt-1 text-sm leading-6 text-slate-600">{'Sua decis\u00e3o j\u00e1 foi registrada. A mensagem leva um resumo e o link desta proposta para a empresa consultar rapidamente.'}</p>
+                                <h2 className="mt-1 text-xl font-extrabold text-slate-950">
+                                    {latestDecision.kind === 'approved' ? 'Tudo certo!' : `Continuar com ${data.company.name} no WhatsApp`}
+                                </h2>
+                                <p className="mt-1 text-sm leading-6 text-slate-600">
+                                    {latestDecision.kind === 'approved'
+                                        ? `Sua aprova\u00e7\u00e3o foi registrada. Fale com a ${data.company.name} para agendar o servi\u00e7o.`
+                                        : 'Sua decis\u00e3o j\u00e1 foi registrada. Continue a conversa com a empresa pelo WhatsApp.'}
+                                </p>
                                 <a href={decisionWhatsAppUrl} target="_blank" rel="noreferrer" className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 text-sm font-extrabold text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700">
-                                    <MessageCircle className="h-4 w-4" /> Abrir conversa no WhatsApp
+                                    <MessageCircle className="h-4 w-4" /> {latestDecision.kind === 'approved' ? 'Agendar' : 'Continuar no WhatsApp'}
                                 </a>
                             </div>
                         </section>
