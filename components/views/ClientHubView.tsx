@@ -477,7 +477,9 @@ const ClientHubView: React.FC<ClientHubViewProps> = ({
                             return (
                                 <article
                                     key={pdf.id ?? pdf.nomeArquivo}
-                                    className="relative overflow-hidden rounded-[12px] border border-[var(--border-subtle)] bg-[var(--surface)] transition-[border-color,box-shadow] duration-200 hover:border-blue-200 hover:shadow-[var(--shadow-soft)] dark:hover:border-blue-900/60"
+                                    className={`relative rounded-[12px] border border-[var(--border-subtle)] bg-[var(--surface)] transition-[border-color,box-shadow] duration-200 hover:border-blue-200 hover:shadow-[var(--shadow-soft)] dark:hover:border-blue-900/60 ${
+                                        isStatusOpen ? 'z-20 overflow-visible' : 'overflow-hidden'
+                                    }`}
                                 >
                                     <span className={`absolute inset-y-0 left-0 z-10 w-[3px] ${statusMeta.accentClassName}`} aria-hidden="true" />
                                     <div className="p-3 pl-4 sm:p-3.5 sm:pl-[18px]">

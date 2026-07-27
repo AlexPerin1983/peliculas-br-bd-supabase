@@ -86,6 +86,30 @@ describe('ClientHubView', () => {
         expect(props.onNavigateToOption).toHaveBeenCalledWith(1, 99);
     });
 
+    it('keeps the status menu above the other cards while open', () => {
+        const props = {
+            ...baseProps(),
+            pdfs: [
+                makePdf({ id: 10, proposalOptionName: 'Option A' }),
+                makePdf({ id: 11, proposalOptionName: 'Option B' }),
+            ],
+        };
+
+        render(<ClientHubView {...props} />);
+
+        const statusButtons = screen.getAllByRole('button', { name: 'Pendente' });
+        const firstCard = statusButtons[0].closest('article');
+        const secondCard = statusButtons[1].closest('article');
+
+        expect(firstCard).toHaveClass('overflow-hidden');
+        fireEvent.click(statusButtons[0]);
+
+        expect(screen.getByRole('menu')).toBeInTheDocument();
+        expect(firstCard).toHaveClass('overflow-visible', 'z-20');
+        expect(firstCard).not.toHaveClass('overflow-hidden');
+        expect(secondCard).toHaveClass('overflow-hidden');
+    });
+
     it('mostra o preparo e envia o PDF completo para download', async () => {
         let finishDownload: (started: boolean) => void = () => undefined;
         const downloadPromise = new Promise<boolean>(resolve => { finishDownload = resolve; });
