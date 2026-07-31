@@ -69,42 +69,45 @@ const AdjustmentCard: React.FC<AdjustmentCardProps> = ({
         : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300';
 
     return (
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/60">
-            <div className="mb-3 flex items-start justify-between gap-3">
-                <div>
-                    <div className="flex items-center gap-2 text-sm font-black text-slate-900 dark:text-white">
+        <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50 p-2.5 dark:border-slate-700 dark:bg-slate-800/60 sm:p-3">
+            <div className="mb-2 flex min-w-0 items-start justify-between gap-2 sm:mb-3 sm:gap-3">
+                <div className="min-w-0">
+                    <div className="flex min-h-5 items-center gap-1.5 text-xs font-black leading-tight text-slate-900 dark:text-white sm:gap-2 sm:text-sm">
                         {kind === 'increase'
-                            ? <PlusCircle className="h-4 w-4 text-blue-500" aria-hidden="true" />
-                            : <MinusCircle className="h-4 w-4 text-emerald-500" aria-hidden="true" />
+                            ? <PlusCircle className="h-3.5 w-3.5 shrink-0 text-blue-500 sm:h-4 sm:w-4" aria-hidden="true" />
+                            : <MinusCircle className="h-3.5 w-3.5 shrink-0 text-emerald-500 sm:h-4 sm:w-4" aria-hidden="true" />
                         }
-                        <span>{title}</span>
+                        <span className="sm:hidden">{kind === 'increase' ? 'Acréscimo' : 'Desconto'}</span>
+                        <span className="hidden sm:inline">{title}</span>
                     </div>
-                    <p className="mt-1 text-xs leading-snug text-slate-500 dark:text-slate-400">{description}</p>
+                    <p className="mt-1 hidden text-xs leading-snug text-slate-500 dark:text-slate-400 sm:block">{description}</p>
                 </div>
                 {amount > 0 && (
-                    <span className={`rounded-full px-2 py-1 text-xs font-bold ${toneClasses}`}>
+                    <span className={`hidden shrink-0 rounded-full px-2 py-1 text-xs font-bold sm:inline-flex ${toneClasses}`}>
                         {sign}{formatNumberBR(amount)}
                     </span>
                 )}
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex min-w-0 gap-1.5 sm:gap-2">
                 <button
                     type="button"
                     onClick={() => onUpdate({ type: isPercentage ? 'fixed' : 'percentage' })}
-                    className="flex h-11 min-w-[72px] items-center justify-center gap-2 rounded-xl bg-slate-900 px-3 text-sm font-bold text-white transition-all active:scale-95 dark:bg-slate-100 dark:text-slate-950"
+                    className="flex h-10 min-w-11 items-center justify-center rounded-lg bg-slate-900 px-2 text-xs font-bold text-white transition-all active:scale-95 dark:bg-slate-100 dark:text-slate-950 sm:h-11 sm:min-w-[72px] sm:gap-2 sm:rounded-xl sm:px-3 sm:text-sm"
                     aria-label={`Alternar ${title}`}
                 >
-                    {isPercentage ? <Percent className="h-4 w-4" aria-hidden="true" /> : <CircleDollarSign className="h-4 w-4" aria-hidden="true" />}
+                    {isPercentage ? <Percent className="hidden h-4 w-4 sm:block" aria-hidden="true" /> : <CircleDollarSign className="hidden h-4 w-4 sm:block" aria-hidden="true" />}
                     <span>{isPercentage ? '%' : 'R$'}</span>
                 </button>
                 <input
                     type="text"
                     inputMode="decimal"
+                    enterKeyHint="done"
                     value={input.value}
                     onChange={(event) => onUpdate({ value: normalizeAdjustmentInputValue(event.target.value) })}
                     placeholder={isPercentage ? '0' : '0,00'}
-                    className="h-11 min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-4 text-right text-lg font-bold text-slate-900 outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                    aria-label={`Valor do ${title.toLocaleLowerCase('pt-BR')}`}
+                    className="h-10 min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2 text-right text-base font-bold text-slate-900 outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-white sm:h-11 sm:rounded-xl sm:px-4 sm:text-lg"
                 />
             </div>
         </div>
@@ -753,24 +756,26 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                                             <strong className="shrink-0 text-xl font-black tracking-tight">{formatNumberBR(totals.finalTotal)}</strong>
                                         </div>
 
-                                        <AdjustmentCard
-                                            kind="increase"
-                                            title="Acréscimo embutido"
-                                            description="Aumenta o valor sem criar uma linha separada no PDF."
-                                            amount={hiddenIncreaseAmount}
-                                            tone="blue"
-                                            input={adjustmentInputs.increase}
-                                            onUpdate={(input) => updateAdjustment('increase', input)}
-                                        />
-                                        <AdjustmentCard
-                                            kind="discount"
-                                            title="Desconto final"
-                                            description="Aplica o desconto sobre o valor final."
-                                            amount={finalDiscountAmount}
-                                            tone="emerald"
-                                            input={adjustmentInputs.discount}
-                                            onUpdate={(input) => updateAdjustment('discount', input)}
-                                        />
+                                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-1 sm:gap-3">
+                                            <AdjustmentCard
+                                                kind="increase"
+                                                title="Acréscimo embutido"
+                                                description="Aumenta o valor sem criar uma linha separada no PDF."
+                                                amount={hiddenIncreaseAmount}
+                                                tone="blue"
+                                                input={adjustmentInputs.increase}
+                                                onUpdate={(input) => updateAdjustment('increase', input)}
+                                            />
+                                            <AdjustmentCard
+                                                kind="discount"
+                                                title="Desconto final"
+                                                description="Aplica o desconto sobre o valor final."
+                                                amount={finalDiscountAmount}
+                                                tone="emerald"
+                                                input={adjustmentInputs.discount}
+                                                onUpdate={(input) => updateAdjustment('discount', input)}
+                                            />
+                                        </div>
 
                                         {totals.totalItemDiscount > 0 && (
                                             <div className="flex items-center justify-between px-1 text-sm text-red-500 dark:text-red-400">

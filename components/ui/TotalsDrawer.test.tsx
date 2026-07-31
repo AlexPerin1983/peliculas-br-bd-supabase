@@ -100,4 +100,29 @@ describe('TotalsDrawer preço personalizado', () => {
             filmPriceOverrides: undefined
         })));
     });
+
+    it('mantém acréscimo e desconto editáveis no resumo compacto', () => {
+        const onUpdate = vi.fn();
+        render(<TotalsDrawer
+            isOpen
+            onClose={vi.fn()}
+            totals={totals}
+            generalDiscount={baseDiscount}
+            onUpdateGeneralDiscount={onUpdate}
+            onGeneratePdf={vi.fn()}
+            isGeneratingPdf={false}
+        />);
+
+        fireEvent.click(screen.getByRole('button', { name: /Acréscimo e desconto/i }));
+
+        const increaseInput = screen.getByLabelText('Valor do acréscimo embutido');
+        const discountInput = screen.getByLabelText('Valor do desconto final');
+        expect(increaseInput).toHaveAttribute('inputmode', 'decimal');
+        expect(discountInput).toHaveAttribute('inputmode', 'decimal');
+
+        fireEvent.change(increaseInput, { target: { value: '12,34567' } });
+        expect(onUpdate).toHaveBeenLastCalledWith(expect.objectContaining({
+            increaseValue: '12,3456',
+        }));
+    });
 });

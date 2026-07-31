@@ -28,7 +28,7 @@ export const normalizeAdjustmentInputValue = (value: string | number | undefined
         return integerPart;
     }
 
-    return `${integerPart},${decimalParts.join('')}`;
+    return `${integerPart},${decimalParts.join('').slice(0, 4)}`;
 };
 
 export const parseAdjustmentNumber = (value: string | number | undefined | null) => (
