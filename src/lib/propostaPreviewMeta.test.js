@@ -13,7 +13,11 @@ describe('prévia amigável da proposta', () => {
 
         expect(result).toContain('Proposta para Vinícius | Películas Brasil');
         expect(result).toContain('Disponível até 22/07/2026');
-        expect(result).toContain('https://cdn.example.com/logo.png');
+        expect(result).toContain(escapeHtml(resolvePreviewImage(
+            'https://cdn.example.com/logo.png',
+            'https://app.filmstec.shop',
+            'codigo',
+        )));
         expect(result).not.toContain('content="antiga"');
     });
 
@@ -24,6 +28,11 @@ describe('prévia amigável da proposta', () => {
 
     it('muda a versão quando a logo muda', () => {
         expect(previewFingerprint('logo antiga')).not.toBe(previewFingerprint('logo nova'));
+    });
+
+    it('versiona também logos externas para não reutilizar a prévia de outra empresa', () => {
+        expect(resolvePreviewImage('https://cdn.example.com/logo.png', 'https://app.filmstec.shop', 'codigo'))
+            .toMatch(/^https:\/\/app\.filmstec\.shop\/api\/proposta-logo\?code=codigo&v=company-v2-/);
     });
 
     it('versiona a imagem da empresa para invalidar previews antigos', () => {

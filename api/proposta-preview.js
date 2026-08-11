@@ -28,12 +28,19 @@ export const resolvePreviewImage = (
     shareCode = '',
     version = `${PREVIEW_IMAGE_VERSION}-${previewFingerprint(logo)}`,
 ) => {
-    if (String(logo || '').startsWith('data:image/') && shareCode) {
+    const hasShareLogo = shareCode && String(logo || '').trim();
+    if (hasShareLogo && String(logo || '').startsWith('data:image/')) {
         return `${origin}/api/proposta-logo?code=${encodeURIComponent(shareCode)}&v=${encodeURIComponent(version)}`;
     }
     try {
         const candidate = new URL(String(logo || ''), origin);
-        if (candidate.protocol === 'https:' || candidate.protocol === 'http:') return candidate.toString();
+        if (candidate.protocol === 'https:' || candidate.protocol === 'http:') {
+            // A prévia é vinculada ao link. Assim, uma troca de marca ganha uma URL
+            // nova e os clientes de mensagem não reutilizam a imagem de outra empresa.
+            return hasShareLogo
+                ? `${origin}/api/proposta-logo?code=${encodeURIComponent(shareCode)}&v=${encodeURIComponent(version)}`
+                : candidate.toString();
+        }
     } catch {
         // Usa o icone publico quando a logo cadastrada nao e uma URL acessivel.
     }
