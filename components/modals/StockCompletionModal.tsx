@@ -11,6 +11,7 @@ import {
     StockFilmPlan,
 } from '../../src/lib/serviceStockConsumption';
 import Modal from '../ui/Modal';
+import StockRollSelect from './StockRollSelect';
 
 interface StockCompletionModalProps {
     isOpen: boolean;
@@ -296,22 +297,15 @@ const StockCompletionModal: React.FC<StockCompletionModalProps> = ({
 
                                 {plan.pieces.length > 0 ? (
                                     <div className="mt-3 grid gap-3">
-                                        <label className="block">
-                                            <span className="mb-1 block text-xs font-bold text-[var(--text-strong)]">Bobina utilizada</span>
-                                            <select
-                                                aria-label={`Bobina utilizada para ${plan.filmName}`}
-                                                value={selection?.bobinaId || ''}
-                                                onChange={(event) => updateBobina(plan, event.target.value)}
-                                                className="h-11 w-full rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] px-3 text-sm text-[var(--text-strong)] outline-none focus:border-blue-500"
-                                            >
-                                                <option value="">{matches.length ? 'Selecione a bobina' : 'Nenhuma bobina compatível'}</option>
-                                                {matches.map((bobina) => (
-                                                    <option key={bobina.id} value={bobina.id}>
-                                                        #{bobina.id} · {bobina.larguraCm} cm · saldo {formatMeters(bobina.comprimentoRestanteM)} m
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </label>
+                                        <StockRollSelect
+                                            label="Bobina utilizada"
+                                            ariaLabel={`Bobina utilizada para ${plan.filmName}`}
+                                            options={matches}
+                                            value={selection?.bobinaId || ''}
+                                            onChange={(bobinaId) => updateBobina(plan, bobinaId)}
+                                            placeholder={matches.length ? 'Selecione a bobina' : 'Nenhuma bobina compatível'}
+                                            disabled={matches.length === 0}
+                                        />
                                         <label className="block">
                                             <span className="mb-1 block text-xs font-bold text-[var(--text-strong)]">Metros realmente usados</span>
                                             <input

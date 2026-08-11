@@ -102,7 +102,8 @@ describe('StockCompletionModal', () => {
         renderModal({ onConfirm });
 
         const select = await screen.findByRole('combobox', { name: /bobina utilizada para carbono prime/i });
-        await waitFor(() => expect(select).toHaveValue('10'));
+        await waitFor(() => expect(select).toHaveTextContent('#10'));
+        expect(select.tagName).toBe('BUTTON');
 
         const confirmButton = screen.getByRole('button', { name: /concluir e baixar estoque/i });
         await waitFor(() => expect(confirmButton).toBeEnabled());
@@ -126,9 +127,15 @@ describe('StockCompletionModal', () => {
         renderModal();
 
         const select = await screen.findByRole('combobox', { name: /bobina utilizada para carbono prime/i });
-        expect(select).toHaveValue('');
+        expect(select).toHaveTextContent(/selecione a bobina/i);
         expect(screen.getByRole('button', { name: /concluir e baixar estoque/i })).toBeDisabled();
         expect(screen.getByText(/selecione a bobina realmente utilizada/i)).toBeInTheDocument();
+
+        fireEvent.click(select);
+        fireEvent.click(screen.getByRole('option', { name: /bobina 11/i }));
+
+        expect(select).toHaveTextContent('#11');
+        expect(screen.getByRole('button', { name: /concluir e baixar estoque/i })).toBeEnabled();
     });
 
     it('impede confirmar quando a estimativa ultrapassa o saldo da bobina', async () => {
