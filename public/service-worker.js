@@ -1,8 +1,20 @@
 // Service Worker com Auto-Atualização
 // ========================================
 // VERSÃO: Mude este número para forçar atualização nos clientes
-const SW_VERSION = 'v2.6.0';
+const SW_VERSION = 'v2.7.3';
 const CACHE_NAME = `peliculas-br-bd-${SW_VERSION}`;
+const TECHNICAL_CACHE_PREFIXES = [
+    'peliculas-br-bd-',
+    'peliculas-brasil-',
+    'app-cache-',
+    'workbox-'
+];
+const TECHNICAL_CACHE_NAMES = ['pages-cache', 'assets-cache', 'images-cache'];
+
+const isAppTechnicalCache = (cacheName) => (
+    TECHNICAL_CACHE_NAMES.includes(cacheName)
+    || TECHNICAL_CACHE_PREFIXES.some((prefix) => cacheName.startsWith(prefix))
+);
 
 // Lista de recursos essenciais para cache offline
 const ESSENTIAL_CACHE = [
@@ -39,7 +51,7 @@ self.addEventListener('activate', (event) => {
             caches.keys().then((cacheNames) => {
                 return Promise.all(
                     cacheNames.map((cacheName) => {
-                        if (cacheName !== CACHE_NAME && cacheName.startsWith('peliculas-br-bd')) {
+                        if (cacheName !== CACHE_NAME && isAppTechnicalCache(cacheName)) {
                             console.log(`[SW ${SW_VERSION}] Removendo cache antigo:`, cacheName);
                             return caches.delete(cacheName);
                         }
@@ -62,8 +74,9 @@ self.addEventListener('activate', (event) => {
     );
 });
 
-// Estratégia de Fetch: Network First para tudo
-// Isso garante que sempre tente buscar a versão mais recente
+// Estratégia de fetch:
+// - assets com hash: Cache First (o nome muda a cada build);
+// - HTML e demais recursos: Network First para detectar atualizações.
 self.addEventListener('fetch', (event) => {
     const { request } = event;
     const url = new URL(request.url);
@@ -85,8 +98,6 @@ self.addEventListener('fetch', (event) => {
     // Ignora requisições de API (supabase, etc)
     if (url.pathname.includes('/api/') || url.hostname.includes('supabase')) return;
 
-    // NETWORK FIRST para TUDO (HTML, JS, CSS, etc)
-    // Isso resolve o problema de versões antigas ficarem em cache
     const isHashedAsset = url.pathname.startsWith('/assets/');
     const isJavaScriptAsset = isHashedAsset && /\.m?js$/i.test(url.pathname);
     const isCssAsset = isHashedAsset && /\.css$/i.test(url.pathname);
@@ -105,7 +116,7 @@ self.addEventListener('fetch', (event) => {
         return !contentType.includes('text/html');
     };
 
-    event.respondWith(
+    const fetchAndCache = () => (
         fetch(request)
             .then((response) => {
                 // Um bundle antigo inexistente pode cair no fallback da SPA e receber
@@ -131,20 +142,41 @@ self.addEventListener('fetch', (event) => {
                 }
                 return response;
             })
-            .catch(() => {
-                // Se offline, tenta buscar do cache
-                return caches.match(request).then((response) => {
-                    if (response) {
-                        return response;
-                    }
-                    // Se for navegação e não tiver cache, mostra página offline
-                    if (request.mode === 'navigate') {
-                        return caches.match('/offline.html');
-                    }
-                    // Para outros recursos, retorna resposta vazia
-                    return new Response('', { status: 503, statusText: 'Offline' });
-                });
+    );
+
+    // Nunca consulta caches globais/legados. Mesmo que a exclusao de um cache
+    // antigo falhe, apenas a versao ativa pode responder a uma requisicao.
+    const matchCurrentCache = () => (
+        caches.open(CACHE_NAME).then((cache) => cache.match(request))
+    );
+
+    if (isHashedAsset) {
+        event.respondWith(
+            matchCurrentCache().then((cachedResponse) => {
+                if (cachedResponse && hasExpectedAssetContentType(cachedResponse)) {
+                    return cachedResponse;
+                }
+
+                return fetchAndCache().catch(() => (
+                    new Response('', { status: 503, statusText: 'Offline' })
+                ));
             })
+        );
+        return;
+    }
+
+    event.respondWith(
+        fetchAndCache().catch(() => {
+            return matchCurrentCache().then((response) => {
+                if (response) {
+                    return response;
+                }
+                if (request.mode === 'navigate') {
+                    return caches.open(CACHE_NAME).then((cache) => cache.match('/offline.html'));
+                }
+                return new Response('', { status: 503, statusText: 'Offline' });
+            });
+        })
     );
 });
 
@@ -162,9 +194,13 @@ self.addEventListener('message', (event) => {
                 break;
 
             case 'CLEAR_ALL_CACHES':
-                console.log(`[SW ${SW_VERSION}] Limpando TODOS os caches...`);
+                console.log(`[SW ${SW_VERSION}] Limpando caches tecnicos do aplicativo...`);
                 caches.keys().then((names) => {
-                    Promise.all(names.map((name) => caches.delete(name)));
+                    return Promise.all(
+                        names
+                            .filter(isAppTechnicalCache)
+                            .map((name) => caches.delete(name))
+                    );
                 }).then(() => {
                     event.ports[0].postMessage({ success: true });
                 });

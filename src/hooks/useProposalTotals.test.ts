@@ -553,6 +553,62 @@ describe('useProposalTotals', () => {
     expect(result.current.linearMeterCost).toBeCloseTo(result.current.totalLinearMeters * 20);
     expect(result.current.groupedTotals?.Jateada.unitSalePriceLinearMeter).toBe(60);
   });
+
+  it('arredonda a area total uma vez e mantem 25,78 independentemente do agrupamento', () => {
+    const dimensions: Array<[string, string]> = [
+      ['1,12', '0,87'], ['1,17', '0,87'], ['1,17', '0,87'], ['1,12', '0,87'],
+      ['1,15', '0,87'], ['0,20', '0,87'], ['1,17', '0,87'], ['1,06', '0,87'],
+      ['1,00', '0,87'], ['1,16', '0,87'], ['1,12', '0,87'], ['1,00', '0,87'],
+      ['1,16', '0,87'], ['1,16', '0,87'], ['1,16', '0,87'], ['1,06', '0,87'],
+      ['0,77', '0,84'], ['0,75', '0,84'], ['0,76', '0,84'], ['0,76', '0,84'],
+      ['0,76', '0,84'], ['0,76', '0,84'], ['0,70', '1,02'], ['0,70', '1,02'],
+      ['0,70', '1,02'], ['0,70', '1,02'], ['0,64', '0,95'], ['0,70', '1,02'],
+      ['1,00', '1,00'], ['1,00', '1,00'], ['1,00', '1,00']
+    ];
+    const films: Film[] = [{ nome: 'Carbono', preco: 100 }];
+    const createMeasurement = (
+      id: number,
+      largura: string,
+      altura: string,
+      quantidade: number
+    ): UIMeasurement => ({
+      id,
+      largura,
+      altura,
+      quantidade,
+      ambiente: '',
+      tipoAplicacao: 'Interna',
+      pelicula: 'Carbono',
+      active: true
+    });
+    const individual = dimensions.map(([largura, altura], index) => (
+      createMeasurement(index + 1, largura, altura, 1)
+    ));
+    const groupedMap = new Map<string, UIMeasurement>();
+    individual.forEach(measurement => {
+      const key = `${measurement.largura}|${measurement.altura}`;
+      const current = groupedMap.get(key);
+      if (current) current.quantidade += 1;
+      else groupedMap.set(key, { ...measurement });
+    });
+    const generalDiscount = { value: '0', type: 'percentage' as const, pricingMode: 'complete' as const };
+
+    const individualResult = renderHook(() => useProposalTotals({
+      measurements: individual,
+      films,
+      generalDiscount
+    }));
+    const groupedResult = renderHook(() => useProposalTotals({
+      measurements: [...groupedMap.values()],
+      films,
+      generalDiscount
+    }));
+
+    expect(individualResult.result.current.totalQuantity).toBe(31);
+    expect(groupedResult.result.current.totalQuantity).toBe(31);
+    expect(individualResult.result.current.totalM2).toBe(25.78);
+    expect(groupedResult.result.current.totalM2).toBe(25.78);
+  });
 });
 
 describe('useProposalTotals cutting widths', () => {

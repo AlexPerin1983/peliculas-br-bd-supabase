@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { Bobina, Retalho } from '../../../types';
-import QRScannerModal from '../../modals/QRScannerModal';
 import { StatusDrawer } from '../../ui/StatusDrawer';
+
+const QRScannerModal = lazy(() => import('../../modals/QRScannerModal'));
 
 type StatusModalState = { type: 'bobina' | 'retalho'; item: Bobina | Retalho } | null;
 
@@ -37,11 +38,15 @@ export default function EstoqueStatusAndScannerFlow({
 }: EstoqueStatusAndScannerFlowProps) {
     return (
         <>
-            <QRScannerModal
-                isOpen={showScannerModal}
-                onClose={() => setShowScannerModal(false)}
-                onDataUpdated={onDataUpdated}
-            />
+            {showScannerModal && (
+                <Suspense fallback={null}>
+                    <QRScannerModal
+                        isOpen
+                        onClose={() => setShowScannerModal(false)}
+                        onDataUpdated={onDataUpdated}
+                    />
+                </Suspense>
+            )}
 
             {showStatusModal && (
                 <StatusDrawer

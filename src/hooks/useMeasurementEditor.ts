@@ -1,15 +1,18 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Measurement, UIMeasurement } from '../../types';
 import { useMeasurementInputMode } from './useMeasurementInputMode';
 import { formatCentimeterDigitsAsMeters, metersValueToCentimeterDigits } from '../lib/measurementInputMode';
+import {
+    CLOSED_NUMPAD_DRAFT,
+    closeActiveNumpadDraft,
+    getActiveNumpadDraft,
+    NumpadDraftSnapshot,
+    NumpadField,
+    setActiveNumpadDraft,
+    updateActiveNumpadDraft
+} from './useNumpadDraft';
 
-export type NumpadConfig = {
-    isOpen: boolean;
-    measurementId: number | null;
-    field: 'largura' | 'altura' | 'quantidade' | null;
-    currentValue: string;
-    shouldClearOnNextInput: boolean;
-};
+export type NumpadConfig = NumpadDraftSnapshot;
 
 interface UseMeasurementEditorParams {
     measurements: UIMeasurement[];
@@ -18,13 +21,7 @@ interface UseMeasurementEditorParams {
     createEmptyMeasurement: () => Measurement;
 }
 
-const CLOSED_NUMPAD: NumpadConfig = {
-    isOpen: false,
-    measurementId: null,
-    field: null,
-    currentValue: '',
-    shouldClearOnNextInput: false
-};
+const CLOSED_NUMPAD = CLOSED_NUMPAD_DRAFT;
 
 export function useMeasurementEditor({
     measurements,
@@ -41,6 +38,13 @@ export function useMeasurementEditor({
     const [deletedMeasurementIndex, setDeletedMeasurementIndex] = useState<number | null>(null);
     const [showUndoToast, setShowUndoToast] = useState(false);
     const [numpadConfig, setNumpadConfig] = useState<NumpadConfig>(CLOSED_NUMPAD);
+    const measurementsRef = useRef(measurements);
+
+    measurementsRef.current = measurements;
+
+    useEffect(() => () => {
+        closeActiveNumpadDraft();
+    }, []);
 
     const applyMeasurements = useCallback(async (nextMeasurements: UIMeasurement[]) => {
         if (handleMeasurementsChangeWithPersistence) {
@@ -75,39 +79,52 @@ export function useMeasurementEditor({
     }, []);
 
     const handleNumpadClose = useCallback(() => {
-        const updatedMeasurements = saveCurrentNumpadValue(numpadConfig, measurements);
+        const currentDraft = getActiveNumpadDraft();
+        if (!currentDraft.isOpen) {
+            setNumpadConfig(CLOSED_NUMPAD);
+            return;
+        }
+
+        const updatedMeasurements = saveCurrentNumpadValue(currentDraft, measurementsRef.current);
         applyMeasurementsInBackground(updatedMeasurements);
+        closeActiveNumpadDraft();
         setNumpadConfig(CLOSED_NUMPAD);
-    }, [numpadConfig, measurements, saveCurrentNumpadValue, applyMeasurementsInBackground]);
+    }, [saveCurrentNumpadValue, applyMeasurementsInBackground]);
 
-    const handleOpenNumpad = useCallback((measurementId: number, field: 'largura' | 'altura' | 'quantidade', currentValue: string | number) => {
-        setNumpadConfig(prev => {
-            const isSameButton = prev.isOpen && prev.measurementId === measurementId && prev.field === field;
+    const handleOpenNumpad = useCallback((measurementId: number, field: NumpadField, currentValue: string | number) => {
+        const previousDraft = getActiveNumpadDraft();
+        const isSameButton = previousDraft.isOpen
+            && previousDraft.measurementId === measurementId
+            && previousDraft.field === field;
 
-            if (prev.isOpen && (prev.measurementId !== measurementId || prev.field !== field)) {
-                const updatedMeasurements = saveCurrentNumpadValue(prev, measurements);
-                applyMeasurementsInBackground(updatedMeasurements);
-            }
+        if (previousDraft.isOpen && !isSameButton) {
+            const updatedMeasurements = saveCurrentNumpadValue(previousDraft, measurementsRef.current);
+            applyMeasurementsInBackground(updatedMeasurements);
+        }
 
-            if (isSameButton) {
-                return {
-                    ...prev,
-                    shouldClearOnNextInput: false
-                };
-            }
+        if (isSameButton) {
+            updateActiveNumpadDraft(current => ({
+                ...current,
+                shouldClearOnNextInput: false
+            }));
+            return;
+        }
 
-            return {
-                isOpen: true,
-                measurementId,
-                field,
-                currentValue: String(currentValue).replace(',', '.'),
-                shouldClearOnNextInput: true
-            };
-        });
-    }, [measurements, saveCurrentNumpadValue, applyMeasurementsInBackground]);
+        const nextDraft: NumpadConfig = {
+            isOpen: true,
+            measurementId,
+            field,
+            currentValue: String(currentValue).replace(',', '.'),
+            shouldClearOnNextInput: true
+        };
+
+        setActiveNumpadDraft(nextDraft);
+        setNumpadConfig(nextDraft);
+    }, [saveCurrentNumpadValue, applyMeasurementsInBackground]);
 
     const handleNumpadDone = useCallback(() => {
-        const { measurementId, field, currentValue } = numpadConfig;
+        const currentDraft = getActiveNumpadDraft();
+        const { measurementId, field, currentValue } = currentDraft;
         if (measurementId === null || field === null) return;
 
         let finalValue: string | number;
@@ -117,12 +134,12 @@ export function useMeasurementEditor({
             finalValue = (String(currentValue) === '' || String(currentValue) === '.') ? '0' : String(currentValue).replace('.', ',');
         }
 
-        const updatedMeasurements = measurements.map(measurement =>
+        const updatedMeasurements = measurementsRef.current.map(measurement =>
             measurement.id === measurementId ? { ...measurement, [field]: finalValue } : measurement
         );
         applyMeasurementsInBackground(updatedMeasurements);
 
-        const fieldSequence: Array<'largura' | 'altura' | 'quantidade'> = ['largura', 'altura', 'quantidade'];
+        const fieldSequence: NumpadField[] = ['largura', 'altura', 'quantidade'];
         const currentIndex = fieldSequence.indexOf(field);
         const nextIndex = currentIndex + 1;
 
@@ -131,21 +148,27 @@ export function useMeasurementEditor({
             const currentMeasurement = updatedMeasurements.find(measurement => measurement.id === measurementId);
             const nextValue = currentMeasurement ? currentMeasurement[nextField] : '';
 
-            setNumpadConfig({
+            const nextDraft: NumpadConfig = {
                 isOpen: true,
                 measurementId,
                 field: nextField,
                 currentValue: String(nextValue).replace(',', '.'),
                 shouldClearOnNextInput: true
-            });
+            };
+            setActiveNumpadDraft(nextDraft);
+            setNumpadConfig(nextDraft);
             return;
         }
 
+        closeActiveNumpadDraft();
         setNumpadConfig(CLOSED_NUMPAD);
-    }, [numpadConfig, measurements, applyMeasurementsInBackground]);
+    }, [applyMeasurementsInBackground]);
 
     const handleNumpadInput = useCallback((value: string) => {
-        setNumpadConfig(prev => {
+        const previousDraft = getActiveNumpadDraft();
+        if (!previousDraft.isOpen) return;
+
+        const getNextDraft = (prev: NumpadConfig) => {
             const shouldClear = prev.shouldClearOnNextInput;
             let newValue = prev.currentValue;
             const char = value === ',' ? '.' : value;
@@ -172,12 +195,12 @@ export function useMeasurementEditor({
 
             if (isWidthOrHeight && matchesPattern) {
                 const finalValue = newValue.replace('.', ',');
-                const measurementsWithSavedValue = measurements.map(measurement =>
+                const measurementsWithSavedValue = measurementsRef.current.map(measurement =>
                     measurement.id === prev.measurementId ? { ...measurement, [prev.field!]: finalValue } : measurement
                 );
                 applyMeasurementsInBackground(measurementsWithSavedValue);
 
-                const fieldSequence: Array<'largura' | 'altura' | 'quantidade'> = ['largura', 'altura', 'quantidade'];
+                const fieldSequence: NumpadField[] = ['largura', 'altura', 'quantidade'];
                 const currentIndex = fieldSequence.indexOf(prev.field!);
                 const nextIndex = currentIndex + 1;
 
@@ -186,24 +209,34 @@ export function useMeasurementEditor({
                     const currentMeasurement = measurementsWithSavedValue.find(measurement => measurement.id === prev.measurementId);
                     const nextValueForField = currentMeasurement ? currentMeasurement[nextField] : '';
 
-                    return {
+                    const nextDraft: NumpadConfig = {
                         isOpen: true,
                         measurementId: prev.measurementId,
                         field: nextField,
                         currentValue: String(nextValueForField).replace(',', '.'),
                         shouldClearOnNextInput: true
                     };
+                    setActiveNumpadDraft(nextDraft);
+                    setNumpadConfig(nextDraft);
+                    return null;
                 }
 
-                return CLOSED_NUMPAD;
+                closeActiveNumpadDraft();
+                setNumpadConfig(CLOSED_NUMPAD);
+                return null;
             }
 
             return { ...prev, currentValue: newValue, shouldClearOnNextInput: false };
-        });
-    }, [measurements, applyMeasurementsInBackground, measurementInputMode]);
+        };
+
+        const nextDraft = getNextDraft(previousDraft);
+        if (nextDraft) {
+            setActiveNumpadDraft(nextDraft);
+        }
+    }, [applyMeasurementsInBackground, measurementInputMode]);
 
     const handleNumpadDelete = useCallback(() => {
-        setNumpadConfig(prev => {
+        updateActiveNumpadDraft(prev => {
             const isWidthOrHeight = prev.field === 'largura' || prev.field === 'altura';
             if (isWidthOrHeight && measurementInputMode === 'centimeters') {
                 const currentDigits = metersValueToCentimeterDigits(prev.currentValue);
@@ -223,7 +256,8 @@ export function useMeasurementEditor({
     }, [measurementInputMode]);
 
     const handleNumpadDuplicate = useCallback(() => {
-        const { measurementId, field, currentValue } = numpadConfig;
+        const currentDraft = getActiveNumpadDraft();
+        const { measurementId, field, currentValue } = currentDraft;
         if (measurementId === null || field === null) return;
 
         let finalValue: string | number;
@@ -233,7 +267,7 @@ export function useMeasurementEditor({
             finalValue = (String(currentValue) === '' || String(currentValue) === '.') ? '0' : String(currentValue).replace('.', ',');
         }
 
-        const measurementsWithSavedValue = measurements.map(measurement =>
+        const measurementsWithSavedValue = measurementsRef.current.map(measurement =>
             measurement.id === measurementId ? { ...measurement, [field]: finalValue } : measurement
         );
         const measurementToDuplicate = measurementsWithSavedValue.find(measurement => measurement.id === measurementId);
@@ -258,27 +292,29 @@ export function useMeasurementEditor({
         applyMeasurementsInBackground(finalMeasurements.map(measurement =>
             measurement.id === newMeasurement.id ? measurement : { ...measurement, isNew: false }
         ));
+        closeActiveNumpadDraft();
         setNumpadConfig(CLOSED_NUMPAD);
-    }, [numpadConfig, measurements, applyMeasurementsInBackground]);
+    }, [applyMeasurementsInBackground]);
 
     const handleNumpadClear = useCallback(() => {
-        const { measurementId, field } = numpadConfig;
+        const currentDraft = getActiveNumpadDraft();
+        const { measurementId, field } = currentDraft;
         if (measurementId === null) return;
 
-        const updatedMeasurements = measurements.map(measurement =>
+        const updatedMeasurements = measurementsRef.current.map(measurement =>
             measurement.id === measurementId ? { ...measurement, largura: '', altura: '', quantidade: 1 } : measurement
         );
         applyMeasurementsInBackground(updatedMeasurements);
 
-        setNumpadConfig(prev => ({
+        updateActiveNumpadDraft(prev => ({
             ...prev,
             currentValue: field === 'quantidade' ? '1' : '',
             shouldClearOnNextInput: true
         }));
-    }, [numpadConfig, measurements, applyMeasurementsInBackground]);
+    }, [applyMeasurementsInBackground]);
 
     const handleNumpadAddGroup = useCallback(() => {
-        const updatedMeasurements = saveCurrentNumpadValue(numpadConfig, measurements);
+        const updatedMeasurements = saveCurrentNumpadValue(getActiveNumpadDraft(), measurementsRef.current);
         const newMeasurement: UIMeasurement = { ...createEmptyMeasurement(), isNew: true };
         const finalMeasurements = [
             ...updatedMeasurements.map(measurement => ({ ...measurement, isNew: false })),
@@ -286,15 +322,16 @@ export function useMeasurementEditor({
         ];
 
         applyMeasurementsInBackground(finalMeasurements);
+        closeActiveNumpadDraft();
         setNumpadConfig(CLOSED_NUMPAD);
-    }, [numpadConfig, measurements, createEmptyMeasurement, saveCurrentNumpadValue, applyMeasurementsInBackground]);
+    }, [createEmptyMeasurement, saveCurrentNumpadValue, applyMeasurementsInBackground]);
 
     const handleOpenEditMeasurementModal = useCallback((measurement: UIMeasurement) => {
-        if (numpadConfig.isOpen) {
+        if (getActiveNumpadDraft().isOpen) {
             handleNumpadClose();
         }
         setEditingMeasurement(measurement);
-    }, [numpadConfig.isOpen, handleNumpadClose]);
+    }, [handleNumpadClose]);
 
     const handleCloseEditMeasurementModal = useCallback(() => {
         setEditingMeasurement(null);
@@ -368,12 +405,12 @@ export function useMeasurementEditor({
     }, []);
 
     const handleOpenDiscountModal = useCallback((measurement: UIMeasurement, basePrice: number = 0) => {
-        if (numpadConfig.isOpen) {
+        if (getActiveNumpadDraft().isOpen) {
             handleNumpadClose();
         }
         setEditingMeasurementForDiscount(measurement);
         setEditingMeasurementBasePrice(basePrice);
-    }, [numpadConfig.isOpen, handleNumpadClose]);
+    }, [handleNumpadClose]);
 
     const handleCloseDiscountModal = useCallback(() => {
         setEditingMeasurementForDiscount(null);

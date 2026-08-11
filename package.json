@@ -9,7 +9,15 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test --project=iphone-15-pro-max --project=iphone-11-pro-max",
+    "test:e2e:iphone": "playwright test --project=iphone-15-pro-max",
+    "test:e2e:iphone:legacy": "playwright test --project=iphone-11-pro-max",
+    "test:e2e:iphone:headed": "playwright test --project=iphone-15-pro-max --headed",
+    "test:e2e:ui": "playwright test --project=iphone-15-pro-max --ui",
+    "test:e2e:debug": "playwright test --project=iphone-15-pro-max --debug",
+    "test:e2e:install": "playwright install webkit",
+    "test:e2e:report": "playwright show-report"
   },
   "dependencies": {
     "@google/genai": "^1.30.0",
@@ -30,6 +38,7 @@
     "vaul": "^1.1.2"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4.1.17",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",

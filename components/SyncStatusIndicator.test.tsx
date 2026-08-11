@@ -62,10 +62,10 @@ describe('SyncStatusIndicator', () => {
     fireEvent.click(screen.getByRole('button', { name: /salvo no celular/i }));
 
     expect(screen.getByText('Conexão')).toBeInTheDocument();
-    expect(screen.getByText(/clientes.*atualizar.*tentativa 2/i)).toBeInTheDocument();
+    expect(screen.getByText(/clientes.*aguardando conexão/i)).toBeInTheDocument();
     expect(screen.getByText(/conexão instável com o servidor/i)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /tentar agora/i }));
+    fireEvent.click(screen.getByRole('button', { name: /tentar novamente/i }));
 
     await waitFor(() => {
       expect(mockedForcSync).toHaveBeenCalled();
@@ -92,8 +92,58 @@ describe('SyncStatusIndicator', () => {
     render(<SyncStatusIndicator />);
     fireEvent.click(screen.getByRole('button', { name: /salvo no celular/i }));
 
-    expect(screen.getByText(/pdfs.*enviar.*tentativa 1/i)).toBeInTheDocument();
+    expect(screen.getByText(/pdfs.*aguardando conexão/i)).toBeInTheDocument();
     expect(screen.getAllByText(/seus dados estão salvos neste celular/i)).toHaveLength(2);
+  });
+
+  it('traduz erros técnicos de película e oculta o número de tentativas', () => {
+    mockedSubscribeSyncStatus.mockImplementation(listener => {
+      listener(buildStatus({
+        failedCount: 1,
+        error: 'films: numeric field overflow',
+        failedItems: [{
+          id: 10,
+          table: 'films',
+          action: 'update',
+          retryCount: 114,
+          lastError: 'films: numeric field overflow',
+          lastAttemptAt: Date.now()
+        }]
+      }));
+      return vi.fn();
+    });
+
+    render(<SyncStatusIndicator />);
+    fireEvent.click(screen.getByRole('button', { name: /1 ajuste/i }));
+
+    expect(screen.getByText(/películas.*precisa de revisão/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/valor numérico inválido/i)).toHaveLength(2);
+    expect(screen.queryByText(/numeric field overflow/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/tentativa 114/i)).not.toBeInTheDocument();
+  });
+
+  it('traduz erro de permissão das configurações sem expor termos do banco', () => {
+    mockedSubscribeSyncStatus.mockImplementation(listener => {
+      listener(buildStatus({
+        failedCount: 1,
+        failedItems: [{
+          id: 11,
+          table: 'userInfo',
+          action: 'update',
+          retryCount: 29,
+          lastError: 'userInfo: new row violates row-level security policy for table user_info',
+          lastAttemptAt: Date.now()
+        }]
+      }));
+      return vi.fn();
+    });
+
+    render(<SyncStatusIndicator />);
+    fireEvent.click(screen.getByRole('button', { name: /1 ajuste/i }));
+
+    expect(screen.getByText(/configurações.*precisa de revisão/i)).toBeInTheDocument();
+    expect(screen.getByText(/não foi possível salvar as configurações/i)).toBeInTheDocument();
+    expect(screen.queryByText(/row-level security/i)).not.toBeInTheDocument();
   });
 
   it('mostra estado offline e nao exibe botao de sincronizacao', () => {

@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useRef, useState } from 'r
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../services/supabaseClient';
 import { Profile } from '../types';
-import { getSessionScope } from '../services/sessionScope';
+import { getSessionScope, SessionScope } from '../services/sessionScope';
 import { repairAgendaPushSubscription } from '../services/agendaPushNotifications';
 import { isSignupInProgress } from '../src/lib/signupFlow';
 
@@ -146,6 +146,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // revalidacao em segundo plano deve ou nao re-bloquear a interface.
     const hasUsableScopeRef = useRef<boolean>(Boolean(hydratedScope?.profile));
     const activeUserIdRef = useRef<string | null>(initialSession?.user.id ?? null);
+    const profileRequestRef = useRef<{
+        userId: string;
+        request: Promise<SessionScope>;
+    } | null>(null);
 
     useEffect(() => {
         let isMounted = true;
@@ -172,7 +176,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 activeUserIdRef.current = session?.user.id ?? null;
                 setIsPasswordRecovery(hasRecoveryContextInUrl(!!session));
                 if (session?.user) {
-                    fetchProfile(session.user.id, session.user.email!, { silent: silentBoot });
+                    fetchProfile(session.user.id, session.user.email!, {
+                        silent: silentBoot,
+                        session
+                    });
                 } else {
                     clearCachedScope();
                     hasUsableScopeRef.current = false;
@@ -248,7 +255,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 // que possa consultar novamente a sessão do Supabase. Caso contrário,
                 // login e logout podem ficar aguardando o mesmo bloqueio interno.
                 window.setTimeout(() => {
-                    void fetchProfile(session.user.id, session.user.email!, { silent });
+                    void fetchProfile(session.user.id, session.user.email!, {
+                        silent,
+                        session
+                    });
                 }, 0);
             } else {
                 clearCachedScope();
@@ -278,23 +288,48 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             });
         };
 
-        repairPush();
+        const initialRepairTimer = window.setTimeout(repairPush, 2000);
         document.addEventListener('visibilitychange', repairPush);
         window.addEventListener('pageshow', repairPush);
 
         return () => {
+            window.clearTimeout(initialRepairTimer);
             document.removeEventListener('visibilitychange', repairPush);
             window.removeEventListener('pageshow', repairPush);
         };
     }, [user?.id]);
 
-    const fetchProfile = async (_userId: string, email: string, options?: { silent?: boolean }) => {
+    const fetchProfile = async (
+        _userId: string,
+        email: string,
+        options?: { silent?: boolean; session?: Session | null }
+    ) => {
         const silent = options?.silent ?? false;
-        try {
-            const scope = await withTimeout(
-                getSessionScope({ ensureProfile: true, email }),
+        let request = profileRequestRef.current?.userId === _userId
+            ? profileRequestRef.current.request
+            : null;
+
+        if (!request) {
+            request = withTimeout(
+                getSessionScope({
+                    ensureProfile: true,
+                    email,
+                    ...(options && Object.prototype.hasOwnProperty.call(options, 'session')
+                        ? {
+                            session: options.session ?? null,
+                            user: options.session?.user ?? null
+                        }
+                        : {})
+                }),
                 'auth_profile'
             );
+            profileRequestRef.current = { userId: _userId, request };
+        }
+
+        try {
+            const scope = await request;
+            if (activeUserIdRef.current !== _userId) return;
+
             const nextMemberRole = scope.member?.role ?? null;
             setProfile(scope.profile);
             setMemberStatus(scope.memberStatus);
@@ -313,6 +348,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 clearCachedScope();
             }
         } catch (error) {
+            if (activeUserIdRef.current !== _userId) return;
             console.error('Error fetching profile:', error);
             // Numa atualizacao silenciosa (app ja aberto com dados em cache),
             // preservamos o que ja esta na tela em vez de derrubar a sessao.
@@ -326,13 +362,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 setConnectionError(AUTH_CONNECTION_ERROR_MESSAGE);
             }
         } finally {
-            setLoading(false);
+            if (profileRequestRef.current?.request === request) {
+                profileRequestRef.current = null;
+                setLoading(false);
+            }
         }
     };
 
     const refreshProfile = async () => {
         if (user) {
-            await fetchProfile(user.id, user.email!);
+            await fetchProfile(user.id, user.email!, { session });
         }
     };
 
@@ -344,6 +383,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setSession(null);
         setUser(null);
         activeUserIdRef.current = null;
+        profileRequestRef.current = null;
         setMemberStatus(null);
         setMemberRole(null);
         setIsOwner(false);

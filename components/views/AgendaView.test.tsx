@@ -1,6 +1,19 @@
 import { fireEvent, render, screen } from '@testing-library/react';
+import { act } from 'react';
 import AgendaView from './AgendaView';
-import { Agendamento, Client } from '../../types';
+import { Agendamento, Client, SavedPDF } from '../../types';
+
+const estoqueMocks = vi.hoisted(() => ({
+    getAllBobinas: vi.fn(),
+}));
+
+vi.mock('../../contexts/SubscriptionContext', () => ({
+    useSubscription: () => ({ canUseEstoque: true }),
+}));
+
+vi.mock('../../services/estoqueDb', () => ({
+    getAllBobinas: estoqueMocks.getAllBobinas,
+}));
 
 const appointmentDate = '2026-05-24T12:00:00.000Z';
 
@@ -25,14 +38,20 @@ const appointment: Agendamento = {
     end: '2026-05-24T14:00:00.000Z',
 };
 
-const renderAgenda = (clients: Client[] = [clientWithAddress], agendamentos: Agendamento[] = [appointment]) => render(
+const renderAgenda = (
+    clients: Client[] = [clientWithAddress],
+    agendamentos: Agendamento[] = [appointment],
+    pdfs: SavedPDF[] = [],
+    onCompleteAgendamentoWithValue = vi.fn().mockResolvedValue(true),
+) => render(
     <AgendaView
         agendamentos={agendamentos}
-        pdfs={[]}
+        pdfs={pdfs}
         clients={clients}
         onEditAgendamento={vi.fn()}
         onUpdateServiceStatus={vi.fn()}
-        onCompleteAgendamentoWithValue={vi.fn()}
+        onSaveReceiptDescription={vi.fn().mockResolvedValue(undefined)}
+        onCompleteAgendamentoWithValue={onCompleteAgendamentoWithValue}
         onContinueAgendamento={vi.fn()}
         onRescheduleAgendamento={vi.fn()}
         onCreateNewAgendamento={vi.fn()}
@@ -43,6 +62,15 @@ describe('AgendaView', () => {
     beforeEach(() => {
         vi.useFakeTimers();
         vi.setSystemTime(new Date(appointmentDate));
+        estoqueMocks.getAllBobinas.mockResolvedValue([{
+            id: 8,
+            filmId: 'Carbono Prime',
+            codigoQr: 'BOB-8',
+            larguraCm: 152,
+            comprimentoTotalM: 30,
+            comprimentoRestanteM: 20,
+            status: 'ativa',
+        }]);
     });
 
     afterEach(() => {
@@ -111,5 +139,101 @@ describe('AgendaView', () => {
         expect(screen.getByRole('heading', { name: /gerar recibo/i })).toBeInTheDocument();
         expect(screen.getAllByText(/380,00/).length).toBeGreaterThan(0);
         expect(screen.getByDisplayValue(/fornecimento e aplica/i)).toBeInTheDocument();
+    });
+
+    it('preenche o recibo com os serviços de todos os orçamentos vinculados', () => {
+        const pdfs = [
+            {
+                id: 10,
+                clienteId: 1,
+                date: appointmentDate,
+                totalPreco: 200,
+                totalM2: 2,
+                nomeArquivo: 'residencial.pdf',
+                proposalOptionName: 'Residencial',
+                measurements: [{ pelicula: 'Carbono Prime', ambiente: 'Sala', tipoAplicacao: 'Janela' }],
+            },
+            {
+                id: 11,
+                clienteId: 1,
+                date: appointmentDate,
+                totalPreco: 180,
+                totalM2: 1,
+                nomeArquivo: 'comercial.pdf',
+                proposalOptionName: 'Comercial',
+                measurements: [{ pelicula: 'Jateada', ambiente: 'Entrada', tipoAplicacao: 'Porta' }],
+            },
+        ] as SavedPDF[];
+
+        renderAgenda(
+            [clientWithAddress],
+            [{ ...appointment, pdfId: 10, pdfIds: [10, 11], serviceStatus: 'completed', valorFinal: 380 }],
+            pdfs,
+        );
+
+        fireEvent.click(screen.getAllByRole('button', { name: /gerar recibo do servi/i })[0]);
+
+        const description = screen.getByRole('textbox', { name: /descrição do serviço/i });
+        const descriptionValue = (description as HTMLTextAreaElement).value;
+        expect(descriptionValue).toContain('Carbono Prime');
+        expect(descriptionValue).toContain('Jateada');
+        expect(descriptionValue).toContain('Sala');
+        expect(descriptionValue).toContain('Entrada');
+    });
+
+    it('pede confirmação da bobina antes de concluir um serviço com material', async () => {
+        vi.setSystemTime(new Date('2026-05-24T15:00:00.000Z'));
+        const onComplete = vi.fn().mockResolvedValue(true);
+        const pdf = {
+            id: 10,
+            clienteId: 1,
+            date: appointmentDate,
+            totalPreco: 350,
+            totalM2: 1,
+            nomeArquivo: 'servico.pdf',
+            measurements: [{
+                id: 1,
+                largura: '1',
+                altura: '1',
+                quantidade: 1,
+                ambiente: 'Sala',
+                tipoAplicacao: 'Janela',
+                pelicula: 'Carbono Prime',
+                active: true,
+            }],
+        } as SavedPDF;
+
+        renderAgenda(
+            [clientWithAddress],
+            [{ ...appointment, pdfId: 10, pdfIds: [10] }],
+            [pdf],
+            onComplete,
+        );
+
+        fireEvent.click(screen.getAllByRole('button', { name: /^concluído$/i })[0]);
+        fireEvent.change(screen.getAllByPlaceholderText('0,00')[0], { target: { value: '350,00' } });
+
+        await act(async () => {
+            fireEvent.click(screen.getAllByRole('button', { name: /confirmar conclusão/i })[0]);
+            await Promise.resolve();
+            await Promise.resolve();
+        });
+
+        expect(screen.getByRole('combobox', { name: /bobina utilizada para carbono prime/i })).toHaveValue('8');
+        expect(onComplete).not.toHaveBeenCalled();
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /concluir e baixar estoque/i }));
+            await Promise.resolve();
+        });
+
+        expect(onComplete).toHaveBeenCalledWith(
+            expect.objectContaining({ id: 1 }),
+            350,
+            expect.objectContaining({
+                stockStatus: 'confirmed',
+                lines: [expect.objectContaining({ bobinaId: 8, filmId: 'Carbono Prime' })],
+            }),
+        );
     });
 });

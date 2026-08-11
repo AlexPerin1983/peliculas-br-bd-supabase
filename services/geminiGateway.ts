@@ -21,7 +21,66 @@ interface GeminiModelOptions {
 interface GatewayResponse {
     text: string;
     usageMetadata?: Record<string, unknown>;
+    finishReason?: string;
+    finishMessage?: string;
 }
+
+export class GeminiGatewayError extends Error {
+    code: string;
+    status?: number;
+    finishReason?: string;
+
+    constructor(
+        code: string,
+        message: string,
+        options: { status?: number; finishReason?: string } = {}
+    ) {
+        super(message);
+        this.name = 'GeminiGatewayError';
+        this.code = code;
+        this.status = options.status;
+        this.finishReason = options.finishReason;
+    }
+}
+
+const NON_FALLBACK_ERROR_CODES = new Set([
+    'USER_RATE_LIMIT',
+    'OUTPUT_TRUNCATED',
+    'CONTENT_BLOCKED',
+    'INPUT_TOO_LARGE',
+    'INVALID_INPUT',
+    'UNAUTHORIZED'
+]);
+
+const shouldUsePersonalFallback = (error: unknown) => {
+    if (!(error instanceof GeminiGatewayError)) return true;
+    if (NON_FALLBACK_ERROR_CODES.has(error.code)) return false;
+    if (error.status && [400, 401, 403, 413, 422].includes(error.status)) return false;
+    return true;
+};
+
+const assertCompletedResponse = (finishReason?: string, finishMessage?: string) => {
+    if (!finishReason || finishReason === 'STOP' || finishReason === 'FINISH_REASON_UNSPECIFIED') return;
+    if (finishReason === 'MAX_TOKENS') {
+        throw new GeminiGatewayError(
+            'OUTPUT_TRUNCATED',
+            finishMessage || 'A resposta da IA atingiu o limite de tamanho.',
+            { finishReason }
+        );
+    }
+    if (/SAFETY|PROHIBITED_CONTENT|BLOCKLIST|RECITATION/i.test(finishReason)) {
+        throw new GeminiGatewayError(
+            'CONTENT_BLOCKED',
+            finishMessage || 'O conteúdo não pôde ser processado.',
+            { finishReason }
+        );
+    }
+    throw new GeminiGatewayError(
+        'INCOMPLETE_RESPONSE',
+        finishMessage || 'A IA não concluiu a resposta.',
+        { finishReason }
+    );
+};
 
 const buildPersonalConfig = (
     generationConfig?: Record<string, unknown>,
@@ -81,24 +140,32 @@ const globalRequest = async (
         const context = (error as any)?.context;
         const status = context?.status;
         let reason = error.message || 'global_gemini_error';
+        let code = 'GLOBAL_GEMINI_ERROR';
+        let finishReason: string | undefined;
 
         try {
             const payload = context ? await context.clone().json() : null;
-            reason = payload?.code || payload?.error || reason;
+            reason = payload?.error || payload?.code || reason;
+            code = payload?.code || code;
+            finishReason = payload?.finishReason;
         } catch {
             // Mantem a mensagem original quando o corpo nao e JSON.
         }
 
-        throw new Error(reason);
+        if (status === 413 && code === 'GLOBAL_GEMINI_ERROR') code = 'INPUT_TOO_LARGE';
+        if (status === 401 && code === 'GLOBAL_GEMINI_ERROR') code = 'UNAUTHORIZED';
+        throw new GeminiGatewayError(code, reason, { status, finishReason });
     }
 
     if (!data?.text) {
-        throw new Error('Gemini nao retornou conteudo.');
+        throw new GeminiGatewayError('EMPTY_RESPONSE', 'Gemini nao retornou conteudo.');
     }
 
     return {
         text: data.text,
-        usageMetadata: data.usageMetadata
+        usageMetadata: data.usageMetadata,
+        finishReason: data.finishReason,
+        finishMessage: data.finishMessage
     };
 };
 
@@ -114,8 +181,16 @@ export const createGeminiModel = ({
         : null;
 
     const usePersonalFallback = async <T>(operation: () => Promise<T>, globalError: unknown): Promise<T> => {
+        if (!shouldUsePersonalFallback(globalError)) {
+            throw globalError;
+        }
+
         if (!personalClientPromise) {
-            const reason = globalError instanceof Error ? globalError.message : 'global_gemini_error';
+            const reason = globalError instanceof GeminiGatewayError
+                ? globalError.code
+                : globalError instanceof Error
+                    ? globalError.message
+                    : 'global_gemini_error';
             notifyGlobalUnavailable(reason);
             throw globalError;
         }
@@ -135,10 +210,13 @@ export const createGeminiModel = ({
     const generateContent = async (input: unknown) => {
         try {
             const gateway = await globalRequest(feature, input, generationConfig, systemInstruction);
+            assertCompletedResponse(gateway.finishReason, gateway.finishMessage);
             return {
                 response: {
                     text: () => gateway.text,
-                    usageMetadata: gateway.usageMetadata
+                    usageMetadata: gateway.usageMetadata,
+                    finishReason: gateway.finishReason,
+                    finishMessage: gateway.finishMessage
                 }
             } as any;
         } catch (globalError) {
@@ -149,10 +227,15 @@ export const createGeminiModel = ({
                     contents: input as any,
                     config: buildPersonalConfig(generationConfig, systemInstruction) as any
                 });
+                const finishReason = (response as any).candidates?.[0]?.finishReason;
+                const finishMessage = (response as any).candidates?.[0]?.finishMessage;
+                assertCompletedResponse(finishReason, finishMessage);
                 return {
                     response: {
                         text: () => response.text || '',
-                        usageMetadata: response.usageMetadata
+                        usageMetadata: response.usageMetadata,
+                        finishReason,
+                        finishMessage
                     }
                 } as any;
             }, globalError);
@@ -167,6 +250,7 @@ export const createGeminiModel = ({
                 generationConfig,
                 systemInstruction
             );
+            assertCompletedResponse(gateway.finishReason, gateway.finishMessage);
             async function* stream() {
                 yield { text: () => gateway.text };
             }
@@ -174,7 +258,9 @@ export const createGeminiModel = ({
                 stream: stream(),
                 response: Promise.resolve({
                     text: () => gateway.text,
-                    usageMetadata: gateway.usageMetadata
+                    usageMetadata: gateway.usageMetadata,
+                    finishReason: gateway.finishReason,
+                    finishMessage: gateway.finishMessage
                 })
             } as any;
         } catch (globalError) {

@@ -9,20 +9,60 @@ interface ReceiptModalProps {
     agendamento: Agendamento;
     client?: Client;
     linkedPdf?: SavedPDF;
+    linkedPdfs?: SavedPDF[];
     userInfo?: UserInfo | null;
     amount: number;
+    onSaveDescription?: (description: string) => Promise<void>;
 }
 
 const PAYMENT_OPTIONS = ['', 'Pix', 'Dinheiro', 'Cartão', 'Transferência bancária', 'Outro'];
 
+type ReceiptGeneratorModule = typeof import('../../services/receiptGenerator');
+let loadedReceiptGenerator: ReceiptGeneratorModule | null = null;
+let receiptGeneratorPromise: Promise<ReceiptGeneratorModule> | null = null;
+
+const preloadReceiptGenerator = (): Promise<ReceiptGeneratorModule> => {
+    if (loadedReceiptGenerator) return Promise.resolve(loadedReceiptGenerator);
+    if (!receiptGeneratorPromise) {
+        receiptGeneratorPromise = import('../../services/receiptGenerator')
+            .then((module) => {
+                loadedReceiptGenerator = module;
+                return module;
+            })
+            .catch((error) => {
+                receiptGeneratorPromise = null;
+                throw error;
+            });
+    }
+    return receiptGeneratorPromise;
+};
+
 const ReceiptModal: React.FC<ReceiptModalProps> = ({
-    isOpen, onClose, agendamento, client, linkedPdf, userInfo, amount,
+    isOpen, onClose, agendamento, client, linkedPdf, linkedPdfs, userInfo, amount, onSaveDescription,
 }) => {
-    const defaultDescription = useMemo(() => getDefaultReceiptDescription(linkedPdf), [linkedPdf]);
+    const defaultDescription = useMemo(
+        () => agendamento.receiptDescription?.trim()
+            || getDefaultReceiptDescription(linkedPdfs?.length ? linkedPdfs : linkedPdf),
+        [agendamento.receiptDescription, linkedPdf, linkedPdfs],
+    );
     const [description, setDescription] = useState(defaultDescription);
     const [paymentMethod, setPaymentMethod] = useState('');
     const [busyAction, setBusyAction] = useState<'download' | 'share' | null>(null);
     const [message, setMessage] = useState('');
+    const [generatorReady, setGeneratorReady] = useState(Boolean(loadedReceiptGenerator));
+    const linkedPdfIds = useMemo(() => Array.from(new Set(
+        agendamento.pdfIds?.length
+            ? agendamento.pdfIds
+            : (agendamento.pdfId != null ? [agendamento.pdfId] : []),
+    )), [agendamento.pdfId, agendamento.pdfIds]);
+    const availablePdfIds = useMemo(() => new Set(
+        [...(linkedPdfs || []), ...(linkedPdf ? [linkedPdf] : [])]
+            .map((pdf) => pdf.id)
+            .filter((id): id is number => typeof id === 'number'),
+    ), [linkedPdf, linkedPdfs]);
+    const hasCompleteServiceData = Boolean(agendamento.receiptDescription?.trim())
+        || linkedPdfIds.length === 0
+        || linkedPdfIds.every((id) => availablePdfIds.has(id));
 
     useEffect(() => {
         if (!isOpen) return;
@@ -31,17 +71,49 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({
         setMessage('');
     }, [defaultDescription, isOpen]);
 
+    useEffect(() => {
+        if (!isOpen) return;
+        let active = true;
+        setGeneratorReady(Boolean(loadedReceiptGenerator));
+        preloadReceiptGenerator()
+            .then(() => {
+                if (active) setGeneratorReady(true);
+            })
+            .catch((error) => {
+                console.error('Erro ao preparar gerador de recibo:', error);
+                if (active) setMessage('Não foi possível preparar o recibo. Feche e tente novamente.');
+            });
+        return () => {
+            active = false;
+        };
+    }, [isOpen]);
+
     const details = () => buildReceiptDetails({
-        agendamento, client, linkedPdf, userInfo, amount, description, paymentMethod,
+        agendamento, client, linkedPdf, linkedPdfs, userInfo, amount, description, paymentMethod,
     });
+
+    const persistDescription = async (confirmedDescription: string): Promise<boolean> => {
+        if (!onSaveDescription || confirmedDescription === agendamento.receiptDescription?.trim()) return true;
+        try {
+            await onSaveDescription(confirmedDescription);
+            return true;
+        } catch (error) {
+            console.error('Erro ao guardar descrição do recibo:', error);
+            return false;
+        }
+    };
 
     const handleDownload = async () => {
         setBusyAction('download');
         setMessage('');
         try {
-            const { downloadReceiptPdf } = await import('../../services/receiptGenerator');
-            await downloadReceiptPdf(details());
-            setMessage('Recibo baixado com sucesso.');
+            if (!loadedReceiptGenerator) throw new Error('Gerador de recibo ainda não está pronto.');
+            const receiptDetails = details();
+            await loadedReceiptGenerator.downloadReceiptPdf(receiptDetails);
+            const descriptionSaved = await persistDescription(receiptDetails.description);
+            setMessage(descriptionSaved
+                ? 'Recibo baixado com sucesso.'
+                : 'Recibo baixado, mas a descrição não pôde ser guardada para a próxima emissão.');
         } catch (error) {
             console.error('Erro ao gerar recibo:', error);
             setMessage('Não foi possível gerar o recibo. Tente novamente.');
@@ -54,11 +126,15 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({
         setBusyAction('share');
         setMessage('');
         try {
-            const { shareReceiptPdf } = await import('../../services/receiptGenerator');
-            const result = await shareReceiptPdf(details());
-            setMessage(result === 'shared'
-                ? 'Recibo compartilhado.'
-                : 'Seu navegador não compartilha PDF diretamente. O arquivo foi baixado para você enviar ao cliente.');
+            if (!loadedReceiptGenerator) throw new Error('Gerador de recibo ainda não está pronto.');
+            const receiptDetails = details();
+            const result = await loadedReceiptGenerator.shareReceiptPdf(receiptDetails);
+            const descriptionSaved = await persistDescription(receiptDetails.description);
+            setMessage(!descriptionSaved
+                ? 'Recibo gerado, mas a descrição não pôde ser guardada para a próxima emissão.'
+                : result === 'shared'
+                    ? 'Recibo compartilhado.'
+                    : 'Seu navegador não compartilha PDF diretamente. O arquivo foi baixado para você enviar ao cliente.');
         } catch (error) {
             if ((error as DOMException)?.name !== 'AbortError') {
                 console.error('Erro ao compartilhar recibo:', error);
@@ -82,19 +158,19 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({
                     <button
                         type="button"
                         onClick={handleDownload}
-                        disabled={isBusy || !description.trim()}
+                        disabled={isBusy || !generatorReady || !hasCompleteServiceData || !description.trim()}
                         className="inline-flex h-11 items-center justify-center gap-2 rounded-[var(--radius-control)] border border-blue-300 bg-white px-3 text-sm font-bold text-blue-700 disabled:opacity-50 dark:border-blue-800 dark:bg-slate-900 dark:text-blue-300"
                     >
-                        <i className={`fas ${busyAction === 'download' ? 'fa-spinner fa-spin' : 'fa-download'}`} />
+                        <i className={`fas ${busyAction === 'download' || !generatorReady ? 'fa-spinner fa-spin' : 'fa-download'}`} />
                         Baixar PDF
                     </button>
                     <button
                         type="button"
                         onClick={handleShare}
-                        disabled={isBusy || !description.trim()}
+                        disabled={isBusy || !generatorReady || !hasCompleteServiceData || !description.trim()}
                         className="inline-flex h-11 items-center justify-center gap-2 rounded-[var(--radius-control)] bg-blue-600 px-3 text-sm font-bold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
                     >
-                        <i className={`fas ${busyAction === 'share' ? 'fa-spinner fa-spin' : 'fa-share-nodes'}`} />
+                        <i className={`fas ${busyAction === 'share' || !generatorReady ? 'fa-spinner fa-spin' : 'fa-share-nodes'}`} />
                         Compartilhar
                     </button>
                 </div>
@@ -133,7 +209,11 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({
                         maxLength={300}
                         className="w-full resize-none rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] px-3 py-2.5 text-sm text-[var(--text-strong)] outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
                     />
-                    <span className="mt-1 block text-[11px] text-[var(--text-muted)]">Já preenchemos com os dados do orçamento. Edite apenas se precisar.</span>
+                    <span className="mt-1 block text-[11px] text-[var(--text-muted)]">
+                        {hasCompleteServiceData
+                            ? 'Já preenchemos com os dados do orçamento. Edite apenas se precisar.'
+                            : 'Aguarde enquanto carregamos todos os serviços vinculados a este atendimento.'}
+                    </span>
                 </label>
 
                 <label className="block">

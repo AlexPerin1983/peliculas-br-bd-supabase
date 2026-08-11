@@ -5,6 +5,7 @@ import DynamicSelector from './ui/DynamicSelector';
 import Tooltip from './ui/Tooltip';
 import { calculatePricingAreaM2 } from '../src/lib/pricingArea';
 import { useMeasurementInputMode } from '../src/hooks/useMeasurementInputMode';
+import { useNumpadDraft } from '../src/hooks/useNumpadDraft';
 import { normalizeMeasurementInput } from '../src/lib/measurementInputMode';
 
 type UIMeasurement = Measurement & { isNew?: boolean };
@@ -23,17 +24,17 @@ interface MeasurementGroupProps {
     measurement: UIMeasurement;
     films: Film[];
     pricingMode: ProposalPricingMode;
-    onUpdate: (updatedMeasurement: Partial<Measurement>) => void;
-    onDelete: () => void;
-    onDeleteImmediate: () => void;
-    onDuplicate: () => void;
+    onUpdate: (measurementId: number, updatedMeasurement: Partial<Measurement>) => void;
+    onDelete: (measurementId: number) => void;
+    onDeleteImmediate: (measurementId: number) => void;
+    onDuplicate: (measurementId: number) => void;
     onOpenFilmSelectionModal: (measurementId: number) => void;
     onOpenEditModal: (measurement: UIMeasurement) => void;
     onOpenDiscountModal: (measurement: UIMeasurement, basePrice?: number) => void;
     index: number;
     isDragging: boolean;
-    onDragStart: () => void;
-    onDragEnter: () => void;
+    onDragStart: (index: number) => void;
+    onDragEnter: (index: number) => void;
     onDragEnd: () => void;
     isSelectionMode: boolean;
     isSelected: boolean;
@@ -84,6 +85,8 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
     onOpenMeasurementInputSettings
 }) => {
     const { mode: measurementInputMode } = useMeasurementInputMode();
+    const liveNumpadDraft = useNumpadDraft(measurement.id);
+    const activeNumpadConfig = liveNumpadDraft.isOpen ? liveNumpadDraft : numpadConfig;
     const groupRef = useRef<HTMLDivElement>(null);
     const [desktopDraftValues, setDesktopDraftValues] = useState<DesktopDraftValues>({
         largura: String(measurement.largura ?? ''),
@@ -246,7 +249,7 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
             setTranslateX(ACTIONS_REVEAL_WIDTH);
             onSetSwipedItem(measurement.id);
         } else if (finalAction === 'delete') {
-            onDeleteImmediate();
+            onDeleteImmediate(measurement.id);
             if (navigator.vibrate) navigator.vibrate(100);
 
             // Animate out
@@ -284,7 +287,7 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
 
     const handleDuplicateClick = (e: React.MouseEvent) => {
         e.stopPropagation();
-        onDuplicate();
+        onDuplicate(measurement.id);
         closeSwipe();
     };
 
@@ -296,7 +299,7 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
 
     const handleDeleteClick = (e: React.MouseEvent) => {
         e.stopPropagation();
-        onDelete();
+        onDelete(measurement.id);
         onSetSwipedItem(null);
     };
 
@@ -322,7 +325,7 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
 
 
     const handleInputChange = (field: keyof Measurement, value: any) => {
-        onUpdate({ [field]: value });
+        onUpdate(measurement.id, { [field]: value });
     };
 
     useEffect(() => {
@@ -372,7 +375,7 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
         e.stopPropagation();
         if (!measurement.aiFilmSuggestion?.suggestedFilm) return;
 
-        onUpdate({
+        onUpdate(measurement.id, {
             pelicula: measurement.aiFilmSuggestion.suggestedFilm,
             aiFilmSuggestion: undefined
         });
@@ -397,7 +400,7 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
         }
     };
 
-    const isEditingThisMeasurement = numpadConfig.isOpen && numpadConfig.measurementId === measurement.id;
+    const isEditingThisMeasurement = activeNumpadConfig.isOpen && activeNumpadConfig.measurementId === measurement.id;
 
     const desktopValueFor = (field: EditableMeasurementField, value: string | number) =>
         useTouchNumpad ? String(value) : (desktopDraftValues[field] ?? '');
@@ -412,16 +415,16 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
         return Number.isFinite(parsedValue) ? parsedValue : 0;
     };
 
-    const larguraNum = isEditingThisMeasurement && numpadConfig.field === 'largura'
-        ? parseDecimalValue(numpadConfig.currentValue || '0')
+    const larguraNum = isEditingThisMeasurement && activeNumpadConfig.field === 'largura'
+        ? parseDecimalValue(activeNumpadConfig.currentValue || '0')
         : parseDecimalValue(desktopValueFor('largura', measurement.largura));
 
-    const alturaNum = isEditingThisMeasurement && numpadConfig.field === 'altura'
-        ? parseDecimalValue(numpadConfig.currentValue || '0')
+    const alturaNum = isEditingThisMeasurement && activeNumpadConfig.field === 'altura'
+        ? parseDecimalValue(activeNumpadConfig.currentValue || '0')
         : parseDecimalValue(desktopValueFor('altura', measurement.altura));
 
-    const quantidadeNum = isEditingThisMeasurement && numpadConfig.field === 'quantidade'
-        ? parseQuantityValue(numpadConfig.currentValue || '0')
+    const quantidadeNum = isEditingThisMeasurement && activeNumpadConfig.field === 'quantidade'
+        ? parseQuantityValue(activeNumpadConfig.currentValue || '0')
         : parseQuantityValue(desktopValueFor('quantidade', measurement.quantidade));
 
     const m2 = calculatePricingAreaM2(larguraNum, alturaNum, quantidadeNum);
@@ -498,9 +501,9 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
     const isDraggable = !isSelectionMode && translateX === 0 && !isModalMode;
 
     const renderNumberInput = (field: EditableMeasurementField, placeholder: string, value: string | number) => {
-        const isEditing = isEditingThisMeasurement && numpadConfig.field === field;
-        const isSelectedForReplacement = isEditing && numpadConfig.shouldClearOnNextInput;
-        const displayValue = isEditing ? numpadConfig.currentValue : String(value);
+        const isEditing = isEditingThisMeasurement && activeNumpadConfig.field === field;
+        const isSelectedForReplacement = isEditing && activeNumpadConfig.shouldClearOnNextInput;
+        const displayValue = isEditing ? activeNumpadConfig.currentValue : String(value);
 
         const getButtonClasses = () => {
             let classes = `${inputBaseClasses} bg-[var(--surface-muted)] text-[var(--text-strong)] border-[var(--border-subtle)] placeholder:text-[var(--text-soft)] focus:outline-none`;
@@ -691,8 +694,8 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
                     data-measurement-id={measurement.id}
                     onClick={handleRowClick}
                     draggable={isDraggable}
-                    onDragStart={onDragStart}
-                    onDragEnter={onDragEnter}
+                    onDragStart={() => onDragStart(index)}
+                    onDragEnter={() => onDragEnter(index)}
                     onDragEnd={onDragEnd}
                     onDragOver={(e) => e.preventDefault()}
                     className={`relative z-10 ${baseClasses} ${selectionClasses} ${isDragging ? 'shadow-2xl scale-[1.02]' : ''} ${isActive ? 'ring-2 ring-blue-500' : ''}`}
@@ -875,14 +878,14 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
                                 label="Ambiente"
                                 options={AMBIENTES}
                                 value={measurement.ambiente}
-                                onChange={(value) => onUpdate({ ambiente: value })}
+                                onChange={(value) => onUpdate(measurement.id, { ambiente: value })}
                                 disabled={!measurement.active}
                             />
                             <DynamicSelector
                                 label="Tipo de Aplicação"
                                 options={TIPOS_APLICACAO}
                                 value={measurement.tipoAplicacao}
-                                onChange={(value) => onUpdate({ tipoAplicacao: value })}
+                                onChange={(value) => onUpdate(measurement.id, { tipoAplicacao: value })}
                                 disabled={!measurement.active}
                             />
                         </div>

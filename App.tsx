@@ -6,15 +6,9 @@ import * as db from './services/db';
 import { supabase } from './services/supabaseClient';
 // pdfGenerator será importado dinamicamente para code splitting
 import Header from './components/Header';
-import PaymentMethodsModal from './components/modals/PaymentMethodsModal';
 import CustomNumpad from './components/ui/CustomNumpad';
-import ProposalExpensesModal from './components/modals/ProposalExpensesModal';
-import LocationImportModal from './components/modals/LocationImportModal';
-import UpdateNotification from './components/UpdateNotification';
-import UpdateBanner from './components/UpdateBanner';
 import { ModalsContainer } from './components/ModalsContainer';
 import { usePwaInstallPrompt } from './src/hooks/usePwaInstallPrompt';
-import { usePwaUpdate } from './src/hooks/usePwaUpdate';
 import { useAppBootstrap } from './src/hooks/useAppBootstrap';
 import { useProposalEditor } from './src/hooks/useProposalEditor';
 import { useMeasurementEditor } from './src/hooks/useMeasurementEditor';
@@ -24,8 +18,12 @@ import { usePdfActions } from './src/hooks/usePdfActions';
 import { useClientFlow } from './src/hooks/useClientFlow';
 import { useFilmFlow } from './src/hooks/useFilmFlow';
 import { useSchedulingFlow } from './src/hooks/useSchedulingFlow';
-import { AppContentRouter } from './src/components/app/AppContentRouter';
-import { AppClientWorkspace } from './src/components/app/AppClientWorkspace';
+import { AppContentRouter, preloadAppContentView } from './src/components/app/AppContentRouter';
+
+const loadAppClientWorkspace = () => import('./src/components/app/AppClientWorkspace');
+const AppClientWorkspace = lazy(() => loadAppClientWorkspace().then(module => ({
+    default: module.AppClientWorkspace
+})));
 
 import { useError } from './src/contexts/ErrorContext';
 import { useFeedback } from './src/contexts/FeedbackContext';
@@ -48,9 +46,55 @@ import OnboardingTour from './components/onboarding/OnboardingTour';
 import { seedExampleDataIfNeeded } from './services/seedData';
 import { createPastedMeasurementsFromClipboard } from './src/lib/measurementClipboard';
 import { createGeminiModel, GLOBAL_GEMINI_UNAVAILABLE_EVENT } from './services/geminiGateway';
+import {
+    getFriendlyMeasurementExtractionError,
+    MeasurementExtractionError,
+    normalizeAndGroupMeasurementExtraction,
+    parseMeasurementExtractionResponse,
+    type AIMeasurementExtractionPayload
+} from './src/lib/aiMeasurementExtraction';
+import {
+    DEFAULT_MENU_ORDER,
+    loadMenuOrder,
+    resetMenuOrder,
+    saveMenuOrder,
+    type MenuTabId
+} from './src/lib/menuPreferences';
+
+const PaymentMethodsModal = lazy(() => import('./components/modals/PaymentMethodsModal'));
+const ProposalExpensesModal = lazy(() => import('./components/modals/ProposalExpensesModal'));
+const LocationImportModal = lazy(() => import('./components/modals/LocationImportModal'));
 
 
-type ActiveTab = 'dashboard' | 'client' | 'cliente_hub' | 'clients_list' | 'films' | 'settings' | 'history' | 'proposals' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores';
+type ActiveTab = 'dashboard' | 'client' | 'cliente_hub' | 'clients_list' | 'films' | 'settings' | 'history' | 'proposals' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores' | 'saved_places';
+
+const getExplicitStartupTab = (): ActiveTab | null => {
+    if (typeof window === 'undefined') return null;
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('markAgendamento')) return 'agenda';
+    if (params.has('upgrade')) return 'account';
+
+    const tab = params.get('tab');
+    if (tab === 'estoque') return 'estoque';
+
+    const supportedShortcutTabs: ActiveTab[] = [
+        'dashboard',
+        'client',
+        'films',
+        'settings',
+        'history',
+        'proposals',
+        'agenda',
+        'sales',
+        'account',
+        'saved_places'
+    ];
+
+    return tab && supportedShortcutTabs.includes(tab as ActiveTab)
+        ? tab as ActiveTab
+        : null;
+};
 
 interface BillingReturnState {
     status: BillingReturnStatus;
@@ -100,60 +144,6 @@ const sanitizeForFilename = (name: string): string => {
     sanitized = sanitized.replace(/[<>:"/\\|?*]/g, '');
 
     return sanitized;
-};
-
-const extractFirstJsonArray = (rawText: string): string | null => {
-    if (!rawText) return null;
-
-    const text = rawText.trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '');
-    let startIndex = -1;
-    let depth = 0;
-    let inString = false;
-    let isEscaped = false;
-
-    for (let i = 0; i < text.length; i += 1) {
-        const char = text[i];
-
-        if (inString) {
-            if (isEscaped) {
-                isEscaped = false;
-                continue;
-            }
-
-            if (char === '\\') {
-                isEscaped = true;
-                continue;
-            }
-
-            if (char === '"') {
-                inString = false;
-            }
-
-            continue;
-        }
-
-        if (char === '"') {
-            inString = true;
-            continue;
-        }
-
-        if (char === '[') {
-            if (depth === 0) {
-                startIndex = i;
-            }
-            depth += 1;
-            continue;
-        }
-
-        if (char === ']' && depth > 0) {
-            depth -= 1;
-            if (depth === 0 && startIndex >= 0) {
-                return text.slice(startIndex, i + 1);
-            }
-        }
-    }
-
-    return null;
 };
 
 const extractFirstJsonObject = (rawText: string): string | null => {
@@ -225,7 +215,6 @@ const App: React.FC = () => {
     const { showError } = useError();
     const { showAlert, showToast } = useFeedback();
     const { deferredPrompt, promptInstall, isInstalled } = usePwaInstallPrompt();
-    const { newVersionAvailable, handleUpdate } = usePwaUpdate();
     const { hasModule, refresh: refreshSubscription, modules: subscriptionModules } = useSubscription();
     const needsOrganizationSetup = !!authUser && !organizationId;
 
@@ -256,32 +245,69 @@ const App: React.FC = () => {
     const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
     // Marcacao de status operacional vinda de uma notificacao push (deep link/acao).
     const [pendingServiceStatusMark, setPendingServiceStatusMark] = useState<{ id: number; status: AgendamentoServiceStatus } | null>(null);
-    const [activeTab, setActiveTab] = useState<ActiveTab>(() => {
-        const saved = localStorage.getItem('peliculas-br-active-tab');
-        if (saved && ['dashboard', 'client', 'films', 'settings', 'history', 'proposals', 'agenda', 'sales', 'admin', 'account', 'estoque', 'qr_code', 'fornecedores'].includes(saved)) {
-            return saved as ActiveTab;
-        }
-        return 'dashboard';
-    });
-    const initialPdfLoadRef = useRef<'all' | 'history' | 'deferred'>(
-        activeTab === 'history' ? 'history' : activeTab === 'dashboard' ? 'deferred' : 'all'
+    const persistedMenuOrder = useMemo(
+        () => loadMenuOrder(authUser?.id),
+        [authUser?.id]
     );
-    const initialClientLoadRef = useRef<'all' | 'page' | 'deferred'>(
-        activeTab === 'clients_list' ? 'page' : activeTab === 'dashboard' ? 'deferred' : 'all'
+    const explicitStartupTabRef = useRef<ActiveTab | null>(getExplicitStartupTab());
+    const [menuOrder, setMenuOrder] = useState<MenuTabId[]>(() => persistedMenuOrder);
+    const [activeTab, setActiveTab] = useState<ActiveTab>(() =>
+        explicitStartupTabRef.current ?? persistedMenuOrder[0] ?? DEFAULT_MENU_ORDER[0]
     );
-    const historyPageRequestedRef = useRef(activeTab === 'history');
-    const clientListRequestedRef = useRef(activeTab === 'clients_list');
+    const startupTab = explicitStartupTabRef.current ?? persistedMenuOrder[0] ?? DEFAULT_MENU_ORDER[0];
+    const initialPdfLoad: 'all' | 'history' | 'deferred' =
+        startupTab === 'history'
+            ? 'history'
+            : ['agenda', 'cliente_hub', 'clients_list'].includes(startupTab)
+                ? 'all'
+                : 'deferred';
+    const initialClientLoad: 'all' | 'page' | 'deferred' =
+        startupTab === 'clients_list'
+            ? 'page'
+            : ['client', 'agenda', 'cliente_hub', 'qr_code', 'history'].includes(startupTab)
+                ? 'all'
+                : 'deferred';
+    const historyPageRequestedRef = useRef(startupTab === 'history');
+    const clientListRequestedRef = useRef(startupTab === 'clients_list');
     const [billingReturnState, setBillingReturnState] = useState<BillingReturnState | null>(null);
     const [isBillingReturnVisible, setIsBillingReturnVisible] = useState(false);
     const [forceOnboardingTour, setForceOnboardingTour] = useState(false);
     // Pilha de abas visitadas para o botao "voltar" estilo navegacao nativa.
     const [tabHistory, setTabHistory] = useState<ActiveTab[]>([]);
 
-    // Persist active tab to localStorage
-    useEffect(() => {
-        localStorage.setItem('peliculas-br-active-tab', activeTab);
-    }, [activeTab]);
+    const initializedMenuUserRef = useRef<string | null>(null);
 
+    useEffect(() => {
+        const userId = authUser?.id;
+        if (!userId) {
+            initializedMenuUserRef.current = null;
+            setMenuOrder([...DEFAULT_MENU_ORDER]);
+            return;
+        }
+
+        const nextOrder = loadMenuOrder(userId);
+        setMenuOrder(nextOrder);
+
+        if (initializedMenuUserRef.current !== userId) {
+            const nextStartupTab = explicitStartupTabRef.current ?? nextOrder[0] ?? DEFAULT_MENU_ORDER[0];
+            setActiveTab(nextStartupTab);
+            setTabHistory([]);
+            historyPageRequestedRef.current = nextStartupTab === 'history';
+            clientListRequestedRef.current = nextStartupTab === 'clients_list';
+            initializedMenuUserRef.current = userId;
+        }
+    }, [authUser?.id]);
+
+    // Inicia o download da tela restaurada enquanto autenticação e dados ainda
+    // estão sendo preparados, evitando uma segunda espera no Suspense.
+    useEffect(() => {
+        if (authUser?.id) {
+            preloadAppContentView(activeTab);
+            if (activeTab === 'client') {
+                void loadAppClientWorkspace();
+            }
+        }
+    }, [activeTab, authUser?.id]);
 
     // Persist selected client to localStorage para reabrir no mesmo cliente.
     useEffect(() => {
@@ -398,10 +424,16 @@ const App: React.FC = () => {
     const [apiKeyModalProvider, setApiKeyModalProvider] = useState<'gemini' | 'openai'>('gemini');
 
     useEffect(() => {
-        const handleGlobalGeminiUnavailable = () => {
+        const handleGlobalGeminiUnavailable = (event: Event) => {
+            const reason = (event as CustomEvent<{ reason?: string }>).detail?.reason || '';
             setApiKeyModalProvider('gemini');
             setIsApiKeyModalOpen(true);
-            showToast('O limite da IA compartilhada foi atingido. Para continuar agora, use sua chave pessoal do Gemini.', { tone: 'warning', duration: 5500 });
+            const message = reason === 'GLOBAL_QUOTA_EXHAUSTED'
+                ? 'O limite da IA compartilhada foi atingido. Para continuar agora, use sua chave pessoal do Gemini.'
+                : reason === 'PERSONAL_KEY_INVALID'
+                    ? 'Sua chave pessoal do Gemini precisa ser atualizada.'
+                    : 'A IA compartilhada está temporariamente indisponível. Você pode tentar novamente mais tarde ou usar sua chave pessoal do Gemini.';
+            showToast(message, { tone: 'warning', duration: 5500 });
         };
         window.addEventListener(GLOBAL_GEMINI_UNAVAILABLE_EVENT, handleGlobalGeminiUnavailable);
         return () => window.removeEventListener(GLOBAL_GEMINI_UNAVAILABLE_EVENT, handleGlobalGeminiUnavailable);
@@ -517,7 +549,7 @@ const App: React.FC = () => {
             setActiveTab('account');
         } else if (
             tabParam &&
-            ['dashboard', 'client', 'films', 'settings', 'history', 'proposals', 'agenda', 'sales', 'account'].includes(tabParam)
+            ['dashboard', 'client', 'films', 'settings', 'history', 'proposals', 'agenda', 'sales', 'account', 'saved_places'].includes(tabParam)
         ) {
             setActiveTab(tabParam as ActiveTab);
         }
@@ -720,7 +752,7 @@ const App: React.FC = () => {
         setClientListHasMore,
         setClientListNextOffset,
         setHasLoadedAllClients,
-        initialClientLoad: initialClientLoadRef.current,
+        initialClientLoad,
         setSelectedClientId,
         setUserInfo,
         setFilms,
@@ -729,7 +761,7 @@ const App: React.FC = () => {
         setHistoryHasMore,
         setHistoryNextOffset,
         setHasLoadedAllPdfs,
-        initialPdfLoad: initialPdfLoadRef.current,
+        initialPdfLoad,
         setAgendamentos,
         setHasLoadedHistory,
         setHasLoadedAgendamentos
@@ -781,7 +813,9 @@ const App: React.FC = () => {
             }
 
             setHistoryPdfs(current => {
-                const byId = new Map(current.map(pdf => [pdf.id, pdf]));
+                const byId = new Map<number | undefined, SavedPDF>(
+                    current.map(pdf => [pdf.id, pdf] as const)
+                );
                 loaded.forEach(pdf => byId.set(pdf.id, pdf));
                 return [...byId.values()].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
             });
@@ -795,8 +829,8 @@ const App: React.FC = () => {
     useEffect(() => {
         if (!authUser?.id || isLoading || isLoadingAllPdfsRef.current) return;
 
-        const needsAllPdfs = activeTab !== 'history' && activeTab !== 'dashboard' && !hasLoadedAllPdfs;
-        const needsAllClients = activeTab !== 'dashboard' && activeTab !== 'clients_list' && !hasLoadedAllClients;
+        const needsAllPdfs = ['agenda', 'cliente_hub', 'clients_list'].includes(activeTab) && !hasLoadedAllPdfs;
+        const needsAllClients = ['client', 'agenda', 'cliente_hub', 'qr_code', 'history'].includes(activeTab) && !hasLoadedAllClients;
         if (!needsAllPdfs && !needsAllClients) return;
 
         isLoadingAllPdfsRef.current = true;
@@ -1157,6 +1191,7 @@ const App: React.FC = () => {
         handleCloseAgendamentoModal,
         handleSaveAgendamento,
         handleUpdateAgendamentoServiceStatus,
+        handleSaveReceiptDescription,
         handleCompleteAgendamentoWithValue,
         handleContinueAgendamento,
         handleRequestDeleteAgendamento,
@@ -1207,9 +1242,20 @@ const App: React.FC = () => {
         const target = agendamentos.find(item => item.id === pendingServiceStatusMark.id);
         if (!target) return;
 
+        if (pendingServiceStatusMark.status === 'completed') {
+            // A conclusão precisa passar pela conferência de valor e estoque na
+            // Agenda. A notificação apenas leva o usuário até o atendimento.
+            handleShowInfo(
+                'Abra o atendimento na Agenda e toque em "Concluído" para confirmar o valor e o material utilizado.',
+                'Concluir atendimento'
+            );
+            setPendingServiceStatusMark(null);
+            return;
+        }
+
         void handleUpdateAgendamentoServiceStatus(target, pendingServiceStatusMark.status);
         setPendingServiceStatusMark(null);
-    }, [pendingServiceStatusMark, agendamentos, handleUpdateAgendamentoServiceStatus]);
+    }, [pendingServiceStatusMark, agendamentos, handleShowInfo, handleUpdateAgendamentoServiceStatus]);
 
     const handleConfirmDeleteAgendamentoWithFeedback = useCallback(async () => {
         setIsDeletingAgendamento(true);
@@ -2065,6 +2111,47 @@ Regras:
         setPdfToDeleteId(pdfId);
     }, []);
 
+    const handleDeletePdfs = useCallback(async (pdfIds: number[]) => {
+        const uniquePdfIds = Array.from(new Set(pdfIds.filter(Number.isFinite)));
+        if (uniquePdfIds.length === 0) return;
+
+        const deletedPdfIds = new Set(uniquePdfIds);
+        setAllSavedPdfs((previous: SavedPDF[]) => previous.filter(pdf => !pdf.id || !deletedPdfIds.has(pdf.id)));
+        setHistoryPdfs((previous: SavedPDF[]) => previous.filter(pdf => !pdf.id || !deletedPdfIds.has(pdf.id)));
+
+        if (hasLoadedAgendamentos) {
+            setAgendamentos((previous: Agendamento[]) => previous.filter(agendamento => (
+                (!agendamento.pdfId || !deletedPdfIds.has(agendamento.pdfId))
+                && !(agendamento.pdfIds || []).some(pdfId => deletedPdfIds.has(pdfId))
+            )));
+        }
+
+        const results = await Promise.allSettled(uniquePdfIds.map(pdfId => db.deletePDF(pdfId)));
+        const failures = results.filter(result => result.status === 'rejected');
+
+        if (failures.length > 0) {
+            if (hasLoadedAllPdfs) {
+                await loadAllPdfs();
+            } else {
+                await loadPdfHistoryPage({ reset: true });
+            }
+            if (hasLoadedAgendamentos) {
+                await loadAgendamentos();
+            }
+            throw new Error(`Falha ao excluir ${failures.length} de ${uniquePdfIds.length} orçamentos.`);
+        }
+
+        if (hasLoadedAgendamentos) {
+            await loadAgendamentos();
+        }
+    }, [
+        hasLoadedAgendamentos,
+        hasLoadedAllPdfs,
+        loadAgendamentos,
+        loadAllPdfs,
+        loadPdfHistoryPage
+    ]);
+
     const handleConfirmDeleteMeasurementWithFeedback = useCallback(async () => {
         setIsDeletingMeasurement(true);
         try {
@@ -2081,25 +2168,15 @@ Regras:
         if (pdfToDeleteId === null) return;
         setIsDeletingPdf(true);
         try {
-            const deletedPdfId = pdfToDeleteId;
-            setAllSavedPdfs((prev: SavedPDF[]) => prev.filter(pdf => pdf.id !== deletedPdfId));
-            await db.deletePDF(deletedPdfId);
-            if (hasLoadedAgendamentos) {
-                setAgendamentos((prev: Agendamento[]) => prev.filter(agendamento => agendamento.pdfId !== deletedPdfId));
-                await loadAgendamentos();
-            }
+            await handleDeletePdfs([pdfToDeleteId]);
             setPdfToDeleteId(null);
         } catch (error) {
             console.error('Erro ao excluir orçamento:', error);
-            await loadAllPdfs();
-            if (hasLoadedAgendamentos) {
-                await loadAgendamentos();
-            }
             handleShowInfo('Não foi possível excluir o orçamento. Tente novamente.');
         } finally {
             setIsDeletingPdf(false);
         }
-    }, [pdfToDeleteId, loadAllPdfs, hasLoadedAgendamentos, loadAgendamentos, handleShowInfo]);
+    }, [handleDeletePdfs, handleShowInfo, pdfToDeleteId]);
 
     const handleUpdatePdfStatus = useCallback(async (pdfId: number, status: SavedPDF['status']) => {
         const currentPdf = allSavedPdfs.find(pdf => pdf.id === pdfId);
@@ -2135,6 +2212,15 @@ Regras:
             }
         }
     }, []);
+
+    const handleMenuOrderChange = useCallback((nextOrder: MenuTabId[]) => {
+        const normalizedOrder = saveMenuOrder(authUser?.id, nextOrder);
+        setMenuOrder(normalizedOrder);
+    }, [authUser?.id]);
+
+    const handleResetMenuOrder = useCallback(() => {
+        setMenuOrder(resetMenuOrder(authUser?.id));
+    }, [authUser?.id]);
 
     const handleTabChange = useCallback((tab: ActiveTab) => {
         if (numpadConfig.isOpen) {
@@ -2325,7 +2411,6 @@ Regras:
     }, [handleCreateNewAgendamento]);
 
     const handleProcessAIMeasurementInput = useCallback(async (input: AIInput) => {
-
         const hasContent = (input.text && input.text.trim()) || (input.images && input.images.length > 0) || !!input.audio;
         if (!hasContent) {
             handleShowInfo("Adicione texto, imagem ou áudio para extrair as medidas.");
@@ -2334,73 +2419,114 @@ Regras:
 
         setIsProcessingAI(true);
         try {
-            const model = createGeminiModel({ apiKey: userInfo?.aiConfig?.apiKey, feature: 'measurement_extraction' });
+            const { Type: SchemaType } = await import('@google/genai');
+            const generationConfig: Record<string, unknown> = {
+                maxOutputTokens: 8192,
+                responseMimeType: 'application/json',
+                responseSchema: {
+                    type: SchemaType.OBJECT,
+                    properties: {
+                        medidas: {
+                            type: SchemaType.ARRAY,
+                            items: {
+                                type: SchemaType.OBJECT,
+                                properties: {
+                                    linhaOrigem: { type: SchemaType.INTEGER },
+                                    local: { type: SchemaType.STRING },
+                                    largura: { type: SchemaType.STRING },
+                                    altura: { type: SchemaType.STRING },
+                                    quantidade: { type: SchemaType.INTEGER },
+                                    peliculaDetectada: { type: SchemaType.STRING }
+                                },
+                                required: ['linhaOrigem', 'local', 'largura', 'altura', 'quantidade', 'peliculaDetectada']
+                            }
+                        },
+                        totalItens: { type: SchemaType.INTEGER },
+                        houveTrechoIlegivel: { type: SchemaType.BOOLEAN },
+                        observacao: { type: SchemaType.STRING }
+                    },
+                    required: ['medidas', 'totalItens', 'houveTrechoIlegivel', 'observacao']
+                }
+            };
+            const model = createGeminiModel({
+                apiKey: userInfo?.aiConfig?.apiKey,
+                feature: 'measurement_extraction',
+                generationConfig
+            });
 
-            const prompt = `Você é um assistente especialista em extração de medidas de janelas/vidros para instalação de películas.
+            const prompt = `Você extrai medidas de janelas e vidros para orçamentos de películas.
 
-Sua tarefa é extrair as medidas e retornar um array JSON.
+REGRAS CRÍTICAS PARA IMAGENS E TABELAS:
+1. Leia a tabela de cima para baixo e devolva UMA entrada para CADA linha visível que tenha largura e altura.
+2. NÃO agrupe, não conte repetições e não some linhas da imagem. Em tabela, cada linha deve ter quantidade 1.
+3. Preserve a ordem em linhaOrigem: 1, 2, 3... Isso é essencial para a conferência.
+4. Ignore cabeçalhos, linhas de total e linhas sem largura ou altura.
+5. Releia todas as linhas uma segunda vez antes de responder, conferindo especialmente valores repetidos.
+6. totalItens deve ser o número total de peças lidas e deve ser igual à soma das quantidades.
+7. Se qualquer número estiver cortado ou ilegível, marque houveTrechoIlegivel como true. Não invente.
 
-**REGRAS DE AGRUPAMENTO (CRÍTICO):**
-1. AGRUPE medidas idênticas (mesma largura, altura e local) em um único item.
-2. Se a entrada for "5 janelas de 1.20 x 2.10 na sala", retorne UM ÚNICO item com quantidade: 5.
-3. N?O crie itens separados para a mesma medida repetida.
+REGRAS PARA TEXTO OU ÁUDIO:
+1. Uma quantidade declarada pode permanecer agrupada. Ex.: "5 janelas de 1,20 x 2,10" usa quantidade 5.
+2. Se houver uma lista, preserve uma entrada para cada item da lista.
 
-**REGRAS DE AMBIENTE:**
-1. O campo "local" deve SEMPRE incluir o ambiente mencionado (Sala, Quarto, Cozinha, etc).
-2. Ex: "Janela da Sala", "Vidro Fixo do Escritório".
-3. Se não houver ambiente, use genérico (ex: "Janela").
+CAMPOS:
+- largura e altura: metros, com duas casas e vírgula decimal, como "1,20".
+- local: copie somente o ambiente/descrição da mesma linha. Se não existir, use string vazia; nunca invente "Linha 1" ou "Janela 1".
+- peliculaDetectada: copie o nome/tipo somente quando estiver claro. Caso contrário, use string vazia.
+- observacao: explique brevemente apenas se houver algo ilegível; caso contrário, use string vazia.
 
-**OUTRAS REGRAS:**
-1. Largura e Altura devem ser strings com vírgula como decimal (ex: "1,20").
-2. Se identificar o nome ou tipo da película, retorne no campo opcional "peliculaDetectada".
-3. Se não tiver confiança sobre a película, use string vazia em "peliculaDetectada".
-4. Em imagens, prints, fotos de orçamento ou fotos de anotações, procure o nome da película em títulos, observações, descrições, legendas, tabelas, etiquetas, marcas e abreviações.
-5. Em imagens, se houver medidas e película na mesma linha, bloco ou cartão visual, associe a película à medida correta.
-6. Em imagens, prefira retornar o texto bruto mais útil da película em "peliculaDetectada" mesmo que não esteja perfeitamente padronizado. Ex: "jateada", "fumê espelhado", "blackout", "nano ceramic", "g20".
-7. Nunca invente uma película. Se a imagem não deixar isso claro, use string vazia em "peliculaDetectada".
+Ignore botões, menus, propagandas e outros textos da interface. Responda somente no JSON definido.`;
 
-**REGRAS ESPECIAIS PARA FOTO/PRINT:**
-1. Ignore textos decorativos da interface, botões, menus e propagandas.
-2. Priorize textos próximos das medidas ou do item medido.
-3. Se houver mais de uma película possível na imagem e não for claro qual pertence à medida, não chute.
-
-FORMATO DE RESPOSTA (JSON PURO):
-[
-  { "local": "Janela da Sala", "largura": "1,20", "altura": "2,10", "quantidade": 5, "peliculaDetectada": "Fumê Espelhado" }
-]
-
-Se não conseguir extrair, retorne: []`;
-
-            const parts: any[] = [prompt];
-
-            if (input.text && input.text.trim()) {
-                parts.push(input.text);
-            }
-            if (input.images && input.images.length > 0) {
+            const sourceParts: any[] = [];
+            if (input.text && input.text.trim()) sourceParts.push(input.text);
+            if (input.images?.length) {
                 for (const file of input.images) {
                     const { mimeType, data } = await blobToBase64(file);
-                    parts.push({ inlineData: { mimeType, data } });
+                    sourceParts.push({ inlineData: { mimeType, data } });
                 }
             }
             if (input.audio) {
                 const { mimeType, data } = await blobToBase64(input.audio);
-                parts.push({ inlineData: { mimeType, data } });
+                sourceParts.push({ inlineData: { mimeType, data } });
             }
 
-            const result = await model.generateContent(parts);
-            const responseText = result.response.text();
+            const firstResult = await model.generateContent([prompt, ...sourceParts]);
+            let finalPayload: AIMeasurementExtractionPayload = parseMeasurementExtractionResponse(
+                firstResult.response.text(),
+                firstResult.response.finishReason
+            );
+            const firstNormalized = normalizeAndGroupMeasurementExtraction(finalPayload);
+            let verificationFailed = false;
 
-            const extractedJson = extractFirstJsonArray(responseText);
-            if (!extractedJson) {
-                handleShowInfo("Não foi possível extrair medidas. Tente reformular.");
-                return;
+            // Listas grandes recebem uma segunda leitura independente, voltada a detectar
+            // exatamente trocas de contagem entre medidas repetidas.
+            if (input.images?.length && firstNormalized.totalItems >= 10) {
+                const verificationPrompt = `Confira novamente a imagem, linha por linha e de cima para baixo.
+A leitura anterior está abaixo apenas como referência; não presuma que ela está correta.
+Conte separadamente cada ocorrência repetida e corrija qualquer largura, altura ou linha omitida.
+Em tabelas, devolva uma entrada por linha, quantidade 1 e a ordem em linhaOrigem.
+Antes de responder, confirme que totalItens é igual à soma das quantidades.
+Use somente o JSON definido e não inclua explicações fora dele.`;
+
+                try {
+                    const verificationResult = await model.generateContent([
+                        verificationPrompt,
+                        `LEITURA ANTERIOR PARA AUDITORIA:\n${JSON.stringify(finalPayload)}`,
+                        ...sourceParts
+                    ]);
+                    finalPayload = parseMeasurementExtractionResponse(
+                        verificationResult.response.text(),
+                        verificationResult.response.finishReason
+                    );
+                } catch (verificationError) {
+                    verificationFailed = true;
+                    console.warn('A conferência adicional das medidas não foi concluída:', verificationError);
+                }
             }
 
-            const extractedMeasurements = JSON.parse(extractedJson);
-
-            if (!Array.isArray(extractedMeasurements) || extractedMeasurements.length === 0) {
-                handleShowInfo("Nenhuma medida foi encontrada. Tente novamente.");
-                return;
+            const extraction = normalizeAndGroupMeasurementExtraction(finalPayload);
+            if (extraction.needsReview) {
+                throw new MeasurementExtractionError('LOW_CONFIDENCE');
             }
 
             const highConfidenceThreshold = 0.85;
@@ -2408,29 +2534,23 @@ Se não conseguir extrair, retorne: []`;
             let autoMatchedFilmsCount = 0;
             const suggestedFilms: string[] = [];
 
-            // Adiciona as medidas extraídas
-            const newMeasurements = extractedMeasurements.map((m: any, index: number) => {
+            const newMeasurements = extraction.measurements.map((measurement, index) => {
                 const baseMeasurement = {
                     ...createEmptyMeasurement(),
-                    id: Date.now() + index, // Garante ID único
-                    ambiente: m.local || '', // Mapeia 'local' do JSON para 'ambiente' do objeto Measurement
-                    largura: m.largura || '',
-                    altura: m.altura || '',
-                    quantidade: m.quantidade || 1,
+                    id: Date.now() + index,
+                    ambiente: measurement.local,
+                    largura: measurement.largura,
+                    altura: measurement.altura,
+                    quantidade: measurement.quantidade,
                     isNew: false
                 };
 
-                if (!films.length || !m.peliculaDetectada) {
-                    return baseMeasurement;
-                }
+                if (!films.length || !measurement.peliculaDetectada) return baseMeasurement;
 
-                const filmMatch = matchFilmFromExtractedText(m.peliculaDetectada, films);
+                const filmMatch = matchFilmFromExtractedText(measurement.peliculaDetectada, films);
                 if (filmMatch.matchedFilmName && filmMatch.confidence >= highConfidenceThreshold) {
                     autoMatchedFilmsCount += 1;
-                    return {
-                        ...baseMeasurement,
-                        pelicula: filmMatch.matchedFilmName
-                    };
+                    return { ...baseMeasurement, pelicula: filmMatch.matchedFilmName };
                 }
 
                 if (filmMatch.matchedFilmName && filmMatch.confidence >= suggestionConfidenceThreshold) {
@@ -2451,27 +2571,52 @@ Se não conseguir extrair, retorne: []`;
                 return baseMeasurement;
             });
 
-
             handleMeasurementsChange([...measurements, ...newMeasurements]);
             setIsAIMeasurementModalOpen(false);
-            if (autoMatchedFilmsCount > 0) {
-                const suggestionSummary = suggestedFilms.length > 0
-                    ? `\n\nSugestões para revisar manualmente:\n${suggestedFilms.slice(0, 3).join('\n')}${suggestedFilms.length > 3 ? '\n...' : ''}`
-                    : '';
-                handleShowInfo(`${newMeasurements.length} medida(s) adicionada(s). ${autoMatchedFilmsCount} película(s) foram reconhecidas automaticamente.${suggestionSummary}`);
-            } else if (suggestedFilms.length > 0) {
-                handleShowInfo(`${newMeasurements.length} medida(s) adicionada(s).\n\nSugestões de película para revisar:\n${suggestedFilms.slice(0, 3).join('\n')}${suggestedFilms.length > 3 ? '\n...' : ''}`);
-            } else {
-                handleShowInfo(`${newMeasurements.length} medida(s) adicionada(s) com sucesso!`);
-            }
 
+            const piecesLabel = extraction.totalItems === 1 ? '1 peça adicionada' : `${extraction.totalItems} peças adicionadas`;
+            const groupsLabel = newMeasurements.length === 1 ? '1 medida' : `${newMeasurements.length} medidas`;
+            const summary = extraction.totalItems === newMeasurements.length
+                ? `${groupsLabel} adicionada${newMeasurements.length === 1 ? '' : 's'}`
+                : `${piecesLabel} em ${groupsLabel}`;
+            const verificationNotice = verificationFailed
+                ? '\n\nA conferência adicional não terminou. Revise o total antes de enviar o orçamento.'
+                : input.images?.length && extraction.totalItems >= 10
+                    ? '\n\nA tabela foi lida duas vezes para conferir as quantidades.'
+                    : '';
+
+            if (autoMatchedFilmsCount > 0 || suggestedFilms.length > 0 || verificationNotice) {
+                const filmNotice = autoMatchedFilmsCount > 0
+                    ? ` ${autoMatchedFilmsCount} película(s) reconhecida(s) automaticamente.`
+                    : '';
+                const suggestionSummary = suggestedFilms.length > 0
+                    ? `\n\nSugestões para revisar:\n${suggestedFilms.slice(0, 3).join('\n')}${suggestedFilms.length > 3 ? '\n...' : ''}`
+                    : '';
+                showAlert({
+                    title: verificationFailed ? 'Medidas adicionadas para revisão' : 'Leitura concluída',
+                    message: `${summary}.${filmNotice}${suggestionSummary}${verificationNotice}`,
+                    tone: verificationFailed ? 'warning' : 'success'
+                });
+            } else {
+                showToast(`${summary} com sucesso.`, { tone: 'success', duration: 3500 });
+            }
         } catch (error) {
             console.error("Erro ao processar medidas com IA:", error);
-            handleShowInfo(`Erro: ${error instanceof Error ? error.message : 'Tente novamente'}`);
+            const friendlyError = getFriendlyMeasurementExtractionError(error);
+            showAlert({ title: friendlyError.title, message: friendlyError.message, tone: 'warning' });
         } finally {
             setIsProcessingAI(false);
         }
-    }, [userInfo, measurements, handleMeasurementsChange, createEmptyMeasurement, films]);
+    }, [
+        createEmptyMeasurement,
+        films,
+        handleMeasurementsChange,
+        handleShowInfo,
+        measurements,
+        showAlert,
+        showToast,
+        userInfo
+    ]);
 
 
     const LoadingSpinner = () => (
@@ -2637,6 +2782,7 @@ Se não conseguir extrair, retorne: []`;
             onOpenApiKeyModal={handleOpenApiKeyModal}
             onPromptPwaInstall={handlePromptPwaInstall}
             onDeletePdf={handleRequestDeletePdf}
+            onDeletePdfs={handleDeletePdfs}
             onDownloadPdf={handleDownloadPdf}
             onUpdatePdfStatus={handleUpdatePdfStatus}
             onSchedulePdf={handleOpenAgendamentoModal}
@@ -2644,6 +2790,7 @@ Se não conseguir extrair, retorne: []`;
             onNavigateToOption={handleNavigateToOption}
             onEditAgendamento={handleEditAgendamento}
             onUpdateAgendamentoServiceStatus={handleUpdateAgendamentoServiceStatus}
+            onSaveReceiptDescription={handleSaveReceiptDescription}
             onCompleteAgendamentoWithValue={handleCompleteAgendamentoWithValue}
             onContinueAgendamento={handleContinueAgendamento}
             onRescheduleAgendamento={handleRescheduleAgendamento}
@@ -2869,7 +3016,6 @@ Se não conseguir extrair, retorne: []`;
         setActiveTab('dashboard');
         setTabHistory([]);
         setForceOnboardingTour(true);
-        localStorage.setItem('peliculas-br-active-tab', 'dashboard');
 
         await refreshProfile();
         showToast(`Empresa "${organizationName}" criada com sucesso.`, {
@@ -2879,13 +3025,13 @@ Se não conseguir extrair, retorne: []`;
     }, [refreshProfile, showToast]);
 
 
-    const wideWorkspaceClass = ['dashboard', 'history', 'proposals', 'estoque', 'films', 'fornecedores', 'agenda', 'settings', 'qr_code', 'account', 'admin', 'cliente_hub', 'clients_list'].includes(activeTab)
+    const wideWorkspaceClass = ['dashboard', 'history', 'proposals', 'estoque', 'films', 'fornecedores', 'agenda', 'saved_places', 'settings', 'qr_code', 'account', 'admin', 'cliente_hub', 'clients_list'].includes(activeTab)
         ? 'mx-auto w-full max-w-[1480px]'
         : activeTab === 'client'
             ? 'mx-auto w-full max-w-[1480px]'
             : 'container mx-auto w-full max-w-2xl lg:max-w-5xl';
 
-    const useNativeSurface = ['dashboard', 'client', 'cliente_hub', 'clients_list', 'history', 'proposals', 'estoque', 'films', 'fornecedores', 'agenda', 'settings', 'qr_code', 'account'].includes(activeTab);
+    const useNativeSurface = ['dashboard', 'client', 'cliente_hub', 'clients_list', 'history', 'proposals', 'estoque', 'films', 'fornecedores', 'agenda', 'saved_places', 'settings', 'qr_code', 'account'].includes(activeTab);
 
 
 
@@ -2904,12 +3050,16 @@ Se não conseguir extrair, retorne: []`;
                     />
                 ) : (
                     <>
-                <DesktopSidebar activeTab={activeTab} onTabChange={handleTabChange} />
+                <DesktopSidebar
+                    activeTab={activeTab}
+                    onTabChange={handleTabChange}
+                    menuOrder={menuOrder}
+                    onMenuOrderChange={handleMenuOrderChange}
+                    onResetMenuOrder={handleResetMenuOrder}
+                />
                 <OnboardingTour onNavigate={handleTabChange} forceOpen={forceOnboardingTour} />
 
                 <div className="flex-grow flex flex-col min-w-0 h-full overflow-hidden">
-                    <UpdateBanner />
-
                     <main ref={mainRef} className="flex-grow overflow-y-auto bg-[var(--app-bg)] pb-32 transition-colors duration-500 sm:pb-0 lg:pb-0">
                         <div className="sticky top-0 z-40 border-b border-[var(--border-subtle)] bg-[color-mix(in_srgb,var(--app-bg)_88%,transparent)] backdrop-blur-md">
                             <div className={`${wideWorkspaceClass} px-4`}>
@@ -2917,6 +3067,9 @@ Se não conseguir extrair, retorne: []`;
                                     <Header
                                         activeTab={activeTab}
                                         onTabChange={handleTabChange}
+                                        menuOrder={menuOrder}
+                                        onMenuOrderChange={handleMenuOrderChange}
+                                        onResetMenuOrder={handleResetMenuOrder}
                                         onGoBack={handleGoBack}
                                         canGoBack={tabHistory.length > 0}
                                         onMenuOpenChange={setIsMobileMenuOpen}
@@ -2944,49 +3097,51 @@ Se não conseguir extrair, retorne: []`;
                                 )}
 
                                 {activeTab === 'client' ? (
-                                    <AppClientWorkspace
-                                        clientsCount={hasLoadedAllClients ? clients.length : clientDashboardStats.totalCount}
-                                        selectedClient={selectedClient}
-                                        clientTransitionKey={clientTransitionKey}
-                                        proposalOptions={proposalOptions}
-                                        activeOptionId={activeOptionId}
-                                        selectedClientId={selectedClientId}
-                                        measurements={measurements}
-                                        films={films}
-                                        totals={totals}
-                                        generalDiscount={generalDiscount}
-                                        content={tabContent}
-                                        isGeneratingPdf={pdfGenerationStatus === 'generating'}
-                                        onSelectClientClick={handleOpenClientSelectionModal}
-                                        onOpenClientHub={handleOpenClientHub}
-                                        onAddClient={() => handleOpenClientModal('add')}
-                                        onAddClientAI={handleOpenAIClientModal}
-                                        onOpenAIQuickProposal={handleOpenAIQuickProposalModal}
-                                        onEditClient={() => handleOpenClientModal('edit')}
-                                        onDeleteClient={handleDeleteClient}
-                                        onSwipeLeft={goToNextClient}
-                                        onSwipeRight={goToPrevClient}
-                                         onSelectOption={setActiveOptionId}
-                                         onRenameOption={handleRenameProposalOption}
-                                         onDeleteOption={handleRequestDeleteProposalOption}
-                                         onAddOption={addProposalOption}
-                                         onSelectPricingMode={handleProposalPricingModeChange}
-                                         onOpenProposalPaymentConfig={() => setIsProposalPaymentModalOpen(true)}
-                                         onOpenProposalExpenses={() => setIsProposalExpensesModalOpen(true)}
-                                         hasCustomProposalPaymentConfig={hasActiveProposalPaymentOverride}
-                                         hasActiveExpenses={totals.operationalExpenses > 0}
-                                         onSwipeDirectionChange={handleSwipeDirectionChange}
-                                        onOpenGeneralDiscountModal={() => setIsGeneralDiscountModalOpen(true)}
-                                        onUpdateGeneralDiscount={handleGeneralDiscountChange}
-                                        onAddMeasurement={addMeasurement}
-                                        onDuplicateMeasurements={duplicateAllMeasurements}
-                                        onGeneratePdf={handleGeneratePdf}
-                                        onOpenAIModal={() => {
-                                            if (!ensureAiReady()) return;
-                                            setIsAIMeasurementModalOpen(true);
-                                        }}
-                                        defaultHideMeasurements={!!userInfo?.hideMeasurementsInPdf}
-                                    />
+                                    <Suspense fallback={<ClientViewSkeleton />}>
+                                        <AppClientWorkspace
+                                            clientsCount={hasLoadedAllClients ? clients.length : clientDashboardStats.totalCount}
+                                            selectedClient={selectedClient}
+                                            clientTransitionKey={clientTransitionKey}
+                                            proposalOptions={proposalOptions}
+                                            activeOptionId={activeOptionId}
+                                            selectedClientId={selectedClientId}
+                                            measurements={measurements}
+                                            films={films}
+                                            totals={totals}
+                                            generalDiscount={generalDiscount}
+                                            content={tabContent}
+                                            isGeneratingPdf={pdfGenerationStatus === 'generating'}
+                                            onSelectClientClick={handleOpenClientSelectionModal}
+                                            onOpenClientHub={handleOpenClientHub}
+                                            onAddClient={() => handleOpenClientModal('add')}
+                                            onAddClientAI={handleOpenAIClientModal}
+                                            onOpenAIQuickProposal={handleOpenAIQuickProposalModal}
+                                            onEditClient={() => handleOpenClientModal('edit')}
+                                            onDeleteClient={handleDeleteClient}
+                                            onSwipeLeft={goToNextClient}
+                                            onSwipeRight={goToPrevClient}
+                                            onSelectOption={setActiveOptionId}
+                                            onRenameOption={handleRenameProposalOption}
+                                            onDeleteOption={handleRequestDeleteProposalOption}
+                                            onAddOption={addProposalOption}
+                                            onSelectPricingMode={handleProposalPricingModeChange}
+                                            onOpenProposalPaymentConfig={() => setIsProposalPaymentModalOpen(true)}
+                                            onOpenProposalExpenses={() => setIsProposalExpensesModalOpen(true)}
+                                            hasCustomProposalPaymentConfig={hasActiveProposalPaymentOverride}
+                                            hasActiveExpenses={totals.operationalExpenses > 0}
+                                            onSwipeDirectionChange={handleSwipeDirectionChange}
+                                            onOpenGeneralDiscountModal={() => setIsGeneralDiscountModalOpen(true)}
+                                            onUpdateGeneralDiscount={handleGeneralDiscountChange}
+                                            onAddMeasurement={addMeasurement}
+                                            onDuplicateMeasurements={duplicateAllMeasurements}
+                                            onGeneratePdf={handleGeneratePdf}
+                                            onOpenAIModal={() => {
+                                                if (!ensureAiReady()) return;
+                                                setIsAIMeasurementModalOpen(true);
+                                            }}
+                                            defaultHideMeasurements={!!userInfo?.hideMeasurementsInPdf}
+                                        />
+                                    </Suspense>
                                 ) : ['history', 'proposals', 'agenda'].includes(activeTab) ? (
                                     <div className={activeTab === 'history'
                                         ? 'rounded-none bg-transparent'
@@ -3029,29 +3184,33 @@ Se não conseguir extrair, retorne: []`;
                               onClose={handleCloseBillingReturn}
                           />
                       )}
-                      {userInfo && selectedClientId && activeOption && (
-                          <PaymentMethodsModal
-                              isOpen={isProposalPaymentModalOpen}
-                              onClose={() => setIsProposalPaymentModalOpen(false)}
-                              onSave={handleSaveProposalPaymentConfig}
-                              onResetToDefault={hasActiveProposalPaymentOverride ? handleResetProposalPaymentConfig : undefined}
-                              paymentMethods={effectivePaymentConfig.paymentMethods}
-                              prazoPagamento={effectivePaymentConfig.prazoPagamento}
-                              showPrazoPagamentoField
-                              title="Pagamento desta proposta"
-                              description="Por padrão, o PDF usa as formas de pagamento da empresa. Aqui você pode personalizar apenas a proposta ativa sem alterar o cadastro geral."
-                              saveLabel="Salvar nesta proposta"
-                              resetLabel="Usar padrao da empresa"
-                          />
+                      {isProposalPaymentModalOpen && userInfo && selectedClientId && activeOption && (
+                          <Suspense fallback={null}>
+                              <PaymentMethodsModal
+                                  isOpen
+                                  onClose={() => setIsProposalPaymentModalOpen(false)}
+                                  onSave={handleSaveProposalPaymentConfig}
+                                  onResetToDefault={hasActiveProposalPaymentOverride ? handleResetProposalPaymentConfig : undefined}
+                                  paymentMethods={effectivePaymentConfig.paymentMethods}
+                                  prazoPagamento={effectivePaymentConfig.prazoPagamento}
+                                  showPrazoPagamentoField
+                                  title="Pagamento desta proposta"
+                                  description="Por padrão, o PDF usa as formas de pagamento da empresa. Aqui você pode personalizar apenas a proposta ativa sem alterar o cadastro geral."
+                                  saveLabel="Salvar nesta proposta"
+                                  resetLabel="Usar padrao da empresa"
+                              />
+                          </Suspense>
                       )}
-                      {selectedClientId && activeOption && (
-                          <ProposalExpensesModal
-                              isOpen={isProposalExpensesModalOpen}
-                              onClose={() => setIsProposalExpensesModalOpen(false)}
-                              onSave={handleSaveProposalExpenses}
-                              expenses={generalDiscount.expenses || []}
-                              totals={totals}
-                          />
+                      {isProposalExpensesModalOpen && selectedClientId && activeOption && (
+                          <Suspense fallback={null}>
+                              <ProposalExpensesModal
+                                  isOpen
+                                  onClose={() => setIsProposalExpensesModalOpen(false)}
+                                  onSave={handleSaveProposalExpenses}
+                                  expenses={generalDiscount.expenses || []}
+                                  totals={totals}
+                              />
+                          </Suspense>
                       )}
                       <CustomNumpad
                           ref={numpadRef}
@@ -3068,19 +3227,20 @@ Se não conseguir extrair, retorne: []`;
 
 
 
-                    <LocationImportModal
-                        isOpen={isLocationImportModalOpen}
-                        onClose={() => setIsLocationImportModalOpen(false)}
-                        onImportMeasurements={(importedMeasurements) => {
-                            handleMeasurementsChange([...measurements, ...importedMeasurements]);
-                            setIsLocationImportModalOpen(false);
-                        }}
-                        currentFilm={films[0]?.nome}
-                    />
-
-                    {newVersionAvailable && (
-                        <UpdateNotification onUpdate={handleUpdate} />
+                    {isLocationImportModalOpen && (
+                        <Suspense fallback={null}>
+                            <LocationImportModal
+                                isOpen
+                                onClose={() => setIsLocationImportModalOpen(false)}
+                                onImportMeasurements={(importedMeasurements) => {
+                                    handleMeasurementsChange([...measurements, ...importedMeasurements]);
+                                    setIsLocationImportModalOpen(false);
+                                }}
+                                currentFilm={films[0]?.nome}
+                            />
+                        </Suspense>
                     )}
+
                     {showUndoToast && deletedMeasurement && (
                         <Toast
                             message="Medida excluída"

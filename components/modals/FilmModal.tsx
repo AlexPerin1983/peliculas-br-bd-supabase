@@ -13,6 +13,7 @@ import {
 } from '../../utils/filmMatchingMetadata';
 import { selectAllOnFocus } from '../../src/lib/selectOnFocus';
 import { GARANTIA_UNIDADES, GarantiaUnidade } from '../../src/lib/filmWarranty';
+import { normalizeFilmForPersistence, validateFilmForPersistence } from '../../src/lib/filmPersistence';
 
 interface FilmModalProps {
     isOpen: boolean;
@@ -233,7 +234,14 @@ const FilmModal: React.FC<FilmModalProps> = ({
         setIsSaving(true);
         setError(null);
         try {
-            await onSave({ ...formData, customFields: customFieldsWithMatchingMetadata }, film);
+            const candidate = { ...formData, customFields: customFieldsWithMatchingMetadata };
+            const validationError = validateFilmForPersistence(candidate);
+            if (validationError) {
+                setError(validationError);
+                setIsSaving(false);
+                return;
+            }
+            await onSave(normalizeFilmForPersistence(candidate), film);
         } catch (err: any) {
             setError(err.message || 'Erro ao salvar película. Tente novamente.');
             setIsSaving(false);
@@ -412,11 +420,11 @@ const FilmModal: React.FC<FilmModalProps> = ({
                     <div className="p-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg">
                         <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Especificacoes Tecnicas</h4>
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                            <Input id="uv" label="Protecao UV (%)" type="number" value={formData.uv} onChange={handleChange} onFocus={handleFocus} min="0" step="0.1" />
-                            <Input id="ir" label="Rejeicao IR (%)" type="number" value={formData.ir} onChange={handleChange} onFocus={handleFocus} min="0" step="0.1" />
-                            <Input id="vtl" label="VLT (%)" type="number" value={formData.vtl} onChange={handleChange} onFocus={handleFocus} min="0" step="0.1" />
+                            <Input id="uv" label="Protecao UV (%)" type="number" value={formData.uv} onChange={handleChange} onFocus={handleFocus} min="0" max="100" step="0.1" />
+                            <Input id="ir" label="Rejeicao IR (%)" type="number" value={formData.ir} onChange={handleChange} onFocus={handleFocus} min="0" max="100" step="0.1" />
+                            <Input id="vtl" label="VLT (%)" type="number" value={formData.vtl} onChange={handleChange} onFocus={handleFocus} min="0" max="100" step="0.1" />
                             <Input id="espessura" label="Espessura (micras)" type="number" value={formData.espessura} onChange={handleChange} onFocus={handleFocus} min="0" />
-                            <Input id="tser" label="TSER (%)" type="number" value={formData.tser} onChange={handleChange} onFocus={handleFocus} min="0" step="0.1" />
+                            <Input id="tser" label="TSER (%)" type="number" value={formData.tser} onChange={handleChange} onFocus={handleFocus} min="0" max="100" step="0.1" />
                             <div className="hidden sm:block"></div>
                         </div>
 

@@ -1,6 +1,7 @@
 // @deno-types="npm:@types/web-push@3.6.4"
 import webpush from 'npm:web-push@3.6.7';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { selectCompanyBranding } from './companyBranding.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -231,16 +232,7 @@ const loadCompanyBranding = async (
       .in('user_id', userIds)
     : { data: [] };
 
-  const creatorInfo = (infos || []).find((info: any) => info.user_id === createdBy);
-  const ownerInfo = (infos || []).find((info: any) => info.user_id === organization?.owner_id);
-
-  return {
-    name: creatorInfo?.empresa || ownerInfo?.empresa || organization?.name || 'Empresa',
-    phone: creatorInfo?.telefone || ownerInfo?.telefone || null,
-    email: creatorInfo?.email || ownerInfo?.email || null,
-    logo: creatorInfo?.logo || ownerInfo?.logo || null,
-    colors: creatorInfo?.cores || ownerInfo?.cores || null,
-  };
+  return selectCompanyBranding(organization, infos || [], createdBy);
 };
 
 Deno.serve(async (request) => {

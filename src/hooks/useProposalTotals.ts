@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { Film, FilmPricingMode, Measurement, ProposalDiscount, Totals, UIMeasurement } from '../../types';
 import { CuttingOptimizer } from '../../utils/CuttingOptimizer';
 import { summarizeProposalExpenses } from '../lib/proposalExpenses';
-import { calculatePricingAreaM2 } from '../lib/pricingArea';
+import { calculatePricingAreaM2, roundAreaForPricing } from '../lib/pricingArea';
 import { calculateProposalAdjustmentAmounts } from '../lib/proposalAdjustments';
 import { getCatalogFilmPrices, resolveFilmPrices } from '../lib/filmPriceOverrides';
 import {
@@ -41,6 +41,7 @@ export function useProposalTotals({
             const largura = parseFloat(measurement.largura.replace(',', '.')) || 0;
             const altura = parseFloat(measurement.altura.replace(',', '.')) || 0;
             const quantidade = parseInt(String(measurement.quantidade), 10) || 0;
+            const rawM2 = largura * altura * quantidade;
             const m2 = calculatePricingAreaM2(largura, altura, quantidade);
             const film = films.find(item => item.nome === measurement.pelicula);
             const prices = resolveFilmPrices(film, filmPriceOverrides, measurement.pelicula);
@@ -77,7 +78,7 @@ export function useProposalTotals({
 
             const finalItemPrice = Math.max(0, basePrice - itemDiscountAmount);
 
-            acc.totalM2 += m2;
+            acc.totalM2 += Number.isFinite(rawM2) ? rawM2 : 0;
             acc.subtotal += basePrice;
             acc.totalItemDiscount += itemDiscountAmount;
             acc.priceAfterItemDiscounts += finalItemPrice;
@@ -106,7 +107,7 @@ export function useProposalTotals({
                 };
             }
 
-            groupedTotals[measurement.pelicula].totalM2 += m2;
+            groupedTotals[measurement.pelicula].totalM2 += Number.isFinite(rawM2) ? rawM2 : 0;
             groupedTotals[measurement.pelicula].totalMaterial += materialPrice;
             groupedTotals[measurement.pelicula].totalLabor += laborPrice;
 
@@ -119,6 +120,14 @@ export function useProposalTotals({
             totalQuantity: 0,
             totalMaterial: 0,
             totalLabor: 0
+        });
+
+        // A área total deve ser invariável ao modo como medidas iguais estão agrupadas.
+        // Os preços continuam usando a área exibida de cada linha; apenas o total em m²
+        // soma a área exata e arredonda uma vez no final.
+        result.totalM2 = roundAreaForPricing(result.totalM2);
+        Object.values(groupedTotals).forEach(group => {
+            group.totalM2 = roundAreaForPricing(group.totalM2);
         });
 
         const groupedByFilm: { [key: string]: Measurement[] } = {};

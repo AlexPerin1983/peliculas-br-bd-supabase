@@ -1,8 +1,7 @@
 import React, { ReactNode, Suspense, lazy } from 'react';
 import { Bolt, ClipboardPaste, Plus, Ruler, Sparkles, UserCheck, Users } from 'lucide-react';
-import { Client, Film, Agendamento, AgendamentoServiceStatus, ProposalOption, ProposalPricingMode, SavedPDF, UserInfo, UIMeasurement } from '../../../types';
-import MeasurementList from '../../../components/MeasurementList';
-import ProposalOptionsCarousel from '../../../components/ProposalOptionsCarousel';
+import { Client, Film, Agendamento, AgendamentoServiceStatus, AgendamentoStockStatus, ProposalOption, ProposalPricingMode, SavedPDF, UserInfo, UIMeasurement } from '../../../types';
+import { ServiceStockConsumptionInput } from '../../../services/estoqueDb';
 import { FeatureGate } from '../../../components/subscription/SubscriptionComponents';
 import { PremiumFeatureSection } from '../../../components/subscription/PremiumFeatureSection';
 import { NumpadConfig } from '../../hooks/useMeasurementEditor';
@@ -10,21 +9,57 @@ import ActionButton from '../../../components/ui/ActionButton';
 import ContentState from '../../../components/ui/ContentState';
 import { getMeasurementClipboardCount } from '../../lib/measurementClipboard';
 
-const DashboardView = lazy(() => import('../../../components/views/DashboardView'));
-const UserSettingsView = lazy(() => import('../../../components/views/UserSettingsView'));
-const PdfHistoryView = lazy(() => import('../../../components/views/PdfHistoryView'));
-const ProposalCenterView = lazy(() => import('../../../components/views/ProposalCenterView'));
-const FilmListView = lazy(() => import('../../../components/views/FilmListView'));
-const AgendaView = lazy(() => import('../../../components/views/AgendaView'));
-const EstoqueView = lazy(() => import('../../../components/views/EstoqueView'));
-const FornecedoresView = lazy(() => import('../../../components/views/FornecedoresView'));
-const ServicoQrView = lazy(() => import('../../../components/views/ServicoQrView'));
-const ClientHubView = lazy(() => import('../../../components/views/ClientHubView'));
-const ClientListView = lazy(() => import('../../../components/views/ClientListView'));
-const AdminUsers = lazy(() => import('../../../components/AdminUsers').then(module => ({ default: module.AdminUsers })));
-const UserAccount = lazy(() => import('../../../components/UserAccount').then(module => ({ default: module.UserAccount })));
+type ActiveTab = 'dashboard' | 'client' | 'cliente_hub' | 'clients_list' | 'films' | 'settings' | 'history' | 'proposals' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores' | 'saved_places';
 
-type ActiveTab = 'dashboard' | 'client' | 'cliente_hub' | 'clients_list' | 'films' | 'settings' | 'history' | 'proposals' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores';
+const loadMeasurementList = () => import('../../../components/MeasurementList');
+const loadProposalOptionsCarousel = () => import('../../../components/ProposalOptionsCarousel');
+const MeasurementList = lazy(loadMeasurementList);
+const ProposalOptionsCarousel = lazy(loadProposalOptionsCarousel);
+
+const contentLoaders: Partial<Record<ActiveTab, () => Promise<unknown>>> = {
+    dashboard: () => import('../../../components/views/DashboardView'),
+    settings: () => import('../../../components/views/UserSettingsView'),
+    history: () => import('../../../components/views/PdfHistoryView'),
+    proposals: () => import('../../../components/views/ProposalCenterView'),
+    films: () => import('../../../components/views/FilmListView'),
+    agenda: () => import('../../../components/views/AgendaView'),
+    saved_places: () => import('../../../components/views/SavedPlacesView'),
+    estoque: () => import('../../../components/views/EstoqueView'),
+    fornecedores: () => import('../../../components/views/FornecedoresView'),
+    qr_code: () => import('../../../components/views/ServicoQrView'),
+    cliente_hub: () => import('../../../components/views/ClientHubView'),
+    clients_list: () => import('../../../components/views/ClientListView'),
+    admin: () => import('../../../components/AdminUsers'),
+    account: () => import('../../../components/UserAccount')
+};
+
+export const preloadAppContentView = (activeTab: ActiveTab): void => {
+    if (activeTab === 'client') {
+        void loadMeasurementList();
+        void loadProposalOptionsCarousel();
+        return;
+    }
+    void contentLoaders[activeTab]?.();
+};
+
+const DashboardView = lazy(() => contentLoaders.dashboard!() as Promise<{ default: React.ComponentType<any> }>);
+const UserSettingsView = lazy(() => contentLoaders.settings!() as Promise<{ default: React.ComponentType<any> }>);
+const PdfHistoryView = lazy(() => contentLoaders.history!() as Promise<{ default: React.ComponentType<any> }>);
+const ProposalCenterView = lazy(() => contentLoaders.proposals!() as Promise<{ default: React.ComponentType<any> }>);
+const FilmListView = lazy(() => contentLoaders.films!() as Promise<{ default: React.ComponentType<any> }>);
+const AgendaView = lazy(() => contentLoaders.agenda!() as Promise<{ default: React.ComponentType<any> }>);
+const SavedPlacesView = lazy(() => contentLoaders.saved_places!() as Promise<{ default: React.ComponentType<any> }>);
+const EstoqueView = lazy(() => contentLoaders.estoque!() as Promise<{ default: React.ComponentType<any> }>);
+const FornecedoresView = lazy(() => contentLoaders.fornecedores!() as Promise<{ default: React.ComponentType<any> }>);
+const ServicoQrView = lazy(() => contentLoaders.qr_code!() as Promise<{ default: React.ComponentType<any> }>);
+const ClientHubView = lazy(() => contentLoaders.cliente_hub!() as Promise<{ default: React.ComponentType<any> }>);
+const ClientListView = lazy(() => contentLoaders.clients_list!() as Promise<{ default: React.ComponentType<any> }>);
+const AdminUsers = lazy(() => (
+    contentLoaders.admin!() as Promise<{ AdminUsers: React.ComponentType<any> }>
+).then(module => ({ default: module.AdminUsers })));
+const UserAccount = lazy(() => (
+    contentLoaders.account!() as Promise<{ UserAccount: React.ComponentType<any> }>
+).then(module => ({ default: module.UserAccount })));
 
 interface AppContentRouterProps {
     activeTab: ActiveTab;
@@ -71,6 +106,7 @@ interface AppContentRouterProps {
     onOpenApiKeyModal: (provider: 'gemini' | 'openai') => void;
     onPromptPwaInstall: () => void;
     onDeletePdf: (pdfId: number) => void;
+    onDeletePdfs: (pdfIds: number[]) => Promise<void>;
     onDownloadPdf: (pdfId: number) => Promise<void>;
     onUpdatePdfStatus: (pdfId: number, status: SavedPDF['status']) => Promise<void>;
     onSchedulePdf: (info: any) => void;
@@ -78,7 +114,12 @@ interface AppContentRouterProps {
     onNavigateToOption: (clientId: number, optionId: number) => void;
     onEditAgendamento: (agendamento: Agendamento) => void;
     onUpdateAgendamentoServiceStatus: (agendamento: Agendamento, serviceStatus: AgendamentoServiceStatus) => void;
-    onCompleteAgendamentoWithValue: (agendamento: Agendamento, finalValue: number) => void;
+    onSaveReceiptDescription: (agendamento: Agendamento, description: string) => Promise<void>;
+    onCompleteAgendamentoWithValue: (
+        agendamento: Agendamento,
+        finalValue: number,
+        stockDecision?: { lines?: ServiceStockConsumptionInput[]; stockStatus: AgendamentoStockStatus },
+    ) => Promise<boolean>;
     onContinueAgendamento: (agendamento: Agendamento) => void;
     onRescheduleAgendamento: (agendamento: Agendamento) => void;
     onCreateNewAgendamento: (date: Date) => void;
@@ -166,6 +207,7 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
     onOpenApiKeyModal,
     onPromptPwaInstall,
     onDeletePdf,
+    onDeletePdfs,
     onDownloadPdf,
     onUpdatePdfStatus,
     onSchedulePdf,
@@ -173,6 +215,7 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
     onNavigateToOption,
     onEditAgendamento,
     onUpdateAgendamentoServiceStatus,
+    onSaveReceiptDescription,
     onCompleteAgendamentoWithValue,
     onContinueAgendamento,
     onRescheduleAgendamento,
@@ -218,21 +261,23 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
     const copiedMeasurementsCount = getMeasurementClipboardCount();
     const mobileProposalOptionsSlot = proposalOptions.length > 0 && activeOptionId ? (
         <div className="sm:hidden">
-            <ProposalOptionsCarousel
-                options={proposalOptions}
-                activeOptionId={activeOptionId}
-                onSelectOption={onSelectOption}
-                onRenameOption={onRenameOption}
-                onDeleteOption={onDeleteOption}
-                onAddOption={onAddOption}
-                onSelectPricingMode={onSelectPricingMode}
-                onOpenPaymentConfig={onOpenProposalPaymentConfig}
-                onOpenExpenses={onOpenProposalExpenses}
-                hasActivePaymentOverride={hasCustomProposalPaymentConfig}
-                hasActiveExpenses={hasActiveExpenses}
-                onSwipeDirectionChange={onSwipeDirectionChange}
-                showPricingMode={false}
-            />
+            <Suspense fallback={null}>
+                <ProposalOptionsCarousel
+                    options={proposalOptions}
+                    activeOptionId={activeOptionId}
+                    onSelectOption={onSelectOption}
+                    onRenameOption={onRenameOption}
+                    onDeleteOption={onDeleteOption}
+                    onAddOption={onAddOption}
+                    onSelectPricingMode={onSelectPricingMode}
+                    onOpenPaymentConfig={onOpenProposalPaymentConfig}
+                    onOpenExpenses={onOpenProposalExpenses}
+                    hasActivePaymentOverride={hasCustomProposalPaymentConfig}
+                    hasActiveExpenses={hasActiveExpenses}
+                    onSwipeDirectionChange={onSwipeDirectionChange}
+                    showPricingMode={false}
+                />
+            </Suspense>
         </div>
     ) : null;
 
@@ -308,6 +353,7 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
                 films={films}
                 googleReviewsLink={userInfo?.socialLinks?.googleReviews}
                 onDelete={onDeletePdf}
+                onDeleteMany={onDeletePdfs}
                 onDownload={onDownloadPdf}
                 onUpdateStatus={onUpdatePdfStatus}
                 onSchedule={onSchedulePdf}
@@ -337,6 +383,7 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
                 clients={clients}
                 onEditAgendamento={onEditAgendamento}
                 onUpdateServiceStatus={onUpdateAgendamentoServiceStatus}
+                onSaveReceiptDescription={onSaveReceiptDescription}
                 onCompleteAgendamentoWithValue={onCompleteAgendamentoWithValue}
                 onContinueAgendamento={onContinueAgendamento}
                 onRescheduleAgendamento={onRescheduleAgendamento}
@@ -346,6 +393,10 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
             />,
             defaultLoadingView
         );
+    }
+
+    if (activeTab === 'saved_places') {
+        return renderDeferred(<SavedPlacesView />, defaultLoadingView);
     }
 
     if (activeTab === 'films') {
@@ -482,7 +533,7 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
     }
 
     if (selectedClientId && measurements.length > 0) {
-        return (
+        return renderDeferred(
             <MeasurementList
                 measurements={measurements}
                 films={films}
@@ -509,7 +560,8 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
                 totalM2={totals.totalM2}
                 totalQuantity={totals.totalQuantity}
                 proposalOptionsSlot={mobileProposalOptionsSlot}
-            />
+            />,
+            clientLoadingView
         );
     }
 

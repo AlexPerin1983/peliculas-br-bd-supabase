@@ -5,6 +5,128 @@ interface UpdateBannerProps {
     onDismiss?: () => void;
 }
 
+export const PWA_UPDATE_READY_EVENT = 'peliculas-br-pwa-update-ready';
+
+const WORKER_INSTALL_TIMEOUT_MS = 5_000;
+const UPDATE_RELOAD_FALLBACK_MS = 4_000;
+
+const isLocalDevelopmentHost = () => {
+    const hostname = window.location.hostname;
+    return import.meta.env.DEV
+        || ['localhost', '127.0.0.1', '0.0.0.0'].includes(hostname)
+        || hostname.endsWith('.local')
+        || /^10\./.test(hostname)
+        || /^192\.168\./.test(hostname)
+        || /^172\.(1[6-9]|2\d|3[01])\./.test(hostname);
+};
+
+const withTimeout = <T,>(promise: Promise<T>, timeoutMs: number, fallback: T): Promise<T> => (
+    new Promise((resolve, reject) => {
+        let settled = false;
+        const timeoutId = window.setTimeout(() => {
+            settled = true;
+            resolve(fallback);
+        }, timeoutMs);
+
+        promise.then(
+            (value) => {
+                if (settled) return;
+                settled = true;
+                window.clearTimeout(timeoutId);
+                resolve(value);
+            },
+            (error) => {
+                if (settled) return;
+                settled = true;
+                window.clearTimeout(timeoutId);
+                reject(error);
+            }
+        );
+    })
+);
+
+const reloadWithCacheBust = () => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('_app_refresh', String(Date.now()));
+    window.location.replace(url.toString());
+};
+
+const waitForWorkerInstallation = (worker: ServiceWorker): Promise<boolean> => {
+    if (worker.state === 'installed' || worker.state === 'activated' || worker.state === 'redundant') {
+        return Promise.resolve(true);
+    }
+
+    return new Promise((resolve) => {
+        let timeoutId: number | undefined;
+
+        const finish = (completed: boolean) => {
+            worker.removeEventListener('statechange', handleStateChange);
+            if (timeoutId !== undefined) {
+                window.clearTimeout(timeoutId);
+            }
+            resolve(completed);
+        };
+
+        const handleStateChange = () => {
+            if (worker.state === 'installed' || worker.state === 'activated' || worker.state === 'redundant') {
+                finish(true);
+            }
+        };
+
+        worker.addEventListener('statechange', handleStateChange);
+        timeoutId = window.setTimeout(() => finish(false), WORKER_INSTALL_TIMEOUT_MS);
+    });
+};
+
+const requestUpdatedWorkerActivation = async (
+    registration: ServiceWorkerRegistration
+): Promise<boolean> => {
+    const activateWaitingWorker = () => {
+        const waitingWorker = registration.waiting;
+        if (!waitingWorker) return false;
+
+        waitingWorker.postMessage({ type: 'SKIP_WAITING' });
+        return true;
+    };
+
+    // Uma versao que ja esta pronta nao depende de uma nova consulta de rede.
+    if (activateWaitingWorker()) return true;
+
+    try {
+        await withTimeout(
+            registration.update(),
+            WORKER_INSTALL_TIMEOUT_MS,
+            undefined
+        );
+    } catch (error) {
+        // A atualizacao pode ter terminado enquanto a consulta reportava erro.
+        if (activateWaitingWorker()) return true;
+        throw error;
+    }
+
+    if (activateWaitingWorker()) return true;
+
+    if (!registration.waiting && registration.installing) {
+        const installationFinished = await waitForWorkerInstallation(registration.installing);
+        if (!installationFinished) {
+            throw new Error('A nova versao ainda esta sendo instalada. Tente novamente.');
+        }
+    }
+
+    return activateWaitingWorker();
+};
+
+const scheduleFreshReload = (activationRequested: boolean) => {
+    if (!activationRequested) {
+        reloadWithCacheBust();
+        return;
+    }
+
+    // O index.html recarrega assim que recebe controllerchange. Este timeout e
+    // apenas um fallback para navegadores que demoram a emitir esse evento.
+    window.setTimeout(reloadWithCacheBust, UPDATE_RELOAD_FALLBACK_MS);
+};
+
 /**
  * Detecta atualizacoes do Service Worker e mostra um banner simples
  * para atualizar o app sem depender de conhecimento tecnico do usuario.
@@ -13,28 +135,21 @@ const UpdateBanner: React.FC<UpdateBannerProps> = ({ onDismiss }) => {
     const [showBanner, setShowBanner] = useState(false);
     const [isUpdating, setIsUpdating] = useState(false);
     const [updateReady, setUpdateReady] = useState(false);
-    const isLocalDev = import.meta.env.DEV || ['localhost', '127.0.0.1'].includes(window.location.hostname);
+    const isLocalDev = isLocalDevelopmentHost();
 
     const handleUpdate = useCallback(async () => {
         setIsUpdating(true);
 
         try {
-            if ('caches' in window) {
-                const cacheNames = await caches.keys();
-                await Promise.all(cacheNames.map(name => caches.delete(name)));
-            }
-
             const registration = await navigator.serviceWorker?.getRegistration();
-            if (registration?.waiting) {
-                registration.waiting.postMessage({ type: 'SKIP_WAITING' });
-            }
+            const activationRequested = registration
+                ? await requestUpdatedWorkerActivation(registration)
+                : false;
 
-            setTimeout(() => {
-                window.location.reload();
-            }, 500);
+            scheduleFreshReload(activationRequested);
         } catch (error) {
             console.error('[UpdateBanner] Erro ao atualizar:', error);
-            window.location.reload();
+            reloadWithCacheBust();
         }
     }, []);
 
@@ -45,23 +160,22 @@ const UpdateBanner: React.FC<UpdateBannerProps> = ({ onDismiss }) => {
             const registration = await navigator.serviceWorker.getRegistration();
 
             if (registration) {
-                await registration.update();
+                if (registration.waiting) {
+                    setShowBanner(true);
+                    setUpdateReady(true);
+                    return;
+                }
+
+                await withTimeout(
+                    registration.update(),
+                    WORKER_INSTALL_TIMEOUT_MS,
+                    undefined
+                );
 
                 if (registration.waiting) {
                     setShowBanner(true);
                     setUpdateReady(true);
                 }
-
-                registration.addEventListener('updatefound', () => {
-                    const newWorker = registration.installing;
-
-                    newWorker?.addEventListener('statechange', () => {
-                        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                            setShowBanner(true);
-                            setUpdateReady(true);
-                        }
-                    });
-                });
             }
         } catch (error) {
             console.error('[UpdateBanner] Erro ao verificar atualizacoes:', error);
@@ -71,20 +185,18 @@ const UpdateBanner: React.FC<UpdateBannerProps> = ({ onDismiss }) => {
     useEffect(() => {
         if (isLocalDev || !('serviceWorker' in navigator)) return;
 
-        const handleMessage = (event: MessageEvent) => {
-            if (event.data?.type === 'SW_UPDATED') {
-                setShowBanner(true);
-                setUpdateReady(true);
-            }
+        const handleUpdateReady = () => {
+            setShowBanner(true);
+            setUpdateReady(true);
         };
 
-        navigator.serviceWorker.addEventListener('message', handleMessage);
+        window.addEventListener(PWA_UPDATE_READY_EVENT, handleUpdateReady);
         checkForUpdates();
 
         const interval = setInterval(checkForUpdates, 5 * 60 * 1000);
 
         return () => {
-            navigator.serviceWorker.removeEventListener('message', handleMessage);
+            window.removeEventListener(PWA_UPDATE_READY_EVENT, handleUpdateReady);
             clearInterval(interval);
         };
     }, [checkForUpdates, isLocalDev]);
@@ -165,14 +277,14 @@ const UpdateBanner: React.FC<UpdateBannerProps> = ({ onDismiss }) => {
 
 export const useServiceWorkerUpdate = () => {
     const [hasUpdate, setHasUpdate] = useState(false);
-    const isLocalDev = import.meta.env.DEV || ['localhost', '127.0.0.1'].includes(window.location.hostname);
+    const isLocalDev = isLocalDevelopmentHost();
 
     const forceUpdate = useCallback(async () => {
-        if ('caches' in window) {
-            const names = await caches.keys();
-            await Promise.all(names.map(name => caches.delete(name)));
-        }
-        window.location.reload();
+        const registration = await navigator.serviceWorker?.getRegistration();
+        const activationRequested = registration
+            ? await requestUpdatedWorkerActivation(registration)
+            : false;
+        scheduleFreshReload(activationRequested);
     }, []);
 
     useEffect(() => {

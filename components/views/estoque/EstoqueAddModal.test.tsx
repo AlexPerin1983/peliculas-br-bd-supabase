@@ -113,6 +113,7 @@ describe('EstoqueAddModal', () => {
 
         expect(screen.getByText('Window Blue')).toBeInTheDocument();
         expect(screen.queryByText('Window Premium Clear')).not.toBeInTheDocument();
+        expect(screen.getByText(/8,00m restantes/)).toBeInTheDocument();
 
         fireEvent.click(screen.getByText('Window Blue'));
 

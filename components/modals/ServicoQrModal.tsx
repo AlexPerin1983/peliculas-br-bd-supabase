@@ -262,7 +262,7 @@ const ServicoQrModal: React.FC<ServicoQrModalProps> = ({
     const qrUrl = savedServico ? gerarUrlServico(savedServico.codigo_qr) : '';
 
     return (
-        <div className="fixed inset-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm z-[10000] flex flex-col animate-fade-in">
+        <div className="fixed inset-0 bg-white/95 pt-[env(safe-area-inset-top,0px)] dark:bg-slate-900/95 backdrop-blur-sm z-[10000] flex flex-col animate-fade-in">
             {/* Header */}
             <div className="flex-shrink-0 p-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 sticky top-0">
                 <div className="flex items-center justify-between gap-4 max-w-3xl mx-auto">
@@ -270,8 +270,10 @@ const ServicoQrModal: React.FC<ServicoQrModalProps> = ({
                         {step === 'form' ? '📋 Registrar Serviço' : '🎫 Etiqueta Pronta'}
                     </h2>
                     <button
+                        type="button"
                         onClick={onClose}
-                        className="text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white h-10 w-10 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800"
+                        aria-label="Fechar"
+                        className="text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white h-11 w-11 touch-manipulation flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800"
                     >
                         <i className="fas fa-times text-xl"></i>
                     </button>

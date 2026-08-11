@@ -1,6 +1,8 @@
 const DEFAULT_SUPABASE_URL = 'https://avlefzsipbqvollukgyt.supabase.co';
 const DEFAULT_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF2bGVmenNpcGJxdm9sbHVrZ3l0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY3Nzc0MjUsImV4cCI6MjA4MjM1MzQyNX0.mXiqnxe9reQNwuAjZ6yFfm1AR1Qcdib3EjXCaG9EonM';
 
+const PREVIEW_IMAGE_VERSION = 'company-v2';
+
 export const escapeHtml = (value = '') => String(value)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -20,7 +22,12 @@ export const previewFingerprint = (value = '') => {
     return (hash >>> 0).toString(36);
 };
 
-export const resolvePreviewImage = (logo, origin, shareCode = '', version = previewFingerprint(logo)) => {
+export const resolvePreviewImage = (
+    logo,
+    origin,
+    shareCode = '',
+    version = `${PREVIEW_IMAGE_VERSION}-${previewFingerprint(logo)}`,
+) => {
     if (String(logo || '').startsWith('data:image/') && shareCode) {
         return `${origin}/api/proposta-logo?code=${encodeURIComponent(shareCode)}&v=${encodeURIComponent(version)}`;
     }

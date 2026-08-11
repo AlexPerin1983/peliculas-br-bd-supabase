@@ -3,22 +3,23 @@
 
 import React, { lazy, Suspense } from 'react';
 import ReactDOM from 'react-dom/client';
-import { BrowserRouter } from 'react-router-dom';
 import './src/index.css';
-import App from './App';
 import { ErrorProvider } from './src/contexts/ErrorContext';
 import { FeedbackProvider } from './src/contexts/FeedbackContext';
 import { ThemeProvider } from './src/contexts/ThemeContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SubscriptionProvider } from './contexts/SubscriptionContext';
 import { ResetPassword } from './components/ResetPassword';
+import UpdateBanner from './components/UpdateBanner';
 import { redirectToCanonicalHostIfNeeded } from './src/lib/canonicalHost';
+import { readPasswordRecoveryTokens } from './src/lib/passwordRecovery';
 import { supabase } from './services/supabaseClient';
 
 const EstoquePublicoView = lazy(() => import('./components/views/EstoquePublicoView'));
 const ServicoPublicoView = lazy(() => import('./components/views/ServicoPublicoView'));
 const ProposalPortalView = lazy(() => import('./components/views/ProposalPortalView'));
-const InviteRegister = lazy(() => import('./components/InviteRegister'));
+const InviteRoute = lazy(() => import('./components/InviteRoute'));
+const App = lazy(() => import('./App'));
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -64,6 +65,7 @@ const isProposalPortal = pathname.startsWith('/proposta') || pathname.startsWith
 
 const isInvitePage = pathname.startsWith('/convite/') || pathname.includes('/convite/');
 const isResetPasswordPath = pathname.startsWith('/reset-password');
+const passwordRecoveryTokens = readPasswordRecoveryTokens(pathname, window.location.hash);
 
 const root = ReactDOM.createRoot(rootElement);
 
@@ -109,7 +111,11 @@ const AppWithPasswordRecovery: React.FC = () => {
     );
   }
 
-  return <App />;
+  return (
+    <Suspense fallback={PublicLoadingFallback}>
+      <App />
+    </Suspense>
+  );
 };
 
 const renderApp = () => {
@@ -141,9 +147,7 @@ const renderApp = () => {
     root.render(
       <ThemeProvider>
         <Suspense fallback={PublicLoadingFallback}>
-          <BrowserRouter>
-            <InviteRegister />
-          </BrowserRouter>
+          <InviteRoute />
         </Suspense>
       </ThemeProvider>
     );
@@ -152,6 +156,7 @@ const renderApp = () => {
       <ErrorProvider>
         <FeedbackProvider>
           <ThemeProvider>
+            <UpdateBanner />
             <AuthProvider>
               <SubscriptionProvider>
                 <AppWithPasswordRecovery />
@@ -193,16 +198,46 @@ const bootstrapOAuthSession = async () => {
   }
 };
 
+// Links administrativos e alguns provedores de email retornam a recuperacao
+// no formato implicito (#access_token=...&refresh_token=...). Como o cliente
+// usa PKCE para o login social, estabelecemos essa sessao explicitamente antes
+// de montar o React. Assim, ResetPassword nunca chama updateUser sem sessao.
+const bootstrapPasswordRecoverySession = async () => {
+  if (!passwordRecoveryTokens) {
+    return;
+  }
+
+  try {
+    const { error } = await supabase.auth.setSession({
+      access_token: passwordRecoveryTokens.accessToken,
+      refresh_token: passwordRecoveryTokens.refreshToken
+    });
+
+    if (error) {
+      console.error('[PasswordRecovery] Nao foi possivel estabelecer a sessao:', error.message);
+      return;
+    }
+
+    // Remove os tokens sensiveis da barra de endereco somente depois que a
+    // sessao estiver persistida. A rota continua reconhecida pelo pathname.
+    window.history.replaceState({}, '', `${window.location.pathname}${window.location.search}`);
+  } catch (error) {
+    console.error('[PasswordRecovery] Erro inesperado ao preparar a sessao:', error);
+  }
+};
+
 void redirectToCanonicalHostIfNeeded()
   .then(async redirected => {
     if (redirected) {
       return;
     }
     await bootstrapOAuthSession();
+    await bootstrapPasswordRecoverySession();
     renderApp();
   })
   .catch(async error => {
     console.error('Erro ao verificar dominio canonico:', error);
     await bootstrapOAuthSession();
+    await bootstrapPasswordRecoverySession();
     renderApp();
   });

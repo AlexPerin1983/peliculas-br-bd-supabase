@@ -10,8 +10,8 @@ import {
 } from '../../services/estoqueDb';
 import QRCode from 'qrcode';
 import {
-    formatMeterValue,
     formatMetersFromCentimeters,
+    formatStockMeters,
     parseFlexibleCentimeterInput,
     parseFlexibleMeterInput
 } from '../lib/estoqueDimensions';
@@ -169,7 +169,7 @@ export function useEstoqueOperations({
 
         const dimensoes = document.createElement('p');
         dimensoes.textContent = 'comprimentoTotalM' in item
-            ? `${formatMetersFromCentimeters(item.larguraCm)}m x ${formatMeterValue(item.comprimentoTotalM)}m`
+            ? `${formatMetersFromCentimeters(item.larguraCm)}m x ${formatStockMeters(item.comprimentoTotalM)}m`
             : `${formatMetersFromCentimeters(item.larguraCm)}m x ${formatMetersFromCentimeters((item as Retalho).comprimentoCm)}m`;
         dimensoes.style.fontSize = '14px';
         dimensoes.style.color = '#64748b';

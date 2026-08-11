@@ -204,6 +204,34 @@ describe('useProposalEditor', () => {
     expect(result.current.isDirty).toBe(false);
   });
 
+  it('persiste uma medida sem recarregar toda a lista de clientes', async () => {
+    mockedDb.getProposalOptions.mockResolvedValue([]);
+    mockedDb.saveProposalOptions.mockResolvedValue(undefined as any);
+    const loadClients = vi.fn().mockResolvedValue(undefined);
+    const { result } = buildHook(1, loadClients);
+
+    await act(async () => {});
+    loadClients.mockClear();
+
+    await act(async () => {
+      await result.current.handleMeasurementsChangeWithPersistence([
+        {
+          id: 101,
+          largura: '1,50',
+          altura: '0,50',
+          quantidade: 2,
+          ambiente: 'Sala',
+          tipoAplicacao: 'Interna',
+          pelicula: 'Window Blue',
+          active: true
+        }
+      ]);
+    });
+
+    expect(mockedDb.saveProposalOptions).toHaveBeenCalledWith(1, expect.any(Array));
+    expect(loadClients).not.toHaveBeenCalled();
+  });
+
   it('permite trocar o modo de cobranca da opcao ativa', async () => {
     mockedDb.getProposalOptions.mockResolvedValue([]);
 

@@ -1,7 +1,10 @@
-import { hasLocalSyncDebt } from '../../services/offlineDb';
-
 export const CANONICAL_APP_HOST = 'app.filmstec.shop';
 export const CANONICAL_APP_ORIGIN = `https://${CANONICAL_APP_HOST}`;
+
+const loadLocalSyncDebt = async (): Promise<boolean> => {
+    const { hasLocalSyncDebt } = await import('../../services/offlineDb');
+    return hasLocalSyncDebt();
+};
 
 interface CanonicalHostDecisionInput {
     hostname: string;
@@ -80,7 +83,7 @@ export function buildCanonicalRedirectUrl(location: Pick<Location, 'pathname' | 
 
 export async function getCanonicalRedirectUrl(
     location: Pick<Location, 'hostname' | 'pathname' | 'search' | 'hash'> = window.location,
-    hasSyncDebt = hasLocalSyncDebt
+    hasSyncDebt = loadLocalSyncDebt
 ): Promise<string | null> {
     if (!isProjectAliasHost(location.hostname) || isPublicBypassRoute(location.pathname, location.search)) {
         return null;
@@ -101,7 +104,7 @@ export async function getCanonicalRedirectUrl(
 
 export async function redirectToCanonicalHostIfNeeded(
     location: Location = window.location,
-    hasSyncDebt = hasLocalSyncDebt
+    hasSyncDebt = loadLocalSyncDebt
 ): Promise<boolean> {
     const redirectUrl = await getCanonicalRedirectUrl(location, hasSyncDebt);
 

@@ -1,6 +1,8 @@
 import { Dispatch, SetStateAction, useCallback } from 'react';
 import * as db from '../../services/db';
-import { Agendamento, AgendamentoServiceStatus, SavedPDF, SchedulingInfo } from '../../types';
+import { completeAgendamentoWithStock, ServiceStockConsumptionInput } from '../../services/estoqueDb';
+import { Agendamento, AgendamentoServiceStatus, AgendamentoStockStatus, SavedPDF, SchedulingInfo } from '../../types';
+import { getDefaultReceiptDescription } from '../lib/receipt';
 
 type SetActiveTab = Dispatch<SetStateAction<'dashboard' | 'client' | 'films' | 'settings' | 'history' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores'>>;
 
@@ -96,51 +98,162 @@ export function useSchedulingFlow({
         }
     }, [handleShowInfo, setAgendamentos]);
 
-    const handleCompleteAgendamentoWithValue = useCallback(async (agendamento: Agendamento, finalValue: number) => {
+    const handleSaveReceiptDescription = useCallback(async (agendamento: Agendamento, description: string) => {
+        const receiptDescription = description.trim().slice(0, 300).trimEnd();
+        if (!receiptDescription || receiptDescription === agendamento.receiptDescription?.trim()) return;
+
+        const previousDescription = agendamento.receiptDescription;
+        setAgendamentos(current => current.map(item => (
+            item.id === agendamento.id ? { ...item, receiptDescription } : item
+        )));
+
+        try {
+            const savedAgendamento = await db.saveAgendamento({ ...agendamento, receiptDescription });
+            if (savedAgendamento.receiptDescription?.trim() !== receiptDescription) {
+                throw new Error('A descrição do recibo não foi confirmada pelo armazenamento.');
+            }
+        } catch (error) {
+            console.error('Erro ao salvar descrição do recibo:', error);
+            setAgendamentos(current => current.map(item => (
+                item.id === agendamento.id && item.receiptDescription === receiptDescription
+                    ? { ...item, receiptDescription: previousDescription }
+                    : item
+            )));
+            throw error;
+        }
+    }, [setAgendamentos]);
+
+    const handleCompleteAgendamentoWithValue = useCallback(async (
+        agendamento: Agendamento,
+        finalValue: number,
+        stockDecision?: { lines?: ServiceStockConsumptionInput[]; stockStatus: AgendamentoStockStatus },
+    ): Promise<boolean> => {
         const previousStatus = agendamento.serviceStatus;
         const previousValorFinal = agendamento.valorFinal;
+        const previousStockStatus = agendamento.stockStatus;
+        const previousStockConsumedAt = agendamento.stockConsumedAt;
+        const previousStockSourcePdfIds = agendamento.stockSourcePdfIds;
 
         const linkedPdf = agendamento.pdfId ? allSavedPdfs.find(pdf => pdf.id === agendamento.pdfId) : undefined;
         const linkedProposalIds = agendamento.pdfIds?.length ? agendamento.pdfIds : (agendamento.pdfId ? [agendamento.pdfId] : []);
         const hasMultipleLinkedProposals = linkedProposalIds.length > 1;
+        const stockLines = stockDecision?.lines?.length ? stockDecision.lines : undefined;
+        const nextStockStatus: AgendamentoStockStatus = stockLines
+            ? 'confirmed'
+            : (stockDecision?.stockStatus || agendamento.stockStatus || 'not_required');
 
         const hasValidValue = Number.isFinite(finalValue) && finalValue > 0;
-        // Com orcamento vinculado: o valor sobrescreve o orcamento.
         const shouldUpdatePdf = Boolean(linkedPdf && !hasMultipleLinkedProposals && hasValidValue && finalValue !== linkedPdf!.totalPreco);
-        // Sem orcamento vinculado: o valor fica guardado no proprio agendamento
-        // para entrar no resultado financeiro como servico avulso.
         const shouldStoreValorFinal = (!linkedPdf || hasMultipleLinkedProposals) && hasValidValue && finalValue !== agendamento.valorFinal;
-
         const nextValorFinal = shouldStoreValorFinal ? finalValue : agendamento.valorFinal;
 
-        // Conclui o atendimento de forma otimista (status + valor avulso).
         setAgendamentos(current => current.map(item => (
-            item.id === agendamento.id ? { ...item, serviceStatus: 'completed', valorFinal: nextValorFinal } : item
+            item.id === agendamento.id
+                ? {
+                    ...item,
+                    serviceStatus: 'completed',
+                    valorFinal: nextValorFinal,
+                    stockStatus: nextStockStatus,
+                }
+                : item
         )));
 
         if (shouldUpdatePdf && linkedPdf) {
-            // Sobrescreve o valor do orcamento vinculado com o valor final do servico.
             setAllSavedPdfs(previous => previous.map(pdf => (
                 pdf.id === linkedPdf.id ? { ...pdf, totalPreco: finalValue } : pdf
             )));
         }
 
         try {
-            await db.saveAgendamento({ ...agendamento, serviceStatus: 'completed', valorFinal: nextValorFinal });
-            if (shouldUpdatePdf && linkedPdf) {
-                await db.updatePDF({ ...linkedPdf, totalPreco: finalValue });
+            if (stockLines) {
+                if (agendamento.id == null) {
+                    throw new Error('Salve o agendamento antes de confirmar a baixa de estoque.');
+                }
+
+                const result = await completeAgendamentoWithStock(
+                    agendamento.id,
+                    shouldStoreValorFinal ? nextValorFinal ?? null : null,
+                    stockLines,
+                );
+                const completedAgendamento: Agendamento = {
+                    ...agendamento,
+                    serviceStatus: 'completed',
+                    valorFinal: nextValorFinal,
+                    stockStatus: result.stockStatus,
+                    stockConsumedAt: result.stockConsumedAt,
+                    stockSourcePdfIds: result.stockSourcePdfIds,
+                };
+                setAgendamentos(current => current.map(item => (
+                    item.id === agendamento.id
+                        ? {
+                            ...item,
+                            serviceStatus: 'completed',
+                            valorFinal: nextValorFinal,
+                            stockStatus: result.stockStatus,
+                            stockConsumedAt: result.stockConsumedAt,
+                            stockSourcePdfIds: result.stockSourcePdfIds,
+                        }
+                        : item
+                )));
+
+                // A RPC escreve primeiro no servidor. Em seguida espelhamos o
+                // resultado no banco offline para que um reload sem conexão não
+                // volte a exibir a conclusão como pendente.
+                try {
+                    await db.saveAgendamento(completedAgendamento);
+                } catch (localMirrorError) {
+                    console.error('Baixa confirmada, mas houve erro ao atualizar o espelho offline:', localMirrorError);
+                }
+            } else {
+                await db.saveAgendamento({
+                    ...agendamento,
+                    serviceStatus: 'completed',
+                    valorFinal: nextValorFinal,
+                    stockStatus: nextStockStatus,
+                });
             }
+
+            if (shouldUpdatePdf && linkedPdf) {
+                try {
+                    await db.updatePDF({ ...linkedPdf, totalPreco: finalValue });
+                } catch (pdfError) {
+                    console.error('Atendimento concluído, mas houve erro ao atualizar o valor do orçamento:', pdfError);
+                    setAllSavedPdfs(previous => previous.map(pdf => (
+                        pdf.id === linkedPdf.id ? { ...pdf, totalPreco: linkedPdf.totalPreco } : pdf
+                    )));
+                    handleShowInfo(
+                        'O serviço foi concluído e a baixa foi preservada, mas o valor do orçamento não foi atualizado. Edite o valor novamente na Agenda.',
+                    );
+                }
+            }
+            return true;
         } catch (error) {
             console.error('Erro ao concluir atendimento com valor final:', error);
             setAgendamentos(current => current.map(item => (
-                item.id === agendamento.id ? { ...item, serviceStatus: previousStatus, valorFinal: previousValorFinal } : item
+                item.id === agendamento.id
+                    ? {
+                        ...item,
+                        serviceStatus: previousStatus,
+                        valorFinal: previousValorFinal,
+                        stockStatus: previousStockStatus,
+                        stockConsumedAt: previousStockConsumedAt,
+                        stockSourcePdfIds: previousStockSourcePdfIds,
+                    }
+                    : item
             )));
             if (shouldUpdatePdf && linkedPdf) {
                 setAllSavedPdfs(previous => previous.map(pdf => (
                     pdf.id === linkedPdf.id ? { ...pdf, totalPreco: linkedPdf.totalPreco } : pdf
                 )));
             }
-            handleShowInfo('Não foi possível concluir o atendimento. Tente novamente.');
+            const errorMessage = error instanceof Error
+                ? error.message
+                : (typeof error === 'object' && error && 'message' in error
+                    ? String((error as { message?: unknown }).message || '')
+                    : '');
+            const detail = errorMessage ? ` ${errorMessage}` : '';
+            handleShowInfo(`Não foi possível concluir o atendimento. Nenhum material foi descontado.${detail}`);
+            return false;
         }
     }, [allSavedPdfs, handleShowInfo, setAgendamentos, setAllSavedPdfs]);
 
@@ -192,6 +305,17 @@ export function useSchedulingFlow({
         const originDate = new Date(agendamento.start).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
         const continuationNote = `Continuação do atendimento de ${originDate}.`;
         const notes = agendamento.notes ? `${continuationNote}\n\n${agendamento.notes}` : continuationNote;
+        const linkedProposalIds = agendamento.pdfIds?.length
+            ? agendamento.pdfIds
+            : (agendamento.pdfId ? [agendamento.pdfId] : []);
+        const stockSourcePdfIds = agendamento.stockSourcePdfIds?.length
+            ? agendamento.stockSourcePdfIds
+            : linkedProposalIds;
+        const linkedPdfs = linkedProposalIds
+            .map((pdfId) => allSavedPdfs.find((pdf) => pdf.id === pdfId))
+            .filter((pdf): pdf is SavedPDF => Boolean(pdf));
+        const receiptDescription = agendamento.receiptDescription?.trim()
+            || (linkedPdfs.length ? getDefaultReceiptDescription(linkedPdfs) : undefined);
 
         // Continuacao nao herda o pdfId para nao reapontar o orcamento (evita
         // desvincular o agendamento original do orcamento).
@@ -201,9 +325,11 @@ export function useSchedulingFlow({
                 clienteNome: agendamento.clienteNome,
                 start: continuationStart.toISOString(),
                 notes,
+                receiptDescription,
+                stockSourcePdfIds,
             }
         });
-    }, [handleOpenAgendamentoModal, handleUpdateAgendamentoServiceStatus]);
+    }, [allSavedPdfs, handleOpenAgendamentoModal, handleUpdateAgendamentoServiceStatus]);
 
     const handleCreateNewAgendamento = useCallback((date: Date) => {
         const startDate = new Date(date);
@@ -239,6 +365,7 @@ export function useSchedulingFlow({
         handleCloseAgendamentoModal,
         handleSaveAgendamento,
         handleUpdateAgendamentoServiceStatus,
+        handleSaveReceiptDescription,
         handleCompleteAgendamentoWithValue,
         handleContinueAgendamento,
         handleRequestDeleteAgendamento,

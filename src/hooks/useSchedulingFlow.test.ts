@@ -2,6 +2,7 @@ import { renderHook } from '@testing-library/react';
 import { act } from 'react';
 import { useSchedulingFlow } from './useSchedulingFlow';
 import * as db from '../../services/db';
+import * as estoqueDb from '../../services/estoqueDb';
 import { Agendamento, SavedPDF } from '../../types';
 
 vi.mock('../../services/db', () => ({
@@ -11,7 +12,12 @@ vi.mock('../../services/db', () => ({
   deleteAgendamento: vi.fn()
 }));
 
+vi.mock('../../services/estoqueDb', () => ({
+  completeAgendamentoWithStock: vi.fn()
+}));
+
 const mockedDb = vi.mocked(db);
+const mockedEstoqueDb = vi.mocked(estoqueDb);
 
 describe('useSchedulingFlow', () => {
   const savedPdf: SavedPDF = {
@@ -35,6 +41,7 @@ describe('useSchedulingFlow', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockedDb.saveAgendamento.mockImplementation(async (item) => item as Agendamento);
   });
 
   function buildHook(overrides: Partial<Parameters<typeof useSchedulingFlow>[0]> = {}) {
@@ -139,6 +146,163 @@ describe('useSchedulingFlow', () => {
 
     expect(setPdfGenerationStatus).toHaveBeenCalledWith('idle');
     expect(setActiveTab).toHaveBeenCalledWith('history');
+  });
+
+  it('salva a descrição confirmada do recibo sem alterar valor ou status', async () => {
+    const setAgendamentos = vi.fn();
+    mockedDb.saveAgendamento.mockResolvedValue({
+      ...agendamento,
+      serviceStatus: 'completed',
+      valorFinal: 380,
+      receiptDescription: 'Aplicação de película Carbono Prime na sala'
+    });
+    const completedAppointment = {
+      ...agendamento,
+      serviceStatus: 'completed' as const,
+      valorFinal: 380
+    };
+    const { result } = buildHook({ setAgendamentos });
+
+    await act(async () => {
+      await result.current.handleSaveReceiptDescription(
+        completedAppointment,
+        '  Aplicação de película Carbono Prime na sala  '
+      );
+    });
+
+    expect(mockedDb.saveAgendamento).toHaveBeenCalledWith({
+      ...completedAppointment,
+      receiptDescription: 'Aplicação de película Carbono Prime na sala'
+    });
+    expect(setAgendamentos).toHaveBeenCalledTimes(1);
+  });
+
+  it('desfaz a descrição otimista quando a persistência do recibo falha', async () => {
+    const setAgendamentos = vi.fn();
+    mockedDb.saveAgendamento.mockRejectedValue(new Error('falha ao persistir'));
+    const { result } = buildHook({ setAgendamentos });
+
+    await expect(act(async () => {
+      await result.current.handleSaveReceiptDescription(agendamento, 'Serviço confirmado');
+    })).rejects.toThrow('falha ao persistir');
+
+    expect(setAgendamentos).toHaveBeenCalledTimes(2);
+  });
+
+  it('conclui e baixa todas as linhas de estoque em uma única operação', async () => {
+    const setAgendamentos = vi.fn();
+    mockedEstoqueDb.completeAgendamentoWithStock.mockResolvedValue({
+      agendamentoId: 50,
+      stockStatus: 'confirmed',
+      stockConsumedAt: '2026-08-07T15:30:00.000Z',
+      stockSourcePdfIds: [10],
+      alreadyConfirmed: false,
+      lines: []
+    });
+    const lines = [{
+      bobinaId: 8,
+      metrosConsumidos: 2.4,
+      sourceKey: 'agenda:50:film:carbono%20prime',
+      filmId: 'Carbono Prime',
+      pdfId: 10
+    }];
+    const { result } = buildHook({ setAgendamentos });
+
+    let completed = false;
+    await act(async () => {
+      completed = await result.current.handleCompleteAgendamentoWithValue(
+        agendamento,
+        100,
+        { lines, stockStatus: 'confirmed' }
+      );
+    });
+
+    expect(completed).toBe(true);
+    expect(mockedEstoqueDb.completeAgendamentoWithStock).toHaveBeenCalledWith(50, null, lines);
+    expect(mockedDb.saveAgendamento).toHaveBeenCalledWith(expect.objectContaining({
+      id: 50,
+      serviceStatus: 'completed',
+      stockStatus: 'confirmed',
+      stockConsumedAt: '2026-08-07T15:30:00.000Z',
+      stockSourcePdfIds: [10]
+    }));
+    expect(setAgendamentos).toHaveBeenCalledTimes(2);
+  });
+
+  it('mantém a conclusão pendente quando o usuário decide baixar depois', async () => {
+    const { result } = buildHook();
+
+    let completed = false;
+    await act(async () => {
+      completed = await result.current.handleCompleteAgendamentoWithValue(
+        agendamento,
+        100,
+        { stockStatus: 'pending' }
+      );
+    });
+
+    expect(completed).toBe(true);
+    expect(mockedDb.saveAgendamento).toHaveBeenCalledWith(expect.objectContaining({
+      id: 50,
+      serviceStatus: 'completed',
+      stockStatus: 'pending'
+    }));
+    expect(mockedEstoqueDb.completeAgendamentoWithStock).not.toHaveBeenCalled();
+  });
+
+  it('desfaz o estado otimista sem salvar parcialmente quando a baixa falha', async () => {
+    const setAgendamentos = vi.fn();
+    const handleShowInfo = vi.fn();
+    mockedEstoqueDb.completeAgendamentoWithStock.mockRejectedValue(new Error('Saldo insuficiente'));
+    const { result } = buildHook({ setAgendamentos, handleShowInfo });
+
+    let completed = true;
+    await act(async () => {
+      completed = await result.current.handleCompleteAgendamentoWithValue(
+        agendamento,
+        100,
+        {
+          stockStatus: 'confirmed',
+          lines: [{
+            bobinaId: 8,
+            metrosConsumidos: 20,
+            sourceKey: 'agenda:50:film:carbono%20prime'
+          }]
+        }
+      );
+    });
+
+    expect(completed).toBe(false);
+    expect(mockedDb.saveAgendamento).not.toHaveBeenCalled();
+    expect(setAgendamentos).toHaveBeenCalledTimes(2);
+    expect(handleShowInfo).toHaveBeenCalledWith(expect.stringMatching(/nenhum material foi descontado.*saldo insuficiente/i));
+  });
+
+  it('leva a descrição do serviço para uma continuação sem religar o orçamento', () => {
+    const setSchedulingInfo = vi.fn();
+    const pdfWithService = {
+      ...savedPdf,
+      measurements: [{ pelicula: 'Carbono Prime', tipoAplicacao: 'Janela', ambiente: 'Sala' }]
+    } as SavedPDF;
+    const { result } = buildHook({
+      allSavedPdfs: [pdfWithService],
+      setSchedulingInfo
+    });
+
+    act(() => {
+      result.current.handleContinueAgendamento(agendamento);
+    });
+
+    expect(setSchedulingInfo).toHaveBeenCalledWith({
+      agendamento: expect.objectContaining({
+        clienteId: agendamento.clienteId,
+        receiptDescription: expect.stringContaining('Carbono Prime'),
+        stockSourcePdfIds: [10]
+      })
+    });
+    const continuation = setSchedulingInfo.mock.calls[0][0].agendamento;
+    expect(continuation).not.toHaveProperty('pdfId');
+    expect(continuation).not.toHaveProperty('pdfIds');
   });
 
   it('informa erro quando salvar agendamento falha', async () => {

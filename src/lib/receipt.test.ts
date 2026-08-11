@@ -23,6 +23,89 @@ describe('receipt', () => {
         expect(getDefaultReceiptDescription(pdf)).toBe('Serviço de fornecimento e aplicação de película: Carbono Prime, Jateada');
     });
 
+    it('detalha um único orçamento com opção, aplicação, película e ambiente', () => {
+        const pdf = {
+            proposalOptionName: 'Residencial',
+            measurements: [{
+                tipoAplicacao: 'Janela',
+                pelicula: 'Carbono Prime',
+                ambiente: 'Sala',
+            }],
+        } as SavedPDF;
+
+        expect(getDefaultReceiptDescription(pdf)).toBe(
+            'Serviço de fornecimento e aplicação de película: Carbono Prime — Opção: Residencial; Aplicação: Janela; Ambiente: Sala',
+        );
+    });
+
+    it('reúne vários orçamentos e elimina dados duplicados sem diferenciar maiúsculas', () => {
+        const pdfs = [
+            {
+                proposalOptionName: 'Residencial',
+                measurements: [{ tipoAplicacao: 'Janela', pelicula: 'Carbono Prime', ambiente: 'Sala' }],
+            },
+            {
+                proposalOptionName: 'Comercial',
+                measurements: [
+                    { tipoAplicacao: ' janela ', pelicula: ' carbono prime ', ambiente: ' sala ' },
+                    { tipoAplicacao: 'Porta de vidro', pelicula: 'Jateada', ambiente: 'Entrada' },
+                ],
+            },
+        ] as SavedPDF[];
+
+        const expected = 'Serviço de fornecimento e aplicação de película: Carbono Prime, Jateada — Opções: Residencial e Comercial; Aplicações: Janela e Porta de vidro; Ambientes: Sala e Entrada';
+        expect(getDefaultReceiptDescription(pdfs)).toBe(expected);
+        expect(buildReceiptDetails({ agendamento: appointment, amount: 850, linkedPdfs: pdfs }).description)
+            .toBe(expected);
+    });
+
+    it('mantém os fallbacks para orçamento sem medições e atendimento avulso', () => {
+        expect(getDefaultReceiptDescription({ proposalOptionName: 'Opção 3' } as SavedPDF))
+            .toBe('Serviço de aplicação de películas — Opção 3');
+        expect(getDefaultReceiptDescription())
+            .toBe('Serviço de fornecimento e aplicação de películas');
+    });
+
+    it('prioriza a descrição manual e depois o snapshot do agendamento', () => {
+        const appointmentWithSnapshot = {
+            ...appointment,
+            receiptDescription: 'Serviço confirmado no encerramento',
+        } as Agendamento & { receiptDescription?: string };
+        const linkedPdfs = [{
+            measurements: [{ pelicula: 'Carbono Prime' }],
+        }] as SavedPDF[];
+
+        expect(buildReceiptDetails({
+            agendamento: appointmentWithSnapshot,
+            amount: 850,
+            linkedPdfs,
+            description: '  Descrição ajustada pelo usuário  ',
+        }).description).toBe('Descrição ajustada pelo usuário');
+
+        expect(buildReceiptDetails({
+            agendamento: appointmentWithSnapshot,
+            amount: 850,
+            linkedPdfs,
+        }).description).toBe('Serviço confirmado no encerramento');
+    });
+
+    it('limita a descrição automática a 300 caracteres sem terminar em separador', () => {
+        const pdf = {
+            proposalOptionName: 'Projeto corporativo com diferentes fachadas e divisórias internas',
+            measurements: Array.from({ length: 12 }, (_, index) => ({
+                tipoAplicacao: `Aplicação especial número ${index + 1}`,
+                pelicula: `Película técnica de controle solar modelo ${index + 1}`,
+                ambiente: `Ambiente comercial número ${index + 1}`,
+            })),
+        } as SavedPDF;
+
+        const description = getDefaultReceiptDescription(pdf);
+
+        expect(description.length).toBeLessThanOrEqual(300);
+        expect(description).toMatch(/…$/u);
+        expect(description).not.toMatch(/[\s,:;—-]…$/u);
+    });
+
     it('preenche dados do recibo sem alterar o orçamento', () => {
         vi.setSystemTime(new Date('2026-07-17T12:00:00.000Z'));
         const details = buildReceiptDetails({

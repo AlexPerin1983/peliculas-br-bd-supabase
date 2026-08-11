@@ -2,7 +2,7 @@
 // Funções para gerenciar bobinas, retalhos e consumos
 
 import { supabase } from './supabaseClient';
-import { Bobina, Retalho, Consumo } from '../types';
+import { AgendamentoStockStatus, Bobina, Retalho, Consumo } from '../types';
 import {
     calculateAreaM2FromCentimeters,
     normalizeLegacyCentimeterValue,
@@ -136,9 +136,13 @@ export const saveBobina = async (bobina: Omit<Bobina, 'id'> | Bobina): Promise<B
     };
 
     if ('id' in bobina && bobina.id) {
+        // O saldo e alterado exclusivamente pelo ledger/trigger de consumos.
+        // Nao o envie em edicoes de metadata/status: um objeto aberto antes de
+        // outra baixa poderia restaurar silenciosamente uma metragem antiga.
+        const { comprimento_restante_m: _staleRemainingMeters, ...bobinaUpdateData } = bobinaData;
         const { data, error } = await supabase
             .from('bobinas')
-            .update(bobinaData)
+            .update(bobinaUpdateData)
             .eq('id', bobina.id)
             .select()
             .single();
@@ -345,6 +349,137 @@ const mapRowToRetalho = (row: any): Retalho => {
 // CONSUMOS FUNCTIONS
 // ============================================
 
+export interface ServiceStockConsumptionInput {
+    bobinaId: number;
+    metrosConsumidos: number;
+    sourceKey: string;
+    filmId?: string;
+    pdfId?: number;
+    larguraCorteCm?: number;
+    comprimentoCorteCm?: number;
+    areaM2?: number;
+    tipo?: Consumo['tipo'];
+    observacao?: string;
+}
+
+export interface CompleteAgendamentoStockResult {
+    agendamentoId: number;
+    stockStatus: AgendamentoStockStatus;
+    stockConsumedAt?: string;
+    stockSourcePdfIds: number[];
+    alreadyConfirmed: boolean;
+    lines: ServiceStockConsumptionInput[];
+}
+
+const mapRpcLineToServiceStockConsumption = (line: any): ServiceStockConsumptionInput => ({
+    bobinaId: Number(line?.bobina_id),
+    metrosConsumidos: Number(line?.metros_consumidos),
+    sourceKey: String(line?.source_key || ''),
+    filmId: line?.film_id ?? undefined,
+    pdfId: line?.pdf_id == null ? undefined : Number(line.pdf_id),
+    larguraCorteCm: line?.largura_corte_cm == null ? undefined : Number(line.largura_corte_cm),
+    comprimentoCorteCm: line?.comprimento_corte_cm == null ? undefined : Number(line.comprimento_corte_cm),
+    areaM2: line?.area_m2 == null ? undefined : Number(line.area_m2),
+    tipo: line?.tipo ?? undefined,
+    observacao: line?.observacao ?? undefined
+});
+
+const mapStockCompletionResult = (rawData: any): CompleteAgendamentoStockResult => {
+    const data = Array.isArray(rawData) ? rawData[0] : rawData;
+    if (!data || data.agendamento_id == null) {
+        throw new Error('Resposta inválida ao confirmar a baixa de estoque.');
+    }
+
+    return {
+        agendamentoId: Number(data.agendamento_id),
+        stockStatus: data.stock_status as AgendamentoStockStatus,
+        stockConsumedAt: data.stock_consumed_at ?? undefined,
+        stockSourcePdfIds: Array.isArray(data.stock_source_pdf_ids)
+            ? data.stock_source_pdf_ids.map(Number).filter(Number.isFinite)
+            : [],
+        alreadyConfirmed: data.already_confirmed === true,
+        lines: Array.isArray(data.stock_consumption_snapshot)
+            ? data.stock_consumption_snapshot.map(mapRpcLineToServiceStockConsumption)
+            : []
+    };
+};
+
+const buildStockRpcLine = (
+    agendamentoId: number,
+    line: ServiceStockConsumptionInput
+): Record<string, unknown> => {
+    if (!Number.isInteger(line.bobinaId) || line.bobinaId <= 0) {
+        throw new Error('Bobina inválida para a baixa de estoque.');
+    }
+    if (!Number.isFinite(line.metrosConsumidos) || line.metrosConsumidos <= 0) {
+        throw new Error('A quantidade consumida deve ser maior que zero.');
+    }
+
+    const sourceKey = line.sourceKey.trim();
+    const sourceKeyPrefix = `agenda:${agendamentoId}:`;
+    if (!sourceKey.startsWith(sourceKeyPrefix) || sourceKey.length <= sourceKeyPrefix.length) {
+        throw new Error(`A chave de origem deve começar com agenda:${agendamentoId}:.`);
+    }
+
+    const optionalNumber = (value: number | undefined, fieldLabel: string): number | undefined => {
+        if (value == null) return undefined;
+        if (!Number.isFinite(value) || value < 0) {
+            throw new Error(`${fieldLabel} inválido para a baixa de estoque.`);
+        }
+        return value;
+    };
+
+    const pdfId = line.pdfId == null ? undefined : optionalNumber(line.pdfId, 'PDF');
+    if (pdfId != null && (!Number.isInteger(pdfId) || pdfId <= 0)) {
+        throw new Error('PDF inválido para a baixa de estoque.');
+    }
+
+    const larguraCorteCm = optionalNumber(line.larguraCorteCm, 'Largura do corte');
+    const comprimentoCorteCm = optionalNumber(line.comprimentoCorteCm, 'Comprimento do corte');
+    const areaM2 = optionalNumber(line.areaM2, 'Área consumida');
+    const filmId = line.filmId?.trim();
+    const observacao = line.observacao?.trim();
+
+    return {
+        bobina_id: line.bobinaId,
+        metros_consumidos: line.metrosConsumidos,
+        source_key: sourceKey,
+        ...(filmId ? { film_id: filmId } : {}),
+        ...(pdfId != null ? { pdf_id: pdfId } : {}),
+        ...(larguraCorteCm != null ? { largura_corte_cm: larguraCorteCm } : {}),
+        ...(comprimentoCorteCm != null ? { comprimento_corte_cm: comprimentoCorteCm } : {}),
+        ...(areaM2 != null ? { area_m2: areaM2 } : {}),
+        ...(line.tipo ? { tipo: line.tipo } : {}),
+        ...(observacao ? { observacao } : {})
+    };
+};
+
+export const completeAgendamentoWithStock = async (
+    agendamentoId: number,
+    finalValue: number | null,
+    lines: ServiceStockConsumptionInput[]
+): Promise<CompleteAgendamentoStockResult> => {
+    if (!Number.isInteger(agendamentoId) || agendamentoId <= 0) {
+        throw new Error('Agendamento inválido para concluir o serviço.');
+    }
+    if (finalValue != null && (!Number.isFinite(finalValue) || finalValue < 0)) {
+        throw new Error('Valor final inválido para concluir o serviço.');
+    }
+    if (!Array.isArray(lines) || lines.length === 0) {
+        throw new Error('Informe ao menos um material para concluir a baixa de estoque.');
+    }
+
+    const rpcLines = lines.map((line) => buildStockRpcLine(agendamentoId, line));
+    const { data, error } = await supabase.rpc('complete_agendamento_with_stock', {
+        p_agendamento_id: agendamentoId,
+        p_final_value: finalValue,
+        p_lines: rpcLines
+    });
+
+    if (error) throw error;
+    return mapStockCompletionResult(data);
+};
+
 export const getAllConsumos = async (): Promise<Consumo[]> => {
     const userId = await getCurrentUserId();
     if (!userId) return [];
@@ -395,6 +530,8 @@ export const saveConsumo = async (consumo: Omit<Consumo, 'id'>): Promise<Consumo
         client_id: consumo.clientId,
         client_name: consumo.clientName,
         pdf_id: consumo.pdfId,
+        ...(consumo.agendamentoId != null ? { agendamento_id: consumo.agendamentoId } : {}),
+        ...(consumo.sourceKey ? { source_key: consumo.sourceKey } : {}),
         metros_consumidos: consumo.metrosConsumidos,
         largura_corte_cm: consumo.larguraCorteCm,
         comprimento_corte_cm: consumo.comprimentoCorteCm,
@@ -432,6 +569,8 @@ const mapRowToConsumo = (row: any): Consumo => ({
     clientId: row.client_id,
     clientName: row.client_name,
     pdfId: row.pdf_id,
+    agendamentoId: row.agendamento_id ?? undefined,
+    sourceKey: row.source_key ?? undefined,
     metrosConsumidos: row.metros_consumidos,
     larguraCorteCm: row.largura_corte_cm,
     comprimentoCorteCm: row.comprimento_corte_cm,

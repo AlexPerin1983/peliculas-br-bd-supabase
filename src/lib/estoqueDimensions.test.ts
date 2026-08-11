@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
     calculateAreaM2FromCentimeters,
     formatMetersFromCentimeters,
+    formatStockMeters,
     normalizeLegacyRetalhoDimensions,
     normalizeLegacyCentimeterValue,
     parseFlexibleCentimeterInput,
@@ -39,6 +40,13 @@ describe('estoqueDimensions', () => {
     it('formata centimetros como metros para exibicao', () => {
         expect(formatMetersFromCentimeters(152)).toBe('1,52');
         expect(formatMetersFromCentimeters(55)).toBe('0,55');
+    });
+
+    it('exibe saldos do estoque sempre com duas casas decimais', () => {
+        expect(formatStockMeters(14.05)).toBe('14,05');
+        expect(formatStockMeters(14.1)).toBe('14,10');
+        expect(formatStockMeters(20)).toBe('20,00');
+        expect(formatStockMeters(Number.NaN)).toBe('0,00');
     });
 
     it('normaliza entrada de metros para bobinas', () => {

@@ -1,9 +1,10 @@
 import React from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Login } from './Login';
+import { CommunityAccessGate } from './CommunityAccessGate';
 
 export const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const { session, loading, isBlocked, signOut, connectionError, retryConnection } = useAuth();
+    const { session, profile, loading, isAdmin, isBlocked, signOut, refreshProfile, connectionError, retryConnection } = useAuth();
 
     if (loading) {
         return (
@@ -92,6 +93,22 @@ export const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ childr
                     </button>
                 </div>
             </div>
+        );
+    }
+
+    // Perfis antigos em cache nao possuem a propriedade (undefined) e seguem
+    // normalmente. Depois da migracao, novos perfis recebem null ate validarem
+    // o codigo. Durante o cadastro automatico o perfil ainda pode ser null.
+    const needsCommunityAccess = !isAdmin && (
+        profile === null || profile.community_access_granted_at === null
+    );
+
+    if (needsCommunityAccess) {
+        return (
+            <CommunityAccessGate
+                onGranted={refreshProfile}
+                onSignOut={signOut}
+            />
         );
     }
 

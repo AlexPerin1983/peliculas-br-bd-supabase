@@ -161,22 +161,30 @@ const GlobalNotificationBell: React.FC<GlobalNotificationBellProps> = ({ onNavig
     }, [seenIds]);
 
     useEffect(() => {
-        void refresh();
         const refreshWhenVisible = () => {
             if (document.visibilityState === 'visible') void refresh();
         };
-        const interval = window.setInterval(refreshWhenVisible, FALLBACK_REFRESH_INTERVAL_MS);
         const handleVisibility = refreshWhenVisible;
-        document.addEventListener('visibilitychange', handleVisibility);
-        const channel = supabase.channel('global-notification-center')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'proposal_portal_messages' }, refreshWhenVisible)
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'agendamentos' }, refreshWhenVisible)
-            .subscribe();
+        let interval: number | null = null;
+        let channel: ReturnType<typeof supabase.channel> | null = null;
+
+        // O sino não participa do primeiro conteúdo visível. Adiamos suas
+        // consultas pesadas para não disputar rede com a tela que o usuário abriu.
+        const startupTimer = window.setTimeout(() => {
+            void refresh();
+            interval = window.setInterval(refreshWhenVisible, FALLBACK_REFRESH_INTERVAL_MS);
+            document.addEventListener('visibilitychange', handleVisibility);
+            channel = supabase.channel('global-notification-center')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'proposal_portal_messages' }, refreshWhenVisible)
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'agendamentos' }, refreshWhenVisible)
+                .subscribe();
+        }, 1500);
 
         return () => {
-            window.clearInterval(interval);
+            window.clearTimeout(startupTimer);
+            if (interval !== null) window.clearInterval(interval);
             document.removeEventListener('visibilitychange', handleVisibility);
-            void supabase.removeChannel(channel);
+            if (channel) void supabase.removeChannel(channel);
         };
     }, [refresh]);
 
@@ -184,7 +192,7 @@ const GlobalNotificationBell: React.FC<GlobalNotificationBellProps> = ({ onNavig
 
     const markSeen = useCallback((ids: string[]) => {
         setSeenIds(current => {
-            const next = new Set(current);
+            const next = new Set<string>(current);
             ids.forEach(id => next.add(id));
             saveSeenIds(next);
             return next;
@@ -208,7 +216,12 @@ const GlobalNotificationBell: React.FC<GlobalNotificationBellProps> = ({ onNavig
 
     const handleMarkAll = async () => {
         markSeen(items.map(item => item.id));
-        const portalIds = Array.from(new Set(items.filter(item => item.kind === 'proposal').map(item => item.portalId).filter((id): id is string => Boolean(id))));
+        const portalIds: string[] = Array.from(new Set<string>(
+            items
+                .filter(item => item.kind === 'proposal')
+                .map(item => item.portalId)
+                .filter((id): id is string => Boolean(id))
+        ));
         await Promise.allSettled(portalIds.map(portalId => markCompanyProposalPortalRead(portalId)));
         void refresh();
     };

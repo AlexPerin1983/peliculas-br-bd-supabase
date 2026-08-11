@@ -211,8 +211,7 @@ export function useProposalEditor({
 
         await db.saveProposalOptions(selectedClientId, updatedProposalOptions);
         setIsDirty(false);
-        await loadClients(selectedClientId, false);
-    }, [selectedClientId, activeOptionId, loadClients, handleMeasurementsChange]);
+    }, [selectedClientId, activeOptionId, handleMeasurementsChange]);
 
     useEffect(() => {
         if (!isDirty) {

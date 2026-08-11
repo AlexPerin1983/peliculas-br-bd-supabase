@@ -80,10 +80,16 @@ export const FREE_PLAN_LIMITS: SubscriptionLimits = {
 };
 
 let cachedSubscriptionInfo: SubscriptionInfo | null = null;
+let cachedSubscriptionOrganizationId: string | null = null;
 let cacheTimestamp = 0;
+let cachedAvailableModules: SubscriptionModule[] | null = null;
 const CACHE_DURATION_MS = 5 * 60 * 1000;
 
-export async function getAvailableModules(): Promise<SubscriptionModule[]> {
+export async function getAvailableModules(forceRefresh = false): Promise<SubscriptionModule[]> {
+    if (!forceRefresh && cachedAvailableModules) {
+        return cachedAvailableModules;
+    }
+
     const { data, error } = await supabase
         .from('subscription_modules')
         .select('*')
@@ -95,22 +101,28 @@ export async function getAvailableModules(): Promise<SubscriptionModule[]> {
         return [];
     }
 
-    return data.map((module) => ({
+    cachedAvailableModules = data.map((module) => ({
         ...module,
         features: module.features || []
     }));
+    return cachedAvailableModules;
 }
 
-export async function getSubscriptionInfo(forceRefresh = false): Promise<SubscriptionInfo> {
+export async function getSubscriptionInfo(
+    forceRefresh = false,
+    organizationIdOverride?: string | null
+): Promise<SubscriptionInfo> {
+    const organizationId = organizationIdOverride ?? await getEffectiveOrganizationId();
+
     if (
         !forceRefresh &&
         cachedSubscriptionInfo &&
+        cachedSubscriptionOrganizationId === organizationId &&
         Date.now() - cacheTimestamp < CACHE_DURATION_MS
     ) {
         return cachedSubscriptionInfo;
     }
 
-    const organizationId = await getEffectiveOrganizationId();
     if (!organizationId) {
         return getDefaultSubscriptionInfo();
     }
@@ -125,6 +137,7 @@ export async function getSubscriptionInfo(forceRefresh = false): Promise<Subscri
     }
 
     cachedSubscriptionInfo = data as SubscriptionInfo;
+    cachedSubscriptionOrganizationId = organizationId;
     cacheTimestamp = Date.now();
 
     return cachedSubscriptionInfo;
@@ -317,6 +330,7 @@ export async function confirmModuleActivation(
 
 export function clearSubscriptionCache(): void {
     cachedSubscriptionInfo = null;
+    cachedSubscriptionOrganizationId = null;
     cacheTimestamp = 0;
 }
 

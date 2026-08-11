@@ -4,7 +4,7 @@
 
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no, interactive-widget=resizes-content">
   <title>Películas Brasil - BD (v2)</title>
 
   <!-- PWA Configuration -->
@@ -12,7 +12,8 @@
   <meta name="theme-color" content="#364562">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <!-- Mantém os controles abaixo da barra de status/Dynamic Island no PWA iOS. -->
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="Películas BD">
   <link rel="apple-touch-icon" href="/icon-192x192.png">
   <link rel="icon" type="image/png" sizes="192x192" href="/icon-192x192.png">
@@ -53,11 +54,26 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
-    href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Montserrat:wght@700&display=optional"
-    rel="stylesheet">
+    href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap"
+    rel="preload"
+    as="style"
+    onload="this.onload=null;this.rel='stylesheet'">
+  <noscript>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap"
+      rel="stylesheet">
+  </noscript>
 
   <!-- Font Awesome -->
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com">
+  <link
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    rel="preload"
+    as="style"
+    onload="this.onload=null;this.rel='stylesheet'">
+  <noscript>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  </noscript>
 
 </head>
 
@@ -97,7 +113,15 @@
     (function () {
       var RECOVERY_KEY = 'peliculas-br-asset-recovery-at';
       var RECOVERY_WINDOW_MS = 2 * 60 * 1000;
-      var CACHE_PREFIX = 'peliculas-br-bd-';
+      var UPDATE_RELOAD_FALLBACK_MS = 4 * 1000;
+      var TECHNICAL_STEP_TIMEOUT_MS = 5 * 1000;
+      var TECHNICAL_CACHE_PREFIXES = [
+        'peliculas-br-bd-',
+        'peliculas-brasil-',
+        'app-cache-',
+        'workbox-'
+      ];
+      var TECHNICAL_CACHE_NAMES = ['pages-cache', 'assets-cache', 'images-cache'];
       var recoveryInProgress = false;
 
       function getLastRecoveryAt() {
@@ -117,29 +141,142 @@
         }
       }
 
-      function clearRecoveryGuard() {
-        try {
-          window.sessionStorage.removeItem(RECOVERY_KEY);
-        } catch (_error) {}
+      function isTechnicalCacheName(name) {
+        return TECHNICAL_CACHE_NAMES.indexOf(name) !== -1
+          || TECHNICAL_CACHE_PREFIXES.some(function (prefix) {
+            return name.indexOf(prefix) === 0;
+          });
+      }
+
+      function withTimeout(promise, fallbackValue) {
+        return new Promise(function (resolve, reject) {
+          var settled = false;
+          var timeoutId = window.setTimeout(function () {
+            settled = true;
+            resolve(fallbackValue);
+          }, TECHNICAL_STEP_TIMEOUT_MS);
+
+          Promise.resolve(promise).then(function (value) {
+            if (settled) return;
+            settled = true;
+            window.clearTimeout(timeoutId);
+            resolve(value);
+          }, function (error) {
+            if (settled) return;
+            settled = true;
+            window.clearTimeout(timeoutId);
+            reject(error);
+          });
+        });
       }
 
       function clearTechnicalCaches() {
         if (!('caches' in window)) return Promise.resolve();
 
-        return window.caches.keys()
+        var cleanup = window.caches.keys()
           .then(function (names) {
             return Promise.all(names
-              .filter(function (name) { return name.indexOf(CACHE_PREFIX) === 0; })
+              .filter(isTechnicalCacheName)
               .map(function (name) { return window.caches.delete(name); }));
           })
           .catch(function () {});
+
+        return withTimeout(cleanup, []);
       }
 
       function replaceWithFreshUrl() {
+        if (window.__peliculasReloading) return;
+        window.__peliculasReloading = true;
         var url = new URL(window.location.href);
         url.searchParams.set('_app_refresh', String(Date.now()));
         window.location.replace(url.toString());
       }
+
+      function waitForWorkerInstallation(worker) {
+        if (!worker || worker.state === 'installed' || worker.state === 'activated' || worker.state === 'redundant') {
+          return Promise.resolve(true);
+        }
+
+        return new Promise(function (resolve) {
+          var timeoutId;
+
+          function finish(completed) {
+            worker.removeEventListener('statechange', handleStateChange);
+            if (timeoutId) window.clearTimeout(timeoutId);
+            resolve(completed);
+          }
+
+          function handleStateChange() {
+            if (worker.state === 'installed' || worker.state === 'activated' || worker.state === 'redundant') {
+              finish(true);
+            }
+          }
+
+          worker.addEventListener('statechange', handleStateChange);
+          timeoutId = window.setTimeout(function () { finish(false); }, 5000);
+        });
+      }
+
+      function requestUpdatedWorkerActivation() {
+        if (!('serviceWorker' in navigator)) return Promise.resolve(false);
+
+        return navigator.serviceWorker.getRegistration()
+          .then(function (registration) {
+            if (!registration) return false;
+
+            function activateWaitingWorker() {
+              var waitingWorker = registration.waiting;
+              if (!waitingWorker) return false;
+
+              waitingWorker.postMessage({ type: 'SKIP_WAITING' });
+              return true;
+            }
+
+            // Se a versao nova ja esta pronta, ativa sem depender da rede.
+            if (activateWaitingWorker()) return true;
+
+            return withTimeout(registration.update(), undefined)
+              .catch(function (error) {
+                if (activateWaitingWorker()) return true;
+                throw error;
+              })
+              .then(function (activatedDuringUpdate) {
+                if (activatedDuringUpdate === true || activateWaitingWorker()) return true;
+
+                if (!registration.installing) return false;
+
+                return waitForWorkerInstallation(registration.installing).then(function (installationFinished) {
+                  if (!installationFinished) {
+                    throw new Error('A nova versao ainda esta sendo instalada. Tente novamente.');
+                  }
+                  return activateWaitingWorker();
+                });
+              });
+          });
+      }
+
+      function prepareFreshVersion() {
+        return requestUpdatedWorkerActivation()
+          .then(function (activationRequested) {
+            // O worker novo limpa os caches antigos durante activate. Quando
+            // nao existe worker aguardando, limpamos aqui antes de recarregar.
+            if (activationRequested) return true;
+            return clearTechnicalCaches().then(function () { return false; });
+          });
+      }
+
+      function finishFreshUpdate(activationRequested) {
+        if (!activationRequested) {
+          replaceWithFreshUrl();
+          return;
+        }
+
+        // controllerchange normalmente recarrega antes. Este e apenas o
+        // fallback para navegadores que atrasam ou omitem esse evento.
+        window.setTimeout(replaceWithFreshUrl, UPDATE_RELOAD_FALLBACK_MS);
+      }
+
+      window.__reloadPeliculasApp = replaceWithFreshUrl;
 
       function showRecoveryScreen() {
         function render() {
@@ -171,8 +308,18 @@
           document.body.appendChild(screen);
 
           document.getElementById('pwa-recovery-button').addEventListener('click', function () {
-            clearRecoveryGuard();
-            clearTechnicalCaches().then(replaceWithFreshUrl);
+            var button = document.getElementById('pwa-recovery-button');
+            button.disabled = true;
+            button.textContent = 'Atualizando...';
+            setLastRecoveryAt(Date.now());
+
+            prepareFreshVersion()
+              .then(finishFreshUpdate)
+              .catch(function (error) {
+                console.error('Nao foi possivel ativar a nova versao:', error);
+                button.disabled = false;
+                button.textContent = 'Tentar novamente';
+              });
           });
         }
 
@@ -199,16 +346,8 @@
         console.warn('Atualizando arquivos tecnicos do aplicativo:', reason);
         setLastRecoveryAt(now);
 
-        clearTechnicalCaches()
-          .then(function () {
-            if (!('serviceWorker' in navigator)) return;
-            return navigator.serviceWorker.getRegistration()
-              .then(function (registration) {
-                return registration ? registration.update() : undefined;
-              })
-              .catch(function () {});
-          })
-          .then(replaceWithFreshUrl)
+        prepareFreshVersion()
+          .then(finishFreshUpdate)
           .catch(showRecoveryScreen);
       }
 
@@ -263,7 +402,11 @@
       navigator.serviceWorker.addEventListener('controllerchange', () => {
         if (refreshing) return;
         refreshing = true;
-        window.location.reload();
+        if (window.__reloadPeliculasApp) {
+          window.__reloadPeliculasApp();
+        } else {
+          window.location.reload();
+        }
       });
 
       window.addEventListener('load', async () => {
@@ -287,13 +430,16 @@
           scope: '/'
         })
           .then(registration => {
+            const notifyUpdateReady = () => {
+              window.dispatchEvent(new Event('peliculas-br-pwa-update-ready'));
+            };
+
             // Check for updates every 60 seconds
             setInterval(() => {
-              registration.update();
+              registration.update().catch(error => {
+                console.warn('Falha ao verificar atualizacao do aplicativo:', error);
+              });
             }, 60000);
-
-            // Immediate update check
-            registration.update();
 
             registration.addEventListener('updatefound', () => {
               const newWorker = registration.installing;
@@ -301,17 +447,25 @@
               if (newWorker) {
                 newWorker.addEventListener('statechange', () => {
                   // Quando o novo SW estiver instalado e houver um controlador atual,
-                  // apenas notifica o usuário. NÃO ativamos automaticamente (sem
-                  // SKIP_WAITING aqui) para evitar reload em loop. A ativação acontece
-                  // quando o usuário clica em "Atualizar Agora" no banner.
+                  // notifica o banner global, inclusive na tela de login.
                   if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                    if (window.showUpdateNotification) {
-                      window.showUpdateNotification();
-                    }
+                    notifyUpdateReady();
                   }
                 });
               }
             });
+
+            if (registration.waiting) {
+              notifyUpdateReady();
+            }
+
+            // Immediate update check, depois de registrar os listeners para
+            // nao perder updatefound em conexoes rapidas.
+            if (!registration.waiting) {
+              registration.update().catch(error => {
+                console.warn('Falha na verificacao inicial de atualizacao:', error);
+              });
+            }
           })
           .catch(error => {
             console.error('❌ Falha ao registrar Service Worker:', error);

@@ -709,33 +709,217 @@ export async function savePdfLocal(pdf: SavedPDF): Promise<LocalSavedPDF> {
 // FUNÇÕES DE AGENDAMENTOS
 // =====================================================
 
+export async function deletePdfLocal(
+    pdfId: number | string,
+    options: { queueRemoteDelete?: boolean } = {}
+): Promise<void> {
+    const queueRemoteDelete = options.queueRemoteDelete !== false;
+    const pdf = await offlineDb.savedPdfs
+        .filter(item => (
+            item.id === pdfId
+            || item._remoteId === pdfId
+            || item._localId === pdfId
+            || getTemporaryPublicIdFromLocalId(item._localId) === pdfId
+        ))
+        .first();
+    const remoteId = isPersistedRemoteId(pdf?._remoteId)
+        ? pdf._remoteId
+        : isPersistedRemoteId(pdf?.id)
+            ? pdf.id
+            : isPersistedRemoteId(pdfId)
+                ? pdfId
+                : undefined;
+    const queuedItems = await offlineDb.syncQueue
+        .where('table')
+        .equals('savedPdfs')
+        .toArray();
+    const queuedForPdf = queuedItems.filter(item => (
+        (!!pdf?._localId && item.data?._localId === pdf._localId)
+        || (!!remoteId && (item.data?._remoteId === remoteId || item.data?.id === remoteId))
+    ));
+
+    if (queuedForPdf.length > 0) {
+        await offlineDb.syncQueue.bulkDelete(queuedForPdf.map(item => item.id!).filter(Boolean));
+    }
+
+    if (queueRemoteDelete && remoteId) {
+        await enqueueSyncItem({
+            table: 'savedPdfs',
+            action: 'delete',
+            data: { id: remoteId },
+            timestamp: Date.now()
+        });
+    }
+
+    if (pdf?._localId) {
+        await offlineDb.savedPdfs.delete(pdf._localId);
+    }
+}
+
 export async function getAllAgendamentosLocal(): Promise<LocalAgendamento[]> {
     return await offlineDb.agendamentos.toArray();
 }
 
-export async function saveAgendamentoLocal(agendamento: Agendamento): Promise<LocalAgendamento> {
-    const now = Date.now();
-    const localId = generateLocalId();
-    const remoteId = isPersistedRemoteId(agendamento.id) ? agendamento.id : undefined;
+const getAgendamentoIdentityValues = (
+    agendamento: Partial<LocalAgendamento>
+): Array<number | string> => {
+    const values = new Set<number | string>();
 
-    const localAgendamento: LocalAgendamento = {
-        ...agendamento,
-        _localId: localId,
-        _syncStatus: 'pending',
-        _lastModified: now,
-        _remoteId: remoteId
-    };
+    if (agendamento._localId) {
+        values.add(agendamento._localId);
+        const temporaryId = getTemporaryPublicIdFromLocalId(agendamento._localId);
+        if (temporaryId !== undefined) values.add(temporaryId);
+    }
 
-    await offlineDb.agendamentos.put(localAgendamento);
+    if (agendamento.id !== undefined) values.add(agendamento.id);
+    if (agendamento._remoteId !== undefined) values.add(agendamento._remoteId);
 
-    await enqueueSyncItem({
-        table: 'agendamentos',
-        action: remoteId ? 'update' : 'create',
-        data: localAgendamento,
-        timestamp: now
+    return Array.from(values);
+};
+
+const findMatchingAgendamentos = (
+    allAgendamentos: LocalAgendamento[],
+    input: Partial<LocalAgendamento>
+): { matches: LocalAgendamento[]; identityValues: Set<number | string> } => {
+    const identityValues = new Set(getAgendamentoIdentityValues(input));
+    const matches: LocalAgendamento[] = [];
+    const matchedRecords = new Set<LocalAgendamento>();
+
+    // Expande a identidade de forma transitiva. Isso também consolida registros
+    // legados em que uma cópia tem apenas o ID temporário e outra já recebeu o
+    // _remoteId do Supabase.
+    let foundNewMatch = true;
+    while (foundNewMatch) {
+        foundNewMatch = false;
+
+        for (const candidate of allAgendamentos) {
+            if (matchedRecords.has(candidate)) continue;
+
+            const candidateValues = getAgendamentoIdentityValues(candidate);
+            if (!candidateValues.some(value => identityValues.has(value))) continue;
+
+            matches.push(candidate);
+            matchedRecords.add(candidate);
+            candidateValues.forEach(value => identityValues.add(value));
+            foundNewMatch = true;
+        }
+    }
+
+    return { matches, identityValues };
+};
+
+async function upsertAgendamentoSyncItem(
+    localAgendamento: LocalAgendamento,
+    action: 'create' | 'update',
+    timestamp: number,
+    identityValues: Set<number | string>
+): Promise<void> {
+    getAgendamentoIdentityValues(localAgendamento).forEach(value => identityValues.add(value));
+
+    const existingItems = await offlineDb.syncQueue
+        .where('table')
+        .equals('agendamentos')
+        .toArray();
+    const sameAgendamentoItems = existingItems.filter(item => {
+        if (!(item.action === 'create' || item.action === 'update')) return false;
+
+        return getAgendamentoIdentityValues(item.data || {})
+            .some(value => identityValues.has(value));
     });
 
-    return localAgendamento;
+    if (sameAgendamentoItems.length === 0) {
+        await enqueueSyncItem({
+            table: 'agendamentos',
+            action,
+            data: localAgendamento,
+            timestamp
+        });
+        return;
+    }
+
+    const [latestItem, ...duplicateItems] = sameAgendamentoItems
+        .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+    await offlineDb.syncQueue.update(latestItem.id!, {
+        action,
+        data: localAgendamento,
+        timestamp,
+        status: 'pending',
+        lastError: undefined,
+        lastAttemptAt: undefined,
+        retryCount: 0
+    });
+
+    const duplicateIds = duplicateItems
+        .map(item => item.id)
+        .filter((id): id is number => id !== undefined);
+    if (duplicateIds.length > 0) {
+        await offlineDb.syncQueue.bulkDelete(duplicateIds);
+    }
+}
+
+export async function saveAgendamentoLocal(agendamento: Agendamento): Promise<LocalAgendamento> {
+    const now = Date.now();
+    const input = agendamento as Agendamento & Partial<SyncMetadata>;
+    let savedAgendamento!: LocalAgendamento;
+
+    await offlineDb.transaction('rw', offlineDb.agendamentos, offlineDb.syncQueue, async () => {
+        const allAgendamentos = await offlineDb.agendamentos.toArray();
+        const { matches, identityValues } = findMatchingAgendamentos(allAgendamentos, input);
+        const orderedMatches = [...matches].sort((a, b) => (
+            (a._lastModified || 0) - (b._lastModified || 0)
+        ));
+        const exactLocalMatch = input._localId
+            ? orderedMatches.find(item => item._localId === input._localId)
+            : undefined;
+        const latestMatch = exactLocalMatch || orderedMatches.at(-1);
+        const mergedExisting = orderedMatches.reduce<Partial<LocalAgendamento>>(
+            (merged, item) => ({ ...merged, ...item }),
+            {}
+        );
+        const localId = latestMatch?._localId || input._localId || generateLocalId();
+        const remoteId = isPersistedRemoteId(input._remoteId)
+            ? input._remoteId
+            : isPersistedRemoteId(input.id)
+                ? input.id
+                : isPersistedRemoteId(latestMatch?._remoteId)
+                    ? latestMatch._remoteId
+                    : isPersistedRemoteId(latestMatch?.id)
+                        ? latestMatch.id
+                        : undefined;
+        const publicId = remoteId
+            ?? (typeof input.id === 'number' ? input.id : undefined)
+            ?? (typeof latestMatch?.id === 'number' ? latestMatch.id : undefined)
+            ?? getTemporaryPublicIdFromLocalId(localId);
+
+        savedAgendamento = {
+            ...mergedExisting,
+            ...input,
+            ...(publicId !== undefined ? { id: publicId } : {}),
+            _localId: localId,
+            _syncStatus: 'pending',
+            _lastModified: now,
+            _remoteId: remoteId
+        } as LocalAgendamento;
+
+        await offlineDb.agendamentos.put(savedAgendamento);
+
+        const duplicateLocalIds = matches
+            .map(item => item._localId)
+            .filter((candidate): candidate is string => !!candidate && candidate !== localId);
+        if (duplicateLocalIds.length > 0) {
+            await offlineDb.agendamentos.bulkDelete(duplicateLocalIds);
+        }
+
+        await upsertAgendamentoSyncItem(
+            savedAgendamento,
+            remoteId ? 'update' : 'create',
+            now,
+            identityValues
+        );
+    });
+
+    return savedAgendamento;
 }
 
 // =====================================================
@@ -860,7 +1044,9 @@ export async function getFailedSyncCount(): Promise<number> {
 
 export async function hasLocalSyncDebt(): Promise<boolean> {
     const queuedItems = await offlineDb.syncQueue
-        .filter(item => item.status === 'pending' || item.status === 'error')
+        .where('status')
+        .anyOf('pending', 'error')
+        .limit(1)
         .count();
 
     if (queuedItems > 0) {
@@ -877,17 +1063,15 @@ export async function hasLocalSyncDebt(): Promise<boolean> {
         offlineDb.standaloneExpenses
     ];
 
-    for (const table of tables) {
-        const count = await table
-            .filter(item => item._syncStatus === 'pending' || item._syncStatus === 'error')
-            .count();
+    const dirtyCounts = await Promise.all(tables.map(table => (
+        table
+            .where('_syncStatus')
+            .anyOf('pending', 'error')
+            .limit(1)
+            .count()
+    )));
 
-        if (count > 0) {
-            return true;
-        }
-    }
-
-    return false;
+    return dirtyCounts.some(count => count > 0);
 }
 
 export async function getFailedSyncItems(limit = 3): Promise<FailedSyncItem[]> {

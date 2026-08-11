@@ -138,7 +138,9 @@ export function useAppBootstrap({
         const page = await db.getPDFPage({ offset: requestedOffset, limit: 50 });
         setHistoryPdfs(current => {
             if (reset) return page.pdfs;
-            const byId = new Map(current.map(pdf => [pdf.id, pdf]));
+            const byId = new Map<number | undefined, SavedPDF>(
+                current.map(pdf => [pdf.id, pdf] as const)
+            );
             page.pdfs.forEach(pdf => byId.set(pdf.id, pdf));
             return [...byId.values()].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         });
@@ -253,12 +255,12 @@ export function useAppBootstrap({
                 }
             };
 
-            const isProgressiveDashboard = initialClientLoad === 'deferred'
+            const isProgressiveStartup = initialClientLoad === 'deferred'
                 && initialPdfLoad === 'deferred';
 
-            if (isProgressiveDashboard) {
-                // O dashboard pode aparecer imediatamente. Cada conjunto secundario
-                // atualiza seu proprio estado quando chegar, sem segurar a tela toda.
+            if (isProgressiveStartup) {
+                // Telas que não dependem da coleção completa de clientes/PDFs podem
+                // aparecer imediatamente; perfil, películas e agenda chegam depois.
                 setIsLoading(false);
 
                 const backgroundTasks = [
@@ -299,11 +301,15 @@ export function useAppBootstrap({
                     db.getUserInfo(),
                     initialClientLoad === 'page'
                         ? loadClientListPage({ reset: true })
-                        : loadClients(),
+                        : initialClientLoad === 'all'
+                            ? loadClients()
+                            : Promise.resolve(),
                     loadFilms(),
                     initialPdfLoad === 'history'
                         ? loadPdfHistoryPage({ reset: true })
-                        : loadAllPdfs(),
+                        : initialPdfLoad === 'all'
+                            ? loadAllPdfs()
+                            : Promise.resolve(),
                     loadAgendamentos()
                 ]);
 
@@ -331,7 +337,6 @@ export function useAppBootstrap({
         loadAllPdfs,
         initialClientLoad,
         initialPdfLoad,
-        loadClientListPage,
         loadClients,
         loadClientListPage,
         loadFilms,
@@ -344,6 +349,7 @@ export function useAppBootstrap({
 
     return {
         loadClients,
+        loadClientListPage,
         loadFilms,
         loadAllPdfs,
         loadPdfHistoryPage,

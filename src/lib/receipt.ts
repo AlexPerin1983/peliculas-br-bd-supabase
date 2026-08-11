@@ -88,14 +88,98 @@ const clientAddress = (client?: Client): string | undefined => {
     return [street, client.complemento, client.bairro, city, client.cep].filter(Boolean).join(' - ') || undefined;
 };
 
-export const getDefaultReceiptDescription = (linkedPdf?: SavedPDF): string => {
-    const films = Array.from(new Set(
-        (linkedPdf?.measurements || []).map((item) => item.pelicula?.trim()).filter(Boolean) as string[]
-    ));
-    if (films.length) return `Serviço de fornecimento e aplicação de película: ${films.join(', ')}`;
-    if (linkedPdf?.proposalOptionName?.trim()) return `Serviço de aplicação de películas — ${linkedPdf.proposalOptionName.trim()}`;
-    return 'Serviço de fornecimento e aplicação de películas';
+const DEFAULT_RECEIPT_DESCRIPTION = 'Serviço de fornecimento e aplicação de películas';
+const MAX_RECEIPT_DESCRIPTION_LENGTH = 300;
+
+const isMeaningfulReceiptText = (value?: string | null): value is string => {
+    const normalized = value?.trim().toLocaleLowerCase('pt-BR');
+    return Boolean(normalized && normalized !== 'desconhecido' && normalized !== 'não informado');
 };
+
+const uniqueReceiptValues = (values: Array<string | undefined>): string[] => {
+    const seen = new Set<string>();
+    return values.reduce<string[]>((result, value) => {
+        if (!isMeaningfulReceiptText(value)) return result;
+        const trimmed = value.trim().replace(/\s+/g, ' ');
+        const key = trimmed.toLocaleLowerCase('pt-BR');
+        if (!seen.has(key)) {
+            seen.add(key);
+            result.push(trimmed);
+        }
+        return result;
+    }, []);
+};
+
+const joinReceiptValues = (values: string[]): string => {
+    if (values.length <= 1) return values[0] || '';
+    return `${values.slice(0, -1).join(', ')} e ${values[values.length - 1]}`;
+};
+
+const truncateReceiptDescription = (
+    value: string,
+    maxLength = MAX_RECEIPT_DESCRIPTION_LENGTH,
+): string => {
+    if (value.length <= maxLength) return value;
+
+    const available = maxLength - 1;
+    const candidate = value.slice(0, available + 1);
+    const breakPoints = [candidate.lastIndexOf(';'), candidate.lastIndexOf(','), candidate.lastIndexOf(' ')];
+    const naturalBreak = Math.max(...breakPoints);
+    const cutAt = naturalBreak > 0 ? naturalBreak : available;
+    const shortened = value
+        .slice(0, cutAt)
+        .trim()
+        .replace(/[,:;—-]+$/u, '')
+        .trimEnd();
+
+    return `${shortened}…`;
+};
+
+const describeReceiptValues = (
+    singularLabel: string,
+    pluralLabel: string,
+    values: string[],
+): string | undefined => {
+    if (!values.length) return undefined;
+    return `${values.length > 1 ? pluralLabel : singularLabel}: ${joinReceiptValues(values)}`;
+};
+
+export function getDefaultReceiptDescription(linkedPdf?: SavedPDF): string;
+export function getDefaultReceiptDescription(linkedPdfs?: readonly SavedPDF[]): string;
+export function getDefaultReceiptDescription(linkedPdfOrPdfs?: SavedPDF | readonly SavedPDF[]): string;
+export function getDefaultReceiptDescription(
+    linkedPdfOrPdfs?: SavedPDF | readonly SavedPDF[],
+): string {
+    const linkedPdfs = Array.isArray(linkedPdfOrPdfs)
+        ? linkedPdfOrPdfs
+        : linkedPdfOrPdfs
+            ? [linkedPdfOrPdfs as SavedPDF]
+            : [];
+    const measurements = linkedPdfs.flatMap((pdf) => pdf.measurements || []);
+    const proposalNames = uniqueReceiptValues(linkedPdfs.map((pdf) => pdf.proposalOptionName));
+    const applicationTypes = uniqueReceiptValues(measurements.map((item) => item.tipoAplicacao));
+    const films = uniqueReceiptValues(measurements.map((item) => item.pelicula));
+    const environments = uniqueReceiptValues(measurements.map((item) => item.ambiente));
+
+    // Preserva o texto legado quando o orçamento possui apenas o nome da opção.
+    if (!films.length && !applicationTypes.length && !environments.length) {
+        if (proposalNames.length) {
+            return truncateReceiptDescription(`Serviço de aplicação de películas — ${joinReceiptValues(proposalNames)}`);
+        }
+        return DEFAULT_RECEIPT_DESCRIPTION;
+    }
+
+    const base = films.length
+        ? `Serviço de fornecimento e aplicação de película: ${films.join(', ')}`
+        : DEFAULT_RECEIPT_DESCRIPTION;
+    const context = [
+        describeReceiptValues('Opção', 'Opções', proposalNames),
+        describeReceiptValues('Aplicação', 'Aplicações', applicationTypes),
+        describeReceiptValues('Ambiente', 'Ambientes', environments),
+    ].filter((part): part is string => Boolean(part));
+
+    return truncateReceiptDescription(context.length ? `${base} — ${context.join('; ')}` : base);
+}
 
 const receiptNumber = (agendamento: Agendamento): string => {
     const date = new Date(agendamento.end || agendamento.start);
@@ -104,41 +188,53 @@ const receiptNumber = (agendamento: Agendamento): string => {
 };
 
 export const buildReceiptDetails = ({
-    agendamento, client, linkedPdf, userInfo, amount, description, paymentMethod,
+    agendamento, client, linkedPdf, linkedPdfs, userInfo, amount, description, paymentMethod,
 }: {
     agendamento: Agendamento;
     client?: Client;
     linkedPdf?: SavedPDF;
+    linkedPdfs?: readonly SavedPDF[];
     userInfo?: UserInfo | null;
     amount: number;
     description?: string;
     paymentMethod?: string;
-}): ReceiptDetails => ({
-    receiptNumber: receiptNumber(agendamento),
-    issuedAt: new Date().toISOString(),
-    serviceDate: agendamento.end || agendamento.start,
-    amount,
-    amountInWords: amountToWordsBRL(amount),
-    description: description?.trim() || getDefaultReceiptDescription(linkedPdf),
-    paymentMethod: paymentMethod?.trim() || undefined,
-    client: {
-        name: client?.nome || agendamento.clienteNome,
-        document: client?.cpfCnpj?.trim() || undefined,
-        address: clientAddress(client),
-        phone: client?.telefone?.trim() || undefined,
-    },
-    company: {
-        name: userInfo?.empresa?.trim() || userInfo?.nome?.trim() || 'Prestador de serviço',
-        responsible: userInfo?.nome?.trim() || undefined,
-        document: userInfo?.cpfCnpj?.trim() || undefined,
-        address: userInfo?.endereco?.trim() || undefined,
-        phone: userInfo?.telefone?.trim() || undefined,
-        email: userInfo?.email?.trim() || undefined,
-        logo: userInfo?.logo,
-        signature: userInfo?.assinatura,
-        primaryColor: userInfo?.cores?.primaria,
-    },
-});
+}): ReceiptDetails => {
+    const receiptDescription = (agendamento as Agendamento & { receiptDescription?: string })
+        .receiptDescription
+        ?.trim();
+    const automaticDescriptionSource = linkedPdfs?.length
+        ? linkedPdfs
+        : linkedPdf;
+
+    return {
+        receiptNumber: receiptNumber(agendamento),
+        issuedAt: new Date().toISOString(),
+        serviceDate: agendamento.end || agendamento.start,
+        amount,
+        amountInWords: amountToWordsBRL(amount),
+        description: description?.trim()
+            || receiptDescription
+            || getDefaultReceiptDescription(automaticDescriptionSource),
+        paymentMethod: paymentMethod?.trim() || undefined,
+        client: {
+            name: client?.nome || agendamento.clienteNome,
+            document: client?.cpfCnpj?.trim() || undefined,
+            address: clientAddress(client),
+            phone: client?.telefone?.trim() || undefined,
+        },
+        company: {
+            name: userInfo?.empresa?.trim() || userInfo?.nome?.trim() || 'Prestador de serviço',
+            responsible: userInfo?.nome?.trim() || undefined,
+            document: userInfo?.cpfCnpj?.trim() || undefined,
+            address: userInfo?.endereco?.trim() || undefined,
+            phone: userInfo?.telefone?.trim() || undefined,
+            email: userInfo?.email?.trim() || undefined,
+            logo: userInfo?.logo,
+            signature: userInfo?.assinatura,
+            primaryColor: userInfo?.cores?.primaria,
+        },
+    };
+};
 
 export const receiptFileName = (details: ReceiptDetails): string => {
     const safeName = details.client.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase();

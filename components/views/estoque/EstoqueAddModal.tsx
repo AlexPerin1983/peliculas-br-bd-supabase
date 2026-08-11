@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Bobina } from '../../../types';
-import { formatMetersFromCentimeters } from '../../../src/lib/estoqueDimensions';
+import { formatMetersFromCentimeters, formatStockMeters } from '../../../src/lib/estoqueDimensions';
 import Modal from '../../ui/Modal';
 
 type EstoqueAddModalProps = {
@@ -97,7 +97,8 @@ export default function EstoqueAddModal({
                 bobina.filmId,
                 `${bobina.larguraCm}cm`,
                 `${formatMetersFromCentimeters(bobina.larguraCm)}m`,
-                `${bobina.comprimentoRestanteM.toFixed(1)}m`,
+                `${bobina.comprimentoRestanteM}m`,
+                `${formatStockMeters(bobina.comprimentoRestanteM)}m`,
                 bobina.localizacao,
                 bobina.fornecedor,
                 bobina.lote,
@@ -141,7 +142,7 @@ export default function EstoqueAddModal({
         ? `${selectedBobina.filmId} - ${formatMetersFromCentimeters(selectedBobina.larguraCm)}m`
         : 'Retalho avulso (sem bobina)';
     const selectedOriginDetail = selectedBobina
-        ? `${selectedBobina.comprimentoRestanteM.toFixed(1)}m restantes${selectedBobina.localizacao ? ` - ${selectedBobina.localizacao}` : ''}`
+        ? `${formatStockMeters(selectedBobina.comprimentoRestanteM)}m restantes${selectedBobina.localizacao ? ` - ${selectedBobina.localizacao}` : ''}`
         : 'Cadastrar sem vincular a uma bobina do estoque.';
 
     const closeOriginSearch = () => {
@@ -464,7 +465,7 @@ export default function EstoqueAddModal({
                                                 </span>
                                             </div>
                                             <p className="mt-1 text-xs text-[var(--text-muted)]">
-                                                #{bobina.id} - {formatMetersFromCentimeters(bobina.larguraCm)}m largura - {bobina.comprimentoRestanteM.toFixed(1)}m restantes
+                                                #{bobina.id} - {formatMetersFromCentimeters(bobina.larguraCm)}m largura - {formatStockMeters(bobina.comprimentoRestanteM)}m restantes
                                             </p>
                                             {(bobina.localizacao || bobina.fornecedor || bobina.lote) && (
                                                 <p className="mt-1 truncate text-xs text-[var(--text-soft)]">

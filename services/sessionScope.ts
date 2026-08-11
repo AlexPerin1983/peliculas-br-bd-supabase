@@ -114,7 +114,7 @@ async function getOrganizationOwnerId(organizationId: string): Promise<string | 
     return data?.owner_id ?? null;
 }
 
-export async function getOrganizationMember(profile: Profile): Promise<OrganizationMember | null> {
+async function getOrganizationMemberRecord(profile: Profile): Promise<OrganizationMember | null> {
     if (!profile.organization_id) return null;
 
     const { data, error } = await supabase
@@ -131,11 +131,13 @@ export async function getOrganizationMember(profile: Profile): Promise<Organizat
         return null;
     }
 
-    if (data) {
-        return data;
-    }
+    return data ?? null;
+}
 
-    const ownerId = await getOrganizationOwnerId(profile.organization_id);
+const buildOwnerFallbackMember = (
+    profile: Profile,
+    ownerId: string | null
+): OrganizationMember | null => {
     if (ownerId === profile.id) {
         return {
             id: `owner-fallback-${profile.organization_id}-${profile.id}`,
@@ -150,6 +152,16 @@ export async function getOrganizationMember(profile: Profile): Promise<Organizat
     }
 
     return null;
+};
+
+export async function getOrganizationMember(profile: Profile): Promise<OrganizationMember | null> {
+    const member = await getOrganizationMemberRecord(profile);
+    if (member || !profile.organization_id) {
+        return member;
+    }
+
+    const ownerId = await getOrganizationOwnerId(profile.organization_id);
+    return buildOwnerFallbackMember(profile, ownerId);
 }
 
 export async function getEffectiveOrganizationId(): Promise<string | null> {
@@ -174,9 +186,22 @@ export async function getEffectiveOwnerUserId(): Promise<string | null> {
 export async function getSessionScope(options?: {
     ensureProfile?: boolean;
     email?: string;
+    session?: Session | null;
+    user?: User | null;
 }): Promise<SessionScope> {
-    const session = await getCurrentSession();
-    const user = session?.user ?? (await getCurrentUser());
+    const hasProvidedAuth = Boolean(
+        options
+        && (
+            Object.prototype.hasOwnProperty.call(options, 'session')
+            || Object.prototype.hasOwnProperty.call(options, 'user')
+        )
+    );
+    const session = hasProvidedAuth
+        ? options?.session ?? null
+        : await getCurrentSession();
+    const user = hasProvidedAuth
+        ? options?.user ?? session?.user ?? null
+        : session?.user ?? (await getCurrentUser());
 
     if (!user) {
         return {
@@ -196,8 +221,17 @@ export async function getSessionScope(options?: {
         options?.ensureProfile && (options.email || user.email)
             ? await ensureProfile(user.id, options.email || user.email || '')
             : await getProfile(user.id);
-    const member = profile ? await getOrganizationMember(profile) : null;
-    const ownerUserId = profile?.organization_id ? await getEffectiveOwnerUserId() : user.id;
+    let member: OrganizationMember | null = null;
+    let ownerUserId: string | null = user.id;
+
+    if (profile?.organization_id) {
+        const [memberRecord, organizationOwnerId] = await Promise.all([
+            getOrganizationMemberRecord(profile),
+            getOrganizationOwnerId(profile.organization_id)
+        ]);
+        member = memberRecord ?? buildOwnerFallbackMember(profile, organizationOwnerId);
+        ownerUserId = organizationOwnerId || user.id;
+    }
 
     return {
         session,

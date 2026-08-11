@@ -1,5 +1,6 @@
 import React from 'react';
 import { EstoqueStats } from '../../../services/estoqueDb';
+import { formatStockMeters } from '../../../src/lib/estoqueDimensions';
 import { PackageIcon, ScissorsIcon } from './EstoqueIcons';
 
 interface EstoqueStatsBarProps {
@@ -17,7 +18,7 @@ const statCards = (stats: EstoqueStats) => [
     },
     {
         label: 'Metros disponiveis',
-        value: `${stats.totalMetrosDisponiveis.toFixed(1)}m`,
+        value: `${formatStockMeters(stats.totalMetrosDisponiveis)}m`,
         detail: 'estoque utilizavel',
         tone: 'border border-[var(--border-subtle)] bg-[var(--brand-primary-soft)] text-[var(--brand-primary)]',
         accent: 'bg-[var(--brand-primary)]',
@@ -38,7 +39,7 @@ const statCards = (stats: EstoqueStats) => [
     },
     {
         label: 'Consumo 30 dias',
-        value: `${stats.consumoUltimos30Dias.toFixed(1)}m`,
+        value: `${formatStockMeters(stats.consumoUltimos30Dias)}m`,
         detail: 'ritmo recente',
         tone: 'border border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-muted)]',
         accent: 'bg-[var(--brand-primary)]',

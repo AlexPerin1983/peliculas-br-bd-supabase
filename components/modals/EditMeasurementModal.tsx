@@ -238,14 +238,14 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
     const inputErrorClasses = "w-full text-center p-2.5 rounded-[var(--radius-control)] border-2 text-base font-bold transition-colors duration-200 bg-red-50 text-[var(--text-strong)] border-red-500 focus:outline-none focus:ring-4 focus:ring-red-500/10 focus:border-red-500";
 
     return (
-        <div className="fixed inset-0 z-50 flex flex-col bg-[var(--app-bg)] animate-fade-in">
+        <div className="fixed inset-0 z-50 flex flex-col bg-[var(--app-bg)] pt-[env(safe-area-inset-top,0px)] animate-fade-in">
             <header className="sticky top-0 z-40 flex-shrink-0 border-b border-[var(--border-subtle)] bg-[color-mix(in_srgb,var(--app-bg)_88%,transparent)] p-4 backdrop-blur-md">
                 <div className="mx-auto flex max-w-3xl items-center justify-between gap-4">
                     <div>
                         <p className="ui-kicker">Detalhe da proposta</p>
                         <h2 className="mt-1 text-xl font-bold text-[var(--text-strong)]">Editar medida</h2>
                     </div>
-                    <button onClick={onClose} className="flex h-10 w-10 items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-muted)] shadow-[var(--shadow-hairline)] transition-colors hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)]">
+                    <button type="button" onClick={onClose} aria-label="Fechar" className="flex h-11 w-11 touch-manipulation items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-muted)] shadow-[var(--shadow-hairline)] transition-colors hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)]">
                         <i className="fas fa-times text-xl"></i>
                     </button>
                 </div>

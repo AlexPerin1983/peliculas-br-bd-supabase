@@ -1,9 +1,12 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+    ArrowDown,
+    ArrowUp,
     Boxes,
     CalendarDays,
     CircleUserRound,
     FileText,
+    GripVertical,
     Headset,
     History,
     Layers3,
@@ -13,8 +16,10 @@ import {
     LucideIcon,
     MessageCircle,
     MessagesSquare,
+    MapPinned,
     PanelLeftClose,
     PanelLeftOpen,
+    Pencil,
     QrCode,
     Settings,
     ShieldUser,
@@ -27,12 +32,17 @@ import SyncStatusIndicator from '../SyncStatusIndicator';
 import ThemeToggle from '../ui/ThemeToggle';
 import SupportModal from '../modals/SupportModal';
 import * as db from '../../services/db';
+import { moveMenuItem, type MenuTabId } from '../../src/lib/menuPreferences';
+import { useMenuDragReorder } from '../../src/hooks/useMenuDragReorder';
 
-type ActiveTab = 'dashboard' | 'client' | 'cliente_hub' | 'clients_list' | 'films' | 'settings' | 'history' | 'proposals' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores' | 'wa_connector';
+type ActiveTab = 'dashboard' | 'client' | 'cliente_hub' | 'clients_list' | 'films' | 'settings' | 'history' | 'proposals' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores' | 'saved_places' | 'wa_connector';
 
 interface DesktopSidebarProps {
     activeTab: ActiveTab;
     onTabChange: (tab: ActiveTab) => void;
+    menuOrder: readonly MenuTabId[];
+    onMenuOrderChange: (order: MenuTabId[]) => void;
+    onResetMenuOrder: () => void;
 }
 
 interface NavItemConfig {
@@ -52,20 +62,51 @@ const MAIN_NAV: NavItemConfig[] = [
     { tabId: 'estoque', icon: Boxes, label: 'Estoque' },
     { tabId: 'qr_code', icon: QrCode, label: 'QR Code' },
     { tabId: 'agenda', icon: CalendarDays, label: 'Agenda' },
-    { tabId: 'fornecedores', icon: Truck, label: 'Fornecedores' },
-    // Conector de WhatsApp: só aparece localmente quando VITE_WA_CONNECTOR=1 (nunca em produção).
-    ...(isWaConnectorEnabled()
-        ? [{ tabId: 'wa_connector' as ActiveTab, icon: MessageCircle, label: 'WhatsApp', badge: 'Local' }]
-        : [])
+    { tabId: 'saved_places', icon: MapPinned, label: 'Meus locais' },
+    { tabId: 'fornecedores', icon: Truck, label: 'Fornecedores' }
 ];
+
+const MAIN_NAV_BY_TAB = new Map<MenuTabId, NavItemConfig>(
+    MAIN_NAV.map(item => [item.tabId as MenuTabId, item])
+);
+
+const getMainNavItemLabel = (tabId: MenuTabId) =>
+    MAIN_NAV_BY_TAB.get(tabId)?.label ?? 'Item';
 
 const SIDEBAR_COLLAPSED_KEY = 'peliculas-br-sidebar-collapsed';
 
-const DesktopSidebar: React.FC<DesktopSidebarProps> = ({ activeTab, onTabChange }) => {
+const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
+    activeTab,
+    onTabChange,
+    menuOrder,
+    onMenuOrderChange,
+    onResetMenuOrder
+}) => {
     const { isAdmin, user, signOut } = useAuth();
     const [isSigningOut, setIsSigningOut] = useState(false);
     const [isSupportOpen, setIsSupportOpen] = useState(false);
     const [companyLogo, setCompanyLogo] = useState<string | undefined>(undefined);
+    const [isEditingMenu, setIsEditingMenu] = useState(false);
+    const [menuAnnouncement, setMenuAnnouncement] = useState('');
+    const navScrollRef = useRef<HTMLElement | null>(null);
+
+    const {
+        displayOrder: displayedMenuOrder,
+        draggingTabId,
+        registerRow: registerMenuRow,
+        handlePointerDown: handleMenuItemPointerDown,
+        handlePointerMove: handleMenuItemPointerMove,
+        handlePointerUp: handleMenuItemPointerUp,
+        handlePointerCancel: handleMenuItemPointerCancel,
+        cancelDrag: cancelMenuItemDrag
+    } = useMenuDragReorder({
+        order: menuOrder,
+        enabled: isEditingMenu,
+        onCommit: onMenuOrderChange,
+        onAnnounce: setMenuAnnouncement,
+        getItemLabel: getMainNavItemLabel,
+        scrollRef: navScrollRef
+    });
 
     useEffect(() => {
         let active = true;
@@ -90,6 +131,17 @@ const DesktopSidebar: React.FC<DesktopSidebarProps> = ({ activeTab, onTabChange 
         }
     }, [isCollapsed]);
 
+    useEffect(() => {
+        if (!draggingTabId) return;
+
+        const handleEscape = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') cancelMenuItemDrag();
+        };
+
+        window.addEventListener('keydown', handleEscape);
+        return () => window.removeEventListener('keydown', handleEscape);
+    }, [cancelMenuItemDrag, draggingTabId]);
+
     const initials = (user?.email || 'U')
         .split('@')[0]
         .slice(0, 2)
@@ -104,6 +156,23 @@ const DesktopSidebar: React.FC<DesktopSidebarProps> = ({ activeTab, onTabChange 
             { tabId: 'account', icon: CircleUserRound, label: 'Minha Conta' }
         ],
         [isAdmin]
+    );
+
+    const orderedMainNav = useMemo(
+        () => displayedMenuOrder
+            .map(tabId => MAIN_NAV_BY_TAB.get(tabId))
+            .filter((item): item is NavItemConfig => Boolean(item)),
+        [displayedMenuOrder]
+    );
+
+    const visibleMainNav = useMemo(
+        () => [
+            ...orderedMainNav,
+            ...(isWaConnectorEnabled()
+                ? [{ tabId: 'wa_connector' as ActiveTab, icon: MessageCircle, label: 'WhatsApp', badge: 'Local' }]
+                : [])
+        ],
+        [orderedMainNav]
     );
 
     const handleSignOut = async () => {
@@ -127,13 +196,16 @@ const DesktopSidebar: React.FC<DesktopSidebarProps> = ({ activeTab, onTabChange 
 
     const NavItem: React.FC<NavItemConfig> = ({ tabId, icon: Icon, label, badge }) => {
         const isActive = activeTab === tabId;
+        const isInitial = tabId === displayedMenuOrder[0];
 
         return (
             <button
                 type="button"
                 data-tour={`nav-${tabId}`}
+                data-menu-tab={tabId}
                 onClick={() => onTabChange(tabId)}
                 aria-label={label}
+                aria-current={isActive ? 'page' : undefined}
                 title={isCollapsed ? label : undefined}
                 className={[
                     'group relative flex h-10 w-full items-center rounded-[var(--radius-control)] text-left transition-colors duration-200',
@@ -159,16 +231,106 @@ const DesktopSidebar: React.FC<DesktopSidebarProps> = ({ activeTab, onTabChange 
                 {!isCollapsed ? (
                     <>
                         <span className="min-w-0 flex-1 truncate text-sm font-semibold">{label}</span>
-                        {badge ? (
-                            <span className="shrink-0 rounded-full bg-blue-100 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-blue-600 dark:bg-blue-500/20 dark:text-blue-300">
-                                {badge}
-                            </span>
-                        ) : isActive ? (
-                            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--brand-primary)] dark:bg-blue-300" />
-                        ) : null}
+                        <span className="flex shrink-0 items-center gap-1.5">
+                            {isInitial ? (
+                                <span className="rounded-full border border-blue-200/80 bg-blue-50 px-1.5 py-px text-[8px] font-bold uppercase tracking-wide text-blue-700 dark:border-blue-300/20 dark:bg-blue-400/10 dark:text-blue-200">
+                                    Inicial
+                                </span>
+                            ) : null}
+                            {badge ? (
+                                <span className="rounded-full bg-blue-100 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-blue-600 dark:bg-blue-500/20 dark:text-blue-300">
+                                    {badge}
+                                </span>
+                            ) : null}
+                            {isActive ? (
+                                <span
+                                    data-menu-active-marker
+                                    className="h-1.5 w-1.5 rounded-full bg-[var(--brand-primary)] dark:bg-blue-300"
+                                    aria-hidden="true"
+                                />
+                            ) : null}
+                        </span>
                     </>
                 ) : null}
             </button>
+        );
+    };
+
+    const renderEditableNavItem = (item: NavItemConfig, index: number) => {
+        const { tabId, icon: Icon, label } = item;
+        const menuTabId = tabId as MenuTabId;
+        const isFirst = index === 0;
+        const isLast = index === orderedMainNav.length - 1;
+
+        const handleMove = (direction: -1 | 1) => {
+            const nextOrder = moveMenuItem(displayedMenuOrder, menuTabId, direction);
+            const nextPosition = nextOrder.indexOf(menuTabId) + 1;
+            onMenuOrderChange(nextOrder);
+            setMenuAnnouncement(`${label}: posição ${nextPosition} de ${nextOrder.length}.`);
+        };
+
+        return (
+            <div
+                key={tabId}
+                ref={node => registerMenuRow(menuTabId, node)}
+                className={[
+                    'flex min-h-11 items-center gap-1 rounded-[var(--radius-control)] border bg-[var(--surface-muted)] px-1.5 transition-[transform,box-shadow,border-color] dark:bg-white/[0.045]',
+                    draggingTabId === menuTabId
+                        ? 'relative z-20 scale-[1.015] border-blue-400 shadow-[0_10px_24px_rgba(37,99,235,0.18)] dark:border-blue-300/60'
+                        : 'border-[var(--border-subtle)] dark:border-white/10'
+                ].join(' ')}
+                data-menu-tab={tabId}
+                data-menu-dragging={draggingTabId === menuTabId ? 'true' : undefined}
+            >
+                <button
+                    type="button"
+                    data-menu-drag-handle
+                    aria-label={`Puxador de ${label}. Arraste ou use as setas para mudar a posição.`}
+                    onPointerDown={event => handleMenuItemPointerDown(event, menuTabId)}
+                    onPointerMove={handleMenuItemPointerMove}
+                    onPointerUp={handleMenuItemPointerUp}
+                    onPointerCancel={handleMenuItemPointerCancel}
+                    onKeyDown={event => {
+                        if (event.key === 'ArrowUp' && !isFirst) {
+                            event.preventDefault();
+                            handleMove(-1);
+                        } else if (event.key === 'ArrowDown' && !isLast) {
+                            event.preventDefault();
+                            handleMove(1);
+                        }
+                    }}
+                    className="flex h-8 w-7 touch-none shrink-0 cursor-grab items-center justify-center rounded-lg text-[var(--text-soft)] hover:bg-[var(--surface)] hover:text-[var(--brand-primary)] active:cursor-grabbing dark:hover:bg-white/[0.06] dark:hover:text-blue-200"
+                >
+                    <GripVertical className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+                <Icon className="h-4 w-4 shrink-0 text-[var(--brand-primary)] dark:text-blue-300" aria-hidden="true" />
+                <div className="min-w-0 flex-1">
+                    <p className="truncate text-xs font-semibold text-[var(--text-strong)] dark:text-white">{label}</p>
+                    {isFirst ? (
+                        <p className="text-[8px] font-bold uppercase tracking-[0.1em] text-[var(--brand-primary)] dark:text-blue-300">
+                            Tela inicial
+                        </p>
+                    ) : null}
+                </div>
+                <button
+                    type="button"
+                    onClick={() => handleMove(-1)}
+                    disabled={isFirst}
+                    aria-label={`Mover ${label} para cima, posição ${index + 1} de ${orderedMainNav.length}`}
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-muted)] disabled:opacity-25 dark:border-white/10 dark:bg-white/[0.055] dark:text-slate-200"
+                >
+                    <ArrowUp className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+                <button
+                    type="button"
+                    onClick={() => handleMove(1)}
+                    disabled={isLast}
+                    aria-label={`Mover ${label} para baixo, posição ${index + 1} de ${orderedMainNav.length}`}
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-muted)] disabled:opacity-25 dark:border-white/10 dark:bg-white/[0.055] dark:text-slate-200"
+                >
+                    <ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+            </div>
         );
     };
 
@@ -196,7 +358,11 @@ const DesktopSidebar: React.FC<DesktopSidebarProps> = ({ activeTab, onTabChange 
 
                     <button
                         type="button"
-                        onClick={() => setIsCollapsed(current => !current)}
+                        onClick={() => {
+                            cancelMenuItemDrag();
+                            setIsEditingMenu(false);
+                            setIsCollapsed(current => !current);
+                        }}
                         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-muted)] shadow-[var(--shadow-hairline)] transition-all duration-200 hover:bg-[var(--surface)] hover:text-[var(--brand-primary)] dark:border-white/10 dark:bg-white/[0.045] dark:text-slate-400 dark:hover:bg-white/[0.08] dark:hover:text-blue-200"
                         aria-label={isCollapsed ? 'Expandir menu lateral' : 'Recolher menu lateral'}
                         title={isCollapsed ? 'Expandir menu lateral' : 'Recolher menu lateral'}
@@ -206,11 +372,59 @@ const DesktopSidebar: React.FC<DesktopSidebarProps> = ({ activeTab, onTabChange 
                 </div>
             </div>
 
-            <nav className={`${isCollapsed ? 'px-3' : 'px-3'} flex-grow space-y-1 overflow-y-auto py-4`}>
-                {renderSectionLabel('Principal')}
-                {MAIN_NAV.map(item => (
-                    <NavItem key={item.tabId} {...item} />
-                ))}
+            <nav
+                ref={navScrollRef}
+                className={`${isCollapsed ? 'px-3' : 'px-3'} flex-grow space-y-1 overflow-y-auto py-4`}
+            >
+                {isCollapsed ? (
+                    renderSectionLabel('Principal')
+                ) : (
+                    <div className="mb-2 flex items-center justify-between gap-2 px-3">
+                        <p className="ui-kicker text-[var(--text-soft)] dark:text-slate-500">
+                            {isEditingMenu ? 'Organizar menu' : 'Principal'}
+                        </p>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                if (isEditingMenu) cancelMenuItemDrag();
+                                setIsEditingMenu(current => !current);
+                            }}
+                            aria-label={isEditingMenu ? 'Concluir organização do menu' : 'Organizar menu'}
+                            aria-pressed={isEditingMenu}
+                            className="flex h-7 items-center gap-1.5 rounded-full border border-[var(--border-subtle)] bg-[var(--surface-muted)] px-2.5 text-[10px] font-bold text-[var(--brand-primary)] transition-colors hover:bg-[var(--brand-primary-soft)] dark:border-white/10 dark:bg-white/[0.045] dark:text-blue-300"
+                        >
+                            <Pencil className="h-3 w-3" aria-hidden="true" />
+                            {isEditingMenu ? 'Concluir' : 'Organizar'}
+                        </button>
+                    </div>
+                )}
+
+                {isEditingMenu && !isCollapsed ? (
+                    <>
+                        <div className="mx-1 mb-2 rounded-[var(--radius-control)] bg-[var(--brand-primary-soft)] px-3 py-2 text-[10px] leading-relaxed text-[var(--brand-primary)] dark:bg-blue-400/10 dark:text-blue-200">
+                            <p>Arraste pelo puxador ou use as setas. O primeiro item será aberto ao iniciar o aplicativo.</p>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    cancelMenuItemDrag();
+                                    onResetMenuOrder();
+                                    setMenuAnnouncement('Ordem padrão restaurada. Dashboard é a tela inicial.');
+                                }}
+                                className="mt-1 font-bold underline underline-offset-2"
+                            >
+                                Restaurar ordem padrão
+                            </button>
+                        </div>
+                        <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+                            {menuAnnouncement}
+                        </p>
+                        {orderedMainNav.map(renderEditableNavItem)}
+                    </>
+                ) : (
+                    visibleMainNav.map(item => (
+                        <NavItem key={item.tabId} {...item} />
+                    ))
+                )}
 
                 <div className="mt-3 space-y-1 border-t border-[var(--border-subtle)] pt-3 dark:border-white/10">
                     {renderSectionLabel('Sistema')}

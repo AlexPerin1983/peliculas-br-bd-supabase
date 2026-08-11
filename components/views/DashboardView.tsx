@@ -2543,7 +2543,7 @@ const MobilePeriodSelector: React.FC<{
             role="dialog"
             aria-modal="true"
             aria-label="Filtro de periodo"
-            className="fixed inset-0 z-[90] flex min-h-[100dvh] w-screen flex-col bg-[var(--app-bg)] text-[var(--text-strong)] sm:hidden"
+            className="fixed inset-0 z-[90] flex min-h-[100dvh] w-screen flex-col bg-[var(--app-bg)] pt-[env(safe-area-inset-top,0px)] text-[var(--text-strong)] sm:hidden"
         >
             {view === 'list' ? (
                 <>

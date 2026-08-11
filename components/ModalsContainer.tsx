@@ -1,21 +1,21 @@
 import React, { lazy, Suspense } from 'react';
-import ClientModal from './modals/ClientModal';
-import ClientSelectionModal from './modals/ClientSelectionModal';
-import PaymentMethodsModal from './modals/PaymentMethodsModal';
-import FilmModal from './modals/FilmModal';
-import ConfirmationModal from './modals/ConfirmationModal';
-import FilmSelectionModal from './modals/FilmSelectionModal';
-import EditMeasurementModal from './modals/EditMeasurementModal';
+const ClientModal = lazy(() => import('./modals/ClientModal'));
+const ClientSelectionModal = lazy(() => import('./modals/ClientSelectionModal'));
+const PaymentMethodsModal = lazy(() => import('./modals/PaymentMethodsModal'));
+const FilmModal = lazy(() => import('./modals/FilmModal'));
+const ConfirmationModal = lazy(() => import('./modals/ConfirmationModal'));
+const FilmSelectionModal = lazy(() => import('./modals/FilmSelectionModal'));
+const EditMeasurementModal = lazy(() => import('./modals/EditMeasurementModal'));
 const AgendamentoModal = lazy(() => import('./modals/AgendamentoModal'));
-import DiscountModal from './modals/DiscountModal';
-import GeneralDiscountModal from './modals/GeneralDiscountModal';
+const DiscountModal = lazy(() => import('./modals/DiscountModal'));
+const GeneralDiscountModal = lazy(() => import('./modals/GeneralDiscountModal'));
 const AIMeasurementModal = lazy(() => import('./modals/AIMeasurementModal'));
 const AIClientModal = lazy(() => import('./modals/AIClientModal'));
 const AIFilmModal = lazy(() => import('./modals/AIFilmModal'));
 const AIQuickProposalModal = lazy(() => import('./modals/AIQuickProposalModal'));
 const ApiKeyModal = lazy(() => import('./modals/ApiKeyModal'));
-import PdfGenerationStatusModal from './modals/PdfGenerationStatusModal';
-import ImageGalleryModal from './modals/ImageGalleryModal';
+const PdfGenerationStatusModal = lazy(() => import('./modals/PdfGenerationStatusModal'));
+const ImageGalleryModal = lazy(() => import('./modals/ImageGalleryModal'));
 import { Client, Film, UserInfo, SavedPDF, Agendamento, ProposalOption, SchedulingInfo, ProposalDiscount } from '../types';
 
 type UIMeasurement = any; // Temporary - will be properly typed later

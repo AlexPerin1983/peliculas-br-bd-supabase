@@ -51,7 +51,16 @@ type NumpadConfig = {
     measurementId: number | null;
     field: 'largura' | 'altura' | 'quantidade' | null;
     currentValue: string;
+    shouldClearOnNextInput: boolean;
 };
+
+const INACTIVE_NUMPAD_CONFIG: NumpadConfig = Object.freeze({
+    isOpen: false,
+    measurementId: null,
+    field: null,
+    currentValue: '',
+    shouldClearOnNextInput: false
+});
 
 interface MeasurementListProps {
     measurements: UIMeasurement[];
@@ -345,7 +354,7 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
         setIsDeleteSelectedModalOpen(false);
     };
 
-    const handleToggleSelection = (id: number, index: number, isShiftKey: boolean) => {
+    const handleToggleSelection = useCallback((id: number, index: number, isShiftKey: boolean) => {
         setSelectedIds(prevSelectedIds => {
             const newSelectedIds = new Set(prevSelectedIds);
 
@@ -372,7 +381,7 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
             setLastSelectedIndex(index);
             return newSelectedIds;
         });
-    };
+    }, [lastSelectedIndex, measurements]);
 
     const handleToggleSelectAll = () => {
         if (selectedIds.size === measurements.length) {
@@ -382,19 +391,19 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
         }
     };
 
-    const handleDragStart = (index: number) => {
+    const handleDragStart = useCallback((index: number) => {
         if (isSelectionMode) return;
         setDraggedIndex(index);
-    };
+    }, [isSelectionMode]);
 
-    const handleDragEnter = (index: number) => {
+    const handleDragEnter = useCallback((index: number) => {
         if (isSelectionMode) return;
         if (draggedIndex !== null && draggedIndex !== index) {
             setDragOverIdx(index);
         }
-    };
+    }, [draggedIndex, isSelectionMode]);
 
-    const handleDragEnd = () => {
+    const handleDragEnd = useCallback(() => {
         if (isSelectionMode) return;
         scrollVelocityRef.current = 0;
         if (animationFrameRef.current) {
@@ -410,14 +419,14 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
         }
         setDraggedIndex(null);
         setDragOverIdx(null);
-    };
+    }, [applyMeasurements, dragOverIdx, draggedIndex, isSelectionMode, measurements]);
 
-    const updateMeasurement = (id: number, updatedMeasurement: Partial<Measurement>) => {
+    const updateMeasurement = useCallback((id: number, updatedMeasurement: Partial<Measurement>) => {
         const newMeasurements = measurements.map(m => m.id === id ? { ...m, ...updatedMeasurement } : m);
         void applyMeasurements(newMeasurements);
-    };
+    }, [applyMeasurements, measurements]);
 
-    const duplicateMeasurement = (id: number) => {
+    const duplicateMeasurement = useCallback((id: number) => {
         const measurementToDuplicate = measurements.find(m => m.id === id);
         if (measurementToDuplicate) {
             const newMeasurement: UIMeasurement = {
@@ -436,7 +445,7 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
             const finalMeasurements = newMeasurements.map(m => m.id === newMeasurement.id ? { ...m, isNew: true, focusField: 'quantidade' as const } : { ...m, isNew: false });
             void applyMeasurements(finalMeasurements);
         }
-    };
+    }, [applyMeasurements, measurements]);
 
     const handleSetSwipedItem = useCallback((id: number | null) => {
         setSwipedItemId(id);
@@ -446,6 +455,10 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
         setRetalhoMeasurementId(measurementId);
         void loadRetalhos();
     }, [loadRetalhos]);
+
+    const handleOpenMeasurementInputSettings = useCallback(() => {
+        setIsMeasurementInputSettingsOpen(true);
+    }, []);
 
     const handleCloseRetalhoSuggestions = useCallback(() => {
         if (consumingRetalhoId !== null) {
@@ -971,21 +984,21 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
                             measurement={measurement}
                             films={films}
                             pricingMode={pricingMode}
-                            onUpdate={(updated) => updateMeasurement(measurement.id, updated)}
-                            onDelete={() => onDeleteMeasurement(measurement.id)}
-                            onDeleteImmediate={() => onDeleteMeasurementImmediate(measurement.id)}
-                            onDuplicate={() => duplicateMeasurement(measurement.id)}
+                            onUpdate={updateMeasurement}
+                            onDelete={onDeleteMeasurement}
+                            onDeleteImmediate={onDeleteMeasurementImmediate}
+                            onDuplicate={duplicateMeasurement}
                             onOpenFilmSelectionModal={onOpenFilmSelectionModal}
                             onOpenEditModal={onOpenEditModal}
                             index={index}
                             isDragging={draggedIndex === index}
-                            onDragStart={() => handleDragStart(index)}
-                            onDragEnter={() => handleDragEnter(index)}
+                            onDragStart={handleDragStart}
+                            onDragEnter={handleDragEnter}
                             onDragEnd={handleDragEnd}
                             isSelectionMode={isSelectionMode}
                             isSelected={selectedIds.has(measurement.id)}
                             onToggleSelection={handleToggleSelection}
-                            numpadConfig={numpadConfig}
+                            numpadConfig={numpadConfig.measurementId === measurement.id ? numpadConfig : INACTIVE_NUMPAD_CONFIG}
                             onOpenNumpad={onOpenNumpad}
                             useTouchNumpad={useTouchNumpad}
                             isActive={measurement.id === activeMeasurementId}
@@ -995,7 +1008,7 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
                             compatibleRetalhosCount={(compatibleRetalhosByMeasurement.get(measurement.id) || []).length}
                             isCheckingEstoque={isLoadingRetalhos}
                             onOpenRetalhoSuggestions={handleOpenRetalhoSuggestions}
-                            onOpenMeasurementInputSettings={() => setIsMeasurementInputSettingsOpen(true)}
+                            onOpenMeasurementInputSettings={handleOpenMeasurementInputSettings}
                         />
                     </React.Fragment>
                 ))}

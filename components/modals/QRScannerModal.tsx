@@ -15,6 +15,7 @@ import { getAllClients } from '../../services/db';
 import {
     calculateAreaM2FromCentimeters,
     formatMetersFromCentimeters,
+    formatStockMeters,
     parseFlexibleCentimeterInput,
     parseFlexibleMeterInput
 } from '../../src/lib/estoqueDimensions';
@@ -348,11 +349,11 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose, onData
                                         <>
                                             <div className="info-item">
                                                 <span className="label">Comprimento Total</span>
-                                                <span className="value">{(result.data as Bobina).comprimentoTotalM} m</span>
+                                                <span className="value">{formatStockMeters((result.data as Bobina).comprimentoTotalM)} m</span>
                                             </div>
                                             <div className="info-item highlight">
                                                 <span className="label">Restante</span>
-                                                <span className="value">{(result.data as Bobina).comprimentoRestanteM.toFixed(2)} m</span>
+                                                <span className="value">{formatStockMeters((result.data as Bobina).comprimentoRestanteM)} m</span>
                                             </div>
                                             <div className="info-item">
                                                 <span className="label">Uso</span>
@@ -466,7 +467,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose, onData
                                             <span className={`history-tipo status-${result.parentBobina.status}`}>{result.parentBobina.status}</span>
                                         </div>
                                         <div className="history-details">
-                                            <span className="history-client">Restante: {result.parentBobina.comprimentoRestanteM.toFixed(2)}m</span>
+                                            <span className="history-client">Restante: {formatStockMeters(result.parentBobina.comprimentoRestanteM)}m</span>
                                             <span className="history-date">QR: {result.parentBobina.codigoQr}</span>
                                         </div>
                                     </div>
@@ -481,7 +482,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose, onData
                                         {result.consumos.map(consumo => (
                                             <div key={consumo.id} className="history-item">
                                                 <div className="history-main">
-                                                    <span className="history-metros">-{consumo.metrosConsumidos}m</span>
+                                                    <span className="history-metros">-{formatStockMeters(consumo.metrosConsumidos)}m</span>
                                                     <span className="history-tipo">{consumo.tipo}</span>
                                                 </div>
                                                 <div className="history-details">

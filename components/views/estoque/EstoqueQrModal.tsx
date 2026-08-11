@@ -1,7 +1,7 @@
 import React from 'react';
 import { Bobina, Retalho } from '../../../types';
 import { QrCodeIcon } from './EstoqueIcons';
-import { formatMeterValue, formatMetersFromCentimeters } from '../../../src/lib/estoqueDimensions';
+import { formatMetersFromCentimeters, formatStockMeters } from '../../../src/lib/estoqueDimensions';
 
 type EstoqueQrModalProps = {
     showQRModal: { type: 'bobina' | 'retalho'; item: Bobina | Retalho } | null;
@@ -66,7 +66,7 @@ export default function EstoqueQrModal({
                     </h3>
 
                     <p className="text-slate-500 dark:text-slate-400 text-sm">
-                        {formatMetersFromCentimeters(showQRModal.item.larguraCm)}m x {'comprimentoTotalM' in showQRModal.item ? `${formatMeterValue(showQRModal.item.comprimentoTotalM)}m` : `${formatMetersFromCentimeters((showQRModal.item as Retalho).comprimentoCm)}m`}
+                        {formatMetersFromCentimeters(showQRModal.item.larguraCm)}m x {'comprimentoTotalM' in showQRModal.item ? `${formatStockMeters(showQRModal.item.comprimentoTotalM)}m` : `${formatMetersFromCentimeters((showQRModal.item as Retalho).comprimentoCm)}m`}
                     </p>
                 </div>
 

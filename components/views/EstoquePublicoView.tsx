@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Package, Scissors, MapPin, Calendar, QrCode, ShieldAlert, LoaderCircle } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
+import { formatStockMeters } from '../../src/lib/estoqueDimensions';
 
 interface PublicRetalhoData {
     id: number;
@@ -141,7 +142,7 @@ const EstoquePublicoView: React.FC = () => {
                                                 label={data.tipo === 'bobina' ? 'Comprimento restante' : 'Comprimento'}
                                                 value={
                                                     data.tipo === 'bobina'
-                                                        ? `${data.comprimentoRestanteM ?? 0} m`
+                                                        ? `${formatStockMeters(data.comprimentoRestanteM)} m`
                                                         : `${data.comprimentoCm ?? 0} cm`
                                                 }
                                                 icon={<Scissors className="h-4 w-4" />}
@@ -175,7 +176,7 @@ const EstoquePublicoView: React.FC = () => {
                                                     Comprimento total
                                                 </p>
                                                 <p className="mt-2 text-xl font-semibold text-slate-950">
-                                                    {data.comprimentoTotalM} m
+                                                    {formatStockMeters(data.comprimentoTotalM)} m
                                                 </p>
                                             </div>
                                         )}

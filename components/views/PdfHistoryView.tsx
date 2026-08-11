@@ -41,6 +41,7 @@ interface PdfHistoryViewProps {
     films: Film[];
     googleReviewsLink?: string;
     onDelete: (pdfId: number) => void;
+    onDeleteMany: (pdfIds: number[]) => Promise<void>;
     onDownload: (pdf: SavedPDF, filename: string) => void;
     onUpdateStatus: (pdfId: number, status: SavedPDF['status']) => void;
     onSchedule: (info: { pdf: SavedPDF; agendamento?: Agendamento } | { agendamento: Agendamento; pdf?: SavedPDF }) => void;
@@ -50,6 +51,7 @@ interface PdfHistoryViewProps {
 }
 
 type HistoryFocusFilter = 'all' | 'pending' | 'approved' | 'revised' | 'expenses' | 'expired';
+type HistorySortKey = 'recent' | 'oldest' | 'highest' | 'name';
 type HistoryPeriodKey =
     | 'custom'
     | 'today'
@@ -77,6 +79,13 @@ const HISTORY_FOCUS_FILTER_LABELS: Record<HistoryFocusFilter, string> = {
     revised: 'Revisar',
     expenses: 'Com gastos',
     expired: 'Vencidos'
+};
+
+const HISTORY_SORT_LABELS: Record<HistorySortKey, string> = {
+    recent: 'Mais recentes',
+    oldest: 'Mais antigos',
+    highest: 'Maior valor',
+    name: 'Nome A-Z',
 };
 
 const HISTORY_PERIOD_OPTIONS: { key: HistoryPeriodKey; label: string }[] = [
@@ -1720,10 +1729,8 @@ const PdfHistoryMobileToolbar: React.FC<{
     filteredCount: number;
     periodLabel: string;
     searchTerm: string;
-    isSearchActive: boolean;
     searchInputRef: React.RefObject<HTMLInputElement | null>;
     onOpenPeriod: () => void;
-    onCloseSearch: () => void;
     onSearchChange: (value: string) => void;
     onClearSearch: () => void;
 }> = ({
@@ -1731,67 +1738,13 @@ const PdfHistoryMobileToolbar: React.FC<{
     filteredCount,
     periodLabel,
     searchTerm,
-    isSearchActive,
     searchInputRef,
     onOpenPeriod,
-    onCloseSearch,
     onSearchChange,
     onClearSearch,
 }) => {
-    if (isSearchActive) {
-        return (
-            <section className="sm:hidden">
-                <div className="rounded-[18px] border border-slate-200/80 bg-white/96 p-2 shadow-[0_8px_18px_rgba(15,23,42,0.05)] dark:border-slate-700/70 dark:bg-slate-900/95">
-                    <div className="flex items-center gap-2">
-                        <button
-                            type="button"
-                            onClick={onCloseSearch}
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-[12px] border border-slate-200 bg-slate-50 text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-                            aria-label="Fechar busca"
-                        >
-                            <i className="fas fa-arrow-left text-[13px]" aria-hidden="true"></i>
-                        </button>
-
-                        <label className="relative flex-1">
-                            <i
-                                className="fas fa-search pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[12px] text-slate-400 dark:text-slate-500"
-                                aria-hidden="true"
-                            ></i>
-                            <input
-                                ref={searchInputRef}
-                                type="text"
-                                value={searchTerm}
-                                onChange={(event) => onSearchChange(event.target.value)}
-                                placeholder="Buscar por cliente, proposta..."
-                                className="h-10 w-full rounded-[14px] border border-slate-200 bg-slate-50/90 pl-9 pr-9 text-[13px] font-medium text-slate-800 outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:bg-slate-800"
-                            />
-                            {searchTerm ? (
-                                <button
-                                    type="button"
-                                    onClick={onClearSearch}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-slate-600 dark:hover:text-slate-200"
-                                    aria-label="Limpar busca"
-                                >
-                                    <i className="fas fa-times-circle text-[13px]" aria-hidden="true"></i>
-                                </button>
-                            ) : null}
-                        </label>
-                    </div>
-
-                    <div className="pl-11 pt-2 text-[10px] font-medium text-slate-500 dark:text-slate-400">
-                        {searchTerm.trim()
-                            ? `${filteredCount} clientes em foco`
-                            : totalGroups > 0
-                              ? 'Busque por cliente, proposta, data ou valor'
-                              : 'Seus orçamentos aparecerão aqui'}
-                    </div>
-                </div>
-            </section>
-        );
-    }
-
     return (
-        <section className="sm:hidden">
+        <section className="space-y-3 sm:hidden">
             <div className="flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-2">
                     <h1 className="min-w-0 truncate text-2xl font-bold leading-tight text-[var(--text-strong)]">
@@ -1807,12 +1760,44 @@ const PdfHistoryMobileToolbar: React.FC<{
                     onClick={onOpenPeriod}
                     aria-label={`Abrir periodo do historico: ${periodLabel}`}
                     title={periodLabel}
-                    className="inline-flex h-9 shrink-0 items-center gap-2 rounded-full border border-[var(--border-subtle)] bg-[var(--surface)] px-3 text-sm font-bold text-[var(--text-strong)] shadow-[var(--shadow-hairline)] transition-colors hover:bg-[var(--surface-muted)]"
+                    className="inline-flex h-10 shrink-0 items-center gap-2 rounded-full border border-[var(--border-subtle)] bg-[var(--surface)] px-3.5 text-sm font-bold text-[var(--text-strong)] shadow-[var(--shadow-hairline)] transition-colors hover:bg-[var(--surface-muted)]"
                 >
                     <CalendarDays className="h-4 w-4 text-[var(--text-muted)]" aria-hidden="true" />
                     <span>{periodLabel}</span>
                 </button>
             </div>
+
+            <label className="relative block">
+                <span className="sr-only">Buscar no histórico</span>
+                <Search
+                    className="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-[var(--text-soft)]"
+                    aria-hidden="true"
+                />
+                <input
+                    ref={searchInputRef}
+                    type="search"
+                    value={searchTerm}
+                    onChange={(event) => onSearchChange(event.target.value)}
+                    placeholder="Buscar cliente, proposta, data ou valor"
+                    autoComplete="off"
+                    className="h-12 w-full rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface)] pl-11 pr-11 text-[13px] font-semibold text-[var(--text-strong)] shadow-[var(--shadow-hairline)] outline-none transition-all placeholder:font-medium placeholder:text-[var(--text-soft)] focus:border-[var(--brand-primary)] focus:ring-4 focus:ring-blue-500/10"
+                />
+                {searchTerm ? (
+                    <button
+                        type="button"
+                        onClick={onClearSearch}
+                        className="absolute right-2 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-[var(--text-soft)] transition-colors hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)]"
+                        aria-label="Limpar busca"
+                    >
+                        <X className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                ) : null}
+                {searchTerm.trim() ? (
+                    <span className="sr-only" aria-live="polite">
+                        {filteredCount} de {totalGroups} clientes encontrados
+                    </span>
+                ) : null}
+            </label>
         </section>
     );
 };
@@ -2333,7 +2318,7 @@ const MobileHistoryPeriodSelector: React.FC<{
             role="dialog"
             aria-modal="true"
             aria-label="Filtro de periodo"
-            className="fixed inset-0 z-[90] flex min-h-[100dvh] w-screen flex-col bg-[var(--app-bg)] text-[var(--text-strong)] sm:hidden"
+            className="fixed inset-0 z-[90] flex min-h-[100dvh] w-screen flex-col bg-[var(--app-bg)] pt-[env(safe-area-inset-top,0px)] text-[var(--text-strong)] sm:hidden"
         >
             {view === 'list' ? (
                 <>
@@ -2568,7 +2553,7 @@ const HistoryStatusFilters: React.FC<{
                         aria-label={`${filter.label}: ${counts[filter.key] || 0}`}
                         onClick={() => onChange(filter.key)}
                         className={[
-                            'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-[var(--radius-control)] border px-2.5 text-[10px] font-bold transition-colors duration-200 sm:h-10 sm:gap-2 sm:px-3 sm:text-xs',
+                            'inline-flex h-10 shrink-0 items-center gap-2 rounded-[var(--radius-control)] border px-3 text-[11px] font-bold transition-colors duration-200 sm:text-xs',
                             isActive
                                 ? `${filter.activeClassName} shadow-[var(--shadow-hairline)]`
                                 : 'border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-muted)] hover:border-[var(--border-strong)] hover:text-[var(--text-strong)]'
@@ -2576,7 +2561,7 @@ const HistoryStatusFilters: React.FC<{
                     >
                         <span className={`h-1.5 w-1.5 rounded-full ${filter.dotClassName}`} aria-hidden="true" />
                         <span>{filter.label}</span>
-                        <span className={`inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-black ${isActive ? 'bg-white/60 text-current dark:bg-white/10' : 'bg-[var(--surface-muted)] text-slate-400'}`}>
+                        <span className={`inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[9px] font-black ${isActive ? 'bg-white/60 text-current dark:bg-white/10' : 'bg-[var(--surface-muted)] text-slate-400'}`}>
                             {counts[filter.key] || 0}
                         </span>
                     </button>
@@ -2585,6 +2570,38 @@ const HistoryStatusFilters: React.FC<{
         </div>
     );
 };
+
+const HistoryListToolbar: React.FC<{
+    count: number;
+    sort: HistorySortKey;
+    onSortChange: (sort: HistorySortKey) => void;
+}> = ({ count, sort, onSortChange }) => (
+    <div className="flex items-end justify-between gap-3 px-1 sm:px-0">
+        <div className="min-w-0">
+            <p className="ui-kicker">Propostas</p>
+            <p className="mt-0.5 truncate text-xs font-semibold text-[var(--text-muted)]">
+                {count} {count === 1 ? 'cliente encontrado' : 'clientes encontrados'}
+            </p>
+        </div>
+        <label className="relative shrink-0">
+            <span className="sr-only">Ordenar histórico</span>
+            <select
+                value={sort}
+                onChange={(event) => onSortChange(event.target.value as HistorySortKey)}
+                aria-label="Ordenar histórico"
+                className="h-10 max-w-[148px] appearance-none rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] pl-3 pr-8 text-[11px] font-bold text-[var(--text-strong)] shadow-[var(--shadow-hairline)] outline-none transition-colors focus:border-[var(--brand-primary)] focus:ring-4 focus:ring-blue-500/10 sm:max-w-none sm:text-xs"
+            >
+                {(Object.keys(HISTORY_SORT_LABELS) as HistorySortKey[]).map(key => (
+                    <option key={key} value={key}>{HISTORY_SORT_LABELS[key]}</option>
+                ))}
+            </select>
+            <ChevronDown
+                className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]"
+                aria-hidden="true"
+            />
+        </label>
+    </div>
+);
 
 const MonthlyExpenseSummaryCard: React.FC<{
     selectedSummary: MonthlyExpenseSummary | null;
@@ -2869,13 +2886,18 @@ const MonthlyExpenseSummaryCard: React.FC<{
             ) : null}
 
             {isExpanded ? createPortal(
-                <div className="fixed inset-0 z-[60] flex flex-col bg-[var(--surface)] sm:hidden">
+                <div
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Resumo do periodo"
+                    className="fixed inset-0 z-[60] flex flex-col bg-[var(--surface)] pt-[env(safe-area-inset-top,0px)] sm:hidden"
+                >
                     <header className="flex items-center gap-3 border-b border-[var(--border-subtle)] px-4 py-3">
                         <button
                             type="button"
                             onClick={onToggleExpanded}
                             aria-label="Fechar resumo do periodo"
-                            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-muted)] transition-colors hover:text-[var(--text-strong)]"
+                            className="inline-flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-muted)] transition-colors hover:text-[var(--text-strong)]"
                         >
                             <i className="fas fa-arrow-left text-[13px]" aria-hidden="true"></i>
                         </button>
@@ -3005,7 +3027,7 @@ const PdfHistoryItem: React.FC<{
     }, [normalizedPhone, showToast]);
 
     return (
-        <div className={`relative overflow-hidden rounded-[var(--radius-panel)] bg-[var(--surface-muted)] ring-1 ring-[var(--border-subtle)] ${fitContent ? '' : 'h-full'}`}>
+        <div className={`relative overflow-hidden rounded-[var(--radius-panel)] bg-[var(--surface-muted)] ring-1 transition-shadow ${isSelected ? 'ring-2 ring-blue-500 shadow-[0_10px_28px_rgba(37,99,235,0.12)]' : 'ring-[var(--border-subtle)]'} ${fitContent ? '' : 'h-full'}`}>
             {/* Conteúdo do card */}
             <div className={`relative z-10 w-full ${fitContent ? '' : 'h-full'}`}>
                 {/* Status accent bar */}
@@ -3024,9 +3046,9 @@ const PdfHistoryItem: React.FC<{
                             checked={isSelected}
                             onChange={() => onToggleSelect(pdf.id!)}
                             onClick={(e) => e.stopPropagation()}
-                            className="h-4 w-4 flex-shrink-0 text-slate-800 border-slate-300 rounded focus:ring-slate-500 cursor-pointer"
-                            aria-label="Selecionar proposta"
-                            title="Selecionar para enviar várias propostas juntas ou gerar um PDF combinado"
+                            className="h-5 w-5 flex-shrink-0 cursor-pointer rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                            aria-label={`Selecionar orçamento ${pdf.proposalOptionName || pdf.nomeArquivo}`}
+                            title="Selecionar para criar um link, gerar PDF combinado ou excluir em massa"
                         />
                         <div className="flex-grow min-w-0">
                             {pdf.proposalOptionName && (
@@ -3575,8 +3597,8 @@ const PdfHistoryMobileFooter: React.FC<{
     );
 };
 
-const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs = false, isLoadingMoreServerPdfs = false, onLoadMoreServerPdfs, onEnsureCompleteServerHistory, clients, agendamentos, films, googleReviewsLink, onDelete, onDownload, onUpdateStatus, onSchedule, onOpenInAgenda, onGenerateCombinedPdf, onNavigateToOption }) => {
-    const { showToast } = useFeedback();
+const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs = false, isLoadingMoreServerPdfs = false, onLoadMoreServerPdfs, onEnsureCompleteServerHistory, clients, agendamentos, films, googleReviewsLink, onDelete, onDeleteMany, onDownload, onUpdateStatus, onSchedule, onOpenInAgenda, onGenerateCombinedPdf, onNavigateToOption }) => {
+    const { confirm, showToast } = useFeedback();
     const [pendingFocusClientId] = useState<number | null>(() => readInitialHistoryFocusClient());
     const [expandedClientId, setExpandedClientId] = useState<number | null>(pendingFocusClientId);
     const [highlightedClientId, setHighlightedClientId] = useState<number | null>(pendingFocusClientId);
@@ -3584,6 +3606,7 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
     const [optionsModalClientId, setOptionsModalClientId] = useState<number | null>(null);
     const [optionsModalIndex, setOptionsModalIndex] = useState(0);
     const [selectedPdfIds, setSelectedPdfIds] = useState<Set<number>>(() => readSelectedCombinedPdfIds());
+    const [isDeletingSelectedPdfs, setIsDeletingSelectedPdfs] = useState(false);
     const [focusFilter, setFocusFilter] = useState<HistoryFocusFilter>(() => readInitialHistoryFocusFilter());
     const [period, setPeriod] = useState<HistoryPeriodKey>('month');
     const [customStartDate, setCustomStartDate] = useState(() => toDateInputValue(addDays(new Date(), -6)));
@@ -3599,7 +3622,7 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
     const [mobileDraftStartDate, setMobileDraftStartDate] = useState(() => toDateInputValue(addDays(new Date(), -6)));
     const [mobileDraftEndDate, setMobileDraftEndDate] = useState(() => toDateInputValue(new Date()));
     const [searchTerm, setSearchTerm] = useState('');
-    const [isSearchActive, setIsSearchActive] = useState(false);
+    const [historySort, setHistorySort] = useState<HistorySortKey>('recent');
     const [visibleCount, setVisibleCount] = useState(10);
     const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
     const [isExpenseSummaryExpanded, setIsExpenseSummaryExpanded] = useState(false);
@@ -3694,16 +3717,6 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
     }, [isTemplateModalOpen, messageTemplates]);
 
     useEffect(() => {
-        if (!isSearchActive) return;
-
-        const frame = window.requestAnimationFrame(() => {
-            searchInputRef.current?.focus();
-        });
-
-        return () => window.cancelAnimationFrame(frame);
-    }, [isSearchActive]);
-
-    useEffect(() => {
         if (!isDesktopPeriodOpen || typeof window === 'undefined') return;
 
         const handleKeyDown = (event: KeyboardEvent) => {
@@ -3792,9 +3805,13 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
         // 2. Group by client
         sortedPdfs.forEach(pdf => {
             const clientId = pdf.clienteId;
-            const client = clientsById.get(clientId);
-
-            if (!client) return;
+            const client = clientsById.get(clientId) || {
+                id: clientId,
+                nome: pdf.clientName?.trim() || 'Cliente não identificado',
+                telefone: '',
+                email: '',
+                cpfCnpj: '',
+            };
 
             if (!groups.has(clientId)) {
                 groups.set(clientId, { client, pdfs: [] });
@@ -3838,24 +3855,61 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
         }
 
         if (deferredSearchTerm.trim()) {
-            const lowerTerm = normalizeSearchText(deferredSearchTerm);
+            const normalizedTerm = normalizeSearchText(deferredSearchTerm);
+            const compactTerm = normalizedTerm.replace(/[\s./()$-]/g, '');
             groups = groups.filter(group => {
-                const clientMatch = matchesSearch(group.client.nome, lowerTerm);
-                const pdfMatch = group.pdfs.some(pdf =>
-                    (pdf.proposalOptionName && matchesSearch(pdf.proposalOptionName, lowerTerm)) ||
-                    formatNumberBR(pdf.totalPreco).includes(lowerTerm) ||
-                    new Date(pdf.date).toLocaleDateString('pt-BR').includes(lowerTerm)
-                );
-                return clientMatch || pdfMatch;
+                const clientSearchText = [
+                    group.client.nome,
+                    group.client.telefone,
+                    group.client.email,
+                    group.client.cpfCnpj,
+                ].join(' ');
+                const pdfSearchText = group.pdfs.map(pdf => {
+                    const date = parseDate(pdf.date);
+                    const statusLabel = PDF_STATUS_META[pdf.status || 'pending'].label;
+
+                    return [
+                        pdf.proposalOptionName,
+                        pdf.nomeArquivo,
+                        pdf.totalPreco,
+                        formatNumberBR(pdf.totalPreco),
+                        date?.toLocaleDateString('pt-BR'),
+                        statusLabel,
+                    ].join(' ');
+                }).join(' ');
+                const haystack = normalizeSearchText(`${clientSearchText} ${pdfSearchText}`);
+                const compactHaystack = haystack.replace(/[\s./()$-]/g, '');
+
+                return matchesSearch(haystack, normalizedTerm)
+                    || Boolean(compactTerm && compactHaystack.includes(compactTerm));
             });
         }
         return groups;
     }, [groupedHistory, deferredSearchTerm, focusFilter]);
 
+    const organizedGroupedHistory = useMemo(() => {
+        const groups = [...filteredGroupedHistory];
+
+        return groups.sort((left, right) => {
+            if (historySort === 'name') {
+                return left.client.nome.localeCompare(right.client.nome, 'pt-BR', { sensitivity: 'base' });
+            }
+
+            if (historySort === 'highest') {
+                return buildFunnelTotals(right.pdfs, funnelReferencePdfIds).funnelRevenue
+                    - buildFunnelTotals(left.pdfs, funnelReferencePdfIds).funnelRevenue;
+            }
+
+            const leftDate = parseDate(left.pdfs[0]?.date)?.getTime() || 0;
+            const rightDate = parseDate(right.pdfs[0]?.date)?.getTime() || 0;
+            return historySort === 'oldest' ? leftDate - rightDate : rightDate - leftDate;
+        });
+    }, [filteredGroupedHistory, funnelReferencePdfIds, historySort]);
+
     const visibleApprovedPdfIds = useMemo(() => {
         const ids = new Set<number>();
 
-        filteredGroupedHistory.forEach(group => {
+        organizedGroupedHistory.forEach(group => {
             group.pdfs.forEach(pdf => {
                 if (pdf.status === 'approved' && typeof pdf.id === 'number') {
                     ids.add(pdf.id);
@@ -3864,7 +3918,7 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
         });
 
         return ids;
-    }, [filteredGroupedHistory]);
+    }, [organizedGroupedHistory]);
 
     const visibleReviewCampaignCandidates = useMemo(() => {
         if (visibleApprovedPdfIds.size === 0) return [];
@@ -3879,16 +3933,16 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
     ), [visibleReviewCampaignCandidates]);
 
     const displayedHistory = useMemo(() => {
-        return filteredGroupedHistory.slice(0, visibleCount);
-    }, [filteredGroupedHistory, visibleCount]);
+        return organizedGroupedHistory.slice(0, visibleCount);
+    }, [organizedGroupedHistory, visibleCount]);
 
     const handleLoadMore = async () => {
-        const hasHiddenLoadedGroups = visibleCount < filteredGroupedHistory.length;
+        const hasHiddenLoadedGroups = visibleCount < organizedGroupedHistory.length;
         if (hasHiddenLoadedGroups) {
             setVisibleCount(prev => prev + 10);
         }
 
-        const reachesEndOfLoadedGroups = visibleCount + 10 >= filteredGroupedHistory.length;
+        const reachesEndOfLoadedGroups = visibleCount + 10 >= organizedGroupedHistory.length;
         if (reachesEndOfLoadedGroups && hasMoreServerPdfs && onLoadMoreServerPdfs) {
             await onLoadMoreServerPdfs();
         }
@@ -3969,9 +4023,32 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
         saveSelectedCombinedPdfIds(empty);
     };
 
+    const handleToggleSelectGroup = useCallback((groupPdfs: SavedPDF[]) => {
+        const groupIds = groupPdfs
+            .map(pdf => pdf.id)
+            .filter((pdfId): pdfId is number => typeof pdfId === 'number');
+
+        setSelectedPdfIds(previous => {
+            const next = new Set(previous);
+            const allSelected = groupIds.length > 0 && groupIds.every(pdfId => next.has(pdfId));
+
+            groupIds.forEach(pdfId => {
+                if (allSelected) {
+                    next.delete(pdfId);
+                } else {
+                    next.add(pdfId);
+                }
+            });
+
+            saveSelectedCombinedPdfIds(next);
+            return next;
+        });
+    }, []);
+
     const selectedPdfs = useMemo(() => {
         return pdfs.filter(pdf => typeof pdf.id === 'number' && selectedPdfIds.has(pdf.id));
     }, [pdfs, selectedPdfIds]);
+
     const hasOnlySameClientSelectedPdfs = selectedPdfs.length > 0
         ? selectedPdfs.every(pdf => pdf.clienteId === selectedPdfs[0].clienteId)
         : true;
@@ -3990,6 +4067,40 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
     const [isCombinedShareOpen, setIsCombinedShareOpen] = useState(false);
     const [singleProposalShare, setSingleProposalShare] = useState<{ client: Client; pdf: SavedPDF } | null>(null);
     const [copiedCombinedMessageIndex, setCopiedCombinedMessageIndex] = useState<number | null>(null);
+
+    const handleDeleteSelectedPdfs = useCallback(async () => {
+        if (selectedPdfs.length === 0 || isDeletingSelectedPdfs) return;
+
+        const count = selectedPdfs.length;
+        const shouldDelete = await confirm({
+            title: count === 1 ? 'Excluir orçamento?' : `Excluir ${count} orçamentos?`,
+            message: count === 1
+                ? 'O orçamento selecionado será apagado do histórico. Esta ação não pode ser desfeita.'
+                : `Os ${count} orçamentos selecionados serão apagados do histórico. Esta ação não pode ser desfeita.`,
+            confirmButtonText: count === 1 ? 'Sim, excluir' : `Excluir ${count}`,
+            cancelButtonText: 'Cancelar',
+            confirmButtonVariant: 'danger',
+            presentation: 'auto',
+        });
+
+        if (!shouldDelete) return;
+
+        setIsDeletingSelectedPdfs(true);
+        try {
+            await onDeleteMany(selectedPdfs.map(pdf => pdf.id!));
+            handleClearSelection();
+            showToast(
+                count === 1 ? 'Orçamento excluído.' : `${count} orçamentos excluídos.`,
+                { tone: 'success', duration: 2400 }
+            );
+        } catch (error) {
+            console.error('Erro ao excluir orçamentos selecionados:', error);
+            showToast('Não foi possível concluir a exclusão. Tente novamente.', { tone: 'error' });
+        } finally {
+            setIsDeletingSelectedPdfs(false);
+        }
+    }, [confirm, isDeletingSelectedPdfs, onDeleteMany, selectedPdfs, showToast]);
+
     const handleOpenSingleProposalShare = useCallback((client: Client, pdf: SavedPDF) => {
         setSingleProposalShare({ client, pdf });
     }, []);
@@ -4197,6 +4308,8 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
         const isExpanded = expandedClientId === client.id;
         const isHighlighted = highlightedClientId === client.id;
         const hasSelectedInGroup = pdfs.some(p => selectedPdfIds.has(p.id!));
+        const selectedInGroupCount = pdfs.filter(p => selectedPdfIds.has(p.id!)).length;
+        const areAllPdfsInGroupSelected = selectedInGroupCount === pdfs.length;
         const totalPdfs = pdfs.length;
         const latestPdf = pdfs[0];
         const clientFunnelSummary = buildFunnelTotals(pdfs, funnelReferencePdfIds);
@@ -4293,6 +4406,16 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
                             <span className="inline-flex items-center rounded-full bg-white px-2.5 py-1 text-[10px] font-semibold text-slate-500 shadow-sm dark:bg-slate-800 dark:text-slate-300">
                                 {totalPdfs} {totalPdfs === 1 ? 'opção' : 'opções'}
                             </span>
+                            {totalPdfs > 1 ? (
+                                <button
+                                    type="button"
+                                    onClick={() => handleToggleSelectGroup(pdfs)}
+                                    className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[10px] font-semibold text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-300 dark:hover:bg-blue-900/40"
+                                >
+                                    <i className={`fas ${areAllPdfsInGroupSelected ? 'fa-times' : 'fa-check-double'} text-[9px]`} aria-hidden="true" />
+                                    {areAllPdfsInGroupSelected ? 'Desmarcar todas' : 'Selecionar todas'}
+                                </button>
+                            ) : null}
                             {clientFunnelSummary.duplicatedRevenue > 0 ? (
                                 <span className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-semibold text-blue-700 dark:bg-blue-950/30 dark:text-blue-300">
                                     Apresentado {formatNumberBR(clientFunnelSummary.presentedRevenue)}
@@ -4300,7 +4423,7 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
                             ) : null}
                             {hasSelectedInGroup ? (
                                 <span className="inline-flex items-center rounded-full bg-slate-900 px-2.5 py-1 text-[10px] font-semibold text-white dark:bg-slate-100 dark:text-slate-900">
-                                    {pdfs.filter(p => selectedPdfIds.has(p.id!)).length} selecionado{pdfs.filter(p => selectedPdfIds.has(p.id!)).length > 1 ? 's' : ''}
+                                    {selectedInGroupCount} selecionado{selectedInGroupCount > 1 ? 's' : ''}
                                 </span>
                             ) : null}
                         </div>
@@ -4535,9 +4658,9 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
         handleStatusFilterChange('all');
     };
 
-    const handleCloseSearch = () => {
-        setIsSearchActive(false);
-        handleClearSearch();
+    const handleFocusSearch = () => {
+        searchInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        window.setTimeout(() => searchInputRef.current?.focus(), 250);
     };
 
     const periodControl = (
@@ -4570,10 +4693,8 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
                 filteredCount={filteredGroupedHistory.length}
                 periodLabel={mobilePeriodTriggerLabel}
                 searchTerm={searchTerm}
-                isSearchActive={isSearchActive}
                 searchInputRef={searchInputRef}
                 onOpenPeriod={openMobilePeriodSelector}
-                onCloseSearch={handleCloseSearch}
                 onSearchChange={handleSearchChange}
                 onClearSearch={handleClearSearch}
             />
@@ -4790,6 +4911,18 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
                                 Criar link com selecionadas
                             </ActionButton>
                             <ActionButton
+                                onClick={handleDeleteSelectedPdfs}
+                                disabled={isDeletingSelectedPdfs}
+                                loading={isDeletingSelectedPdfs}
+                                loadingText="Excluindo..."
+                                variant="danger"
+                                size="sm"
+                                iconClassName="fas fa-trash-alt"
+                                className="w-full sm:w-auto"
+                            >
+                                Excluir selecionadas
+                            </ActionButton>
+                            <ActionButton
                                 onClick={handleGenerateCombined}
                                 disabled={selectedPdfs.length < 2 || !hasOnlySameClientSelectedPdfs}
                                 variant="secondary"
@@ -4803,6 +4936,14 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
                     </div>
                 </div>
             )}
+            <HistoryListToolbar
+                count={filteredGroupedHistory.length}
+                sort={historySort}
+                onSortChange={(nextSort) => {
+                    setHistorySort(nextSort);
+                    resetHistoryViewport();
+                }}
+            />
             <div>
                 {displayedHistory.length > 0 ? (
                     <>
@@ -4812,7 +4953,7 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
                             ))}
                         </div>
 
-                        {(visibleCount < filteredGroupedHistory.length || hasMoreServerPdfs) && (
+                        {(visibleCount < organizedGroupedHistory.length || hasMoreServerPdfs) && (
                             <div className="flex justify-center pt-3 sm:pt-4">
                                 <ActionButton
                                     onClick={handleLoadMore}
@@ -4935,21 +5076,28 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
 
             {/* Modal de opções (mobile) — navegação por setas, deslize e pontinhos */}
             {optionsModalClientId != null && (() => {
-                const group = filteredGroupedHistory.find(item => item.client.id === optionsModalClientId);
+                const group = organizedGroupedHistory.find(item => item.client.id === optionsModalClientId);
                 if (!group) return null;
                 const { client, pdfs: groupPdfs } = group;
                 const funnelSummary = buildFunnelTotals(groupPdfs, funnelReferencePdfIds);
                 const total = groupPdfs.length;
                 const current = Math.min(Math.max(optionsModalIndex, 0), total - 1);
+                const selectedInGroupCount = groupPdfs.filter(pdf => selectedPdfIds.has(pdf.id!)).length;
+                const areAllPdfsInGroupSelected = selectedInGroupCount === total;
 
                 return createPortal(
-                    <div className="fixed inset-0 z-[60] flex flex-col bg-[var(--surface)] sm:hidden">
+                    <div
+                        role="dialog"
+                        aria-modal="true"
+                        aria-label={`Opções de ${client.nome}`}
+                        className="fixed inset-0 z-[60] flex flex-col bg-[var(--surface)] pt-[env(safe-area-inset-top,0px)] sm:hidden"
+                    >
                         <div className="flex items-center gap-3 border-b border-[var(--border-subtle)] px-4 py-3">
                             <button
                                 type="button"
                                 onClick={closeOptionsModal}
                                 aria-label="Fechar"
-                                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-[var(--surface-muted)] dark:text-slate-300"
+                                className="flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-[var(--surface-muted)] dark:text-slate-300"
                             >
                                 <i className="fas fa-arrow-left text-base" aria-hidden="true" />
                             </button>
@@ -4961,10 +5109,67 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
                                     {total} {total === 1 ? 'opção' : 'opções'}
                                 </p>
                             </div>
+                            {total > 1 ? (
+                                <button
+                                    type="button"
+                                    onClick={() => handleToggleSelectGroup(groupPdfs)}
+                                    aria-label={areAllPdfsInGroupSelected ? 'Desmarcar todas as opções' : 'Selecionar todas as opções'}
+                                    className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-2.5 text-[10px] font-semibold text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-300"
+                                >
+                                    <i className={`fas ${areAllPdfsInGroupSelected ? 'fa-times' : 'fa-check-double'} text-[9px]`} aria-hidden="true" />
+                                    {areAllPdfsInGroupSelected ? 'Limpar' : 'Todas'}
+                                </button>
+                            ) : null}
                             <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold tabular-nums text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                                 {current + 1}/{total}
                             </span>
                         </div>
+
+                        {selectedPdfs.length > 0 ? (
+                            <div className="border-b border-blue-100 bg-blue-50/90 px-3 py-2.5 dark:border-blue-900/50 dark:bg-blue-950/25">
+                                <div className="mb-2 flex items-center justify-between gap-3">
+                                    <p className="text-xs font-semibold text-blue-950 dark:text-blue-100">
+                                        {selectedPdfs.length} selecionado{selectedPdfs.length > 1 ? 's' : ''}
+                                    </p>
+                                    <button
+                                        type="button"
+                                        onClick={handleClearSelection}
+                                        className="inline-flex h-7 items-center gap-1 rounded-full px-2 text-[10px] font-semibold text-blue-700 hover:bg-blue-100 dark:text-blue-300 dark:hover:bg-blue-900/40"
+                                    >
+                                        <i className="fas fa-times text-[9px]" aria-hidden="true" />
+                                        Limpar
+                                    </button>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <ActionButton
+                                        onClick={() => setIsCombinedShareOpen(true)}
+                                        disabled={!hasOnlySameClientSelectedPdfs || !selectedClientForCombinedMessages}
+                                        variant="primary"
+                                        size="sm"
+                                        iconClassName="fas fa-link"
+                                        className="w-full"
+                                    >
+                                        Criar link
+                                    </ActionButton>
+                                    <ActionButton
+                                        onClick={handleDeleteSelectedPdfs}
+                                        loading={isDeletingSelectedPdfs}
+                                        loadingText="Excluindo..."
+                                        variant="danger"
+                                        size="sm"
+                                        iconClassName="fas fa-trash-alt"
+                                        className="w-full"
+                                    >
+                                        Excluir
+                                    </ActionButton>
+                                </div>
+                                {!hasOnlySameClientSelectedPdfs ? (
+                                    <p className="mt-2 text-[10px] leading-4 text-amber-700 dark:text-amber-300">
+                                        Para criar um link, mantenha apenas opções do mesmo cliente.
+                                    </p>
+                                ) : null}
+                            </div>
+                        ) : null}
 
                         <div className="relative min-h-0 flex-1 overflow-hidden">
                             <OptionsPager
@@ -5040,7 +5245,7 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
             })()}
 
             <PdfHistoryMobileFooter
-                onSearch={() => setIsSearchActive(true)}
+                onSearch={handleFocusSearch}
                 onOpenPeriod={openMobilePeriodSelector}
                 onOpenFaturamento={() => setIsExpenseSummaryExpanded(true)}
                 faturamentoEnabled={Boolean(selectedExpenseSummary)}

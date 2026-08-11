@@ -6,6 +6,13 @@ const MODEL = 'gemini-3.5-flash-lite';
 const MAX_REQUEST_BYTES = 12 * 1024 * 1024;
 const MAX_REQUESTS_PER_MINUTE = 30;
 const MAX_REQUESTS_PER_DAY = 200;
+const OUTPUT_TOKEN_LIMITS: Record<string, { defaultValue: number; maximum: number }> = {
+    measurement_extraction: { defaultValue: 8192, maximum: 8192 },
+    quick_proposal: { defaultValue: 4096, maximum: 8192 },
+    client_extraction: { defaultValue: 1600, maximum: 4096 },
+    film_extraction: { defaultValue: 1600, maximum: 4096 },
+    stock_extraction: { defaultValue: 2400, maximum: 4096 }
+};
 const ALLOWED_FEATURES = new Set([
     'client_extraction',
     'quick_proposal',
@@ -105,11 +112,12 @@ serve(async (req) => {
     }
 
     const requestedConfig = body.generationConfig || {};
+    const outputTokenLimit = OUTPUT_TOKEN_LIMITS[feature] || { defaultValue: 1600, maximum: 4096 };
     const generationConfig = {
         ...requestedConfig,
         maxOutputTokens: Math.min(
-            Math.max(safeNumber(requestedConfig.maxOutputTokens) || 1200, 64),
-            1600
+            Math.max(safeNumber(requestedConfig.maxOutputTokens) || outputTokenLimit.defaultValue, 64),
+            outputTokenLimit.maximum
         ),
         thinkingConfig: requestedConfig.thinkingConfig || { thinkingLevel: 'MINIMAL' }
     };
@@ -155,13 +163,29 @@ serve(async (req) => {
     const usage = googleBody?.usageMetadata || {};
     const status = googleResponse.status;
     const googleErrorCode = googleBody?.error?.status || String(status);
+    const candidate = googleBody?.candidates?.[0];
+    const finishReason = typeof candidate?.finishReason === 'string' ? candidate.finishReason : '';
+    const finishMessage = typeof candidate?.finishMessage === 'string' ? candidate.finishMessage : '';
+    const text = (candidate?.content?.parts || [])
+        .filter((part: any) => !part.thought && typeof part.text === 'string')
+        .map((part: any) => part.text)
+        .join('');
+    const completionErrorCode = finishReason === 'MAX_TOKENS'
+        ? 'OUTPUT_TRUNCATED'
+        : /SAFETY|PROHIBITED_CONTENT|BLOCKLIST|RECITATION/i.test(finishReason)
+            ? 'CONTENT_BLOCKED'
+            : finishReason && finishReason !== 'STOP' && finishReason !== 'FINISH_REASON_UNSPECIFIED'
+                ? 'INCOMPLETE_RESPONSE'
+                : googleResponse.ok && !text
+                    ? 'EMPTY_RESPONSE'
+                    : null;
 
     await admin.from('ai_usage_events').insert({
         user_id: user.id,
         feature,
         model: MODEL,
-        success: googleResponse.ok,
-        error_code: googleResponse.ok ? null : googleErrorCode,
+        success: googleResponse.ok && !completionErrorCode,
+        error_code: googleResponse.ok ? completionErrorCode : googleErrorCode,
         prompt_token_count: safeNumber(usage.promptTokenCount),
         candidates_token_count: safeNumber(usage.candidatesTokenCount),
         thoughts_token_count: safeNumber(usage.thoughtsTokenCount),
@@ -176,18 +200,26 @@ serve(async (req) => {
         }, isQuota ? 429 : 502);
     }
 
-    const text = (googleBody?.candidates?.[0]?.content?.parts || [])
-        .filter((part: any) => !part.thought && typeof part.text === 'string')
-        .map((part: any) => part.text)
-        .join('');
-
-    if (!text) {
-        return jsonResponse({ error: 'Gemini nao retornou conteudo' }, 502);
+    if (completionErrorCode) {
+        const errorMessage = completionErrorCode === 'OUTPUT_TRUNCATED'
+            ? 'A resposta atingiu o limite de tamanho'
+            : completionErrorCode === 'CONTENT_BLOCKED'
+                ? 'O conteudo nao pode ser processado'
+                : 'Gemini nao concluiu a resposta';
+        return jsonResponse({
+            error: errorMessage,
+            code: completionErrorCode,
+            finishReason,
+            finishMessage,
+            usageMetadata: usage
+        }, 422);
     }
 
     return jsonResponse({
         text,
         usageMetadata: usage,
-        model: MODEL
+        model: MODEL,
+        finishReason,
+        finishMessage
     });
 });

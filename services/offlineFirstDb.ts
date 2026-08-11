@@ -9,6 +9,7 @@
 import { Client, Measurement, UserInfo, Film, PaymentMethods, SavedPDF, Agendamento, ProposalOption, StandaloneExpense } from '../types';
 import * as supabaseDb from './supabaseDb';
 import * as offlineDb from './offlineDb';
+import { normalizeFilmForPersistence } from '../src/lib/filmPersistence';
 import { isOnlineNow, syncAllPending } from './syncService';
 
 const POSTGRES_INTEGER_MAX = 2147483647;
@@ -276,7 +277,7 @@ export async function getAllCustomFilms(): Promise<Film[]> {
 }
 
 export async function saveCustomFilm(film: Film): Promise<void> {
-    await offlineDb.saveFilmLocal(film);
+    await offlineDb.saveFilmLocal(normalizeFilmForPersistence(film));
 
     if (isOnlineNow()) {
         syncAllPending().catch(console.error);
@@ -543,11 +544,22 @@ export async function getClientPage(
 ): Promise<supabaseDb.ClientPageResult> {
     const offset = Math.max(0, Math.trunc(query.offset || 0));
     const limit = Math.min(100, Math.max(1, Math.trunc(query.limit || 50)));
-    const localClients = await offlineDb.getAllClientsLocal();
+    let localClientsPromise: ReturnType<typeof offlineDb.getAllClientsLocal> | null = null;
+    const getLocalClients = () => {
+        localClientsPromise ??= offlineDb.getAllClientsLocal();
+        return localClientsPromise;
+    };
 
     try {
         if (isOnlineNow()) {
-            const remotePage = await supabaseDb.getClientPage({ ...query, offset, limit });
+            if (offset > 0) {
+                return await supabaseDb.getClientPage({ ...query, offset, limit });
+            }
+
+            const [remotePage, localClients] = await Promise.all([
+                supabaseDb.getClientPage({ ...query, offset, limit }),
+                getLocalClients()
+            ]);
             const now = Date.now();
             if (remotePage.clients.length > 0) {
                 await offlineDb.offlineDb.clients.bulkPut(remotePage.clients.map(client => ({
@@ -559,7 +571,6 @@ export async function getClientPage(
                 })));
             }
 
-            if (offset > 0) return remotePage;
             const pending = localClients
                 .filter(client => client._syncStatus === 'pending' || client._syncStatus === 'error')
                 .map(stripClientSyncMetadata);
@@ -579,6 +590,7 @@ export async function getClientPage(
         console.error('[OfflineFirst] Erro ao buscar pagina de clientes, usando cache local:', error);
     }
 
+    const localClients = await getLocalClients();
     const normalizedSearch = query.search?.trim().toLocaleLowerCase('pt-BR') || '';
     const filtered = sortClientsForPage(localClients.map(stripClientSyncMetadata)).filter(client => {
         if (!normalizedSearch) return true;
@@ -616,13 +628,22 @@ export async function getPDFPage(
 ): Promise<supabaseDb.PDFPageResult> {
     const offset = Math.max(0, Math.trunc(query.offset || 0));
     const limit = Math.min(100, Math.max(1, Math.trunc(query.limit || 50)));
+    let localPdfsPromise: ReturnType<typeof offlineDb.getAllPdfsLocal> | null = null;
+    const getLocalPdfs = () => {
+        localPdfsPromise ??= offlineDb.getAllPdfsLocal();
+        return localPdfsPromise;
+    };
 
     try {
-        const localPdfs = await offlineDb.getAllPdfsLocal();
-
         if (isOnlineNow()) {
-            const remotePage = await supabaseDb.getPDFPage({ ...query, offset, limit });
-            if (offset > 0) return remotePage;
+            if (offset > 0) {
+                return await supabaseDb.getPDFPage({ ...query, offset, limit });
+            }
+
+            const [remotePage, localPdfs] = await Promise.all([
+                supabaseDb.getPDFPage({ ...query, offset, limit }),
+                getLocalPdfs()
+            ]);
 
             const merged = mergeUnsyncedLocalPdfs(remotePage.pdfs, localPdfs);
             return {
@@ -634,6 +655,7 @@ export async function getPDFPage(
             };
         }
 
+        const localPdfs = await getLocalPdfs();
         const normalizedSearch = query.search?.trim().toLocaleLowerCase('pt-BR') || '';
         const filtered = sortPdfsByDateDesc(localPdfs.map(stripPdfSyncMetadata)).filter(pdf => {
             const timestamp = new Date(pdf.date).getTime();
@@ -656,7 +678,7 @@ export async function getPDFPage(
         };
     } catch (error) {
         console.error('[OfflineFirst] Erro ao buscar pagina de PDFs, usando cache local:', error);
-        const localPdfs = await offlineDb.getAllPdfsLocal();
+        const localPdfs = await getLocalPdfs();
         const pdfs = sortPdfsByDateDesc(localPdfs.map(stripPdfSyncMetadata)).slice(offset, offset + limit);
         return {
             pdfs,
@@ -717,9 +739,18 @@ export async function getPDFBlob(pdfId: number): Promise<Blob | null> {
 }
 
 export async function deletePDF(pdfId: number): Promise<void> {
-    // Por enquanto, apenas deletar do Supabase se online
-    if (isOnlineNow()) {
+    if (isOnlineNow() && isPersistedIntegerId(pdfId)) {
         await supabaseDb.deletePDF(pdfId);
+        await offlineDb.deletePdfLocal(pdfId, { queueRemoteDelete: false });
+        return;
+    }
+
+    await offlineDb.deletePdfLocal(pdfId);
+
+    if (isOnlineNow()) {
+        syncAllPending().catch(error => {
+            console.error('[OfflineFirst] Erro ao sincronizar exclusao de PDF:', error);
+        });
     }
 }
 
@@ -840,8 +871,66 @@ const stripAgendamentoSyncMetadata = (localAgendamento: offlineDb.LocalAgendamen
         ? _remoteId
         : isPersistedIntegerId(agendamento.id)
             ? agendamento.id
-            : getTemporaryPublicIdFromLocalId(_localId);
+            : typeof agendamento.id === 'number'
+                ? agendamento.id
+                : getTemporaryPublicIdFromLocalId(_localId);
     return { ...agendamento, id: publicId };
+};
+
+const isUnsyncedAgendamento = (agendamento: offlineDb.LocalAgendamento): boolean => (
+    agendamento._syncStatus === 'pending' || agendamento._syncStatus === 'error'
+);
+
+const getAgendamentoRemoteId = (
+    agendamento: Pick<offlineDb.LocalAgendamento, 'id' | '_remoteId'> | Agendamento
+): number | undefined => {
+    const remoteId = '_remoteId' in agendamento ? agendamento._remoteId : undefined;
+    return isPersistedIntegerId(remoteId)
+        ? remoteId
+        : isPersistedIntegerId(agendamento.id)
+            ? agendamento.id
+            : undefined;
+};
+
+const getLocalAgendamentoIdentity = (agendamento: offlineDb.LocalAgendamento): string => {
+    const remoteId = getAgendamentoRemoteId(agendamento);
+    if (remoteId !== undefined) return `remote:${remoteId}`;
+    if (typeof agendamento.id === 'number') return `temporary:${agendamento.id}`;
+
+    const temporaryId = getTemporaryPublicIdFromLocalId(agendamento._localId);
+    if (temporaryId !== undefined) return `temporary:${temporaryId}`;
+
+    return `local:${agendamento._localId || 'unknown'}`;
+};
+
+const preferLocalAgendamento = (
+    current: offlineDb.LocalAgendamento,
+    candidate: offlineDb.LocalAgendamento
+): offlineDb.LocalAgendamento => {
+    const currentUnsynced = isUnsyncedAgendamento(current);
+    const candidateUnsynced = isUnsyncedAgendamento(candidate);
+
+    if (currentUnsynced !== candidateUnsynced) {
+        return candidateUnsynced ? candidate : current;
+    }
+
+    return (candidate._lastModified || 0) >= (current._lastModified || 0)
+        ? candidate
+        : current;
+};
+
+const dedupeLocalAgendamentos = (
+    agendamentos: offlineDb.LocalAgendamento[]
+): offlineDb.LocalAgendamento[] => {
+    const unique = new Map<string, offlineDb.LocalAgendamento>();
+
+    for (const agendamento of agendamentos) {
+        const identity = getLocalAgendamentoIdentity(agendamento);
+        const existing = unique.get(identity);
+        unique.set(identity, existing ? preferLocalAgendamento(existing, agendamento) : agendamento);
+    }
+
+    return Array.from(unique.values());
 };
 
 // Tamanho da equipe ativa (capacidade de agendamentos simultâneos). Leitura
@@ -858,9 +947,15 @@ export async function getActiveTeamSize(): Promise<number> {
 }
 
 export async function getAllAgendamentos(): Promise<Agendamento[]> {
+    let localAgendamentosPromise: ReturnType<typeof offlineDb.getAllAgendamentosLocal> | null = null;
+    const getLocalAgendamentos = () => {
+        localAgendamentosPromise ??= offlineDb.getAllAgendamentosLocal();
+        return localAgendamentosPromise;
+    };
+
     try {
-        const localAgendamentos = await offlineDb.getAllAgendamentosLocal();
-        const pendingAgendamentos = localAgendamentos.filter(agendamento => agendamento._syncStatus === 'pending');
+        const localAgendamentos = dedupeLocalAgendamentos(await getLocalAgendamentos());
+        const pendingAgendamentos = localAgendamentos.filter(isUnsyncedAgendamento);
 
         if (isOnlineNow()) {
             if (pendingAgendamentos.length > 0) {
@@ -868,24 +963,79 @@ export async function getAllAgendamentos(): Promise<Agendamento[]> {
             }
 
             const remoteAgendamentos = await supabaseDb.getAllAgendamentos();
-            const remoteIds = new Set(remoteAgendamentos.map(agendamento => agendamento.id).filter(Boolean));
-            const pendingNotInRemote = pendingAgendamentos
-                .filter(agendamento => {
-                    const remoteId = isPersistedIntegerId(agendamento._remoteId)
-                        ? agendamento._remoteId
-                        : isPersistedIntegerId(agendamento.id)
-                            ? agendamento.id
-                            : undefined;
-                    return !remoteId || !remoteIds.has(remoteId);
-                })
-                .map(stripAgendamentoSyncMetadata);
+            const pendingByRemoteId = new Map<number, offlineDb.LocalAgendamento>();
+            for (const pending of pendingAgendamentos) {
+                const remoteId = getAgendamentoRemoteId(pending);
+                if (remoteId === undefined) continue;
 
-            return [...remoteAgendamentos, ...pendingNotInRemote];
+                const existing = pendingByRemoteId.get(remoteId);
+                pendingByRemoteId.set(
+                    remoteId,
+                    existing ? preferLocalAgendamento(existing, pending) : pending
+                );
+            }
+
+            // O cache remoto nunca pode usar a mesma chave de um registro ainda
+            // pendente, pois isso apagaria a fotografia local antes do sync.
+            const localByRemoteId = new Map<number, offlineDb.LocalAgendamento>();
+            for (const local of localAgendamentos) {
+                const remoteId = getAgendamentoRemoteId(local);
+                if (remoteId !== undefined && !localByRemoteId.has(remoteId)) {
+                    localByRemoteId.set(remoteId, local);
+                }
+            }
+
+            const now = Date.now();
+            const remoteAgendamentosToCache = remoteAgendamentos
+                .filter(agendamento => (
+                    isPersistedIntegerId(agendamento.id)
+                    && !pendingByRemoteId.has(agendamento.id)
+                ))
+                .map(agendamento => {
+                    const existingLocal = localByRemoteId.get(agendamento.id!);
+                    return {
+                        ...agendamento,
+                        _localId: existingLocal?._localId || `remote_agendamento_${agendamento.id}`,
+                        _syncStatus: 'synced' as const,
+                        _lastModified: now,
+                        _syncedAt: now,
+                        _remoteId: agendamento.id
+                    };
+                });
+
+            if (remoteAgendamentosToCache.length > 0) {
+                await offlineDb.offlineDb.agendamentos.bulkPut(remoteAgendamentosToCache);
+            }
+
+            const merged: Agendamento[] = [];
+            const includedIdentities = new Set<string>();
+
+            for (const remote of remoteAgendamentos) {
+                const remoteId = getAgendamentoRemoteId(remote);
+                const identity = remoteId !== undefined
+                    ? `remote:${remoteId}`
+                    : `remote-row:${merged.length}`;
+                if (includedIdentities.has(identity)) continue;
+
+                const pending = remoteId !== undefined ? pendingByRemoteId.get(remoteId) : undefined;
+                merged.push(pending ? stripAgendamentoSyncMetadata(pending) : remote);
+                includedIdentities.add(identity);
+            }
+
+            for (const pending of pendingAgendamentos) {
+                const identity = getLocalAgendamentoIdentity(pending);
+                if (includedIdentities.has(identity)) continue;
+
+                merged.push(stripAgendamentoSyncMetadata(pending));
+                includedIdentities.add(identity);
+            }
+
+            return merged;
         }
 
         return localAgendamentos.map(stripAgendamentoSyncMetadata);
     } catch (error) {
-        const localAgendamentos = await offlineDb.getAllAgendamentosLocal();
+        const localAgendamentos = dedupeLocalAgendamentos(await getLocalAgendamentos());
         return localAgendamentos.map(stripAgendamentoSyncMetadata);
     }
 }
@@ -925,11 +1075,14 @@ export async function saveAgendamento(agendamento: Agendamento): Promise<Agendam
             ? agendamento.id
             : getTemporaryPublicIdFromLocalId(localAgendamento._localId) ?? -Date.now();
 
-    if (!localAgendamento.id && localAgendamento._localId) {
+    if (localAgendamento.id === undefined && localAgendamento._localId) {
         await offlineDb.offlineDb.agendamentos.update(localAgendamento._localId, { id: tempId });
     }
 
-    return { ...agendamento, id: tempId };
+    return {
+        ...stripAgendamentoSyncMetadata(localAgendamento),
+        id: tempId
+    };
 }
 
 export async function deleteAgendamento(agendamentoId: number): Promise<void> {

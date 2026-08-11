@@ -297,6 +297,11 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
             pdfId: proposalIds[0],
             pdfIds: proposalIds,
             serviceStatus,
+            valorFinal: agendamento?.valorFinal,
+            receiptDescription: agendamento?.receiptDescription,
+            stockStatus: agendamento?.stockStatus,
+            stockConsumedAt: agendamento?.stockConsumedAt,
+            stockSourcePdfIds: agendamento?.stockSourcePdfIds,
         };
 
         if (isEditing) {
@@ -635,7 +640,17 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                                         <button
                                             key={option.value}
                                             type="button"
-                                            onClick={() => setServiceStatus(option.value)}
+                                            onClick={() => {
+                                                if (
+                                                    option.value === 'completed'
+                                                    && agendamento?.serviceStatus !== 'completed'
+                                                ) {
+                                                    setValidationError('Para concluir, use o botão "Concluído" na Agenda e confirme o material utilizado.');
+                                                    return;
+                                                }
+                                                setValidationError(null);
+                                                setServiceStatus(option.value);
+                                            }}
                                             aria-pressed={isActive}
                                             className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors ${isActive ? option.activeClasses : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-700/50 dark:text-slate-300 dark:hover:bg-slate-700'}`}
                                         >

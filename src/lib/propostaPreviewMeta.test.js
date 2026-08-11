@@ -26,6 +26,11 @@ describe('prévia amigável da proposta', () => {
         expect(previewFingerprint('logo antiga')).not.toBe(previewFingerprint('logo nova'));
     });
 
+    it('versiona a imagem da empresa para invalidar previews antigos', () => {
+        expect(resolvePreviewImage('data:image/png;base64,abc', 'https://app.filmstec.shop', 'codigo'))
+            .toContain('v=company-v2-');
+    });
+
     it('protege os metadados contra HTML inserido nos nomes', () => {
         expect(escapeHtml('<script>')).toBe('&lt;script&gt;');
     });

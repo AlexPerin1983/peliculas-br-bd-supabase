@@ -294,13 +294,15 @@ const ClientSelectionModal: React.FC<ClientSelectionModalProps> = ({
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex flex-col bg-white/94 dark:bg-slate-900/95 backdrop-blur-md animate-fade-in">
+        <div className="fixed inset-0 z-50 flex flex-col bg-white/94 pt-[env(safe-area-inset-top,0px)] dark:bg-slate-900/95 backdrop-blur-md animate-fade-in">
             <div className="sticky top-0 z-10 flex-shrink-0 border-b border-slate-200/80 bg-white/94 p-3.5 backdrop-blur dark:border-slate-700 dark:bg-slate-900/94">
                 <div className="mx-auto max-w-3xl">
                     <div className="flex items-center gap-3">
                         <button
+                            type="button"
                             onClick={onClose}
-                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition-colors hover:border-slate-300 hover:text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:text-white"
+                            aria-label="Voltar"
+                            className="flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition-colors hover:border-slate-300 hover:text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:text-white"
                         >
                             <i className="fas fa-arrow-left text-[14px]"></i>
                         </button>

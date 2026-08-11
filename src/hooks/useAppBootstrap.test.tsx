@@ -80,4 +80,45 @@ describe('useAppBootstrap', () => {
     expect(setAgendamentos).toHaveBeenCalledWith([{ id: 1 }]);
     expect(setHasLoadedAgendamentos).toHaveBeenCalledWith(true);
   });
+
+  it('nao busca colecoes completas que a tela inicial nao usa', async () => {
+    dbMocks.getUserInfo.mockResolvedValue({ id: 'info', nome: 'Empresa' });
+    dbMocks.getAllCustomFilms.mockResolvedValue([]);
+    dbMocks.getAllAgendamentos.mockResolvedValue([]);
+    dbMocks.getPDFPage.mockResolvedValue({
+      pdfs: [],
+      hasMore: false,
+      nextOffset: 0
+    });
+
+    const setIsLoading = vi.fn();
+
+    renderHook(() => useAppBootstrap({
+      authUserId: 'user-1',
+      initialClientLoad: 'deferred',
+      initialPdfLoad: 'history',
+      setIsLoading,
+      setClients: vi.fn(),
+      setClientListClients: vi.fn(),
+      setClientListHasMore: vi.fn(),
+      setClientListNextOffset: vi.fn(),
+      setHasLoadedAllClients: vi.fn(),
+      setSelectedClientId: vi.fn(),
+      setUserInfo: vi.fn(),
+      setFilms: vi.fn(),
+      setAllSavedPdfs: vi.fn(),
+      setHistoryPdfs: vi.fn(),
+      setHistoryHasMore: vi.fn(),
+      setHistoryNextOffset: vi.fn(),
+      setHasLoadedAllPdfs: vi.fn(),
+      setAgendamentos: vi.fn(),
+      setHasLoadedHistory: vi.fn(),
+      setHasLoadedAgendamentos: vi.fn()
+    }));
+
+    await waitFor(() => expect(setIsLoading).toHaveBeenLastCalledWith(false));
+    expect(dbMocks.getPDFPage).toHaveBeenCalledWith({ offset: 0, limit: 50 });
+    expect(dbMocks.getAllClients).not.toHaveBeenCalled();
+    expect(dbMocks.getAllPDFs).not.toHaveBeenCalled();
+  });
 });

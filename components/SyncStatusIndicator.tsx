@@ -35,7 +35,26 @@ const formatSyncErrorMessage = (error: string | null | undefined): string | null
         return 'Conexão instável com o servidor. Seus dados estão salvos neste celular e tentaremos novamente automaticamente.';
     }
 
-    return error;
+    if (normalized.includes('numeric field overflow')) {
+        return 'Uma película possui um valor numérico inválido. Confira os números preenchidos e salve novamente.';
+    }
+
+    if (
+        normalized.includes('row-level security')
+        && (normalized.includes('user_info') || normalized.includes('configura'))
+    ) {
+        return 'Não foi possível salvar as configurações da empresa agora. Atualize a página e tente novamente.';
+    }
+
+    if (normalized.includes('row-level security')) {
+        return 'Esta alteração não pôde ser salva com a permissão atual da conta.';
+    }
+
+    if (normalized.includes('duplicate key') || normalized.includes('unique constraint')) {
+        return 'Este item já existe. Atualize a página antes de tentar novamente.';
+    }
+
+    return 'Não foi possível concluir a sincronização. Tente novamente em alguns instantes.';
 };
 
 const isConnectionFailure = (error: string | null | undefined): boolean => {
@@ -55,12 +74,6 @@ const formatSyncItemLabel = (table: string): string => {
 
     return labels[table] || table;
 };
-
-const formatSyncActionLabel = (action: 'create' | 'update' | 'delete'): string => ({
-    create: 'enviar',
-    update: 'atualizar',
-    delete: 'excluir'
-}[action]);
 
 const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({ showDetails = false }) => {
     const [status, setStatus] = useState<SyncStatus>({
@@ -102,7 +115,7 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({ showDetails =
             return <CloudOff className="w-4 h-4 text-amber-500" />;
         }
         if (status.failedCount > 0) {
-            return <AlertCircle className="w-4 h-4 text-red-500" />;
+            return <AlertCircle className="w-4 h-4 text-amber-500" />;
         }
         if (status.pendingCount > 0) {
             return <CloudOff className="w-4 h-4 text-yellow-500" />;
@@ -117,7 +130,7 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({ showDetails =
         if (status.syncInProgress) return 'Sincronizando...';
         if (!status.isOnline) return 'Offline';
         if (status.failedCount > 0 && hasConnectionFailure) return 'Salvo no celular';
-        if (status.failedCount > 0) return `${status.failedCount} erro${status.failedCount > 1 ? 's' : ''}`;
+        if (status.failedCount > 0) return `${status.failedCount} ${status.failedCount > 1 ? 'ajustes' : 'ajuste'}`;
         if (status.pendingCount > 0) return `${status.pendingCount} pendente${status.pendingCount > 1 ? 's' : ''}`;
         if (status.error) return 'Erro';
         return 'Sincronizado';
@@ -127,7 +140,7 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({ showDetails =
         if (status.syncInProgress) return 'bg-blue-100 dark:bg-blue-900/30 border-blue-300 dark:border-blue-700';
         if (!status.isOnline) return 'bg-red-100 dark:bg-red-900/30 border-red-300 dark:border-red-700';
         if (status.failedCount > 0 && hasConnectionFailure) return 'bg-amber-100 dark:bg-amber-900/30 border-amber-300 dark:border-amber-700';
-        if (status.failedCount > 0) return 'bg-red-100 dark:bg-red-900/30 border-red-300 dark:border-red-700';
+        if (status.failedCount > 0) return 'bg-amber-100 dark:bg-amber-900/30 border-amber-300 dark:border-amber-700';
         if (status.pendingCount > 0) return 'bg-yellow-100 dark:bg-yellow-900/30 border-yellow-300 dark:border-yellow-700';
         if (status.error) return 'bg-red-100 dark:bg-red-900/30 border-red-300 dark:border-red-700';
         return 'bg-green-100 dark:bg-green-900/30 border-green-300 dark:border-green-700';
@@ -173,8 +186,8 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({ showDetails =
                         </div>
 
                         <div className="flex items-center justify-between">
-                            <span className="text-sm text-slate-600 dark:text-slate-400">Erros</span>
-                            <span className={`text-sm font-medium ${status.failedCount > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                            <span className="text-sm text-slate-600 dark:text-slate-400">Ajustes</span>
+                            <span className={`text-sm font-medium ${status.failedCount > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-green-600 dark:text-green-400'}`}>
                                 {status.failedCount}
                             </span>
                         </div>
@@ -188,9 +201,15 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({ showDetails =
                             </div>
                         )}
 
+                        {status.failedCount > 0 && !hasConnectionFailure && (
+                            <div className="rounded-lg bg-amber-50 p-2 dark:bg-amber-900/20">
+                                <p className="text-xs leading-5 text-amber-800 dark:text-amber-200">Alguns dados precisam de uma pequena revisão. O restante do sistema continua funcionando normalmente.</p>
+                            </div>
+                        )}
+
                         {friendlyError && (
-                            <div className={`rounded-lg p-2 ${hasConnectionFailure ? 'bg-amber-50 dark:bg-amber-900/20' : 'bg-red-50 dark:bg-red-900/20'}`}>
-                                <p className={`text-xs ${hasConnectionFailure ? 'text-amber-700 dark:text-amber-300' : 'text-red-600 dark:text-red-400'}`}>{friendlyError}</p>
+                            <div className="rounded-lg bg-amber-50 p-2 dark:bg-amber-900/20">
+                                <p className="text-xs text-amber-700 dark:text-amber-300">{friendlyError}</p>
                             </div>
                         )}
 
@@ -201,13 +220,13 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({ showDetails =
                                     return (
                                         <div
                                             key={item.id}
-                                            className={`rounded-lg border p-2 ${itemHasConnectionFailure ? 'border-amber-100 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-900/20' : 'border-red-100 bg-red-50 dark:border-red-900/40 dark:bg-red-900/20'}`}
+                                            className="rounded-lg border border-amber-100 bg-amber-50 p-2 dark:border-amber-900/40 dark:bg-amber-900/20"
                                         >
-                                            <p className={`text-xs font-medium ${itemHasConnectionFailure ? 'text-amber-800 dark:text-amber-200' : 'text-red-700 dark:text-red-300'}`}>
-                                                {formatSyncItemLabel(item.table)} • {formatSyncActionLabel(item.action)} • tentativa {item.retryCount}
+                                            <p className="text-xs font-medium text-amber-800 dark:text-amber-200">
+                                                {formatSyncItemLabel(item.table)} • {itemHasConnectionFailure ? 'aguardando conexão' : 'precisa de revisão'}
                                             </p>
                                             {item.lastError && (
-                                                <p className={`mt-1 line-clamp-2 text-xs ${itemHasConnectionFailure ? 'text-amber-700 dark:text-amber-300' : 'text-red-600 dark:text-red-400'}`}>
+                                                <p className="mt-1 text-xs leading-5 text-amber-700 dark:text-amber-300">
                                                     {formatSyncErrorMessage(item.lastError)}
                                                 </p>
                                             )}
@@ -224,7 +243,7 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({ showDetails =
                                 className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
                             >
                                 <RefreshCw className={`w-4 h-4 ${status.syncInProgress ? 'animate-spin' : ''}`} />
-                                {status.syncInProgress ? 'Sincronizando...' : hasConnectionFailure ? 'Tentar agora' : 'Sincronizar Agora'}
+                                {status.syncInProgress ? 'Sincronizando...' : 'Tentar novamente'}
                             </button>
                         )}
                     </div>

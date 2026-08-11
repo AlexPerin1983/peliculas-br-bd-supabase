@@ -2,6 +2,7 @@ import React from 'react';
 import { Drawer } from 'vaul';
 import { QrCode, RefreshCw, Trash2 } from 'lucide-react';
 import { Bobina, Retalho } from '../../../types';
+import { formatStockMeters } from '../../../src/lib/estoqueDimensions';
 
 export type EstoqueSelectedItem = { type: 'bobina'; item: Bobina } | { type: 'retalho'; item: Retalho };
 
@@ -44,9 +45,9 @@ const EstoqueItemSheet: React.FC<EstoqueItemSheetProps> = ({ selected, onClose, 
 
                         <div className="mt-4 grid grid-cols-2 gap-2 rounded-[var(--radius-card)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-3">
                             {isBobina ? <>
-                                <div><p className="text-[9px] uppercase text-[var(--text-muted)]">Restante</p><p className="mt-1 text-[18px] font-semibold text-[var(--text-strong)]">{bobina!.comprimentoRestanteM.toFixed(1)}m</p></div>
+                                <div><p className="text-[9px] uppercase text-[var(--text-muted)]">Restante</p><p className="mt-1 text-[18px] font-semibold tabular-nums text-[var(--text-strong)]">{formatStockMeters(bobina!.comprimentoRestanteM)}m</p></div>
                                 <div><p className="text-[9px] uppercase text-[var(--text-muted)]">Largura</p><p className="mt-1 text-[18px] font-semibold text-[var(--text-strong)]">{bobina!.larguraCm}cm</p></div>
-                                <p className="col-span-2 text-[11px] text-[var(--text-muted)]">{bobina!.comprimentoTotalM}m total{bobina!.lote ? ` · Lote ${bobina!.lote}` : ''}{bobina!.localizacao ? ` · ${bobina!.localizacao}` : ''}</p>
+                                <p className="col-span-2 text-[11px] text-[var(--text-muted)]">{formatStockMeters(bobina!.comprimentoTotalM)}m total{bobina!.lote ? ` · Lote ${bobina!.lote}` : ''}{bobina!.localizacao ? ` · ${bobina!.localizacao}` : ''}</p>
                             </> : <>
                                 <div><p className="text-[9px] uppercase text-[var(--text-muted)]">Largura</p><p className="mt-1 text-[18px] font-semibold text-[var(--text-strong)]">{retalho!.larguraCm}cm</p></div>
                                 <div><p className="text-[9px] uppercase text-[var(--text-muted)]">Comprimento</p><p className="mt-1 text-[18px] font-semibold text-[var(--text-strong)]">{retalho!.comprimentoCm}cm</p></div>

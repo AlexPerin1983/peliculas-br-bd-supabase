@@ -3,10 +3,12 @@ import { act } from 'react';
 import { useMeasurementEditor } from './useMeasurementEditor';
 import { UIMeasurement } from '../../types';
 import { MEASUREMENT_INPUT_MODE_STORAGE_KEY } from '../lib/measurementInputMode';
+import { closeActiveNumpadDraft, getActiveNumpadDraft } from './useNumpadDraft';
 
 describe('useMeasurementEditor', () => {
   beforeEach(() => {
     localStorage.removeItem(MEASUREMENT_INPUT_MODE_STORAGE_KEY);
+    closeActiveNumpadDraft();
   });
 
   const measurement: UIMeasurement = {
@@ -106,7 +108,7 @@ describe('useMeasurementEditor', () => {
       result.current.handleNumpadInput('2');
     });
 
-    expect(result.current.numpadConfig.currentValue).toBe('1.52');
+    expect(getActiveNumpadDraft().currentValue).toBe('1.52');
 
     act(() => {
       result.current.handleNumpadDone();
@@ -116,6 +118,59 @@ describe('useMeasurementEditor', () => {
       expect.objectContaining({ id: 1, largura: '1,52' })
     ]);
     expect(result.current.numpadConfig.field).toBe('altura');
+  });
+
+  it('mantem o fechamento do teclado estavel enquanto os digitos mudam', () => {
+    const handleMeasurementsChange = vi.fn();
+
+    const { result } = renderHook(() =>
+      useMeasurementEditor({
+        measurements: [measurement],
+        handleMeasurementsChange,
+        createEmptyMeasurement
+      })
+    );
+    const initialCloseHandler = result.current.handleNumpadClose;
+
+    act(() => {
+      result.current.handleOpenNumpad(1, 'largura', '');
+      result.current.handleNumpadInput('1');
+      result.current.handleNumpadInput('5');
+      result.current.handleNumpadInput('2');
+    });
+
+    expect(result.current.handleNumpadClose).toBe(initialCloseHandler);
+  });
+
+  it('nao renderiza o editor principal novamente a cada digito', () => {
+    localStorage.setItem(MEASUREMENT_INPUT_MODE_STORAGE_KEY, 'centimeters');
+    const handleMeasurementsChange = vi.fn();
+    let renderCount = 0;
+
+    const { result } = renderHook(() => {
+      renderCount += 1;
+      return useMeasurementEditor({
+        measurements: [measurement],
+        handleMeasurementsChange,
+        createEmptyMeasurement
+      });
+    });
+
+    act(() => {
+      result.current.handleOpenNumpad(1, 'largura', '');
+    });
+    const renderCountAfterOpen = renderCount;
+    const sessionConfig = result.current.numpadConfig;
+
+    act(() => {
+      result.current.handleNumpadInput('1');
+      result.current.handleNumpadInput('5');
+      result.current.handleNumpadInput('2');
+    });
+
+    expect(renderCount).toBe(renderCountAfterOpen);
+    expect(result.current.numpadConfig).toBe(sessionConfig);
+    expect(getActiveNumpadDraft().currentValue).toBe('1.52');
   });
 
   it('duplica a medida atual a partir do numpad', () => {

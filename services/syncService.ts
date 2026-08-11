@@ -21,6 +21,7 @@ import {
     deleteAgendamentoRemote,
     deleteClientRemote,
     deleteCustomFilmRemote,
+    deletePDFRemote,
     deleteStandaloneExpenseRemote,
     saveAgendamentoRemote,
     saveClientRemote,
@@ -30,6 +31,7 @@ import {
     saveStandaloneExpenseRemote,
     saveUserInfoRemote
 } from './supabaseDb';
+import { normalizeFilmForPersistence } from '../src/lib/filmPersistence';
 
 let isOnline = navigator.onLine;
 let syncInProgress = false;
@@ -650,7 +652,7 @@ async function syncFilm(action: string, data: LocalFilm): Promise<void> {
     const { _localId, _syncStatus, _lastModified, _syncedAt, _remoteId, ...filmRest } = data;
 
     if (action === 'create' || action === 'update') {
-        await saveCustomFilmRemote(filmRest);
+        await saveCustomFilmRemote(normalizeFilmForPersistence(filmRest));
         await markAsSynced('films', _localId!);
         return;
     }
@@ -684,18 +686,19 @@ async function syncProposalOptions(data: { clientId: number; options: any[] }): 
 
 async function syncPdf(action: string, data: any): Promise<void> {
     const { _localId, _syncStatus, _lastModified, _syncedAt, _remoteId, id, ...pdfRest } = data;
+    const remoteId = getPersistedIntegerId(_remoteId, id);
 
     if (action === 'create' || action === 'update') {
         const localPdf = await findLocalSavedPdf(data);
-        const remoteId = await resolveSavedPdfRemoteIdForSync(data, localPdf);
+        const resolvedRemoteId = await resolveSavedPdfRemoteIdForSync(data, localPdf);
         const normalizedPdfRest = await normalizeSavedPdfReferences({
             ...pdfRest,
             ...(!hasPdfBlobPayload(pdfRest.pdfBlob) && hasPdfBlobPayload(localPdf?.pdfBlob)
                 ? { pdfBlob: localPdf.pdfBlob }
                 : {})
         });
-        const syncPdfPayload = action === 'update' && remoteId
-            ? { ...normalizedPdfRest, id: remoteId }
+        const syncPdfPayload = action === 'update' && resolvedRemoteId
+            ? { ...normalizedPdfRest, id: resolvedRemoteId }
             : normalizedPdfRest;
 
         try {
@@ -738,6 +741,11 @@ async function syncPdf(action: string, data: any): Promise<void> {
 
             throw error;
         }
+    }
+
+    if (action === 'delete') {
+        if (!remoteId) return;
+        await deletePDFRemote(remoteId);
     }
 }
 

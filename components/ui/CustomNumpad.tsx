@@ -46,8 +46,12 @@ const CustomNumpad = forwardRef<HTMLDivElement, CustomNumpadProps>(({ isOpen, on
 
     const handleVibrate = () => {
         if ('vibrate' in navigator) {
-            navigator.vibrate(10);
+            navigator.vibrate(6);
         }
+    };
+
+    const scheduleHapticFeedback = () => {
+        window.setTimeout(handleVibrate, 0);
     };
 
     const NumpadButton: React.FC<{
@@ -59,11 +63,11 @@ const CustomNumpad = forwardRef<HTMLDivElement, CustomNumpadProps>(({ isOpen, on
         <button
             type="button"
             onClick={() => {
-                handleVibrate();
                 action();
+                scheduleHapticFeedback();
             }}
             aria-label={ariaLabel}
-            className={`flex items-center justify-center h-10 rounded-lg text-xl font-semibold transition-colors duration-150 ${className}`}
+            className={`flex h-10 touch-manipulation items-center justify-center rounded-lg text-xl font-semibold transition-[color,background-color,transform] duration-100 active:scale-[0.98] ${className}`}
         >
             {children}
         </button>
@@ -78,11 +82,11 @@ const CustomNumpad = forwardRef<HTMLDivElement, CustomNumpadProps>(({ isOpen, on
         <button
             type="button"
             onClick={() => {
-                handleVibrate();
                 action();
+                scheduleHapticFeedback();
             }}
             aria-label={ariaLabel}
-            className={`flex items-center justify-center h-10 w-10 rounded-full text-lg transition-colors duration-150 ${isPrimary
+            className={`flex h-10 w-10 touch-manipulation items-center justify-center rounded-full text-lg transition-[color,background-color,transform] duration-100 active:scale-95 ${isPrimary
                 ? 'bg-slate-900 text-white hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600 shadow-md'
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600'
                 }`}

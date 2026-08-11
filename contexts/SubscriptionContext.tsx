@@ -82,12 +82,20 @@ export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
 
     // Carregar dados iniciais
     const loadSubscriptionData = useCallback(async () => {
+        if (!user || !organizationId) {
+            setInfo(null);
+            setModules([]);
+            setError(null);
+            setIsLoading(false);
+            return;
+        }
+
         try {
             setIsLoading(true);
             setError(null);
 
             const [subscriptionInfo, availableModules] = await Promise.all([
-                getSubscriptionInfo(true),
+                getSubscriptionInfo(false, organizationId),
                 getAvailableModules()
             ]);
 
@@ -99,7 +107,7 @@ export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
         } finally {
             setIsLoading(false);
         }
-    }, [organizationId]);
+    }, [organizationId, user?.id]);
 
     useEffect(() => {
         loadSubscriptionData();

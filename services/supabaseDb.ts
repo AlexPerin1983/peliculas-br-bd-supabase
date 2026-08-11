@@ -1190,6 +1190,12 @@ export const saveAgendamento = async (agendamento: Agendamento | Omit<Agendament
     if (!userId) throw new Error('User not authenticated');
 
     const serviceStatus = agendamento.serviceStatus || 'scheduled';
+    const requestedReceiptDescription = agendamento.receiptDescription?.trim();
+    const hasRequestedStockData = Boolean(
+        agendamento.stockStatus
+        || agendamento.stockConsumedAt
+        || agendamento.stockSourcePdfIds?.length
+    );
     const agendamentoData = {
         user_id: userId,
         pdf_id: agendamento.pdfId,
@@ -1200,7 +1206,19 @@ export const saveAgendamento = async (agendamento: Agendamento | Omit<Agendament
         end: agendamento.end,
         notes: agendamento.notes,
         service_status: serviceStatus,
-        valor_final: agendamento.valorFinal ?? null
+        valor_final: agendamento.valorFinal ?? null,
+        ...('receiptDescription' in agendamento
+            ? { receipt_description: agendamento.receiptDescription?.trim() || null }
+            : {}),
+        ...('stockStatus' in agendamento
+            ? { stock_status: agendamento.stockStatus ?? null }
+            : {}),
+        ...('stockConsumedAt' in agendamento
+            ? { stock_consumed_at: agendamento.stockConsumedAt ?? null }
+            : {}),
+        ...('stockSourcePdfIds' in agendamento
+            ? { stock_source_pdf_ids: agendamento.stockSourcePdfIds?.length ? agendamento.stockSourcePdfIds : null }
+            : {})
     };
     const legacyAgendamentoData = {
         user_id: userId,
@@ -1227,6 +1245,20 @@ export const saveAgendamento = async (agendamento: Agendamento | Omit<Agendament
         return rest;
     };
 
+    const stripReceiptDescription = <T extends { receipt_description?: unknown }>(payload: T) => {
+        const { receipt_description, ...rest } = payload;
+        return rest;
+    };
+
+    const stripStockFields = <T extends {
+        stock_status?: unknown;
+        stock_consumed_at?: unknown;
+        stock_source_pdf_ids?: unknown;
+    }>(payload: T) => {
+        const { stock_status, stock_consumed_at, stock_source_pdf_ids, ...rest } = payload;
+        return rest;
+    };
+
     const id = 'id' in agendamento && agendamento.id ? agendamento.id : undefined;
 
     const runQuery = (payload: Record<string, unknown>) => {
@@ -1238,6 +1270,23 @@ export const saveAgendamento = async (agendamento: Agendamento | Omit<Agendament
 
     let payload: Record<string, unknown> = agendamentoData;
     let { data, error } = await runQuery(payload);
+
+    if (error && isReceiptDescriptionColumnError(error)) {
+        // Um snapshot confirmado nunca pode ser descartado silenciosamente. Ao
+        // propagar o erro, a camada offline-first o mantém na fila até a
+        // migração chegar ao servidor. Payloads antigos continuam compatíveis.
+        if (requestedReceiptDescription) throw error;
+        payload = stripReceiptDescription(payload);
+        ({ data, error } = await runQuery(payload));
+    }
+
+    if (error && isAgendamentoStockColumnError(error)) {
+        // Uma pendência ou baixa confirmada não pode desaparecer em um
+        // fallback legado. A fila offline tentará novamente após a migração.
+        if (hasRequestedStockData) throw error;
+        payload = stripStockFields(payload);
+        ({ data, error } = await runQuery(payload));
+    }
 
     if (error && isPdfIdsColumnError(error)) {
         payload = stripPdfIds(payload);
@@ -1314,8 +1363,53 @@ const mapRowToAgendamento = (row: any): Agendamento => ({
     end: row.end ?? row.end_time,
     notes: row.notes,
     serviceStatus: row.service_status || 'scheduled',
-    valorFinal: row.valor_final ?? undefined
+    valorFinal: row.valor_final ?? undefined,
+    receiptDescription: row.receipt_description ?? undefined,
+    stockStatus: row.stock_status ?? undefined,
+    stockConsumedAt: row.stock_consumed_at ?? undefined,
+    stockSourcePdfIds: Array.isArray(row.stock_source_pdf_ids)
+        ? row.stock_source_pdf_ids.map(Number).filter(Number.isFinite)
+        : undefined
 });
+
+const isAgendamentoStockColumnError = (error: unknown): boolean => {
+    const details = [
+        (error as { message?: string })?.message,
+        (error as { details?: string })?.details,
+        (error as { hint?: string })?.hint,
+        (error as { code?: string })?.code
+    ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+    return ['stock_status', 'stock_consumed_at', 'stock_source_pdf_ids']
+        .some((column) => details.includes(column))
+        && (
+            details.includes('column')
+            || details.includes('schema cache')
+            || details.includes('could not find')
+        );
+};
+
+const isReceiptDescriptionColumnError = (error: unknown): boolean => {
+    const details = [
+        (error as { message?: string })?.message,
+        (error as { details?: string })?.details,
+        (error as { hint?: string })?.hint,
+        (error as { code?: string })?.code
+    ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+    return details.includes('receipt_description')
+        && (
+            details.includes('column')
+            || details.includes('schema cache')
+            || details.includes('could not find')
+        );
+};
 
 const isPdfIdsColumnError = (error: unknown): boolean => {
     const details = [
@@ -1473,6 +1567,10 @@ export async function savePDFRemote(pdfData: Omit<SavedPDF, 'id'> | SavedPDF): P
     }
 
     return savePDF({ ...pdfData, pdfBlob: normalizedPdfBlob });
+}
+
+export async function deletePDFRemote(id: number): Promise<void> {
+    return deletePDF(id);
 }
 
 export async function saveStandaloneExpenseRemote(expense: StandaloneExpense): Promise<StandaloneExpense> {

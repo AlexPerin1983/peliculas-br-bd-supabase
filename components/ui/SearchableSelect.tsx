@@ -243,13 +243,20 @@ const SearchableSelect = <T extends { [key: string]: any }>({
 
                 {isOpen && (
                     <div
+                        role="dialog"
+                        aria-modal="true"
+                        aria-label={placeholder}
                         className="animate-fade-in fixed left-0 right-0 z-[10050] flex flex-col bg-white shadow-2xl dark:bg-slate-900"
                         style={sheetViewport
                             ? { top: sheetViewport.top, height: sheetViewport.height }
                             : { top: 0, height: '100dvh' }}
                     >
                         {/* Cabeçalho fixo: busca + fechar (nunca sai da tela com o teclado) */}
-                        <div className="flex flex-shrink-0 items-center gap-2 border-b border-slate-200 px-4 py-3 dark:border-slate-700/60">
+                        <div
+                            data-mobile-search-header
+                            className="flex flex-shrink-0 items-center gap-2 border-b border-slate-200 px-4 pb-3 dark:border-slate-700/60"
+                            style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.75rem)' }}
+                        >
                             <div className="relative flex-1">
                                 <i className="fas fa-search pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400"></i>
                                 <input
@@ -266,12 +273,12 @@ const SearchableSelect = <T extends { [key: string]: any }>({
                                 type="button"
                                 onClick={() => setIsOpen(false)}
                                 aria-label="Fechar"
-                                className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700"
+                                className="flex h-11 w-11 flex-shrink-0 touch-manipulation items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700"
                             >
                                 <i className="fas fa-times text-lg"></i>
                             </button>
                         </div>
-                        <ul className="flex-1 overflow-y-auto overscroll-contain">
+                        <ul className="flex-1 overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom,0px)]">
                             {optionItems(true)}
                         </ul>
                     </div>

@@ -29,7 +29,7 @@ const addWrappedText = (
     return y + lines.length * lineHeight;
 };
 
-export const generateReceiptPdf = async (details: ReceiptDetails): Promise<Blob> => {
+export const generateReceiptPdf = (details: ReceiptDetails): Blob => {
     const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
     const pageWidth = doc.internal.pageSize.getWidth();
     const margin = 18;
@@ -129,7 +129,7 @@ export const generateReceiptPdf = async (details: ReceiptDetails): Promise<Blob>
 };
 
 export const downloadReceiptPdf = async (details: ReceiptDetails): Promise<void> => {
-    const blob = await generateReceiptPdf(details);
+    const blob = generateReceiptPdf(details);
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
@@ -139,7 +139,9 @@ export const downloadReceiptPdf = async (details: ReceiptDetails): Promise<void>
 };
 
 export const shareReceiptPdf = async (details: ReceiptDetails): Promise<'shared' | 'downloaded'> => {
-    const blob = await generateReceiptPdf(details);
+    // A geração é síncrona para que navigator.share seja chamado no mesmo
+    // gesto do usuário, exigência especialmente importante no WebKit/iPhone.
+    const blob = generateReceiptPdf(details);
     const file = new File([blob], receiptFileName(details), { type: 'application/pdf' });
     if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
         await navigator.share({

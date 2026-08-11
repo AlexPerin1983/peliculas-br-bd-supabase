@@ -104,6 +104,16 @@ const formatNumberBR = (value: number, digits = 2): string => value
     .replace(/,00$/, '')
     .replace(/(\,\d*[1-9])0$/, '$1');
 
+const stockMetersFormatter = new Intl.NumberFormat('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+});
+
+export const formatStockMeters = (valueMeters?: number): string => {
+    const safeValue = Number.isFinite(valueMeters) ? Number(valueMeters) : 0;
+    return stockMetersFormatter.format(safeValue);
+};
+
 export const formatMetersFromCentimeters = (valueCm?: number, digits = 2): string => {
     const safeValue = Number.isFinite(valueCm) ? Number(valueCm) : 0;
     return formatNumberBR(safeValue / 100, digits);

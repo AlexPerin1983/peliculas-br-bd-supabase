@@ -29,7 +29,15 @@ export default defineConfig(({ mode }) => {
               return undefined;
             }
 
-            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom')) {
+            const normalizedId = id.replace(/\\/g, '/');
+
+            if (
+              normalizedId.includes('/node_modules/react/')
+              || normalizedId.includes('/node_modules/react-dom/')
+              || normalizedId.includes('/node_modules/react-router-dom/')
+              || normalizedId.includes('/node_modules/react-router/')
+              || normalizedId.includes('/node_modules/scheduler/')
+            ) {
               return 'vendor-react';
             }
 
@@ -37,7 +45,7 @@ export default defineConfig(({ mode }) => {
               return 'vendor-supabase';
             }
 
-            if (id.includes('dexie') || id.includes('lucide-react') || id.includes('vaul')) {
+            if (id.includes('dexie')) {
               return 'vendor-utils';
             }
 

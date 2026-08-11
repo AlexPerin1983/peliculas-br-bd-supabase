@@ -91,7 +91,11 @@ describe('supabaseDb PDF updates', () => {
         client_name: 'Cliente Agenda',
         start,
         end,
-        notes: 'Instalacao'
+        notes: 'Instalacao',
+        receipt_description: 'Aplicacao de pelicula Carbono Prime',
+        stock_status: 'pending',
+        stock_consumed_at: null,
+        stock_source_pdf_ids: [91, 92]
       },
       error: null
     });
@@ -107,7 +111,10 @@ describe('supabaseDb PDF updates', () => {
       clienteNome: 'Cliente Agenda',
       start,
       end,
-      notes: 'Instalacao'
+      notes: 'Instalacao',
+      receiptDescription: 'Aplicacao de pelicula Carbono Prime',
+      stockStatus: 'pending',
+      stockSourcePdfIds: [91, 92]
     });
 
     expect(fromMock).toHaveBeenCalledWith('agendamentos');
@@ -119,7 +126,10 @@ describe('supabaseDb PDF updates', () => {
       client_name: 'Cliente Agenda',
       start,
       end,
-      notes: 'Instalacao'
+      notes: 'Instalacao',
+      receipt_description: 'Aplicacao de pelicula Carbono Prime',
+      stock_status: 'pending',
+      stock_source_pdf_ids: [91, 92]
     }));
     expect(insertMock.mock.calls[0][0]).not.toHaveProperty('start_time');
     expect(insertMock.mock.calls[0][0]).not.toHaveProperty('end_time');
@@ -130,7 +140,101 @@ describe('supabaseDb PDF updates', () => {
       clienteId: 12,
       clienteNome: 'Cliente Agenda',
       start,
-      end
+      end,
+      receiptDescription: 'Aplicacao de pelicula Carbono Prime',
+      stockStatus: 'pending',
+      stockSourcePdfIds: [91, 92]
+    }));
+  });
+
+  it('mantém payloads antigos compatíveis quando a coluna ainda não foi migrada', async () => {
+    const start = '2026-05-20T09:00:00.000Z';
+    const end = '2026-05-20T11:00:00.000Z';
+    singleMock
+      .mockResolvedValueOnce({
+        data: null,
+        error: { code: 'PGRST204', message: "Could not find the 'receipt_description' column" }
+      })
+      .mockResolvedValueOnce({
+        data: {
+          id: 55,
+          client_id: 12,
+          client_name: 'Cliente Agenda',
+          start,
+          end,
+          notes: null
+        },
+        error: null
+      });
+    selectMock.mockReturnValue({ single: singleMock });
+    insertMock.mockReturnValue({ select: selectMock });
+    fromMock.mockReturnValue({ update: updateMock, insert: insertMock });
+
+    const { saveAgendamento } = await import('./supabaseDb');
+    const saved = await saveAgendamento({
+      clienteId: 12,
+      clienteNome: 'Cliente Agenda',
+      start,
+      end,
+      receiptDescription: undefined
+    });
+
+    expect(insertMock).toHaveBeenCalledTimes(2);
+    expect(insertMock.mock.calls[0][0]).toHaveProperty('receipt_description', null);
+    expect(insertMock.mock.calls[1][0]).not.toHaveProperty('receipt_description');
+    expect(saved.receiptDescription).toBeUndefined();
+  });
+
+  it('não descarta silenciosamente um snapshot quando falta a coluna remota', async () => {
+    const start = '2026-05-20T09:00:00.000Z';
+    const end = '2026-05-20T11:00:00.000Z';
+    singleMock.mockResolvedValueOnce({
+      data: null,
+      error: { code: 'PGRST204', message: "Could not find the 'receipt_description' column" }
+    });
+    selectMock.mockReturnValue({ single: singleMock });
+    insertMock.mockReturnValue({ select: selectMock });
+    fromMock.mockReturnValue({ update: updateMock, insert: insertMock });
+
+    const { saveAgendamento } = await import('./supabaseDb');
+    await expect(saveAgendamento({
+      clienteId: 12,
+      clienteNome: 'Cliente Agenda',
+      start,
+      end,
+      receiptDescription: 'Aplicacao de pelicula'
+    })).rejects.toMatchObject({ code: 'PGRST204' });
+
+    expect(insertMock).toHaveBeenCalledTimes(1);
+    expect(insertMock.mock.calls[0][0]).toHaveProperty('receipt_description', 'Aplicacao de pelicula');
+  });
+
+  it('não descarta uma pendência de estoque quando falta a migração remota', async () => {
+    const start = '2026-05-20T09:00:00.000Z';
+    const end = '2026-05-20T11:00:00.000Z';
+    singleMock.mockResolvedValueOnce({
+      data: null,
+      error: { code: 'PGRST204', message: "Could not find the 'stock_status' column" }
+    });
+    selectMock.mockReturnValue({ single: singleMock });
+    insertMock.mockReturnValue({ select: selectMock });
+    fromMock.mockReturnValue({ update: updateMock, insert: insertMock });
+
+    const { saveAgendamento } = await import('./supabaseDb');
+    await expect(saveAgendamento({
+      clienteId: 12,
+      clienteNome: 'Cliente Agenda',
+      start,
+      end,
+      serviceStatus: 'completed',
+      stockStatus: 'pending',
+      stockSourcePdfIds: [91]
+    })).rejects.toMatchObject({ code: 'PGRST204' });
+
+    expect(insertMock).toHaveBeenCalledTimes(1);
+    expect(insertMock.mock.calls[0][0]).toEqual(expect.objectContaining({
+      stock_status: 'pending',
+      stock_source_pdf_ids: [91]
     }));
   });
 

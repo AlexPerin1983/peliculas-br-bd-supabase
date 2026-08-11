@@ -1,0 +1,26 @@
+# Dependencias e artefatos locais
+node_modules/
+dist/
+coverage/
+test-results/
+playwright-report/
+blob-report/
+.vercel/
+
+# Credenciais locais
+.env
+.env.*
+!.env.example
+*.local
+
+# Estado local dos assistentes e anexos
+.agent/
+.agents/
+.codex/
+.codex-remote-attachments/
+.gemini/
+
+# Metadados e arquivos temporarios
+.git/
+*.log
+*.patch

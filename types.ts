@@ -297,6 +297,7 @@ export interface UserInfo {
 }
 
 export type AgendamentoServiceStatus = 'scheduled' | 'completed' | 'partial' | 'cancelled' | 'no_show';
+export type AgendamentoStockStatus = 'pending' | 'confirmed' | 'not_required';
 
 export interface Agendamento {
     id?: number;
@@ -309,6 +310,13 @@ export interface Agendamento {
     notes?: string;
     serviceStatus?: AgendamentoServiceStatus; // status operacional do atendimento (separado do status comercial do orçamento)
     valorFinal?: number; // valor final cobrado no atendimento (usado quando não há orçamento vinculado para entrar no resultado financeiro)
+    // Fotografia do texto "referente a" confirmada ao emitir o recibo.
+    // Evita que um recibo antigo mude se o orçamento vinculado for editado ou excluído.
+    receiptDescription?: string;
+    // Estado da baixa de material vinculada à conclusão do atendimento.
+    stockStatus?: AgendamentoStockStatus;
+    stockConsumedAt?: string;
+    stockSourcePdfIds?: number[];
 }
 
 export interface Totals {
@@ -412,6 +420,9 @@ export interface Profile {
     approved: boolean;
     created_at: string;
     organization_id?: string;
+    // undefined pode existir apenas em caches locais criados antes da coluna.
+    // Novos perfis vindos do banco recebem null ate validar o codigo do grupo.
+    community_access_granted_at?: string | null;
 }
 
 export interface Organization {
@@ -488,6 +499,8 @@ export interface Consumo {
     clientId?: number;
     clientName?: string;
     pdfId?: number;
+    agendamentoId?: number;
+    sourceKey?: string;
     metrosConsumidos: number;
     larguraCorteCm?: number;
     comprimentoCorteCm?: number;

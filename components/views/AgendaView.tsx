@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Drawer } from 'vaul';
-import { Agendamento, AgendamentoServiceStatus, Client, SavedPDF, UserInfo } from '../../types';
+import { Agendamento, AgendamentoServiceStatus, AgendamentoStockStatus, Client, SavedPDF, UserInfo } from '../../types';
 import ActionButton from '../ui/ActionButton';
 import ContentState from '../ui/ContentState';
 import Modal from '../ui/Modal';
@@ -8,6 +8,10 @@ import AgendaPushReminderControl from './AgendaPushReminderControl';
 import { getAgendaPushState } from '../../services/agendaPushNotifications';
 import { parseCurrencyInput } from '../../src/lib/proposalExpenses';
 import ReceiptModal from '../modals/ReceiptModal';
+import StockCompletionModal from '../modals/StockCompletionModal';
+import { ServiceStockConsumptionInput } from '../../services/estoqueDb';
+import { buildServiceStockPlans } from '../../src/lib/serviceStockConsumption';
+import { useSubscription } from '../../contexts/SubscriptionContext';
 import {
     buildReviewFollowUpMessage,
     buildShortReviewMessage,
@@ -25,7 +29,12 @@ interface AgendaViewProps {
     clients: Client[];
     onEditAgendamento: (agendamento: Agendamento) => void;
     onUpdateServiceStatus: (agendamento: Agendamento, serviceStatus: AgendamentoServiceStatus) => void;
-    onCompleteAgendamentoWithValue: (agendamento: Agendamento, finalValue: number) => void;
+    onSaveReceiptDescription: (agendamento: Agendamento, description: string) => Promise<void>;
+    onCompleteAgendamentoWithValue: (
+        agendamento: Agendamento,
+        finalValue: number,
+        stockDecision?: { lines?: ServiceStockConsumptionInput[]; stockStatus: AgendamentoStockStatus },
+    ) => Promise<boolean>;
     onContinueAgendamento: (agendamento: Agendamento) => void;
     onRescheduleAgendamento: (agendamento: Agendamento) => void;
     onCreateNewAgendamento: (date: Date) => void;
@@ -33,7 +42,13 @@ interface AgendaViewProps {
     userInfo?: UserInfo | null;
 }
 
-type AgendamentoWithStatus = Agendamento & { status?: SavedPDF['status']; proposalNames?: string[]; proposalTotal?: number };
+type AgendamentoWithStatus = Agendamento & {
+    status?: SavedPDF['status'];
+    proposalNames?: string[];
+    proposalTotal?: number;
+    linkedPdfs?: SavedPDF[];
+    stockSourcePdfs?: SavedPDF[];
+};
 
 const SERVICE_STATUS_META: Record<AgendamentoServiceStatus, {
     text: string;
@@ -565,7 +580,7 @@ const ReviewRequestModal: React.FC<{
         <Drawer.Root open={true} onOpenChange={(open) => !open && onClose()}>
             <Drawer.Portal>
                 <Drawer.Overlay className="fixed inset-0 z-[9999] bg-slate-950/68 backdrop-blur-sm" />
-                <Drawer.Content className="fixed inset-x-0 bottom-0 z-[10000] mx-auto flex h-[100dvh] max-h-[100dvh] flex-col rounded-t-[var(--radius-panel)] border-t border-[var(--border-subtle)] bg-[var(--surface)] outline-none sm:max-w-xl">
+                <Drawer.Content className="fixed inset-x-0 bottom-0 z-[10000] mx-auto flex h-[100dvh] max-h-[100dvh] flex-col rounded-t-[var(--radius-panel)] border-t border-[var(--border-subtle)] bg-[var(--surface)] pt-[env(safe-area-inset-top,0px)] outline-none sm:max-w-xl">
                     <div className="mx-auto mt-3 h-1.5 w-12 flex-shrink-0 rounded-full bg-slate-300 dark:bg-slate-700" aria-hidden="true" />
 
                     <div className="flex items-start justify-between gap-3 px-5 pb-4 pt-3">
@@ -584,7 +599,7 @@ const ReviewRequestModal: React.FC<{
                             type="button"
                             onClick={onClose}
                             aria-label="Fechar"
-                            className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)]"
+                            className="flex h-11 w-11 flex-shrink-0 touch-manipulation items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)]"
                         >
                             <i className="fas fa-times" aria-hidden="true"></i>
                         </button>
@@ -747,20 +762,57 @@ const AppointmentCard: React.FC<{
     agendamento: AgendamentoWithStatus;
     client?: Client;
     linkedPdf?: SavedPDF;
+    linkedPdfs?: SavedPDF[];
+    stockSourcePdfs?: SavedPDF[];
+    canUseStock: boolean;
     onEdit: (agendamento: Agendamento) => void;
     onUpdateServiceStatus: (agendamento: Agendamento, serviceStatus: AgendamentoServiceStatus) => void;
-    onCompleteWithValue: (agendamento: Agendamento, finalValue: number) => void;
+    onSaveReceiptDescription: (agendamento: Agendamento, description: string) => Promise<void>;
+    onCompleteWithValue: (
+        agendamento: Agendamento,
+        finalValue: number,
+        stockDecision?: { lines?: ServiceStockConsumptionInput[]; stockStatus: AgendamentoStockStatus },
+    ) => Promise<boolean>;
     onContinueAgendamento: (agendamento: Agendamento) => void;
     onReschedule: (agendamento: Agendamento) => void;
     googleReviewsLink?: string;
     userInfo?: UserInfo | null;
     reviewStars: number;
     onUpdateReviewRating: (agendamentoId: number, stars: number) => void;
-}> = ({ agendamento, client, linkedPdf, onEdit, onUpdateServiceStatus, onCompleteWithValue, onContinueAgendamento, onReschedule, googleReviewsLink, userInfo, reviewStars, onUpdateReviewRating }) => {
+}> = ({ agendamento, client, linkedPdf, linkedPdfs, stockSourcePdfs, canUseStock, onEdit, onUpdateServiceStatus, onSaveReceiptDescription, onCompleteWithValue, onContinueAgendamento, onReschedule, googleReviewsLink, userInfo, reviewStars, onUpdateReviewRating }) => {
     const status = agendamento.status || 'pending';
     const meta = STATUS_META[status] || STATUS_META.pending;
     const serviceStatus = agendamento.serviceStatus || 'scheduled';
-    const linkedProposalCount = agendamento.pdfIds?.length || (agendamento.pdfId ? 1 : 0);
+    const linkedProposalIds = Array.from(new Set<number>(
+        agendamento.pdfIds?.length
+            ? agendamento.pdfIds
+            : (agendamento.pdfId != null ? [agendamento.pdfId] : []),
+    ));
+    const linkedProposalCount = linkedProposalIds.length;
+    const primaryLinkedPdf = linkedPdf || linkedPdfs?.[0];
+    const loadedProposalIds = new Set(
+        [...(linkedPdfs || []), ...(primaryLinkedPdf ? [primaryLinkedPdf] : [])]
+            .map((pdf) => pdf.id)
+            .filter((id): id is number => typeof id === 'number'),
+    );
+    const hasCompleteReceiptSource = Boolean(agendamento.receiptDescription?.trim())
+        || linkedProposalCount === 0
+        || linkedProposalIds.every((id) => loadedProposalIds.has(id));
+    const stockSourceIds = Array.from(new Set<number>(
+        agendamento.stockSourcePdfIds?.length
+            ? agendamento.stockSourcePdfIds
+            : linkedProposalIds,
+    ));
+    const loadedStockSourceIds = new Set(
+        (stockSourcePdfs || []).map((pdf) => pdf.id).filter((id): id is number => typeof id === 'number'),
+    );
+    const hasCompleteStockSource = stockSourceIds.length === 0
+        || stockSourceIds.every((id) => loadedStockSourceIds.has(id));
+    const stockPlans = useMemo(
+        () => buildServiceStockPlans(stockSourcePdfs || []),
+        [stockSourcePdfs],
+    );
+    const hasPendingStockMaterials = stockPlans.some((plan) => plan.pieces.length > 0);
     const hasEnded = new Date(agendamento.end).getTime() < Date.now();
     const showEndedPrompt = serviceStatus === 'scheduled' && hasEnded;
     const [isConfirmingValue, setIsConfirmingValue] = useState(false);
@@ -768,10 +820,13 @@ const AppointmentCard: React.FC<{
     const [isChoosingWhatsapp, setIsChoosingWhatsapp] = useState(false);
     const [isRequestingReview, setIsRequestingReview] = useState(false);
     const [isReceiptOpen, setIsReceiptOpen] = useState(false);
+    const [isStockCompletionOpen, setIsStockCompletionOpen] = useState(false);
+    const [pendingCompletionValue, setPendingCompletionValue] = useState<number | null>(null);
+    const [isCompleting, setIsCompleting] = useState(false);
 
     // Valor exibido/editado: vem do orcamento vinculado ou, sem orcamento, do
     // valor avulso guardado no proprio agendamento.
-    const currentValue = agendamento.valorFinal ?? (linkedProposalCount > 1 ? agendamento.proposalTotal : linkedPdf?.totalPreco);
+    const currentValue = agendamento.valorFinal ?? (linkedProposalCount > 1 ? agendamento.proposalTotal : primaryLinkedPdf?.totalPreco);
     const hasCurrentValue = typeof currentValue === 'number' && Number.isFinite(currentValue);
 
     const openValuePanel = () => {
@@ -783,17 +838,59 @@ const AppointmentCard: React.FC<{
         openValuePanel();
     };
 
-    const handleConfirmValue = () => {
+    const isCompleted = serviceStatus === 'completed';
+
+    const completeWithStockDecision = async (
+        finalValue: number,
+        stockDecision: { lines?: ServiceStockConsumptionInput[]; stockStatus: AgendamentoStockStatus },
+    ): Promise<boolean> => {
+        if (isCompleting) return false;
+        setIsCompleting(true);
+        try {
+            const completed = await onCompleteWithValue(agendamento, finalValue, stockDecision);
+            if (completed) {
+                setIsConfirmingValue(false);
+            }
+            return completed;
+        } finally {
+            setIsCompleting(false);
+        }
+    };
+
+    const handleConfirmValue = async () => {
         const parsed = parseCurrencyInput(finalValueInput);
-        onCompleteWithValue(agendamento, parsed);
-        setIsConfirmingValue(false);
+
+        // Alterar apenas o valor de um atendimento já concluído nunca repete a
+        // baixa. A operação transacional no banco também protege contra duplo clique.
+        if (isCompleted) {
+            await completeWithStockDecision(parsed, {
+                stockStatus: agendamento.stockStatus || 'not_required',
+            });
+            return;
+        }
+
+        if (
+            canUseStock
+            && agendamento.id != null
+            && hasCompleteStockSource
+            && hasPendingStockMaterials
+        ) {
+            setPendingCompletionValue(parsed);
+            setIsConfirmingValue(false);
+            setIsStockCompletionOpen(true);
+            return;
+        }
+
+        const stockStatus: AgendamentoStockStatus = canUseStock && !hasCompleteStockSource
+            ? 'pending'
+            : 'not_required';
+        await completeWithStockDecision(parsed, { stockStatus });
     };
 
     const handleEditValueClick = () => {
         openValuePanel();
     };
 
-    const isCompleted = serviceStatus === 'completed';
     const isReviewed = reviewStars > 0;
 
     const valueConfirmationPanel = (
@@ -803,7 +900,7 @@ const AppointmentCard: React.FC<{
                 Valor final do serviço
             </p>
             <p className="mb-2 text-[11px] leading-4 text-[var(--text-muted)]">
-                {linkedPdf
+                {primaryLinkedPdf
                     ? 'Confirme ou ajuste o valor cobrado (acréscimos ou descontos feitos na hora). Ele substituirá o valor do orçamento.'
                     : 'Informe o valor cobrado neste atendimento. Ele entra no seu resultado financeiro.'}
             </p>
@@ -825,6 +922,7 @@ const AppointmentCard: React.FC<{
                 <button
                     type="button"
                     onClick={() => setIsConfirmingValue(false)}
+                    disabled={isCompleting}
                     className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[var(--radius-control)] border border-slate-300 bg-white px-2 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
                 >
                     <span className="truncate">Cancelar</span>
@@ -832,9 +930,10 @@ const AppointmentCard: React.FC<{
                 <button
                     type="button"
                     onClick={handleConfirmValue}
+                    disabled={isCompleting}
                     className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[var(--radius-control)] border border-emerald-300 bg-emerald-100 px-2 text-xs font-bold text-emerald-800 transition-colors hover:bg-emerald-200 dark:border-emerald-800/70 dark:bg-emerald-950/40 dark:text-emerald-200"
                 >
-                    <i className="fas fa-check text-[11px]" aria-hidden="true"></i>
+                    <i className={`fas ${isCompleting ? 'fa-spinner fa-spin' : 'fa-check'} text-[11px]`} aria-hidden="true"></i>
                     <span className="truncate">{isCompleted ? 'Salvar valor' : 'Confirmar conclusão'}</span>
                 </button>
             </div>
@@ -849,6 +948,38 @@ const AppointmentCard: React.FC<{
     const endTime = formatTime(agendamento.end);
     const duration = getDurationLabel(agendamento.start, agendamento.end);
     const hasActions = Boolean(telUrl || whatsappUrl || clientAddress);
+
+    const openPendingStockCompletion = () => {
+        setPendingCompletionValue(hasCurrentValue ? currentValue! : 0);
+        setIsStockCompletionOpen(true);
+    };
+
+    const handlePendingStockClick = async () => {
+        if (!hasCompleteStockSource || isCompleting) return;
+        if (!hasPendingStockMaterials) {
+            await completeWithStockDecision(hasCurrentValue ? currentValue! : 0, {
+                stockStatus: 'not_required',
+            });
+            return;
+        }
+        openPendingStockCompletion();
+    };
+
+    const handleConfirmStock = async (lines: ServiceStockConsumptionInput[]): Promise<boolean> => {
+        if (pendingCompletionValue == null) return false;
+        return completeWithStockDecision(pendingCompletionValue, {
+            lines,
+            stockStatus: 'confirmed',
+        });
+    };
+
+    const handleSkipStock = async (): Promise<boolean> => {
+        // Ao consultar uma baixa pendente de um atendimento já concluído,
+        // "deixar para depois" apenas fecha o modal e mantém a pendência.
+        if (isCompleted) return true;
+        if (pendingCompletionValue == null) return false;
+        return completeWithStockDecision(pendingCompletionValue, { stockStatus: 'pending' });
+    };
 
     return (
         <article className="overflow-hidden rounded-[var(--radius-card)] border border-[var(--border-subtle)] bg-[var(--surface)] text-left shadow-[var(--shadow-hairline)] transition-all duration-200 hover:shadow-[var(--shadow-soft)]">
@@ -994,14 +1125,34 @@ const AppointmentCard: React.FC<{
                                     <span>{hasCurrentValue ? 'Editar valor' : 'Adicionar valor'}</span>
                                 </button>
                             </div>
+                            {canUseStock && agendamento.stockStatus === 'confirmed' ? (
+                                <div className="mt-2 inline-flex min-h-8 w-full items-center justify-center gap-2 rounded-[var(--radius-control)] border border-emerald-200 bg-white/80 px-3 text-xs font-bold text-emerald-800 dark:border-emerald-800/70 dark:bg-slate-900/40 dark:text-emerald-200">
+                                    <i className="fas fa-box-check text-[11px]" aria-hidden="true"></i>
+                                    Estoque baixado
+                                </div>
+                            ) : null}
+                            {canUseStock && agendamento.stockStatus === 'pending' ? (
+                                <button
+                                    type="button"
+                                    onClick={handlePendingStockClick}
+                                    disabled={!hasCompleteStockSource || isCompleting}
+                                    title={!hasCompleteStockSource ? 'Carregando os materiais vinculados' : undefined}
+                                    className="mt-2 inline-flex min-h-9 w-full items-center justify-center gap-2 rounded-[var(--radius-control)] border border-amber-300 bg-amber-100 px-3 text-xs font-bold text-amber-900 transition-colors hover:bg-amber-200 disabled:cursor-wait disabled:opacity-60 dark:border-amber-800/70 dark:bg-amber-950/35 dark:text-amber-200"
+                                >
+                                    <i className={`fas ${isCompleting || !hasCompleteStockSource ? 'fa-spinner fa-spin' : 'fa-box-open'} text-[11px]`} aria-hidden="true"></i>
+                                    {hasCompleteStockSource ? 'Baixa pendente · registrar agora' : 'Carregando materiais'}
+                                </button>
+                            ) : null}
                             {hasCurrentValue ? (
                                 <button
                                     type="button"
                                     onClick={() => setIsReceiptOpen(true)}
-                                    className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-[var(--radius-control)] bg-blue-600 px-3 text-xs font-bold text-white shadow-sm transition-colors hover:bg-blue-700"
+                                    disabled={!hasCompleteReceiptSource}
+                                    title={hasCompleteReceiptSource ? undefined : 'Carregando os serviços vinculados'}
+                                    className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-[var(--radius-control)] bg-blue-600 px-3 text-xs font-bold text-white shadow-sm transition-colors hover:bg-blue-700 disabled:cursor-wait disabled:opacity-60"
                                 >
-                                    <i className="fas fa-receipt text-[12px]" aria-hidden="true"></i>
-                                    <span>Gerar recibo do serviço</span>
+                                    <i className={`fas ${hasCompleteReceiptSource ? 'fa-receipt' : 'fa-spinner fa-spin'} text-[12px]`} aria-hidden="true"></i>
+                                    <span>{hasCompleteReceiptSource ? 'Gerar recibo do serviço' : 'Carregando serviços'}</span>
                                 </button>
                             ) : null}
                             {!isReviewed ? (
@@ -1023,7 +1174,7 @@ const AppointmentCard: React.FC<{
                 <ReviewRequestModal
                     agendamento={agendamento}
                     client={client}
-                    linkedPdf={linkedPdf}
+                    linkedPdf={primaryLinkedPdf}
                     googleReviewsLink={googleReviewsLink}
                     stars={reviewStars}
                     onRate={(value) => { if (agendamento.id != null) onUpdateReviewRating(agendamento.id, value); }}
@@ -1037,9 +1188,25 @@ const AppointmentCard: React.FC<{
                     onClose={() => setIsReceiptOpen(false)}
                     agendamento={agendamento}
                     client={client}
-                    linkedPdf={linkedPdf}
+                    linkedPdf={primaryLinkedPdf}
+                    linkedPdfs={linkedPdfs}
                     userInfo={userInfo}
                     amount={currentValue!}
+                    onSaveDescription={(description) => onSaveReceiptDescription(agendamento, description)}
+                />
+            ) : null}
+
+            {agendamento.id != null && pendingCompletionValue != null ? (
+                <StockCompletionModal
+                    isOpen={isStockCompletionOpen}
+                    onClose={() => {
+                        setIsStockCompletionOpen(false);
+                        setPendingCompletionValue(null);
+                    }}
+                    agendamento={agendamento}
+                    linkedPdfs={stockSourcePdfs || []}
+                    onConfirm={handleConfirmStock}
+                    onSkip={handleSkipStock}
                 />
             ) : null}
 
@@ -1337,7 +1504,8 @@ const AgendaQuickButton: React.FC<{
 
 const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
 
-const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, onEditAgendamento, onUpdateServiceStatus, onCompleteAgendamentoWithValue, onContinueAgendamento, onRescheduleAgendamento, onCreateNewAgendamento, googleReviewsLink, userInfo }) => {
+const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, onEditAgendamento, onUpdateServiceStatus, onSaveReceiptDescription, onCompleteAgendamentoWithValue, onContinueAgendamento, onRescheduleAgendamento, onCreateNewAgendamento, googleReviewsLink, userInfo }) => {
+    const { canUseEstoque } = useSubscription();
     const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState(new Date());
     const [reviewRatings, setReviewRatings] = useState<Record<number, number>>(() => readAllReviewRatings());
@@ -1391,12 +1559,24 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
     const agendamentosWithStatus = useMemo<AgendamentoWithStatus[]>(() => (
         agendamentos
             .map((agendamento) => {
-                const linkedIds = agendamento.pdfIds?.length ? agendamento.pdfIds : (agendamento.pdfId ? [agendamento.pdfId] : []);
+                const linkedIds = Array.from(new Set<number>(
+                    agendamento.pdfIds?.length
+                        ? agendamento.pdfIds
+                        : (agendamento.pdfId != null ? [agendamento.pdfId] : []),
+                ));
                 const statuses = linkedIds.map((id) => pdfStatusMap.get(id) || 'pending');
                 const status = statuses.includes('approved')
                     ? 'approved'
                     : (statuses.includes('revised') ? 'revised' : 'pending');
                 const linkedPdfs = linkedIds
+                    .map((id) => pdfById.get(id))
+                    .filter((item): item is SavedPDF => Boolean(item));
+                const stockSourceIds = Array.from(new Set<number>(
+                    agendamento.stockSourcePdfIds?.length
+                        ? agendamento.stockSourcePdfIds
+                        : linkedIds,
+                ));
+                const stockSourcePdfs = stockSourceIds
                     .map((id) => pdfById.get(id))
                     .filter((item): item is SavedPDF => Boolean(item));
                 const proposalNames = linkedPdfs.map((item) => item.proposalOptionName || item.nomeArquivo || ('Proposta #' + item.id));
@@ -1408,6 +1588,8 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                     status,
                     proposalNames,
                     proposalTotal,
+                    linkedPdfs,
+                    stockSourcePdfs,
                 };
             })
             .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())
@@ -1859,7 +2041,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                         <div className="space-y-3">
                             {selectedDayAgendamentos.map((agendamento) => {
                                 const client = clientsById.get(agendamento.clienteId);
-                                return <AppointmentCard key={agendamento.id} agendamento={agendamento} client={client} linkedPdf={agendamento.pdfId ? pdfById.get(agendamento.pdfId) : undefined} onEdit={onEditAgendamento} onUpdateServiceStatus={onUpdateServiceStatus} onCompleteWithValue={onCompleteAgendamentoWithValue} onContinueAgendamento={onContinueAgendamento} onReschedule={onRescheduleAgendamento} googleReviewsLink={googleReviewsLink} userInfo={userInfo} reviewStars={agendamento.id != null ? (reviewRatings[agendamento.id] || 0) : 0} onUpdateReviewRating={handleUpdateReviewRating} />;
+                                return <AppointmentCard key={agendamento.id} agendamento={agendamento} client={client} linkedPdf={agendamento.pdfId ? pdfById.get(agendamento.pdfId) : undefined} linkedPdfs={agendamento.linkedPdfs} stockSourcePdfs={agendamento.stockSourcePdfs} canUseStock={canUseEstoque} onEdit={onEditAgendamento} onUpdateServiceStatus={onUpdateServiceStatus} onSaveReceiptDescription={onSaveReceiptDescription} onCompleteWithValue={onCompleteAgendamentoWithValue} onContinueAgendamento={onContinueAgendamento} onReschedule={onRescheduleAgendamento} googleReviewsLink={googleReviewsLink} userInfo={userInfo} reviewStars={agendamento.id != null ? (reviewRatings[agendamento.id] || 0) : 0} onUpdateReviewRating={handleUpdateReviewRating} />;
                             })}
                         </div>
                     ) : (
@@ -1910,7 +2092,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                                     </div>
                                     {items.map((agendamento) => {
                                         const client = clientsById.get(agendamento.clienteId);
-                                        return <AppointmentCard key={agendamento.id} agendamento={agendamento} client={client} linkedPdf={agendamento.pdfId ? pdfById.get(agendamento.pdfId) : undefined} onEdit={onEditAgendamento} onUpdateServiceStatus={onUpdateServiceStatus} onCompleteWithValue={onCompleteAgendamentoWithValue} onContinueAgendamento={onContinueAgendamento} onReschedule={onRescheduleAgendamento} googleReviewsLink={googleReviewsLink} userInfo={userInfo} reviewStars={agendamento.id != null ? (reviewRatings[agendamento.id] || 0) : 0} onUpdateReviewRating={handleUpdateReviewRating} />;
+                                        return <AppointmentCard key={agendamento.id} agendamento={agendamento} client={client} linkedPdf={agendamento.pdfId ? pdfById.get(agendamento.pdfId) : undefined} linkedPdfs={agendamento.linkedPdfs} stockSourcePdfs={agendamento.stockSourcePdfs} canUseStock={canUseEstoque} onEdit={onEditAgendamento} onUpdateServiceStatus={onUpdateServiceStatus} onSaveReceiptDescription={onSaveReceiptDescription} onCompleteWithValue={onCompleteAgendamentoWithValue} onContinueAgendamento={onContinueAgendamento} onReschedule={onRescheduleAgendamento} googleReviewsLink={googleReviewsLink} userInfo={userInfo} reviewStars={agendamento.id != null ? (reviewRatings[agendamento.id] || 0) : 0} onUpdateReviewRating={handleUpdateReviewRating} />;
                                     })}
                                 </div>
                             ))}
@@ -2023,7 +2205,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                         <div className="space-y-3">
                             {selectedDayAgendamentos.map((agendamento) => {
                                 const client = clientsById.get(agendamento.clienteId);
-                                return <AppointmentCard key={agendamento.id} agendamento={agendamento} client={client} linkedPdf={agendamento.pdfId ? pdfById.get(agendamento.pdfId) : undefined} onEdit={onEditAgendamento} onUpdateServiceStatus={onUpdateServiceStatus} onCompleteWithValue={onCompleteAgendamentoWithValue} onContinueAgendamento={onContinueAgendamento} onReschedule={onRescheduleAgendamento} googleReviewsLink={googleReviewsLink} userInfo={userInfo} reviewStars={agendamento.id != null ? (reviewRatings[agendamento.id] || 0) : 0} onUpdateReviewRating={handleUpdateReviewRating} />;
+                                return <AppointmentCard key={agendamento.id} agendamento={agendamento} client={client} linkedPdf={agendamento.pdfId ? pdfById.get(agendamento.pdfId) : undefined} linkedPdfs={agendamento.linkedPdfs} stockSourcePdfs={agendamento.stockSourcePdfs} canUseStock={canUseEstoque} onEdit={onEditAgendamento} onUpdateServiceStatus={onUpdateServiceStatus} onSaveReceiptDescription={onSaveReceiptDescription} onCompleteWithValue={onCompleteAgendamentoWithValue} onContinueAgendamento={onContinueAgendamento} onReschedule={onRescheduleAgendamento} googleReviewsLink={googleReviewsLink} userInfo={userInfo} reviewStars={agendamento.id != null ? (reviewRatings[agendamento.id] || 0) : 0} onUpdateReviewRating={handleUpdateReviewRating} />;
                             })}
                         </div>
                     ) : (

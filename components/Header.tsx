@@ -5,6 +5,11 @@ import SyncStatusIndicator from './SyncStatusIndicator';
 import ThemeToggle from './ui/ThemeToggle';
 import SupportModal from './modals/SupportModal';
 import { isWaConnectorEnabled } from '../src/lib/waConnector';
+import {
+    moveMenuItem,
+    type MenuTabId
+} from '../src/lib/menuPreferences';
+import { useMenuDragReorder } from '../src/hooks/useMenuDragReorder';
 import * as db from '../services/db';
 import GlobalNotificationBell from './GlobalNotificationBell';
 
@@ -24,11 +29,15 @@ type ActiveTab =
     | 'estoque'
     | 'qr_code'
     | 'fornecedores'
+    | 'saved_places'
     | 'wa_connector';
 
 interface HeaderProps {
     activeTab: ActiveTab;
     onTabChange: (tab: ActiveTab) => void;
+    menuOrder: readonly MenuTabId[];
+    onMenuOrderChange: (order: MenuTabId[]) => void;
+    onResetMenuOrder: () => void;
     onGoBack?: () => void;
     canGoBack?: boolean;
     onMenuOpenChange?: (isOpen: boolean) => void;
@@ -43,14 +52,8 @@ interface NavItem {
     badge?: string;
 }
 
-interface NavSection {
-    id: string;
-    label: string;
-    items: NavItem[];
-}
-
-// Menu agrupado por seções (Geral / Vendas / Operação / Sistema) para uma
-// leitura mais profissional no mobile. Admin e WhatsApp local entram em runtime.
+// Itens principais personalizaveis. A ordem inicial preserva o menu conhecido;
+// conta, configuracoes e acoes operacionais continuam fixas em "Sistema".
 const SECTION_GERAL: NavItem[] = [
     { tabId: 'dashboard', icon: 'fas fa-chart-line', label: 'Dashboard', hint: 'visao geral do negocio' },
 ];
@@ -65,6 +68,7 @@ const SECTION_VENDAS: NavItem[] = [
 
 const SECTION_OPERACAO: NavItem[] = [
     { tabId: 'agenda', icon: 'fas fa-calendar-alt', label: 'Agenda', hint: 'visitas, prazos e tarefas' },
+    { tabId: 'saved_places', icon: 'fas fa-map-marker-alt', label: 'Meus locais', hint: 'endereços e rotas favoritas' },
     { tabId: 'estoque', icon: 'fas fa-boxes', label: 'Estoque', hint: 'bobinas, retalhos e status' },
     { tabId: 'qr_code', icon: 'fas fa-qrcode', label: 'QR Code', hint: 'rótulos e leitura rápida' },
     { tabId: 'fornecedores', icon: 'fas fa-truck', label: 'Fornecedores', hint: 'compras, contatos e apoio' },
@@ -75,6 +79,19 @@ const SECTION_SISTEMA: NavItem[] = [
     { tabId: 'account', icon: 'fas fa-user-circle', label: 'Minha Conta', hint: 'perfil, acesso e segurança' },
 ];
 
+const PRIMARY_NAV_ITEMS = [
+    ...SECTION_GERAL,
+    ...SECTION_VENDAS,
+    ...SECTION_OPERACAO
+];
+
+const PRIMARY_NAV_BY_TAB = new Map<MenuTabId, NavItem>(
+    PRIMARY_NAV_ITEMS.map(item => [item.tabId as MenuTabId, item])
+);
+
+const getPrimaryNavItemLabel = (tabId: MenuTabId) =>
+    PRIMARY_NAV_BY_TAB.get(tabId)?.label ?? 'Item';
+
 const pageLabels: Record<string, string> = {
     dashboard: 'Dashboard',
     clients_list: 'Clientes',
@@ -84,6 +101,7 @@ const pageLabels: Record<string, string> = {
     estoque: 'Estoque',
     qr_code: 'QR Code',
     agenda: 'Agenda',
+    saved_places: 'Meus locais',
     proposals: 'Propostas',
     history: 'Histórico',
     fornecedores: 'Fornecedores',
@@ -100,6 +118,9 @@ const MAX_SWIPE_TRANSLATE = 240;
 const Header: React.FC<HeaderProps> = ({
     activeTab,
     onTabChange,
+    menuOrder,
+    onMenuOrderChange,
+    onResetMenuOrder,
     onGoBack,
     canGoBack = false,
     onMenuOpenChange,
@@ -108,6 +129,9 @@ const Header: React.FC<HeaderProps> = ({
     const { isAdmin, user, signOut } = useAuth();
     const [menuState, setMenuState] = useState<MenuRenderState>('closed');
     const [isSupportOpen, setIsSupportOpen] = useState(false);
+    const [isEditingMenu, setIsEditingMenu] = useState(false);
+    const [menuAnnouncement, setMenuAnnouncement] = useState('');
+    const [hasMoreNavContent, setHasMoreNavContent] = useState(false);
     const [companyLogo, setCompanyLogo] = useState<string | undefined>(undefined);
     const [dragOffsetX, setDragOffsetX] = useState(0);
     const [isDraggingMenu, setIsDraggingMenu] = useState(false);
@@ -119,6 +143,39 @@ const Header: React.FC<HeaderProps> = ({
         tracking: false,
     });
     const shellRef = useRef<HTMLElement | null>(null);
+    const navScrollRef = useRef<HTMLDivElement | null>(null);
+
+    const updateNavScrollIndicator = React.useCallback(() => {
+        const node = navScrollRef.current;
+        if (!node) {
+            setHasMoreNavContent(false);
+            return;
+        }
+
+        const hasContentBelow = node.scrollHeight - node.scrollTop - node.clientHeight > 2;
+        setHasMoreNavContent(current => (
+            current === hasContentBelow ? current : hasContentBelow
+        ));
+    }, []);
+
+    const {
+        displayOrder: displayedMenuOrder,
+        draggingTabId,
+        registerRow: registerMenuRow,
+        handlePointerDown: handleMenuItemPointerDown,
+        handlePointerMove: handleMenuItemPointerMove,
+        handlePointerUp: handleMenuItemPointerUp,
+        handlePointerCancel: handleMenuItemPointerCancel,
+        cancelDrag: cancelMenuItemDrag
+    } = useMenuDragReorder({
+        order: menuOrder,
+        enabled: isEditingMenu,
+        onCommit: onMenuOrderChange,
+        onAnnounce: setMenuAnnouncement,
+        getItemLabel: getPrimaryNavItemLabel,
+        scrollRef: navScrollRef,
+        onAutoScroll: updateNavScrollIndicator
+    });
 
     const isMenuMounted = menuState !== 'closed';
 
@@ -132,9 +189,10 @@ const Header: React.FC<HeaderProps> = ({
 
     useEffect(() => {
         if (closeMenuRequest > 0) {
+            cancelMenuItemDrag();
             setMenuState(current => (current === 'closed' ? current : 'closing'));
         }
-    }, [closeMenuRequest]);
+    }, [cancelMenuItemDrag, closeMenuRequest]);
     const isMenuVisible = menuState === 'open';
 
     useEffect(() => {
@@ -159,13 +217,14 @@ const Header: React.FC<HeaderProps> = ({
 
         const handleEscape = (event: KeyboardEvent) => {
             if (event.key === 'Escape') {
+                if (cancelMenuItemDrag()) return;
                 setMenuState('closing');
             }
         };
 
         window.addEventListener('keydown', handleEscape);
         return () => window.removeEventListener('keydown', handleEscape);
-    }, [isMenuMounted]);
+    }, [cancelMenuItemDrag, isMenuMounted]);
 
     useEffect(() => {
         if (menuState !== 'opening') return;
@@ -201,6 +260,13 @@ const Header: React.FC<HeaderProps> = ({
     }, [menuState]);
 
     useEffect(() => {
+        if (menuState === 'closing' || menuState === 'closed') {
+            setIsEditingMenu(false);
+            setMenuAnnouncement('');
+        }
+    }, [menuState]);
+
+    useEffect(() => {
         if (!isMenuMounted || !shellRef.current || typeof ResizeObserver === 'undefined') return;
 
         const observer = new ResizeObserver((entries) => {
@@ -216,11 +282,49 @@ const Header: React.FC<HeaderProps> = ({
         return () => observer.disconnect();
     }, [isMenuMounted]);
 
+    useEffect(() => {
+        if (!isMenuMounted) {
+            setHasMoreNavContent(false);
+            return;
+        }
+
+        updateNavScrollIndicator();
+        const frame = window.requestAnimationFrame(updateNavScrollIndicator);
+        window.addEventListener('resize', updateNavScrollIndicator);
+
+        return () => {
+            window.cancelAnimationFrame(frame);
+            window.removeEventListener('resize', updateNavScrollIndicator);
+        };
+    }, [
+        displayedMenuOrder,
+        isAdmin,
+        isEditingMenu,
+        isMenuMounted,
+        shellMetrics.height,
+        updateNavScrollIndicator
+    ]);
+
+    useEffect(() => {
+        if (!isEditingMenu) return;
+
+        setDragOffsetX(0);
+        setIsDraggingMenu(false);
+        touchStateRef.current = {
+            startX: 0,
+            startY: 0,
+            dragging: false,
+            tracking: false,
+        };
+    }, [isEditingMenu]);
+
     const openMenu = () => {
         setMenuState(current => (current === 'open' || current === 'opening' ? current : 'opening'));
     };
 
     const closeMenu = () => {
+        cancelMenuItemDrag();
+        setIsEditingMenu(false);
         setMenuState(current => (current === 'closed' ? current : 'closing'));
     };
 
@@ -238,6 +342,10 @@ const Header: React.FC<HeaderProps> = ({
     };
 
     const handleMenuTouchStart = (event: React.TouchEvent<HTMLElement>) => {
+        if (
+            isEditingMenu
+            || (event.target as HTMLElement).closest('[data-menu-drag-handle]')
+        ) return;
         if (event.touches.length !== 1 || menuState !== 'open') return;
 
         const touch = event.touches[0];
@@ -250,6 +358,7 @@ const Header: React.FC<HeaderProps> = ({
     };
 
     const handleMenuTouchMove = (event: React.TouchEvent<HTMLElement>) => {
+        if (isEditingMenu) return;
         if (!touchStateRef.current.tracking || event.touches.length !== 1 || menuState !== 'open') return;
 
         const touch = event.touches[0];
@@ -278,6 +387,7 @@ const Header: React.FC<HeaderProps> = ({
     };
 
     const handleMenuTouchEnd = () => {
+        if (isEditingMenu) return;
         if (!touchStateRef.current.dragging) {
             touchStateRef.current = {
                 startX: 0,
@@ -355,20 +465,120 @@ const Header: React.FC<HeaderProps> = ({
         ? [{ tabId: 'admin', icon: 'fas fa-user-shield', label: 'Admin', hint: 'gestao da equipe e acessos' }]
         : [];
 
-    const navSections: NavSection[] = [
-        { id: 'geral', label: 'Geral', items: SECTION_GERAL },
-        { id: 'vendas', label: 'Vendas', items: SECTION_VENDAS },
-        { id: 'operacao', label: 'Operação', items: [...SECTION_OPERACAO, ...waItems] },
+    const orderedPrimaryItems = displayedMenuOrder
+        .map(tabId => PRIMARY_NAV_BY_TAB.get(tabId))
+        .filter((item): item is NavItem => Boolean(item));
+
+    const navSections = [
+        { id: 'menu', label: 'Navegação', items: [...orderedPrimaryItems, ...waItems] },
         { id: 'sistema', label: 'Sistema', items: [...adminItems, ...SECTION_SISTEMA] },
     ];
 
-    const renderNavItem = (item: NavItem, tone: 'primary' | 'system') => {
+    const handleMoveMenuItem = (tabId: MenuTabId, direction: -1 | 1) => {
+        const nextOrder = moveMenuItem(displayedMenuOrder, tabId, direction);
+        const nextPosition = nextOrder.indexOf(tabId) + 1;
+        const itemLabel = PRIMARY_NAV_BY_TAB.get(tabId)?.label ?? 'Item';
+
+        onMenuOrderChange(nextOrder);
+        setMenuAnnouncement(`${itemLabel}: posição ${nextPosition} de ${nextOrder.length}.`);
+    };
+
+    const handleResetMenuOrder = () => {
+        cancelMenuItemDrag();
+        onResetMenuOrder();
+        setMenuAnnouncement('Ordem padrão restaurada. Dashboard é a tela inicial.');
+    };
+
+    const renderEditableNavItem = (item: NavItem, index: number) => {
+        const tabId = item.tabId as MenuTabId;
+        const isFirst = index === 0;
+        const isLast = index === orderedPrimaryItems.length - 1;
+
+        return (
+            <div
+                key={item.tabId}
+                ref={node => registerMenuRow(tabId, node)}
+                className={[
+                    'flex w-full items-center gap-1.5 rounded-[18px] border bg-white/75 px-1.5 py-1.5 transition-[transform,box-shadow,border-color] dark:bg-white/[0.045]',
+                    draggingTabId === tabId
+                        ? 'relative z-20 scale-[1.015] border-blue-400 shadow-[0_12px_28px_rgba(37,99,235,0.2)] dark:border-cyan-300/60'
+                        : 'border-slate-200/80 shadow-sm dark:border-white/10'
+                ].join(' ')}
+                data-menu-tab={item.tabId}
+                data-menu-dragging={draggingTabId === tabId ? 'true' : undefined}
+            >
+                <button
+                    type="button"
+                    data-menu-drag-handle
+                    aria-label={`Puxador de ${item.label}. Arraste ou use as setas para mudar a posição.`}
+                    onPointerDown={event => handleMenuItemPointerDown(event, tabId)}
+                    onPointerMove={handleMenuItemPointerMove}
+                    onPointerUp={handleMenuItemPointerUp}
+                    onPointerCancel={handleMenuItemPointerCancel}
+                    onTouchStart={event => event.stopPropagation()}
+                    onKeyDown={event => {
+                        if (event.key === 'ArrowUp' && !isFirst) {
+                            event.preventDefault();
+                            handleMoveMenuItem(tabId, -1);
+                        } else if (event.key === 'ArrowDown' && !isLast) {
+                            event.preventDefault();
+                            handleMoveMenuItem(tabId, 1);
+                        }
+                    }}
+                    className="flex h-11 w-10 touch-none flex-shrink-0 cursor-grab items-center justify-center rounded-xl text-slate-400 transition-colors active:cursor-grabbing active:bg-blue-50 active:text-blue-600 dark:text-slate-400 dark:active:bg-cyan-300/10 dark:active:text-cyan-200"
+                >
+                    <i className="fas fa-grip-vertical text-sm" aria-hidden="true" />
+                </button>
+                <div className="flex h-[var(--sidebar-icon-box)] w-[var(--sidebar-icon-box)] flex-shrink-0 items-center justify-center">
+                    <i className={`${item.icon} text-[var(--sidebar-icon-size)] text-blue-500/90 dark:text-cyan-300/90`} />
+                </div>
+                <div className="min-w-0 flex-1">
+                    <p className="truncate text-[var(--sidebar-item-font)] font-medium text-slate-800 dark:text-white/92">
+                        {item.label}
+                    </p>
+                    {isFirst ? (
+                        <p className="mt-0.5 text-[9px] font-bold uppercase tracking-[0.12em] text-blue-600 dark:text-cyan-300">
+                            Tela inicial
+                        </p>
+                    ) : null}
+                </div>
+                <div className="flex flex-shrink-0 items-center gap-1">
+                    <button
+                        type="button"
+                        onClick={() => handleMoveMenuItem(tabId, -1)}
+                        disabled={isFirst}
+                        aria-label={`Mover ${item.label} para cima, posição ${index + 1} de ${orderedPrimaryItems.length}`}
+                        className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition-colors active:scale-95 disabled:cursor-not-allowed disabled:opacity-25 dark:border-white/10 dark:bg-white/[0.055] dark:text-slate-200"
+                    >
+                        <i className="fas fa-chevron-up text-xs" aria-hidden="true" />
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => handleMoveMenuItem(tabId, 1)}
+                        disabled={isLast}
+                        aria-label={`Mover ${item.label} para baixo, posição ${index + 1} de ${orderedPrimaryItems.length}`}
+                        className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition-colors active:scale-95 disabled:cursor-not-allowed disabled:opacity-25 dark:border-white/10 dark:bg-white/[0.055] dark:text-slate-200"
+                    >
+                        <i className="fas fa-chevron-down text-xs" aria-hidden="true" />
+                    </button>
+                </div>
+            </div>
+        );
+    };
+
+    const renderNavItem = (
+        item: NavItem,
+        tone: 'primary' | 'system',
+        isInitial = false
+    ) => {
         const isActive = activeTab === item.tabId;
 
         return (
             <button
                 key={item.tabId}
+                data-menu-tab={item.tabId}
                 onClick={() => handleNav(item.tabId)}
+                aria-current={isActive ? 'page' : undefined}
                 className={[
                     'group relative flex w-full items-center gap-[var(--sidebar-item-gap)] px-[var(--sidebar-item-px)] py-[var(--sidebar-item-py)] text-left transition-all duration-200 active:scale-[0.985]',
                     tone === 'primary' ? 'rounded-[18px]' : 'rounded-2xl',
@@ -389,28 +599,44 @@ const Header: React.FC<HeaderProps> = ({
                     </p>
                 </div>
 
-                {item.badge ? (
-                    <span className="rounded-full bg-blue-100 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-blue-600 dark:bg-blue-500/20 dark:text-blue-300">
-                        {item.badge}
-                    </span>
-                ) : isActive ? (
-                    <span className="h-2 w-2 rounded-full bg-blue-500 dark:bg-cyan-300/90" />
-                ) : null}
+                <div className="flex flex-shrink-0 items-center gap-2">
+                    {isInitial ? (
+                        <span className="rounded-full border border-blue-200/80 bg-blue-50/80 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-blue-700 dark:border-cyan-300/20 dark:bg-cyan-300/10 dark:text-cyan-200">
+                            Inicial
+                        </span>
+                    ) : null}
+                    {item.badge ? (
+                        <span className="rounded-full bg-blue-100 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-blue-600 dark:bg-blue-500/20 dark:text-blue-300">
+                            {item.badge}
+                        </span>
+                    ) : null}
+                    {isActive ? (
+                        <span
+                            data-menu-active-marker
+                            className="h-2 w-2 rounded-full bg-blue-500 dark:bg-cyan-300/90"
+                            aria-hidden="true"
+                        />
+                    ) : null}
+                </div>
             </button>
         );
     };
 
     return (
         <>
-            <div className="flex items-center justify-between">
+            <div
+                data-app-mobile-header
+                className="flex items-center justify-between pt-[env(safe-area-inset-top,0px)] lg:pt-0"
+            >
                 <div className="flex items-center gap-2.5">
                     <div className="flex items-center gap-0.5 rounded-full bg-slate-100 p-0.5 dark:bg-slate-800 lg:hidden">
                         {canGoBack && onGoBack ? (
                             <>
                                 <button
+                                    type="button"
                                     onClick={onGoBack}
                                     aria-label="Voltar para a tela anterior"
-                                    className="flex h-9 w-9 items-center justify-center rounded-full text-slate-600 transition-all active:scale-95 dark:text-slate-300"
+                                    className="relative z-10 flex h-11 w-11 touch-manipulation items-center justify-center rounded-full text-slate-600 transition-all active:scale-95 dark:text-slate-300"
                                 >
                                     <i className="fas fa-arrow-left text-sm" />
                                 </button>
@@ -418,11 +644,12 @@ const Header: React.FC<HeaderProps> = ({
                             </>
                         ) : null}
                         <button
+                            type="button"
                             onClick={openMenu}
                             aria-label="Abrir menu"
                             aria-expanded={isMenuMounted}
                             aria-controls="mobile-main-menu"
-                            className="flex h-9 w-9 flex-col items-center justify-center gap-[4px] rounded-full text-slate-600 transition-all active:scale-95 dark:text-slate-300"
+                            className="relative z-10 flex h-11 w-11 touch-manipulation flex-col items-center justify-center gap-[4px] rounded-full text-slate-600 transition-all active:scale-95 dark:text-slate-300"
                         >
                             <span className="h-[2px] w-[18px] rounded-full bg-slate-600 dark:bg-slate-300" />
                             <span className="ml-[9px] h-[2px] w-[13px] self-start rounded-full bg-slate-600 dark:bg-slate-300" />
@@ -512,10 +739,14 @@ const Header: React.FC<HeaderProps> = ({
                                     </div>
                                 </div>
 
-                                <div
-                                    className="relative flex-1 overflow-y-auto px-[calc(var(--sidebar-pad-x)-0.08rem)] py-[var(--sidebar-nav-top)] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
-                                    style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-                                >
+                                <div className="relative min-h-0 flex-1">
+                                    <div
+                                        ref={navScrollRef}
+                                        data-menu-scroll-area
+                                        onScroll={updateNavScrollIndicator}
+                                        className="relative h-full overflow-y-auto px-[calc(var(--sidebar-pad-x)-0.08rem)] py-[var(--sidebar-nav-top)] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+                                        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                                    >
                                     {navSections.map((section, index) => {
                                         const isSistema = section.id === 'sistema';
                                         return (
@@ -527,11 +758,54 @@ const Header: React.FC<HeaderProps> = ({
                                                     isSistema ? 'border-t border-slate-200/80 pt-[var(--sidebar-section-top)] dark:border-cyan-300/18' : '',
                                                 ].filter(Boolean).join(' ')}
                                             >
-                                                <p className="mb-1.5 px-[var(--sidebar-item-px)] text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
-                                                    {section.label}
-                                                </p>
+                                                <div className="mb-1.5 flex items-center justify-between gap-3 px-[var(--sidebar-item-px)]">
+                                                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
+                                                        {isEditingMenu && section.id === 'menu' ? 'Organizar menu' : section.label}
+                                                    </p>
+                                                    {section.id === 'menu' ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                if (isEditingMenu) cancelMenuItemDrag();
+                                                                setIsEditingMenu(current => !current);
+                                                            }}
+                                                            aria-label={isEditingMenu ? 'Concluir organização do menu' : 'Organizar menu'}
+                                                            aria-pressed={isEditingMenu}
+                                                            className="flex min-h-8 items-center gap-1.5 rounded-full border border-blue-200/80 bg-blue-50 px-3 text-[10px] font-bold text-blue-700 transition-colors active:scale-95 dark:border-cyan-300/20 dark:bg-cyan-300/10 dark:text-cyan-200"
+                                                        >
+                                                            <i className={`fas ${isEditingMenu ? 'fa-check' : 'fa-pen'} text-[9px]`} aria-hidden="true" />
+                                                            {isEditingMenu ? 'Concluir' : 'Organizar'}
+                                                        </button>
+                                                    ) : null}
+                                                </div>
+                                                {isEditingMenu && section.id === 'menu' ? (
+                                                    <div className="mb-2 rounded-2xl bg-blue-50/80 px-3 py-2.5 text-[10px] leading-relaxed text-blue-800 dark:bg-cyan-300/10 dark:text-cyan-100">
+                                                        <div className="flex items-start gap-2">
+                                                            <i className="fas fa-house mt-0.5 text-[9px]" aria-hidden="true" />
+                                                            <p>Arraste pelo puxador ou use as setas. O primeiro item será aberto ao iniciar o aplicativo.</p>
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={handleResetMenuOrder}
+                                                            className="mt-2 font-bold text-blue-700 underline decoration-blue-300 underline-offset-2 dark:text-cyan-200 dark:decoration-cyan-400/50"
+                                                        >
+                                                            Restaurar ordem padrão
+                                                        </button>
+                                                    </div>
+                                                ) : null}
+                                                {section.id === 'menu' ? (
+                                                    <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+                                                        {menuAnnouncement}
+                                                    </p>
+                                                ) : null}
                                                 <div className="space-y-1">
-                                                    {section.items.map(item => renderNavItem(item, isSistema ? 'system' : 'primary'))}
+                                                    {isEditingMenu && section.id === 'menu'
+                                                        ? orderedPrimaryItems.map(renderEditableNavItem)
+                                                        : section.items.map(item => renderNavItem(
+                                                            item,
+                                                            isSistema ? 'system' : 'primary',
+                                                            section.id === 'menu' && item.tabId === displayedMenuOrder[0]
+                                                        ))}
                                                     {isSistema && (
                                                         <button
                                                             onClick={() => {
@@ -554,6 +828,19 @@ const Header: React.FC<HeaderProps> = ({
                                             </section>
                                         );
                                     })}
+                                    </div>
+
+                                    {hasMoreNavContent ? (
+                                        <div
+                                            aria-hidden="true"
+                                            data-menu-scroll-more
+                                            className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex h-12 items-end justify-center bg-gradient-to-t from-white via-white/95 to-transparent pb-1 dark:from-[#23314d] dark:via-[#23314d]/95"
+                                        >
+                                            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/95 text-blue-500 shadow-sm ring-1 ring-slate-200/80 dark:bg-[#23314d] dark:text-cyan-300 dark:ring-white/10">
+                                                <i className="fas fa-chevron-down text-[9px]" />
+                                            </span>
+                                        </div>
+                                    ) : null}
                                 </div>
 
                                 <div className="relative z-10 border-t border-slate-200/80 px-[calc(var(--sidebar-pad-x)-0.08rem)] pb-[calc(var(--sidebar-pad-bottom)+var(--sidebar-safe-bottom))] pt-[var(--sidebar-pad-bottom)] dark:border-cyan-300/16">

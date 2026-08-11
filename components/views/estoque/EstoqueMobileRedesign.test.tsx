@@ -43,7 +43,7 @@ describe('redesenho mobile do estoque', () => {
             codigoQr: 'bobina-37',
             larguraCm: 152,
             comprimentoTotalM: 20,
-            comprimentoRestanteM: 17,
+            comprimentoRestanteM: 14.05,
             fornecedor: '3M',
             lote: '1230',
             status: 'ativa' as const,
@@ -64,6 +64,7 @@ describe('redesenho mobile do estoque', () => {
 
         const mobileRow = screen.getAllByRole('button').find(button => button.textContent?.includes('Color Stable'));
         expect(mobileRow).toBeDefined();
+        expect(screen.getByText('14,05m')).toBeInTheDocument();
         fireEvent.click(mobileRow!);
         expect(onOpenDetails).toHaveBeenCalledWith({ type: 'bobina', item: bobina });
     });
