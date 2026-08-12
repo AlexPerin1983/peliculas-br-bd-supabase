@@ -22,6 +22,11 @@ vi.mock('./SyncStatusIndicator', () => ({ default: () => null }));
 vi.mock('./GlobalNotificationBell', () => ({ default: () => null }));
 vi.mock('./ui/ThemeToggle', () => ({ default: () => <div>Tema</div> }));
 vi.mock('./modals/SupportModal', () => ({ default: () => null }));
+vi.mock('./modals/CompanyShareSheet', () => ({
+    default: ({ isOpen }: { isOpen: boolean }) => isOpen
+        ? <div role="dialog" aria-label="Ficha para compartilhar">Ficha da empresa</div>
+        : null
+}));
 
 describe('Header - personalizacao do menu', () => {
     const renderHeader = (options?: { menuOrder?: MenuTabId[] }) => {
@@ -62,6 +67,16 @@ describe('Header - personalizacao do menu', () => {
         expect(mobileHeader).toHaveClass('pt-[env(safe-area-inset-top,0px)]', 'lg:pt-0');
         expect(trigger).toHaveClass('h-11', 'w-11', 'touch-manipulation');
         expect(trigger).toHaveAttribute('type', 'button');
+    });
+
+    it('abre a ficha de compartilhamento pelo botao ao lado do nome', () => {
+        const { dialog } = renderHeader();
+
+        const shareButton = within(dialog).getByRole('button', { name: 'Compartilhar empresa' });
+        expect(shareButton).toHaveClass('h-9', 'w-9', 'touch-manipulation');
+
+        fireEvent.click(shareButton);
+        expect(screen.getByRole('dialog', { name: 'Ficha para compartilhar' })).toBeInTheDocument();
     });
 
     it('mostra a ordem recebida igualmente na navegacao', () => {

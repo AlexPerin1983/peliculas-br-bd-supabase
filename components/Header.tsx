@@ -12,6 +12,8 @@ import {
 import { useMenuDragReorder } from '../src/hooks/useMenuDragReorder';
 import * as db from '../services/db';
 import GlobalNotificationBell from './GlobalNotificationBell';
+import CompanyShareSheet from './modals/CompanyShareSheet';
+import type { UserInfo } from '../types';
 
 type ActiveTab =
     | 'dashboard'
@@ -132,7 +134,8 @@ const Header: React.FC<HeaderProps> = ({
     const [isEditingMenu, setIsEditingMenu] = useState(false);
     const [menuAnnouncement, setMenuAnnouncement] = useState('');
     const [hasMoreNavContent, setHasMoreNavContent] = useState(false);
-    const [companyLogo, setCompanyLogo] = useState<string | undefined>(undefined);
+    const [companyInfo, setCompanyInfo] = useState<UserInfo | null>(null);
+    const [isCompanyShareOpen, setIsCompanyShareOpen] = useState(false);
     const [dragOffsetX, setDragOffsetX] = useState(0);
     const [isDraggingMenu, setIsDraggingMenu] = useState(false);
     const [shellMetrics, setShellMetrics] = useState({ width: 336, height: 880 });
@@ -202,13 +205,14 @@ const Header: React.FC<HeaderProps> = ({
         };
     }, [isMenuMounted]);
 
-    // Carrega a logo da empresa ao abrir o menu (avatar usa logo, com fallback nas iniciais).
+    // Carrega os dados da empresa ao abrir o menu. Eles alimentam o cabeçalho
+    // e a ficha de compartilhamento sem criar uma segunda fonte de verdade.
     useEffect(() => {
         if (!isMenuMounted) return;
         let active = true;
         db.getUserInfo()
-            .then(info => { if (active) setCompanyLogo(info?.logo || undefined); })
-            .catch(() => { /* sem logo: mantem as iniciais */ });
+            .then(info => { if (active) setCompanyInfo(info || null); })
+            .catch(() => { /* usa os dados básicos da sessão como fallback */ });
         return () => { active = false; };
     }, [isMenuMounted]);
 
@@ -417,8 +421,9 @@ const Header: React.FC<HeaderProps> = ({
         setDragOffsetX(0);
     };
 
-    const initials = (user?.email || 'U').split('@')[0].slice(0, 2).toUpperCase();
-    const userName = user?.email?.split('@')[0] || 'Usuário';
+    const userName = companyInfo?.empresa?.trim() || user?.email?.split('@')[0] || 'Usuário';
+    const initials = userName.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase() || 'U';
+    const companyLogo = companyInfo?.logo || undefined;
     const shellWidth = shellMetrics.width;
     const measuredShellHeight = shellMetrics.height;
     const shellProgress = Math.max(0, Math.min(1, (shellWidth - 320) / 68));
@@ -729,11 +734,28 @@ const Header: React.FC<HeaderProps> = ({
                                                     </div>
                                                 )}
                                             </div>
-                                            <p className="min-w-0 truncate text-[var(--sidebar-title)] font-semibold leading-[0.96] tracking-[-0.03em] text-slate-900 dark:text-white">
-                                                {userName}
-                                            </p>
+                                            <div className="flex min-w-0 items-center gap-2">
+                                                <p className="min-w-0 flex-1 truncate text-[var(--sidebar-title)] font-semibold leading-[0.96] tracking-[-0.03em] text-slate-900 dark:text-white">
+                                                    {userName}
+                                                </p>
+                                                <button
+                                                    type="button"
+                                                    onPointerDown={event => event.stopPropagation()}
+                                                    onTouchStart={event => event.stopPropagation()}
+                                                    onClick={event => {
+                                                        event.preventDefault();
+                                                        event.stopPropagation();
+                                                        setIsCompanyShareOpen(true);
+                                                    }}
+                                                    aria-label="Compartilhar empresa"
+                                                    title="Compartilhar empresa"
+                                                    className="flex h-9 w-9 shrink-0 touch-manipulation items-center justify-center rounded-xl border border-blue-200/80 bg-blue-50 text-blue-600 shadow-sm transition-all active:scale-95 dark:border-cyan-300/20 dark:bg-cyan-300/10 dark:text-cyan-200"
+                                                >
+                                                    <i className="fas fa-share-nodes text-[13px]" aria-hidden="true" />
+                                                </button>
+                                            </div>
                                             <p className="min-w-0 truncate text-[var(--sidebar-email)] text-blue-600/90 dark:text-cyan-200/95">
-                                                {user?.email || ''}
+                                                {companyInfo?.email || user?.email || ''}
                                             </p>
                                         </div>
                                     </div>
@@ -881,6 +903,13 @@ const Header: React.FC<HeaderProps> = ({
                 )}
 
             <SupportModal isOpen={isSupportOpen} onClose={() => setIsSupportOpen(false)} />
+            <CompanyShareSheet
+                isOpen={isCompanyShareOpen}
+                onClose={() => setIsCompanyShareOpen(false)}
+                companyInfo={companyInfo}
+                fallbackName={userName}
+                fallbackEmail={user?.email || ''}
+            />
         </>
     );
 };
