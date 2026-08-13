@@ -60,13 +60,19 @@ import {
     saveMenuOrder,
     type MenuTabId
 } from './src/lib/menuPreferences';
+import {
+    loadActiveTab,
+    resolveStartupTab,
+    saveActiveTab,
+    type PersistedAppTab
+} from './src/lib/activeTabPreferences';
 
 const PaymentMethodsModal = lazy(() => import('./components/modals/PaymentMethodsModal'));
 const ProposalExpensesModal = lazy(() => import('./components/modals/ProposalExpensesModal'));
 const LocationImportModal = lazy(() => import('./components/modals/LocationImportModal'));
 
 
-type ActiveTab = 'dashboard' | 'client' | 'cliente_hub' | 'clients_list' | 'films' | 'settings' | 'history' | 'proposals' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores' | 'saved_places';
+type ActiveTab = PersistedAppTab;
 
 const getExplicitStartupTab = (): ActiveTab | null => {
     if (typeof window === 'undefined') return null;
@@ -250,11 +256,14 @@ const App: React.FC = () => {
         [authUser?.id]
     );
     const explicitStartupTabRef = useRef<ActiveTab | null>(getExplicitStartupTab());
+    const persistedActiveTabRef = useRef<ActiveTab | null>(loadActiveTab());
     const [menuOrder, setMenuOrder] = useState<MenuTabId[]>(() => persistedMenuOrder);
-    const [activeTab, setActiveTab] = useState<ActiveTab>(() =>
-        explicitStartupTabRef.current ?? persistedMenuOrder[0] ?? DEFAULT_MENU_ORDER[0]
+    const startupTab = resolveStartupTab(
+        explicitStartupTabRef.current,
+        persistedActiveTabRef.current,
+        persistedMenuOrder[0]
     );
-    const startupTab = explicitStartupTabRef.current ?? persistedMenuOrder[0] ?? DEFAULT_MENU_ORDER[0];
+    const [activeTab, setActiveTab] = useState<ActiveTab>(() => startupTab);
     const initialPdfLoad: 'all' | 'history' | 'deferred' =
         startupTab === 'history'
             ? 'history'
@@ -289,7 +298,11 @@ const App: React.FC = () => {
         setMenuOrder(nextOrder);
 
         if (initializedMenuUserRef.current !== userId) {
-            const nextStartupTab = explicitStartupTabRef.current ?? nextOrder[0] ?? DEFAULT_MENU_ORDER[0];
+            const nextStartupTab = resolveStartupTab(
+                explicitStartupTabRef.current,
+                loadActiveTab(),
+                nextOrder[0]
+            );
             setActiveTab(nextStartupTab);
             setTabHistory([]);
             historyPageRequestedRef.current = nextStartupTab === 'history';
@@ -297,6 +310,12 @@ const App: React.FC = () => {
             initializedMenuUserRef.current = userId;
         }
     }, [authUser?.id]);
+
+    // Ordem do menu e tela atual sao preferencias independentes. Salvar a tela
+    // visitada evita que um reload volte para o primeiro item organizado.
+    useEffect(() => {
+        saveActiveTab(activeTab);
+    }, [activeTab]);
 
     // Inicia o download da tela restaurada enquanto autenticação e dados ainda
     // estão sendo preparados, evitando uma segunda espera no Suspense.
