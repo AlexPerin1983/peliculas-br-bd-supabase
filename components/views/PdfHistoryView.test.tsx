@@ -33,6 +33,7 @@ const renderHistory = (
         onLoadMoreServerPdfs?: () => Promise<void>;
         onOpenInAgenda?: (agendamento: Agendamento) => void;
         onDeleteMany?: (pdfIds: number[]) => Promise<void>;
+        onUpdateStatus?: (pdfId: number, status: SavedPDF['status']) => Promise<void> | void;
     } = {}
 ) => render(
     <FeedbackProvider>
@@ -47,7 +48,7 @@ const renderHistory = (
             onDelete={vi.fn()}
             onDeleteMany={options.onDeleteMany || vi.fn().mockResolvedValue(undefined)}
             onDownload={vi.fn()}
-            onUpdateStatus={vi.fn()}
+            onUpdateStatus={options.onUpdateStatus || vi.fn()}
             onSchedule={vi.fn()}
             onOpenInAgenda={options.onOpenInAgenda || vi.fn()}
             onGenerateCombinedPdf={vi.fn()}
@@ -107,6 +108,34 @@ describe('PdfHistoryView', () => {
     afterEach(() => {
         vi.useRealTimers();
         vi.unstubAllGlobals();
+    });
+
+    it('confirma o toque em Aprovado imediatamente enquanto salva', async () => {
+        let finishUpdate: (() => void) | undefined;
+        const onUpdateStatus = vi.fn(() => new Promise<void>(resolve => {
+            finishUpdate = resolve;
+        }));
+
+        renderHistory([makePdf({ id: 32, status: 'pending' })], { onUpdateStatus });
+
+        const approveButton = screen.getByRole('button', { name: 'Aprovado' });
+        fireEvent.click(approveButton);
+
+        expect(onUpdateStatus).toHaveBeenCalledWith(32, 'approved');
+        expect(approveButton).toHaveAttribute('aria-pressed', 'true');
+        expect(approveButton).toHaveAttribute('aria-busy', 'true');
+        expect(screen.getByRole('button', { name: 'Aprovando...' })).toBeDisabled();
+        expect(screen.getByRole('status')).toHaveTextContent('Salvando status do orçamento');
+
+        fireEvent.click(approveButton);
+        expect(onUpdateStatus).toHaveBeenCalledTimes(1);
+
+        await act(async () => {
+            finishUpdate?.();
+            await Promise.resolve();
+        });
+
+        expect(screen.getByRole('button', { name: 'Aprovado' })).not.toBeDisabled();
     });
 
     it('calcula pipeline real por oportunidade sem somar alternativas do mesmo cliente', () => {

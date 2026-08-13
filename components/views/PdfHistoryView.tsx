@@ -43,7 +43,7 @@ interface PdfHistoryViewProps {
     onDelete: (pdfId: number) => void;
     onDeleteMany: (pdfIds: number[]) => Promise<void>;
     onDownload: (pdf: SavedPDF, filename: string) => void;
-    onUpdateStatus: (pdfId: number, status: SavedPDF['status']) => void;
+    onUpdateStatus: (pdfId: number, status: SavedPDF['status']) => Promise<void> | void;
     onSchedule: (info: { pdf: SavedPDF; agendamento?: Agendamento } | { agendamento: Agendamento; pdf?: SavedPDF }) => void;
     onOpenInAgenda: (agendamento: Agendamento) => void;
     onGenerateCombinedPdf: (pdfs: SavedPDF[]) => void;
@@ -2924,7 +2924,7 @@ const PdfHistoryItem: React.FC<{
     agendamento: Agendamento | undefined;
     onDownload: (pdf: SavedPDF, filename: string) => void;
     onDelete: (id: number) => void;
-    onUpdateStatus: (id: number, status: SavedPDF['status']) => void;
+    onUpdateStatus: (id: number, status: SavedPDF['status']) => Promise<void> | void;
     onSchedule: (info: { pdf: SavedPDF; agendamento?: Agendamento } | { agendamento: Agendamento; pdf?: SavedPDF }) => void;
     films: Film[];
     messageTemplates: string[];
@@ -2944,9 +2944,22 @@ const PdfHistoryItem: React.FC<{
     const [selectedMessageIndex, setSelectedMessageIndex] = useState(0);
     const [isEditingMessage, setIsEditingMessage] = useState(false);
     const [whatsAppMessage, setWhatsAppMessage] = useState<string | null>(null);
+    const [pendingStatusChange, setPendingStatusChange] = useState<{
+        status: SavedPDF['status'];
+        action: 'revised' | 'approved';
+    } | null>(null);
+    const activeStatus = pendingStatusChange?.status || pdf.status || 'pending';
+    const isUpdatingStatus = pendingStatusChange !== null;
 
-    const handleActionClick = (status: SavedPDF['status']) => {
-        onUpdateStatus(pdf.id!, status);
+    const handleActionClick = async (status: SavedPDF['status'], action: 'revised' | 'approved') => {
+        if (isUpdatingStatus || !pdf.id) return;
+
+        setPendingStatusChange({ status, action });
+        try {
+            await onUpdateStatus(pdf.id, status);
+        } finally {
+            setPendingStatusChange(null);
+        }
     };
 
     const StatusBadge: React.FC<{ status?: SavedPDF['status'] }> = ({ status = 'pending' }) => {
@@ -2960,7 +2973,7 @@ const PdfHistoryItem: React.FC<{
     };
 
     const expirationDate = pdf.expirationDate ? new Date(pdf.expirationDate) : null;
-    const isExpired = isExpiredOpenPdf(pdf);
+    const isExpired = isExpiredOpenPdf({ ...pdf, status: activeStatus });
     const persuasiveMessages = useMemo(() => {
         const context = buildPdfMessageContext(pdf, client.nome, films);
         return messageTemplates.map(template => renderPdfMessageTemplate(template, context));
@@ -2970,9 +2983,9 @@ const PdfHistoryItem: React.FC<{
         readReadyMessageOverrides(readyMessageOverrideKey) || persuasiveMessages
     ));
     const reviewFollowUpMessage = useMemo(() => {
-        if (pdf.status !== 'approved') return '';
+        if (activeStatus !== 'approved') return '';
         return buildReviewFollowUpMessage(pdf, client, googleReviewsLink);
-    }, [pdf, client, googleReviewsLink]);
+    }, [activeStatus, pdf, client, googleReviewsLink]);
     const normalizedPhone = useMemo(() => normalizeWhatsappPhone(client.telefone), [client.telefone]);
 
     useEffect(() => {
@@ -3032,8 +3045,8 @@ const PdfHistoryItem: React.FC<{
             <div className={`relative z-10 w-full ${fitContent ? '' : 'h-full'}`}>
                 {/* Status accent bar */}
                 <div className={`absolute bottom-0 left-0 top-0 z-20 w-[3px] rounded-l-[12px] ${
-                    pdf.status === 'approved' ? 'bg-emerald-500' :
-                    pdf.status === 'revised'  ? 'bg-amber-400' :
+                    activeStatus === 'approved' ? 'bg-emerald-500' :
+                    activeStatus === 'revised'  ? 'bg-amber-400' :
                                                 'bg-slate-300 dark:bg-slate-600'
                 }`} />
 
@@ -3089,7 +3102,7 @@ const PdfHistoryItem: React.FC<{
 
                     {/* Row 2: status + validade */}
                     <div className="mt-2 flex items-center gap-2 flex-wrap">
-                        <StatusBadge status={pdf.status} />
+                        <StatusBadge status={activeStatus} />
                         {pdf.archivedAt && (
                             <span
                                 title="O arquivo foi removido para economizar espaço. O PDF é gerado novamente ao baixar."
@@ -3134,31 +3147,51 @@ const PdfHistoryItem: React.FC<{
                     <div className="mt-2.5 flex items-center gap-1.5">
                         <button
                             type="button"
-                            onClick={(e) => { e.stopPropagation(); handleActionClick(pdf.status === 'revised' ? 'pending' : 'revised'); }}
-                            aria-pressed={pdf.status === 'revised'}
-                            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold transition-colors ${
-                                pdf.status === 'revised'
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                void handleActionClick(activeStatus === 'revised' ? 'pending' : 'revised', 'revised');
+                            }}
+                            aria-pressed={activeStatus === 'revised'}
+                            aria-busy={pendingStatusChange?.action === 'revised'}
+                            disabled={isUpdatingStatus}
+                            className={`inline-flex min-h-9 items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold transition duration-150 active:scale-95 disabled:cursor-wait ${
+                                activeStatus === 'revised'
                                     ? 'bg-amber-400 text-white shadow-sm'
                                     : 'border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300 dark:hover:bg-amber-900/40'
                             }`}
                         >
-                            <i className="fas fa-eye text-[10px]" aria-hidden="true" />
-                            Revisar
+                            <i
+                                className={`${pendingStatusChange?.action === 'revised' ? 'fas fa-circle-notch animate-spin' : 'fas fa-eye'} text-[10px]`}
+                                aria-hidden="true"
+                            />
+                            {pendingStatusChange?.action === 'revised'
+                                ? pendingStatusChange.status === 'revised' ? 'Marcando...' : 'Salvando...'
+                                : 'Revisar'}
                         </button>
                         <button
                             type="button"
-                            onClick={(e) => { e.stopPropagation(); handleActionClick(pdf.status === 'approved' ? 'pending' : 'approved'); }}
-                            aria-pressed={pdf.status === 'approved'}
-                            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold transition-colors ${
-                                pdf.status === 'approved'
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                void handleActionClick(activeStatus === 'approved' ? 'pending' : 'approved', 'approved');
+                            }}
+                            aria-pressed={activeStatus === 'approved'}
+                            aria-busy={pendingStatusChange?.action === 'approved'}
+                            disabled={isUpdatingStatus}
+                            className={`inline-flex min-h-9 items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold transition duration-150 active:scale-95 disabled:cursor-wait ${
+                                activeStatus === 'approved'
                                     ? 'bg-emerald-500 text-white shadow-sm'
                                     : 'border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-300 dark:hover:bg-emerald-900/40'
                             }`}
                         >
-                            <i className="fas fa-check text-[10px]" aria-hidden="true" />
-                            Aprovado
+                            <i
+                                className={`${pendingStatusChange?.action === 'approved' ? 'fas fa-circle-notch animate-spin' : 'fas fa-check'} text-[10px]`}
+                                aria-hidden="true"
+                            />
+                            {pendingStatusChange?.action === 'approved'
+                                ? pendingStatusChange.status === 'approved' ? 'Aprovando...' : 'Salvando...'
+                                : 'Aprovado'}
                         </button>
-                        {pdf.status === 'approved' && agendamento ? (
+                        {activeStatus === 'approved' && agendamento ? (
                             <button
                                 type="button"
                                 onClick={(event) => {
@@ -3171,6 +3204,11 @@ const PdfHistoryItem: React.FC<{
                             >
                                 <CalendarDays className="h-4 w-4" aria-hidden="true" />
                             </button>
+                        ) : null}
+                        {isUpdatingStatus ? (
+                            <span className="sr-only" role="status" aria-live="polite">
+                                Salvando status do orçamento
+                            </span>
                         ) : null}
                     </div>
 

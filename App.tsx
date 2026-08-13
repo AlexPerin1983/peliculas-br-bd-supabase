@@ -2179,10 +2179,13 @@ Regras:
     }, [handleDeletePdfs, handleShowInfo, pdfToDeleteId]);
 
     const handleUpdatePdfStatus = useCallback(async (pdfId: number, status: SavedPDF['status']) => {
-        const currentPdf = allSavedPdfs.find(pdf => pdf.id === pdfId);
+        const currentPdf = allSavedPdfs.find(pdf => pdf.id === pdfId)
+            || historyPdfs.find(pdf => pdf.id === pdfId);
 
-        // Atualiza estado imediatamente para refletir na UI sem esperar o banco
+        // A tela de histórico usa uma lista paginada enquanto o acervo completo não foi
+        // carregado. As duas fontes precisam mudar juntas para o toque responder na hora.
         setAllSavedPdfs((prev: SavedPDF[]) => prev.map(p => p.id === pdfId ? { ...p, status } : p));
+        setHistoryPdfs((prev: SavedPDF[]) => prev.map(p => p.id === pdfId ? { ...p, status } : p));
         try {
             let pdfToUpdate = currentPdf;
             if (!pdfToUpdate) {
@@ -2196,9 +2199,13 @@ Regras:
         } catch (error) {
             console.error("Failed to update PDF status", error);
             handleShowInfo("Não foi possível atualizar o status do orçamento.");
-            await loadAllPdfs(); // reverte em caso de erro
+            if (hasLoadedAllPdfs) {
+                await loadAllPdfs();
+            } else {
+                await loadPdfHistoryPage({ reset: true });
+            }
         }
-    }, [allSavedPdfs, loadAllPdfs, handleShowInfo]);
+    }, [allSavedPdfs, handleShowInfo, hasLoadedAllPdfs, historyPdfs, loadAllPdfs, loadPdfHistoryPage]);
 
 
     const toggleFullScreen = useCallback(() => {
