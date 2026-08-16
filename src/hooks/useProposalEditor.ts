@@ -101,6 +101,7 @@ export function useProposalEditor({
     const [activeOptionId, setActiveOptionId] = useState<number | null>(null);
     const [isDirty, setIsDirty] = useState(false);
     const proposalOptionsRef = useRef<ProposalOption[]>([]);
+    const loadedClientIdRef = useRef<number | null>(null);
 
     useEffect(() => {
         proposalOptionsRef.current = proposalOptions;
@@ -109,13 +110,17 @@ export function useProposalEditor({
     useEffect(() => {
         let isCancelled = false;
 
+        // Nunca mantenha na memória as opções do cliente anterior enquanto o
+        // próximo cliente ainda está carregando. Isso impede o autosave de
+        // associar medidas antigas ao novo clientId.
+        loadedClientIdRef.current = null;
+        proposalOptionsRef.current = [];
+        setProposalOptions([]);
+        setActiveOptionId(null);
+        setIsDirty(false);
+
         const loadDataForClient = async () => {
             if (!selectedClientId) {
-                if (!isCancelled) {
-                    setProposalOptions([]);
-                    setActiveOptionId(null);
-                    setIsDirty(false);
-                }
                 return;
             }
 
@@ -128,14 +133,18 @@ export function useProposalEditor({
             if (savedOptions.length === 0) {
                 const defaultOption = createDefaultOption();
                 setProposalOptions([defaultOption]);
+                proposalOptionsRef.current = [defaultOption];
                 setActiveOptionId(defaultOption.id);
             } else {
-                setProposalOptions(savedOptions.map(option => ({
+                const normalizedOptions = savedOptions.map(option => ({
                     ...option,
                     generalDiscount: normalizeGeneralDiscount(option.generalDiscount)
-                })));
+                }));
+                setProposalOptions(normalizedOptions);
+                proposalOptionsRef.current = normalizedOptions;
                 setActiveOptionId(savedOptions[0].id);
             }
+            loadedClientIdRef.current = selectedClientId;
             setIsDirty(false);
         };
 
@@ -156,7 +165,11 @@ export function useProposalEditor({
     const handleSaveChanges = useCallback(async () => {
         const currentProposalOptions = proposalOptionsRef.current;
 
-        if (selectedClientId && currentProposalOptions.length > 0) {
+        if (
+            selectedClientId
+            && loadedClientIdRef.current === selectedClientId
+            && currentProposalOptions.length > 0
+        ) {
             await db.saveProposalOptions(selectedClientId, currentProposalOptions);
             setIsDirty(false);
             // O orçamento já está seguro no banco local neste ponto. A
@@ -169,7 +182,7 @@ export function useProposalEditor({
     }, [selectedClientId, loadClients]);
 
     const updateActiveOption = useCallback((updater: (option: ProposalOption) => ProposalOption) => {
-        if (!activeOptionId) {
+        if (!activeOptionId || loadedClientIdRef.current !== selectedClientId) {
             return;
         }
 
@@ -187,16 +200,15 @@ export function useProposalEditor({
         if (hasUpdated) {
             setIsDirty(true);
         }
-    }, [activeOptionId]);
+    }, [activeOptionId, selectedClientId]);
 
     const handleMeasurementsChange = useCallback((newMeasurements: UIMeasurement[]) => {
         updateActiveOption(option => ({ ...option, measurements: newMeasurements }));
     }, [updateActiveOption]);
 
     const handleMeasurementsChangeWithPersistence = useCallback(async (newMeasurements: UIMeasurement[]) => {
-        if (!selectedClientId || !activeOptionId) {
-            handleMeasurementsChange(newMeasurements);
-            return;
+        if (!selectedClientId || !activeOptionId || loadedClientIdRef.current !== selectedClientId) {
+            throw new Error('Aguarde o cliente terminar de carregar antes de salvar medidas.');
         }
 
         const updatedProposalOptions = proposalOptionsRef.current.map(option =>

@@ -114,6 +114,37 @@ describe('offlineFirstDb userInfo', () => {
     expect(getProposalOptionsRemoteMock).not.toHaveBeenCalled();
   });
 
+  it('atualiza o indicador assim que salva um rascunho de medidas offline', async () => {
+    const saveProposalOptionsLocalMock = vi.fn().mockResolvedValue(undefined);
+    const refreshSyncStatusMock = vi.fn().mockResolvedValue(undefined);
+    const syncAllPendingMock = vi.fn();
+    const options = [{
+      id: 10,
+      name: 'Opcao Local',
+      measurements: [],
+      generalDiscount: { value: '', type: 'fixed' as const }
+    }];
+
+    vi.doMock('./offlineDb', () => ({
+      saveProposalOptionsLocal: saveProposalOptionsLocalMock
+    }));
+    vi.doMock('./supabaseDb', () => ({}));
+    vi.doMock('./syncService', () => ({
+      isOnlineNow: vi.fn().mockReturnValue(false),
+      refreshSyncStatus: refreshSyncStatusMock,
+      syncAllPending: syncAllPendingMock
+    }));
+
+    const { saveProposalOptions } = await import('./offlineFirstDb');
+    await saveProposalOptions(123, options);
+
+    expect(saveProposalOptionsLocalMock).toHaveBeenCalledWith(123, options);
+    expect(refreshSyncStatusMock).toHaveBeenCalledTimes(1);
+    expect(syncAllPendingMock).not.toHaveBeenCalled();
+    expect(saveProposalOptionsLocalMock.mock.invocationCallOrder[0])
+      .toBeLessThan(refreshSyncStatusMock.mock.invocationCallOrder[0]);
+  });
+
   it('mantem status local pendente de PDFs quando a leitura remota ainda esta atrasada', async () => {
     const syncAllPendingMock = vi.fn().mockResolvedValue(undefined);
     const remotePdf = {

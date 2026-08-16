@@ -128,7 +128,11 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({ showDetails =
 
     const getStatusText = () => {
         if (status.syncInProgress) return 'Sincronizando...';
-        if (!status.isOnline) return 'Offline';
+        if (!status.isOnline) {
+            return status.pendingCount > 0 || status.failedCount > 0
+                ? 'Salvo no celular'
+                : 'Offline';
+        }
         if (status.failedCount > 0 && hasConnectionFailure) return 'Salvo no celular';
         if (status.failedCount > 0) return `${status.failedCount} ${status.failedCount > 1 ? 'ajustes' : 'ajuste'}`;
         if (status.pendingCount > 0) return `${status.pendingCount} pendente${status.pendingCount > 1 ? 's' : ''}`;

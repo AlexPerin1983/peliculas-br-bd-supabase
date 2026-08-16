@@ -7,6 +7,7 @@ const singleMock = vi.fn();
 const eqSecondMock = vi.fn();
 const eqFirstMock = vi.fn();
 const fromMock = vi.fn();
+const rpcMock = vi.fn();
 
 vi.mock('./sessionScope', () => ({
   getCurrentUserId: vi.fn().mockResolvedValue('user-1'),
@@ -16,7 +17,8 @@ vi.mock('./sessionScope', () => ({
 
 vi.mock('./supabaseClient', () => ({
   supabase: {
-    from: (...args: unknown[]) => fromMock(...args)
+    from: (...args: unknown[]) => fromMock(...args),
+    rpc: (...args: unknown[]) => rpcMock(...args)
   }
 }));
 
@@ -283,5 +285,61 @@ describe('supabaseDb PDF updates', () => {
     expect(result.clients.map(client => client.id)).toEqual([3, 2]);
     expect(result.hasMore).toBe(true);
     expect(result.nextOffset).toBe(2);
+  });
+});
+
+describe('supabaseDb proposal operation writes', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('envia somente o lote incremental para o RPC', async () => {
+    const base = [{
+      id: 10,
+      name: 'Opcao 1',
+      measurements: [{
+        id: 1,
+        largura: '1,00',
+        altura: '1,00',
+        quantidade: 1,
+        ambiente: 'Sala',
+        tipoAplicacao: 'Janela',
+        pelicula: 'Carbono',
+        active: true
+      }],
+      generalDiscount: { value: '', type: 'fixed' as const }
+    }];
+    const next = [{
+      ...base[0],
+      measurements: [{ ...base[0].measurements[0], largura: '1,25' }]
+    }];
+
+    rpcMock.mockResolvedValue({
+      data: { status: 'saved', revision: 8, snapshot: next },
+      error: null
+    });
+
+    const { saveProposalOptionsRemote } = await import('./supabaseDb');
+    const result = await saveProposalOptionsRemote(12, next, {
+      baseRevision: 7,
+      baseOptions: base,
+      deviceId: 'device-test'
+    });
+
+    expect(rpcMock).toHaveBeenCalledWith('apply_proposal_option_operations', {
+      p_client_id: 12,
+      p_operations: [expect.objectContaining({
+        type: 'upsert_measurement',
+        optionId: 10,
+        measurement: expect.objectContaining({ id: 1, largura: '1,25' })
+      })],
+      p_expected_revision: 7,
+      p_device_id: 'device-test'
+    });
+    expect(result).toEqual(expect.objectContaining({
+      options: next,
+      revision: 8,
+      conflictResolved: false
+    }));
   });
 });

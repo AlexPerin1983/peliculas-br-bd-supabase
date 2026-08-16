@@ -32,6 +32,7 @@ import {
     saveUserInfoRemote
 } from './supabaseDb';
 import { normalizeFilmForPersistence } from '../src/lib/filmPersistence';
+import { ProposalOptionOperation, ProposalOptionsSaveResult } from './proposalSync';
 
 let isOnline = navigator.onLine;
 let syncInProgress = false;
@@ -528,8 +529,25 @@ export async function syncAllPending(options?: { force?: boolean }): Promise<voi
                 if (item.status === 'error') {
                     await markSyncItemPending(item.id!);
                 }
-                await processQueueItem(item);
-                await offlineDb.syncQueue.delete(item.id!);
+                const processResult = await processQueueItem(item);
+                const acknowledged = await acknowledgeProcessedQueueItem(item);
+
+                if (acknowledged && processResult?.proposalOptions) {
+                    await markProposalOptionsAsSynced(
+                        processResult.proposalOptions.localClientId,
+                        processResult.proposalOptions.result.options,
+                        processResult.proposalOptions.result.revision
+                    );
+
+                    if (processResult.proposalOptions.result.conflictResolved && typeof window !== 'undefined') {
+                        window.dispatchEvent(new CustomEvent('proposal-sync-conflict-resolved', {
+                            detail: {
+                                clientId: processResult.proposalOptions.localClientId,
+                                preservedConflicts: processResult.proposalOptions.result.preservedConflicts
+                            }
+                        }));
+                    }
+                }
             } catch (error: any) {
                 currentStatus.error = `${item.table}: ${error?.message || error}`;
                 await markSyncItemError(item.id!, currentStatus.error);
@@ -586,7 +604,37 @@ export async function syncAllPending(options?: { force?: boolean }): Promise<voi
     }
 }
 
-async function processQueueItem(item: SyncQueueItem): Promise<void> {
+interface QueueProcessResult {
+    proposalOptions?: {
+        localClientId: number;
+        result: ProposalOptionsSaveResult;
+    };
+}
+
+async function acknowledgeProcessedQueueItem(item: SyncQueueItem): Promise<boolean> {
+    if (typeof (offlineDb.syncQueue as any).get !== 'function') {
+        await offlineDb.syncQueue.delete(item.id!);
+        return true;
+    }
+
+    const currentItem = await offlineDb.syncQueue.get(item.id!);
+    if (!currentItem) return true;
+
+    const processedToken = item.data?.syncToken;
+    const currentToken = currentItem.data?.syncToken;
+    const isSameMutation = processedToken
+        ? processedToken === currentToken
+        : currentItem.timestamp === item.timestamp;
+
+    if (!isSameMutation) {
+        return false;
+    }
+
+    await offlineDb.syncQueue.delete(item.id!);
+    return true;
+}
+
+async function processQueueItem(item: SyncQueueItem): Promise<QueueProcessResult | void> {
     const { table, action, data } = item;
 
     switch (table) {
@@ -600,8 +648,7 @@ async function processQueueItem(item: SyncQueueItem): Promise<void> {
             await syncUserInfo(data);
             break;
         case 'proposalOptions':
-            await syncProposalOptions(data);
-            break;
+            return { proposalOptions: await syncProposalOptions(data) };
         case 'savedPdfs':
             await syncPdf(action, data);
             break;
@@ -673,15 +720,34 @@ async function syncUserInfo(data: LocalUserInfo): Promise<void> {
     await markAsSynced('userInfo', _localId!);
 }
 
-async function syncProposalOptions(data: { clientId: number; options: any[] }): Promise<void> {
+async function syncProposalOptions(data: {
+    clientId: number;
+    options: any[];
+    operations?: ProposalOptionOperation[];
+    baseRevision?: number;
+    baseOptions?: any[];
+    deviceId?: string;
+}): Promise<{ localClientId: number; result: ProposalOptionsSaveResult }> {
     const { clientId, options } = data;
     const remoteClientId = await resolveClientRemoteId(clientId);
     if (!remoteClientId) {
         throw new Error('ID do cliente nao encontrado para sincronizar opcoes da proposta');
     }
 
-    await saveProposalOptionsRemote(remoteClientId, options);
-    await markProposalOptionsAsSynced(clientId);
+    const savedResult = await saveProposalOptionsRemote(remoteClientId, options, {
+        baseRevision: data.baseRevision ?? 0,
+        baseOptions: data.baseOptions ?? [],
+        deviceId: data.deviceId ?? 'unknown-device',
+        operations: data.operations
+    });
+    const result = savedResult ?? {
+        options,
+        revision: (data.baseRevision ?? 0) + 1,
+        conflictResolved: false,
+        preservedConflicts: 0
+    };
+
+    return { localClientId: clientId, result };
 }
 
 async function syncPdf(action: string, data: any): Promise<void> {
@@ -829,6 +895,10 @@ export function getSyncStatus(): SyncStatus {
     return { ...currentStatus };
 }
 
+export async function refreshSyncStatus(): Promise<void> {
+    await updatePendingCount();
+}
+
 export function isOnlineNow(): boolean {
     return isOnline;
 }
@@ -853,6 +923,7 @@ export default {
     syncAllPending,
     subscribeSyncStatus,
     getSyncStatus,
+    refreshSyncStatus,
     isOnlineNow,
     forcSync,
     clearSyncQueue

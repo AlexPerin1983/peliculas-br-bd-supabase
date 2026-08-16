@@ -232,6 +232,55 @@ describe('useProposalEditor', () => {
     expect(loadClients).not.toHaveBeenCalled();
   });
 
+  it('nunca salva medidas do cliente anterior enquanto o novo cliente carrega', async () => {
+    vi.useFakeTimers();
+    let resolveSecondClient: ((value: any[]) => void) | undefined;
+    mockedDb.getProposalOptions.mockImplementation(async (clientId: number) => {
+      if (clientId === 1) {
+        return [{
+          id: 10,
+          name: 'Cliente anterior',
+          measurements: [{
+            id: 1,
+            largura: '9,99',
+            altura: '9,99',
+            quantidade: 1,
+            ambiente: 'Outro cliente',
+            tipoAplicacao: 'Janela',
+            pelicula: 'Blackout',
+            active: true
+          }],
+          generalDiscount: { value: '', type: 'fixed' }
+        }];
+      }
+
+      return await new Promise<any[]>(resolve => {
+        resolveSecondClient = resolve;
+      });
+    });
+    mockedDb.saveProposalOptions.mockResolvedValue(undefined as any);
+    const loadClients = vi.fn().mockResolvedValue(undefined);
+    const hook = renderHook(
+      ({ clientId }) => useProposalEditor({ selectedClientId: clientId, films, loadClients }),
+      { initialProps: { clientId: 1 } }
+    );
+
+    await act(async () => {});
+    act(() => hook.result.current.addMeasurement());
+    hook.rerender({ clientId: 2 });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+
+    expect(mockedDb.saveProposalOptions).not.toHaveBeenCalledWith(2, expect.any(Array));
+    expect(hook.result.current.proposalOptions).toEqual([]);
+
+    await act(async () => {
+      resolveSecondClient?.([]);
+    });
+  });
+
   it('permite trocar o modo de cobranca da opcao ativa', async () => {
     mockedDb.getProposalOptions.mockResolvedValue([]);
 

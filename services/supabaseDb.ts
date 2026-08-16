@@ -5,6 +5,13 @@ import { Client, Measurement, UserInfo, Film, SavedPDF, Agendamento, ProposalOpt
 import { DEFAULT_PROPOSAL_MESSAGE_TEMPLATES, ProposalMessageTemplate } from '../src/lib/proposalMessages';
 import { mockUserInfo } from './mockData';
 import {
+    buildProposalOperations,
+    mergeProposalOptions,
+    ProposalOptionsSaveContext,
+    ProposalOptionsSaveResult,
+    ProposalOptionsSnapshot
+} from './proposalSync';
+import {
     getCurrentUserId as getSessionUserId,
     getEffectiveOrganizationId,
     getEffectiveOwnerUserId
@@ -190,7 +197,7 @@ const mapRowToClient = (row: any): Client => ({
 // PROPOSAL OPTIONS FUNCTIONS
 // ============================================
 
-export const getProposalOptions = async (clientId: number): Promise<ProposalOption[]> => {
+const getLegacyProposalOptions = async (clientId: number): Promise<ProposalOption[]> => {
     const userId = await getCurrentUserId();
     if (!userId) return [];
 
@@ -213,62 +220,54 @@ export const getProposalOptions = async (clientId: number): Promise<ProposalOpti
     }));
 };
 
-export const saveProposalOptions = async (clientId: number, options: ProposalOption[]): Promise<void> => {
-    const userId = await getCurrentUserId();
-    if (!userId) throw new Error('User not authenticated');
-    const orgId = await getEffectiveOrganizationId();
-
-    // Buscar organization_id do usuário para manter consistência
-    const { data: profile } = await supabase
-        .from('profiles')
-        .select('organization_id')
-        .eq('id', userId)
-        .single();
-
-
-    // Delete existing options for this client (RLS controla acesso por organização)
-    // Não filtramos por user_id para permitir colaboradores editar dados do owner
-    await supabase
-        .from('proposal_options')
-        .delete()
-        .eq('client_id', clientId);
-
-    // Insert new options
-    if (options.length > 0) {
-        const optionsData = options.map(opt => ({
-            user_id: userId,  // Quem está salvando
-            organization_id: orgId,  // Organização para RLS
-            client_id: clientId,
-            name: opt.name,
-            measurements: opt.measurements,
-            general_discount: opt.generalDiscount
-        }));
-
-        const { error } = await supabase
-            .from('proposal_options')
-            .insert(optionsData);
-
-        if (error) throw error;
-    }
-
-    // Update client's lastUpdated timestamp (sem filtro de user_id)
-    await supabase
-        .from('clients')
-        .update({ last_updated: new Date().toISOString() })
-        .eq('id', clientId);
+const isMissingProposalStateRelation = (error: unknown): boolean => {
+    const candidate = error as { code?: string; message?: string; details?: string } | null;
+    const message = `${candidate?.message || ''} ${candidate?.details || ''}`.toLowerCase();
+    return candidate?.code === '42P01'
+        || candidate?.code === 'PGRST205'
+        || (message.includes('proposal_option_states') && message.includes('could not find'));
 };
 
-export const deleteProposalOptions = async (clientId: number): Promise<void> => {
+export const getProposalOptionsSnapshot = async (clientId: number): Promise<ProposalOptionsSnapshot> => {
     const userId = await getCurrentUserId();
-    if (!userId) throw new Error('User not authenticated');
+    if (!userId) return { options: [], revision: 0 };
 
-    // RLS controla acesso por organização - não filtrar por user_id
-    const { error } = await supabase
-        .from('proposal_options')
-        .delete()
-        .eq('client_id', clientId);
+    const { data, error } = await supabase
+        .from('proposal_option_states')
+        .select('snapshot, revision')
+        .eq('client_id', clientId)
+        .maybeSingle();
 
-    if (error) throw error;
+    if (!error && data) {
+        return {
+            options: Array.isArray(data.snapshot) ? data.snapshot as ProposalOption[] : [],
+            revision: Number(data.revision) || 0
+        };
+    }
+
+    if (error && !isMissingProposalStateRelation(error)) {
+        throw error;
+    }
+
+    // Compatibilidade de leitura durante a implantação. Escritas nunca voltam
+    // ao fluxo destrutivo antigo.
+    return {
+        options: await getLegacyProposalOptions(clientId),
+        revision: 0
+    };
+};
+
+export const getProposalOptions = async (clientId: number): Promise<ProposalOption[]> => (
+    (await getProposalOptionsSnapshot(clientId)).options
+);
+
+export const saveProposalOptions = async (clientId: number, options: ProposalOption[]): Promise<void> => {
+    const snapshot = await getProposalOptionsSnapshot(clientId);
+    await saveProposalOptionsRemote(clientId, options, {
+        baseRevision: snapshot.revision,
+        baseOptions: snapshot.options,
+        deviceId: 'direct-write'
+    });
 };
 
 // ============================================
@@ -1392,6 +1391,10 @@ const isAgendamentoStockColumnError = (error: unknown): boolean => {
         );
 };
 
+export const deleteProposalOptions = async (clientId: number): Promise<void> => {
+    await saveProposalOptions(clientId, []);
+};
+
 const isReceiptDescriptionColumnError = (error: unknown): boolean => {
     const details = [
         (error as { message?: string })?.message,
@@ -1543,8 +1546,72 @@ export async function deleteClientRemote(id: number): Promise<void> {
     return deleteClient(id);
 }
 
-export async function saveProposalOptionsRemote(clientId: number, options: ProposalOption[]): Promise<void> {
-    return saveProposalOptions(clientId, options);
+export async function saveProposalOptionsRemote(
+    clientId: number,
+    options: ProposalOption[],
+    context?: Partial<ProposalOptionsSaveContext>
+): Promise<ProposalOptionsSaveResult> {
+    const userId = await getCurrentUserId();
+    if (!userId) throw new Error('User not authenticated');
+
+    let expectedRevision = context?.baseRevision ?? 0;
+    let mergeBase = context?.baseOptions ?? [];
+    let nextOptions = options;
+    let nextOperations = context?.operations ?? buildProposalOperations(mergeBase, nextOptions);
+    let conflictResolved = false;
+    let preservedConflicts = 0;
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+        if (nextOperations.length === 0) {
+            return {
+                options: nextOptions,
+                revision: expectedRevision,
+                conflictResolved,
+                preservedConflicts
+            };
+        }
+
+        const { data, error } = await supabase.rpc('apply_proposal_option_operations', {
+            p_client_id: clientId,
+            p_operations: nextOperations,
+            p_expected_revision: expectedRevision,
+            p_device_id: context?.deviceId ?? 'unknown-device'
+        });
+
+        if (error) {
+            throw new Error(`Falha no salvamento seguro das medidas: ${error.message}`);
+        }
+
+        const response = data as {
+            status?: string;
+            revision?: number;
+            snapshot?: ProposalOption[];
+        } | null;
+
+        if (response?.status === 'saved') {
+            return {
+                options: Array.isArray(response.snapshot) ? response.snapshot : nextOptions,
+                revision: Number(response.revision) || expectedRevision + 1,
+                conflictResolved,
+                preservedConflicts
+            };
+        }
+
+        if (response?.status !== 'conflict') {
+            throw new Error('O servidor não confirmou a versão salva das medidas.');
+        }
+
+        const remoteOptions = Array.isArray(response.snapshot) ? response.snapshot : [];
+        const merge = mergeProposalOptions(mergeBase, nextOptions, remoteOptions);
+        nextOptions = merge.options;
+        nextOperations = buildProposalOperations(remoteOptions, nextOptions);
+        preservedConflicts += merge.preservedConflicts;
+        conflictResolved = true;
+        mergeBase = remoteOptions;
+        expectedRevision = Number(response.revision) || 0;
+    }
+
+    throw new Error('As medidas mudaram repetidamente em outro aparelho. A sincronização foi mantida pendente para não perder dados.');
 }
 
 export async function saveUserInfoRemote(userInfo: UserInfo): Promise<UserInfo> {
