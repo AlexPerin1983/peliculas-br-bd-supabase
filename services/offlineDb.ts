@@ -6,6 +6,7 @@
 
 import Dexie, { Table } from 'dexie';
 import { Client, Film, UserInfo, SavedPDF, Agendamento, ProposalOption, StandaloneExpense } from '../types';
+import { buildProposalOperations } from './proposalSync';
 
 // Tipos para dados com metadata de sincronização
 export interface SyncMetadata {
@@ -23,6 +24,12 @@ export type LocalSavedPDF = SavedPDF & SyncMetadata;
 export type LocalAgendamento = Agendamento & SyncMetadata;
 export type LocalProposalOption = ProposalOption & SyncMetadata & { clientId: number };
 export type LocalStandaloneExpense = StandaloneExpense & SyncMetadata;
+export interface LocalProposalSyncMeta {
+    clientId: number;
+    revision: number;
+    baseOptions: ProposalOption[];
+    lastSyncedAt?: number;
+}
 export interface SyncQueueItem {
     id?: number;
     table: string;
@@ -52,6 +59,7 @@ class OfflineDatabase extends Dexie {
     savedPdfs!: Table<LocalSavedPDF, string>;
     agendamentos!: Table<LocalAgendamento, string>;
     proposalOptions!: Table<LocalProposalOption, string>;
+    proposalSyncMeta!: Table<LocalProposalSyncMeta, number>;
     standaloneExpenses!: Table<LocalStandaloneExpense, string>;
     syncQueue!: Table<SyncQueueItem, number>;
 
@@ -94,6 +102,17 @@ class OfflineDatabase extends Dexie {
             standaloneExpenses: '_localId, id, date, category, clientId, proposalId, _syncStatus',
             syncQueue: '++id, table, status, timestamp, lastAttemptAt'
         });
+        this.version(4).stores({
+            clients: '_localId, id, nome, _syncStatus',
+            films: '_localId, nome, _syncStatus',
+            userInfo: '_localId, id, _syncStatus',
+            savedPdfs: '_localId, id, clienteId, _syncStatus',
+            agendamentos: '_localId, id, clienteId, _syncStatus',
+            proposalOptions: '_localId, id, clientId, _syncStatus',
+            proposalSyncMeta: 'clientId, revision',
+            standaloneExpenses: '_localId, id, date, category, clientId, proposalId, _syncStatus',
+            syncQueue: '++id, table, status, timestamp, lastAttemptAt'
+        });
     }
 }
 
@@ -103,6 +122,23 @@ export const offlineDb = new OfflineDatabase();
 // Gerar ID local único
 export const generateLocalId = (): string => {
     return `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+};
+
+const SYNC_DEVICE_ID_KEY = 'peliculasbr.sync-device-id.v1';
+let fallbackDeviceId: string | null = null;
+
+export const getSyncDeviceId = (): string => {
+    try {
+        const stored = window.localStorage.getItem(SYNC_DEVICE_ID_KEY);
+        if (stored) return stored;
+
+        const created = `device_${generateLocalId()}`;
+        window.localStorage.setItem(SYNC_DEVICE_ID_KEY, created);
+        return created;
+    } catch {
+        fallbackDeviceId ??= `device_${generateLocalId()}`;
+        return fallbackDeviceId;
+    }
 };
 
 const isPersistedRemoteId = (value: unknown): value is number => (
@@ -127,7 +163,13 @@ async function enqueueSyncItem(item: Omit<SyncQueueItem, 'id' | 'status' | 'retr
     });
 }
 
-async function upsertProposalOptionsSyncItem(clientId: number, options: ProposalOption[], timestamp: number): Promise<void> {
+async function upsertProposalOptionsSyncItem(
+    clientId: number,
+    options: ProposalOption[],
+    timestamp: number,
+    baseRevision: number,
+    baseOptions: ProposalOption[]
+): Promise<void> {
     const existingItems = await offlineDb.syncQueue
         .where('table')
         .equals('proposalOptions')
@@ -142,16 +184,38 @@ async function upsertProposalOptionsSyncItem(clientId: number, options: Proposal
         await enqueueSyncItem({
             table: 'proposalOptions',
             action: 'update',
-            data: { clientId, options },
+            data: {
+                clientId,
+                options,
+                operations: buildProposalOperations(baseOptions, options),
+                baseRevision,
+                baseOptions,
+                deviceId: getSyncDeviceId(),
+                syncToken: generateLocalId()
+            },
             timestamp
         });
         return;
     }
 
     const [latestItem, ...duplicateItems] = sameClientItems.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    const queuedBaseRevision = Number.isFinite(latestItem.data?.baseRevision)
+        ? latestItem.data.baseRevision
+        : baseRevision;
+    const queuedBaseOptions = Array.isArray(latestItem.data?.baseOptions)
+        ? latestItem.data.baseOptions
+        : baseOptions;
 
     await offlineDb.syncQueue.update(latestItem.id!, {
-        data: { clientId, options },
+        data: {
+            clientId,
+            options,
+            operations: buildProposalOperations(queuedBaseOptions, options),
+            baseRevision: queuedBaseRevision,
+            baseOptions: queuedBaseOptions,
+            deviceId: latestItem.data?.deviceId || getSyncDeviceId(),
+            syncToken: generateLocalId()
+        },
         timestamp,
         status: 'pending',
         lastError: undefined,
@@ -506,10 +570,15 @@ export async function getProposalOptionsLocal(clientId: number): Promise<LocalPr
         .toArray();
 }
 
+export async function getProposalSyncMeta(clientId: number): Promise<LocalProposalSyncMeta | undefined> {
+    return await offlineDb.proposalSyncMeta.get(clientId);
+}
+
 export async function saveProposalOptionsLocal(clientId: number, options: ProposalOption[]): Promise<void> {
     const now = Date.now();
 
-    await offlineDb.transaction('rw', offlineDb.proposalOptions, offlineDb.syncQueue, async () => {
+    await offlineDb.transaction('rw', offlineDb.proposalOptions, offlineDb.proposalSyncMeta, offlineDb.syncQueue, async () => {
+        const syncMeta = await getProposalSyncMeta(clientId);
         const existingOptions = await getProposalOptionsLocal(clientId);
         for (const opt of existingOptions) {
             await offlineDb.proposalOptions.delete(opt._localId!);
@@ -528,18 +597,25 @@ export async function saveProposalOptionsLocal(clientId: number, options: Propos
             await offlineDb.proposalOptions.put(localOption);
         }
 
-        await upsertProposalOptionsSyncItem(clientId, options, now);
+        await upsertProposalOptionsSyncItem(
+            clientId,
+            options,
+            now,
+            syncMeta?.revision ?? 0,
+            syncMeta?.baseOptions ?? []
+        );
     });
 }
 
 export async function replaceProposalOptionsCache(
     clientId: number,
     options: ProposalOption[],
-    syncStatus: 'synced' | 'pending' | 'error' = 'synced'
+    syncStatus: 'synced' | 'pending' | 'error' = 'synced',
+    revision = 0
 ): Promise<void> {
     const now = Date.now();
 
-    await offlineDb.transaction('rw', offlineDb.proposalOptions, async () => {
+    await offlineDb.transaction('rw', offlineDb.proposalOptions, offlineDb.proposalSyncMeta, async () => {
         const existingOptions = await getProposalOptionsLocal(clientId);
         for (const opt of existingOptions) {
             await offlineDb.proposalOptions.delete(opt._localId!);
@@ -556,6 +632,15 @@ export async function replaceProposalOptionsCache(
             };
 
             await offlineDb.proposalOptions.put(localOption);
+        }
+
+        if (syncStatus === 'synced') {
+            await offlineDb.proposalSyncMeta.put({
+                clientId,
+                revision,
+                baseOptions: options,
+                lastSyncedAt: now
+            });
         }
     });
 }
@@ -1029,6 +1114,7 @@ export async function clearAllLocalData(): Promise<void> {
     await offlineDb.savedPdfs.clear();
     await offlineDb.agendamentos.clear();
     await offlineDb.proposalOptions.clear();
+    await offlineDb.proposalSyncMeta.clear();
     await offlineDb.standaloneExpenses.clear();
     await offlineDb.syncQueue.clear();
 }
@@ -1153,7 +1239,16 @@ export async function markAsSynced(table: string, localId: string, remoteId?: nu
     }
 }
 
-export async function markProposalOptionsAsSynced(clientId: number): Promise<void> {
+export async function markProposalOptionsAsSynced(
+    clientId: number,
+    syncedOptions?: ProposalOption[],
+    revision?: number
+): Promise<void> {
+    if (syncedOptions && Number.isFinite(revision)) {
+        await replaceProposalOptionsCache(clientId, syncedOptions, 'synced', revision);
+        return;
+    }
+
     const now = Date.now();
 
     const options = await getProposalOptionsLocal(clientId);

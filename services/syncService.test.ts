@@ -332,9 +332,81 @@ describe('syncService', () => {
 
     await syncAllPending();
 
-    expect(saveProposalOptionsRemoteMock).toHaveBeenCalledWith(15, queueItem.data.options);
-    expect(markProposalOptionsAsSyncedMock).toHaveBeenCalledWith(15);
+    expect(saveProposalOptionsRemoteMock).toHaveBeenCalledWith(15, queueItem.data.options, {
+      baseRevision: 0,
+      baseOptions: [],
+      deviceId: 'unknown-device',
+      operations: undefined
+    });
+    expect(markProposalOptionsAsSyncedMock).toHaveBeenCalledWith(15, queueItem.data.options, 1);
     expect(deleteMock).toHaveBeenCalledWith(6);
+  });
+
+  it('nao remove uma gravacao mais nova que entrou na fila durante o sync', async () => {
+    const queueItem = {
+      id: 60,
+      table: 'proposalOptions',
+      action: 'update',
+      data: {
+        clientId: 15,
+        options: [{ id: 1, name: 'Opcao antiga', measurements: [], generalDiscount: { value: '', type: 'percentage' } }],
+        syncToken: 'old-token'
+      },
+      timestamp: 100,
+      status: 'pending',
+      retryCount: 0
+    };
+    const newerQueueItem = {
+      ...queueItem,
+      data: {
+        ...queueItem.data,
+        options: [{ id: 1, name: 'Opcao nova', measurements: [{ id: 99 }], generalDiscount: { value: '', type: 'percentage' } }],
+        syncToken: 'new-token'
+      },
+      timestamp: 200
+    };
+    const deleteMock = vi.fn();
+    const markProposalOptionsAsSyncedMock = vi.fn();
+
+    vi.doMock('./offlineDb', () => ({
+      offlineDb: {
+        syncQueue: {
+          orderBy: vi.fn(() => ({ toArray: vi.fn().mockResolvedValue([queueItem]) })),
+          get: vi.fn().mockResolvedValue(newerQueueItem),
+          delete: deleteMock
+        }
+      },
+      getFailedSyncItems: vi.fn().mockResolvedValue([]),
+      getFailedSyncCount: vi.fn().mockResolvedValue(0),
+      getPendingSyncCount: vi.fn().mockResolvedValue(1),
+      markSyncItemError: vi.fn(),
+      markSyncItemPending: vi.fn(),
+      markAsSynced: vi.fn(),
+      markProposalOptionsAsSynced: markProposalOptionsAsSyncedMock
+    }));
+
+    vi.doMock('./supabaseDb', () => ({
+      saveClientRemote: vi.fn(),
+      deleteClientRemote: vi.fn(),
+      saveCustomFilmRemote: vi.fn(),
+      deleteCustomFilmRemote: vi.fn(),
+      saveUserInfoRemote: vi.fn(),
+      saveProposalOptionsRemote: vi.fn().mockResolvedValue({
+        options: queueItem.data.options,
+        revision: 2,
+        conflictResolved: false,
+        preservedConflicts: 0
+      }),
+      savePDFRemote: vi.fn(),
+      saveAgendamentoRemote: vi.fn(),
+      deleteAgendamentoRemote: vi.fn()
+    }));
+
+    const { syncAllPending } = await import('./syncService');
+    await syncAllPending();
+
+    expect(deleteMock).not.toHaveBeenCalled();
+    expect(markProposalOptionsAsSyncedMock).not.toHaveBeenCalled();
   });
 
   it('sincroniza cliente temporario antes das opcoes de proposta', async () => {
@@ -412,9 +484,13 @@ describe('syncService', () => {
     expect(saveClientRemoteMock).toHaveBeenCalledWith(expect.objectContaining({
       nome: 'Cliente Mobile'
     }));
-    expect(saveProposalOptionsRemoteMock).toHaveBeenCalledWith(77, queueItem.data.options);
+    expect(saveProposalOptionsRemoteMock).toHaveBeenCalledWith(77, queueItem.data.options, {
+      baseRevision: 0,
+      baseOptions: [],
+      deviceId: 'unknown-device'
+    });
     expect(markAsSyncedMock).toHaveBeenCalledWith('clients', 'client_mobile_options', 77);
-    expect(markProposalOptionsAsSyncedMock).toHaveBeenCalledWith(temporaryClientId);
+    expect(markProposalOptionsAsSyncedMock).toHaveBeenCalledWith(temporaryClientId, queueItem.data.options, 1);
     expect(deleteMock).toHaveBeenCalledWith(16);
   });
 

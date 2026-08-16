@@ -10,7 +10,7 @@ import { Client, Measurement, UserInfo, Film, PaymentMethods, SavedPDF, Agendame
 import * as supabaseDb from './supabaseDb';
 import * as offlineDb from './offlineDb';
 import { normalizeFilmForPersistence } from '../src/lib/filmPersistence';
-import { isOnlineNow, syncAllPending } from './syncService';
+import { isOnlineNow, refreshSyncStatus, syncAllPending } from './syncService';
 
 const POSTGRES_INTEGER_MAX = 2147483647;
 
@@ -425,11 +425,11 @@ export async function getProposalOptions(clientId: number): Promise<ProposalOpti
                 return normalizedLocalOptions;
             }
 
-            const options = await supabaseDb.getProposalOptions(clientId);
+            const snapshot = await supabaseDb.getProposalOptionsSnapshot(clientId);
 
-            await offlineDb.replaceProposalOptionsCache(clientId, options, 'synced');
+            await offlineDb.replaceProposalOptionsCache(clientId, snapshot.options, 'synced', snapshot.revision);
 
-            return options;
+            return snapshot.options;
         } else {
             return normalizedLocalOptions;
         }
@@ -442,6 +442,7 @@ export async function getProposalOptions(clientId: number): Promise<ProposalOpti
 
 export async function saveProposalOptions(clientId: number, options: ProposalOption[]): Promise<void> {
     await offlineDb.saveProposalOptionsLocal(clientId, options);
+    await refreshSyncStatus();
 
     if (isOnlineNow()) {
         syncAllPending().catch(console.error);

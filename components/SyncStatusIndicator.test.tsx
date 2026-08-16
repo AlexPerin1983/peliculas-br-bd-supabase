@@ -157,8 +157,9 @@ describe('SyncStatusIndicator', () => {
 
     render(<SyncStatusIndicator />);
 
-    fireEvent.click(screen.getByRole('button', { name: /offline/i }));
+    fireEvent.click(screen.getByRole('button', { name: /salvo no celular/i }));
 
+    expect(screen.getByRole('button', { name: /salvo no celular/i })).toBeInTheDocument();
     expect(screen.getAllByText('Offline')[0]).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /sincronizar agora/i })).not.toBeInTheDocument();
   });

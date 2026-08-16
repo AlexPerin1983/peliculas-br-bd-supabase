@@ -336,6 +336,22 @@ const App: React.FC = () => {
             localStorage.setItem('peliculas-br-selected-client-id', String(selectedClientId));
         }
     }, [selectedClientId]);
+
+    useEffect(() => {
+        const handleProposalConflictResolved = (event: Event) => {
+            const detail = (event as CustomEvent<{ preservedConflicts?: number }>).detail;
+            const preserved = detail?.preservedConflicts ?? 0;
+            showToast(
+                preserved > 0
+                    ? `Conflito entre aparelhos resolvido: ${preserved} medida${preserved === 1 ? '' : 's'} preservada${preserved === 1 ? '' : 's'} em duas versões.`
+                    : 'Alterações feitas em outro aparelho foram combinadas com estas medidas.',
+                { tone: 'warning', duration: 7000 }
+            );
+        };
+
+        window.addEventListener('proposal-sync-conflict-resolved', handleProposalConflictResolved);
+        return () => window.removeEventListener('proposal-sync-conflict-resolved', handleProposalConflictResolved);
+    }, [showToast]);
     const [hasLoadedHistory, setHasLoadedHistory] = useState(false);
     const [hasLoadedAgendamentos, setHasLoadedAgendamentos] = useState(false);
     const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
