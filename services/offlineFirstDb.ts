@@ -464,6 +464,18 @@ const hasPendingProposalOptionsForClient = async (clientId: number): Promise<boo
     return queueItems.some(item => item.data?.clientId === clientId);
 };
 
+const waitForProposalOptionsSync = async (clientId: number, timeoutMs = 8000): Promise<boolean> => {
+    const deadline = Date.now() + timeoutMs;
+
+    do {
+        await syncAllPending({ force: true });
+        if (!await hasPendingProposalOptionsForClient(clientId)) return true;
+        await new Promise(resolve => setTimeout(resolve, 200));
+    } while (Date.now() < deadline);
+
+    return false;
+};
+
 export async function getProposalOptionsHistory(
     clientId: number,
     limit = 30
@@ -472,8 +484,7 @@ export async function getProposalOptionsHistory(
         throw new Error('Conecte-se à internet para consultar o histórico salvo no servidor.');
     }
 
-    await syncAllPending({ force: true });
-    if (await hasPendingProposalOptionsForClient(clientId)) {
+    if (!await waitForProposalOptionsSync(clientId)) {
         throw new Error('Ainda existem medidas deste cliente aguardando sincronização. Aguarde o status confirmar "Salvo" e tente novamente.');
     }
 
@@ -493,8 +504,7 @@ export async function restoreProposalOptionsVersion(
         throw new Error('Conecte-se à internet para restaurar uma versão com segurança.');
     }
 
-    await syncAllPending({ force: true });
-    if (await hasPendingProposalOptionsForClient(clientId)) {
+    if (!await waitForProposalOptionsSync(clientId)) {
         throw new Error('Ainda existem alterações aguardando sincronização. Aguarde o status confirmar "Salvo" antes de restaurar.');
     }
 

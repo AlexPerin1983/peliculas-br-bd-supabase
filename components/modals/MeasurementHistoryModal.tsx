@@ -44,6 +44,21 @@ const getVersionTotals = (options: ProposalOption[]) => {
     };
 };
 
+const getVisibleCheckpointKey = (entry: ProposalOptionsHistoryEntry): string => {
+    const totals = getVersionTotals(entry.options);
+    return [totals.groups, totals.pieces, totals.area.toFixed(4)].join(':');
+};
+
+/**
+ * Oculta somente salvamentos consecutivos com o mesmo resumo visível. As
+ * revisões continuam intactas no Supabase e podem ser exibidas pelo usuário.
+ */
+export const consolidateMeasurementHistory = (
+    entries: ProposalOptionsHistoryEntry[]
+): ProposalOptionsHistoryEntry[] => entries.filter((entry, index) => (
+    index === 0 || getVisibleCheckpointKey(entry) !== getVisibleCheckpointKey(entries[index - 1])
+));
+
 const getDeviceLabel = (entry: ProposalOptionsHistoryEntry): string => {
     if (entry.isCurrentDevice) return 'Este aparelho';
     if (entry.sourceDeviceId === 'migration') return 'Dados anteriores';
@@ -69,6 +84,7 @@ const MeasurementHistoryModal: React.FC<MeasurementHistoryModalProps> = ({
     const [expandedRevision, setExpandedRevision] = useState<number | null>(null);
     const [selectedEntry, setSelectedEntry] = useState<ProposalOptionsHistoryEntry | null>(null);
     const [isRestoring, setIsRestoring] = useState(false);
+    const [showAllVersions, setShowAllVersions] = useState(false);
 
     const loadHistory = useCallback(async () => {
         setIsLoading(true);
@@ -89,6 +105,7 @@ const MeasurementHistoryModal: React.FC<MeasurementHistoryModalProps> = ({
     useEffect(() => {
         if (!isOpen) {
             setSelectedEntry(null);
+            setShowAllVersions(false);
             return;
         }
 
@@ -96,6 +113,9 @@ const MeasurementHistoryModal: React.FC<MeasurementHistoryModalProps> = ({
     }, [isOpen, loadHistory]);
 
     const currentRevision = entries[0]?.revision ?? null;
+    const consolidatedEntries = useMemo(() => consolidateMeasurementHistory(entries), [entries]);
+    const visibleEntries = showAllVersions ? entries : consolidatedEntries;
+    const hiddenVersionsCount = entries.length - consolidatedEntries.length;
     const selectedTotals = useMemo(
         () => selectedEntry ? getVersionTotals(selectedEntry.options) : null,
         [selectedEntry]
@@ -177,7 +197,24 @@ const MeasurementHistoryModal: React.FC<MeasurementHistoryModalProps> = ({
 
                     {!isLoading && !error && entries.length > 0 && (
                         <div className="space-y-3" aria-label="Versões salvas das medidas">
-                            {entries.map(entry => {
+                            <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+                                <p className="text-xs font-semibold text-[var(--text-muted)]">
+                                    {showAllVersions
+                                        ? `${entries.length} salvamentos protegidos`
+                                        : `${consolidatedEntries.length} pontos principais · ${entries.length} salvamentos protegidos`}
+                                </p>
+                                {hiddenVersionsCount > 0 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowAllVersions(current => !current)}
+                                        className="text-xs font-bold text-[var(--brand-primary)] hover:underline"
+                                    >
+                                        {showAllVersions ? 'Mostrar pontos principais' : `Mostrar todos (${entries.length})`}
+                                    </button>
+                                )}
+                            </div>
+
+                            {visibleEntries.map(entry => {
                                 const totals = getVersionTotals(entry.options);
                                 const isCurrent = entry.revision === currentRevision;
                                 const isExpanded = entry.revision === expandedRevision;

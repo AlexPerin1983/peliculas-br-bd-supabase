@@ -1354,6 +1354,24 @@ const App: React.FC = () => {
         }
     }, [applyRestoredProposalOptions, loadClients, selectedClientId, showToast]);
 
+    const handleOpenMeasurementHistory = useCallback(async () => {
+        try {
+            // A tela pode estar dentro da janela de autosave. Confirma o estado
+            // visível antes de consultar o servidor para que o selo "Atual"
+            // corresponda exatamente ao que o usuário acabou de editar.
+            if (isDirty) {
+                await handleSaveChanges();
+            }
+            setIsMeasurementHistoryOpen(true);
+        } catch (error) {
+            console.error('Erro ao preparar o histórico de medidas:', error);
+            showToast('Não foi possível salvar as alterações atuais antes de abrir o histórico.', {
+                tone: 'error',
+                duration: 4200
+            });
+        }
+    }, [handleSaveChanges, isDirty, showToast]);
+
     const handleToggleClientPinForCurrentData = useCallback(async (clientId: number) => {
         if (hasLoadedAllClients) {
             await handleToggleClientPin(clientId);
@@ -2884,7 +2902,7 @@ Use somente o JSON definido e não inclua explicações fora dele.`;
             onDeleteMeasurement={handleDeleteMeasurementFromGroup}
             onDeleteMeasurementImmediate={handleImmediateDeleteMeasurement}
             onPasteCopiedMeasurements={handlePasteCopiedMeasurements}
-            onOpenMeasurementHistory={() => setIsMeasurementHistoryOpen(true)}
+            onOpenMeasurementHistory={() => { void handleOpenMeasurementHistory(); }}
             onTogglePin={handleToggleClientPinForCurrentData}
             onAddNewClient={handleAddNewClientFromSelection}
             isClientsLoading={isLoading}
