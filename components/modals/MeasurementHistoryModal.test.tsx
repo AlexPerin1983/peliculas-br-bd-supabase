@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import MeasurementHistoryModal from './MeasurementHistoryModal';
+import MeasurementHistoryModal, { consolidateMeasurementHistory } from './MeasurementHistoryModal';
 import * as db from '../../services/db';
 
 vi.mock('../../services/db', () => ({
@@ -89,5 +89,29 @@ describe('MeasurementHistoryModal', () => {
         });
         expect(onRestored).toHaveBeenCalledWith(recoveredOptions);
         expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('consolida salvamentos consecutivos com o mesmo resumo sem apagar revisoes', () => {
+        const baseEntry = {
+            id: 4,
+            clientId: 44,
+            revision: 4,
+            options: recoveredOptions,
+            createdAt: '2026-08-16T14:04:00.000Z',
+            createdBy: 'user-1',
+            sourceDeviceId: 'device-a',
+            isCurrentDevice: true
+        };
+        const history = [
+            baseEntry,
+            { ...baseEntry, id: 3, revision: 3, createdAt: '2026-08-16T14:03:00.000Z' },
+            { ...baseEntry, id: 2, revision: 2, options: currentOptions, createdAt: '2026-08-16T14:02:00.000Z' },
+            { ...baseEntry, id: 1, revision: 1, options: currentOptions, createdAt: '2026-08-16T14:01:00.000Z' }
+        ];
+
+        const consolidated = consolidateMeasurementHistory(history);
+
+        expect(history).toHaveLength(4);
+        expect(consolidated.map(entry => entry.revision)).toEqual([4, 2]);
     });
 });
