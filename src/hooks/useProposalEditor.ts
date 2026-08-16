@@ -357,6 +357,22 @@ export function useProposalEditor({
         handleMeasurementsChange([]);
     }, [handleMeasurementsChange]);
 
+    const applyRestoredProposalOptions = useCallback((restoredOptions: ProposalOption[]) => {
+        if (!selectedClientId || loadedClientIdRef.current !== selectedClientId) {
+            throw new Error('Aguarde o cliente terminar de carregar antes de restaurar as medidas.');
+        }
+
+        const normalizedOptions = restoredOptions.map(option => ({
+            ...option,
+            generalDiscount: normalizeGeneralDiscount(option.generalDiscount)
+        }));
+
+        proposalOptionsRef.current = normalizedOptions;
+        setProposalOptions(normalizedOptions);
+        setActiveOptionId(normalizedOptions[0]?.id ?? null);
+        setIsDirty(false);
+    }, [selectedClientId]);
+
     return {
         proposalOptions,
         activeOptionId,
@@ -378,6 +394,7 @@ export function useProposalEditor({
         renameProposalOption,
         deleteProposalOption,
         clearMeasurements,
+        applyRestoredProposalOptions,
         updateActiveOption
     };
 }

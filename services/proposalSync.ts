@@ -5,6 +5,17 @@ export interface ProposalOptionsSnapshot {
     revision: number;
 }
 
+export interface ProposalOptionsHistoryEntry {
+    id: number;
+    clientId: number;
+    revision: number;
+    options: ProposalOption[];
+    createdAt: string;
+    createdBy: string | null;
+    sourceDeviceId: string | null;
+    isCurrentDevice: boolean;
+}
+
 export interface ProposalOptionsSaveContext {
     baseRevision: number;
     baseOptions: ProposalOption[];

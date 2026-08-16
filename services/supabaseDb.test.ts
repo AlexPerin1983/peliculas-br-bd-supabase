@@ -263,6 +263,43 @@ describe('supabaseDb PDF updates', () => {
     expect(result.nextOffset).toBe(2);
   });
 
+  it('lista o historico imutavel das medidas da versao mais recente para a mais antiga', async () => {
+    const limitMock = vi.fn().mockResolvedValue({
+      data: [
+        {
+          id: 12,
+          client_id: 44,
+          revision: 3,
+          snapshot: [{ id: 9, name: 'Opcao 1', measurements: [], generalDiscount: { value: '', type: 'fixed' } }],
+          created_at: '2026-08-16T12:00:00.000Z',
+          created_by: 'user-1',
+          source_device_id: 'device-b'
+        }
+      ],
+      error: null
+    });
+    const orderMock = vi.fn().mockReturnValue({ limit: limitMock });
+    const historyEqMock = vi.fn().mockReturnValue({ order: orderMock });
+    const historySelectMock = vi.fn().mockReturnValue({ eq: historyEqMock });
+    fromMock.mockReturnValue({ select: historySelectMock });
+
+    const { getProposalOptionsHistory } = await import('./supabaseDb');
+    const result = await getProposalOptionsHistory(44, 10);
+
+    expect(fromMock).toHaveBeenCalledWith('proposal_option_history');
+    expect(historyEqMock).toHaveBeenCalledWith('client_id', 44);
+    expect(orderMock).toHaveBeenCalledWith('revision', { ascending: false });
+    expect(limitMock).toHaveBeenCalledWith(10);
+    expect(result).toEqual([
+      expect.objectContaining({
+        id: 12,
+        clientId: 44,
+        revision: 3,
+        sourceDeviceId: 'device-b'
+      })
+    ]);
+  });
+
   it('pagina clientes recentes e informa quando existe outra pagina', async () => {
     const rangeMock = vi.fn().mockResolvedValue({
       data: [

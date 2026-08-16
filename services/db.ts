@@ -18,7 +18,9 @@ export {
 
     // Proposal Options functions
     getProposalOptions,
+    getProposalOptionsHistory,
     saveProposalOptions,
+    restoreProposalOptionsVersion,
     deleteProposalOptions,
 
     // UserInfo functions

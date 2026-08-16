@@ -105,7 +105,8 @@ describe('AppContentRouter', () => {
     onOpenEditModal: vi.fn(),
     onOpenDiscountModal: vi.fn(),
     onDeleteMeasurement: vi.fn(),
-    onDeleteMeasurementImmediate: vi.fn()
+    onDeleteMeasurementImmediate: vi.fn(),
+    onOpenMeasurementHistory: vi.fn()
   };
 
   it('mostra estado vazio de clientes e permite abrir cadastro', () => {
@@ -131,7 +132,21 @@ describe('AppContentRouter', () => {
     expect(screen.getByText('Adicione a primeira medida')).toBeInTheDocument();
     expect(screen.getByText(/Registre largura, altura, quantidade e pel[ií]cula/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Adicionar Medida/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Histórico de Medidas/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Buscar por Localizacao/i })).not.toBeInTheDocument();
+  });
+
+  it('abre o historico mesmo quando a lista atual de medidas esta vazia', () => {
+    render(
+      <AppContentRouter
+        {...baseProps}
+        clients={[{ id: 1, nome: 'Cliente' } as any]}
+        selectedClientId={1}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Histórico de Medidas/i }));
+    expect(baseProps.onOpenMeasurementHistory).toHaveBeenCalledTimes(1);
   });
 
 });

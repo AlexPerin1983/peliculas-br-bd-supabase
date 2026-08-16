@@ -70,6 +70,7 @@ import {
 const PaymentMethodsModal = lazy(() => import('./components/modals/PaymentMethodsModal'));
 const ProposalExpensesModal = lazy(() => import('./components/modals/ProposalExpensesModal'));
 const LocationImportModal = lazy(() => import('./components/modals/LocationImportModal'));
+const MeasurementHistoryModal = lazy(() => import('./components/modals/MeasurementHistoryModal'));
 
 
 type ActiveTab = PersistedAppTab;
@@ -480,6 +481,7 @@ const App: React.FC = () => {
     const [isDeleteProposalOptionModalOpen, setIsDeleteProposalOptionModalOpen] = useState(false);
     const [proposalOptionToDeleteId, setProposalOptionToDeleteId] = useState<number | null>(null);
     const [isDeletingProposalOption, setIsDeletingProposalOption] = useState(false);
+    const [isMeasurementHistoryOpen, setIsMeasurementHistoryOpen] = useState(false);
 
     // Estados para modais de upgrade de módulos premium
     const [showQrUpgradeModal, setShowQrUpgradeModal] = useState(false);
@@ -942,7 +944,8 @@ const App: React.FC = () => {
         addProposalOption,
         renameProposalOption,
         deleteProposalOption,
-        clearMeasurements
+        clearMeasurements,
+        applyRestoredProposalOptions
     } = useProposalEditor({
         selectedClientId,
         films,
@@ -1340,6 +1343,16 @@ const App: React.FC = () => {
         handleOpenAgendamentoModal,
         handleShowInfo
     });
+
+    const handleMeasurementHistoryRestored = useCallback(async (restoredOptions: ProposalOption[]) => {
+        applyRestoredProposalOptions(restoredOptions);
+        showToast('Versão restaurada e salva com segurança.', { tone: 'success', duration: 3200 });
+        if (selectedClientId) {
+            void loadClients(selectedClientId, false).catch(error => {
+                console.error('Erro ao atualizar cliente após restaurar medidas:', error);
+            });
+        }
+    }, [applyRestoredProposalOptions, loadClients, selectedClientId, showToast]);
 
     const handleToggleClientPinForCurrentData = useCallback(async (clientId: number) => {
         if (hasLoadedAllClients) {
@@ -2871,6 +2884,7 @@ Use somente o JSON definido e não inclua explicações fora dele.`;
             onDeleteMeasurement={handleDeleteMeasurementFromGroup}
             onDeleteMeasurementImmediate={handleImmediateDeleteMeasurement}
             onPasteCopiedMeasurements={handlePasteCopiedMeasurements}
+            onOpenMeasurementHistory={() => setIsMeasurementHistoryOpen(true)}
             onTogglePin={handleToggleClientPinForCurrentData}
             onAddNewClient={handleAddNewClientFromSelection}
             isClientsLoading={isLoading}
@@ -3216,6 +3230,17 @@ Use somente o JSON definido e não inclua explicações fora dele.`;
                       )}
 
                       <ModalsContainer {...modalProps} />
+                      {isMeasurementHistoryOpen && selectedClientId && (
+                          <Suspense fallback={null}>
+                              <MeasurementHistoryModal
+                                  isOpen
+                                  clientId={selectedClientId}
+                                  clientName={selectedClient?.nome}
+                                  onClose={() => setIsMeasurementHistoryOpen(false)}
+                                  onRestored={handleMeasurementHistoryRestored}
+                              />
+                          </Suspense>
+                      )}
                       {billingReturnState && (
                           <BillingReturnModal
                               isOpen={isBillingReturnVisible}

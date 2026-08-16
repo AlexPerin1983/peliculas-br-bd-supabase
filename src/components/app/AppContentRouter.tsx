@@ -1,5 +1,5 @@
 import React, { ReactNode, Suspense, lazy } from 'react';
-import { Bolt, ClipboardPaste, Plus, Ruler, Sparkles, UserCheck, Users } from 'lucide-react';
+import { Bolt, ClipboardPaste, History, Plus, Ruler, Sparkles, UserCheck, Users } from 'lucide-react';
 import { Client, Film, Agendamento, AgendamentoServiceStatus, AgendamentoStockStatus, ProposalOption, ProposalPricingMode, SavedPDF, UserInfo, UIMeasurement } from '../../../types';
 import { ServiceStockConsumptionInput } from '../../../services/estoqueDb';
 import { FeatureGate } from '../../../components/subscription/SubscriptionComponents';
@@ -157,6 +157,7 @@ interface AppContentRouterProps {
     onDeleteMeasurement: (measurementId: number) => void;
     onDeleteMeasurementImmediate: (id: number) => void;
     onPasteCopiedMeasurements?: () => void | Promise<void>;
+    onOpenMeasurementHistory?: () => void;
     onTogglePin?: (id: number) => void;
     onAddNewClient?: (clientName: string) => void;
     isClientsLoading?: boolean;
@@ -254,6 +255,7 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
     onDeleteMeasurement,
     onDeleteMeasurementImmediate,
     onPasteCopiedMeasurements,
+    onOpenMeasurementHistory,
     onTogglePin,
     onAddNewClient,
     isClientsLoading = false
@@ -557,6 +559,7 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
                 onDeleteMeasurement={onDeleteMeasurement}
                 onDeleteMeasurementImmediate={onDeleteMeasurementImmediate}
                 onPasteCopiedMeasurements={onPasteCopiedMeasurements}
+                onOpenMeasurementHistory={onOpenMeasurementHistory}
                 totalM2={totals.totalM2}
                 totalQuantity={totals.totalQuantity}
                 proposalOptionsSlot={mobileProposalOptionsSlot}
@@ -595,6 +598,16 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
                                     icon={<ClipboardPaste className="h-4 w-4" aria-hidden="true" />}
                                 >
                                     Colar {copiedMeasurementsCount === 1 ? '1 Medida' : `${copiedMeasurementsCount} Medidas`}
+                                </ActionButton>
+                            )}
+                            {onOpenMeasurementHistory && (
+                                <ActionButton
+                                    onClick={onOpenMeasurementHistory}
+                                    variant="secondary"
+                                    size="lg"
+                                    icon={<History className="h-4 w-4" aria-hidden="true" />}
+                                >
+                                    Histórico de Medidas
                                 </ActionButton>
                             )}
                         </div>
