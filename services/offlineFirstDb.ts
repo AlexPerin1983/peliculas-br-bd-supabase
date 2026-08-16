@@ -11,6 +11,7 @@ import * as supabaseDb from './supabaseDb';
 import * as offlineDb from './offlineDb';
 import { normalizeFilmForPersistence } from '../src/lib/filmPersistence';
 import { isOnlineNow, refreshSyncStatus, syncAllPending } from './syncService';
+import { ProposalOptionsHistoryEntry } from './proposalSync';
 
 const POSTGRES_INTEGER_MAX = 2147483647;
 
@@ -447,6 +448,66 @@ export async function saveProposalOptions(clientId: number, options: ProposalOpt
     if (isOnlineNow()) {
         syncAllPending().catch(console.error);
     }
+}
+
+const hasPendingProposalOptionsForClient = async (clientId: number): Promise<boolean> => {
+    const localOptions = await offlineDb.getProposalOptionsLocal(clientId);
+    if (localOptions.some(option => option._syncStatus === 'pending' || option._syncStatus === 'error')) {
+        return true;
+    }
+
+    const queueItems = await offlineDb.offlineDb.syncQueue
+        .where('table')
+        .equals('proposalOptions')
+        .toArray();
+
+    return queueItems.some(item => item.data?.clientId === clientId);
+};
+
+export async function getProposalOptionsHistory(
+    clientId: number,
+    limit = 30
+): Promise<ProposalOptionsHistoryEntry[]> {
+    if (!isOnlineNow()) {
+        throw new Error('Conecte-se à internet para consultar o histórico salvo no servidor.');
+    }
+
+    await syncAllPending({ force: true });
+    if (await hasPendingProposalOptionsForClient(clientId)) {
+        throw new Error('Ainda existem medidas deste cliente aguardando sincronização. Aguarde o status confirmar "Salvo" e tente novamente.');
+    }
+
+    const deviceId = offlineDb.getSyncDeviceId();
+    const history = await supabaseDb.getProposalOptionsHistory(clientId, limit);
+    return history.map(entry => ({
+        ...entry,
+        isCurrentDevice: entry.sourceDeviceId === deviceId
+    }));
+}
+
+export async function restoreProposalOptionsVersion(
+    clientId: number,
+    targetOptions: ProposalOption[]
+): Promise<ProposalOption[]> {
+    if (!isOnlineNow()) {
+        throw new Error('Conecte-se à internet para restaurar uma versão com segurança.');
+    }
+
+    await syncAllPending({ force: true });
+    if (await hasPendingProposalOptionsForClient(clientId)) {
+        throw new Error('Ainda existem alterações aguardando sincronização. Aguarde o status confirmar "Salvo" antes de restaurar.');
+    }
+
+    const current = await supabaseDb.getProposalOptionsSnapshot(clientId);
+    const restored = await supabaseDb.saveProposalOptionsRemote(clientId, targetOptions, {
+        baseRevision: current.revision,
+        baseOptions: current.options,
+        deviceId: offlineDb.getSyncDeviceId()
+    });
+
+    await offlineDb.replaceProposalOptionsCache(clientId, restored.options, 'synced', restored.revision);
+    await refreshSyncStatus();
+    return restored.options;
 }
 
 export async function deleteProposalOptions(clientId: number): Promise<void> {

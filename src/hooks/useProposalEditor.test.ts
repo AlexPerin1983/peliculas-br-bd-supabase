@@ -81,6 +81,33 @@ describe('useProposalEditor', () => {
     });
   });
 
+  it('aplica a versao restaurada sem disparar um segundo autosave', async () => {
+    mockedDb.getProposalOptions.mockResolvedValue([{
+      id: 50,
+      name: 'Atual',
+      measurements: [],
+      generalDiscount: { value: '', type: 'fixed' }
+    }]);
+
+    const { result } = buildHook();
+    await act(async () => {});
+
+    act(() => {
+      result.current.applyRestoredProposalOptions([{
+        id: 11,
+        name: 'Recuperada',
+        measurements: [{ id: 4, largura: '1', altura: '2', quantidade: 3 } as any],
+        generalDiscount: { value: '5', type: 'percentage' }
+      }]);
+    });
+
+    expect(result.current.activeOptionId).toBe(11);
+    expect(result.current.activeOption?.name).toBe('Recuperada');
+    expect(result.current.measurements).toHaveLength(1);
+    expect(result.current.isDirty).toBe(false);
+    expect(mockedDb.saveProposalOptions).not.toHaveBeenCalled();
+  });
+
   it('adiciona medida usando a pelicula padrao disponivel', async () => {
     mockedDb.getProposalOptions.mockResolvedValue([]);
 

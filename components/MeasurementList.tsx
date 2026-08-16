@@ -1,6 +1,6 @@
 ﻿import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { MobileActionsDrawer } from './MobileActionsDrawer';
-import { CheckSquare, ChevronDown, ChevronUp, ClipboardCheck, ClipboardPaste, Copy, Layers3, Trash2, X } from 'lucide-react';
+import { CheckSquare, ChevronDown, ChevronUp, ClipboardCheck, ClipboardPaste, Copy, History, Layers3, Trash2, X } from 'lucide-react';
 import { useMemo } from 'react';
 import { Measurement, Film, ProposalPricingMode, Retalho, UIMeasurement } from '../types';
 import MeasurementGroup from './MeasurementGroup';
@@ -87,6 +87,7 @@ interface MeasurementListProps {
     optionId?: number;
     onDeleteMeasurementImmediate: (id: number) => void;
     onPasteCopiedMeasurements?: () => void | Promise<void>;
+    onOpenMeasurementHistory?: () => void;
     proposalOptionsSlot?: React.ReactNode;
 }
 
@@ -113,6 +114,7 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
     clientId,
     onOpenFilmSelectionModal,
     onPasteCopiedMeasurements,
+    onOpenMeasurementHistory,
     proposalOptionsSlot
 }) => {
     const { showToast } = useFeedback();
@@ -771,6 +773,13 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
                                             icon={<ClipboardCheck className="h-4 w-4" aria-hidden="true" />}
                                             label="Progresso de Aplicacao"
                                         />
+                                        {onOpenMeasurementHistory && (
+                                            <ActionMenuItem
+                                                onClick={onOpenMeasurementHistory}
+                                                icon={<History className="h-4 w-4" aria-hidden="true" />}
+                                                label="Histórico de Medidas"
+                                            />
+                                        )}
                                         <ActionMenuItem
                                             onClick={onOpenApplyFilmToAllModal}
                                             icon={<Layers3 className="h-4 w-4" aria-hidden="true" />}
@@ -923,6 +932,25 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
                                         </div>
                                         <i className="fas fa-chevron-right text-slate-300 text-xs"></i>
                                     </button>
+
+                                    {onOpenMeasurementHistory && (
+                                        <button
+                                            onClick={() => {
+                                                onOpenMeasurementHistory();
+                                                setIsMobileMenuOpen(false);
+                                            }}
+                                            className="w-full flex items-center gap-4 px-4 py-4 text-left transition-colors active:bg-slate-100 dark:active:bg-slate-700 rounded-xl text-slate-700 dark:text-slate-200"
+                                        >
+                                            <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 bg-violet-50 dark:bg-violet-900/20">
+                                                <History className="h-5 w-5 text-violet-600 dark:text-violet-300" aria-hidden="true" />
+                                            </div>
+                                            <div className="flex-1">
+                                                <span className="font-semibold block text-base">Histórico de Medidas</span>
+                                                <span className="text-xs text-slate-500 dark:text-slate-400 block mt-0.5">Ver e recuperar versões salvas</span>
+                                            </div>
+                                            <i className="fas fa-chevron-right text-slate-300 text-xs"></i>
+                                        </button>
+                                    )}
 
                                     <button
                                         onClick={() => {

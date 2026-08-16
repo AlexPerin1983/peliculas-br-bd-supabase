@@ -9,7 +9,8 @@ import {
     mergeProposalOptions,
     ProposalOptionsSaveContext,
     ProposalOptionsSaveResult,
-    ProposalOptionsSnapshot
+    ProposalOptionsSnapshot,
+    ProposalOptionsHistoryEntry
 } from './proposalSync';
 import {
     getCurrentUserId as getSessionUserId,
@@ -260,6 +261,34 @@ export const getProposalOptionsSnapshot = async (clientId: number): Promise<Prop
 export const getProposalOptions = async (clientId: number): Promise<ProposalOption[]> => (
     (await getProposalOptionsSnapshot(clientId)).options
 );
+
+export const getProposalOptionsHistory = async (
+    clientId: number,
+    limit = 30
+): Promise<Omit<ProposalOptionsHistoryEntry, 'isCurrentDevice'>[]> => {
+    const userId = await getCurrentUserId();
+    if (!userId) throw new Error('Sessão expirada. Entre novamente para consultar o histórico.');
+
+    const safeLimit = Math.min(100, Math.max(1, Math.trunc(limit)));
+    const { data, error } = await supabase
+        .from('proposal_option_history')
+        .select('id, client_id, revision, snapshot, created_at, created_by, source_device_id')
+        .eq('client_id', clientId)
+        .order('revision', { ascending: false })
+        .limit(safeLimit);
+
+    if (error) throw error;
+
+    return (data || []).map(row => ({
+        id: Number(row.id),
+        clientId: Number(row.client_id),
+        revision: Number(row.revision) || 0,
+        options: Array.isArray(row.snapshot) ? row.snapshot as ProposalOption[] : [],
+        createdAt: row.created_at,
+        createdBy: row.created_by || null,
+        sourceDeviceId: row.source_device_id || null
+    }));
+};
 
 export const saveProposalOptions = async (clientId: number, options: ProposalOption[]): Promise<void> => {
     const snapshot = await getProposalOptionsSnapshot(clientId);

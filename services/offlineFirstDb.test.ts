@@ -145,6 +145,73 @@ describe('offlineFirstDb userInfo', () => {
       .toBeLessThan(refreshSyncStatusMock.mock.invocationCallOrder[0]);
   });
 
+  it('restaura uma versao como nova revisao e atualiza o cache confirmado', async () => {
+    const targetOptions = [{
+      id: 10,
+      name: 'Versao recuperada',
+      measurements: [{
+        id: 1,
+        largura: '1,20',
+        altura: '0,80',
+        quantidade: 2,
+        ambiente: 'Sala',
+        tipoAplicacao: 'Interna',
+        pelicula: 'Blackout',
+        active: true
+      }],
+      generalDiscount: { value: '', type: 'fixed' as const }
+    }];
+    const currentOptions = [{
+      id: 10,
+      name: 'Versao atual',
+      measurements: [],
+      generalDiscount: { value: '', type: 'fixed' as const }
+    }];
+    const replaceCacheMock = vi.fn().mockResolvedValue(undefined);
+    const saveRemoteMock = vi.fn().mockResolvedValue({
+      options: targetOptions,
+      revision: 8,
+      conflictResolved: false,
+      preservedConflicts: 0
+    });
+    const toArrayMock = vi.fn().mockResolvedValue([]);
+    const equalsMock = vi.fn().mockReturnValue({ toArray: toArrayMock });
+    const whereMock = vi.fn().mockReturnValue({ equals: equalsMock });
+    const syncAllPendingMock = vi.fn().mockResolvedValue(undefined);
+    const refreshSyncStatusMock = vi.fn().mockResolvedValue(undefined);
+
+    vi.doMock('./offlineDb', () => ({
+      getProposalOptionsLocal: vi.fn().mockResolvedValue([]),
+      getSyncDeviceId: vi.fn().mockReturnValue('device-a'),
+      replaceProposalOptionsCache: replaceCacheMock,
+      offlineDb: {
+        syncQueue: { where: whereMock }
+      }
+    }));
+    vi.doMock('./supabaseDb', () => ({
+      getProposalOptionsSnapshot: vi.fn().mockResolvedValue({ options: currentOptions, revision: 7 }),
+      saveProposalOptionsRemote: saveRemoteMock
+    }));
+    vi.doMock('./syncService', () => ({
+      isOnlineNow: vi.fn().mockReturnValue(true),
+      syncAllPending: syncAllPendingMock,
+      refreshSyncStatus: refreshSyncStatusMock
+    }));
+
+    const { restoreProposalOptionsVersion } = await import('./offlineFirstDb');
+    const result = await restoreProposalOptionsVersion(123, targetOptions);
+
+    expect(syncAllPendingMock).toHaveBeenCalledWith({ force: true });
+    expect(saveRemoteMock).toHaveBeenCalledWith(123, targetOptions, {
+      baseRevision: 7,
+      baseOptions: currentOptions,
+      deviceId: 'device-a'
+    });
+    expect(replaceCacheMock).toHaveBeenCalledWith(123, targetOptions, 'synced', 8);
+    expect(refreshSyncStatusMock).toHaveBeenCalledTimes(1);
+    expect(result).toEqual(targetOptions);
+  });
+
   it('mantem status local pendente de PDFs quando a leitura remota ainda esta atrasada', async () => {
     const syncAllPendingMock = vi.fn().mockResolvedValue(undefined);
     const remotePdf = {
