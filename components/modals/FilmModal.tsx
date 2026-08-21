@@ -359,7 +359,7 @@ const FilmModal: React.FC<FilmModalProps> = ({
                             />
                             <Input
                                 id="precoVendaMetroLinear"
-                                label="Venda por metro linear (R$)"
+                                label="Venda linear sem preço/m² (R$)"
                                 type="number"
                                 value={formData.precoVendaMetroLinear}
                                 onChange={handleChange}

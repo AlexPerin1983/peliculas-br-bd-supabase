@@ -188,7 +188,7 @@ export interface Film {
     nome: string;
     preco: number;
     precoMetroLinear?: number; // Custo por metro linear (usado para estimativa de margem)
-    precoVendaMetroLinear?: number; // Preço de VENDA por metro linear (usado no modo de cobrança por metro linear)
+    precoVendaMetroLinear?: number; // Fallback legado quando não há preço/m²; na proposta, a venda linear é convertida pela largura da bobina.
     maoDeObra?: number; // NOVO CAMPO: Valor fixo de mão de obra por m²
     garantiaFabricante?: number;
     garantiaMaoDeObra?: number;
@@ -353,6 +353,9 @@ export interface Totals {
             unitPriceLinearMeter: number;
             filmPricingMode: FilmPricingMode;
             unitSalePriceLinearMeter: number;
+            defaultUnitSalePriceLinearMeter: number;
+            rollWidthMeters: number;
+            linearSalePriceDefaultSource: 'converted' | 'catalog';
             linearSaleSubtotal: number;
             catalogUnitPriceMaterial: number;
             catalogUnitPriceLabor: number;

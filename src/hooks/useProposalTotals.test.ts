@@ -369,19 +369,22 @@ describe('useProposalTotals', () => {
     const linearMeters = result.current.totalLinearMeters;
     expect(linearMeters).toBeGreaterThan(0);
 
-    // Venda = preco de venda por metro linear x metros lineares (ignora preco/m2).
-    expect(result.current.subtotal).toBeCloseTo(linearMeters * 40);
+    // Sem override no orçamento, converte R$ 100/m² pela bobina padrão de 1,52 m.
+    expect(result.current.subtotal).toBeCloseTo(linearMeters * 152);
     // Desconto por item nao se aplica no modo linear.
     expect(result.current.totalItemDiscount).toBe(0);
-    expect(result.current.priceAfterItemDiscounts).toBeCloseTo(linearMeters * 40);
-    expect(result.current.finalTotal).toBeCloseTo(linearMeters * 40);
+    expect(result.current.priceAfterItemDiscounts).toBeCloseTo(linearMeters * 152);
+    expect(result.current.finalTotal).toBeCloseTo(linearMeters * 152);
     // Area continua sendo contabilizada para exibicao.
     expect(result.current.totalM2).toBeCloseTo(1);
     // Custo (margem) continua usando o custo por metro linear.
     expect(result.current.linearMeterCost).toBeCloseTo(linearMeters * 20);
     expect(result.current.groupedTotals?.Adesivo.filmPricingMode).toBe('linear');
-    expect(result.current.groupedTotals?.Adesivo.unitSalePriceLinearMeter).toBe(40);
-    expect(result.current.groupedTotals?.Adesivo.linearSaleSubtotal).toBeCloseTo(linearMeters * 40);
+    expect(result.current.groupedTotals?.Adesivo.unitSalePriceLinearMeter).toBe(152);
+    expect(result.current.groupedTotals?.Adesivo.defaultUnitSalePriceLinearMeter).toBe(152);
+    expect(result.current.groupedTotals?.Adesivo.rollWidthMeters).toBe(1.52);
+    expect(result.current.groupedTotals?.Adesivo.linearSalePriceDefaultSource).toBe('converted');
+    expect(result.current.groupedTotals?.Adesivo.linearSaleSubtotal).toBeCloseTo(linearMeters * 152);
   });
 
   it('mistura cobranca por m2 e por metro linear na mesma proposta', () => {
@@ -430,7 +433,7 @@ describe('useProposalTotals', () => {
     expect(paredeLinearMeters).toBeGreaterThan(0);
 
     // Janela por m2 (2 m2 x 100) + Parede por metro linear.
-    expect(result.current.subtotal).toBeCloseTo(200 + paredeLinearMeters * 50);
+    expect(result.current.subtotal).toBeCloseTo(200 + paredeLinearMeters * 121.6);
     expect(result.current.groupedTotals?.Janela.filmPricingMode).toBe('area');
     expect(result.current.groupedTotals?.Parede.filmPricingMode).toBe('linear');
   });
@@ -661,5 +664,55 @@ describe('useProposalTotals cutting widths', () => {
     expect(at152.result.current.linearMeterCost).toBeCloseTo(110);
     expect(at122.result.current.linearMeterCost).toBeCloseTo(154);
     expect(at122.result.current.groupedTotals?.['Color Stable'].totalLinearMeters).toBeCloseTo(1.4);
+  });
+
+  it('converte o preço por m² usando a largura selecionada da bobina', () => {
+    const films: Film[] = [{
+      nome: 'Window Blue',
+      preco: 170,
+      // Valor legado igual ao preço/m² não deve impedir a conversão automática.
+      precoVendaMetroLinear: 170,
+    }];
+    const measurements: UIMeasurement[] = [
+      {
+        id: 1,
+        largura: '1,02',
+        altura: '1,30',
+        quantidade: 4,
+        ambiente: 'Janela',
+        tipoAplicacao: 'Interna',
+        pelicula: 'Window Blue',
+        active: true,
+      },
+      {
+        id: 2,
+        largura: '0,89',
+        altura: '1,02',
+        quantidade: 4,
+        ambiente: 'Janela',
+        tipoAplicacao: 'Interna',
+        pelicula: 'Window Blue',
+        active: true,
+      },
+    ];
+
+    const { result } = renderHook(() => useProposalTotals({
+      measurements,
+      films,
+      generalDiscount: {
+        value: '0',
+        type: 'percentage',
+        filmPricingModes: { 'Window Blue': 'linear' },
+        filmCuttingSettings: {
+          'Window Blue': { rollWidthCm: 152, bladeWidthMm: 0, respectGrain: false },
+        },
+      },
+    }));
+
+    const group = result.current.groupedTotals?.['Window Blue'];
+    expect(result.current.totalLinearMeters).toBeCloseTo(7.64);
+    expect(group?.unitSalePriceLinearMeter).toBe(258.4);
+    expect(group?.linearSaleSubtotal).toBeCloseTo(1974.176);
+    expect(result.current.finalTotal).toBeCloseTo(1974.176);
   });
 });

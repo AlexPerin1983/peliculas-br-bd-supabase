@@ -120,6 +120,8 @@ interface ProposalPriceInputProps {
     value: string | number;
     catalogValue: number;
     customized: boolean;
+    defaultLabel?: string;
+    resetAriaLabel?: string;
     onChange: (value: string) => void;
     onReset: () => void;
 }
@@ -130,6 +132,8 @@ const ProposalPriceInput: React.FC<ProposalPriceInputProps> = ({
     value,
     catalogValue,
     customized,
+    defaultLabel,
+    resetAriaLabel,
     onChange,
     onReset,
 }) => {
@@ -169,8 +173,8 @@ const ProposalPriceInput: React.FC<ProposalPriceInputProps> = ({
                         type="button"
                         onClick={onReset}
                         className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-blue-100/80 px-2 py-1 text-[10px] font-bold text-blue-700 transition-colors hover:bg-blue-200 dark:bg-blue-900/50 dark:text-blue-200 dark:hover:bg-blue-900"
-                        aria-label={`Usar preço original do catálogo: ${formatNumberBR(catalogValue)}`}
-                        title="Substituir pelo preço original do catálogo"
+                        aria-label={resetAriaLabel || `Usar preço original do catálogo: ${formatNumberBR(catalogValue)}`}
+                        title={resetAriaLabel ? 'Substituir pela conversão automática' : 'Substituir pelo preço original do catálogo'}
                     >
                         <RotateCcw className="h-3 w-3" aria-hidden="true" />
                         {formatNumberBR(catalogValue)}
@@ -201,7 +205,7 @@ const ProposalPriceInput: React.FC<ProposalPriceInputProps> = ({
 
             <div className="mt-1.5 text-[9px]">
                 <span className={customized ? 'font-semibold text-blue-600 dark:text-blue-300' : 'text-slate-400'}>
-                    {customized ? 'Preço personalizado neste orçamento' : 'Preço atual do catálogo'}
+                    {customized ? 'Preço personalizado neste orçamento' : (defaultLabel || 'Preço atual do catálogo')}
                 </span>
             </div>
         </div>
@@ -227,7 +231,14 @@ const FilmPricingEditor: React.FC<FilmPricingEditorProps> = ({
     onChange,
     onResetAll,
 }) => {
-    const fields: Record<FilmPriceField, { label: string; unit: string; value: number; catalogValue: number }> = {
+    const fields: Record<FilmPriceField, {
+        label: string;
+        unit: string;
+        value: number;
+        catalogValue: number;
+        defaultLabel?: string;
+        resetAriaLabel?: string;
+    }> = {
         preco: {
             label: 'Preço de venda por m²',
             unit: 'm²',
@@ -250,7 +261,13 @@ const FilmPricingEditor: React.FC<FilmPricingEditorProps> = ({
             label: 'Venda por metro linear',
             unit: 'm',
             value: group.unitSalePriceLinearMeter,
-            catalogValue: group.catalogUnitSalePriceLinearMeter,
+            catalogValue: group.defaultUnitSalePriceLinearMeter,
+            defaultLabel: group.linearSalePriceDefaultSource === 'converted'
+                ? 'Conversão automática do preço por m²'
+                : 'Preço atual do catálogo',
+            resetAriaLabel: group.linearSalePriceDefaultSource === 'converted'
+                ? `Usar conversão automática: ${formatNumberBR(group.defaultUnitSalePriceLinearMeter)}`
+                : undefined,
         },
     };
     const primaryField: FilmPriceField = isLaborOnly
@@ -272,6 +289,8 @@ const FilmPricingEditor: React.FC<FilmPricingEditorProps> = ({
                 value={customized ? override?.[field] ?? '' : config.value}
                 catalogValue={config.catalogValue}
                 customized={customized}
+                defaultLabel={config.defaultLabel}
+                resetAriaLabel={config.resetAriaLabel}
                 onChange={(value) => onChange(field, value)}
                 onReset={() => onChange(field, undefined)}
             />
@@ -298,6 +317,12 @@ const FilmPricingEditor: React.FC<FilmPricingEditorProps> = ({
             </div>
 
             {renderField(primaryField)}
+
+            {!isLaborOnly && group.filmPricingMode === 'linear' && group.linearSalePriceDefaultSource === 'converted' && (
+                <p className="rounded-lg bg-blue-100/70 px-2 py-1.5 text-[9px] font-medium leading-4 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200">
+                    Padrão convertido: {formatNumberBR(group.unitPriceMaterial)}/m² × {group.rollWidthMeters.toFixed(2).replace('.', ',')} m de largura = {formatNumberBR(group.defaultUnitSalePriceLinearMeter)}/m. Edite acima para usar outro preço neste orçamento.
+                </p>
+            )}
 
             <button
                 type="button"

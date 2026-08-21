@@ -12,6 +12,10 @@ import {
 
 type DiscountType = ProposalDiscount;
 
+const roundCurrency = (value: number): number => (
+    Math.round((Math.max(0, value) + Number.EPSILON) * 100) / 100
+);
+
 interface UseProposalTotalsParams {
     measurements: UIMeasurement[];
     films: Film[];
@@ -47,6 +51,24 @@ export function useProposalTotals({
             const prices = resolveFilmPrices(film, filmPriceOverrides, measurement.pelicula);
             const catalogPrices = getCatalogFilmPrices(film);
             const filmPricingMode = getFilmPricingMode(measurement.pelicula);
+            const cuttingSettings = normalizeFilmCuttingSettings(
+                generalDiscount.filmCuttingSettings?.[measurement.pelicula]
+            );
+            const rollWidthMeters = cuttingSettings.rollWidthCm / 100;
+            const convertedLinearSalePrice = roundCurrency(prices.preco * rollWidthMeters);
+            const hasLinearSaleOverride = Object.prototype.hasOwnProperty.call(
+                filmPriceOverrides?.[measurement.pelicula] || {},
+                'precoVendaMetroLinear'
+            );
+            // Por padrão, o preço linear mantém o mesmo valor comercial do preço por m²:
+            // preço/m² × largura total da bobina. Um override no orçamento continua
+            // permitindo que o usuário defina deliberadamente outro preço por metro.
+            const defaultLinearSalePrice = prices.preco > 0
+                ? convertedLinearSalePrice
+                : catalogPrices.precoVendaMetroLinear;
+            const effectiveLinearSalePrice = hasLinearSaleOverride
+                ? prices.precoVendaMetroLinear
+                : defaultLinearSalePrice;
 
             let pricePerM2 = 0;
             if (film) {
@@ -98,7 +120,10 @@ export function useProposalTotals({
                     unitPriceLabor: prices.maoDeObra,
                     unitPriceLinearMeter: pricingMode === 'labor_only' ? 0 : prices.precoMetroLinear,
                     filmPricingMode,
-                    unitSalePriceLinearMeter: filmPricingMode === 'linear' ? prices.precoVendaMetroLinear : 0,
+                    unitSalePriceLinearMeter: filmPricingMode === 'linear' ? effectiveLinearSalePrice : 0,
+                    defaultUnitSalePriceLinearMeter: defaultLinearSalePrice,
+                    rollWidthMeters,
+                    linearSalePriceDefaultSource: prices.preco > 0 ? 'converted' : 'catalog',
                     linearSaleSubtotal: 0,
                     catalogUnitPriceMaterial: catalogPrices.preco,
                     catalogUnitPriceLabor: catalogPrices.maoDeObra,
@@ -189,7 +214,7 @@ export function useProposalTotals({
                 }
                 // Venda por metro linear: substitui o preço por m² desta película.
                 if (groupedTotals[filmName].filmPricingMode === 'linear') {
-                    const linearSale = linearMeters * prices.precoVendaMetroLinear;
+                    const linearSale = linearMeters * groupedTotals[filmName].unitSalePriceLinearMeter;
                     groupedTotals[filmName].linearSaleSubtotal = linearSale;
                     result.subtotal += linearSale;
                     result.priceAfterItemDiscounts += linearSale;

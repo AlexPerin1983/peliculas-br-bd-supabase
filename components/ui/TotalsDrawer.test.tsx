@@ -45,6 +45,9 @@ const totals: Totals = {
             unitPriceLinearMeter: 25,
             filmPricingMode: 'area',
             unitSalePriceLinearMeter: 0,
+            defaultUnitSalePriceLinearMeter: 152,
+            rollWidthMeters: 1.52,
+            linearSalePriceDefaultSource: 'converted',
             linearSaleSubtotal: 0,
             catalogUnitPriceMaterial: 100,
             catalogUnitPriceLabor: 35,
@@ -123,6 +126,49 @@ describe('TotalsDrawer preço personalizado', () => {
         fireEvent.change(increaseInput, { target: { value: '12,34567' } });
         expect(onUpdate).toHaveBeenLastCalledWith(expect.objectContaining({
             increaseValue: '12,3456',
+        }));
+    });
+
+    it('explica a conversão automática e permite substituir o preço linear', async () => {
+        const onUpdate = vi.fn();
+        const linearTotals: Totals = {
+            ...totals,
+            subtotal: 304,
+            priceAfterItemDiscounts: 304,
+            finalTotal: 304,
+            groupedTotals: {
+                Jateada: {
+                    ...totals.groupedTotals!.Jateada,
+                    filmPricingMode: 'linear',
+                    unitSalePriceLinearMeter: 152,
+                    linearSaleSubtotal: 304,
+                },
+            },
+        };
+        const linearDiscount: ProposalDiscount = {
+            ...baseDiscount,
+            filmPricingModes: { Jateada: 'linear' },
+        };
+
+        render(<TotalsDrawer
+            isOpen
+            onClose={vi.fn()}
+            totals={linearTotals}
+            generalDiscount={linearDiscount}
+            onUpdateGeneralDiscount={onUpdate}
+            onGeneratePdf={vi.fn()}
+            isGeneratingPdf={false}
+        />);
+
+        fireEvent.click(screen.getByRole('button', { name: /Jateada/ }));
+        expect(await screen.findByText(/Padrão convertido:/)).toHaveTextContent(/R\$\s*100,00\/m² × 1,52 m.*R\$\s*152,00\/m/);
+
+        const linearPriceInput = screen.getByLabelText('Venda por metro linear');
+        expect(linearPriceInput).toHaveValue(152);
+        fireEvent.change(linearPriceInput, { target: { value: '170' } });
+
+        expect(onUpdate).toHaveBeenLastCalledWith(expect.objectContaining({
+            filmPriceOverrides: { Jateada: { precoVendaMetroLinear: '170' } },
         }));
     });
 });
