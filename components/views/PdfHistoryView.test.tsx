@@ -34,6 +34,7 @@ const renderHistory = (
         onOpenInAgenda?: (agendamento: Agendamento) => void;
         onDeleteMany?: (pdfIds: number[]) => Promise<void>;
         onUpdateStatus?: (pdfId: number, status: SavedPDF['status']) => Promise<void> | void;
+        onRenamePdfOption?: (pdfId: number, name: string) => Promise<void>;
     } = {}
 ) => render(
     <FeedbackProvider>
@@ -49,6 +50,7 @@ const renderHistory = (
             onDeleteMany={options.onDeleteMany || vi.fn().mockResolvedValue(undefined)}
             onDownload={vi.fn()}
             onUpdateStatus={options.onUpdateStatus || vi.fn()}
+            onRenamePdfOption={options.onRenamePdfOption || vi.fn().mockResolvedValue(undefined)}
             onSchedule={vi.fn()}
             onOpenInAgenda={options.onOpenInAgenda || vi.fn()}
             onGenerateCombinedPdf={vi.fn()}
@@ -136,6 +138,29 @@ describe('PdfHistoryView', () => {
         });
 
         expect(screen.getByRole('button', { name: 'Aprovado' })).not.toBeDisabled();
+    });
+
+    it('renomeia uma opção do histórico para exibir no PDF e na página do cliente', async () => {
+        const onRenamePdfOption = vi.fn().mockResolvedValue(undefined);
+        renderHistory([
+            makePdf({ id: 33, proposalOptionName: 'Opção 1' }),
+        ], { onRenamePdfOption });
+
+        fireEvent.click(screen.getByRole('button', { name: 'Renomear Opção 1' }));
+
+        expect(screen.getByRole('dialog', { name: 'Renomear opção' })).toBeInTheDocument();
+        expect(screen.getByText(/exibido no PDF e na página do orçamento/i)).toBeInTheDocument();
+
+        fireEvent.change(screen.getByRole('textbox', { name: 'Nome da opção' }), {
+            target: { value: '  Película   Premium  ' },
+        });
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: 'Salvar nome' }));
+            await Promise.resolve();
+        });
+
+        expect(onRenamePdfOption).toHaveBeenCalledWith(33, 'Película Premium');
     });
 
     it('calcula pipeline real por oportunidade sem somar alternativas do mesmo cliente', () => {

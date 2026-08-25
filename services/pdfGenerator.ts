@@ -144,7 +144,7 @@ export const regeneratePDFFromSaved = async (client: Client, userInfo: UserInfo,
         generalDiscount,
         totals,
         pdf.proposalOptionName || 'Opção',
-        undefined
+        pdf.paymentConfig
     );
 };
 

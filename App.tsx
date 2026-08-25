@@ -2273,6 +2273,66 @@ Regras:
         }
     }, [allSavedPdfs, handleShowInfo, hasLoadedAllPdfs, historyPdfs, loadAllPdfs, loadPdfHistoryPage]);
 
+    const handleRenamePdfOption = useCallback(async (pdfId: number, name: string) => {
+        const normalizedName = name.trim().replace(/\s+/g, ' ').slice(0, 80);
+        if (!normalizedName) {
+            throw new Error('O nome da opção não pode ficar vazio.');
+        }
+
+        let currentPdf = allSavedPdfs.find(pdf => pdf.id === pdfId)
+            || historyPdfs.find(pdf => pdf.id === pdfId);
+
+        if (!currentPdf) {
+            const storedPdfs = await db.getAllPDFs();
+            currentPdf = storedPdfs.find(pdf => pdf.id === pdfId);
+        }
+
+        if (!currentPdf) {
+            throw new Error('Orçamento não encontrado.');
+        }
+
+        if (currentPdf.proposalOptionName?.trim() === normalizedName) {
+            return;
+        }
+
+        if (!userInfo) {
+            throw new Error('Preencha os dados da empresa antes de atualizar o PDF.');
+        }
+
+        let proposalClient = clients.find(client => client.id === currentPdf!.clienteId);
+        if (!proposalClient) {
+            const storedClients = await db.getAllClients();
+            proposalClient = storedClients.find(client => client.id === currentPdf!.clienteId);
+        }
+
+        if (!proposalClient) {
+            throw new Error('Cliente do orçamento não encontrado.');
+        }
+
+        const renamedPdf: SavedPDF = {
+            ...currentPdf,
+            proposalOptionName: normalizedName,
+        };
+        const { regeneratePDFFromSaved } = await import('./services/pdfGenerator');
+        const regeneratedBlob = await regeneratePDFFromSaved(proposalClient, userInfo, renamedPdf, films);
+        const updatedPdf: SavedPDF = {
+            ...renamedPdf,
+            pdfBlob: regeneratedBlob,
+            archivedAt: null,
+        };
+
+        await db.updatePDF(updatedPdf);
+
+        // O mesmo objeto alimenta o Histórico, o download do PDF e os links
+        // públicos. Atualizamos as duas listas para refletir o nome sem recarregar.
+        setAllSavedPdfs((previous: SavedPDF[]) => previous.map(pdf => (
+            pdf.id === pdfId ? updatedPdf : pdf
+        )));
+        setHistoryPdfs((previous: SavedPDF[]) => previous.map(pdf => (
+            pdf.id === pdfId ? updatedPdf : pdf
+        )));
+    }, [allSavedPdfs, clients, films, historyPdfs, userInfo]);
+
 
     const toggleFullScreen = useCallback(() => {
         if (!document.fullscreenElement) {
@@ -2858,6 +2918,7 @@ Use somente o JSON definido e não inclua explicações fora dele.`;
             onDeletePdfs={handleDeletePdfs}
             onDownloadPdf={handleDownloadPdf}
             onUpdatePdfStatus={handleUpdatePdfStatus}
+            onRenamePdfOption={handleRenamePdfOption}
             onSchedulePdf={handleOpenAgendamentoModal}
             onGenerateCombinedPdf={handleGenerateCombinedPdf}
             onNavigateToOption={handleNavigateToOption}

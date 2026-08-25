@@ -44,6 +44,7 @@ interface PdfHistoryViewProps {
     onDeleteMany: (pdfIds: number[]) => Promise<void>;
     onDownload: (pdf: SavedPDF, filename: string) => void;
     onUpdateStatus: (pdfId: number, status: SavedPDF['status']) => Promise<void> | void;
+    onRenamePdfOption: (pdfId: number, name: string) => Promise<void>;
     onSchedule: (info: { pdf: SavedPDF; agendamento?: Agendamento } | { agendamento: Agendamento; pdf?: SavedPDF }) => void;
     onOpenInAgenda: (agendamento: Agendamento) => void;
     onGenerateCombinedPdf: (pdfs: SavedPDF[]) => void;
@@ -2925,6 +2926,7 @@ const PdfHistoryItem: React.FC<{
     onDownload: (pdf: SavedPDF, filename: string) => void;
     onDelete: (id: number) => void;
     onUpdateStatus: (id: number, status: SavedPDF['status']) => Promise<void> | void;
+    onRenamePdfOption: (id: number, name: string) => Promise<void>;
     onSchedule: (info: { pdf: SavedPDF; agendamento?: Agendamento } | { agendamento: Agendamento; pdf?: SavedPDF }) => void;
     films: Film[];
     messageTemplates: string[];
@@ -2937,19 +2939,66 @@ const PdfHistoryItem: React.FC<{
     onSetFunnelReference: (pdf: SavedPDF) => void;
     onShare: (client: Client, pdf: SavedPDF) => void;
     fitContent?: boolean;
-}> = React.memo(({ pdf, client, agendamento, onDownload, onDelete, onUpdateStatus, onSchedule, onOpenInAgenda, films, messageTemplates, googleReviewsLink, isSelected, onToggleSelect, onNavigateToOption, isFunnelReference, onSetFunnelReference, onShare, fitContent = false }) => {
+}> = React.memo(({ pdf, client, agendamento, onDownload, onDelete, onUpdateStatus, onRenamePdfOption, onSchedule, onOpenInAgenda, films, messageTemplates, googleReviewsLink, isSelected, onToggleSelect, onNavigateToOption, isFunnelReference, onSetFunnelReference, onShare, fitContent = false }) => {
     const { showToast } = useFeedback();
     const [copiedMessageKey, setCopiedMessageKey] = useState<string | null>(null);
     const [isMessagesExpanded, setIsMessagesExpanded] = useState(false);
     const [selectedMessageIndex, setSelectedMessageIndex] = useState(0);
     const [isEditingMessage, setIsEditingMessage] = useState(false);
     const [whatsAppMessage, setWhatsAppMessage] = useState<string | null>(null);
+    const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
+    const [renameDraft, setRenameDraft] = useState('');
+    const [renameError, setRenameError] = useState('');
+    const [isRenaming, setIsRenaming] = useState(false);
     const [pendingStatusChange, setPendingStatusChange] = useState<{
         status: SavedPDF['status'];
         action: 'revised' | 'approved';
     } | null>(null);
     const activeStatus = pendingStatusChange?.status || pdf.status || 'pending';
     const isUpdatingStatus = pendingStatusChange !== null;
+
+    const handleOpenRenameModal = () => {
+        setRenameDraft(pdf.proposalOptionName?.trim() || '');
+        setRenameError('');
+        setIsRenameModalOpen(true);
+    };
+
+    const handleCloseRenameModal = () => {
+        if (isRenaming) return;
+        setIsRenameModalOpen(false);
+        setRenameError('');
+    };
+
+    const handleRenamePdfOption = async () => {
+        if (!pdf.id || isRenaming) return;
+
+        const normalizedName = renameDraft.trim().replace(/\s+/g, ' ');
+        if (!normalizedName) {
+            setRenameError('Digite um nome para identificar esta opção.');
+            return;
+        }
+
+        if (normalizedName === pdf.proposalOptionName?.trim()) {
+            setIsRenameModalOpen(false);
+            return;
+        }
+
+        setIsRenaming(true);
+        setRenameError('');
+        try {
+            await onRenamePdfOption(pdf.id, normalizedName);
+            setIsRenameModalOpen(false);
+            showToast('Nome atualizado no PDF e na página do cliente.', {
+                tone: 'success',
+                duration: 3200,
+            });
+        } catch (error) {
+            console.error('Erro ao renomear opção do histórico:', error);
+            setRenameError('Não foi possível salvar o novo nome. Tente novamente.');
+        } finally {
+            setIsRenaming(false);
+        }
+    };
 
     const handleActionClick = async (status: SavedPDF['status'], action: 'revised' | 'approved') => {
         if (isUpdatingStatus || !pdf.id) return;
@@ -3083,6 +3132,17 @@ const PdfHistoryItem: React.FC<{
                             </p>
                         </div>
                         <div className="flex items-center gap-0.5 text-slate-400 flex-shrink-0">
+                            <button
+                                onClick={(event) => {
+                                    event.stopPropagation();
+                                    handleOpenRenameModal();
+                                }}
+                                className="flex h-8 w-8 items-center justify-center rounded-[10px] text-slate-400 transition-colors hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-950/30 dark:hover:text-blue-300"
+                                aria-label={`Renomear ${pdf.proposalOptionName || 'opção'}`}
+                                title="Renomear opção"
+                            >
+                                <Pencil className="h-4 w-4" aria-hidden="true" />
+                            </button>
                             <button
                                 onClick={(e) => { e.stopPropagation(); onDownload(pdf, pdf.nomeArquivo); }}
                                 className="flex h-8 w-8 items-center justify-center rounded-[10px] text-sm text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-700 dark:hover:text-white"
@@ -3433,6 +3493,78 @@ const PdfHistoryItem: React.FC<{
                     </div>
                 </div>
             </div>
+            <Modal
+                isOpen={isRenameModalOpen}
+                onClose={handleCloseRenameModal}
+                title="Renomear opção"
+                disableClose={isRenaming}
+                keyboardAwareFooter
+                footer={(
+                    <>
+                        <ActionButton
+                            onClick={handleCloseRenameModal}
+                            disabled={isRenaming}
+                            variant="ghost"
+                            size="md"
+                        >
+                            Cancelar
+                        </ActionButton>
+                        <ActionButton
+                            onClick={() => { void handleRenamePdfOption(); }}
+                            disabled={isRenaming || !renameDraft.trim()}
+                            loading={isRenaming}
+                            loadingText="Atualizando PDF..."
+                            variant="primary"
+                            size="md"
+                        >
+                            Salvar nome
+                        </ActionButton>
+                    </>
+                )}
+            >
+                <div className="space-y-4">
+                    <div className="rounded-[var(--radius-control)] border border-blue-200 bg-blue-50 p-3 text-xs leading-5 text-blue-800 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-200">
+                        O novo nome será exibido no PDF e na página do orçamento enviada ao cliente.
+                    </div>
+                    <label className="block">
+                        <span className="mb-1.5 block text-sm font-semibold text-[var(--text-strong)]">
+                            Nome da opção
+                        </span>
+                        <input
+                            type="text"
+                            autoFocus
+                            maxLength={80}
+                            value={renameDraft}
+                            onChange={(event) => {
+                                setRenameDraft(event.target.value);
+                                if (renameError) setRenameError('');
+                            }}
+                            onKeyDown={(event) => {
+                                if (event.key === 'Enter') {
+                                    event.preventDefault();
+                                    void handleRenamePdfOption();
+                                }
+                            }}
+                            aria-label="Nome da opção"
+                            aria-invalid={Boolean(renameError)}
+                            placeholder="Ex.: Película Premium"
+                            className={`h-12 w-full rounded-[var(--radius-control)] border bg-[var(--surface)] px-3 text-base font-semibold text-[var(--text-strong)] outline-none transition focus:ring-4 ${
+                                renameError
+                                    ? 'border-red-400 focus:border-red-500 focus:ring-red-500/10'
+                                    : 'border-[var(--border-subtle)] focus:border-blue-500 focus:ring-blue-500/10'
+                            }`}
+                        />
+                        <div className="mt-1.5 flex items-start justify-between gap-3">
+                            <p className={`text-xs ${renameError ? 'font-semibold text-red-500' : 'text-[var(--text-muted)]'}`} role={renameError ? 'alert' : undefined}>
+                                {renameError || 'Use um nome curto e fácil para o cliente identificar.'}
+                            </p>
+                            <span className="shrink-0 text-[11px] tabular-nums text-[var(--text-soft)]">
+                                {renameDraft.length}/80
+                            </span>
+                        </div>
+                    </label>
+                </div>
+            </Modal>
             <WhatsAppChooserModal
                 clientName={client.nome}
                 phone={normalizedPhone}
@@ -3635,7 +3767,7 @@ const PdfHistoryMobileFooter: React.FC<{
     );
 };
 
-const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs = false, isLoadingMoreServerPdfs = false, onLoadMoreServerPdfs, onEnsureCompleteServerHistory, clients, agendamentos, films, googleReviewsLink, onDelete, onDeleteMany, onDownload, onUpdateStatus, onSchedule, onOpenInAgenda, onGenerateCombinedPdf, onNavigateToOption }) => {
+const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs = false, isLoadingMoreServerPdfs = false, onLoadMoreServerPdfs, onEnsureCompleteServerHistory, clients, agendamentos, films, googleReviewsLink, onDelete, onDeleteMany, onDownload, onUpdateStatus, onRenamePdfOption, onSchedule, onOpenInAgenda, onGenerateCombinedPdf, onNavigateToOption }) => {
     const { confirm, showToast } = useFeedback();
     const [pendingFocusClientId] = useState<number | null>(() => readInitialHistoryFocusClient());
     const [expandedClientId, setExpandedClientId] = useState<number | null>(pendingFocusClientId);
@@ -4479,6 +4611,7 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
                                         onDownload={onDownload}
                                         onDelete={onDelete}
                                         onUpdateStatus={onUpdateStatus}
+                                        onRenamePdfOption={onRenamePdfOption}
                                         onSchedule={onSchedule}
                                         onOpenInAgenda={onOpenInAgenda}
                                         films={films}
@@ -5224,6 +5357,7 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
                                             onDownload={onDownload}
                                             onDelete={onDelete}
                                             onUpdateStatus={onUpdateStatus}
+                                            onRenamePdfOption={onRenamePdfOption}
                                             onSchedule={onSchedule}
                                             onOpenInAgenda={onOpenInAgenda}
                                             films={films}

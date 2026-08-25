@@ -109,6 +109,7 @@ interface AppContentRouterProps {
     onDeletePdfs: (pdfIds: number[]) => Promise<void>;
     onDownloadPdf: (pdfId: number) => Promise<void>;
     onUpdatePdfStatus: (pdfId: number, status: SavedPDF['status']) => Promise<void>;
+    onRenamePdfOption: (pdfId: number, name: string) => Promise<void>;
     onSchedulePdf: (info: any) => void;
     onGenerateCombinedPdf: (clientId: number) => Promise<void>;
     onNavigateToOption: (clientId: number, optionId: number) => void;
@@ -211,6 +212,7 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
     onDeletePdfs,
     onDownloadPdf,
     onUpdatePdfStatus,
+    onRenamePdfOption,
     onSchedulePdf,
     onGenerateCombinedPdf,
     onNavigateToOption,
@@ -358,6 +360,7 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
                 onDeleteMany={onDeletePdfs}
                 onDownload={onDownloadPdf}
                 onUpdateStatus={onUpdatePdfStatus}
+                onRenamePdfOption={onRenamePdfOption}
                 onSchedule={onSchedulePdf}
                 onOpenInAgenda={(agendamento) => {
                     onTabChange('agenda');

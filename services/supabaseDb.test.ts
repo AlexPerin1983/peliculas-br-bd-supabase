@@ -8,6 +8,10 @@ const eqSecondMock = vi.fn();
 const eqFirstMock = vi.fn();
 const fromMock = vi.fn();
 const rpcMock = vi.fn();
+const portalItemsSelectMock = vi.fn();
+const portalItemsEqMock = vi.fn();
+const portalUpdateMock = vi.fn();
+const portalInMock = vi.fn();
 
 vi.mock('./sessionScope', () => ({
   getCurrentUserId: vi.fn().mockResolvedValue('user-1'),
@@ -50,7 +54,15 @@ const buildUpdateChain = () => {
   eqSecondMock.mockReturnValue({ select: selectMock });
   eqFirstMock.mockReturnValue({ eq: eqSecondMock });
   updateMock.mockReturnValue({ eq: eqFirstMock });
-  fromMock.mockReturnValue({ update: updateMock, insert: insertMock });
+  portalItemsEqMock.mockResolvedValue({ data: [{ portal_id: 'portal-1' }], error: null });
+  portalItemsSelectMock.mockReturnValue({ eq: portalItemsEqMock });
+  portalInMock.mockResolvedValue({ error: null });
+  portalUpdateMock.mockReturnValue({ in: portalInMock });
+  fromMock.mockImplementation((table: string) => {
+    if (table === 'proposal_portal_items') return { select: portalItemsSelectMock };
+    if (table === 'proposal_portals') return { update: portalUpdateMock };
+    return { update: updateMock, insert: insertMock };
+  });
 };
 
 describe('supabaseDb PDF updates', () => {
@@ -78,6 +90,11 @@ describe('supabaseDb PDF updates', () => {
     expect(updateMock.mock.calls[0][0]).not.toHaveProperty('pdf_blob');
     expect(eqFirstMock).toHaveBeenCalledWith('id', 91);
     expect(eqSecondMock).toHaveBeenCalledWith('user_id', 'user-1');
+    expect(portalItemsEqMock).toHaveBeenCalledWith('saved_pdf_id', 91);
+    expect(portalUpdateMock).toHaveBeenCalledWith(expect.objectContaining({
+      last_activity_at: expect.any(String)
+    }));
+    expect(portalInMock).toHaveBeenCalledWith('id', ['portal-1']);
   });
 
   it('salva agendamento usando as colunas atuais start/end', async () => {

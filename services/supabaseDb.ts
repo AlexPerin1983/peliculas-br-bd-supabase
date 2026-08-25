@@ -625,6 +625,29 @@ export const savePDF = async (pdfData: Omit<SavedPDF, 'id'>): Promise<SavedPDF> 
     return mapped;
 };
 
+const touchProposalPortalsForSavedPdf = async (savedPdfId?: number): Promise<void> => {
+    if (!savedPdfId || !Number.isInteger(savedPdfId) || savedPdfId <= 0) return;
+
+    const { data: portalItems, error: portalItemsError } = await supabase
+        .from('proposal_portal_items')
+        .select('portal_id')
+        .eq('saved_pdf_id', savedPdfId);
+    if (portalItemsError) throw portalItemsError;
+
+    const portalIds = Array.from(new Set(
+        (portalItems || [])
+            .map(item => item.portal_id)
+            .filter((portalId): portalId is string => typeof portalId === 'string' && Boolean(portalId))
+    ));
+    if (portalIds.length === 0) return;
+
+    const { error: portalUpdateError } = await supabase
+        .from('proposal_portals')
+        .update({ last_activity_at: new Date().toISOString() })
+        .in('id', portalIds);
+    if (portalUpdateError) throw portalUpdateError;
+};
+
 export const updatePDF = async (pdfData: SavedPDF): Promise<SavedPDF> => {
     const userId = await getCurrentUserId();
     if (!userId) throw new Error('User not authenticated');
@@ -651,9 +674,10 @@ export const updatePDF = async (pdfData: SavedPDF): Promise<SavedPDF> => {
     const normalizedPdfBlob = normalizePdfBlobInput(pdfData.pdfBlob);
     if (normalizedPdfBlob) {
         const pdfPath = await uploadPdfToStorage(normalizedPdfBlob);
-        (pdfRow as typeof pdfRow & { pdf_path: string; pdf_blob: string | null }).pdf_path = pdfPath;
+        (pdfRow as typeof pdfRow & { pdf_path: string; pdf_blob: string | null; archived_at: null }).pdf_path = pdfPath;
         // Limpa o base64 legado para liberar espaço no banco
-        (pdfRow as typeof pdfRow & { pdf_path: string; pdf_blob: string | null }).pdf_blob = null;
+        (pdfRow as typeof pdfRow & { pdf_path: string; pdf_blob: string | null; archived_at: null }).pdf_blob = null;
+        (pdfRow as typeof pdfRow & { pdf_path: string; pdf_blob: string | null; archived_at: null }).archived_at = null;
     }
 
     const { data, error } = await supabase
@@ -665,6 +689,16 @@ export const updatePDF = async (pdfData: SavedPDF): Promise<SavedPDF> => {
         .single();
 
     if (error) throw error;
+
+    try {
+        // A página pública usa last_activity_at para buscar mudanças. Ao
+        // alterar nome, status ou arquivo, avisamos todos os links que usam o PDF.
+        await touchProposalPortalsForSavedPdf(pdfData.id);
+    } catch (portalError) {
+        // O PDF já foi salvo. Uma falha ao avisar o portal não deve desfazer
+        // a alteração; o cliente ainda receberá o dado novo ao recarregar.
+        console.warn('[PDF] Não foi possível notificar os links da proposta:', portalError);
+    }
 
     const mapped = await mapRowToPDF(data);
     if (normalizedPdfBlob) {

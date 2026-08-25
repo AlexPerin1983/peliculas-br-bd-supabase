@@ -65,6 +65,7 @@ describe('AppContentRouter', () => {
     onDeletePdfs: vi.fn().mockResolvedValue(undefined),
     onDownloadPdf: vi.fn(),
     onUpdatePdfStatus: vi.fn(),
+    onRenamePdfOption: vi.fn().mockResolvedValue(undefined),
     onSchedulePdf: vi.fn(),
     onGenerateCombinedPdf: vi.fn(),
     onNavigateToOption: vi.fn(),
