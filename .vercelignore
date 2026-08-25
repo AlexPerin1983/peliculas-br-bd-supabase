@@ -22,5 +22,7 @@ blob-report/
 
 # Metadados e arquivos temporarios
 .git/
+tmp/
+supabase/.temp/
 *.log
 *.patch

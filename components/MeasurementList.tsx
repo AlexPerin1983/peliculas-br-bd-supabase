@@ -1,6 +1,6 @@
 ﻿import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { MobileActionsDrawer } from './MobileActionsDrawer';
-import { CheckSquare, ChevronDown, ChevronUp, ClipboardCheck, ClipboardPaste, Copy, History, Layers3, Trash2, X } from 'lucide-react';
+import { CheckSquare, ChevronDown, ChevronUp, ClipboardCheck, ClipboardPaste, Copy, History, Layers3, Share2, Trash2, X } from 'lucide-react';
 import { useMemo } from 'react';
 import { Measurement, Film, ProposalPricingMode, Retalho, UIMeasurement } from '../types';
 import MeasurementGroup from './MeasurementGroup';
@@ -18,6 +18,7 @@ import {
     getMeasurementClipboardCount
 } from '../src/lib/measurementClipboard';
 import { OPEN_MEASUREMENT_INPUT_SETTINGS_EVENT } from '../src/lib/measurementInputMode';
+import { buildMeasurementConfirmationMessage, getMeasurementsForConfirmation, shareMeasurementConfirmation } from '../src/lib/measurementConfirmation';
 
 const TOUCH_NUMPAD_MEDIA_QUERY = '(max-width: 767px)';
 
@@ -84,6 +85,7 @@ interface MeasurementListProps {
     pricingMode: ProposalPricingMode;
     onSelectPricingMode?: (pricingMode: ProposalPricingMode) => void;
     clientId?: number;
+    clientName?: string;
     optionId?: number;
     onDeleteMeasurementImmediate: (id: number) => void;
     onPasteCopiedMeasurements?: () => void | Promise<void>;
@@ -112,6 +114,7 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
     pricingMode,
     onSelectPricingMode,
     clientId,
+    clientName,
     onOpenFilmSelectionModal,
     onPasteCopiedMeasurements,
     onOpenMeasurementHistory,
@@ -348,6 +351,27 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
             showToast('Não foi possível colar as medidas copiadas.', { tone: 'error' });
         }
     }, [applyMeasurements, measurements, onPasteCopiedMeasurements, showToast]);
+
+    const handleShareMeasurements = useCallback(async () => {
+        if (getMeasurementsForConfirmation(measurements).length === 0) {
+            showToast('Não há medidas ativas e válidas para compartilhar.', { tone: 'warning' });
+            return;
+        }
+
+        const message = buildMeasurementConfirmationMessage({ clientName, measurements });
+
+        try {
+            const result = await shareMeasurementConfirmation(message, clientName);
+            if (result === 'shared') {
+                showToast('Medidas compartilhadas sem preços.', { tone: 'success' });
+            } else if (result === 'copied') {
+                showToast('Medidas copiadas sem preços. Agora é só colar no WhatsApp.', { tone: 'success' });
+            }
+        } catch (error) {
+            console.error('Erro ao compartilhar medidas para conferência:', error);
+            showToast('Não foi possível compartilhar as medidas.', { tone: 'error' });
+        }
+    }, [clientName, measurements, showToast]);
 
     const handleConfirmDeleteSelected = () => {
         const newMeasurements = measurements.filter(m => !selectedIds.has(m.id));
@@ -764,6 +788,11 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
                                             />
                                         )}
                                         <ActionMenuItem
+                                            onClick={() => { void handleShareMeasurements(); }}
+                                            icon={<Share2 className="h-4 w-4" aria-hidden="true" />}
+                                            label="Compartilhar Medidas"
+                                        />
+                                        <ActionMenuItem
                                             onClick={handleEnterSelectionMode}
                                             icon={<CheckSquare className="h-4 w-4" aria-hidden="true" />}
                                             label="Selecionar"
@@ -894,6 +923,23 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
                                             <i className="fas fa-chevron-right text-slate-300 text-xs"></i>
                                         </button>
                                     )}
+
+                                    <button
+                                        onClick={() => {
+                                            void handleShareMeasurements();
+                                            setIsMobileMenuOpen(false);
+                                        }}
+                                        className="w-full flex items-center gap-4 px-4 py-4 text-left transition-colors active:bg-slate-100 dark:active:bg-slate-700 rounded-xl text-slate-700 dark:text-slate-200"
+                                    >
+                                        <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 bg-blue-50 dark:bg-blue-900/20">
+                                            <Share2 className="h-5 w-5 text-blue-600 dark:text-blue-300" aria-hidden="true" />
+                                        </div>
+                                        <div className="flex-1">
+                                            <span className="font-semibold block text-base">Compartilhar Medidas</span>
+                                            <span className="text-xs text-slate-500 dark:text-slate-400 block mt-0.5">Enviar para o cliente conferir, sem preços</span>
+                                        </div>
+                                        <i className="fas fa-chevron-right text-slate-300 text-xs"></i>
+                                    </button>
 
                                     <button
                                         onClick={() => {

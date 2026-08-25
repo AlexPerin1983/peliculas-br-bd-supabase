@@ -542,6 +542,7 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
                 pricingMode={pricingMode}
                 onSelectPricingMode={onSelectPricingMode}
                 clientId={selectedClientId}
+                clientName={clients.find((client) => client.id === selectedClientId)?.nome}
                 optionId={activeOptionId}
                 onMeasurementsChange={onMeasurementsChange}
                 onPersistMeasurementsChange={onPersistMeasurementsChange}
