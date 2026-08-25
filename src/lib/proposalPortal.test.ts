@@ -9,6 +9,7 @@ const {
     isOnlineNowMock,
     syncAllPendingMock,
     findLocalPdfMock,
+    listPdfSyncQueueMock,
 } = vi.hoisted(() => ({
     rpcMock: vi.fn(),
     fromMock: vi.fn(),
@@ -16,6 +17,7 @@ const {
     isOnlineNowMock: vi.fn(() => true),
     syncAllPendingMock: vi.fn(),
     findLocalPdfMock: vi.fn(),
+    listPdfSyncQueueMock: vi.fn(),
 }));
 
 vi.mock('../../services/supabaseClient', () => ({
@@ -32,6 +34,11 @@ vi.mock('../../services/offlineDb', () => ({
         savedPdfs: {
             filter: vi.fn(() => ({ first: findLocalPdfMock })),
         },
+        syncQueue: {
+            where: vi.fn(() => ({
+                equals: vi.fn(() => ({ toArray: listPdfSyncQueueMock })),
+            })),
+        },
     },
 }));
 
@@ -42,6 +49,7 @@ describe('links amigáveis de proposta', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         isOnlineNowMock.mockReturnValue(true);
+        listPdfSyncQueueMock.mockResolvedValue([]);
         window.history.replaceState({}, '', '/');
     });
 
@@ -149,6 +157,39 @@ describe('links amigáveis de proposta', () => {
         expect(syncAllPendingMock).toHaveBeenCalledWith({ force: true });
         expect(rpcMock).toHaveBeenCalledWith('create_proposal_portal', expect.objectContaining({
             p_pdf_ids: [91],
+        }));
+    });
+
+    it('aguarda uma renomeacao pendente chegar ao servidor antes de criar o portal', async () => {
+        const localPdf = {
+            _localId: 'local_123_pdf',
+            id: 42,
+            _remoteId: 42,
+            _syncStatus: 'pending',
+        };
+        findLocalPdfMock.mockResolvedValue(localPdf);
+        listPdfSyncQueueMock
+            .mockResolvedValueOnce([{
+                id: 7,
+                table: 'savedPdfs',
+                action: 'update',
+                status: 'pending',
+                retryCount: 0,
+                timestamp: Date.now(),
+                data: localPdf,
+            }])
+            .mockResolvedValue([]);
+        rpcMock.mockResolvedValue({
+            data: [{ portal_id: 'portal-4', portal_token: 'token-seguro', expires_at: '2099-12-31T23:59:59.000Z' }],
+            error: null,
+        });
+
+        await createProposalPortal([{ id: 42 } as SavedPDF], '2099-12-31', 'Elaine');
+
+        expect(syncAllPendingMock).toHaveBeenCalledWith({ force: true });
+        expect(listPdfSyncQueueMock).toHaveBeenCalledTimes(2);
+        expect(rpcMock).toHaveBeenCalledWith('create_proposal_portal', expect.objectContaining({
+            p_pdf_ids: [42],
         }));
     });
 
