@@ -1,6 +1,10 @@
 import type { Film, FilmPriceOverrides, FilmPricingModes, Measurement, ProposalAdjustmentOperation, ProposalPricingMode, Totals } from '../../types';
 import { calculatePricingAreaM2 } from './pricingArea';
 import { resolveFilmPrices } from './filmPriceOverrides';
+import {
+    calculateMeasurementPriceAdjustment,
+    getMeasurementAdjustmentOperation,
+} from './measurementPriceAdjustment';
 
 type PdfGeneralAdjustment = {
     operation?: ProposalAdjustmentOperation;
@@ -15,6 +19,7 @@ export interface PdfDisplayLineItem {
     m2: number;
     basePrice: number;
     itemDiscountAmount: number;
+    itemIncreaseAmount: number;
     finalItemPrice: number;
     displayBasePrice: number;
     displayItemDiscountAmount: number;
@@ -76,21 +81,8 @@ const getPricePerM2 = (
     return prices.maoDeObra > 0 ? prices.maoDeObra : 0;
 };
 
-const calculateItemDiscountAmount = (measurement: Measurement, basePrice: number) => {
-    const discount = measurement.discount;
-    if (!discount) return 0;
-
-    const discountValue = parseDecimal(discount.value);
-    if (discount.type === 'percentage' && discountValue > 0) {
-        return basePrice * (discountValue / 100);
-    }
-    if (discount.type === 'fixed' && discountValue > 0) {
-        return discountValue;
-    }
-    return 0;
-};
-
 const getPercentageDiscountRate = (measurement: Measurement) => {
+    if (getMeasurementAdjustmentOperation(measurement.discount) !== 'discount') return 0;
     if (measurement.discount?.type !== 'percentage') return 0;
     return parseDecimal(measurement.discount.value);
 };
@@ -124,14 +116,20 @@ export const buildPdfAdjustmentDisplay = ({
         const linear = isLinearFilm(measurement.pelicula);
         // No modo metro linear o preço por linha é distribuído da venda da película (abaixo).
         const basePrice = linear ? 0 : getPricePerM2(film, measurement.pelicula, pricingMode, filmPriceOverrides) * m2;
-        const itemDiscountAmount = linear ? 0 : calculateItemDiscountAmount(measurement, basePrice);
-        const finalItemPrice = Math.max(0, basePrice - itemDiscountAmount);
+        const itemAdjustment = calculateMeasurementPriceAdjustment(
+            basePrice,
+            linear ? undefined : measurement.discount
+        );
+        const itemDiscountAmount = itemAdjustment.operation === 'discount' ? itemAdjustment.amount : 0;
+        const itemIncreaseAmount = itemAdjustment.operation === 'increase' ? itemAdjustment.amount : 0;
+        const finalItemPrice = itemAdjustment.finalPrice;
 
         return {
             measurement,
             m2,
             basePrice,
             itemDiscountAmount,
+            itemIncreaseAmount,
             finalItemPrice,
             linear
         };
@@ -149,6 +147,8 @@ export const buildPdfAdjustmentDisplay = ({
         const shares = distributeAmount(linearSale, indices.map(index => rawLineItems[index].m2));
         indices.forEach((index, position) => {
             rawLineItems[index].basePrice = shares[position];
+            rawLineItems[index].itemDiscountAmount = 0;
+            rawLineItems[index].itemIncreaseAmount = 0;
             rawLineItems[index].finalItemPrice = shares[position];
         });
     });
@@ -170,7 +170,7 @@ export const buildPdfAdjustmentDisplay = ({
     const lineItems = rawLineItems.map((item, index) => {
         const embeddedIncreaseAmount = increaseShares[index] || 0;
         const displayFinalItemPrice = item.finalItemPrice + embeddedIncreaseAmount;
-        let displayBasePrice = item.basePrice + embeddedIncreaseAmount;
+        let displayBasePrice = item.basePrice + item.itemIncreaseAmount + embeddedIncreaseAmount;
         let displayItemDiscountAmount = item.itemDiscountAmount;
 
         const percentageDiscountRate = item.linear ? 0 : getPercentageDiscountRate(item.measurement);
@@ -188,14 +188,15 @@ export const buildPdfAdjustmentDisplay = ({
         };
     });
 
-    const summaryItemDiscount = embedsGeneralIncrease
-        ? lineItems.reduce((sum, item) => sum + item.displayItemDiscountAmount, 0)
-        : totals.totalItemDiscount;
+    const summaryItemDiscount = lineItems.reduce((sum, item) => sum + item.displayItemDiscountAmount, 0);
+    const itemIncreaseTotal = rawLineItems.reduce((sum, item) => sum + item.itemIncreaseAmount, 0);
 
     return {
         lineItems,
         embedsGeneralIncrease,
-        summarySubtotal: embedsGeneralIncrease ? totals.finalTotal + finalDiscountAmount + summaryItemDiscount : totals.subtotal,
+        summarySubtotal: embedsGeneralIncrease
+            ? totals.finalTotal + finalDiscountAmount + summaryItemDiscount
+            : totals.subtotal + itemIncreaseTotal,
         summaryItemDiscount,
         summaryFinalTotal: totals.finalTotal
     };

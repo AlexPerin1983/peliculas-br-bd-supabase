@@ -29,6 +29,15 @@ export interface Client {
     pinnedAt?: number; // Timestamp de quando foi fixado
 }
 
+export type ProposalAdjustmentOperation = 'discount' | 'increase';
+
+export interface MeasurementPriceAdjustment {
+    value: string;
+    type: 'percentage' | 'fixed';
+    // Ausente nos orçamentos antigos significa desconto.
+    operation?: ProposalAdjustmentOperation;
+}
+
 export interface Measurement {
     id: number;
     largura: string;
@@ -38,10 +47,7 @@ export interface Measurement {
     tipoAplicacao: string;
     pelicula: string;
     active: boolean;
-    discount?: {
-        value: string;
-        type: 'percentage' | 'fixed';
-    };
+    discount?: MeasurementPriceAdjustment;
     aiFilmSuggestion?: {
         extractedText: string;
         suggestedFilm: string;
@@ -127,8 +133,6 @@ export interface ProposalExpenseSnapshot {
     estimatedMarginPercentage: number;
     expensesByCategory?: ProposalExpenseCategoryTotal[];
 }
-
-export type ProposalAdjustmentOperation = 'discount' | 'increase';
 
 export interface FilmCuttingPlanSettings {
     rollWidthCm: number;
@@ -323,6 +327,7 @@ export interface Totals {
     totalM2: number;
     subtotal: number;
     totalItemDiscount: number;
+    totalItemIncrease?: number;
     generalDiscountAmount: number;
     generalIncreaseAmount?: number;
     generalFinalDiscountAmount?: number;

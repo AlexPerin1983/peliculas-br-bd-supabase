@@ -270,4 +270,30 @@ describe('useMeasurementEditor', () => {
     ]);
     expect(result.current.editingMeasurementForDiscount).toBe(null);
   });
+
+  it('salva acrescimo embutido na medida em edicao', () => {
+    const handleMeasurementsChange = vi.fn();
+    const { result } = renderHook(() =>
+      useMeasurementEditor({
+        measurements: [measurement],
+        handleMeasurementsChange,
+        createEmptyMeasurement
+      })
+    );
+
+    act(() => {
+      result.current.handleOpenDiscountModal(measurement, 100);
+    });
+
+    act(() => {
+      result.current.handleSaveDiscount({ value: '12', type: 'percentage', operation: 'increase' });
+    });
+
+    expect(handleMeasurementsChange).toHaveBeenCalledWith([
+      expect.objectContaining({
+        id: 1,
+        discount: { value: '12', type: 'percentage', operation: 'increase' }
+      })
+    ]);
+  });
 });

@@ -16,7 +16,7 @@ const AIQuickProposalModal = lazy(() => import('./modals/AIQuickProposalModal'))
 const ApiKeyModal = lazy(() => import('./modals/ApiKeyModal'));
 const PdfGenerationStatusModal = lazy(() => import('./modals/PdfGenerationStatusModal'));
 const ImageGalleryModal = lazy(() => import('./modals/ImageGalleryModal'));
-import { Client, Film, UserInfo, SavedPDF, Agendamento, ProposalOption, SchedulingInfo, ProposalDiscount } from '../types';
+import { Client, Film, UserInfo, SavedPDF, Agendamento, ProposalOption, SchedulingInfo, ProposalDiscount, MeasurementPriceAdjustment } from '../types';
 
 type UIMeasurement = any; // Temporary - will be properly typed later
 
@@ -122,6 +122,10 @@ interface ModalsContainerProps {
     handleOpenFilmSelectionModal: (measurementId: number) => void;
     onOpenLocationImport: () => void;
     numpadConfig: any;
+    editingMeasurementForDiscount: UIMeasurement | null;
+    editingMeasurementBasePrice: number;
+    handleCloseDiscountModal: () => void;
+    handleSaveDiscount: (adjustment: MeasurementPriceAdjustment) => void;
     generalDiscount: ProposalDiscount;
     handleSaveGeneralDiscount: (discount: ProposalDiscount) => void;
     isGeneralDiscountModalOpen: boolean;
@@ -493,6 +497,7 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
                     onSave={props.handleSaveDiscount}
                     initialValue={props.editingMeasurementForDiscount.discount?.value}
                     initialType={props.editingMeasurementForDiscount.discount?.type}
+                    initialOperation={props.editingMeasurementForDiscount.discount?.operation}
                     basePrice={props.editingMeasurementBasePrice}
                 />
             )}

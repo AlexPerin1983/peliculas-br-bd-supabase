@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Measurement, Film, UserInfo, Location } from '../../types';
+import { Measurement, Film, UserInfo, Location, ProposalAdjustmentOperation } from '../../types';
 import { AMBIENTES, TIPOS_APLICACAO } from '../../constants';
 import DynamicSelector from '../ui/DynamicSelector';
 import Accordion from '../ui/Accordion';
@@ -9,6 +9,10 @@ import { useAuth } from '../../contexts/AuthContext';
 import { calculatePricingAreaM2 } from '../../src/lib/pricingArea';
 import { selectAllOnFocus } from '../../src/lib/selectOnFocus';
 import { formatGarantiaMaoDeObraCurto } from '../../src/lib/filmWarranty';
+import {
+    calculateMeasurementPriceAdjustment,
+    getMeasurementAdjustmentOperation,
+} from '../../src/lib/measurementPriceAdjustment';
 
 type UIMeasurement = Measurement & { isNew?: boolean };
 
@@ -111,7 +115,8 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
             handleLocalUpdate({
                 discount: {
                     value: sanitizedValue,
-                    type: localMeasurement.discount?.type || 'percentage'
+                    type: localMeasurement.discount?.type || 'percentage',
+                    operation: getMeasurementAdjustmentOperation(localMeasurement.discount),
                 }
             });
         } else if (field === 'observation') {
@@ -123,7 +128,18 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
         handleLocalUpdate({
             discount: {
                 value: localMeasurement.discount?.value || '0',
-                type: type
+                type,
+                operation: getMeasurementAdjustmentOperation(localMeasurement.discount),
+            }
+        });
+    };
+
+    const handleAdjustmentOperationChange = (operation: ProposalAdjustmentOperation) => {
+        handleLocalUpdate({
+            discount: {
+                value: localMeasurement.discount?.value || '0',
+                type: localMeasurement.discount?.type || 'percentage',
+                operation,
             }
         });
     };
@@ -196,18 +212,8 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
     }, [selectedFilm]);
 
     const basePrice = pricePerM2 * m2;
-    let finalPrice = basePrice;
-    const discountObj = localMeasurement.discount || { value: '0', type: 'percentage' };
-    const discountValue = parseFloat(discountObj.value.replace(',', '.')) || 0;
-
-    if (discountValue > 0) {
-        if (discountObj.type === 'percentage') {
-            finalPrice = basePrice * (1 - discountValue / 100);
-        } else {
-            finalPrice = basePrice - discountValue;
-        }
-    }
-    finalPrice = Math.max(0, finalPrice);
+    const adjustmentOperation = getMeasurementAdjustmentOperation(localMeasurement.discount);
+    const finalPrice = calculateMeasurementPriceAdjustment(basePrice, localMeasurement.discount).finalPrice;
 
     const handleEditFilm = () => {
         if (selectedFilm) {
@@ -420,14 +426,31 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
                         </div>
                     </Accordion>
 
-                    {/* Seção 4: Desconto e Preço */}
-                    <Accordion title="Desconto e Preço" defaultOpen={true}>
+                    {/* Seção 4: Ajuste e Preço */}
+                    <Accordion title="Ajuste e Preço" defaultOpen={true}>
                         <div className="flex justify-between items-center mb-4">
                             <span className="font-medium text-slate-600 dark:text-slate-400">Preço Final</span>
                             <p className="font-bold text-slate-800 dark:text-white text-xl">{formatCurrency(finalPrice)}</p>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">Aplicar Desconto</label>
+                            <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">Tipo de ajuste</label>
+                            <div className="mb-3 grid grid-cols-2 rounded-lg bg-slate-100 p-1 dark:bg-slate-800">
+                                <button
+                                    type="button"
+                                    onClick={() => handleAdjustmentOperationChange('discount')}
+                                    className={`h-9 rounded-md text-sm font-semibold transition ${adjustmentOperation === 'discount' ? 'bg-white text-emerald-700 shadow-sm dark:bg-slate-700 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400'}`}
+                                >
+                                    Desconto
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => handleAdjustmentOperationChange('increase')}
+                                    className={`h-9 rounded-md text-sm font-semibold transition ${adjustmentOperation === 'increase' ? 'bg-white text-blue-700 shadow-sm dark:bg-slate-700 dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}`}
+                                >
+                                    Acréscimo
+                                </button>
+                            </div>
+                            <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">Aplicar {adjustmentOperation === 'increase' ? 'Acréscimo' : 'Desconto'}</label>
                             <div className="flex">
                                 <input
                                     type="text"
@@ -447,6 +470,11 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
                                     </button>
                                 </div>
                             </div>
+                            {adjustmentOperation === 'increase' && (
+                                <p className="mt-2 text-xs leading-5 text-blue-700 dark:text-blue-300">
+                                    O acréscimo será embutido no preço deste grupo e não aparecerá separado no orçamento.
+                                </p>
+                            )}
                         </div>
                     </Accordion>
 

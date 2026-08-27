@@ -65,6 +65,45 @@ describe('useProposalTotals', () => {
     expect(result.current.groupedTotals?.Blackout.totalLabor).toBeCloseTo(100);
   });
 
+  it('embute acrescimo somente no grupo escolhido', () => {
+    const films: Film[] = [{ nome: 'Blackout', preco: 100 }];
+    const measurements: UIMeasurement[] = [
+      {
+        id: 1,
+        largura: '2',
+        altura: '1',
+        quantidade: 1,
+        ambiente: 'Sala',
+        tipoAplicacao: 'Interna',
+        pelicula: 'Blackout',
+        active: true,
+        discount: { value: '10', type: 'percentage', operation: 'increase' }
+      },
+      {
+        id: 2,
+        largura: '1',
+        altura: '1',
+        quantidade: 1,
+        ambiente: 'Quarto',
+        tipoAplicacao: 'Interna',
+        pelicula: 'Blackout',
+        active: true
+      }
+    ];
+
+    const { result } = renderHook(() => useProposalTotals({
+      measurements,
+      films,
+      generalDiscount: { value: '0', type: 'percentage', pricingMode: 'complete' }
+    }));
+
+    expect(result.current.subtotal).toBeCloseTo(300);
+    expect(result.current.totalItemDiscount).toBe(0);
+    expect(result.current.totalItemIncrease).toBeCloseTo(20);
+    expect(result.current.priceAfterItemDiscounts).toBeCloseTo(320);
+    expect(result.current.finalTotal).toBeCloseTo(320);
+  });
+
   it('usa a area exibida com duas casas para calcular material e mao de obra', () => {
     const films: Film[] = [
       {

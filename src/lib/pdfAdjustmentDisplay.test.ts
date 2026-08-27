@@ -139,6 +139,32 @@ describe('buildPdfAdjustmentDisplay', () => {
         expect(display.lineItems.map(item => item.embeddedIncreaseAmount)).toEqual([3.34, 3.33, 3.33]);
     });
 
+    it('embute acrescimo do grupo no preco sem exibir desconto', () => {
+        const display = buildPdfAdjustmentDisplay({
+            measurements: [buildMeasurement({
+                id: 1,
+                discount: { value: '20', type: 'fixed', operation: 'increase' }
+            })],
+            films,
+            pricingMode: 'complete',
+            totals: {
+                subtotal: 100,
+                totalItemDiscount: 0,
+                totalItemIncrease: 20,
+                generalDiscountAmount: 0,
+                finalTotal: 120
+            }
+        });
+
+        expect(display.lineItems[0].itemIncreaseAmount).toBeCloseTo(20);
+        expect(display.lineItems[0].displayBasePrice).toBeCloseTo(120);
+        expect(display.lineItems[0].displayItemDiscountAmount).toBe(0);
+        expect(display.lineItems[0].displayFinalItemPrice).toBeCloseTo(120);
+        expect(display.summarySubtotal).toBeCloseTo(120);
+        expect(display.summaryItemDiscount).toBe(0);
+        expect(display.summaryFinalTotal).toBeCloseTo(120);
+    });
+
     it('usa o preço personalizado da proposta nas linhas do PDF', () => {
         const display = buildPdfAdjustmentDisplay({
             measurements: [buildMeasurement({ id: 1, largura: '2', altura: '1' })],

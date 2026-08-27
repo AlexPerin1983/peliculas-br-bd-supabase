@@ -1,22 +1,34 @@
-import React, { useState, useEffect, FormEvent } from 'react';
+import React, { useState, useEffect } from 'react';
 import Modal from '../ui/Modal';
 import ActionButton from '../ui/ActionButton';
+import type { MeasurementPriceAdjustment, ProposalAdjustmentOperation } from '../../types';
+import { calculateMeasurementPriceAdjustment } from '../../src/lib/measurementPriceAdjustment';
 
 interface DiscountModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSave: (discount: { value: string; type: 'percentage' | 'fixed' }) => void;
+    onSave: (adjustment: MeasurementPriceAdjustment) => void;
     initialValue?: string;
     initialType?: 'percentage' | 'fixed';
+    initialOperation?: ProposalAdjustmentOperation;
     basePrice?: number;
 }
 
 const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
-const DiscountModal: React.FC<DiscountModalProps> = ({ isOpen, onClose, onSave, initialValue, initialType = 'percentage', basePrice = 0 }) => {
+const DiscountModal: React.FC<DiscountModalProps> = ({
+    isOpen,
+    onClose,
+    onSave,
+    initialValue,
+    initialType = 'percentage',
+    initialOperation = 'discount',
+    basePrice = 0,
+}) => {
     // Usando string para o estado para permitir a digitação de vírgulas e números parciais
     const [value, setValue] = useState(initialValue || '');
     const [type, setType] = useState<'percentage' | 'fixed'>(initialType);
+    const [operation, setOperation] = useState<ProposalAdjustmentOperation>(initialOperation);
     const inputRef = React.useRef<HTMLInputElement>(null);
 
     useEffect(() => {
@@ -24,10 +36,11 @@ const DiscountModal: React.FC<DiscountModalProps> = ({ isOpen, onClose, onSave, 
             // Sincroniza o estado local com as props iniciais ao abrir
             setValue(initialValue || '');
             setType(initialType);
+            setOperation(initialOperation);
             // Foca o input ao abrir o modal
             setTimeout(() => inputRef.current?.focus(), 100);
         }
-    }, [isOpen, initialValue, initialType]);
+    }, [isOpen, initialValue, initialType, initialOperation]);
 
     const handleValueChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const val = e.target.value;
@@ -37,9 +50,9 @@ const DiscountModal: React.FC<DiscountModalProps> = ({ isOpen, onClose, onSave, 
         }
     };
 
-    const handleSubmit = (e: FormEvent) => {
+    const handleSubmit = (e: React.SyntheticEvent) => {
         e.preventDefault();
-        onSave({ value, type });
+        onSave({ value, type, operation });
     };
 
     const handleButtonMouseDown = (e: React.MouseEvent) => {
@@ -47,20 +60,10 @@ const DiscountModal: React.FC<DiscountModalProps> = ({ isOpen, onClose, onSave, 
         e.preventDefault();
     };
 
-    const calculatedDiscountValue = React.useMemo(() => {
-        const numValue = parseFloat(value.replace(',', '.')) || 0;
-        if (numValue <= 0) return 0;
-
-        if (type === 'percentage') {
-            return basePrice * (numValue / 100);
-        } else {
-            return numValue;
-        }
-    }, [value, type, basePrice]);
-
-    const finalPrice = React.useMemo(() => {
-        return Math.max(0, basePrice - calculatedDiscountValue);
-    }, [basePrice, calculatedDiscountValue]);
+    const calculatedAdjustment = React.useMemo(() => (
+        calculateMeasurementPriceAdjustment(basePrice, { value, type, operation })
+    ), [basePrice, operation, type, value]);
+    const isIncrease = operation === 'increase';
 
     const footer = (
         <>
@@ -73,7 +76,7 @@ const DiscountModal: React.FC<DiscountModalProps> = ({ isOpen, onClose, onSave, 
                 variant="primary"
                 size="sm"
             >
-                Salvar Desconto
+                Salvar ajuste
             </ActionButton>
         </>
     );
@@ -82,28 +85,57 @@ const DiscountModal: React.FC<DiscountModalProps> = ({ isOpen, onClose, onSave, 
         <Modal
             isOpen={isOpen}
             onClose={onClose}
-            title="Desconto do item"
+            title="Ajuste do grupo"
             footer={footer}
             wrapperClassName="sm:items-center items-start pt-20 sm:pt-4"
         >
             <form id="discountForm" onSubmit={handleSubmit} className="space-y-5">
+                <div>
+                    <span className="mb-2 block text-sm font-bold text-[var(--text-strong)]">O que deseja aplicar?</span>
+                    <div className="grid grid-cols-2 rounded-[var(--radius-control)] bg-[var(--surface-muted)] p-1">
+                        <button
+                            type="button"
+                            onMouseDown={handleButtonMouseDown}
+                            onClick={() => setOperation('discount')}
+                            aria-pressed={!isIncrease}
+                            className={`h-10 rounded-[10px] text-sm font-bold transition ${!isIncrease ? 'bg-[var(--surface)] text-emerald-700 shadow-sm ring-1 ring-emerald-200 dark:text-emerald-300 dark:ring-emerald-900/60' : 'text-[var(--text-muted)] hover:text-[var(--text-strong)]'}`}
+                        >
+                            Desconto
+                        </button>
+                        <button
+                            type="button"
+                            onMouseDown={handleButtonMouseDown}
+                            onClick={() => setOperation('increase')}
+                            aria-pressed={isIncrease}
+                            className={`h-10 rounded-[10px] text-sm font-bold transition ${isIncrease ? 'bg-[var(--surface)] text-blue-700 shadow-sm ring-1 ring-blue-200 dark:text-blue-300 dark:ring-blue-900/60' : 'text-[var(--text-muted)] hover:text-[var(--text-strong)]'}`}
+                        >
+                            Acréscimo
+                        </button>
+                    </div>
+                    <p className="mt-2 text-xs leading-5 text-[var(--text-muted)]">
+                        {isIncrease
+                            ? 'O valor será embutido no preço deste grupo e não aparecerá como uma linha de acréscimo no orçamento.'
+                            : 'O desconto continuará identificado no orçamento do cliente.'}
+                    </p>
+                </div>
+
                 <div className="grid grid-cols-2 gap-3">
                     <div className="rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-3">
                         <span className="ui-kicker">Valor original</span>
                         <span className="mt-1 block text-lg font-black text-[var(--text-strong)]">{formatCurrency(basePrice)}</span>
                     </div>
-                    <div className="rounded-[var(--radius-panel)] border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-900/50 dark:bg-emerald-900/20">
-                        <span className="ui-kicker text-emerald-700 dark:text-emerald-300">Valor final</span>
-                        <span className="mt-1 block text-lg font-black text-emerald-700 dark:text-emerald-300">{formatCurrency(finalPrice)}</span>
+                    <div className={`rounded-[var(--radius-panel)] border p-3 ${isIncrease ? 'border-blue-200 bg-blue-50 dark:border-blue-900/50 dark:bg-blue-900/20' : 'border-emerald-200 bg-emerald-50 dark:border-emerald-900/50 dark:bg-emerald-900/20'}`}>
+                        <span className={`ui-kicker ${isIncrease ? 'text-blue-700 dark:text-blue-300' : 'text-emerald-700 dark:text-emerald-300'}`}>Valor final</span>
+                        <span className={`mt-1 block text-lg font-black ${isIncrease ? 'text-blue-700 dark:text-blue-300' : 'text-emerald-700 dark:text-emerald-300'}`}>{formatCurrency(calculatedAdjustment.finalPrice)}</span>
                     </div>
                 </div>
 
                 <div>
                     <div className="mb-2 flex items-center justify-between gap-3">
-                        <label htmlFor="discount-value" className="text-sm font-bold text-[var(--text-strong)]">Valor do desconto</label>
-                        {basePrice > 0 && calculatedDiscountValue > 0 && (
-                            <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300">
-                                - {formatCurrency(calculatedDiscountValue)}
+                        <label htmlFor="discount-value" className="text-sm font-bold text-[var(--text-strong)]">Valor do {isIncrease ? 'acréscimo' : 'desconto'}</label>
+                        {basePrice > 0 && calculatedAdjustment.amount > 0 && (
+                            <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${isIncrease ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300' : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300'}`}>
+                                {isIncrease ? '+' : '-'} {formatCurrency(calculatedAdjustment.amount)}
                             </span>
                         )}
                     </div>

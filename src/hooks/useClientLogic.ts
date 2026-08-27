@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { Client, Measurement, UserInfo, Film, PaymentMethods, SavedPDF, Agendamento, ProposalOption, SchedulingInfo, ExtractedClientData, UIMeasurement, ProposalDiscount } from '../../types';
+import { Client, Measurement, UserInfo, Film, PaymentMethods, SavedPDF, Agendamento, ProposalOption, SchedulingInfo, ExtractedClientData, UIMeasurement, ProposalDiscount, MeasurementPriceAdjustment } from '../../types';
 import * as db from '../../services/db';
 import { generatePDF, generateCombinedPDF } from '../../services/pdfGenerator';
 import { useAIProcessing } from './useAIProcessing';
@@ -7,6 +7,7 @@ import { useNumpad } from './useNumpad';
 import { summarizeProposalExpenses } from '../lib/proposalExpenses';
 import { calculatePricingAreaM2 } from '../lib/pricingArea';
 import { calculateProposalAdjustmentAmounts } from '../lib/proposalAdjustments';
+import { calculateMeasurementPriceAdjustment } from '../lib/measurementPriceAdjustment';
 
 interface UseClientLogicProps {
     userInfo: UserInfo | null;
@@ -121,14 +122,7 @@ export const useClientLogic = ({
                 const pricePerM2 = film.preco || 0;
                 let itemTotal = area * pricePerM2;
 
-                if (m.discount) {
-                    const discountValue = parseFloat(m.discount.value.replace(',', '.')) || 0;
-                    if (m.discount.type === 'percentage') {
-                        itemTotal -= itemTotal * (discountValue / 100);
-                    } else {
-                        itemTotal -= discountValue;
-                    }
-                }
+                itemTotal = calculateMeasurementPriceAdjustment(itemTotal, m.discount).finalPrice;
                 subtotal += itemTotal;
             }
         });
@@ -658,7 +652,7 @@ export const useClientLogic = ({
         setEditingMeasurementForDiscount(null);
     }, []);
 
-    const handleSaveDiscount = useCallback((discount: { value: string; type: 'percentage' | 'fixed' }) => {
+    const handleSaveDiscount = useCallback((discount: MeasurementPriceAdjustment) => {
         if (editingMeasurementForDiscount && activeOptionId) {
             setProposalOptions(prev => prev.map(opt =>
                 opt.id === activeOptionId ? {

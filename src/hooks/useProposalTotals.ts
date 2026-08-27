@@ -9,6 +9,7 @@ import {
     buildFilmCuttingMeasurementSignature,
     normalizeFilmCuttingSettings,
 } from '../lib/proposalCutting';
+import { calculateMeasurementPriceAdjustment } from '../lib/measurementPriceAdjustment';
 
 type DiscountType = ProposalDiscount;
 
@@ -87,22 +88,22 @@ export function useProposalTotals({
             const laborPrice = prices.maoDeObra * m2;
 
             let itemDiscountAmount = 0;
+            let itemIncreaseAmount = 0;
+            let finalItemPrice = basePrice;
             if (filmPricingMode !== 'linear') {
-                const discountObj = measurement.discount || { value: '0', type: 'percentage' };
-                const discountValue = parseFloat(String(discountObj.value).replace(',', '.')) || 0;
-
-                if (discountObj.type === 'percentage' && discountValue > 0) {
-                    itemDiscountAmount = basePrice * (discountValue / 100);
-                } else if (discountObj.type === 'fixed' && discountValue > 0) {
-                    itemDiscountAmount = discountValue;
+                const itemAdjustment = calculateMeasurementPriceAdjustment(basePrice, measurement.discount);
+                finalItemPrice = itemAdjustment.finalPrice;
+                if (itemAdjustment.operation === 'increase') {
+                    itemIncreaseAmount = itemAdjustment.amount;
+                } else {
+                    itemDiscountAmount = itemAdjustment.amount;
                 }
             }
-
-            const finalItemPrice = Math.max(0, basePrice - itemDiscountAmount);
 
             acc.totalM2 += Number.isFinite(rawM2) ? rawM2 : 0;
             acc.subtotal += basePrice;
             acc.totalItemDiscount += itemDiscountAmount;
+            acc.totalItemIncrease += itemIncreaseAmount;
             acc.priceAfterItemDiscounts += finalItemPrice;
             acc.totalQuantity += quantidade;
             acc.totalMaterial += materialPrice;
@@ -141,6 +142,7 @@ export function useProposalTotals({
             totalM2: 0,
             subtotal: 0,
             totalItemDiscount: 0,
+            totalItemIncrease: 0,
             priceAfterItemDiscounts: 0,
             totalQuantity: 0,
             totalMaterial: 0,

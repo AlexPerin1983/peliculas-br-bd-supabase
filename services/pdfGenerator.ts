@@ -9,6 +9,8 @@ import { clampValidityDays } from '../src/lib/proposalValidity';
 import { formatGarantiaMaoDeObra } from '../src/lib/filmWarranty';
 import { DEFAULT_TERMO_RESPONSABILIDADE } from '../src/lib/termoResponsabilidade';
 import type { PaymentMethod } from '../types';
+import { calculateMeasurementPriceAdjustment, getMeasurementAdjustmentOperation } from '../src/lib/measurementPriceAdjustment';
+import { resolveFilmPrices } from '../src/lib/filmPriceOverrides';
 
 // Define GeneralDiscount locally since it's not exported from types.ts
 interface GeneralDiscount {
@@ -43,20 +45,54 @@ const formatAddressForPdf = (client: Client): string => {
     return parts.filter(Boolean).join(', ');
 };
 
+const calculateSavedItemAdjustments = (pdf: SavedPDF, allFilms: Film[]) => {
+    const pricingMode = pdf.generalDiscount?.pricingMode === 'labor_only' ? 'labor_only' : 'complete';
+    const filmPricingModes = pdf.generalDiscount?.filmPricingModes || {};
+    const filmPriceOverrides = pdf.generalDiscount?.filmPriceOverrides;
+
+    return (pdf.measurements || []).reduce((totals, measurement) => {
+        if (measurement.active === false || (pricingMode !== 'labor_only' && filmPricingModes[measurement.pelicula] === 'linear')) {
+            return totals;
+        }
+
+        const film = allFilms.find(item => item.nome === measurement.pelicula);
+        const prices = resolveFilmPrices(film, filmPriceOverrides, measurement.pelicula);
+        const unitPrice = pricingMode === 'labor_only'
+            ? prices.maoDeObra
+            : prices.preco > 0
+                ? prices.preco
+                : prices.maoDeObra;
+        const basePrice = unitPrice * calculatePricingAreaM2(
+            parseFloat(String(measurement.largura).replace(',', '.')) || 0,
+            parseFloat(String(measurement.altura).replace(',', '.')) || 0,
+            parseInt(String(measurement.quantidade), 10) || 0
+        );
+        const adjustment = calculateMeasurementPriceAdjustment(basePrice, measurement.discount);
+        if (adjustment.operation === 'increase') {
+            totals.increase += adjustment.amount;
+        } else {
+            totals.discount += adjustment.amount;
+        }
+        return totals;
+    }, { discount: 0, increase: 0 });
+};
+
 // Função auxiliar para calcular totais de um único PDF salvo
-const calculateTotalsFromSavedPDF = (pdf: SavedPDF): Totals => {
+const calculateTotalsFromSavedPDF = (pdf: SavedPDF, allFilms: Film[]): Totals => {
     // Acessando as propriedades diretamente do objeto SavedPDF
     const totalM2 = pdf.totalM2 || 0;
     const subtotal = pdf.subtotal || 0;
     // Corrigindo o acesso à propriedade totalItemDiscount
-    const totalItemDiscount = (pdf as any).totalItemDiscount || 0;
+    const savedItemAdjustments = calculateSavedItemAdjustments(pdf, allFilms);
+    const totalItemDiscount = (pdf as any).totalItemDiscount ?? savedItemAdjustments.discount;
+    const totalItemIncrease = (pdf as any).totalItemIncrease ?? savedItemAdjustments.increase;
     const generalDiscountAmount = pdf.generalDiscountAmount || 0;
     const finalTotal = pdf.totalPreco;
     const hasExplicitAdjustment = pdf.generalDiscount?.discountValue !== undefined
         || pdf.generalDiscount?.discountType !== undefined
         || pdf.generalDiscount?.increaseValue !== undefined
         || pdf.generalDiscount?.increaseType !== undefined;
-    const adjustmentBase = Math.max(0, subtotal - totalItemDiscount);
+    const adjustmentBase = Math.max(0, subtotal - totalItemDiscount + totalItemIncrease);
     const calculatedAdjustments = hasExplicitAdjustment && adjustmentBase > 0
         ? calculateProposalAdjustmentAmounts({
             value: String(pdf.generalDiscount?.value ?? ''),
@@ -77,15 +113,22 @@ const calculateTotalsFromSavedPDF = (pdf: SavedPDF): Totals => {
     );
 
     // Se subtotal não estiver disponível, calcula a partir do finalTotal e ajustes
-    const calculatedSubtotal = subtotal || (finalTotal - generalIncreaseAmount + generalFinalDiscountAmount + totalItemDiscount);
+    const calculatedSubtotal = subtotal || (
+        finalTotal
+        - generalIncreaseAmount
+        + generalFinalDiscountAmount
+        + totalItemDiscount
+        - totalItemIncrease
+    );
 
     // Recalcula priceAfterItemDiscounts para garantir consistência
-    const priceAfterItemDiscounts = calculatedSubtotal - totalItemDiscount;
+    const priceAfterItemDiscounts = calculatedSubtotal - totalItemDiscount + totalItemIncrease;
 
     return {
         totalM2,
         subtotal: calculatedSubtotal,
         totalItemDiscount,
+        totalItemIncrease,
         priceAfterItemDiscounts,
         generalDiscountAmount: generalFinalDiscountAmount > 0 ? generalFinalDiscountAmount : generalIncreaseAmount,
         generalIncreaseAmount,
@@ -134,7 +177,7 @@ export const regeneratePDFFromSaved = async (client: Client, userInfo: UserInfo,
         incluirTermoResponsabilidade: pdf.generalDiscount?.incluirTermoResponsabilidade,
     };
 
-    const totals = calculateTotalsFromSavedPDF(pdf);
+    const totals = calculateTotalsFromSavedPDF(pdf, allFilms);
 
     return generatePDF(
         client,
@@ -167,7 +210,7 @@ export const generateCombinedPDF = async (client: Client, userInfo: UserInfo, sa
             hideMeasurements: pdf.generalDiscount?.hideMeasurements,
             incluirTermoResponsabilidade: pdf.generalDiscount?.incluirTermoResponsabilidade,
         } as GeneralDiscount,
-        totals: calculateTotalsFromSavedPDF(pdf),
+        totals: calculateTotalsFromSavedPDF(pdf, allFilms),
         paymentConfig: undefined as ProposalPaymentConfig | undefined,
         proposalOptionName: pdf.proposalOptionName || 'Opção',
     }));
@@ -693,7 +736,7 @@ const renderPdfContent = async (
                     let itemDiscountAmount = 0;
                     let discountDisplay = '-';
 
-                    if (m.discount) {
+                    if (m.discount && getMeasurementAdjustmentOperation(m.discount) === 'discount') {
                         const discountValue = parseFloat(String(m.discount.value).replace(',', '.')) || 0;
                         const discountType = m.discount.type;
 

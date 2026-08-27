@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Measurement, UIMeasurement } from '../../types';
+import { Measurement, MeasurementPriceAdjustment, UIMeasurement } from '../../types';
 import { useMeasurementInputMode } from './useMeasurementInputMode';
 import { formatCentimeterDigitsAsMeters, metersValueToCentimeterDigits } from '../lib/measurementInputMode';
 import {
@@ -417,7 +417,7 @@ export function useMeasurementEditor({
         setEditingMeasurementBasePrice(0);
     }, []);
 
-    const handleSaveDiscount = useCallback((discount: { value: string; type: 'percentage' | 'fixed' }) => {
+    const handleSaveDiscount = useCallback((discount: MeasurementPriceAdjustment) => {
         if (!editingMeasurementForDiscount) return;
 
         const updatedMeasurements = measurements.map(measurement =>

@@ -7,6 +7,11 @@ import { calculatePricingAreaM2 } from '../src/lib/pricingArea';
 import { useMeasurementInputMode } from '../src/hooks/useMeasurementInputMode';
 import { useNumpadDraft } from '../src/hooks/useNumpadDraft';
 import { normalizeMeasurementInput } from '../src/lib/measurementInputMode';
+import {
+    calculateMeasurementPriceAdjustment,
+    getMeasurementAdjustmentOperation,
+    parseMeasurementAdjustmentValue,
+} from '../src/lib/measurementPriceAdjustment';
 
 type UIMeasurement = Measurement & { isNew?: boolean };
 type EditableMeasurementField = 'largura' | 'altura' | 'quantidade';
@@ -451,21 +456,13 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
         const price = pricePerM2 * m2;
         let final = price;
 
-        const discountObj = measurement.discount;
-        const discountValue = discountObj ? parseFloat(String(discountObj.value).replace(',', '.')) : 0;
-        const discountType = discountObj ? discountObj.type : 'percentage';
-
-        if (discountValue > 0) {
-            if (discountType === 'percentage') {
-                final = price * (1 - discountValue / 100);
-            } else { // fixed
-                final = price - discountValue;
-            }
-        }
-        return { basePrice: price, finalPrice: Math.max(0, final), priceLabel: label };
+        final = calculateMeasurementPriceAdjustment(price, measurement.discount).finalPrice;
+        return { basePrice: price, finalPrice: final, priceLabel: label };
     }, [m2, selectedFilm, measurement.discount, pricingMode]);
 
-    const hasDiscount = (parseFloat(String(measurement.discount?.value || '0').replace(',', '.'))) > 0;
+    const adjustmentOperation = getMeasurementAdjustmentOperation(measurement.discount);
+    const hasAdjustment = parseMeasurementAdjustmentValue(measurement.discount?.value) > 0;
+    const hasIncrease = hasAdjustment && adjustmentOperation === 'increase';
 
     // --- Lógica para exibir o ambiente (AJUSTADA) ---
     const displayFilmName = measurement.pelicula || 'Nenhuma';
@@ -787,7 +784,7 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
                         </div>
 
                         <div className="flex items-center relative z-50">
-                            <Tooltip text={hasDiscount ? 'Editar Desconto' : 'Aplicar Desconto'}>
+                            <Tooltip text={hasAdjustment ? `Editar ${hasIncrease ? 'Acréscimo' : 'Desconto'}` : 'Aplicar desconto ou acréscimo'}>
                                 <div
                                     role="button"
                                     tabIndex={isSelectionMode ? -1 : 0}
@@ -806,7 +803,7 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
                                         }
                                     }}
                                     className={`text-right rounded-lg transition-colors ${isSelectionMode ? 'cursor-default' : 'hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer'}`}
-                                    aria-label="Preço, clique para aplicar ou editar desconto"
+                                    aria-label="Preço, clique para aplicar ou editar desconto ou acréscimo"
                                 >
                                     <div className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400 tracking-wider">{priceLabel}</div>
                                     {basePrice > 0 ? (
@@ -815,6 +812,8 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
                                                 <s className="text-red-500/80 text-[10px] font-normal">{formatCurrency(basePrice)}</s>
                                                 <span className="text-sm font-bold text-slate-800 dark:text-slate-200 leading-tight">{formatCurrency(finalPrice)}</span>
                                             </div>
+                                        ) : finalPrice > basePrice ? (
+                                            <span className="text-sm font-bold text-blue-700 dark:text-blue-300 leading-tight">{formatCurrency(finalPrice)}</span>
                                         ) : (
                                             <span className="text-sm font-bold text-slate-800 dark:text-slate-200 leading-tight">{formatCurrency(basePrice)}</span>
                                         )
