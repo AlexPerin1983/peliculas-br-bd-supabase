@@ -59,7 +59,7 @@ describe('SyncStatusIndicator', () => {
 
     render(<SyncStatusIndicator />);
 
-    fireEvent.click(screen.getByRole('button', { name: /salvo no celular/i }));
+    fireEvent.click(screen.getByRole('button', { name: /salvo no aparelho/i }));
 
     expect(screen.getByText('Conexão')).toBeInTheDocument();
     expect(screen.getByText(/clientes.*aguardando conexão/i)).toBeInTheDocument();
@@ -90,10 +90,11 @@ describe('SyncStatusIndicator', () => {
     });
 
     render(<SyncStatusIndicator />);
-    fireEvent.click(screen.getByRole('button', { name: /salvo no celular/i }));
+    fireEvent.click(screen.getByRole('button', { name: /salvo no aparelho/i }));
 
     expect(screen.getByText(/pdfs.*aguardando conexão/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/seus dados estão salvos neste celular/i)).toHaveLength(2);
+    expect(screen.getByText(/há alterações neste aparelho/i)).toBeInTheDocument();
+    expect(screen.getByText(/o envio será tentado novamente automaticamente/i)).toBeInTheDocument();
   });
 
   it('traduz erros técnicos de película e oculta o número de tentativas', () => {
@@ -114,10 +115,10 @@ describe('SyncStatusIndicator', () => {
     });
 
     render(<SyncStatusIndicator />);
-    fireEvent.click(screen.getByRole('button', { name: /1 ajuste/i }));
+    fireEvent.click(screen.getByRole('button', { name: /1 não enviado/i }));
 
-    expect(screen.getByText(/películas.*precisa de revisão/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/valor numérico inválido/i)).toHaveLength(2);
+    expect(screen.getByText(/películas.*dado precisa de revisão/i)).toBeInTheDocument();
+    expect(screen.getByText(/valor numérico inválido/i)).toBeInTheDocument();
     expect(screen.queryByText(/numeric field overflow/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/tentativa 114/i)).not.toBeInTheDocument();
   });
@@ -139,10 +140,10 @@ describe('SyncStatusIndicator', () => {
     });
 
     render(<SyncStatusIndicator />);
-    fireEvent.click(screen.getByRole('button', { name: /1 ajuste/i }));
+    fireEvent.click(screen.getByRole('button', { name: /1 não enviado/i }));
 
-    expect(screen.getByText(/configurações.*precisa de revisão/i)).toBeInTheDocument();
-    expect(screen.getByText(/não foi possível salvar as configurações/i)).toBeInTheDocument();
+    expect(screen.getByText(/configurações.*sem permissão para salvar/i)).toBeInTheDocument();
+    expect(screen.getByText(/conta não foi autorizada/i)).toBeInTheDocument();
     expect(screen.queryByText(/row-level security/i)).not.toBeInTheDocument();
   });
 
@@ -157,9 +158,9 @@ describe('SyncStatusIndicator', () => {
 
     render(<SyncStatusIndicator />);
 
-    fireEvent.click(screen.getByRole('button', { name: /salvo no celular/i }));
+    fireEvent.click(screen.getByRole('button', { name: /salvo no aparelho/i }));
 
-    expect(screen.getByRole('button', { name: /salvo no celular/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /salvo no aparelho/i })).toBeInTheDocument();
     expect(screen.getAllByText('Offline')[0]).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /sincronizar agora/i })).not.toBeInTheDocument();
   });
@@ -179,5 +180,40 @@ describe('SyncStatusIndicator', () => {
 
     const syncButtons = screen.getAllByRole('button', { name: /sincronizando/i });
     expect(syncButtons[1]).toBeDisabled();
+  });
+
+  it('copia somente o diagnostico seguro e nao envia dados de negocio', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText }
+    });
+    mockedSubscribeSyncStatus.mockImplementation(listener => {
+      listener(buildStatus({
+        failedCount: 1,
+        error: 'Maria Segredo maria@segredo.test R$ 999,00 1,52 x 2,80',
+        failedItems: [{
+          id: 20,
+          table: 'clients',
+          action: 'update',
+          retryCount: 1,
+          lastError: 'Maria Segredo maria@segredo.test R$ 999,00 1,52 x 2,80',
+          lastAttemptAt: Date.now()
+        }]
+      }));
+      return vi.fn();
+    });
+
+    render(<SyncStatusIndicator />);
+    fireEvent.click(screen.getByRole('button', { name: /1 não enviado/i }));
+    fireEvent.click(screen.getByRole('button', { name: /copiar diagnóstico/i }));
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+    const copied = writeText.mock.calls[0][0];
+    expect(copied).not.toContain('Maria Segredo');
+    expect(copied).not.toContain('maria@segredo.test');
+    expect(copied).not.toContain('999,00');
+    expect(copied).not.toContain('1,52');
+    expect(screen.getByRole('status')).toHaveTextContent(/diagnóstico copiado/i);
   });
 });

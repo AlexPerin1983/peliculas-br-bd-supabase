@@ -185,14 +185,19 @@ export function useAppBootstrap({
         if (!authUserId) return;
 
         let wasSyncing = false;
+        let previousCompletedAt: number | null = null;
 
         return subscribeSyncStatus(status => {
             const finishedCleanly = wasSyncing
                 && !status.syncInProgress
                 && status.pendingCount === 0
-                && status.failedCount === 0;
+                && status.failedCount === 0
+                && !status.error
+                && status.lastSyncAt !== null
+                && status.lastSyncAt !== previousCompletedAt;
 
             wasSyncing = status.syncInProgress;
+            previousCompletedAt = status.lastSyncAt;
 
             if (finishedCleanly) {
                 void refreshSharedData();

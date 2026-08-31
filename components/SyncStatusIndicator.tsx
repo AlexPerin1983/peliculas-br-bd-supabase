@@ -1,265 +1,135 @@
-// =====================================================
-// SYNC STATUS INDICATOR - Indicador visual de sincronização
-// =====================================================
-
 import React, { useState, useEffect } from 'react';
-import { subscribeSyncStatus, SyncStatus, forcSync } from '../services/syncService';
-import { Wifi, WifiOff, CloudOff, RefreshCw, Check, AlertCircle } from 'lucide-react';
+import { subscribeSyncStatus, type SyncStatus, forcSync } from '../services/syncService';
+import { Wifi, WifiOff, CloudOff, RefreshCw, Check, AlertCircle, Copy } from 'lucide-react';
+import { canAutomaticallyRetrySyncError, getSyncErrorInfo, getSyncErrorPresentation, getSyncTableLabel } from '../src/lib/syncErrors';
+import { buildSyncDiagnostic } from '../src/lib/syncDiagnostics';
 
-interface SyncStatusIndicatorProps {
-    showDetails?: boolean;
-}
-
-const formatSyncErrorMessage = (error: string | null | undefined): string | null => {
-    if (!error) return null;
-
-    const normalized = error.toLowerCase();
-
-    if (
-        normalized.includes('jwt expired')
-        || normalized.includes('unauthorized')
-        || normalized.includes('sessao expirada')
-        || normalized.includes('sessão expirada')
-    ) {
-        return 'Sessão expirada. Faça login novamente para continuar sincronizando.';
-    }
-
-    if (
-        normalized.includes('failed to fetch')
-        || normalized.includes('networkerror')
-        || normalized.includes('network error')
-        || normalized.includes('load failed')
-        || normalized.includes('err_network')
-        || normalized.includes('falha de rede')
-    ) {
-        return 'Conexão instável com o servidor. Seus dados estão salvos neste celular e tentaremos novamente automaticamente.';
-    }
-
-    if (normalized.includes('numeric field overflow')) {
-        return 'Uma película possui um valor numérico inválido. Confira os números preenchidos e salve novamente.';
-    }
-
-    if (
-        normalized.includes('row-level security')
-        && (normalized.includes('user_info') || normalized.includes('configura'))
-    ) {
-        return 'Não foi possível salvar as configurações da empresa agora. Atualize a página e tente novamente.';
-    }
-
-    if (normalized.includes('row-level security')) {
-        return 'Esta alteração não pôde ser salva com a permissão atual da conta.';
-    }
-
-    if (normalized.includes('duplicate key') || normalized.includes('unique constraint')) {
-        return 'Este item já existe. Atualize a página antes de tentar novamente.';
-    }
-
-    return 'Não foi possível concluir a sincronização. Tente novamente em alguns instantes.';
-};
-
-const isConnectionFailure = (error: string | null | undefined): boolean => {
-    if (!error) return false;
-    return formatSyncErrorMessage(error)?.startsWith('Conexão instável') ?? false;
-};
-
-const formatSyncItemLabel = (table: string): string => {
-    const labels: Record<string, string> = {
-        clients: 'Clientes',
-        films: 'Películas',
-        savedPdfs: 'PDFs',
-        agendamentos: 'Agendamentos',
-        proposalOptions: 'Opções',
-        userInfo: 'Configurações'
-    };
-
-    return labels[table] || table;
-};
+interface SyncStatusIndicatorProps { showDetails?: boolean; }
+const formatTime = (value?: number | null) => value ? new Date(value).toLocaleTimeString('pt-BR') : '—';
 
 const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({ showDetails = false }) => {
     const [status, setStatus] = useState<SyncStatus>({
-        isOnline: navigator.onLine,
-        pendingCount: 0,
-        failedCount: 0,
-        failedItems: [],
-        lastSyncAt: null,
-        syncInProgress: false,
-        error: null
+        isOnline: navigator.onLine, pendingCount: 0, failedCount: 0, failedItems: [],
+        lastSyncAt: null, syncInProgress: false, error: null
     });
     const [expanded, setExpanded] = useState(false);
+    const [copyMessage, setCopyMessage] = useState('');
+    const [diagnosticFallback, setDiagnosticFallback] = useState('');
+    const [retryError, setRetryError] = useState('');
 
-    useEffect(() => {
-        const unsubscribe = subscribeSyncStatus(setStatus);
-        return unsubscribe;
-    }, []);
+    useEffect(() => subscribeSyncStatus(setStatus), []);
 
     const handleSync = async () => {
-        await forcSync();
+        setRetryError('');
+        try { await forcSync(); }
+        catch { setRetryError('Não foi possível iniciar o envio. Copie o diagnóstico e fale com o suporte.'); }
+    };
+    const handleCopy = async () => {
+        const diagnostic = buildSyncDiagnostic(status);
+        try {
+            if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
+            await navigator.clipboard.writeText(diagnostic);
+            setDiagnosticFallback('');
+            setCopyMessage('Diagnóstico copiado. Envie ao suporte.');
+        } catch {
+            setDiagnosticFallback(diagnostic);
+            setCopyMessage('Selecione e copie o texto abaixo para enviar ao suporte.');
+        }
     };
 
-    const hasConnectionFailure = isConnectionFailure(status.error)
-        || status.failedItems.some(item => isConnectionFailure(item.lastError));
+    const notSentCount = status.pendingCount + status.failedCount;
+    const currentError = getSyncErrorInfo({ lastError: status.error, errorInfo: status.errorInfo });
+    const hasConnectionFailure = (status.error && currentError.category === 'network')
+        || status.failedItems.some(item => getSyncErrorInfo(item).category === 'network');
+    const hasProblem = notSentCount > 0 || !!status.error;
+    const lastAttemptAt = status.lastAttemptAt || Math.max(0, ...status.failedItems.map(item => item.lastAttemptAt || 0));
 
-    // Não mostrar nada se está online e não tem pendentes
-    if (status.isOnline && status.pendingCount === 0 && status.failedCount === 0 && !showDetails) {
-        return null;
-    }
+    if (status.isOnline && !hasProblem && !status.syncInProgress && !showDetails) return null;
 
-    const getStatusIcon = () => {
-        if (status.syncInProgress) {
-            return <RefreshCw className="w-4 h-4 animate-spin text-blue-500" />;
-        }
-        if (!status.isOnline) {
-            return <WifiOff className="w-4 h-4 text-red-500" />;
-        }
-        if (status.failedCount > 0 && hasConnectionFailure) {
-            return <CloudOff className="w-4 h-4 text-amber-500" />;
-        }
-        if (status.failedCount > 0) {
-            return <AlertCircle className="w-4 h-4 text-amber-500" />;
-        }
-        if (status.pendingCount > 0) {
-            return <CloudOff className="w-4 h-4 text-yellow-500" />;
-        }
-        if (status.error) {
-            return <AlertCircle className="w-4 h-4 text-red-500" />;
-        }
-        return <Check className="w-4 h-4 text-green-500" />;
-    };
-
-    const getStatusText = () => {
-        if (status.syncInProgress) return 'Sincronizando...';
-        if (!status.isOnline) {
-            return status.pendingCount > 0 || status.failedCount > 0
-                ? 'Salvo no celular'
-                : 'Offline';
-        }
-        if (status.failedCount > 0 && hasConnectionFailure) return 'Salvo no celular';
-        if (status.failedCount > 0) return `${status.failedCount} ${status.failedCount > 1 ? 'ajustes' : 'ajuste'}`;
-        if (status.pendingCount > 0) return `${status.pendingCount} pendente${status.pendingCount > 1 ? 's' : ''}`;
-        if (status.error) return 'Erro';
-        return 'Sincronizado';
-    };
-
-    const getStatusColor = () => {
-        if (status.syncInProgress) return 'bg-blue-100 dark:bg-blue-900/30 border-blue-300 dark:border-blue-700';
-        if (!status.isOnline) return 'bg-red-100 dark:bg-red-900/30 border-red-300 dark:border-red-700';
-        if (status.failedCount > 0 && hasConnectionFailure) return 'bg-amber-100 dark:bg-amber-900/30 border-amber-300 dark:border-amber-700';
-        if (status.failedCount > 0) return 'bg-amber-100 dark:bg-amber-900/30 border-amber-300 dark:border-amber-700';
-        if (status.pendingCount > 0) return 'bg-yellow-100 dark:bg-yellow-900/30 border-yellow-300 dark:border-yellow-700';
-        if (status.error) return 'bg-red-100 dark:bg-red-900/30 border-red-300 dark:border-red-700';
-        return 'bg-green-100 dark:bg-green-900/30 border-green-300 dark:border-green-700';
-    };
-
-    const friendlyError = formatSyncErrorMessage(status.error);
+    const text = status.syncInProgress ? 'Sincronizando...'
+        : !status.isOnline ? (notSentCount > 0 ? 'Salvo no aparelho' : 'Offline')
+        : hasConnectionFailure ? 'Salvo no aparelho'
+        : notSentCount > 0 ? notSentCount + ' não enviado' + (notSentCount > 1 ? 's' : '')
+        : status.error ? 'Envio precisa de atenção'
+        : status.lastSyncAt ? 'Sincronizado' : 'Sem pendências';
+    const color = status.syncInProgress ? 'bg-blue-100 dark:bg-blue-900/30 border-blue-300 dark:border-blue-700'
+        : !status.isOnline ? 'bg-red-100 dark:bg-red-900/30 border-red-300 dark:border-red-700'
+        : hasProblem ? 'bg-amber-100 dark:bg-amber-900/30 border-amber-300 dark:border-amber-700'
+        : 'bg-green-100 dark:bg-green-900/30 border-green-300 dark:border-green-700';
+    const icon = status.syncInProgress ? <RefreshCw className="w-4 h-4 animate-spin text-blue-500" />
+        : !status.isOnline ? <WifiOff className="w-4 h-4 text-red-500" />
+        : hasConnectionFailure ? <CloudOff className="w-4 h-4 text-amber-500" />
+        : hasProblem ? <AlertCircle className="w-4 h-4 text-amber-500" />
+        : <Check className="w-4 h-4 text-green-500" />;
 
     return (
         <div className="relative">
-            <button
-                onClick={() => setExpanded(!expanded)}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${getStatusColor()}`}
-            >
-                {getStatusIcon()}
-                <span className="text-slate-700 dark:text-slate-300">{getStatusText()}</span>
+            <button onClick={() => setExpanded(!expanded)} aria-expanded={expanded}
+                className={'flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ' + color}>
+                {icon}<span className="text-slate-700 dark:text-slate-300">{text}</span>
             </button>
-
             {expanded && (
-                <div className="absolute right-0 top-full mt-2 w-64 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 z-50">
-                    <div className="space-y-3">
+                <div className="absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-2rem)] max-h-[75vh] overflow-y-auto bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 z-50">
+                    <div className="space-y-3 text-sm text-slate-600 dark:text-slate-300">
                         <div className="flex items-center justify-between">
-                            <span className="text-sm text-slate-600 dark:text-slate-400">Conexão</span>
-                            <div className="flex items-center gap-2">
-                                {status.isOnline ? (
-                                    <>
-                                        <Wifi className="w-4 h-4 text-green-500" />
-                                        <span className="text-sm text-green-600 dark:text-green-400">Online</span>
-                                    </>
-                                ) : (
-                                    <>
-                                        <WifiOff className="w-4 h-4 text-red-500" />
-                                        <span className="text-sm text-red-600 dark:text-red-400">Offline</span>
-                                    </>
-                                )}
-                            </div>
-                        </div>
-
-                        <div className="flex items-center justify-between">
-                            <span className="text-sm text-slate-600 dark:text-slate-400">Pendentes</span>
-                            <span className={`text-sm font-medium ${status.pendingCount > 0 ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400'}`}>
-                                {status.pendingCount}
+                            <span>Conexão</span>
+                            <span className="flex items-center gap-2">
+                                {status.isOnline ? <Wifi className="w-4 h-4 text-green-500" /> : <WifiOff className="w-4 h-4 text-red-500" />}
+                                {status.isOnline ? 'Online' : 'Offline'}
                             </span>
                         </div>
-
-                        <div className="flex items-center justify-between">
-                            <span className="text-sm text-slate-600 dark:text-slate-400">Ajustes</span>
-                            <span className={`text-sm font-medium ${status.failedCount > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-green-600 dark:text-green-400'}`}>
-                                {status.failedCount}
-                            </span>
+                        <div className="flex justify-between"><span>Ainda não enviados</span><strong>{notSentCount}</strong></div>
+                        <div className="flex justify-between"><span>Com falha</span><strong>{status.failedCount}</strong></div>
+                        <div className="flex justify-between gap-2"><span>Última tentativa</span><span>{formatTime(lastAttemptAt)}</span></div>
+                        <div className="flex justify-between gap-2">
+                            <span>Último envio completo</span>
+                            <span className="text-right text-xs">{status.lastSyncAt ? formatTime(status.lastSyncAt) : 'Sem confirmação nesta sessão'}</span>
                         </div>
-
-                        {status.lastSyncAt && (
-                            <div className="flex items-center justify-between">
-                                <span className="text-sm text-slate-600 dark:text-slate-400">Última sync</span>
-                                <span className="text-sm text-slate-500">
-                                    {new Date(status.lastSyncAt).toLocaleTimeString()}
-                                </span>
+                        {notSentCount > 0 && (
+                            <p className="rounded-lg bg-amber-50 p-2 text-xs leading-5 text-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+                                Há alterações neste aparelho que ainda não chegaram ao servidor. Estar online não confirma o envio. Não limpe os dados nem reinstale o aplicativo.
+                            </p>
+                        )}
+                        {status.error && status.failedItems.length === 0 && (
+                            <div className="rounded-lg bg-amber-50 p-2 text-xs leading-5 text-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+                                <p className="font-medium">{getSyncErrorPresentation(currentError).title}</p>
+                                <p>{getSyncErrorPresentation(currentError).message}</p>
                             </div>
                         )}
-
-                        {status.failedCount > 0 && !hasConnectionFailure && (
-                            <div className="rounded-lg bg-amber-50 p-2 dark:bg-amber-900/20">
-                                <p className="text-xs leading-5 text-amber-800 dark:text-amber-200">Alguns dados precisam de uma pequena revisão. O restante do sistema continua funcionando normalmente.</p>
-                            </div>
+                        {status.failedItems.slice(0, 3).map(item => {
+                            const info = getSyncErrorInfo(item);
+                            const presentation = getSyncErrorPresentation(info, item.table);
+                            const retry = canAutomaticallyRetrySyncError(info, item.retryCount);
+                            return (
+                                <div key={item.id} className="rounded-lg border border-amber-100 bg-amber-50 p-2 text-xs leading-5 text-amber-800 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-200">
+                                    <p className="font-medium">{getSyncTableLabel(item.table)} • {presentation.title}</p>
+                                    <p className="mt-1">{presentation.message}</p>
+                                    <p className="mt-1">{retry ? 'Nova tentativa automática habilitada.' : 'Tentativa automática pausada; alteração preservada.'}</p>
+                                </div>
+                            );
+                        })}
+                        {status.failedCount > 3 && <p className="text-xs">Mais {status.failedCount - 3} falha(s). O diagnóstico inclui até 20.</p>}
+                        {status.nextRetryAt && status.isOnline && (
+                            <p className="text-xs">Nova tentativa automática prevista para {formatTime(status.nextRetryAt)}.</p>
                         )}
-
-                        {friendlyError && (
-                            <div className="rounded-lg bg-amber-50 p-2 dark:bg-amber-900/20">
-                                <p className="text-xs text-amber-700 dark:text-amber-300">{friendlyError}</p>
-                            </div>
-                        )}
-
-                        {status.failedItems.length > 0 && (
-                            <div className="space-y-2">
-                                {status.failedItems.map(item => {
-                                    const itemHasConnectionFailure = isConnectionFailure(item.lastError);
-                                    return (
-                                        <div
-                                            key={item.id}
-                                            className="rounded-lg border border-amber-100 bg-amber-50 p-2 dark:border-amber-900/40 dark:bg-amber-900/20"
-                                        >
-                                            <p className="text-xs font-medium text-amber-800 dark:text-amber-200">
-                                                {formatSyncItemLabel(item.table)} • {itemHasConnectionFailure ? 'aguardando conexão' : 'precisa de revisão'}
-                                            </p>
-                                            {item.lastError && (
-                                                <p className="mt-1 text-xs leading-5 text-amber-700 dark:text-amber-300">
-                                                    {formatSyncErrorMessage(item.lastError)}
-                                                </p>
-                                            )}
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )}
-
-                        {status.isOnline && (status.pendingCount > 0 || status.failedCount > 0) && (
-                            <button
-                                onClick={handleSync}
-                                disabled={status.syncInProgress}
-                                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
-                            >
-                                <RefreshCw className={`w-4 h-4 ${status.syncInProgress ? 'animate-spin' : ''}`} />
+                        {status.isOnline && hasProblem && (
+                            <button onClick={handleSync} disabled={status.syncInProgress}
+                                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg disabled:opacity-50">
+                                <RefreshCw className={'w-4 h-4 ' + (status.syncInProgress ? 'animate-spin' : '')} />
                                 {status.syncInProgress ? 'Sincronizando...' : 'Tentar novamente'}
                             </button>
                         )}
+                        {retryError && <p role="alert" className="text-xs text-amber-700 dark:text-amber-300">{retryError}</p>}
+                        <button onClick={handleCopy} className="w-full flex items-center justify-center gap-2 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm">
+                            <Copy className="w-4 h-4" /> Copiar diagnóstico
+                        </button>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">O diagnóstico não inclui nomes, contatos, medidas, valores ou senhas. Nada é enviado automaticamente ao suporte.</p>
+                        {copyMessage && <p role="status" className="text-xs">{copyMessage}</p>}
+                        {diagnosticFallback && <textarea aria-label="Diagnóstico para o suporte" readOnly value={diagnosticFallback} onFocus={event => event.target.select()} className="w-full h-36 rounded border p-2 text-xs bg-transparent" />}
                     </div>
                 </div>
             )}
-
-            {expanded && (
-                <div
-                    className="fixed inset-0 z-40"
-                    onClick={() => setExpanded(false)}
-                />
-            )}
+            {expanded && <div className="fixed inset-0 z-40" onClick={() => setExpanded(false)} />}
         </div>
     );
 };

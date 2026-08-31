@@ -396,4 +396,25 @@ describe('supabaseDb proposal operation writes', () => {
       conflictResolved: false
     }));
   });
+
+  it('preserva codigo e status da falha para a fila classificar corretamente', async () => {
+    rpcMock.mockResolvedValue({
+      data: null,
+      error: { code: '42501', message: 'permission denied' },
+      status: 403
+    });
+    const next = [{
+      id: 1,
+      name: 'Opcao 1',
+      measurements: [],
+      generalDiscount: { value: '', type: 'fixed' as const }
+    }];
+    const { saveProposalOptionsRemote } = await import('./supabaseDb');
+
+    await expect(saveProposalOptionsRemote(12, next, {
+      baseRevision: 0,
+      baseOptions: [],
+      deviceId: 'device-test'
+    })).rejects.toMatchObject({ code: '42501', status: 403 });
+  });
 });

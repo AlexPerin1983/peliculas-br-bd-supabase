@@ -7,6 +7,7 @@
 import Dexie, { Table } from 'dexie';
 import { Client, Film, UserInfo, SavedPDF, Agendamento, ProposalOption, StandaloneExpense } from '../types';
 import { buildProposalOperations } from './proposalSync';
+import type { SyncErrorInfo } from '../src/lib/syncErrors';
 
 // Tipos para dados com metadata de sincronização
 export interface SyncMetadata {
@@ -40,6 +41,7 @@ export interface SyncQueueItem {
     retryCount: number;
     lastError?: string;
     lastAttemptAt?: number;
+    errorInfo?: SyncErrorInfo;
 }
 
 export interface FailedSyncItem {
@@ -49,6 +51,7 @@ export interface FailedSyncItem {
     retryCount: number;
     lastError: string | null;
     lastAttemptAt: number | null;
+    errorInfo?: SyncErrorInfo;
 }
 
 // Classe do banco de dados IndexedDB
@@ -220,6 +223,7 @@ async function upsertProposalOptionsSyncItem(
         status: 'pending',
         lastError: undefined,
         lastAttemptAt: undefined,
+        errorInfo: undefined,
         retryCount: 0
     });
 
@@ -270,6 +274,7 @@ async function upsertSavedPdfSyncItem(localPdf: LocalSavedPDF, action: 'create' 
         status: 'pending',
         lastError: undefined,
         lastAttemptAt: undefined,
+        errorInfo: undefined,
         retryCount: 0
     });
 
@@ -325,6 +330,7 @@ async function upsertClientSyncItem(localClient: LocalClient, action: 'create' |
         status: 'pending',
         lastError: undefined,
         lastAttemptAt: undefined,
+        errorInfo: undefined,
         retryCount: 0
     });
 
@@ -932,6 +938,7 @@ async function upsertAgendamentoSyncItem(
         status: 'pending',
         lastError: undefined,
         lastAttemptAt: undefined,
+        errorInfo: undefined,
         retryCount: 0
     });
 
@@ -1160,7 +1167,7 @@ export async function hasLocalSyncDebt(): Promise<boolean> {
     return dirtyCounts.some(count => count > 0);
 }
 
-export async function getFailedSyncItems(limit = 3): Promise<FailedSyncItem[]> {
+export async function getFailedSyncItems(limit = 20): Promise<FailedSyncItem[]> {
     const items = await offlineDb.syncQueue
         .where('status')
         .equals('error')
@@ -1175,17 +1182,35 @@ export async function getFailedSyncItems(limit = 3): Promise<FailedSyncItem[]> {
             action: item.action,
             retryCount: item.retryCount,
             lastError: item.lastError || null,
-            lastAttemptAt: item.lastAttemptAt || null
+            lastAttemptAt: item.lastAttemptAt || null,
+            errorInfo: item.errorInfo
         }));
 }
 
-export async function markSyncItemError(id: number, errorMessage: string): Promise<void> {
-    const item = await offlineDb.syncQueue.get(id);
-    await offlineDb.syncQueue.update(id, {
-        status: 'error',
-        lastError: errorMessage,
-        lastAttemptAt: Date.now(),
-        retryCount: (item?.retryCount || 0) + 1
+export async function markSyncItemError(
+    id: number,
+    errorMessage: string,
+    errorInfo?: SyncErrorInfo,
+    expected?: { timestamp: number; syncToken?: string }
+): Promise<boolean> {
+    return offlineDb.transaction('rw', offlineDb.syncQueue, async () => {
+        const item = await offlineDb.syncQueue.get(id);
+        if (!item) return false;
+
+        const currentToken = item.data?.syncToken;
+        const isSameMutation = expected?.syncToken
+            ? expected.syncToken === currentToken
+            : expected ? expected.timestamp === item.timestamp : true;
+        if (!isSameMutation) return false;
+
+        await offlineDb.syncQueue.update(id, {
+            status: 'error',
+            lastError: errorMessage,
+            lastAttemptAt: Date.now(),
+            retryCount: (item.retryCount || 0) + 1,
+            errorInfo
+        });
+        return true;
     });
 }
 
@@ -1193,7 +1218,8 @@ export async function markSyncItemPending(id: number): Promise<void> {
     await offlineDb.syncQueue.update(id, {
         status: 'pending',
         lastError: undefined,
-        lastAttemptAt: Date.now()
+        lastAttemptAt: Date.now(),
+        errorInfo: undefined
     });
 }
 

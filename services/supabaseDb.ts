@@ -1634,7 +1634,7 @@ export async function saveProposalOptionsRemote(
             };
         }
 
-        const { data, error } = await supabase.rpc('apply_proposal_option_operations', {
+        const { data, error, status } = await supabase.rpc('apply_proposal_option_operations', {
             p_client_id: clientId,
             p_operations: nextOperations,
             p_expected_revision: expectedRevision,
@@ -1642,7 +1642,10 @@ export async function saveProposalOptionsRemote(
         });
 
         if (error) {
-            throw new Error(`Falha no salvamento seguro das medidas: ${error.message}`);
+            // Preserva o código para distinguir permissão, sessão e indisponibilidade.
+            throw Object.assign(new Error(`Falha no salvamento seguro das medidas: ${error.message}`), {
+                code: error.code, status
+            });
         }
 
         const response = data as {

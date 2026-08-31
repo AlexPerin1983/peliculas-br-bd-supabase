@@ -33,10 +33,17 @@ import {
 } from './supabaseDb';
 import { normalizeFilmForPersistence } from '../src/lib/filmPersistence';
 import { ProposalOptionOperation, ProposalOptionsSaveResult } from './proposalSync';
+import {
+    canAutomaticallyRetrySyncError,
+    classifySyncError,
+    getSyncErrorInfo,
+    type SyncErrorInfo
+} from '../src/lib/syncErrors';
 
 let isOnline = navigator.onLine;
 let syncInProgress = false;
 let syncRequestedWhileBusy = false;
+let syncRequestedOptions: SyncRunOptions | undefined;
 let syncListeners: ((status: SyncStatus) => void)[] = [];
 const POSTGRES_INTEGER_MAX = 2147483647;
 
@@ -72,22 +79,6 @@ function scheduleSyncRetry(delay: number): void {
     }, delay);
 }
 
-function isLikelyNetworkError(error: unknown): boolean {
-    const message = error instanceof Error
-        ? error.message
-        : typeof error === 'object' && error !== null && 'message' in error
-            ? String((error as { message?: unknown }).message || '')
-            : String(error || '');
-    const normalized = message.toLowerCase();
-
-    return normalized.includes('failed to fetch')
-        || normalized.includes('networkerror')
-        || normalized.includes('network error')
-        || normalized.includes('load failed')
-        || normalized.includes('err_network')
-        || normalized.includes('falha de rede');
-}
-
 export interface SyncStatus {
     isOnline: boolean;
     pendingCount: number;
@@ -99,10 +90,14 @@ export interface SyncStatus {
         retryCount: number;
         lastError: string | null;
         lastAttemptAt: number | null;
+        errorInfo?: SyncErrorInfo;
     }[];
     lastSyncAt: number | null;
+    lastAttemptAt?: number | null;
+    nextRetryAt?: number | null;
     syncInProgress: boolean;
     error: string | null;
+    errorInfo?: SyncErrorInfo;
 }
 
 let currentStatus: SyncStatus = {
@@ -111,30 +106,12 @@ let currentStatus: SyncStatus = {
     failedCount: 0,
     failedItems: [],
     lastSyncAt: null,
+    lastAttemptAt: null,
+    nextRetryAt: null,
     syncInProgress: false,
-    error: null
+    error: null,
+    errorInfo: undefined
 };
-
-function isAuthError(error: unknown): boolean {
-    const message = error instanceof Error
-        ? error.message
-        : typeof error === 'object' && error !== null && 'message' in error
-            ? String((error as { message?: unknown }).message || '')
-            : String(error || '');
-
-    const code = typeof error === 'object' && error !== null && 'code' in error
-        ? String((error as { code?: unknown }).code || '')
-        : '';
-
-    const normalizedMessage = message.toLowerCase();
-    const normalizedCode = code.toUpperCase();
-
-    return normalizedMessage.includes('jwt expired')
-        || normalizedMessage.includes('unauthorized')
-        || normalizedMessage.includes('invalid jwt')
-        || normalizedCode === 'PGRST301'
-        || normalizedCode === 'PGRST303';
-}
 
 function isLegacyPdfBlobError(error: unknown): boolean {
     const message = error instanceof Error
@@ -422,38 +399,10 @@ async function shouldDiscardLegacySavedPdfItem(item: SyncQueueItem): Promise<boo
     }
 
     const localPdf = await findLocalSavedPdf(item.data);
-    const remoteId = item.data?._remoteId ?? item.data?.id ?? localPdf?._remoteId ?? localPdf?.id;
-    const queueHasBlob = hasPdfBlobPayload(item.data?.pdfBlob);
-    const localHasBlob = hasPdfBlobPayload(localPdf?.pdfBlob);
     const referenceTime = item.lastAttemptAt ?? item.timestamp ?? 0;
-
-    if (!localPdf && !remoteId && !queueHasBlob) {
-        return true;
-    }
-
-    if (localPdf?._syncStatus === 'synced' && (localPdf._syncedAt ?? 0) >= referenceTime) {
-        return true;
-    }
-
-    if (item.action === 'update' && !remoteId && !localPdf) {
-        return true;
-    }
-
-    if (
-        item.action === 'update'
-        && !!remoteId
-        && isLegacyPdfBlobError(item.lastError)
-        && !queueHasBlob
-        && !localHasBlob
-    ) {
-        return true;
-    }
-
-    if (!queueHasBlob && !localHasBlob && !remoteId) {
-        return true;
-    }
-
-    return false;
+    // Somente uma confirmação anterior permite concluir uma entrada legada.
+    // A ausência de arquivo ou vínculo, por si só, não autoriza descartá-la.
+    return localPdf?._syncStatus === 'synced' && (localPdf._syncedAt ?? 0) >= referenceTime;
 }
 
 export function initSyncService(): void {
@@ -472,6 +421,7 @@ function handleOnline(): void {
     // Volta de conexão: zera o backoff e força uma tentativa imediata.
     consecutiveSyncFailures = 0;
     nextSyncAllowedAt = 0;
+    currentStatus.nextRetryAt = null;
     clearScheduledSyncRetry();
     notifyListeners();
     syncAllPending({ force: true });
@@ -481,16 +431,27 @@ function handleOffline(): void {
     isOnline = false;
     currentStatus.isOnline = false;
     clearScheduledSyncRetry();
+    currentStatus.nextRetryAt = null;
     notifyListeners();
 }
 
-export async function syncAllPending(options?: { force?: boolean }): Promise<void> {
+interface SyncRunOptions {
+    force?: boolean;
+    // Exclusivo da ação explícita Tentar novamente. force sozinho apenas ignora o backoff.
+    retryBlocked?: boolean;
+}
+
+export async function syncAllPending(options?: SyncRunOptions): Promise<void> {
     if (!isOnline) {
         return;
     }
 
     if (syncInProgress) {
         syncRequestedWhileBusy = true;
+        syncRequestedOptions = {
+            force: syncRequestedOptions?.force || options?.force,
+            retryBlocked: syncRequestedOptions?.retryBlocked || options?.retryBlocked
+        };
         return;
     }
 
@@ -500,16 +461,17 @@ export async function syncAllPending(options?: { force?: boolean }): Promise<voi
         return;
     }
 
-    if (options?.force) {
-        clearScheduledSyncRetry();
-    }
+    clearScheduledSyncRetry();
+    currentStatus.nextRetryAt = null;
 
     syncInProgress = true;
     currentStatus.syncInProgress = true;
     currentStatus.error = null;
+    currentStatus.errorInfo = undefined;
     notifyListeners();
 
     let shouldScheduleRetry = false;
+    let successfulItems = 0;
 
     try {
         const queue = await offlineDb.syncQueue.orderBy('timestamp').toArray();
@@ -517,7 +479,7 @@ export async function syncAllPending(options?: { force?: boolean }): Promise<voi
 
         for (const item of queue) {
             if (item.id && await shouldDiscardLegacySavedPdfItem(item)) {
-                await offlineDb.syncQueue.delete(item.id);
+                await acknowledgeProcessedQueueItem(item);
                 continue;
             }
 
@@ -525,7 +487,13 @@ export async function syncAllPending(options?: { force?: boolean }): Promise<voi
         }
 
         for (const item of sanitizedQueue) {
+            const hasClassifiedFailure = !!item.errorInfo || !!item.lastError;
+            if (item.status === 'error' && hasClassifiedFailure && !options?.retryBlocked
+                && !canAutomaticallyRetrySyncError(getSyncErrorInfo(item), item.retryCount)) {
+                continue;
+            }
             try {
+                currentStatus.lastAttemptAt = Date.now();
                 if (item.status === 'error') {
                     await markSyncItemPending(item.id!);
                 }
@@ -548,18 +516,28 @@ export async function syncAllPending(options?: { force?: boolean }): Promise<voi
                         }));
                     }
                 }
+                if (acknowledged) successfulItems += 1;
             } catch (error: any) {
                 currentStatus.error = `${item.table}: ${error?.message || error}`;
-                await markSyncItemError(item.id!, currentStatus.error);
+                const info = classifySyncError(error);
+                currentStatus.errorInfo = info;
+                const marked = await markSyncItemError(item.id!, currentStatus.error, info, {
+                    timestamp: item.timestamp,
+                    syncToken: item.data?.syncToken
+                });
 
-                if (isAuthError(error)) {
-                    currentStatus.error = 'Sessao expirada. Faca login novamente para continuar sincronizando.';
+                if (marked === false) {
+                    // Uma nova edição substituiu a tentativa antiga: continua pendente.
+                    shouldScheduleRetry = true;
+                    continue;
+                }
+                if (info.category === 'authentication') {
                     shouldScheduleRetry = false;
                     break;
                 }
 
-                shouldScheduleRetry = true;
-                if (isLikelyNetworkError(error)) {
+                shouldScheduleRetry ||= canAutomaticallyRetrySyncError(info, (item.retryCount || 0) + 1);
+                if (info.category === 'network' || info.category === 'server') {
                     // Sem resposta do servidor, os próximos itens provavelmente
                     // falhariam também. Preservamos a fila e aguardamos o retry.
                     break;
@@ -567,17 +545,22 @@ export async function syncAllPending(options?: { force?: boolean }): Promise<voi
             }
         }
 
-        currentStatus.lastSyncAt = Date.now();
         await updatePendingCount();
+        if (successfulItems > 0 && !currentStatus.error
+            && currentStatus.pendingCount === 0 && currentStatus.failedCount === 0) {
+            currentStatus.lastSyncAt = Date.now();
+        }
     } catch (error: any) {
         console.error('[SyncService] Erro geral na sincronizacao:', error);
-        currentStatus.error = error.message;
-        shouldScheduleRetry = !isAuthError(error);
+        currentStatus.lastAttemptAt = Date.now();
+        currentStatus.error = String(error?.message || error);
+        currentStatus.errorInfo = classifySyncError(error);
+        shouldScheduleRetry = canAutomaticallyRetrySyncError(currentStatus.errorInfo, consecutiveSyncFailures + 1);
     } finally {
         syncInProgress = false;
         currentStatus.syncInProgress = false;
 
-        if (currentStatus.error) {
+        if (shouldScheduleRetry && isOnline) {
             // Falhou: agenda próxima tentativa com backoff exponencial.
             consecutiveSyncFailures += 1;
             const delay = Math.min(
@@ -585,21 +568,23 @@ export async function syncAllPending(options?: { force?: boolean }): Promise<voi
                 SYNC_BACKOFF_MAX_MS
             );
             nextSyncAllowedAt = Date.now() + delay;
-            if (shouldScheduleRetry) {
-                scheduleSyncRetry(delay);
-            }
+            currentStatus.nextRetryAt = nextSyncAllowedAt;
+            scheduleSyncRetry(delay);
         } else {
             // Sucesso: limpa o backoff.
             consecutiveSyncFailures = 0;
             nextSyncAllowedAt = 0;
+            currentStatus.nextRetryAt = null;
             clearScheduledSyncRetry();
         }
 
         notifyListeners();
 
         if (syncRequestedWhileBusy && isOnline) {
+            const requestedOptions = syncRequestedOptions;
             syncRequestedWhileBusy = false;
-            void syncAllPending();
+            syncRequestedOptions = undefined;
+            void syncAllPending(requestedOptions);
         }
     }
 }
@@ -658,6 +643,8 @@ async function processQueueItem(item: SyncQueueItem): Promise<QueueProcessResult
         case 'agendamentos':
             await syncAgendamento(action, data);
             break;
+        default:
+            throw Object.assign(new Error('Operação não reconhecida pelo aplicativo; pendência preservada.'), { code: 'SYNC_CONFIGURATION' });
     }
 }
 
@@ -907,7 +894,7 @@ export async function forcSync(): Promise<void> {
     // Retry manual do usuário: ignora o backoff.
     consecutiveSyncFailures = 0;
     nextSyncAllowedAt = 0;
-    await syncAllPending({ force: true });
+    await syncAllPending({ force: true, retryBlocked: true });
 }
 
 export async function clearSyncQueue(): Promise<number> {
