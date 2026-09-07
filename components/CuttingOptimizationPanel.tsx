@@ -1,3 +1,7 @@
+import './cutting-mobile.css';
+import CuttingMobilePiece from './cutting/CuttingMobilePiece';
+import CuttingPieceNavigator from './cutting/CuttingPieceNavigator';
+import { useIsMobile } from '../src/hooks/useIsMobile';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Measurement, Film, FilmCuttingPlanSettings, FilmCuttingPlanSettingsMap } from '../types';
@@ -6,7 +10,7 @@ import ConfirmationModal from './modals/ConfirmationModal';
 import Modal from './ui/Modal';
 import { useSubscription } from '../contexts/SubscriptionContext';
 import { PremiumFeatureSection } from './subscription/PremiumFeatureSection';
-import { Check, ChevronDown, Loader2, Maximize2, Minus, Plus, RotateCcw, Save, X } from 'lucide-react';
+import { Check, ChevronDown, Loader2, Maximize2, Minus, Plus, RotateCcw, RotateCw, List, Save, X, LockKeyhole, UnlockKeyhole } from 'lucide-react';
 import {
     buildFilmCuttingMeasurementSignature,
     CUTTING_ROLL_WIDTH_PRESETS_CM,
@@ -115,7 +119,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
         updateCurrentSettings('rollWidth', value);
     };
     const [result, setResult] = useState<OptimizationResult | null>(null);
-    const [isOptionsOpen, setIsOptionsOpen] = useState(false);
+    const isMobile = useIsMobile();
     const [zoomLevel, setZoomLevel] = useState<number>(1);
     const [manualRotations, setManualRotations] = useState<{ [key: string]: boolean }>({});
     const [lockedItems, setLockedItems] = useState<{ [key: string]: Rect }>({});
@@ -140,6 +144,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
     const [selectedPieceId, setSelectedPieceId] = useState<string | null>(null);
     const [selectedGroupKey, setSelectedGroupKey] = useState<string | null>(null);
     const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+    const [isPieceNavigatorOpen, setIsPieceNavigatorOpen] = useState(false);
     const [fullscreenZoom, setFullscreenZoom] = useState<number>(1);
     const [fullscreenOrientation, setFullscreenOrientation] = useState<'portrait' | 'landscape'>('portrait');
     const [fullscreenViewportSize, setFullscreenViewportSize] = useState({ width: 0, height: 0 });
@@ -317,7 +322,8 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
 
         const handleKeyDown = (event: KeyboardEvent) => {
             if (event.key === 'Escape') {
-                setIsFullscreen(false);
+                if (isPieceNavigatorOpen) setIsPieceNavigatorOpen(false);
+                else setIsFullscreen(false);
             }
         };
 
@@ -326,7 +332,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
         return () => {
             window.removeEventListener('keydown', handleKeyDown);
         };
-    }, [isFullscreen]);
+    }, [isFullscreen, isPieceNavigatorOpen]);
 
     useEffect(() => {
         if (!isFullscreen) return;
@@ -874,14 +880,14 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
         : 0;
     const fullscreenViewportWidth = fullscreenViewportSize.width || window.innerWidth || 0;
     const fullscreenViewportHeight = fullscreenViewportSize.height || window.innerHeight || 0;
-    const fullscreenFitWidth = Math.max(280, fullscreenViewportWidth - FULLSCREEN_SIDE_GUTTER_PX);
+    const fullscreenFitWidth = Math.max(1, fullscreenViewportWidth - (isMobile ? 92 : FULLSCREEN_SIDE_GUTTER_PX));
     const fullscreenFitHeight = Math.max(240, fullscreenViewportHeight - FULLSCREEN_VERTICAL_GUTTER_PX);
     const fullscreenFallbackScale = baseScale > 0 ? baseScale : 2;
-    const fullscreenRawFitScale = fullscreenOrientation === 'landscape'
+    const fullscreenRawFitScale = !isMobile && fullscreenOrientation === 'landscape'
         ? fullscreenFitHeight / Math.max(1, fullscreenAxisHeight)
         : fullscreenFitWidth / Math.max(1, fullscreenAxisWidth);
     const fullscreenBaseScale = Number.isFinite(fullscreenRawFitScale) && fullscreenAxisWidth > 0 && fullscreenAxisHeight > 0
-        ? Math.min(FULLSCREEN_MAX_FIT_SCALE, Math.max(FULLSCREEN_MIN_FIT_SCALE, fullscreenRawFitScale))
+        ? Math.min(FULLSCREEN_MAX_FIT_SCALE, Math.max(isMobile ? 0.01 : FULLSCREEN_MIN_FIT_SCALE, fullscreenRawFitScale))
         : fullscreenFallbackScale;
     const fullscreenScale = fullscreenBaseScale * fullscreenZoom;
     const fullscreenHorizontalRulerLabels = useMemo(() => {
@@ -1061,8 +1067,67 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
 
     const openFullscreenView = React.useCallback(() => {
         setFullscreenZoom(1);
+        setIsPieceNavigatorOpen(false);
         setIsFullscreen(true);
     }, []);
+
+    const selectedMobilePiece = result?.placedItems.find(item => getPieceId(item) === selectedPieceId);
+    const measurementById = useMemo(() => new Map(measurements.map(measurement => [String(measurement.id), measurement])), [measurements]);
+    const getPieceRoom = (item: Rect) => measurementById.get(String(item.id).split('-')[0])?.ambiente || 'Sem ambiente';
+    const formatPieceSize = (value: number) => (value / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const locateMobilePiece = (id: string) => {
+        const item = result?.placedItems.find(piece => getPieceId(piece) === id);
+        if (!item) return;
+        setSelectedPieceId(id);
+        setSelectedGroupKey(getPieceGroupKey(item));
+        setIsPieceNavigatorOpen(false);
+        requestAnimationFrame(() => {
+            const container = fullscreenScrollRef.current;
+            const target = Array.from(container?.querySelectorAll<HTMLElement>('[data-piece-id]') ?? []).find(element => element.dataset.pieceId === id);
+            if (!container || !target) return;
+            const viewport = container.getBoundingClientRect(), bounds = target.getBoundingClientRect();
+            container.scrollTo({
+                left: container.scrollLeft + bounds.left - viewport.left - Math.max(16, (viewport.width - bounds.width) / 2),
+                top: container.scrollTop + bounds.top - viewport.top - Math.max(24, (viewport.height - bounds.height) / 2),
+                behavior: 'instant',
+            });
+        });
+    };
+    const rotateMobilePiece = (item: Rect) => {
+        if (item.id == null || !result || isOptimizing || lockedItems[item.id] || item.h > result.rollWidth) return;
+        setManualRotations(previous => ({ ...previous, [item.id!]: !item.rotated }));
+    };
+    const toggleMobilePieceLock = (item: Rect) => {
+        if (item.id == null) return;
+        setLockedItems(previous => {
+            const next = { ...previous };
+            if (next[item.id!]) delete next[item.id!];
+            else next[item.id!] = { ...item, locked: true };
+            return next;
+        });
+    };
+    const renderMobilePieceLabel = (item: Rect, index: number, width: number, height: number, landscape = false) => (
+        <CuttingMobilePiece item={item} index={index} width={width} height={height} landscape={landscape}
+            selected={selectedPieceId === getPieceId(item)} locked={!!lockedItems[item.id!]}
+            canRotate={!isOptimizing && !lockedItems[item.id!] && !!result && item.h <= result.rollWidth}
+            onRotate={() => rotateMobilePiece(item)} onToggleLock={() => toggleMobilePieceLock(item)} />
+    );
+    const renderMobilePieceDetails = () => (
+        <div className="cutting-piece-details" aria-live="polite" data-inline-actions={!!selectedMobilePiece && isFullscreen && (fullscreenOrientation === 'landscape' ? selectedMobilePiece.h : selectedMobilePiece.w) * fullscreenScale >= 116 && (fullscreenOrientation === 'landscape' ? selectedMobilePiece.w : selectedMobilePiece.h) * fullscreenScale >= 116}>
+            {selectedMobilePiece && result ? <>
+                <div className="cutting-selection-heading"><div className="cutting-piece-description"><strong>Peça {result.placedItems.indexOf(selectedMobilePiece) + 1} · {getPieceRoom(selectedMobilePiece)}</strong><span>{formatPieceSize(selectedMobilePiece.w)} × {formatPieceSize(selectedMobilePiece.h)} m{lockedItems[selectedMobilePiece.id!] ? ' · Posição travada' : ''}</span></div><button type="button" aria-label="Limpar seleção" onClick={() => {setSelectedPieceId(null); setSelectedGroupKey(null);}}><X size={18} aria-hidden="true" /></button></div>
+                <div className="cutting-piece-actions">
+                    <button type="button" disabled={isOptimizing || !!lockedItems[selectedMobilePiece.id!] || selectedMobilePiece.h > result.rollWidth}
+                        onClick={() => rotateMobilePiece(selectedMobilePiece)}><RotateCcw size={18} aria-hidden="true" /> Girar peça</button>
+                    <button type="button" onClick={() => toggleMobilePieceLock(selectedMobilePiece)}>
+                        {lockedItems[selectedMobilePiece.id!] ? <UnlockKeyhole size={18} aria-hidden="true" /> : <LockKeyhole size={18} aria-hidden="true" />}
+                        {lockedItems[selectedMobilePiece.id!] ? 'Destravar' : 'Travar'}
+                    </button>
+                </div>
+                {(lockedItems[selectedMobilePiece.id!] || selectedMobilePiece.h > result.rollWidth) && <small className="cutting-rotation-hint">{lockedItems[selectedMobilePiece.id!] ? 'Destrave a posição para girar esta peça.' : 'Esta peça não cabe girada na largura atual.'}</small>}
+            </> : <p>Toque em uma peça para ver as medidas, girar ou travar.</p>}
+        </div>
+    );
 
     // Linha de cota estilo desenho técnico: extremidades marcadas e etiqueta central.
     // Substitui os antigos cards flutuantes de Bobina/Comprimento sobre as réguas.
@@ -1095,7 +1160,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
     );
 
     return (
-        <div className="mt-8 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+        <div className="cutting-panel mt-8 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
             {/* Bloqueio para quem não tem módulo */}
             {!canUseCorteInteligente ? (
                 <PremiumFeatureSection
@@ -1161,133 +1226,40 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                     <div className="p-2 sm:p-6">
                         {/* Settings - Always visible */}
                         <div className={`block mb-2 sm:mb-6`}>
-                            {/* Mobile: technical control deck */}
-                            <div className="sm:hidden overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_14px_34px_rgba(15,23,42,0.10)] dark:border-slate-700/80 dark:bg-slate-950 dark:shadow-[0_14px_34px_rgba(2,6,23,0.26)]">
-                                <div className="grid grid-cols-[minmax(0,1fr)_92px] border-b border-slate-200 dark:border-slate-800">
-                                    <div className="grid min-w-0 grid-cols-2 divide-x divide-slate-200 dark:divide-slate-800">
-                                        <div className="block px-3 py-2">
-                                            <span className="block text-[10px] font-bold text-slate-500">Bobina</span>
-                                            <button
-                                                type="button"
-                                                aria-label="Selecionar largura da bobina"
-                                                aria-haspopup="dialog"
-                                                onClick={() => setIsRollWidthPickerOpen(true)}
-                                                className="mt-0.5 flex h-7 w-full items-center justify-between gap-1 rounded-md bg-blue-50 px-2 text-[14px] font-bold text-blue-700 transition active:scale-[0.98] dark:bg-blue-500/10 dark:text-blue-200"
-                                            >
-                                                <span>{selectedRollWidthLabel}</span>
-                                                <ChevronDown className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                                            </button>
-                                            {isCustomRollWidth && (
-                                                <span className="mt-1 flex items-end gap-1 rounded-md bg-slate-50 px-1.5 dark:bg-slate-900">
-                                                    <input
-                                                        aria-label="Largura personalizada da bobina em cent�metros"
-                                                        type="number"
-                                                        inputMode="decimal"
-                                                        value={currentSettings.rollWidth}
-                                                        onChange={event => updateCurrentSettings('rollWidth', event.target.value)}
-                                                        placeholder="Ex.: 135"
-                                                        className="h-7 min-w-0 flex-1 border-0 bg-transparent p-0 text-[15px] font-semibold text-slate-900 outline-none focus:ring-0 dark:text-white"
-                                                    />
-                                                    <span className="pb-1 text-[10px] font-medium text-slate-500">cm</span>
-                                                </span>
-                                            )}
-                                        </div>
-                                        <label className="block px-3 py-2">
-                                            <span className="block text-[10px] font-bold text-slate-500">Sangria</span>
-                                            <span className="mt-0.5 flex items-end gap-1">
-                                                <input
-                                                    type="number"
-                                                    inputMode="decimal"
-                                                    value={currentSettings.bladeWidth}
-                                                    onChange={e => updateCurrentSettings('bladeWidth', e.target.value)}
-                                                    placeholder="0"
-                                                    className="h-7 min-w-0 flex-1 border-0 bg-transparent p-0 text-[17px] font-semibold leading-none text-slate-900 outline-none focus:ring-0 dark:text-white"
-                                                />
-                                                <span className="pb-0.5 text-[10px] font-medium text-slate-500">mm</span>
-                                            </span>
-                                        </label>
+                            {/* Mobile: controles diretos e visão geral, como no fluxo validado. */}
+                            <div className="cutting-mobile-controls sm:hidden">
+                                <div className="cutting-direct-config">
+                                    <div>
+                                        <span className="cutting-field-label">Bobina</span>
+                                        <button type="button" aria-label="Selecionar largura da bobina" aria-haspopup="dialog" onClick={() => setIsRollWidthPickerOpen(true)}>
+                                            <strong>{selectedRollWidthLabel}</strong><ChevronDown size={16} aria-hidden="true" />
+                                        </button>
                                     </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => handleOptimize(true)}
-                                        disabled={!result || isOptimizing}
-                                        className={`m-2 inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-2 text-[12px] font-semibold text-white shadow-[0_10px_24px_rgba(37,99,235,0.25)] transition active:bg-blue-700 ${(!result || isOptimizing) ? 'cursor-not-allowed opacity-45' : 'hover:bg-blue-500'}`}
-                                    >
-                                        {isOptimizing ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : <Save className="h-3.5 w-3.5" aria-hidden="true" />}
-                                        <span>{isOptimizing ? 'Salvando' : 'Salvar'}</span>
+                                    <label>
+                                        <span className="cutting-field-label">Espaço (mm)</span>
+                                        <input aria-label="Espaço entre peças (mm)" type="number" min="0" inputMode="decimal" value={currentSettings.bladeWidth} onChange={event => updateCurrentSettings('bladeWidth', event.target.value)} />
+                                    </label>
+                                    <button type="button" className="cutting-primary cutting-save" onClick={() => handleOptimize(true)} disabled={!result || isOptimizing}>
+                                        {isOptimizing ? <Loader2 size={17} className="animate-spin" aria-hidden="true" /> : <Save size={17} aria-hidden="true" />}
+                                        <span>{isOptimizing ? 'Calculando…' : 'Salvar versão'}</span>
                                     </button>
                                 </div>
-
-                                {visualSummary && (
-                                    <div className="px-3 py-2.5">
-                                        <div className="flex items-end justify-between gap-3">
-                                            <div className="min-w-0">
-                                                <div className="text-[10px] font-semibold text-slate-500">Metro linear</div>
-                                                <div className="mt-0.5 text-[22px] font-semibold leading-none text-slate-900 dark:text-white">
-                                                    {visualSummary.linearMeters}<span className="ml-1 text-[12px] font-medium text-slate-500">m</span>
-                                                </div>
-                                            </div>
-                                            <div className="grid shrink-0 grid-cols-2 gap-3 text-right">
-                                                <div>
-                                                    <div className="text-[10px] font-semibold text-slate-500">Uso</div>
-                                                    <div className="mt-0.5 text-[16px] font-semibold leading-none text-blue-600 dark:text-blue-300">{visualSummary.efficiency}%</div>
-                                                </div>
-                                                <div>
-                                                    <div className="text-[10px] font-semibold text-slate-500">Sobra</div>
-                                                    <div className="mt-0.5 text-[16px] font-semibold leading-none text-slate-900 dark:text-white">{visualSummary.wastePercent}%</div>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div className="mt-2 flex items-center justify-between gap-2 rounded-lg bg-slate-100 px-2.5 py-2 dark:bg-slate-900/80">
-                                            <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Material</span>
-                                            <span className="text-[14px] font-semibold text-slate-900 dark:text-white">{activeFilmMaterialCost !== null ? `R$ ${activeFilmMaterialCost.toFixed(2).replace('.', ',')}` : '--'}</span>
-                                            <span className="ml-auto text-[10px] font-semibold text-slate-500">{visualSummary.pieces} peças</span>
-                                        </div>
-                                    </div>
-                                )}
-
-                                <div className="flex items-center gap-1.5 border-t border-slate-200 px-2 py-2 dark:border-slate-800">
-                                    <label className={`inline-flex h-8 cursor-pointer select-none items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-semibold transition ${currentSettings.respectGrain ? 'bg-blue-500/15 text-blue-700 ring-1 ring-blue-400/40 dark:text-blue-200' : 'bg-slate-100 text-slate-500 ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-400 dark:ring-slate-800'}`}>
-                                        <span className={`h-1.5 w-1.5 rounded-full ${currentSettings.respectGrain ? 'bg-blue-500 dark:bg-blue-300' : 'bg-slate-400 dark:bg-slate-600'}`}></span>
-                                        <input type="checkbox" checked={currentSettings.respectGrain} onChange={e => updateCurrentSettings('respectGrain', e.target.checked)} className="hidden" />
-                                        Veio
+                                {isCustomRollWidth && <label className="cutting-mobile-custom">Largura personalizada (cm)<input aria-label="Largura personalizada da bobina em centímetros" type="number" min="1" inputMode="decimal" value={currentSettings.rollWidth} onChange={event => updateCurrentSettings('rollWidth', event.target.value)} /></label>}
+                                <div className="cutting-direct-summary" aria-live="polite" aria-busy={isOptimizing}>
+                                    <div><span>Metro linear</span><strong>{visualSummary?.linearMeters ?? '—'} <small>m</small></strong></div>
+                                    <div><span>Uso</span><strong>{visualSummary?.efficiency ?? '—'}<small>%</small></strong></div>
+                                    <div><span>Sobra</span><strong>{visualSummary?.wastePercent ?? '—'}<small>%</small></strong></div>
+                                </div>
+                                <div className="cutting-direct-cost"><span>Material <strong>{activeFilmMaterialCostText ?? '—'}</strong></span><span>{visualSummary?.pieces ?? 0} peças</span></div>
+                                <div className="cutting-direct-options">
+                                    <label title="Impede a rotação automática das peças" data-active={currentSettings.respectGrain}>
+                                        <input aria-label="Respeitar sentido da película" type="checkbox" checked={currentSettings.respectGrain} onChange={event => updateCurrentSettings('respectGrain', event.target.checked)} />
+                                        <span>Sentido fixo</span>
                                     </label>
-                                    <label className={`inline-flex h-8 cursor-pointer select-none items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-semibold transition ${useDeepSearch ? 'bg-blue-500/15 text-blue-700 ring-1 ring-blue-400/40 dark:text-blue-200' : 'bg-slate-100 text-slate-500 ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-400 dark:ring-slate-800'}`}>
-                                        <span className={`h-1.5 w-1.5 rounded-full ${useDeepSearch ? 'bg-blue-500 dark:bg-blue-300' : 'bg-slate-400 dark:bg-slate-600'}`}></span>
-                                        <input type="checkbox" checked={useDeepSearch} onChange={e => setUseDeepSearch(e.target.checked)} className="hidden" />
-                                        Pro
+                                    <label title="Testa mais combinações de encaixe; pode demorar mais" data-active={useDeepSearch}>
+                                        <input aria-label="Buscar melhor encaixe" type="checkbox" checked={useDeepSearch} onChange={event => setUseDeepSearch(event.target.checked)} />
+                                        <span>Busca ampliada</span>
                                     </label>
-                                    <div className="ml-auto flex h-8 shrink-0 items-center overflow-hidden rounded-lg bg-slate-100 ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800">
-                                        <button
-                                            type="button"
-                                            onClick={() => setZoomLevel(prev => Math.max(0.5, prev - 0.25))}
-                                            className="flex h-8 w-8 items-center justify-center text-slate-600 active:bg-slate-200 dark:text-slate-300 dark:active:bg-slate-800"
-                                            title="Diminuir zoom"
-                                        >
-                                            <Minus className="h-4 w-4" aria-hidden="true" />
-                                        </button>
-                                        <span className="min-w-[36px] px-1 text-center text-[10px] font-black tabular-nums text-slate-600 dark:text-slate-300">{Math.round(zoomLevel * 100)}%</span>
-                                        <button
-                                            type="button"
-                                            onClick={() => setZoomLevel(prev => Math.min(3, prev + 0.25))}
-                                            className="flex h-8 w-8 items-center justify-center text-slate-600 active:bg-slate-200 dark:text-slate-300 dark:active:bg-slate-800"
-                                            title="Aumentar zoom"
-                                        >
-                                            <Plus className="h-4 w-4" aria-hidden="true" />
-                                        </button>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            openFullscreenView();
-                                        }}
-                                        aria-label="Expandir tela cheia"
-                                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-blue-600 ring-1 ring-blue-500/30 active:bg-slate-200 dark:bg-slate-900 dark:text-blue-200 dark:active:bg-slate-800"
-                                        title="Expandir tela cheia"
-                                    >
-                                        <Maximize2 className="h-4 w-4" aria-hidden="true" />
-                                    </button>
                                 </div>
                             </div>
 
@@ -1309,7 +1281,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                         {isCustomRollWidth && (
                                             <span className="mt-1 flex items-baseline gap-1">
                                                 <input
-                                                    aria-label="Largura personalizada da bobina em cent�metros"
+                                                    aria-label="Largura personalizada da bobina em cent�metros"
                                                     type="number"
                                                     inputMode="decimal"
                                                     value={currentSettings.rollWidth}
@@ -1352,7 +1324,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
 
                         {/* History List - Compact for mobile */}
                         {history.length > 0 && (
-                            <div className="mb-2 sm:mb-6 p-2 sm:p-4 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700">
+                            <div className={`cutting-history mb-2 sm:mb-6 p-2 sm:p-4 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700`}>
                                 <h4 className="text-[10px] sm:text-sm font-bold text-slate-700 dark:text-slate-300 mb-1.5 sm:mb-3 flex items-center gap-1.5">
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-600 dark:text-slate-400">
                                         <path fillRule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25zM12.75 6a.75.75 0 00-1.5 0v6c0 .414.336.75.75.75h4.5a.75.75 0 000-1.5h-3.75V6z" clipRule="evenodd" />
@@ -1586,6 +1558,13 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                     </div>
                                 )}
 
+                                <div className="cutting-direct-zoom sm:hidden" aria-label="Zoom do mapa">
+                                    <button type="button" aria-label="Diminuir zoom do mapa" onClick={() => setZoomLevel(value => Math.max(0.5, value - 0.25))}><Minus size={18} aria-hidden="true" /></button>
+                                    <span aria-live="polite">{Math.round(zoomLevel * 100)}%</span>
+                                    <button type="button" aria-label="Aumentar zoom do mapa" onClick={() => setZoomLevel(value => Math.min(3, value + 0.25))}><Plus size={18} aria-hidden="true" /></button>
+                                    <button type="button" className="cutting-overview" aria-label="Restaurar visão geral do mapa" onClick={() => {setZoomLevel(1); scrollContainerRef.current?.scrollTo?.({left: 0, top: 0});}}>Visão geral</button>
+                                    <button type="button" className="cutting-expand" title="Expandir tela cheia" aria-label="Expandir tela cheia" onClick={openFullscreenView}><Maximize2 size={18} aria-hidden="true" /></button>
+                                </div>
                                 {/* Zoom Slider - Desktop only, mobile uses buttons in stats bar */}
                                 <div className="relative z-30 hidden sm:flex mb-4 items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
                                     <span className="shrink-0 text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Zoom</span>
@@ -1634,9 +1613,9 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                 <div
                                     ref={scrollContainerRef}
                                     onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
-                                    className="relative max-h-[72vh] min-h-[430px] overflow-auto rounded-xl border border-slate-300 bg-[radial-gradient(circle_at_top_left,rgba(226,232,240,0.9),rgba(248,250,252,1)_42%,rgba(226,232,240,0.85))] px-4 pb-24 text-left shadow-inner dark:border-slate-800 dark:bg-[radial-gradient(circle_at_top_left,rgba(30,41,59,0.95),rgba(2,6,23,1)_48%,rgba(15,23,42,0.95))] sm:max-h-[70vh] sm:min-h-[400px] sm:px-6"
+                                    className={`cutting-map-scroll relative max-h-[72vh] min-h-[430px] overflow-auto rounded-xl border border-slate-300 bg-[radial-gradient(circle_at_top_left,rgba(226,232,240,0.9),rgba(248,250,252,1)_42%,rgba(226,232,240,0.85))] px-4 pb-24 text-left shadow-inner dark:border-slate-800 dark:bg-[radial-gradient(circle_at_top_left,rgba(30,41,59,0.95),rgba(2,6,23,1)_48%,rgba(15,23,42,0.95))] sm:max-h-[70vh] sm:min-h-[400px] sm:px-6`}
                                 >
-                                    <div className="pointer-events-none relative mb-20 ml-[72px] mr-12 mt-24 inline-block sm:mb-24 sm:ml-[88px] sm:mr-16 sm:mt-28" style={{ textAlign: 'initial' }}>
+                                    <div className="cutting-map-frame pointer-events-none relative mb-20 ml-[72px] mr-12 mt-24 inline-block sm:mb-24 sm:ml-[88px] sm:mr-16 sm:mt-28" style={{ textAlign: 'initial', marginLeft: isMobile ? Math.max(30, (containerWidth - 24 - result.rollWidth * scale) / 2) : undefined }}>
 
                                         {/* Horizontal Ruler (Top) */}
                                         <div className="absolute left-0 top-[-70px] h-[70px] w-full overflow-visible rounded-t-md border-b border-slate-300 bg-white/35 dark:border-slate-700 dark:bg-slate-950/25">
@@ -1685,7 +1664,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
 
                                         {/* Roll Background & Grid */}
                                         <div
-                                            className="relative overflow-hidden rounded-sm border border-slate-300 bg-white shadow-[0_18px_45px_rgba(15,23,42,0.18)] dark:border-slate-700 dark:bg-slate-900/70"
+                                            className="cutting-roll relative overflow-hidden rounded-sm border border-slate-300 bg-white shadow-[0_18px_45px_rgba(15,23,42,0.18)] dark:border-slate-700 dark:bg-slate-900/70"
                                             style={{
                                                 width: `${result.rollWidth * scale}px`,
                                                 height: `${result.totalHeight * scale}px`,
@@ -1733,7 +1712,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                                     <div
                                                         key={item.id || originalIndex}
                                                         onClick={() => togglePieceSelection(item)}
-                                                        className={`pointer-events-auto absolute isolate flex items-center justify-center overflow-visible rounded-[3px] text-xs font-bold border transition-all cursor-pointer backdrop-blur-[1px] ${isSelected
+                                                        data-selected={isSelected} data-locked={!!isLocked} data-group={isGroupHighlighted} className={`cutting-piece pointer-events-auto absolute isolate flex items-center justify-center overflow-visible rounded-[3px] text-xs font-bold border transition-all cursor-pointer backdrop-blur-[1px] ${isSelected
                                                             ? 'z-20 shadow-[0_0_0_2px_rgba(250,204,21,0.35),0_12px_28px_rgba(15,23,42,0.28)] scale-[1.01]'
                                                             : isGroupHighlighted
                                                                 ? 'z-10 shadow-[0_0_0_2px_rgba(103,232,249,0.34),0_14px_30px_rgba(8,145,178,0.26)]'
@@ -1762,9 +1741,10 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                                         }}
                                                         title={`#${originalIndex + 1}: ${item.label} (${item.w.toFixed(1)} x ${item.h.toFixed(1)}) - Clique para selecionar`}
                                                     >
+                                                        {renderMobilePieceLabel(item, originalIndex, pieceScaledWidth, pieceScaledHeight)}
                                                         {/* Large Watermark ID */}
                                                         <div
-                                                            className="absolute inset-0 flex items-center justify-center overflow-hidden rounded-[3px] font-black pointer-events-none select-none"
+                                                            className="cutting-piece-watermark absolute inset-0 flex items-center justify-center overflow-hidden rounded-[3px] font-black pointer-events-none select-none"
                                                             style={{
                                                                 fontSize: `${Math.min(item.w, item.h) * scale * 0.6}px`,
                                                                 color: isSelected ? 'rgba(120, 53, 15, 0.2)' : isGroupHighlighted ? 'rgba(8, 47, 73, 0.18)' : 'rgba(15, 23, 42, 0.14)'
@@ -1777,12 +1757,12 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                                         {showDimensionLabels && (
                                                             <>
                                                                 {/* Width Label (Bottom Right inside) */}
-                                                                <div className={`absolute bottom-1 right-1.5 z-20 rounded-md border px-1.5 py-0.5 text-[10px] font-black leading-none tabular-nums shadow-sm backdrop-blur sm:text-xs ${isSelected ? 'border-yellow-200/70 bg-yellow-50/95 text-yellow-950' : 'border-white/60 bg-white/90 text-slate-900'}`}>
+                                                                <div className={`cutting-old-label absolute bottom-1 right-1.5 z-20 rounded-md border px-1.5 py-0.5 text-[10px] font-black leading-none tabular-nums shadow-sm backdrop-blur sm:text-xs ${isSelected ? 'border-yellow-200/70 bg-yellow-50/95 text-yellow-950' : 'border-white/60 bg-white/90 text-slate-900'}`}>
                                                                     {(item.w / 100).toFixed(2)}
                                                                 </div>
 
                                                                 {/* Height Label (Left inside) */}
-                                                                <div className="absolute left-1 top-0 z-20 flex h-full items-center">
+                                                                <div className="cutting-old-label absolute left-1 top-0 z-20 flex h-full items-center">
                                                                     <span className={`origin-center -rotate-90 rounded-md border px-1.5 py-0.5 text-[10px] font-black leading-none tabular-nums shadow-sm backdrop-blur sm:text-xs ${isSelected ? 'border-yellow-200/70 bg-yellow-50/95 text-yellow-950' : 'border-white/60 bg-white/90 text-slate-900'}`}>
                                                                         {(item.h / 100).toFixed(2)}
                                                                     </span>
@@ -1819,7 +1799,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                                             const needsLargerButtons = pieceScaledWidth < minButtonSize || pieceScaledHeight < 40;
 
                                                             return (
-                                                                <div className="absolute inset-0 flex items-center justify-center z-30 pointer-events-none">
+                                                                <div className="hidden sm:flex absolute inset-0 items-center justify-center z-30 pointer-events-none">
                                                                     <div className={`flex gap-1 pointer-events-auto ${needsLargerButtons ? 'scale-75' : ''}`}>
                                                                         {/* Rotate Button */}
                                                                         <button
@@ -1888,8 +1868,9 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                     </div>
                                 </div>
 
+                                <div className="sm:hidden">{renderMobilePieceDetails()}</div>
                                 {/* Legend Table */}
-                                <div className="mt-6 rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900 overflow-hidden">
+                                <div className={`cutting-list mt-6 rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900 overflow-hidden`}>
                                     <h4 className="font-bold text-slate-800 dark:text-slate-100 px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center gap-2 bg-slate-50/90 dark:bg-slate-950/40">
                                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-blue-600 dark:text-blue-400">
                                             <path fillRule="evenodd" d="M2.625 6.75a1.125 1.125 0 112.25 0 1.125 1.125 0 01-2.25 0zm4.875 0A.75.75 0 018.25 6h12a.75.75 0 010 1.5h-12a.75.75 0 01-.75-.75zM2.625 12a1.125 1.125 0 112.25 0 1.125 1.125 0 01-2.25 0zM7.5 12a.75.75 0 01.75-.75h12a.75.75 0 010 1.5h-12A.75.75 0 017.5 12zm-4.875 5.25a1.125 1.125 0 112.25 0 1.125 1.125 0 01-2.25 0zm4.875 0a.75.75 0 01.75-.75h12a.75.75 0 010 1.5h-12a.75.75 0 01-.75-.75z" clipRule="evenodd" />
@@ -2012,7 +1993,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                             <div className="fixed inset-0 z-[99998] flex items-end justify-center sm:items-center sm:p-6">
                                 <button
                                     type="button"
-                                    aria-label="Fechar sele��o de largura"
+                                    aria-label="Fechar sele��o de largura"
                                     onClick={() => setIsRollWidthPickerOpen(false)}
                                     className="absolute inset-0 bg-slate-950/55 backdrop-blur-[2px]"
                                 />
@@ -2070,7 +2051,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                                 : 'border-dashed border-slate-300 bg-white text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200'
                                                 }`}
                                         >
-                                            <span><strong className="block text-base">Personalizada</strong><small className={`mt-0.5 block text-xs ${isCustomRollWidth ? 'text-blue-100' : 'text-slate-400'}`}>Digite uma largura diferente em cent�metros</small></span>
+                                            <span><strong className="block text-base">Personalizada</strong><small className={`mt-0.5 block text-xs ${isCustomRollWidth ? 'text-blue-100' : 'text-slate-400'}`}>Digite uma largura diferente em cent�metros</small></span>
                                             <ChevronDown className="h-5 w-5 -rotate-90" aria-hidden="true" />
                                         </button>
                                     </div>
@@ -2085,7 +2066,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                 role="dialog"
                                 aria-modal="true"
                                 aria-label={`Mesa de corte expandida - ${activeFilm}`}
-                                className="flex flex-col relative overflow-hidden bg-slate-100 dark:bg-slate-950"
+                                className="cutting-fullscreen flex flex-col relative overflow-hidden bg-slate-100 dark:bg-slate-950"
                                 style={{
                                     position: 'fixed',
                                     top: 0,
@@ -2095,8 +2076,32 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                     zIndex: 99999,
                                 }}
                             >
-                                {/* Barra de controles tecnica */}
-                                <div className="z-30 grid grid-cols-1 gap-2 border-b border-slate-200/90 bg-white/95 px-3 py-2 shadow-sm backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/95 xl:grid-cols-[minmax(240px,1fr)_auto_minmax(300px,1fr)_auto] xl:items-center">
+                                {/* Controles mobile com alvos maiores e enquadramento inicial pela largura. */}
+                                {isMobile ? <div className="cutting-fullscreen-mobile sm:hidden">
+                                    <div className="cutting-mobile-heading">
+                                        <div><span className="cutting-eyebrow">Plano de corte</span><div className="cutting-title-line"><strong>{activeFilm}</strong><span className="cutting-orientation">{fullscreenOrientation === 'portrait' ? 'Vertical' : 'Horizontal'}</span></div></div>
+                                        <div className="cutting-heading-actions"><button type="button" className="cutting-find-pieces" aria-label={`Localizar peças (${result.placedItems.length})`} onClick={() => setIsPieceNavigatorOpen(true)}><List size={18} aria-hidden="true" /><span>Peças</span></button><button type="button" aria-label="Fechar mapa ampliado" onClick={() => setIsFullscreen(false)}><X size={22} aria-hidden="true" /></button></div>
+                                    </div>
+                                    <div className="cutting-expanded-tools">
+                                        <div className="cutting-zoom-cluster">
+                                        <button type="button" aria-label="Diminuir zoom" disabled={fullscreenZoom <= 0.5} onClick={() => setFullscreenZoom(value => Math.max(0.5, value - 0.25))}><Minus size={19} aria-hidden="true" /></button>
+                                            <output aria-label="Zoom atual">{Math.round(fullscreenZoom * 100)}%</output>
+                                            <button type="button" aria-label="Aumentar zoom" disabled={fullscreenZoom >= 5} onClick={() => setFullscreenZoom(value => Math.min(5, value + 0.25))}><Plus size={19} aria-hidden="true" /></button>
+                                        </div>
+                                        <button type="button" className="cutting-view-tool" aria-label="Resetar zoom e ajustar à largura" title="Ajustar à largura" onClick={() => {setFullscreenZoom(1); fullscreenScrollRef.current?.scrollTo?.({left: 0, top: 0});}}><RotateCcw size={17} aria-hidden="true" /><span>Ajustar</span></button>
+                                        <button type="button" className="cutting-view-tool" aria-label={fullscreenOrientation === 'portrait' ? 'Ver mesa na horizontal' : 'Ver mesa na vertical'} title="Girar a visualização" onClick={() => {setFullscreenOrientation(value => value === 'portrait' ? 'landscape' : 'portrait'); setFullscreenZoom(1);}}><RotateCw size={17} aria-hidden="true" /><span>Girar</span></button>
+                                        <span className="cutting-unit-label">Medidas<br />em metros</span>
+                                    </div>
+                                    <div className="cutting-stat-strip" aria-label="Resumo do plano">
+                                        <div><span>Metro linear</span><strong>{fullscreenLinearMeters}<small> m</small></strong></div>
+                                        <div className="cutting-stat-material"><span>Material</span><strong>{activeFilmMaterialCostText ?? '—'}</strong></div>
+                                        <div><span>Uso</span><strong>{fullscreenUsage}<small>%</small></strong></div>
+                                        <div className="cutting-stat-waste"><span>Sobra</span><strong>{fullscreenWaste}<small>%</small></strong></div>
+                                    </div>
+                                    {unplacedCount > 0 && <div className="cutting-incomplete" role="status">{unplacedCount} {unplacedCount === 1 ? 'peça fora do plano' : 'peças fora do plano'} · consumo parcial</div>}
+                                </div> :
+                                /* Barra de controles tecnica */
+                                <div className="hidden sm:grid z-30 grid-cols-1 gap-2 border-b border-slate-200/90 bg-white/95 px-3 py-2 shadow-sm backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/95 xl:grid-cols-[minmax(240px,1fr)_auto_minmax(300px,1fr)_auto] xl:items-center">
                                     {/* Zoom Controls */}
                                     <div className="flex min-w-0 items-center justify-between gap-3 xl:w-auto">
                                         <div className="min-w-0">
@@ -2207,17 +2212,17 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                     >
                                         <X className="h-5 w-5" aria-hidden="true" />
                                     </button>
-                                </div>
+                                </div>}
                                 {/* Fullscreen Content */}
                                 <div
                                     ref={fullscreenScrollRef}
                                     data-testid="fullscreen-cutting-scroll"
-                                    className="flex-1 overflow-auto p-3 bg-[radial-gradient(circle_at_18%_0%,rgba(219,234,254,0.95),rgba(248,250,252,1)_42%,rgba(226,232,240,0.9))] dark:bg-[radial-gradient(circle_at_18%_0%,rgba(30,41,59,0.92),rgba(2,6,23,1)_48%,rgba(15,23,42,0.96))]"
+                                    className="cutting-expanded-scroll flex-1 overflow-auto p-3 bg-[radial-gradient(circle_at_18%_0%,rgba(219,234,254,0.95),rgba(248,250,252,1)_42%,rgba(226,232,240,0.9))] dark:bg-[radial-gradient(circle_at_18%_0%,rgba(30,41,59,0.92),rgba(2,6,23,1)_48%,rgba(15,23,42,0.96))]"
                                     onWheel={handleFullscreenWheel}
                                     style={{ overscrollBehavior: 'contain' }}
                                 >
                                     <div
-                                        className="min-w-max min-h-full flex items-start justify-start"
+                                        className="cutting-fullscreen-frame min-w-max min-h-full flex items-start justify-start"
                                         style={{
                                             paddingLeft: fullscreenOrientation === 'landscape' ? '72px' : '56px',
                                             paddingRight: fullscreenOrientation === 'landscape' ? '240px' : '72px',
@@ -2226,7 +2231,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                     >
                                         <div
                                             ref={fullscreenContentRef}
-                                            className="inline-block relative mt-4 mb-14 rounded-lg"
+                                            className="cutting-fullscreen-content inline-block relative mt-4 mb-14 rounded-lg"
                                             style={{ marginLeft: '72px', marginTop: '84px', marginBottom: '72px' }}
                                         >
 
@@ -2277,7 +2282,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
 
                                         {/* Fullscreen Roll Drawing */}
                                         <div
-                                            data-testid="fullscreen-cutting-roll"
+                                            data-testid="fullscreen-cutting-roll" data-cutting-roll="true"
                                             className="relative overflow-hidden rounded-sm border border-slate-300 bg-white shadow-[0_22px_60px_rgba(15,23,42,0.22)] dark:border-slate-700 dark:bg-slate-900/70"
                                             style={{
                                                 width: `${fullscreenAxisWidth * fullscreenScale}px`,
@@ -2320,7 +2325,8 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                                     <div
                                                         key={item.id || idx}
                                                         onClick={() => togglePieceSelection(item)}
-                                                        className={`absolute isolate flex items-center justify-center overflow-visible rounded-[3px] text-xs font-bold border transition-all cursor-pointer backdrop-blur-[1px] ${isSelected
+                                                        data-piece-id={pieceId} data-selected={isSelected} data-locked={!!isLocked} data-group={isGroupHighlighted}
+                                                        className={`cutting-piece absolute isolate flex items-center justify-center overflow-visible rounded-[3px] text-xs font-bold border transition-all cursor-pointer backdrop-blur-[1px] ${isSelected
                                                             ? 'z-20 shadow-[0_0_0_2px_rgba(250,204,21,0.35),0_16px_34px_rgba(15,23,42,0.3)] scale-[1.01]'
                                                             : isGroupHighlighted
                                                                 ? 'z-10 shadow-[0_0_0_2px_rgba(103,232,249,0.34),0_16px_34px_rgba(8,145,178,0.3)]'
@@ -2349,9 +2355,10 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                                         }}
                                                         title={`#${idx + 1}: ${item.label} (${item.w.toFixed(1)} x ${item.h.toFixed(1)}) - Clique para selecionar`}
                                                     >
+                                                        {renderMobilePieceLabel(item, idx, (fullscreenOrientation === 'landscape' ? item.h : item.w) * fullscreenScale, (fullscreenOrientation === 'landscape' ? item.w : item.h) * fullscreenScale, fullscreenOrientation === 'landscape')}
                                                         {/* Large Watermark ID */}
                                                         <div
-                                                            className="absolute inset-0 flex items-center justify-center overflow-hidden rounded-[3px] font-black pointer-events-none select-none"
+                                                            className="cutting-piece-watermark absolute inset-0 flex items-center justify-center overflow-hidden rounded-[3px] font-black pointer-events-none select-none"
                                                             style={{
                                                                 fontSize: `${Math.min(item.w, item.h) * fullscreenScale * 0.5}px`,
                                                                 color: isSelected ? 'rgba(120, 53, 15, 0.2)' : isGroupHighlighted ? 'rgba(8, 47, 73, 0.18)' : 'rgba(15, 23, 42, 0.12)'
@@ -2362,10 +2369,10 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                                         {/* Dimensions */}
                                                         {showDimensionLabels && (
                                                             <>
-                                                                <div className={`absolute bottom-1.5 right-1.5 z-20 rounded-md border px-1.5 py-1 text-[11px] font-black leading-none tabular-nums shadow-sm backdrop-blur ${isSelected ? 'border-yellow-200 bg-yellow-50/95 text-yellow-950' : 'border-white/70 bg-white/90 text-slate-900'}`}>
+                                                                <div className={`cutting-old-label absolute bottom-1.5 right-1.5 z-20 rounded-md border px-1.5 py-1 text-[11px] font-black leading-none tabular-nums shadow-sm backdrop-blur ${isSelected ? 'border-yellow-200 bg-yellow-50/95 text-yellow-950' : 'border-white/70 bg-white/90 text-slate-900'}`}>
                                                                     {itemFrame.horizontalLabel}
                                                                 </div>
-                                                                <div className="absolute left-1.5 top-0 z-20 flex h-full items-center">
+                                                                <div className="cutting-old-label absolute left-1.5 top-0 z-20 flex h-full items-center">
                                                                     <span className={`origin-center -rotate-90 rounded-md border px-1.5 py-1 text-[11px] font-black leading-none tabular-nums shadow-sm backdrop-blur ${isSelected ? 'border-yellow-200 bg-yellow-50/95 text-yellow-950' : 'border-white/70 bg-white/90 text-slate-900'}`}>
                                                                         {itemFrame.verticalLabel}
                                                                     </span>
@@ -2390,7 +2397,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                                         )}
 
                                                         {isSelected && (
-                                                            <div className="absolute inset-0 flex items-center justify-center z-30 pointer-events-none">
+                                                            <div className="hidden sm:flex absolute inset-0 items-center justify-center z-30 pointer-events-none">
                                                                 <div className={`flex gap-2 pointer-events-auto ${needsLargerButtons ? 'scale-90' : ''}`}>
                                                                     <button
                                                                         onClick={(e) => {
@@ -2517,6 +2524,10 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                         </div>
                                     </div>
                                 </div>
+                                <div className="cutting-expanded-detail sm:hidden">{renderMobilePieceDetails()}</div>
+                                {isMobile && isPieceNavigatorOpen && <CuttingPieceNavigator
+                                    pieces={result.placedItems.map((item, index) => ({id: getPieceId(item), number: index + 1, room: getPieceRoom(item), size: `${formatPieceSize(item.w)} × ${formatPieceSize(item.h)}`, locked: !!lockedItems[item.id!]}))}
+                                    selectedId={selectedPieceId} onSelect={locateMobilePiece} onClose={() => setIsPieceNavigatorOpen(false)} />}
                             </div>,
                             document.body
                         )}
@@ -2528,8 +2539,3 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
 };
 
 export default CuttingOptimizationPanel;
-
-
-
-
-

@@ -18,8 +18,8 @@ describe('CuttingOptimizationPanel fullscreen with real portal', () => {
         measurements={[
           {
             id: 1,
-            largura: '100',
-            altura: '100',
+            largura: '0,70',
+            altura: '1,20',
             quantidade: 2,
             ambiente: 'Janela',
             tipoAplicacao: 'vidro',
@@ -44,6 +44,7 @@ describe('CuttingOptimizationPanel fullscreen with real portal', () => {
 
     await waitFor(() => {
       expect(screen.getAllByTitle('Expandir tela cheia').length).toBeGreaterThan(0);
+      expect(screen.getAllByTitle('Expandir tela cheia')[0]).not.toBeDisabled();
     });
 
     fireEvent.click(screen.getAllByTitle('Expandir tela cheia')[0]);
@@ -80,6 +81,7 @@ describe('CuttingOptimizationPanel fullscreen with real portal', () => {
 
     await waitFor(() => {
       expect(screen.getAllByTitle('Expandir tela cheia').length).toBeGreaterThan(0);
+      expect(screen.getAllByTitle('Expandir tela cheia')[0]).not.toBeDisabled();
     });
 
     fireEvent.click(screen.getAllByTitle('Expandir tela cheia')[0]);
