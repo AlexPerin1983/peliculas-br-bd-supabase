@@ -69,6 +69,15 @@ vi.mock('../../../components/MobileFooter', () => ({
   )
 }));
 
+vi.mock('../../../components/ui/TotalsDrawer', () => ({
+  TotalsDrawer: ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => isOpen ? (
+    <div role="dialog" aria-label="Preços e cobrança">
+      <span>Editor de preços aberto</span>
+      <button onClick={onClose}>Fechar preços</button>
+    </div>
+  ) : null
+}));
+
 describe('AppClientWorkspace', () => {
   const baseProps = {
     clientsCount: 1,
@@ -180,5 +189,17 @@ describe('AppClientWorkspace', () => {
     expect(screen.getByText('Este é um orçamento de demonstração')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Cadastrar meu primeiro cliente' }));
     expect(baseProps.onAddClient).toHaveBeenCalledTimes(1);
+  });
+
+  it('abre no desktop o mesmo editor de preços e cobrança disponível no celular', () => {
+    render(<AppClientWorkspace {...baseProps} />);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Abrir preços e cobrança' })[0]);
+
+    expect(screen.getByRole('dialog', { name: 'Preços e cobrança' })).toBeInTheDocument();
+    expect(screen.getByText('Editor de preços aberto')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Fechar preços' }));
+    expect(screen.queryByRole('dialog', { name: 'Preços e cobrança' })).not.toBeInTheDocument();
   });
 });

@@ -1,10 +1,11 @@
-import React, { ReactNode } from 'react';
+import React, { ReactNode, useState } from 'react';
 import ClientBar from '../../../components/ClientBar';
 import ProposalOptionsCarousel, { getOptionDisplayName } from '../../../components/ProposalOptionsCarousel';
 import SummaryBar from '../../../components/SummaryBar';
 import ActionsBar from '../../../components/ActionsBar';
 import MobileFooter from '../../../components/MobileFooter';
 import CuttingOptimizationPanel from '../../../components/CuttingOptimizationPanel';
+import { TotalsDrawer } from '../../../components/ui/TotalsDrawer';
 import { Client, Film, ProposalDiscount, ProposalOption, Totals, UIMeasurement } from '../../../types';
 import {
     getProposalAdjustmentInputs,
@@ -15,6 +16,7 @@ import {
     BadgeCheck,
     CheckCircle2,
     CircleDollarSign,
+    ChevronRight,
     ClipboardCheck,
     Copy,
     FileText,
@@ -26,6 +28,7 @@ import {
     Plus,
     PlusCircle,
     Ruler,
+    SlidersHorizontal,
     Sparkles,
     TrendingUp,
     UserRound,
@@ -69,6 +72,7 @@ interface AppClientWorkspaceProps {
     onDuplicateMeasurements: () => void;
     onGeneratePdf: () => void;
     onOpenAIModal: () => void;
+    onOpenPrices: () => void;
     defaultHideMeasurements?: boolean;
 }
 
@@ -212,6 +216,7 @@ const ProposalCommandCenter: React.FC<ProposalCommandCenterProps> = ({
     onDuplicateMeasurements,
     onGeneratePdf,
     onOpenAIModal,
+    onOpenPrices,
 }) => {
     const activeMeasurements = measurements.filter(measurement => measurement.active !== false);
     const measurementsWithFilm = activeMeasurements.filter(measurement => Boolean(measurement.pelicula && measurement.pelicula !== 'Nenhuma'));
@@ -303,6 +308,22 @@ const ProposalCommandCenter: React.FC<ProposalCommandCenterProps> = ({
                     </div>
                 </div>
             </div>
+
+            <button
+                type="button"
+                onClick={onOpenPrices}
+                className="mt-4 flex min-h-14 w-full items-center gap-3 rounded-[var(--radius-control)] border border-blue-200 bg-blue-50 p-3 text-left text-blue-950 transition-all hover:border-blue-300 hover:bg-blue-100 active:scale-[0.99] dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-100 dark:hover:bg-blue-950/50"
+                aria-label="Abrir preços e cobrança"
+            >
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm dark:bg-blue-500">
+                    <SlidersHorizontal className="h-5 w-5" aria-hidden="true" />
+                </span>
+                <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-bold">Preços e cobrança</span>
+                    <span className="mt-0.5 block text-xs leading-4 text-blue-700 dark:text-blue-300">Escolha m² ou metro linear para cada película.</span>
+                </span>
+                <ChevronRight className="h-5 w-5 shrink-0 text-blue-500" aria-hidden="true" />
+            </button>
 
             <div className="mt-4 space-y-2">
                 <div className="flex items-center justify-between gap-3">
@@ -416,6 +437,8 @@ export const AppClientWorkspace: React.FC<AppClientWorkspaceProps> = ({
     onOpenAIModal,
     defaultHideMeasurements
 }) => {
+    const [isDesktopTotalsOpen, setIsDesktopTotalsOpen] = useState(false);
+
     if (clientsCount === 0) {
         return (
             <div id="contentContainer" className="w-full min-h-[300px] animate-fade-in">
@@ -524,6 +547,7 @@ export const AppClientWorkspace: React.FC<AppClientWorkspaceProps> = ({
                             onDuplicateMeasurements={onDuplicateMeasurements}
                             onGeneratePdf={onGeneratePdf}
                             onOpenAIModal={onOpenAIModal}
+                            onOpenPrices={() => setIsDesktopTotalsOpen(true)}
                         />
                     </div>
                 )}
@@ -538,6 +562,21 @@ export const AppClientWorkspace: React.FC<AppClientWorkspaceProps> = ({
                             onOpenGeneralDiscountModal={onOpenGeneralDiscountModal}
                             isDesktop
                         />
+                        <button
+                            type="button"
+                            onClick={() => setIsDesktopTotalsOpen(true)}
+                            className="mt-3 flex min-h-14 w-full items-center gap-3 rounded-[var(--radius-control)] border border-blue-200 bg-blue-50 p-3 text-left text-blue-950 transition-all hover:border-blue-300 hover:bg-blue-100 active:scale-[0.99] dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-100"
+                            aria-label="Abrir preços e cobrança"
+                        >
+                            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white">
+                                <SlidersHorizontal className="h-5 w-5" aria-hidden="true" />
+                            </span>
+                            <span className="min-w-0 flex-1">
+                                <span className="block text-sm font-bold">Preços e cobrança</span>
+                                <span className="block text-xs text-blue-700 dark:text-blue-300">Alterar m², metro linear e valores.</span>
+                            </span>
+                            <ChevronRight className="h-5 w-5 shrink-0 text-blue-500" aria-hidden="true" />
+                        </button>
                         <ActionsBar
                             onAddMeasurement={onAddMeasurement}
                             onDuplicateMeasurements={onDuplicateMeasurements}
@@ -557,6 +596,20 @@ export const AppClientWorkspace: React.FC<AppClientWorkspaceProps> = ({
                         onGeneratePdf={onGeneratePdf}
                         isGeneratingPdf={isGeneratingPdf}
                         onOpenAIModal={onOpenAIModal}
+                        defaultHideMeasurements={defaultHideMeasurements}
+                        options={proposalOptions.map((option) => ({ id: option.id, name: getOptionDisplayName(option) }))}
+                        activeOptionId={activeOptionId}
+                        onSelectOption={onSelectOption}
+                    />
+
+                    <TotalsDrawer
+                        isOpen={isDesktopTotalsOpen}
+                        onClose={() => setIsDesktopTotalsOpen(false)}
+                        totals={totals}
+                        generalDiscount={generalDiscount}
+                        onUpdateGeneralDiscount={onUpdateGeneralDiscount}
+                        onGeneratePdf={onGeneratePdf}
+                        isGeneratingPdf={isGeneratingPdf}
                         defaultHideMeasurements={defaultHideMeasurements}
                         options={proposalOptions.map((option) => ({ id: option.id, name: getOptionDisplayName(option) }))}
                         activeOptionId={activeOptionId}

@@ -517,7 +517,7 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
         <Drawer.Root open={isOpen} onOpenChange={(open) => !open && onClose()} repositionInputs={false}>
             <Drawer.Portal>
                 <Drawer.Overlay className="fixed inset-0 bg-black/40 z-50" />
-                <Drawer.Content className="fixed bottom-0 left-0 right-0 z-50 flex h-[100dvh] max-h-[100dvh] flex-col border-t border-slate-200 bg-white outline-none dark:border-slate-700 dark:bg-slate-900">
+                <Drawer.Content className="fixed bottom-0 left-0 right-0 z-50 flex h-[100dvh] max-h-[100dvh] flex-col border-t border-slate-200 bg-white outline-none dark:border-slate-700 dark:bg-slate-900 sm:inset-y-0 sm:left-auto sm:w-[min(520px,calc(100vw-2rem))] sm:border-l sm:border-t-0 sm:shadow-2xl">
                     <div
                         ref={scrollRef}
                         className="flex-1 overflow-y-auto overscroll-contain bg-white px-3 pb-24 dark:bg-slate-900 sm:px-4 sm:pb-4"
@@ -604,7 +604,7 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                                 <div className="space-y-2">
                                     <div className="flex items-center justify-between px-1">
                                         <h3 className="text-[10px] font-medium uppercase tracking-[0.12em] text-slate-400 dark:text-slate-500">Películas e preços</h3>
-                                        <span className="text-[9px] text-slate-400">Toque para editar</span>
+                                        <span className="text-[9px] text-slate-400"><span className="sm:hidden">Toque</span><span className="hidden sm:inline">Clique</span> para editar</span>
                                     </div>
                                     <div className="space-y-2">
                                         {Object.values(totals.groupedTotals).map((group: any) => (
