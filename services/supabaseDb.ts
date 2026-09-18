@@ -573,7 +573,7 @@ export interface PDFPageResult {
     nextOffset: number;
 }
 
-const SAVED_PDF_LIST_COLUMNS = 'id, client_id, client_name, date, expiration_date, total_preco, total_m2, subtotal, general_discount_amount, general_discount, nome_arquivo, measurements, status, agendamento_id, proposal_option_name, proposal_option_id, archived_at, payment_config';
+const SAVED_PDF_LIST_COLUMNS = 'id, client_id, client_name, date, expiration_date, total_preco, total_m2, subtotal, general_discount_amount, general_discount, nome_arquivo, measurements, status, agendamento_id, proposal_option_name, proposal_option_id, archived_at, payment_config, follow_up_base_value, follow_up_discount_percent, follow_up_discount_amount, follow_up_discount_type, follow_up_revision';
 
 export const savePDF = async (pdfData: Omit<SavedPDF, 'id'>): Promise<SavedPDF> => {
     const userId = await getCurrentUserId();
@@ -684,6 +684,7 @@ export const updatePDF = async (pdfData: SavedPDF): Promise<SavedPDF> => {
         .from('saved_pdfs')
         .update(pdfRow)
         .eq('id', pdfData.id)
+        .eq('follow_up_revision', pdfData.followUpRevision ?? 0)
         .eq('user_id', userId)
         .select()
         .single();
@@ -1159,7 +1160,7 @@ const generatePdfStorageName = (): string => {
     return `${uuid}.pdf`;
 };
 
-const uploadPdfToStorage = async (blob: Blob): Promise<string> => {
+export const uploadPdfToStorage = async (blob: Blob): Promise<string> => {
     const prefix = await getPdfStoragePrefix();
     const path = `${prefix}/${generatePdfStorageName()}`;
     const { error } = await supabase.storage
@@ -1189,13 +1190,18 @@ const removePdfFromStorage = async (path: string): Promise<void> => {
     }
 };
 
-const mapRowToPDF = async (row: any): Promise<SavedPDF> => ({
+export const mapRowToPDF = async (row: any): Promise<SavedPDF> => ({
     id: row.id,
     clienteId: row.client_id,
     clientName: row.client_name,
     date: row.date,
     expirationDate: row.expiration_date,
     totalPreco: row.total_preco,
+    followUpBaseValue: row.follow_up_base_value == null ? undefined : Number(row.follow_up_base_value),
+    followUpDiscountPercent: Number(row.follow_up_discount_percent || 0),
+    followUpDiscountAmount: Number(row.follow_up_discount_amount || 0),
+    followUpDiscountType: row.follow_up_discount_type || 'percentage',
+    followUpRevision: Number(row.follow_up_revision || 0),
     totalM2: row.total_m2,
     subtotal: row.subtotal,
     generalDiscountAmount: row.general_discount_amount,

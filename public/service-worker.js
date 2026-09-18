@@ -1,7 +1,7 @@
 // Service Worker com Auto-Atualização
 // ========================================
 // VERSÃO: Mude este número para forçar atualização nos clientes
-const SW_VERSION = 'v2.7.3';
+const SW_VERSION = 'v2.7.5';
 const CACHE_NAME = `peliculas-br-bd-${SW_VERSION}`;
 const TECHNICAL_CACHE_PREFIXES = [
     'peliculas-br-bd-',

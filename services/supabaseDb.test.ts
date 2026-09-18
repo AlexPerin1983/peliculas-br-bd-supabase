@@ -51,7 +51,7 @@ const buildUpdateChain = () => {
   });
 
   selectMock.mockReturnValue({ single: singleMock });
-  eqSecondMock.mockReturnValue({ select: selectMock });
+  eqSecondMock.mockReturnValue({ select: selectMock, eq: eqSecondMock });
   eqFirstMock.mockReturnValue({ eq: eqSecondMock });
   updateMock.mockReturnValue({ eq: eqFirstMock });
   portalItemsEqMock.mockResolvedValue({ data: [{ portal_id: 'portal-1' }], error: null });
@@ -90,6 +90,7 @@ describe('supabaseDb PDF updates', () => {
     expect(updateMock.mock.calls[0][0]).not.toHaveProperty('pdf_blob');
     expect(eqFirstMock).toHaveBeenCalledWith('id', 91);
     expect(eqSecondMock).toHaveBeenCalledWith('user_id', 'user-1');
+    expect(eqSecondMock).toHaveBeenCalledWith('follow_up_revision', 0);
     expect(portalItemsEqMock).toHaveBeenCalledWith('saved_pdf_id', 91);
     expect(portalUpdateMock).toHaveBeenCalledWith(expect.objectContaining({
       last_activity_at: expect.any(String)

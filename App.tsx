@@ -244,6 +244,16 @@ const App: React.FC = () => {
     const [films, setFilms] = useState<Film[]>([]);
     const [allSavedPdfs, setAllSavedPdfs] = useState<SavedPDF[]>([]);
     const [historyPdfs, setHistoryPdfs] = useState<SavedPDF[]>([]);
+    useEffect(() => {
+        const onPriceUpdated = (event: Event) => {
+            const { pdf, previousId } = (event as CustomEvent<{ pdf: SavedPDF; previousId: number }>).detail;
+            const replace = (rows: SavedPDF[]) => rows.map(row => row.id === previousId || row.id === pdf.id ? pdf : row);
+            setAllSavedPdfs(replace);
+            setHistoryPdfs(replace);
+        };
+        window.addEventListener('proposal-price-updated', onPriceUpdated);
+        return () => window.removeEventListener('proposal-price-updated', onPriceUpdated);
+    }, []);
     const [historyHasMore, setHistoryHasMore] = useState(false);
     const [historyNextOffset, setHistoryNextOffset] = useState(0);
     const [hasLoadedAllPdfs, setHasLoadedAllPdfs] = useState(false);

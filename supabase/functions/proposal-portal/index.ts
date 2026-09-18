@@ -2,6 +2,7 @@
 import webpush from 'npm:web-push@3.6.7';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { selectCompanyBranding } from './companyBranding.ts';
+import { resolvePortalPricing } from './followUpPricing.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -315,7 +316,7 @@ Deno.serve(async (request) => {
         admin.from('clients').select('nome').eq('id', portal.client_id).maybeSingle(),
         admin.from('organizations').select('name, owner_id').eq('id', portal.organization_id).maybeSingle(),
         admin.from('proposal_portal_items')
-          .select('position, saved_pdf_id, condition_original_value, condition_final_value, condition_discount_amount, condition_discount_percent, condition_expires_at, condition_updated_at, saved_pdfs(id, proposal_option_name, nome_arquivo, total_preco, total_m2, date, expiration_date, status, payment_config)')
+          .select('position, saved_pdf_id, condition_original_value, condition_final_value, condition_discount_amount, condition_discount_percent, condition_expires_at, condition_updated_at, saved_pdfs(id, proposal_option_name, nome_arquivo, total_preco, total_m2, date, expiration_date, status, payment_config, follow_up_base_value, follow_up_discount_percent, follow_up_discount_amount, follow_up_revision)')
           .eq('portal_id', portal.id)
           .order('position'),
         admin.from('proposal_portal_messages')
@@ -358,11 +359,7 @@ Deno.serve(async (request) => {
             expirationDate: pdf.expiration_date,
             status: pdf.status,
             paymentConfig: pdf.payment_config || undefined,
-            conditionOriginalValue: item.condition_original_value == null ? null : Number(item.condition_original_value),
-            conditionFinalValue: item.condition_final_value == null ? null : Number(item.condition_final_value),
-            conditionDiscountAmount: item.condition_discount_amount == null ? null : Number(item.condition_discount_amount),
-            conditionDiscountPercent: item.condition_discount_percent == null ? null : Number(item.condition_discount_percent),
-            conditionExpiresAt: item.condition_expires_at,
+            ...resolvePortalPricing(pdf, item, portal.expires_at),
             conditionUpdatedAt: item.condition_updated_at,
           };
         }),
@@ -411,14 +408,15 @@ Deno.serve(async (request) => {
       if (!['approved', 'rejected', 'negotiation'].includes(kind)) return json({ error: 'Resposta invalida.' }, 400);
 
       const { data: item } = await admin.from('proposal_portal_items')
-        .select('saved_pdf_id, condition_final_value, condition_expires_at, saved_pdfs(total_preco, payment_config)')
+        .select('saved_pdf_id, condition_final_value, condition_expires_at, saved_pdfs(total_preco, payment_config, follow_up_base_value, follow_up_discount_percent, follow_up_discount_amount, follow_up_revision)')
         .eq('portal_id', portal.id)
         .eq('saved_pdf_id', proposalId)
         .maybeSingle();
       if (!item) return json({ error: 'Proposta nao encontrada neste link.' }, 404);
 
-      const conditionExpired = item.condition_expires_at
-        ? new Date(item.condition_expires_at).getTime() <= Date.now()
+      const pricing = resolvePortalPricing((item as any).saved_pdfs, item, portal.expires_at);
+      const conditionExpired = pricing.conditionExpiresAt
+        ? new Date(pricing.conditionExpiresAt).getTime() <= Date.now()
         : false;
       if (kind === 'approved' && conditionExpired) {
         return json({ error: 'Esta condicao expirou. Converse com a empresa para reativar o valor.' }, 410);
@@ -435,8 +433,8 @@ Deno.serve(async (request) => {
       if (kind === 'rejected' && !body) return json({ error: 'Conte o motivo da recusa.' }, 400);
 
       const pdf = (item as any).saved_pdfs;
-      const approvedValue = item.condition_final_value != null
-        ? Number(item.condition_final_value)
+      const approvedValue = pricing.conditionFinalValue != null
+        ? Number(pricing.conditionFinalValue)
         : Number(pdf?.total_preco || 0);
       const paymentOptions = buildPaymentOptions(approvedValue, pdf?.payment_config);
       let paymentSelection = null;
@@ -461,8 +459,8 @@ Deno.serve(async (request) => {
         body: body || null,
         offer_type: offerType,
         offer_value: offerValue,
-        condition_value: kind === 'approved' && item.condition_final_value != null
-          ? Number(item.condition_final_value)
+        condition_value: kind === 'approved'
+          ? approvedValue
           : null,
         payment_selection: kind === 'approved' ? paymentSelection : null,
       });
@@ -484,8 +482,8 @@ Deno.serve(async (request) => {
         body,
         offerType,
         offerValue,
-        conditionValue: kind === 'approved' && item.condition_final_value != null
-          ? Number(item.condition_final_value)
+        conditionValue: kind === 'approved'
+          ? approvedValue
           : null,
       });
       return json({ ok: true, status: nextStatus });

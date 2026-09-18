@@ -37,6 +37,8 @@ import { useProposalMessageTemplates } from '../../src/hooks/useProposalMessageT
 import { useIsMobile } from '../../src/hooks/useIsMobile';
 import Modal from '../ui/Modal';
 import ProposalShareModal from './ProposalShareModal';
+import { getFollowUpBase, previewProposalFollowUp } from '../../src/lib/proposalFollowUp';
+import { applyProposalFollowUp } from '../../services/proposalFollowUp';
 
 interface ProposalMessagesModalProps {
     isOpen: boolean;
@@ -64,7 +66,7 @@ const getProposalTitle = (pdf: SavedPDF) =>
     pdf.proposalOptionName || (pdf.id != null ? `Orçamento #${pdf.id}` : pdf.nomeArquivo || 'Orçamento');
 
 const getOriginalValue = (pdf: SavedPDF) =>
-    pdf.subtotal ?? Math.max(pdf.totalPreco || 0, (pdf.totalPreco || 0) + (pdf.generalDiscountAmount || 0));
+    pdf.subtotal ?? Math.max(getFollowUpBase(pdf), getFollowUpBase(pdf) + (pdf.generalDiscountAmount || 0));
 
 const STATUS_LABELS: Record<NonNullable<SavedPDF['status']>, string> = {
     pending: 'Pendente',
@@ -389,7 +391,12 @@ const ProposalWhatsAppChooser: React.FC<{
     </Modal>
 );
 
-const ProposalMessagesModal: React.FC<ProposalMessagesModalProps> = ({ isOpen, client, pdf, onClose }) => {
+const ProposalMessagesModal: React.FC<ProposalMessagesModalProps> = ({ isOpen, client, pdf: sourcePdf, onClose }) => {
+    const [savedPdf, setSavedPdf] = useState<SavedPDF | null>(null);
+    const pdf = savedPdf ?? sourcePdf;
+    const [pendingAction, setPendingAction] = useState<'link' | 'whatsapp' | null>(null);
+    const [isApplying, setIsApplying] = useState(false);
+    const applyingRef = useRef(false);
     const [fields, setFields] = useState<MessageFields>({
         firstName: '',
         discountValue: '',
@@ -414,17 +421,20 @@ const ProposalMessagesModal: React.FC<ProposalMessagesModalProps> = ({ isOpen, c
     } = useProposalMessageTemplates(isOpen && !!pdf);
 
     useEffect(() => {
-        if (!isOpen || !pdf) return;
+        if (!isOpen || !sourcePdf) return;
+        const pdf = sourcePdf;
+        setSavedPdf(null);
+        setPendingAction(null);
         const firstName = client.nome.trim().split(/\s+/)[0] || '';
-        setFields({ firstName, discountValue: '', commercialNote: '' });
-        setDiscountType('percentage');
+        setFields({ firstName, discountValue: pdf.followUpBaseValue != null ? String(pdf.followUpDiscountType === 'fixed' ? pdf.followUpDiscountAmount || 0 : pdf.followUpDiscountPercent || 0) : '', commercialNote: '' });
+        setDiscountType(pdf.followUpDiscountType || 'percentage');
         setActiveTemplateId(null);
         setEditor(null);
         setFeedback(null);
         setIsWhatsAppChooserOpen(false);
         setIsShareModalOpen(false);
         setShowPersonalize(isDesktopViewport());
-    }, [client.nome, isOpen, pdf]);
+    }, [client.nome, isOpen, sourcePdf?.id]);
 
     // Mantém um modelo válido selecionado assim que a lista chega/muda.
     useEffect(() => {
@@ -435,16 +445,18 @@ const ProposalMessagesModal: React.FC<ProposalMessagesModalProps> = ({ isOpen, c
     }, [templates]);
 
     const originalValue = pdf ? Math.max(0, getOriginalValue(pdf) || 0) : 0;
+    const baseValue = pdf ? getFollowUpBase(pdf) : 0;
+    const sharePdfs = useMemo(() => pdf ? [pdf] : [], [pdf]);
     const followUpDiscount = useMemo(
-        () => calculateFollowUpDiscount(originalValue, fields.discountValue, discountType),
-        [discountType, fields.discountValue, originalValue]
+        () => calculateFollowUpDiscount(baseValue, fields.discountValue, discountType),
+        [discountType, fields.discountValue, baseValue]
     );
 
     const values = useMemo<ProposalMessageValues>(() => ({
         primeiro_nome: fields.firstName,
         nome_cliente: client.nome || '',
         titulo_orcamento: pdf ? getProposalTitle(pdf) : '',
-        valor_final: formatCurrencyBR(originalValue),
+        valor_final: formatCurrencyBR(followUpDiscount.specialValue),
         desconto_extra: followUpDiscount.formattedDiscount,
         valor_especial: formatCurrencyBR(followUpDiscount.specialValue),
         observacao_comercial: fields.commercialNote,
@@ -453,7 +465,7 @@ const ProposalMessagesModal: React.FC<ProposalMessagesModalProps> = ({ isOpen, c
     if (!pdf) return null;
 
     const proposalTitle = getProposalTitle(pdf);
-    const currentDiscount = pdf.generalDiscountAmount ?? Math.max(0, originalValue - (pdf.totalPreco || 0));
+    const currentDiscount = (pdf.generalDiscountAmount ?? Math.max(0, originalValue - baseValue)) + followUpDiscount.discountAmount;
     const status = STATUS_LABELS[pdf.status ?? 'pending'];
     const statusChipClass = STATUS_CHIP_CLASSES[pdf.status ?? 'pending'];
     const hasFollowUpDiscount = followUpDiscount.discountAmount > 0;
@@ -469,7 +481,7 @@ const ProposalMessagesModal: React.FC<ProposalMessagesModalProps> = ({ isOpen, c
         }
         const parsedValue = Number(value);
         if (!Number.isFinite(parsedValue)) return;
-        const maximumValue = discountType === 'percentage' ? 100 : originalValue;
+        const maximumValue = discountType === 'percentage' ? 100 : baseValue;
         updateField('discountValue', String(Math.min(Math.max(parsedValue, 0), maximumValue)));
     };
 
@@ -478,7 +490,7 @@ const ProposalMessagesModal: React.FC<ProposalMessagesModalProps> = ({ isOpen, c
         setDiscountType(nextType);
         setFields(current => {
             if (current.discountValue === '') return current;
-            const nextDiscount = calculateFollowUpDiscount(originalValue, current.discountValue, nextType);
+            const nextDiscount = calculateFollowUpDiscount(baseValue, current.discountValue, nextType);
             return { ...current, discountValue: String(nextDiscount.discountValue) };
         });
     };
@@ -552,8 +564,53 @@ const ProposalMessagesModal: React.FC<ProposalMessagesModalProps> = ({ isOpen, c
         }
     };
 
+    const continueAction = (action: 'link' | 'whatsapp') => {
+        if (action === 'link') setIsShareModalOpen(true);
+        else setIsWhatsAppChooserOpen(true);
+    };
+
+    const requestAction = (action: 'link' | 'whatsapp') => {
+        if (applyingRef.current) return;
+        const next = previewProposalFollowUp(pdf, fields.discountValue, discountType);
+        const changed = next.totalPreco !== pdf.totalPreco
+            || next.followUpDiscountPercent !== (pdf.followUpDiscountPercent || 0)
+            || next.followUpDiscountAmount !== (pdf.followUpDiscountAmount || 0)
+            || (next.followUpBaseValue != null) !== (pdf.followUpBaseValue != null);
+        if (changed) setPendingAction(action);
+        else continueAction(action);
+    };
+
+    const confirmDiscount = async () => {
+        if (!pendingAction || applyingRef.current) return;
+        applyingRef.current = true;
+        setIsApplying(true);
+        setFeedback(null);
+        try {
+            const updated = await applyProposalFollowUp(pdf, client, fields.discountValue, discountType);
+            setSavedPdf(updated);
+            setPendingAction(null);
+            continueAction(pendingAction);
+        } catch (err) {
+            setFeedback({ message: err instanceof Error ? err.message : 'Não foi possível salvar o desconto. Tente novamente.', type: 'error' });
+        } finally {
+            applyingRef.current = false;
+            setIsApplying(false);
+        }
+    };
+
     const footer = (
         <div className="w-full space-y-2">
+            {pendingAction && (
+                <div className="space-y-2 rounded-xl border border-blue-200 bg-blue-50 p-3 dark:border-blue-900 dark:bg-blue-950" role="alert">
+                    <p className="text-sm font-bold text-[var(--text-strong)]">
+                        {followUpDiscount.discountValue > 0 ? `Aplicar ${followUpDiscount.formattedDiscount} nesta proposta?` : 'Remover o desconto de follow-up desta proposta?'} Novo valor: {formatCurrencyBR(followUpDiscount.specialValue)}
+                    </p>
+                    <div className="flex gap-2">
+                        <button type="button" disabled={isApplying} onClick={() => void confirmDiscount()} className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-bold text-white disabled:opacity-60">{isApplying ? 'Salvando proposta e PDF…' : 'Confirmar desconto'}</button>
+                        <button type="button" disabled={isApplying} onClick={() => setPendingAction(null)} className="rounded-lg px-3 py-2 text-sm font-bold">Cancelar</button>
+                    </div>
+                </div>
+            )}
             {feedback && (
                 <p className={`text-xs font-semibold ${feedback.type === 'error' ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`} role="status">
                     {feedback.message}
@@ -561,7 +618,8 @@ const ProposalMessagesModal: React.FC<ProposalMessagesModalProps> = ({ isOpen, c
             )}
             <button
                 type="button"
-                onClick={() => setIsShareModalOpen(true)}
+                onClick={() => requestAction('link')}
+                disabled={isApplying}
                 className="flex h-11 w-full items-center justify-center gap-2 rounded-[12px] bg-blue-600 px-3 text-sm font-black text-white shadow-[0_10px_22px_rgba(37,99,235,0.20)] transition-colors hover:bg-blue-700"
             >
                 <Link2 className="h-4 w-4" aria-hidden="true" />
@@ -571,7 +629,7 @@ const ProposalMessagesModal: React.FC<ProposalMessagesModalProps> = ({ isOpen, c
                 <button
                     type="button"
                     onClick={() => void copyMessage()}
-                    disabled={!activeTemplate}
+                    disabled={!activeTemplate || isApplying}
                     aria-label="Copiar mensagem"
                     title="Copiar mensagem"
                     className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-muted)] transition-colors duration-200 hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)] disabled:opacity-50"
@@ -581,7 +639,7 @@ const ProposalMessagesModal: React.FC<ProposalMessagesModalProps> = ({ isOpen, c
                 <button
                     type="button"
                     onClick={openEditEditor}
-                    disabled={!activeTemplate}
+                    disabled={!activeTemplate || isApplying}
                     aria-label="Editar texto"
                     title="Editar texto"
                     className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-muted)] transition-colors duration-200 hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)] disabled:opacity-50"
@@ -591,8 +649,8 @@ const ProposalMessagesModal: React.FC<ProposalMessagesModalProps> = ({ isOpen, c
                 {activeWhatsAppAppUrl && activeWhatsAppBusinessUrl ? (
                     <button
                         type="button"
-                        onClick={() => setIsWhatsAppChooserOpen(true)}
-                        disabled={!activeTemplate}
+                        onClick={() => requestAction('whatsapp')}
+                        disabled={!activeTemplate || isApplying}
                         className="inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-2 rounded-[12px] bg-emerald-600 px-3 text-sm font-bold text-white shadow-[0_10px_22px_rgba(5,150,105,0.22)] transition-all duration-200 hover:bg-emerald-700 active:scale-[0.99] disabled:opacity-50"
                     >
                         <MessageCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -620,7 +678,7 @@ const ProposalMessagesModal: React.FC<ProposalMessagesModalProps> = ({ isOpen, c
             onClose={onClose}
             // Enquanto o editor de modelo está aberto, trava o arrastar-para-fechar
             // do sheet para não perder a edição ao gesticular/rolar sobre as tags.
-            disableClose={editor != null}
+            disableClose={editor != null || isApplying}
             title={(
                 <span className="inline-flex items-center gap-2.5">
                     <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-[var(--brand-primary)] text-white shadow-[0_8px_20px_rgba(21,94,239,0.28)]">
@@ -654,7 +712,7 @@ const ProposalMessagesModal: React.FC<ProposalMessagesModalProps> = ({ isOpen, c
                         </div>
                         <div className="min-w-0 p-1.5 sm:p-2.5">
                             <dt className="truncate text-[8px] font-bold uppercase tracking-[0.08em] text-[var(--text-soft)] sm:text-[9px]">Valor atual</dt>
-                            <dd className="mt-0.5 truncate text-[11px] font-black text-[var(--brand-primary)] sm:text-sm">{formatCurrencyBR(pdf.totalPreco)}</dd>
+                            <dd className="mt-0.5 truncate text-[11px] font-black text-[var(--brand-primary)] sm:text-sm">{formatCurrencyBR(followUpDiscount.specialValue)}</dd>
                         </div>
                     </dl>
                 </section>
@@ -751,7 +809,7 @@ const ProposalMessagesModal: React.FC<ProposalMessagesModalProps> = ({ isOpen, c
                         </span>
                         <span className="min-w-0 flex-1">
                             <span className="block text-[13px] font-black tracking-[-0.01em] text-[var(--text-strong)] sm:text-sm">Personalizar conversa</span>
-                            <span className="block truncate text-[10px] font-medium text-[var(--text-muted)] sm:text-[11px]">Nome, desconto e observação · não altera o orçamento</span>
+                            <span className="block truncate text-[10px] font-medium text-[var(--text-muted)] sm:text-[11px]">Desconto aplicado à proposta ao confirmar o link ou WhatsApp</span>
                         </span>
                         {hasFollowUpDiscount && (
                             <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-black text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300">
@@ -770,7 +828,7 @@ const ProposalMessagesModal: React.FC<ProposalMessagesModalProps> = ({ isOpen, c
 
                             <div className="rounded-[12px] border border-blue-100 bg-blue-50/55 p-2.5 dark:border-blue-900/50 dark:bg-blue-950/20 sm:p-3">
                                 <div className="flex items-center justify-center gap-2">
-                                    <span className={`min-w-0 truncate text-xs font-bold text-[var(--text-muted)] ${hasFollowUpDiscount ? 'line-through' : ''}`}>{formatCurrencyBR(originalValue)}</span>
+                                    <span className={`min-w-0 truncate text-xs font-bold text-[var(--text-muted)] ${hasFollowUpDiscount ? 'line-through' : ''}`}>{formatCurrencyBR(baseValue)}</span>
                                     <ArrowRight className="h-3.5 w-3.5 shrink-0 text-[var(--brand-primary)]" aria-hidden="true" />
                                     <span className="min-w-0 truncate text-sm font-black text-[var(--brand-primary)]">{formatCurrencyBR(followUpDiscount.specialValue)}</span>
                                 </div>
@@ -778,16 +836,17 @@ const ProposalMessagesModal: React.FC<ProposalMessagesModalProps> = ({ isOpen, c
                                 <label className="mt-2.5 block space-y-1.5">
                                     <span className="flex items-center justify-between gap-2 text-[11px] font-bold text-[var(--text-body)]">
                                         <span>Desconto para follow-up</span>
-                                        <span className="font-medium text-[var(--text-muted)]">Máx. {discountType === 'percentage' ? '100%' : formatCurrencyBR(originalValue)}</span>
+                                        <span className="font-medium text-[var(--text-muted)]">Máx. {discountType === 'percentage' ? '100%' : formatCurrencyBR(baseValue)}</span>
                                     </span>
                                     <span className="relative block">
                                         <input
                                             type="number"
                                             inputMode="decimal"
                                             min="0"
-                                            max={discountType === 'percentage' ? 100 : originalValue}
+                                            max={discountType === 'percentage' ? 100 : baseValue}
                                             step="0.01"
                                             value={fields.discountValue}
+                                            disabled={isApplying}
                                             onChange={event => updateDiscountValue(event.target.value)}
                                             placeholder="0"
                                             className="h-10 w-full rounded-[11px] border border-blue-200 bg-[var(--surface)] pl-3 pr-16 text-sm font-bold text-[var(--text-strong)] outline-none transition-[border-color,box-shadow] duration-200 placeholder:text-[var(--text-muted)] focus:border-[var(--brand-primary)] focus:shadow-[0_0_0_3px_rgba(21,94,239,0.10)] dark:border-blue-900/60"
@@ -795,6 +854,7 @@ const ProposalMessagesModal: React.FC<ProposalMessagesModalProps> = ({ isOpen, c
                                         <button
                                             type="button"
                                             onClick={toggleDiscountType}
+                                            disabled={isApplying}
                                             aria-label={discountType === 'percentage' ? 'Alterar desconto para reais' : 'Alterar desconto para percentual'}
                                             title={discountType === 'percentage' ? 'Usar desconto em reais' : 'Usar desconto percentual'}
                                             className="absolute inset-y-1 right-1 inline-flex min-w-12 items-center justify-center rounded-[8px] bg-[var(--brand-primary)] px-2.5 text-xs font-black text-white shadow-[0_6px_14px_rgba(21,94,239,0.22)] transition-all duration-200 hover:bg-[var(--brand-primary-strong)] active:scale-[0.97]"
@@ -837,7 +897,7 @@ const ProposalMessagesModal: React.FC<ProposalMessagesModalProps> = ({ isOpen, c
         <ProposalShareModal
             isOpen={isShareModalOpen}
             client={client}
-            pdfs={[pdf]}
+            pdfs={sharePdfs}
             onClose={() => setIsShareModalOpen(false)}
         />
         </>

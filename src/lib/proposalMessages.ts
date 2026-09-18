@@ -71,7 +71,7 @@ Qual desses pontos faz mais sentido para você?`,
         title: 'Condição especial',
         text: `{{primeiro_nome}}, consegui fazer um ajuste nessa proposta.
 
-O valor original era {{valor_final}}.
+O valor atualizado da proposta é {{valor_final}}.
 
 Com o desconto de {{desconto_extra}}, consigo deixar por {{valor_especial}}.
 
@@ -160,7 +160,7 @@ export const calculateFollowUpDiscount = (
     const parsedDiscount = Number(rawDiscount.replace(',', '.'));
     const safeDiscount = Number.isFinite(parsedDiscount) ? Math.max(0, parsedDiscount) : 0;
     const maximumDiscount = discountType === 'percentage' ? 100 : safeOriginalValue;
-    const discountValue = Math.min(safeDiscount, maximumDiscount);
+    const discountValue = Math.min(roundCurrency(safeDiscount), maximumDiscount);
     const discountAmount = roundCurrency(
         discountType === 'percentage'
             ? safeOriginalValue * (discountValue / 100)

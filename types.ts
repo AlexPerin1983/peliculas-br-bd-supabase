@@ -377,6 +377,11 @@ export interface SavedPDF {
     date: string;
     expirationDate?: string;
     totalPreco: number; // Final total price
+    followUpBaseValue?: number;
+    followUpDiscountPercent?: number;
+    followUpDiscountType?: 'percentage' | 'fixed';
+    followUpDiscountAmount?: number;
+    followUpRevision?: number;
     totalM2: number;
     subtotal?: number;
     generalDiscountAmount?: number;

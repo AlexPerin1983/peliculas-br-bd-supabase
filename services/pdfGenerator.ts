@@ -35,6 +35,48 @@ const formatNumberBR = (number: number): string => {
     }).format(number);
 };
 
+const formatAddressForPdf = (client: Client): string => {
+    const parts = [
+        client.logradouro && client.numero ? `${client.logradouro}, ${client.numero}` : client.logradouro,
+        client.bairro,
+        client.cidade && client.uf ? `${client.cidade} - ${client.uf}` : client.cidade,
+        client.cep
+    ];
+    return parts.filter(Boolean).join(', ');
+};
+
+const calculateSavedItemAdjustments = (pdf: SavedPDF, allFilms: Film[]) => {
+    const pricingMode = pdf.generalDiscount?.pricingMode === 'labor_only' ? 'labor_only' : 'complete';
+    const filmPricingModes = pdf.generalDiscount?.filmPricingModes || {};
+    const filmPriceOverrides = pdf.generalDiscount?.filmPriceOverrides;
+
+    return (pdf.measurements || []).reduce((totals, measurement) => {
+        if (measurement.active === false || (pricingMode !== 'labor_only' && filmPricingModes[measurement.pelicula] === 'linear')) {
+            return totals;
+        }
+
+        const film = allFilms.find(item => item.nome === measurement.pelicula);
+        const prices = resolveFilmPrices(film, filmPriceOverrides, measurement.pelicula);
+        const unitPrice = pricingMode === 'labor_only'
+            ? prices.maoDeObra
+            : prices.preco > 0
+                ? prices.preco
+                : prices.maoDeObra;
+        const basePrice = unitPrice * calculatePricingAreaM2(
+            parseFloat(String(measurement.largura).replace(',', '.')) || 0,
+            parseFloat(String(measurement.altura).replace(',', '.')) || 0,
+            parseInt(String(measurement.quantidade), 10) || 0
+        );
+        const adjustment = calculateMeasurementPriceAdjustment(basePrice, measurement.discount);
+        if (adjustment.operation === 'increase') {
+            totals.increase += adjustment.amount;
+        } else {
+            totals.discount += adjustment.amount;
+        }
+        return totals;
+    }, { discount: 0, increase: 0 });
+};
+
 const calculatePaymentWithoutInterest = (total: number, installments?: number | null) => {
     if (!installments || installments === 0) return 0;
     return total / installments;
@@ -98,48 +140,6 @@ export const buildPrimaryPaymentSummary = (total: number, paymentConfig: Proposa
     }
 };
 
-const formatAddressForPdf = (client: Client): string => {
-    const parts = [
-        client.logradouro && client.numero ? `${client.logradouro}, ${client.numero}` : client.logradouro,
-        client.bairro,
-        client.cidade && client.uf ? `${client.cidade} - ${client.uf}` : client.cidade,
-        client.cep
-    ];
-    return parts.filter(Boolean).join(', ');
-};
-
-const calculateSavedItemAdjustments = (pdf: SavedPDF, allFilms: Film[]) => {
-    const pricingMode = pdf.generalDiscount?.pricingMode === 'labor_only' ? 'labor_only' : 'complete';
-    const filmPricingModes = pdf.generalDiscount?.filmPricingModes || {};
-    const filmPriceOverrides = pdf.generalDiscount?.filmPriceOverrides;
-
-    return (pdf.measurements || []).reduce((totals, measurement) => {
-        if (measurement.active === false || (pricingMode !== 'labor_only' && filmPricingModes[measurement.pelicula] === 'linear')) {
-            return totals;
-        }
-
-        const film = allFilms.find(item => item.nome === measurement.pelicula);
-        const prices = resolveFilmPrices(film, filmPriceOverrides, measurement.pelicula);
-        const unitPrice = pricingMode === 'labor_only'
-            ? prices.maoDeObra
-            : prices.preco > 0
-                ? prices.preco
-                : prices.maoDeObra;
-        const basePrice = unitPrice * calculatePricingAreaM2(
-            parseFloat(String(measurement.largura).replace(',', '.')) || 0,
-            parseFloat(String(measurement.altura).replace(',', '.')) || 0,
-            parseInt(String(measurement.quantidade), 10) || 0
-        );
-        const adjustment = calculateMeasurementPriceAdjustment(basePrice, measurement.discount);
-        if (adjustment.operation === 'increase') {
-            totals.increase += adjustment.amount;
-        } else {
-            totals.discount += adjustment.amount;
-        }
-        return totals;
-    }, { discount: 0, increase: 0 });
-};
-
 // Função auxiliar para calcular totais de um único PDF salvo
 const calculateTotalsFromSavedPDF = (pdf: SavedPDF, allFilms: Film[]): Totals => {
     // Acessando as propriedades diretamente do objeto SavedPDF
@@ -171,9 +171,9 @@ const calculateTotalsFromSavedPDF = (pdf: SavedPDF, allFilms: Film[]): Totals =>
     const generalIncreaseAmount = calculatedAdjustments?.generalIncreaseAmount ?? (
         pdf.generalDiscount?.operation === 'increase' ? generalDiscountAmount : 0
     );
-    const generalFinalDiscountAmount = calculatedAdjustments?.generalFinalDiscountAmount ?? (
+    const generalFinalDiscountAmount = (calculatedAdjustments?.generalFinalDiscountAmount ?? (
         pdf.generalDiscount?.operation === 'discount' ? generalDiscountAmount : 0
-    );
+    )) + (pdf.followUpDiscountAmount || 0);
 
     // Se subtotal não estiver disponível, calcula a partir do finalTotal e ajustes
     const calculatedSubtotal = subtotal || (

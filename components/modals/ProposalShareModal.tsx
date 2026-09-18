@@ -107,6 +107,9 @@ const ProposalShareModal: React.FC<ProposalShareModalProps> = ({ isOpen, client,
                                 {pdfs.map((pdf, index) => <div key={pdf.id ?? index} className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] px-3 py-2.5"><span className="truncate text-xs font-bold text-[var(--text-strong)]">{pdf.proposalOptionName || pdf.nomeArquivo || `Proposta ${index + 1}`}</span><span className="shrink-0 text-xs font-black text-[var(--brand-primary)]">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(pdf.totalPreco || 0)}</span></div>)}
                             </div>
                         </div>
+                        {pdfs.some(pdf => (pdf.followUpDiscountAmount || 0) > 0 && pdf.expirationDate && new Date(pdf.expirationDate).getTime() <= Date.now()) && (
+                            <p className="rounded-xl bg-amber-50 p-3 text-xs font-semibold text-amber-800">Esta proposta venceu. Sugerimos uma nova validade para a oferta com desconto; confira a data abaixo.</p>
+                        )}
                         <label className="block">
                             <span className="mb-1.5 flex items-center gap-1.5 text-xs font-bold text-[var(--text-body)]"><CalendarClock className="h-4 w-4 text-[var(--brand-primary)]" /> Válido até</span>
                             <input type="date" min={dateInput(new Date(Date.now() + 86_400_000))} value={expiration} onChange={event => setExpiration(event.target.value)} className="ui-field h-12 w-full px-3 text-sm font-bold" />

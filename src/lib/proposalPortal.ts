@@ -1,3 +1,4 @@
+import { resolvePortalPricing } from '../../supabase/functions/proposal-portal/followUpPricing';
 import { supabase } from '../../services/supabaseClient';
 import { offlineDb, type LocalSavedPDF, type SyncQueueItem } from '../../services/offlineDb';
 import { isOnlineNow, syncAllPending } from '../../services/syncService';
@@ -265,7 +266,8 @@ export const buildProposalShareMessage = (client: Client, pdfs: SavedPDF[], port
     const firstName = client.nome.trim().split(/\s+/)[0] || 'Olá';
     const optionText = pdfs.length === 1 ? 'sua proposta' : `suas ${pdfs.length} opções de proposta`;
     const expiry = new Date(expiresAt).toLocaleDateString('pt-BR');
-    return `${firstName}, preparei ${optionText}. Você pode visualizar, baixar o PDF e responder pelo link abaixo:\n\n${portalUrl}\n\nA proposta fica disponível até ${expiry}.`;
+    const prices = pdfs.map(pdf => `${pdf.proposalOptionName || pdf.nomeArquivo}: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(pdf.totalPreco)}`).join('\n');
+    return `${firstName}, preparei ${optionText}. Você pode visualizar, baixar o PDF e responder pelo link abaixo:\n\n${prices}\n\n${portalUrl}\n\nA proposta fica disponível até ${expiry}.`;
 };
 
 export const buildProposalDecisionWhatsAppMessage = ({
@@ -360,7 +362,7 @@ export const loadCompanyProposalPortals = async (): Promise<CompanyProposalPorta
     const clientIds = Array.from(new Set(portals.map(item => item.client_id)));
     const [{ data: clients }, { data: items }, { data: messages }] = await Promise.all([
         supabase.from('clients').select('id, nome').in('id', clientIds),
-        supabase.from('proposal_portal_items').select('portal_id, saved_pdf_id, position, condition_original_value, condition_final_value, condition_discount_amount, condition_discount_percent, condition_expires_at, saved_pdfs(proposal_option_name, nome_arquivo, total_preco)').in('portal_id', portalIds).order('position'),
+        supabase.from('proposal_portal_items').select('portal_id, saved_pdf_id, position, condition_original_value, condition_final_value, condition_discount_amount, condition_discount_percent, condition_expires_at, saved_pdfs(proposal_option_name, nome_arquivo, total_preco, follow_up_base_value, follow_up_discount_percent, follow_up_discount_amount, follow_up_revision)').in('portal_id', portalIds).order('position'),
         supabase.from('proposal_portal_messages').select('id, portal_id, saved_pdf_id, sender_type, kind, body, offer_type, offer_value, condition_value, payment_selection, created_at').in('portal_id', portalIds).order('created_at'),
     ]);
 
@@ -383,11 +385,7 @@ export const loadCompanyProposalPortals = async (): Promise<CompanyProposalPorta
                 id: Number(item.saved_pdf_id),
                 name: item.saved_pdfs?.proposal_option_name || item.saved_pdfs?.nome_arquivo || `Proposta #${item.saved_pdf_id}`,
                 total: Number(item.saved_pdfs?.total_preco || 0),
-                conditionOriginalValue: item.condition_original_value == null ? null : Number(item.condition_original_value),
-                conditionFinalValue: item.condition_final_value == null ? null : Number(item.condition_final_value),
-                conditionDiscountAmount: item.condition_discount_amount == null ? null : Number(item.condition_discount_amount),
-                conditionDiscountPercent: item.condition_discount_percent == null ? null : Number(item.condition_discount_percent),
-                conditionExpiresAt: item.condition_expires_at,
+                ...resolvePortalPricing(item.saved_pdfs, item, portal.expires_at),
             })),
             messages: portalMessages,
             unreadCount: portalMessages.filter(message => message.sender_type === 'client' && new Date(message.created_at).getTime() > readAt).length,
