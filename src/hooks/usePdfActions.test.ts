@@ -225,6 +225,29 @@ describe('usePdfActions', () => {
     }));
   });
 
+  it('abre o ultimo PDF gerado em uma nova aba para conferencia', async () => {
+    const anchor = createAnchor();
+    const pdfBlob = new Blob(['pdf'], { type: 'application/pdf' });
+    const pdfModule = await import('../../services/pdfGenerator');
+    vi.mocked(pdfModule.generatePDF).mockResolvedValue(pdfBlob);
+    mockedDb.savePDF.mockResolvedValue({
+      id: 103,
+      clienteId: 12,
+      date: new Date().toISOString(),
+      totalPreco: 190,
+      totalM2: 2,
+      nomeArquivo: 'teste.pdf'
+    });
+    const { result } = buildHook();
+
+    await act(async () => { await result.current.handleGeneratePdf(); });
+    expect(result.current.canPreviewGeneratedPdf).toBe(true);
+    expect(result.current.handlePreviewGeneratedPdf()).toBe(true);
+
+    expect(anchor.click).toHaveBeenCalledTimes(2);
+    expect(anchor.target).toBe('_blank');
+  });
+
   it('avisa quando faltam dados obrigatorios para gerar PDF', async () => {
     const handleShowInfo = vi.fn();
     const { result } = buildHook({

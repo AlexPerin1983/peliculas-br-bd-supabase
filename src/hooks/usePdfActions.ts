@@ -124,6 +124,21 @@ export function usePdfActions({
         return 'downloaded';
     }, [downloadBlob, latestGeneratedPdf]);
 
+    const handlePreviewGeneratedPdf = useCallback((): boolean => {
+        if (!latestGeneratedPdf) return false;
+
+        const url = URL.createObjectURL(latestGeneratedPdf.blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.target = '_blank';
+        anchor.rel = 'noopener noreferrer';
+        document.body.appendChild(anchor);
+        anchor.click();
+        document.body.removeChild(anchor);
+        window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+        return true;
+    }, [latestGeneratedPdf]);
+
     const handleDownloadPdf = useCallback(async (pdf: SavedPDF, filename: string) => {
         let blob = pdf.pdfBlob;
         if (!blob && pdf.id) {
@@ -342,7 +357,9 @@ export function usePdfActions({
     return {
         handleDownloadPdf,
         handleShareGeneratedPdf,
+        handlePreviewGeneratedPdf,
         canShareGeneratedPdf: latestGeneratedPdf !== null,
+        canPreviewGeneratedPdf: latestGeneratedPdf !== null,
         isSavingBeforePdf,
         handleGeneratePdf,
         handleGeneratePdfWithSaveCheck,

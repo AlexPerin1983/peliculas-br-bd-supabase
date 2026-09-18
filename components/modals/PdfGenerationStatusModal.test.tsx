@@ -11,7 +11,9 @@ describe('PdfGenerationStatusModal', () => {
                 onClose={vi.fn()}
                 onGoToHistory={vi.fn()}
                 onShare={onShare}
+                onPreview={vi.fn().mockReturnValue(true)}
                 canShare
+                canPreview
             />
         );
 
@@ -28,11 +30,34 @@ describe('PdfGenerationStatusModal', () => {
                 onClose={vi.fn()}
                 onGoToHistory={vi.fn()}
                 onShare={vi.fn().mockResolvedValue('downloaded')}
+                onPreview={vi.fn().mockReturnValue(true)}
                 canShare
+                canPreview
             />
         );
 
         fireEvent.click(screen.getByRole('button', { name: /compartilhar pdf/i }));
         expect(await screen.findByText(/arquivo foi baixado para você enviar/i)).toBeInTheDocument();
+    });
+
+    it('abre o PDF para conferência antes do compartilhamento', () => {
+        const onPreview = vi.fn().mockReturnValue(true);
+
+        render(
+            <PdfGenerationStatusModal
+                status="success"
+                onClose={vi.fn()}
+                onGoToHistory={vi.fn()}
+                onShare={vi.fn().mockResolvedValue('shared')}
+                onPreview={onPreview}
+                canShare
+                canPreview
+            />
+        );
+
+        fireEvent.click(screen.getByRole('button', { name: /visualizar pdf/i }));
+
+        expect(onPreview).toHaveBeenCalledTimes(1);
+        expect(screen.getByText(/pdf aberto para conferência/i)).toBeInTheDocument();
     });
 });

@@ -5,10 +5,12 @@ interface PdfGenerationStatusModalProps {
     onClose: () => void;
     onGoToHistory: () => void;
     onShare: () => Promise<'shared' | 'downloaded' | 'unavailable'>;
+    onPreview: () => boolean;
     canShare: boolean;
+    canPreview: boolean;
 }
 
-const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({ status, onClose, onGoToHistory, onShare, canShare }) => {
+const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({ status, onClose, onGoToHistory, onShare, onPreview, canShare, canPreview }) => {
     const [isSharing, setIsSharing] = useState(false);
     const [shareMessage, setShareMessage] = useState('');
 
@@ -32,6 +34,12 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({ sta
             setIsSharing(false);
         }
     };
+
+    const handlePreview = () => {
+        setShareMessage(onPreview()
+            ? 'PDF aberto para conferência.'
+            : 'O PDF ainda não está disponível para visualizar.');
+    };
     if (status === 'generating') {
         return (
             <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
@@ -53,14 +61,23 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({ sta
                     </div>
                     <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-200">Orçamento Gerado!</h2>
                     <p className="text-slate-600 dark:text-slate-400 mt-2">
-                        Seu PDF foi salvo e baixado. Agora você também pode compartilhá-lo diretamente com o cliente.
+                        Seu PDF foi salvo. Confira o documento ou compartilhe com o cliente.
                     </p>
                     <div className="mt-6 w-full space-y-3">
                         <button
                             type="button"
+                            onClick={handlePreview}
+                            disabled={!canPreview}
+                            className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-3 text-base font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-55"
+                        >
+                            <i className="fas fa-eye" aria-hidden="true"></i>
+                            Visualizar PDF
+                        </button>
+                        <button
+                            type="button"
                             onClick={() => { void handleShare(); }}
                             disabled={!canShare || isSharing}
-                            className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-3 text-base font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-wait disabled:opacity-55"
+                            className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-wait disabled:opacity-55 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
                         >
                             <i className={`fas ${isSharing ? 'fa-spinner fa-spin' : 'fa-share-nodes'}`} aria-hidden="true"></i>
                             {isSharing ? 'Preparando...' : 'Compartilhar PDF'}
