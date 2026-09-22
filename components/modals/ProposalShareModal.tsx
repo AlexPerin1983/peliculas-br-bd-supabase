@@ -2,7 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { CalendarClock, Check, Copy, ExternalLink, Link2, LoaderCircle, MessageCircle, ShieldCheck } from 'lucide-react';
 import type { Client, SavedPDF } from '../../types';
 import { buildProposalShareMessage, createProposalPortal, type CreatedProposalPortal } from '../../src/lib/proposalPortal';
+import { buildProposalWhatsAppAppUrl, buildProposalWhatsAppBusinessUrl } from '../../src/lib/proposalMessages';
 import Modal from '../ui/Modal';
+import ProposalWhatsAppChooser from './ProposalWhatsAppChooser';
 
 interface ProposalShareModalProps {
     isOpen: boolean;
@@ -49,6 +51,7 @@ const ProposalShareModal: React.FC<ProposalShareModalProps> = ({ isOpen, client,
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
     const [copied, setCopied] = useState<'link' | 'message' | null>(null);
+    const [isWhatsAppChooserOpen, setIsWhatsAppChooserOpen] = useState(false);
 
     useEffect(() => {
         if (!isOpen) return;
@@ -56,12 +59,12 @@ const ProposalShareModal: React.FC<ProposalShareModalProps> = ({ isOpen, client,
         setCreated(null);
         setError('');
         setCopied(null);
+        setIsWhatsAppChooserOpen(false);
     }, [isOpen, pdfs]);
 
     const message = useMemo(() => created ? buildProposalShareMessage(client, pdfs, created.url, created.expiresAt) : '', [client, created, pdfs]);
-    const phone = client.telefone?.replace(/\D/g, '') || '';
-    const normalizedPhone = phone && !phone.startsWith('55') ? `55${phone}` : phone;
-    const whatsappUrl = created && normalizedPhone ? `https://wa.me/${normalizedPhone}?text=${encodeURIComponent(message)}` : '';
+    const whatsappAppUrl = created ? buildProposalWhatsAppAppUrl(client.telefone, message) : null;
+    const whatsappBusinessUrl = created ? buildProposalWhatsAppBusinessUrl(client.telefone, message) : null;
 
     const create = async () => {
         setBusy(true);
@@ -86,6 +89,7 @@ const ProposalShareModal: React.FC<ProposalShareModalProps> = ({ isOpen, client,
     };
 
     return (
+        <>
         <Modal
             isOpen={isOpen}
             onClose={onClose}
@@ -128,13 +132,22 @@ const ProposalShareModal: React.FC<ProposalShareModalProps> = ({ isOpen, client,
                         <label className="block"><span className="mb-1.5 block text-xs font-bold text-[var(--text-body)]">Mensagem pronta</span><textarea readOnly value={message} rows={6} className="w-full resize-none rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-3 text-xs leading-5 text-[var(--text-body)]" /></label>
                         <div className="grid gap-2 sm:grid-cols-3">
                             <button type="button" onClick={() => void copy('message', message)} className="flex h-11 items-center justify-center gap-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] text-xs font-bold text-[var(--text-strong)]">{copied === 'message' ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />} Copiar mensagem</button>
-                            {whatsappUrl ? <a href={whatsappUrl} target="_blank" rel="noreferrer" className="flex h-11 items-center justify-center gap-2 rounded-xl bg-emerald-600 text-xs font-bold text-white"><MessageCircle className="h-4 w-4" /> WhatsApp</a> : <button disabled className="h-11 rounded-xl bg-slate-200 text-xs font-bold text-slate-500">Sem telefone</button>}
+                            {whatsappAppUrl && whatsappBusinessUrl ? <button type="button" onClick={() => setIsWhatsAppChooserOpen(true)} className="flex h-11 items-center justify-center gap-2 rounded-xl bg-emerald-600 text-xs font-bold text-white"><MessageCircle className="h-4 w-4" /> WhatsApp</button> : <button disabled className="h-11 rounded-xl bg-slate-200 text-xs font-bold text-slate-500">Sem telefone</button>}
                             <a href={created.url} target="_blank" rel="noreferrer" className="flex h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 text-xs font-bold text-white"><ExternalLink className="h-4 w-4" /> Visualizar página</a>
                         </div>
                     </>
                 )}
             </div>
         </Modal>
+        {isOpen && isWhatsAppChooserOpen && whatsappAppUrl && whatsappBusinessUrl && (
+            <ProposalWhatsAppChooser
+                clientName={client.nome}
+                appUrl={whatsappAppUrl}
+                businessUrl={whatsappBusinessUrl}
+                onClose={() => setIsWhatsAppChooserOpen(false)}
+            />
+        )}
+        </>
     );
 };
 
