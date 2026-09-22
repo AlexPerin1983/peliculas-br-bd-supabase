@@ -64,6 +64,27 @@ const baseDiscount: ProposalDiscount = {
 };
 
 describe('TotalsDrawer preço personalizado', () => {
+    it('permite escolher nos totais quais parcelas irão para o orçamento', () => {
+        const onUpdatePaymentConfig = vi.fn();
+        const methods = [{ tipo: 'parcelado_com_juros' as const, ativo: true, parcelas_max: 12, juros: 2 }];
+        render(<TotalsDrawer
+            isOpen
+            onClose={vi.fn()}
+            totals={totals}
+            generalDiscount={baseDiscount}
+            onUpdateGeneralDiscount={vi.fn()}
+            onGeneratePdf={vi.fn()}
+            isGeneratingPdf={false}
+            paymentConfig={{ paymentMethods: methods, prazoPagamento: '' }}
+            companyPaymentMethods={methods}
+            onUpdatePaymentConfig={onUpdatePaymentConfig}
+        />);
+        fireEvent.click(screen.getByRole('button', { name: '12x com juros' }));
+        expect(onUpdatePaymentConfig).toHaveBeenCalledWith(expect.objectContaining({
+            paymentMethods: [expect.objectContaining({ selectedInstallments: expect.not.arrayContaining([12]) })],
+        }));
+    });
+
     it('edita somente a proposta e oferece restauração do catálogo', async () => {
         const onUpdate = vi.fn();
         const props = {

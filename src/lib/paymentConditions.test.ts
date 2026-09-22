@@ -36,4 +36,21 @@ describe('payment conditions', () => {
         expect(selected?.calculationMode).toBe('monthly_interest');
         expect(selected?.customerTotal).toBeGreaterThan(1000);
     });
+
+    it('oferece somente as parcelas marcadas nesta proposta sem alterar as taxas globais', () => {
+        const options = buildProposalPaymentOptions(1200, [
+            { tipo: 'parcelado_sem_juros', ativo: true, parcelas_max: 4, selectedInstallments: [1, 3] },
+            {
+                tipo: 'parcelado_com_juros', ativo: true, parcelas_max: 12,
+                selectedInstallments: [3, 6], calculation_mode: 'operator_fee',
+                operator_fee_rates: { '3': 4, '6': 8, '12': 15 },
+            },
+        ]);
+        expect(options.map(option => `${option.methodType}:${option.installments}`)).toEqual([
+            'parcelado_sem_juros:1', 'parcelado_sem_juros:3',
+            'parcelado_com_juros:3', 'parcelado_com_juros:6',
+        ]);
+        expect(options.find(option => option.methodType === 'parcelado_com_juros' && option.installments === 6)?.ratePercent).toBe(8);
+        expect(resolveProposalPaymentChoice(1200, [{ tipo: 'parcelado_com_juros', ativo: true, parcelas_max: 12, selectedInstallments: [3], juros: 2 }], { methodType: 'parcelado_com_juros', installments: 12 })).toBeNull();
+    });
 });

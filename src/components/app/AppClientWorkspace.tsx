@@ -6,7 +6,7 @@ import ActionsBar from '../../../components/ActionsBar';
 import MobileFooter from '../../../components/MobileFooter';
 import CuttingOptimizationPanel from '../../../components/CuttingOptimizationPanel';
 import { TotalsDrawer } from '../../../components/ui/TotalsDrawer';
-import { Client, Film, ProposalDiscount, ProposalOption, Totals, UIMeasurement } from '../../../types';
+import { Client, Film, PaymentMethods, ProposalDiscount, ProposalOption, ProposalPaymentConfig, Totals, UIMeasurement } from '../../../types';
 import {
     getProposalAdjustmentInputs,
     normalizeAdjustmentInputValue,
@@ -64,6 +64,10 @@ interface AppClientWorkspaceProps {
     onOpenProposalPaymentConfig: () => void;
     onOpenProposalExpenses: () => void;
     hasCustomProposalPaymentConfig: boolean;
+    proposalPaymentConfig: ProposalPaymentConfig;
+    companyPaymentMethods: PaymentMethods;
+    onUpdateProposalPaymentConfig: (config: ProposalPaymentConfig) => void;
+    onResetProposalPaymentConfig: () => void;
     hasActiveExpenses: boolean;
     onSwipeDirectionChange: (direction: 'left' | 'right' | null, distance: number) => void;
     onOpenGeneralDiscountModal: () => void;
@@ -427,6 +431,10 @@ export const AppClientWorkspace: React.FC<AppClientWorkspaceProps> = ({
     onOpenProposalPaymentConfig,
     onOpenProposalExpenses,
     hasCustomProposalPaymentConfig,
+    proposalPaymentConfig,
+    companyPaymentMethods,
+    onUpdateProposalPaymentConfig,
+    onResetProposalPaymentConfig,
     hasActiveExpenses,
     onSwipeDirectionChange,
     onOpenGeneralDiscountModal,
@@ -597,6 +605,11 @@ export const AppClientWorkspace: React.FC<AppClientWorkspaceProps> = ({
                         isGeneratingPdf={isGeneratingPdf}
                         onOpenAIModal={onOpenAIModal}
                         defaultHideMeasurements={defaultHideMeasurements}
+                        paymentConfig={proposalPaymentConfig}
+                        companyPaymentMethods={companyPaymentMethods}
+                        onUpdatePaymentConfig={onUpdateProposalPaymentConfig}
+                        onResetPaymentConfig={onResetProposalPaymentConfig}
+                        hasCustomPaymentConfig={hasCustomProposalPaymentConfig}
                         options={proposalOptions.map((option) => ({ id: option.id, name: getOptionDisplayName(option) }))}
                         activeOptionId={activeOptionId}
                         onSelectOption={onSelectOption}
@@ -611,6 +624,11 @@ export const AppClientWorkspace: React.FC<AppClientWorkspaceProps> = ({
                         onGeneratePdf={onGeneratePdf}
                         isGeneratingPdf={isGeneratingPdf}
                         defaultHideMeasurements={defaultHideMeasurements}
+                        paymentConfig={proposalPaymentConfig}
+                        companyPaymentMethods={companyPaymentMethods}
+                        onUpdatePaymentConfig={onUpdateProposalPaymentConfig}
+                        onResetPaymentConfig={onResetProposalPaymentConfig}
+                        hasCustomPaymentConfig={hasCustomProposalPaymentConfig}
                         options={proposalOptions.map((option) => ({ id: option.id, name: getOptionDisplayName(option) }))}
                         activeOptionId={activeOptionId}
                         onSelectOption={onSelectOption}

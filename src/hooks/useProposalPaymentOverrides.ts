@@ -13,6 +13,7 @@ const clonePaymentMethods = (methods: ProposalPaymentConfig['paymentMethods'] = 
     methods.map(method => ({
         ...method,
         operator_fee_rates: method.operator_fee_rates ? { ...method.operator_fee_rates } : undefined,
+        selectedInstallments: method.selectedInstallments ? [...method.selectedInstallments] : undefined,
     }));
 
 const sanitizeOptionKey = (optionName: string) => optionName.trim().toLowerCase();

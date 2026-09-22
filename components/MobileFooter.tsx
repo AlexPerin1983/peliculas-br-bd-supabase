@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { TotalsDrawer } from './ui/TotalsDrawer';
-import { ProposalDiscount, Totals } from '../types';
+import { PaymentMethods, ProposalDiscount, ProposalPaymentConfig, Totals } from '../types';
 
 interface MobileFooterProps {
     totals: Totals;
@@ -13,6 +13,11 @@ interface MobileFooterProps {
     isGeneratingPdf: boolean;
     onOpenAIModal: () => void;
     defaultHideMeasurements?: boolean;
+    paymentConfig?: ProposalPaymentConfig;
+    companyPaymentMethods?: PaymentMethods;
+    onUpdatePaymentConfig?: (config: ProposalPaymentConfig) => void;
+    onResetPaymentConfig?: () => void;
+    hasCustomPaymentConfig?: boolean;
     options?: { id: number; name: string }[];
     activeOptionId?: number | null;
     onSelectOption?: (optionId: number) => void;
@@ -29,6 +34,11 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
     isGeneratingPdf,
     onOpenAIModal,
     defaultHideMeasurements,
+    paymentConfig,
+    companyPaymentMethods,
+    onUpdatePaymentConfig,
+    onResetPaymentConfig,
+    hasCustomPaymentConfig,
     options,
     activeOptionId,
     onSelectOption
@@ -125,6 +135,11 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
                 onGeneratePdf={onGeneratePdf}
                 isGeneratingPdf={isGeneratingPdf}
                 defaultHideMeasurements={defaultHideMeasurements}
+                paymentConfig={paymentConfig}
+                companyPaymentMethods={companyPaymentMethods}
+                onUpdatePaymentConfig={onUpdatePaymentConfig}
+                onResetPaymentConfig={onResetPaymentConfig}
+                hasCustomPaymentConfig={hasCustomPaymentConfig}
                 options={options}
                 activeOptionId={activeOptionId}
                 onSelectOption={onSelectOption}

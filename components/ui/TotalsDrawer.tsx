@@ -2,7 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Drawer } from 'vaul';
 import { CircleDollarSign, Eye, EyeOff, MinusCircle, Percent, PlusCircle, RotateCcw, Shield, ShieldCheck, SlidersHorizontal } from 'lucide-react';
 
-import type { FilmPriceOverride, ProposalDiscount, Totals } from '../../types';
+import type { FilmPriceOverride, PaymentMethods, ProposalDiscount, ProposalPaymentConfig, Totals } from '../../types';
+import { PaymentSelectionPanel } from './PaymentSelectionPanel';
 import {
     getProposalAdjustmentInputs,
     normalizeAdjustmentInputValue,
@@ -22,6 +23,11 @@ interface TotalsDrawerProps {
     isGeneratingPdf: boolean;
     defaultHideMeasurements?: boolean;
     defaultIncluirTermo?: boolean;
+    paymentConfig?: ProposalPaymentConfig;
+    companyPaymentMethods?: PaymentMethods;
+    onUpdatePaymentConfig?: (config: ProposalPaymentConfig) => void;
+    onResetPaymentConfig?: () => void;
+    hasCustomPaymentConfig?: boolean;
     /** Opções/oportunidades da proposta — habilita o swipe entre elas no mobile. */
     options?: { id: number; name: string }[];
     activeOptionId?: number | null;
@@ -357,6 +363,11 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
     isGeneratingPdf,
     defaultHideMeasurements = false,
     defaultIncluirTermo = true,
+    paymentConfig,
+    companyPaymentMethods = [],
+    onUpdatePaymentConfig,
+    onResetPaymentConfig,
+    hasCustomPaymentConfig = false,
     options = [],
     activeOptionId = null,
     onSelectOption
@@ -823,6 +834,14 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                                     </span>
                                 </div>
                             </div>
+
+                            {paymentConfig && onUpdatePaymentConfig && <PaymentSelectionPanel
+                                config={paymentConfig}
+                                companyMethods={companyPaymentMethods}
+                                onChange={onUpdatePaymentConfig}
+                                onReset={onResetPaymentConfig}
+                                hasOverride={hasCustomPaymentConfig}
+                            />}
 
                             <div className="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800/50">
                                 <div className="border-b border-slate-100 px-3 py-2 dark:border-slate-700">

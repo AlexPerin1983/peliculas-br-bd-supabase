@@ -10,6 +10,16 @@ const ceilMoney = (value: number) => Math.ceil((value - Number.EPSILON) * 100) /
 const clampPercent = (value: unknown) => Math.min(99.99, Math.max(0, Number(value) || 0));
 const clampInstallments = (value: unknown) => Math.min(12, Math.max(1, Math.trunc(Number(value) || 1)));
 
+export const getAvailableInstallments = (method: PaymentMethod): number[] => {
+    const max = clampInstallments(method.parcelas_max);
+    const configured = Array.isArray(method.selectedInstallments)
+        ? [...new Set(method.selectedInstallments.filter(value => Number.isInteger(value) && value >= 1 && value <= max))].sort((a, b) => a - b)
+        : Array.from({ length: max }, (_, index) => index + 1);
+    return method.tipo === 'parcelado_com_juros' && method.calculation_mode === 'operator_fee'
+        ? configured.filter(value => method.operator_fee_rates?.[String(value)] != null)
+        : configured;
+};
+
 const buildCashSelection = (baseTotal: number, method: PaymentMethod): ProposalPaymentSelection => {
     const discountPercent = clampPercent(method.porcentagem);
     const customerTotal = roundMoney(baseTotal * (1 - discountPercent / 100));
@@ -96,19 +106,19 @@ export const buildProposalPaymentOptions = (
     if (boleto) options.push(buildCashSelection(baseTotal, boleto));
 
     const noInterest = paymentMethods.find(method => method.ativo && method.tipo === 'parcelado_sem_juros');
-    const noInterestMax = noInterest ? clampInstallments(noInterest.parcelas_max) : 0;
+    const noInterestInstallments = noInterest ? getAvailableInstallments(noInterest) : [];
+    const noInterestMax = noInterest && !Array.isArray(noInterest.selectedInstallments) ? clampInstallments(noInterest.parcelas_max) : 0;
     if (noInterest) {
-        for (let installments = 1; installments <= noInterestMax; installments += 1) {
+        for (const installments of noInterestInstallments) {
             options.push(buildNoInterestSelection(baseTotal, installments));
         }
     }
 
     const withInterest = paymentMethods.find(method => method.ativo && method.tipo === 'parcelado_com_juros');
     if (withInterest) {
-        const max = clampInstallments(withInterest.parcelas_max);
         const mode = withInterest.calculation_mode || 'monthly_interest';
-        for (let installments = 1; installments <= max; installments += 1) {
-            if (installments <= noInterestMax) continue;
+        for (const installments of getAvailableInstallments(withInterest)) {
+            if (!Array.isArray(withInterest.selectedInstallments) && (installments <= noInterestMax || noInterestInstallments.includes(installments))) continue;
             if (mode === 'operator_fee') {
                 const configuredRate = withInterest.operator_fee_rates?.[String(installments)];
                 if (configuredRate == null) continue;

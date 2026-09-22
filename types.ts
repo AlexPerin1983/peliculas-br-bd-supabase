@@ -218,6 +218,8 @@ export interface PaymentMethod {
     tipo: PaymentMethodType;
     ativo: boolean;
     parcelas_max?: number | null;
+    /** Parcelas oferecidas nesta proposta; ausente mantém o intervalo global 1..parcelas_max. */
+    selectedInstallments?: number[];
     juros?: number | null;
     porcentagem?: number | null;
     calculation_mode?: 'monthly_interest' | 'operator_fee';

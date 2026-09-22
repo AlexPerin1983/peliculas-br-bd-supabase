@@ -3277,6 +3277,10 @@ Use somente o JSON definido e não inclua explicações fora dele.`;
                                             onOpenProposalPaymentConfig={() => setIsProposalPaymentModalOpen(true)}
                                             onOpenProposalExpenses={() => setIsProposalExpensesModalOpen(true)}
                                             hasCustomProposalPaymentConfig={hasActiveProposalPaymentOverride}
+                                            proposalPaymentConfig={effectivePaymentConfig}
+                                            companyPaymentMethods={userInfo?.payment_methods || []}
+                                            onUpdateProposalPaymentConfig={saveProposalPaymentOverride}
+                                            onResetProposalPaymentConfig={clearProposalPaymentOverride}
                                             hasActiveExpenses={totals.operationalExpenses > 0}
                                             onSwipeDirectionChange={handleSwipeDirectionChange}
                                             onOpenGeneralDiscountModal={() => setIsGeneralDiscountModalOpen(true)}
