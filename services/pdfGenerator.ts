@@ -9,7 +9,7 @@ import { clampValidityDays } from '../src/lib/proposalValidity';
 import { formatGarantiaMaoDeObra } from '../src/lib/filmWarranty';
 import { DEFAULT_TERMO_RESPONSABILIDADE } from '../src/lib/termoResponsabilidade';
 import type { PaymentMethod } from '../types';
-import { calculateMeasurementPriceAdjustment, getMeasurementAdjustmentOperation } from '../src/lib/measurementPriceAdjustment';
+import { calculateMeasurementPriceAdjustment, getMeasurementAdjustmentInputs } from '../src/lib/measurementPriceAdjustment';
 import { resolveFilmPrices } from '../src/lib/filmPriceOverrides';
 
 // Define GeneralDiscount locally since it's not exported from types.ts
@@ -68,11 +68,8 @@ const calculateSavedItemAdjustments = (pdf: SavedPDF, allFilms: Film[]) => {
             parseInt(String(measurement.quantidade), 10) || 0
         );
         const adjustment = calculateMeasurementPriceAdjustment(basePrice, measurement.discount);
-        if (adjustment.operation === 'increase') {
-            totals.increase += adjustment.amount;
-        } else {
-            totals.discount += adjustment.amount;
-        }
+        totals.increase += adjustment.increaseAmount;
+        totals.discount += adjustment.discountAmount;
         return totals;
     }, { discount: 0, increase: 0 });
 };
@@ -799,9 +796,10 @@ const renderPdfContent = async (
                     let itemDiscountAmount = 0;
                     let discountDisplay = '-';
 
-                    if (m.discount && getMeasurementAdjustmentOperation(m.discount) === 'discount') {
-                        const discountValue = parseFloat(String(m.discount.value).replace(',', '.')) || 0;
-                        const discountType = m.discount.type;
+                    if (m.discount) {
+                        const discountInput = getMeasurementAdjustmentInputs(m.discount).discount;
+                        const discountValue = parseFloat(String(discountInput.value).replace(',', '.')) || 0;
+                        const discountType = discountInput.type;
 
                         if (discountType === 'percentage' && discountValue > 0) {
                             itemDiscountAmount = basePrice * (discountValue / 100);

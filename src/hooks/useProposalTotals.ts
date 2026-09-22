@@ -93,11 +93,8 @@ export function useProposalTotals({
             if (filmPricingMode !== 'linear') {
                 const itemAdjustment = calculateMeasurementPriceAdjustment(basePrice, measurement.discount);
                 finalItemPrice = itemAdjustment.finalPrice;
-                if (itemAdjustment.operation === 'increase') {
-                    itemIncreaseAmount = itemAdjustment.amount;
-                } else {
-                    itemDiscountAmount = itemAdjustment.amount;
-                }
+                itemIncreaseAmount = itemAdjustment.increaseAmount;
+                itemDiscountAmount = itemAdjustment.discountAmount;
             }
 
             acc.totalM2 += Number.isFinite(rawM2) ? rawM2 : 0;

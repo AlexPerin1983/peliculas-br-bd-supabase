@@ -3,6 +3,25 @@ import { useProposalTotals } from './useProposalTotals';
 import { Film, UIMeasurement } from '../../types';
 
 describe('useProposalTotals', () => {
+  it('soma acréscimo e desconto do mesmo grupo sem perder nenhum dos dois', () => {
+    const { result } = renderHook(() => useProposalTotals({
+      measurements: [{
+        id: 1, largura: '1', altura: '1', quantidade: 1, ambiente: 'Sala',
+        tipoAplicacao: 'Interna', pelicula: 'Blackout', active: true,
+        discount: {
+          value: '20', type: 'percentage', operation: 'discount',
+          increaseValue: '10', increaseType: 'percentage',
+          discountValue: '20', discountType: 'percentage',
+        },
+      }],
+      films: [{ nome: 'Blackout', preco: 100 }],
+      generalDiscount: { value: '0', type: 'fixed', pricingMode: 'complete' },
+    }));
+    expect(result.current.totalItemIncrease).toBeCloseTo(10);
+    expect(result.current.totalItemDiscount).toBeCloseTo(22);
+    expect(result.current.finalTotal).toBeCloseTo(88);
+  });
+
   it('calcula subtotal, descontos e total final corretamente', () => {
     const films: Film[] = [
       {

@@ -9,8 +9,6 @@ import { useNumpadDraft } from '../src/hooks/useNumpadDraft';
 import { normalizeMeasurementInput } from '../src/lib/measurementInputMode';
 import {
     calculateMeasurementPriceAdjustment,
-    getMeasurementAdjustmentOperation,
-    parseMeasurementAdjustmentValue,
 } from '../src/lib/measurementPriceAdjustment';
 
 type UIMeasurement = Measurement & { isNew?: boolean };
@@ -460,9 +458,10 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
         return { basePrice: price, finalPrice: final, priceLabel: label };
     }, [m2, selectedFilm, measurement.discount, pricingMode]);
 
-    const adjustmentOperation = getMeasurementAdjustmentOperation(measurement.discount);
-    const hasAdjustment = parseMeasurementAdjustmentValue(measurement.discount?.value) > 0;
-    const hasIncrease = hasAdjustment && adjustmentOperation === 'increase';
+    const adjustmentAmounts = calculateMeasurementPriceAdjustment(basePrice, measurement.discount);
+    const hasDiscount = adjustmentAmounts.discountAmount > 0;
+    const hasIncrease = adjustmentAmounts.increaseAmount > 0;
+    const hasAdjustment = hasDiscount || hasIncrease;
 
     // --- Lógica para exibir o ambiente (AJUSTADA) ---
     const displayFilmName = measurement.pelicula || 'Nenhuma';
@@ -784,7 +783,7 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
                         </div>
 
                         <div className="flex items-center relative z-50">
-                            <Tooltip text={hasAdjustment ? `Editar ${hasIncrease ? 'Acréscimo' : 'Desconto'}` : 'Aplicar desconto ou acréscimo'}>
+                            <Tooltip text={hasAdjustment ? `Editar ${hasIncrease && hasDiscount ? 'acréscimo e desconto' : hasIncrease ? 'acréscimo' : 'desconto'}` : 'Aplicar desconto ou acréscimo'}>
                                 <div
                                     role="button"
                                     tabIndex={isSelectionMode ? -1 : 0}

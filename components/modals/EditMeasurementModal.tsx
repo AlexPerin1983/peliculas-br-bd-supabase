@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Measurement, Film, UserInfo, Location, ProposalAdjustmentOperation } from '../../types';
+import { Measurement, Film, UserInfo, Location } from '../../types';
 import { AMBIENTES, TIPOS_APLICACAO } from '../../constants';
 import DynamicSelector from '../ui/DynamicSelector';
 import Accordion from '../ui/Accordion';
@@ -11,7 +11,7 @@ import { selectAllOnFocus } from '../../src/lib/selectOnFocus';
 import { formatGarantiaMaoDeObraCurto } from '../../src/lib/filmWarranty';
 import {
     calculateMeasurementPriceAdjustment,
-    getMeasurementAdjustmentOperation,
+    getMeasurementAdjustmentInputs,
 } from '../../src/lib/measurementPriceAdjustment';
 
 type UIMeasurement = Measurement & { isNew?: boolean };
@@ -100,7 +100,7 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
         }
     };
 
-    const handleBlur = (e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>, field: 'largura' | 'altura' | 'quantidade' | 'discount' | 'observation') => {
+    const handleBlur = (e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>, field: 'largura' | 'altura' | 'quantidade' | 'observation') => {
         const { value } = e.target;
 
         if (field === 'largura' || field === 'altura') {
@@ -110,38 +110,31 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
         } else if (field === 'quantidade') {
             const intValue = parseInt(value.replace(/[^0-9]/g, ''), 10);
             handleLocalUpdate({ quantidade: isNaN(intValue) || intValue < 1 ? 1 : intValue });
-        } else if (field === 'discount') {
-            const sanitizedValue = value.replace(/[^0-9,.]/g, '');
-            handleLocalUpdate({
-                discount: {
-                    value: sanitizedValue,
-                    type: localMeasurement.discount?.type || 'percentage',
-                    operation: getMeasurementAdjustmentOperation(localMeasurement.discount),
-                }
-            });
         } else if (field === 'observation') {
             handleLocalUpdate({ observation: value });
         }
     };
 
-    const handleDiscountTypeChange = (type: 'percentage' | 'fixed') => {
-        handleLocalUpdate({
-            discount: {
-                value: localMeasurement.discount?.value || '0',
-                type,
-                operation: getMeasurementAdjustmentOperation(localMeasurement.discount),
-            }
-        });
-    };
-
-    const handleAdjustmentOperationChange = (operation: ProposalAdjustmentOperation) => {
-        handleLocalUpdate({
-            discount: {
-                value: localMeasurement.discount?.value || '0',
-                type: localMeasurement.discount?.type || 'percentage',
-                operation,
-            }
-        });
+    const updateAdjustment = (operation: 'increase' | 'discount', field: 'value' | 'type', value: string) => {
+        const inputs = getMeasurementAdjustmentInputs(localMeasurement.discount);
+        const increase = { ...inputs.increase };
+        const discount = { ...inputs.discount };
+        const target = operation === 'increase' ? increase : discount;
+        if (field === 'value') {
+            if (!/^[0-9]*[.,]?[0-9]*$/.test(value)) return;
+            target.value = value;
+        } else {
+            target.type = value as 'percentage' | 'fixed';
+        }
+        handleLocalUpdate({ discount: {
+            value: discount.value || increase.value,
+            type: discount.value ? discount.type : increase.type,
+            operation: discount.value ? 'discount' : 'increase',
+            discountValue: discount.value,
+            discountType: discount.type,
+            increaseValue: increase.value,
+            increaseType: increase.type,
+        } });
     };
 
     const handleSave = async () => {
@@ -212,7 +205,7 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
     }, [selectedFilm]);
 
     const basePrice = pricePerM2 * m2;
-    const adjustmentOperation = getMeasurementAdjustmentOperation(localMeasurement.discount);
+    const adjustmentInputs = getMeasurementAdjustmentInputs(localMeasurement.discount);
     const finalPrice = calculateMeasurementPriceAdjustment(basePrice, localMeasurement.discount).finalPrice;
 
     const handleEditFilm = () => {
@@ -432,49 +425,20 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
                             <span className="font-medium text-slate-600 dark:text-slate-400">Preço Final</span>
                             <p className="font-bold text-slate-800 dark:text-white text-xl">{formatCurrency(finalPrice)}</p>
                         </div>
-                        <div>
-                            <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">Tipo de ajuste</label>
-                            <div className="mb-3 grid grid-cols-2 rounded-lg bg-slate-100 p-1 dark:bg-slate-800">
-                                <button
-                                    type="button"
-                                    onClick={() => handleAdjustmentOperationChange('discount')}
-                                    className={`h-9 rounded-md text-sm font-semibold transition ${adjustmentOperation === 'discount' ? 'bg-white text-emerald-700 shadow-sm dark:bg-slate-700 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400'}`}
-                                >
-                                    Desconto
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => handleAdjustmentOperationChange('increase')}
-                                    className={`h-9 rounded-md text-sm font-semibold transition ${adjustmentOperation === 'increase' ? 'bg-white text-blue-700 shadow-sm dark:bg-slate-700 dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}`}
-                                >
-                                    Acréscimo
-                                </button>
-                            </div>
-                            <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">Aplicar {adjustmentOperation === 'increase' ? 'Acréscimo' : 'Desconto'}</label>
-                            <div className="flex">
-                                <input
-                                    type="text"
-                                    defaultValue={localMeasurement.discount?.value || ''}
-                                    onBlur={(e) => handleBlur(e, 'discount')}
-                                    onFocus={handleFocus}
-                                    className="w-full p-2.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 border border-slate-300 dark:border-slate-600 rounded-l-md shadow-sm focus:ring-slate-500 focus:border-slate-500 sm:text-sm"
-                                    placeholder="0"
-                                    inputMode="decimal"
-                                />
-                                <div className="flex">
-                                    <button type="button" onClick={() => handleDiscountTypeChange('percentage')} className={`px-4 py-2 text-sm font-semibold border-t border-b ${localMeasurement.discount?.type === 'percentage' ? 'bg-slate-800 dark:bg-slate-700 text-white border-slate-800 dark:border-slate-700 z-10' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
-                                        %
-                                    </button>
-                                    <button type="button" onClick={() => handleDiscountTypeChange('fixed')} className={`px-4 py-2 text-sm font-semibold border rounded-r-md ${localMeasurement.discount?.type === 'fixed' ? 'bg-slate-800 dark:bg-slate-700 text-white border-slate-800 dark:border-slate-700 z-10' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
-                                        R$
-                                    </button>
-                                </div>
-                            </div>
-                            {adjustmentOperation === 'increase' && (
-                                <p className="mt-2 text-xs leading-5 text-blue-700 dark:text-blue-300">
-                                    O acréscimo será embutido no preço deste grupo e não aparecerá separado no orçamento.
-                                </p>
-                            )}
+                        <div className="space-y-3">
+                            {(['increase', 'discount'] as const).map(operation => {
+                                const input = adjustmentInputs[operation];
+                                const label = operation === 'increase' ? 'Acréscimo' : 'Desconto';
+                                return <div key={operation}>
+                                    <label htmlFor={`edit-${operation}`} className="mb-1 block text-sm font-medium text-slate-600 dark:text-slate-400">{label}</label>
+                                    <div className="flex">
+                                        <input id={`edit-${operation}`} type="text" value={input.value} onChange={event => updateAdjustment(operation, 'value', event.target.value)} onFocus={handleFocus} className="min-w-0 flex-1 rounded-l-md border border-slate-300 bg-white p-2.5 text-slate-900 shadow-sm focus:border-slate-500 focus:ring-slate-500 dark:border-slate-600 dark:bg-slate-900 dark:text-white" placeholder="0" inputMode="decimal" />
+                                        <button type="button" onClick={() => updateAdjustment(operation, 'type', 'percentage')} aria-label={`${label} em porcentagem`} aria-pressed={input.type === 'percentage'} className={`min-w-11 border-y px-3 text-sm font-semibold ${input.type === 'percentage' ? 'border-slate-800 bg-slate-800 text-white dark:border-slate-700 dark:bg-slate-700' : 'border-slate-300 bg-white text-slate-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400'}`}>%</button>
+                                        <button type="button" onClick={() => updateAdjustment(operation, 'type', 'fixed')} aria-label={`${label} em reais`} aria-pressed={input.type === 'fixed'} className={`min-w-11 rounded-r-md border px-3 text-sm font-semibold ${input.type === 'fixed' ? 'border-slate-800 bg-slate-800 text-white dark:border-slate-700 dark:bg-slate-700' : 'border-slate-300 bg-white text-slate-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400'}`}>R$</button>
+                                    </div>
+                                </div>;
+                            })}
+                            <p className="text-xs leading-5 text-slate-500 dark:text-slate-400">O acréscimo entra no preço; o desconto aparece no orçamento.</p>
                         </div>
                     </Accordion>
 

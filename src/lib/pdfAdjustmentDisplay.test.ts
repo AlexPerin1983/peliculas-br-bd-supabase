@@ -19,6 +19,24 @@ const buildMeasurement = (overrides: Partial<Measurement>): Measurement => ({
 });
 
 describe('buildPdfAdjustmentDisplay', () => {
+    it('mostra acréscimo embutido e desconto separados no mesmo item', () => {
+        const display = buildPdfAdjustmentDisplay({
+            measurements: [buildMeasurement({ discount: {
+                value: '20', type: 'percentage', operation: 'discount',
+                increaseValue: '10', increaseType: 'percentage',
+                discountValue: '20', discountType: 'percentage',
+            } })],
+            films,
+            pricingMode: 'complete',
+            totals: { subtotal: 100, totalItemDiscount: 22, generalDiscountAmount: 0, finalTotal: 88 },
+        });
+        expect(display.lineItems[0]).toMatchObject({
+            displayBasePrice: 110, displayItemDiscountAmount: 22, displayFinalItemPrice: 88,
+        });
+        expect(display.summarySubtotal).toBe(110);
+        expect(display.summaryItemDiscount).toBe(22);
+    });
+
     it('embute acrescimo geral nos itens do PDF por area', () => {
         const measurements = [
             buildMeasurement({ id: 1, largura: '2', altura: '1', pelicula: 'Blackout' }),

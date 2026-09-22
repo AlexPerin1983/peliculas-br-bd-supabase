@@ -19,7 +19,7 @@ vi.mock('../ui/Modal', () => ({
 }));
 
 describe('DiscountModal', () => {
-    it('salva acrescimo e mostra o novo valor do grupo', () => {
+    it('mantém acréscimo e desconto em campos separados e aplica ambos ao valor final', () => {
         const onSave = vi.fn();
         render(
             <DiscountModal
@@ -30,17 +30,29 @@ describe('DiscountModal', () => {
             />
         );
 
-        fireEvent.click(screen.getByRole('button', { name: 'Acréscimo' }));
-        fireEvent.change(screen.getByLabelText('Valor do acréscimo'), { target: { value: '10' } });
+        fireEvent.change(screen.getByRole('textbox', { name: 'Acréscimo' }), { target: { value: '10' } });
 
         expect(screen.getByText(/110,00/)).toBeInTheDocument();
-        expect(screen.getByText(/não aparecerá como uma linha de acréscimo/i)).toBeInTheDocument();
+        fireEvent.change(screen.getByRole('textbox', { name: 'Desconto' }), { target: { value: '20' } });
+        expect(screen.getByText(/88,00/)).toBeInTheDocument();
+        expect(screen.getByRole('textbox', { name: 'Acréscimo' })).toHaveValue('10');
 
         fireEvent.click(screen.getByRole('button', { name: 'Salvar ajuste' }));
         expect(onSave).toHaveBeenCalledWith({
-            value: '10',
+            value: '20',
             type: 'percentage',
-            operation: 'increase',
+            operation: 'discount',
+            increaseValue: '10',
+            increaseType: 'percentage',
+            discountValue: '20',
+            discountType: 'percentage',
         });
+    });
+
+    it('abre ajuste antigo de acréscimo sem transformá-lo em desconto', () => {
+        render(<DiscountModal isOpen onClose={vi.fn()} onSave={vi.fn()} basePrice={100} initialAdjustment={{ value: '10', type: 'fixed', operation: 'increase' }} />);
+        expect(screen.getByRole('textbox', { name: 'Acréscimo' })).toHaveValue('10');
+        expect(screen.getByRole('textbox', { name: 'Desconto' })).toHaveValue('');
+        expect(screen.getByText(/110,00/)).toBeInTheDocument();
     });
 });

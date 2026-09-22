@@ -499,9 +499,7 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
                     isOpen={!!props.editingMeasurementForDiscount}
                     onClose={props.handleCloseDiscountModal}
                     onSave={props.handleSaveDiscount}
-                    initialValue={props.editingMeasurementForDiscount.discount?.value}
-                    initialType={props.editingMeasurementForDiscount.discount?.type}
-                    initialOperation={props.editingMeasurementForDiscount.discount?.operation}
+                    initialAdjustment={props.editingMeasurementForDiscount.discount}
                     basePrice={props.editingMeasurementBasePrice}
                 />
             )}

@@ -3,7 +3,7 @@ import { calculatePricingAreaM2 } from './pricingArea';
 import { resolveFilmPrices } from './filmPriceOverrides';
 import {
     calculateMeasurementPriceAdjustment,
-    getMeasurementAdjustmentOperation,
+    getMeasurementAdjustmentInputs,
 } from './measurementPriceAdjustment';
 
 type PdfGeneralAdjustment = {
@@ -82,9 +82,8 @@ const getPricePerM2 = (
 };
 
 const getPercentageDiscountRate = (measurement: Measurement) => {
-    if (getMeasurementAdjustmentOperation(measurement.discount) !== 'discount') return 0;
-    if (measurement.discount?.type !== 'percentage') return 0;
-    return parseDecimal(measurement.discount.value);
+    const discount = getMeasurementAdjustmentInputs(measurement.discount).discount;
+    return discount.type === 'percentage' ? parseDecimal(discount.value) : 0;
 };
 
 export const buildPdfAdjustmentDisplay = ({
@@ -120,8 +119,8 @@ export const buildPdfAdjustmentDisplay = ({
             basePrice,
             linear ? undefined : measurement.discount
         );
-        const itemDiscountAmount = itemAdjustment.operation === 'discount' ? itemAdjustment.amount : 0;
-        const itemIncreaseAmount = itemAdjustment.operation === 'increase' ? itemAdjustment.amount : 0;
+        const itemDiscountAmount = itemAdjustment.discountAmount;
+        const itemIncreaseAmount = itemAdjustment.increaseAmount;
         const finalItemPrice = itemAdjustment.finalPrice;
 
         return {

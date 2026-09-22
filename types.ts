@@ -36,6 +36,10 @@ export interface MeasurementPriceAdjustment {
     type: 'percentage' | 'fixed';
     // Ausente nos orçamentos antigos significa desconto.
     operation?: ProposalAdjustmentOperation;
+    discountValue?: string;
+    discountType?: 'percentage' | 'fixed';
+    increaseValue?: string;
+    increaseType?: 'percentage' | 'fixed';
 }
 
 export interface Measurement {
