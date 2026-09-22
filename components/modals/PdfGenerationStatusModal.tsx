@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import type { Client, SavedPDF } from '../../types';
+import ProposalShareModal from './ProposalShareModal';
 
 interface PdfGenerationStatusModalProps {
     status: 'generating' | 'success';
@@ -8,14 +10,19 @@ interface PdfGenerationStatusModalProps {
     onPreview: () => boolean;
     canShare: boolean;
     canPreview: boolean;
+    proposalForLink?: { client: Client; pdf: SavedPDF } | null;
 }
 
-const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({ status, onClose, onGoToHistory, onShare, onPreview, canShare, canPreview }) => {
+const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({ status, onClose, onGoToHistory, onShare, onPreview, canShare, canPreview, proposalForLink }) => {
     const [isSharing, setIsSharing] = useState(false);
     const [shareMessage, setShareMessage] = useState('');
+    const [isLinkShareOpen, setIsLinkShareOpen] = useState(false);
 
     useEffect(() => {
-        if (status === 'generating') setShareMessage('');
+        if (status === 'generating') {
+            setShareMessage('');
+            setIsLinkShareOpen(false);
+        }
     }, [status]);
 
     const handleShare = async () => {
@@ -53,6 +60,18 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({ sta
     }
 
     if (status === 'success') {
+        if (isLinkShareOpen && proposalForLink) {
+            return (
+                <ProposalShareModal
+                    isOpen
+                    client={proposalForLink.client}
+                    pdfs={[proposalForLink.pdf]}
+                    autoCreate
+                    onClose={() => setIsLinkShareOpen(false)}
+                />
+            );
+        }
+
         return (
             <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 animate-fade-in">
                 <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl p-8 text-center flex flex-col items-center max-w-sm w-full">
@@ -64,6 +83,15 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({ sta
                         Seu PDF foi salvo. Confira o documento ou compartilhe com o cliente.
                     </p>
                     <div className="mt-6 w-full space-y-3">
+                        <button
+                            type="button"
+                            onClick={() => setIsLinkShareOpen(true)}
+                            disabled={!proposalForLink}
+                            className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-emerald-600 px-4 py-3 text-base font-semibold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-55"
+                        >
+                            <i className="fab fa-whatsapp" aria-hidden="true"></i>
+                            Criar link e enviar
+                        </button>
                         <button
                             type="button"
                             onClick={handlePreview}

@@ -114,6 +114,7 @@ interface ModalsContainerProps {
     handlePreviewGeneratedPdf: () => boolean;
     canShareGeneratedPdf: boolean;
     canPreviewGeneratedPdf: boolean;
+    latestGeneratedProposal: { client: Client; pdf: SavedPDF } | null;
 
     // Edit Measurement Modal
     editingMeasurement: UIMeasurement | null;
@@ -490,6 +491,7 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
                     onPreview={props.handlePreviewGeneratedPdf}
                     canShare={props.canShareGeneratedPdf}
                     canPreview={props.canPreviewGeneratedPdf}
+                    proposalForLink={props.latestGeneratedProposal}
                 />
             )}
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CalendarClock, Check, Copy, ExternalLink, Link2, LoaderCircle, MessageCircle, ShieldCheck } from 'lucide-react';
 import type { Client, SavedPDF } from '../../types';
 import { buildProposalShareMessage, createProposalPortal, type CreatedProposalPortal } from '../../src/lib/proposalPortal';
@@ -11,6 +11,7 @@ interface ProposalShareModalProps {
     client: Client;
     pdfs: SavedPDF[];
     onClose: () => void;
+    autoCreate?: boolean;
 }
 
 const dateInput = (date: Date) => {
@@ -45,13 +46,15 @@ const copyText = async (value: string) => {
     area.remove();
 };
 
-const ProposalShareModal: React.FC<ProposalShareModalProps> = ({ isOpen, client, pdfs, onClose }) => {
+const ProposalShareModal: React.FC<ProposalShareModalProps> = ({ isOpen, client, pdfs, onClose, autoCreate = false }) => {
     const [expiration, setExpiration] = useState(() => getDefaultExpiration(pdfs));
     const [created, setCreated] = useState<CreatedProposalPortal | null>(null);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
     const [copied, setCopied] = useState<'link' | 'message' | null>(null);
     const [isWhatsAppChooserOpen, setIsWhatsAppChooserOpen] = useState(false);
+    const autoCreateKeyRef = useRef<string | null>(null);
+    const pdfKey = pdfs.map(pdf => pdf.id).join(',');
 
     useEffect(() => {
         if (!isOpen) return;
@@ -60,7 +63,9 @@ const ProposalShareModal: React.FC<ProposalShareModalProps> = ({ isOpen, client,
         setError('');
         setCopied(null);
         setIsWhatsAppChooserOpen(false);
-    }, [isOpen, pdfs]);
+    // A chave evita apagar o link criado quando o pai apenas recria o array.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isOpen, pdfKey]);
 
     const message = useMemo(() => created ? buildProposalShareMessage(client, pdfs, created.url, created.expiresAt) : '', [client, created, pdfs]);
     const whatsappAppUrl = created ? buildProposalWhatsAppAppUrl(client.telefone, message) : null;
@@ -77,6 +82,14 @@ const ProposalShareModal: React.FC<ProposalShareModalProps> = ({ isOpen, client,
             setBusy(false);
         }
     };
+
+    useEffect(() => {
+        if (!isOpen || !autoCreate || !pdfKey || autoCreateKeyRef.current === pdfKey) return;
+        autoCreateKeyRef.current = pdfKey;
+        void create();
+        // A criação deve acontecer uma única vez para o conjunto aberto.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isOpen, autoCreate, pdfKey]);
 
     const copy = async (type: 'link' | 'message', value: string) => {
         try {

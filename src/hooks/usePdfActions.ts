@@ -65,6 +65,8 @@ export function usePdfActions({
         blob: Blob;
         filename: string;
         clientName: string;
+        savedPdf?: SavedPDF;
+        client?: Client;
     } | null>(null);
     const [isSavingBeforePdf, setIsSavingBeforePdf] = useState(false);
     const downloadBlob = useCallback((blobOrBase64: Blob | string, filename: string) => {
@@ -247,6 +249,8 @@ export function usePdfActions({
                 blob: pdfBlob,
                 filename,
                 clientName: selectedClient.nome,
+                savedPdf,
+                client: selectedClient,
             });
             downloadBlob(pdfBlob, filename);
             setAllSavedPdfs(previous => [savedPdf, ...previous]);
@@ -360,6 +364,9 @@ export function usePdfActions({
         handlePreviewGeneratedPdf,
         canShareGeneratedPdf: latestGeneratedPdf !== null,
         canPreviewGeneratedPdf: latestGeneratedPdf !== null,
+        latestGeneratedProposal: latestGeneratedPdf?.savedPdf && latestGeneratedPdf.client
+            ? { pdf: latestGeneratedPdf.savedPdf, client: latestGeneratedPdf.client }
+            : null,
         isSavingBeforePdf,
         handleGeneratePdf,
         handleGeneratePdfWithSaveCheck,

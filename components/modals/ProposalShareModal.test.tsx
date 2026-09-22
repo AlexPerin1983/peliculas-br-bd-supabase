@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Client, SavedPDF } from '../../types';
 import { createProposalPortal } from '../../src/lib/proposalPortal';
@@ -48,5 +48,17 @@ describe('ProposalShareModal', () => {
         fireEvent.click(screen.getByRole('button', { name: /Criar link da proposta/i }));
         await screen.findByText('Link criado com sucesso');
         expect(screen.getByRole('button', { name: 'Sem telefone' })).toBeDisabled();
+    });
+
+    it('cria automaticamente o link vindo do orçamento recém-gerado', async () => {
+        const { rerender } = render(<ProposalShareModal isOpen client={client} pdfs={[pdf]} autoCreate onClose={vi.fn()} />);
+
+        await waitFor(() => expect(createProposalPortal).toHaveBeenCalledTimes(1));
+        expect(await screen.findByText('Link criado com sucesso')).toBeInTheDocument();
+        expect(screen.getByDisplayValue(portalUrl)).toBeInTheDocument();
+
+        rerender(<ProposalShareModal isOpen client={client} pdfs={[{ ...pdf }]} autoCreate onClose={vi.fn()} />);
+        expect(screen.getByText('Link criado com sucesso')).toBeInTheDocument();
+        expect(createProposalPortal).toHaveBeenCalledTimes(1);
     });
 });

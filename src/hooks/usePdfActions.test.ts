@@ -194,6 +194,10 @@ describe('usePdfActions', () => {
     }));
     expect(setPdfGenerationStatus).toHaveBeenCalledWith('generating');
     expect(setPdfGenerationStatus).toHaveBeenCalledWith('success');
+    expect(result.current.latestGeneratedProposal).toEqual(expect.objectContaining({
+      client: selectedClient,
+      pdf: expect.objectContaining({ id: 99, clienteId: 12 })
+    }));
     expect(anchor.click).toHaveBeenCalled();
     expect(handleShowInfo).not.toHaveBeenCalled();
   });

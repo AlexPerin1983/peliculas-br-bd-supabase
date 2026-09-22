@@ -1,6 +1,10 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import PdfGenerationStatusModal from './PdfGenerationStatusModal';
 
+vi.mock('./ProposalShareModal', () => ({
+    default: ({ autoCreate }: { autoCreate?: boolean }) => <div>{autoCreate ? 'Link automático aberto' : 'Link aberto'}</div>,
+}));
+
 describe('PdfGenerationStatusModal', () => {
     it('compartilha o PDF recém-gerado pelo botão principal', async () => {
         const onShare = vi.fn().mockResolvedValue('shared');
@@ -59,5 +63,26 @@ describe('PdfGenerationStatusModal', () => {
 
         expect(onPreview).toHaveBeenCalledTimes(1);
         expect(screen.getByText(/pdf aberto para conferência/i)).toBeInTheDocument();
+    });
+
+    it('abre a criação automática do link para WhatsApp da proposta salva', () => {
+        render(
+            <PdfGenerationStatusModal
+                status="success"
+                onClose={vi.fn()}
+                onGoToHistory={vi.fn()}
+                onShare={vi.fn().mockResolvedValue('shared')}
+                onPreview={vi.fn().mockReturnValue(true)}
+                canShare
+                canPreview
+                proposalForLink={{
+                    client: { id: 7, nome: 'Camila', telefone: '83999990000', email: '', cpfCnpj: '' },
+                    pdf: { id: 42, clienteId: 7, totalPreco: 500 } as any,
+                }}
+            />
+        );
+
+        fireEvent.click(screen.getByRole('button', { name: /criar link e enviar/i }));
+        expect(screen.getByText('Link automático aberto')).toBeInTheDocument();
     });
 });
