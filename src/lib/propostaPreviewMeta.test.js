@@ -32,12 +32,24 @@ describe('prévia amigável da proposta', () => {
 
     it('versiona também logos externas para não reutilizar a prévia de outra empresa', () => {
         expect(resolvePreviewImage('https://cdn.example.com/logo.png', 'https://app.filmstec.shop', 'codigo'))
-            .toMatch(/^https:\/\/app\.filmstec\.shop\/api\/proposta-logo\?code=codigo&v=company-v2-/);
+            .toMatch(/^https:\/\/app\.filmstec\.shop\/api\/proposta-logo\?code=codigo&v=company-v3-/);
     });
 
     it('versiona a imagem da empresa para invalidar previews antigos', () => {
         expect(resolvePreviewImage('data:image/png;base64,abc', 'https://app.filmstec.shop', 'codigo'))
-            .toContain('v=company-v2-');
+            .toContain('v=company-v3-');
+    });
+
+    it('informa formato e dimensões da miniatura otimizada', () => {
+        const html = injectProposalPreview(
+            '<html><head></head><body></body></html>',
+            { companyLogo: 'data:image/png;base64,abc' },
+            'https://app.filmstec.shop/p/cliente/codigo',
+            'https://app.filmstec.shop',
+        );
+        expect(html).toContain('<meta property="og:image:type" content="image/jpeg">');
+        expect(html).toContain('<meta property="og:image:width" content="600">');
+        expect(html).toContain('<meta property="og:image:height" content="600">');
     });
 
     it('protege os metadados contra HTML inserido nos nomes', () => {

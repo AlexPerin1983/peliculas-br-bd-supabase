@@ -1,7 +1,7 @@
 const DEFAULT_SUPABASE_URL = 'https://avlefzsipbqvollukgyt.supabase.co';
 const DEFAULT_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF2bGVmenNpcGJxdm9sbHVrZ3l0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY3Nzc0MjUsImV4cCI6MjA4MjM1MzQyNX0.mXiqnxe9reQNwuAjZ6yFfm1AR1Qcdib3EjXCaG9EonM';
 
-const PREVIEW_IMAGE_VERSION = 'company-v2';
+const PREVIEW_IMAGE_VERSION = 'company-v3';
 
 export const escapeHtml = (value = '') => String(value)
     .replace(/&/g, '&amp;')
@@ -60,6 +60,7 @@ export const injectProposalPreview = (html, preview, pageUrl, origin) => {
         : `Sua proposta da ${company} está pronta para você visualizar.`;
     const shareCode = decodeURIComponent(new URL(pageUrl).pathname.split('/').filter(Boolean).pop() || '');
     const image = resolvePreviewImage(preview?.companyLogo, origin, shareCode);
+    const optimizedCompanyLogo = shareCode && /^data:image\/(?:png|jpeg|webp);base64,/i.test(String(preview?.companyLogo || ''));
     const meta = [
         `<title>${escapeHtml(title)}</title>`,
         `<meta name="description" content="${escapeHtml(description)}">`,
@@ -67,6 +68,12 @@ export const injectProposalPreview = (html, preview, pageUrl, origin) => {
         `<meta property="og:title" content="${escapeHtml(title)}">`,
         `<meta property="og:description" content="${escapeHtml(description)}">`,
         `<meta property="og:image" content="${escapeHtml(image)}">`,
+        ...(optimizedCompanyLogo ? [
+            `<meta property="og:image:secure_url" content="${escapeHtml(image)}">`,
+            '<meta property="og:image:type" content="image/jpeg">',
+            '<meta property="og:image:width" content="600">',
+            '<meta property="og:image:height" content="600">',
+        ] : []),
         `<meta property="og:url" content="${escapeHtml(pageUrl)}">`,
         '<meta property="og:locale" content="pt_BR">',
         '<meta name="twitter:card" content="summary_large_image">',
