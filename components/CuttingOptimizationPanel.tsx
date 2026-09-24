@@ -1318,7 +1318,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                 <div className="cutting-settings-card">
                                     <button type="button" className="cutting-settings-toggle" aria-expanded={isMobileSettingsOpen} aria-controls="cutting-mobile-settings" onClick={() => setIsMobileSettingsOpen(open => !open)}>
                                         <span className="cutting-settings-toggle-text">
-                                            <span>Bobina {selectedRollWidthLabel} · Espaço {currentSettings.bladeWidth} mm · {visualSummary?.pieces ?? 0} peças</span>
+                                            <span>{result?.straightCuts && <b className="cutting-straight-badge"><Scissors size={11} aria-hidden="true" /> Cortes retos</b>}Bobina {selectedRollWidthLabel} · Espaço {currentSettings.bladeWidth} mm · {visualSummary?.pieces ?? 0} peças</span>
                                             <strong aria-live="polite" aria-busy={isOptimizing}>
                                                 {isOptimizing ? 'Calculando…' : <>{visualSummary?.linearMeters ?? '—'} m{activeFilmMaterialCostText ? <> · <em>{activeFilmMaterialCostText}</em></> : null}<small> · {visualSummary?.efficiency ?? '—'}% uso</small></>}
                                             </strong>
@@ -2657,6 +2657,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                                 <div><dt>Sobra</dt><dd>{visualSummary.wastePercent}%</dd></div>
                                                 <div><dt>Área útil</dt><dd>{visualSummary.usedAreaMeters} m²</dd></div>
                                             </dl>
+                                            {result.straightCuts && <p className="cutting-fs-sheet-straight"><Scissors size={15} aria-hidden="true" /> Só cortes retos: atravesse a bobina em faixas e depois separe as peças.</p>}
                                             {unplacedCount > 0 && <p className="cutting-fs-sheet-warning" role="status">{unplacedCount === 1 ? '1 peça é maior que a bobina e ficou fora do plano.' : `${unplacedCount} peças são maiores que a bobina e ficaram fora do plano.`}</p>}
                                             <h3 className="cutting-fs-sheet-title">
                                                 <Scissors size={16} aria-hidden="true" /> O que cortar

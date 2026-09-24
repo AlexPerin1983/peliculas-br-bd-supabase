@@ -224,6 +224,11 @@
   .cutting-fs-sheet-stats > div { min-width: 0; padding: 8px 6px; border: 1px solid var(--cut-border); border-radius: 10px; }
   .cutting-fs-sheet-stats dt { font-size: 10px; font-weight: 600; color: var(--cut-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .cutting-fs-sheet-stats dd { margin: 2px 0 0; font-size: 15px; font-weight: 750; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .cutting-straight-badge { display: inline-flex; align-items: center; gap: 3px; margin-right: 6px; padding: 1px 6px; border-radius: 999px; background: #dcfce7; color: #15803d; font-size: 10px; font-weight: 700; vertical-align: 1px; }
+  .dark .cutting-straight-badge { background: #14532d; color: #86efac; }
+  .cutting-fs-sheet-straight { display: flex; align-items: center; gap: 8px; margin: 10px 0 0; padding: 8px 10px; border-radius: 10px; background: #dcfce7; color: #15803d; font-size: 12px; font-weight: 600; }
+  .cutting-fs-sheet-straight svg { flex-shrink: 0; }
+  .dark .cutting-fs-sheet-straight { background: #14532d; color: #86efac; }
   .cutting-fs-sheet-warning { margin: 10px 0 0; padding: 8px 10px; border-radius: 10px; background: #fdecec; color: #a83030; font-size: 12px; }
   .dark .cutting-fs-sheet-warning { background: #3f1d1d; color: #fca5a5; }
   .cutting-fs-sheet-title { display: flex; align-items: center; gap: 6px; margin: 16px 0 4px; font-size: 13px; font-weight: 700; color: var(--cut-ink); }

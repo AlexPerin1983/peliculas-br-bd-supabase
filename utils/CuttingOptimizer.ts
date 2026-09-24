@@ -1,3 +1,5 @@
+import { isStraightCuttable } from './straightCuts';
+
 export interface Rect {
     x: number;
     y: number;
@@ -17,12 +19,30 @@ export interface OptimizationResult {
     // Peças que não couberam na bobina (maiores que a largura em todas as
     // orientações permitidas). Opcional para compatibilidade com históricos salvos.
     unplacedItems?: Rect[];
+    // true quando o plano sai só com cortes retos de ponta a ponta (faixas).
+    straightCuts?: boolean;
+    // Comprimentos (cm) dos melhores planos de cada tipo, para a tela comparar.
+    layoutComparison?: { compactHeight: number; straightHeight: number | null };
 }
+
+export type CutPreference = 'straight' | 'compact';
 
 export interface OptimizerOptions {
     rollWidth: number;
     bladeWidth?: number; // Spacing between cuts
     allowRotation?: boolean;
+    // 'straight' (padrão): prefere plano em faixas se gastar até straightCutTolerance a mais.
+    cutPreference?: CutPreference;
+    straightCutTolerance?: number;
+}
+
+// Quanto a mais de bobina aceitamos para ter um plano só com cortes retos.
+export const DEFAULT_STRAIGHT_CUT_TOLERANCE = 0.03;
+
+interface BandColumn {
+    x: number;
+    w: number;
+    usedHeight: number;
 }
 
 interface Row {
@@ -39,10 +59,19 @@ interface SkylineSegment {
     width: number;
 }
 
+const isBetterResult = (candidate: OptimizationResult, current: OptimizationResult | null) => !current ||
+    candidate.placedItems.length > current.placedItems.length ||
+    (candidate.placedItems.length === current.placedItems.length && (
+        candidate.totalHeight < current.totalHeight ||
+        (Math.abs(candidate.totalHeight - current.totalHeight) < 5 && candidate.efficiency > current.efficiency)
+    ));
+
 export class CuttingOptimizer {
     private rollWidth: number;
     private bladeWidth: number;
     private allowRotation: boolean;
+    private cutPreference: CutPreference;
+    private straightCutTolerance: number;
     private items: Rect[] = [];
     private freeRects: Rect[] = [];
     private placedItems: Rect[] = [];
@@ -52,6 +81,8 @@ export class CuttingOptimizer {
         this.rollWidth = options.rollWidth;
         this.bladeWidth = options.bladeWidth || 0;
         this.allowRotation = options.allowRotation !== undefined ? options.allowRotation : true;
+        this.cutPreference = options.cutPreference ?? 'straight';
+        this.straightCutTolerance = options.straightCutTolerance ?? DEFAULT_STRAIGHT_CUT_TOLERANCE;
     }
 
     public addItem(w: number, h: number, id?: number | string, label?: string) {
@@ -97,61 +128,40 @@ export class CuttingOptimizer {
             { name: 'Horizontal', normalize: (item: Rect) => item.locked ? item : ({ ...item, w: Math.max(item.w, item.h), h: Math.min(item.w, item.h) }) }
         ];
 
+        // Guarda o melhor plano geral (mais compacto) e o melhor só com cortes retos.
         let bestResult: OptimizationResult | null = null;
-        let bestMethod = '';
+        let bestStraight: OptimizationResult | null = null;
+        const consider = (result: OptimizationResult | null) => {
+            if (!result) return;
+            if (isBetterResult(result, bestResult)) bestResult = result;
+            if (isBetterResult(result, bestStraight) && isStraightCuttable(result.placedItems)) bestStraight = result;
+        };
 
-        // Only use Row and Skyline if no items are locked (they don't support pre-placed items easily)
+        // Only use Row, Band and Skyline if no items are locked (they don't support pre-placed items easily)
         if (lockedItems.length === 0) {
             // Try row-based packing first (best for mixed sizes)
-            const rowResult = this.runRowBasedPacking(itemsToPack);
-            if (rowResult) {
-                bestResult = rowResult;
-                bestMethod = 'Row-based';
+            consider(this.runRowBasedPacking(itemsToPack));
+
+            // Faixas atravessadas com colunas empilhadas: sempre cortável em linhas retas.
+            for (const opening of ['best', 'long', 'short', 'asis'] as const) {
+                for (const sortBy of ['height', 'area'] as const) {
+                    consider(this.runBandPacking(itemsToPack, opening, sortBy));
+                }
             }
 
             // Try Skyline packing
-            const skylineResult = this.runSkylinePacking(itemsToPack);
-            if (skylineResult) {
-                const isBetter = !bestResult ||
-                    skylineResult.totalHeight < bestResult.totalHeight ||
-                    (Math.abs(skylineResult.totalHeight - bestResult.totalHeight) < 5 && skylineResult.efficiency > bestResult.efficiency);
-
-                if (isBetter) {
-                    bestResult = skylineResult;
-                    bestMethod = 'Skyline';
-                }
-            }
+            consider(this.runSkylinePacking(itemsToPack));
         }
 
         // Try MaxRects packing (Best Area Fit) - Supports locked items
-        const maxRectsResult = this.runMaxRectsPacking(itemsToPack, false, lockedItems);
-        if (maxRectsResult) {
-            const isBetter = !bestResult ||
-                maxRectsResult.totalHeight < bestResult.totalHeight ||
-                (Math.abs(maxRectsResult.totalHeight - bestResult.totalHeight) < 5 && maxRectsResult.efficiency > bestResult.efficiency);
-
-            if (isBetter) {
-                bestResult = maxRectsResult;
-                bestMethod = 'MaxRects-BAF';
-            }
-        }
+        consider(this.runMaxRectsPacking(itemsToPack, false, lockedItems));
 
         // Try Guillotine strategies as comparison/fallback - Supports locked items
         for (const orientation of orientations) {
             if (!this.allowRotation && orientation.name !== 'None') continue;
 
             for (const strategy of baseStrategies) {
-                const result = this.runHeuristic(itemsToPack, strategy.sort, orientation.normalize, lockedItems);
-
-                // Choose best based on: 1) Height (most important), 2) Efficiency
-                const isBetter = !bestResult ||
-                    result.totalHeight < bestResult.totalHeight ||
-                    (Math.abs(result.totalHeight - bestResult.totalHeight) < 5 && result.efficiency > bestResult.efficiency);
-
-                if (isBetter) {
-                    bestResult = result;
-                    bestMethod = `Guillotine-${strategy.name}-${orientation.name}`;
-                }
+                consider(this.runHeuristic(itemsToPack, strategy.sort, orientation.normalize, lockedItems));
             }
         }
 
@@ -164,24 +174,25 @@ export class CuttingOptimizer {
                 const shuffledItems = [...itemsToPack].sort(() => Math.random() - 0.5);
 
                 // Run MaxRects on shuffled items
-                const randomResult = this.runMaxRectsPacking(shuffledItems, true, lockedItems); // true = skip internal sort
-
-                if (randomResult) {
-                    const isBetter = !bestResult ||
-                        randomResult.totalHeight < bestResult.totalHeight ||
-                        (Math.abs(randomResult.totalHeight - bestResult.totalHeight) < 5 && randomResult.efficiency > bestResult.efficiency);
-
-                    if (isBetter) {
-                        bestResult = randomResult;
-                        bestMethod = `DeepSearch-Iter${i}`;
-                    }
-                }
+                consider(this.runMaxRectsPacking(shuffledItems, true, lockedItems)); // true = skip internal sort
             }
         }
 
-        // console.log('Selected method:', bestMethod, '| Height:', bestResult?.totalHeight, 'cm | Efficiency:', bestResult?.efficiency.toFixed(2) + '%');
+        const compact = bestResult as OptimizationResult | null;
+        const straight = bestStraight as OptimizationResult | null;
+        const useStraight = !!compact && !!straight && this.cutPreference === 'straight'
+            && straight.placedItems.length >= compact.placedItems.length
+            && straight.totalHeight <= compact.totalHeight * (1 + this.straightCutTolerance) + 0.01;
+        const chosen = useStraight ? straight : compact;
 
-        const finalResult = bestResult ?? {
+        const finalResult: OptimizationResult = chosen ? {
+            ...chosen,
+            straightCuts: chosen === straight || isStraightCuttable(chosen.placedItems),
+            layoutComparison: {
+                compactHeight: compact!.totalHeight,
+                straightHeight: straight?.totalHeight ?? null,
+            },
+        } : {
             placedItems: [...lockedItems],
             totalHeight: 0,
             efficiency: 0,
@@ -364,6 +375,135 @@ export class CuttingOptimizer {
             totalHeight,
             efficiency,
             rollWidth: this.rollWidth
+        };
+    }
+
+    /**
+     * Plano em faixas: cada faixa atravessa a bobina (corte reto de lado a lado);
+     * dentro dela as peças ficam em colunas, e cada coluna pode empilhar peças menores.
+     * Todo corte é reto, do jeito que a bobina é desenrolada e cortada na mesa.
+     * Com opening = 'best', cada faixa testa as peças iniciais possíveis e fica
+     * com a mais bem aproveitada.
+     */
+    private runBandPacking(items: Rect[], opening: 'best' | 'long' | 'short' | 'asis', sortBy: 'height' | 'area'): OptimizationResult | null {
+        type Option = { w: number; h: number; turned: boolean };
+        type Placement = { item: Rect; option: Option; x: number; y: number };
+        const gap = this.bladeWidth;
+        const orientationsOf = (item: Rect): Option[] => {
+            const options = [{ w: item.w, h: item.h, turned: false }];
+            if (this.allowRotation && !item.locked && item.w !== item.h) options.push({ w: item.h, h: item.w, turned: true });
+            return options.filter(option => option.w <= this.rollWidth);
+        };
+        const openingOf = (item: Rect) => {
+            const options = orientationsOf(item);
+            if (!options.length) return null;
+            if (opening === 'asis' || opening === 'best') return options[0];
+            return options.reduce((best, option) => (opening === 'long' ? option.h > best.h : option.h < best.h) ? option : best);
+        };
+        const sameSize = (a: Rect, b: Rect) => (a.w === b.w && a.h === b.h) || (a.w === b.h && a.h === b.w);
+        const areaOf = (placements: Placement[]) => placements.reduce((sum, p) => sum + p.option.w * p.option.h, 0);
+
+        // Monta uma faixa a partir da peça inicial, sem alterar a lista recebida.
+        const buildBand = (pool: Rect[], opener: Rect, openerOption: Option, bandY: number): Placement[] => {
+            const left = pool.filter(item => item !== opener);
+            const bandHeight = openerOption.h;
+            const columns: BandColumn[] = [{ x: 0, w: openerOption.w, usedHeight: openerOption.h }];
+            const placements: Placement[] = [{ item: opener, option: openerOption, x: 0, y: bandY }];
+            let usedWidth = openerOption.w;
+
+            // Preenche a faixa escolhendo sempre o encaixe que desperdiça menos área.
+            while (true) {
+                let best: { item: Rect; option: Option; column: BandColumn | null; waste: number } | null = null;
+
+                for (const item of left) {
+                    for (const option of orientationsOf(item)) {
+                        if (option.h > bandHeight) continue;
+                        const area = option.w * option.h;
+
+                        for (const column of columns) {
+                            if (option.w > column.w || column.usedHeight + gap + option.h > bandHeight) continue;
+                            const waste = ((column.w - option.w) * (option.h + gap)) / area;
+                            if (!best || waste < best.waste) best = { item, option, column, waste };
+                        }
+
+                        const x = usedWidth + gap;
+                        if (x + option.w <= this.rollWidth) {
+                            // Nova coluna: considera quantas peças iguais caberiam empilhadas nela.
+                            const twins = left.filter(other => sameSize(other, item)).length;
+                            const perColumn = Math.max(1, Math.floor((bandHeight + gap) / (option.h + gap)));
+                            const filled = Math.min(twins, perColumn) * area;
+                            const waste = ((option.w + gap) * bandHeight - filled) / filled;
+                            if (!best || waste < best.waste) best = { item, option, column: null, waste };
+                        }
+                    }
+                }
+
+                if (!best) break;
+                if (best.column) {
+                    placements.push({ item: best.item, option: best.option, x: best.column.x, y: bandY + best.column.usedHeight + gap });
+                    best.column.usedHeight += gap + best.option.h;
+                } else {
+                    const x = usedWidth + gap;
+                    placements.push({ item: best.item, option: best.option, x, y: bandY });
+                    columns.push({ x, w: best.option.w, usedHeight: best.option.h });
+                    usedWidth = x + best.option.w;
+                }
+                left.splice(left.indexOf(best.item), 1);
+            }
+            return placements;
+        };
+
+        let remaining = items.filter(item => openingOf(item));
+        const placed: Rect[] = [];
+        let bandY = 0;
+
+        while (remaining.length > 0) {
+            let band: Placement[] = [];
+            if (opening === 'best') {
+                // Testa uma peça de cada medida, em cada orientação, como início da faixa.
+                let bestScore = -1;
+                const tried = new Set<string>();
+                for (const opener of remaining) {
+                    for (const option of orientationsOf(opener)) {
+                        const key = `${option.w}x${option.h}`;
+                        if (tried.has(key)) continue;
+                        tried.add(key);
+                        const candidate = buildBand(remaining, opener, option, bandY);
+                        const area = areaOf(candidate);
+                        // 'height': melhor aproveitamento da faixa; 'area': favorece faixas que levam mais peça.
+                        const score = sortBy === 'height'
+                            ? area / ((option.h + gap) * this.rollWidth)
+                            : area * area / ((option.h + gap) * this.rollWidth);
+                        if (score > bestScore + 1e-9) { band = candidate; bestScore = score; }
+                    }
+                }
+            } else {
+                remaining.sort((a, b) => {
+                    const oa = openingOf(a)!, ob = openingOf(b)!;
+                    return sortBy === 'height'
+                        ? (ob.h - oa.h) || (ob.w * ob.h - oa.w * oa.h)
+                        : (ob.w * ob.h - oa.w * oa.h) || (ob.h - oa.h);
+                });
+                band = buildBand(remaining, remaining[0], openingOf(remaining[0])!, bandY);
+            }
+
+            band.forEach(({ item, option, x, y }) => placed.push({
+                x, y, w: option.w, h: option.h, id: item.id, label: item.label,
+                rotated: item.rotated ? !option.turned : option.turned,
+            }));
+            const used = new Set(band.map(p => p.item));
+            remaining = remaining.filter(item => !used.has(item));
+            bandY += band[0].option.h + gap;
+        }
+
+        if (!placed.length) return null;
+        const totalHeight = Math.max(...placed.map(item => item.y + item.h));
+        const usedArea = placed.reduce((sum, item) => sum + item.w * item.h, 0);
+        return {
+            placedItems: placed,
+            totalHeight,
+            efficiency: totalHeight > 0 ? (usedArea / (this.rollWidth * totalHeight)) * 100 : 0,
+            rollWidth: this.rollWidth,
         };
     }
 
