@@ -13,7 +13,7 @@ import ConfirmationModal from './modals/ConfirmationModal';
 import Modal from './ui/Modal';
 import { useSubscription } from '../contexts/SubscriptionContext';
 import { PremiumFeatureSection } from './subscription/PremiumFeatureSection';
-import { Check, ChevronDown, ChevronRight, Loader2, Maximize2, Minus, MoveHorizontal, Plus, RotateCcw, RotateCw, List, Save, Scissors, Shrink, X, LockKeyhole, UnlockKeyhole } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Loader2, Maximize2, Minus, MoveHorizontal, Plus, RotateCcw, RotateCw, List, Save, Scissors, Shrink, SlidersHorizontal, X, LockKeyhole, UnlockKeyhole } from 'lucide-react';
 import {
     buildFilmCuttingMeasurementSignature,
     CUTTING_ROLL_WIDTH_PRESETS_CM,
@@ -1355,59 +1355,85 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                     <div className="p-2 sm:p-6">
                         {/* Settings - Always visible */}
                         <div className={`block mb-2 sm:mb-6`}>
-                            {/* Mobile: resumo compacto; os controles completos abrem em "Ajustes". */}
+                            {/* Mobile: cartão de resumo; ajustes em lista agrupada, no estilo dos apps. */}
                             <div className="cutting-mobile-controls sm:hidden" data-open={isMobileSettingsOpen}>
-                                <div className="cutting-settings-card">
-                                    <button type="button" className="cutting-settings-toggle" aria-expanded={isMobileSettingsOpen} aria-controls="cutting-mobile-settings" onClick={() => setIsMobileSettingsOpen(open => !open)}>
-                                        <span className="cutting-settings-toggle-text">
-                                            <span>{result?.straightCuts && <b className="cutting-straight-badge"><Scissors size={11} aria-hidden="true" /> Cortes retos</b>}Bobina {selectedRollWidthLabel} · Espaço {currentSettings.bladeWidth} mm · {visualSummary?.pieces ?? 0} peças</span>
-                                            <strong aria-live="polite" aria-busy={isOptimizing}>
-                                                {isOptimizing ? 'Calculando…' : <>{visualSummary?.linearMeters ?? '—'} m{activeFilmMaterialCostText ? <> · <em>{activeFilmMaterialCostText}</em></> : null}<small> · {visualSummary?.efficiency ?? '—'}% uso</small></>}
-                                            </strong>
+                                <div className="cutting-summary-card">
+                                    <button type="button" className="cutting-summary-main" aria-expanded={isMobileSettingsOpen} aria-controls="cutting-mobile-settings" onClick={() => setIsMobileSettingsOpen(open => !open)}>
+                                        <span className="cutting-summary-figures" aria-live="polite" aria-busy={isOptimizing}>
+                                            {isOptimizing ? <strong>Calculando…</strong> : <>
+                                                <strong>{visualSummary?.linearMeters ?? '—'}<small> m</small></strong>
+                                                {activeFilmMaterialCostText && <em>{activeFilmMaterialCostText}</em>}
+                                            </>}
+                                        </span>
+                                        <span className="cutting-summary-meta">
+                                            {result?.straightCuts && <span className="cutting-summary-straight"><Scissors size={12} aria-hidden="true" />Cortes retos</span>}
+                                            <span>{visualSummary?.pieces ?? 0} peças · {visualSummary?.efficiency ?? '—'}% uso</span>
                                         </span>
                                     </button>
-                                    <div className="cutting-settings-icons">
-                                        <button type="button" className="cutting-icon-primary" title="Expandir tela cheia" aria-label="Expandir tela cheia" onClick={openFullscreenView} disabled={!result}><Maximize2 size={18} aria-hidden="true" /></button>
-                                        <button type="button" title={isMobileSettingsOpen ? 'Recolher ajustes' : 'Ajustes e zoom'} aria-label={isMobileSettingsOpen ? 'Recolher ajustes' : 'Abrir ajustes e zoom'} aria-expanded={isMobileSettingsOpen} aria-controls="cutting-mobile-settings" onClick={() => setIsMobileSettingsOpen(open => !open)}><ChevronDown size={18} aria-hidden="true" /></button>
+                                    <div className="cutting-summary-actions">
+                                        <button type="button" className="cutting-summary-icon" data-active={isMobileSettingsOpen}
+                                            title={isMobileSettingsOpen ? 'Fechar ajustes' : 'Ajustes do plano'} aria-label={isMobileSettingsOpen ? 'Recolher ajustes' : 'Abrir ajustes e zoom'}
+                                            aria-expanded={isMobileSettingsOpen} aria-controls="cutting-mobile-settings" onClick={() => setIsMobileSettingsOpen(open => !open)}>
+                                            {isMobileSettingsOpen ? <X size={19} aria-hidden="true" /> : <SlidersHorizontal size={19} aria-hidden="true" />}
+                                        </button>
+                                        <button type="button" className="cutting-summary-icon cutting-icon-primary" title="Expandir tela cheia" aria-label="Expandir tela cheia" onClick={openFullscreenView} disabled={!result}>
+                                            <Maximize2 size={19} aria-hidden="true" />
+                                        </button>
                                     </div>
                                 </div>
                                 {isMobileSettingsOpen && <div id="cutting-mobile-settings" className="cutting-mobile-settings">
-                                <div className="cutting-direct-zoom" role="toolbar" aria-label="Zoom do mapa">
-                                    <button type="button" title="Diminuir zoom" aria-label="Diminuir zoom do mapa" disabled={zoomLevel <= 0.5} onClick={() => setZoomLevel(value => Math.max(0.5, value - 0.25))}><Minus size={18} aria-hidden="true" /></button>
-                                    <output aria-label="Zoom atual do mapa">{Math.round(zoomLevel * 100)}%</output>
-                                    <button type="button" title="Aumentar zoom" aria-label="Aumentar zoom do mapa" disabled={zoomLevel >= 3} onClick={() => setZoomLevel(value => Math.min(3, value + 0.25))}><Plus size={18} aria-hidden="true" /></button>
-                                    <span className="cutting-toolbar-divider" aria-hidden="true" />
-                                    <button type="button" title="Visão geral" aria-label="Restaurar visão geral do mapa" disabled={zoomLevel === 1} onClick={() => {setZoomLevel(1); scrollContainerRef.current?.scrollTo?.({left: 0, top: 0});}}><RotateCcw size={17} aria-hidden="true" /></button>
-                                    <span className="cutting-toolbar-divider" aria-hidden="true" />
-                                    <button type="button" title={planCutLines ? 'Linhas de corte' : 'Plano sem cortes retos'} aria-label={showCutLines ? 'Esconder linhas de corte' : 'Mostrar linhas de corte'} aria-pressed={showCutLines && !!planCutLines} disabled={!planCutLines} onClick={toggleCutLines}><Scissors size={17} aria-hidden="true" /></button>
-                                </div>
-                                <div className="cutting-direct-config">
-                                    <div>
-                                        <span className="cutting-field-label">Bobina</span>
-                                        <button type="button" aria-label="Selecionar largura da bobina" aria-haspopup="dialog" onClick={() => setIsRollWidthPickerOpen(true)}>
-                                            <strong>{selectedRollWidthLabel}</strong><ChevronDown size={16} aria-hidden="true" />
+                                    <p className="cutting-group-title">Plano</p>
+                                    <div className="cutting-group">
+                                        <button type="button" className="cutting-row" aria-label={`Largura da bobina: ${selectedRollWidthLabel}. Alterar`} aria-haspopup="dialog" onClick={() => setIsRollWidthPickerOpen(true)}>
+                                            <span className="cutting-row-label">Largura da bobina</span>
+                                            <span className="cutting-row-value">{selectedRollWidthLabel}<ChevronRight size={17} aria-hidden="true" /></span>
                                         </button>
+                                        {isCustomRollWidth && (
+                                            <label className="cutting-row">
+                                                <span className="cutting-row-label">Largura personalizada</span>
+                                                <span className="cutting-row-input">
+                                                    <input aria-label="Largura personalizada da bobina em centímetros" type="number" min="1" inputMode="decimal" value={currentSettings.rollWidth} onChange={event => updateCurrentSettings('rollWidth', event.target.value)} />
+                                                    <small>cm</small>
+                                                </span>
+                                            </label>
+                                        )}
+                                        <label className="cutting-row">
+                                            <span className="cutting-row-label">Espaço entre peças<small>folga de refile</small></span>
+                                            <span className="cutting-row-input">
+                                                <input aria-label="Espaço entre peças (mm)" type="number" min="0" inputMode="decimal" value={currentSettings.bladeWidth} onChange={event => updateCurrentSettings('bladeWidth', event.target.value)} />
+                                                <small>mm</small>
+                                            </span>
+                                        </label>
+                                        <label className="cutting-row">
+                                            <span className="cutting-row-label">Sentido fixo<small>não gira as peças</small></span>
+                                            <input className="cutting-switch" type="checkbox" role="switch" aria-label="Respeitar sentido da película" checked={currentSettings.respectGrain} onChange={event => updateCurrentSettings('respectGrain', event.target.checked)} />
+                                        </label>
+                                        <label className="cutting-row">
+                                            <span className="cutting-row-label">Busca ampliada<small>testa mais encaixes, pode demorar</small></span>
+                                            <input className="cutting-switch" type="checkbox" role="switch" aria-label="Buscar melhor encaixe" checked={useDeepSearch} onChange={event => setUseDeepSearch(event.target.checked)} />
+                                        </label>
                                     </div>
-                                    <label>
-                                        <span className="cutting-field-label">Espaço (mm)</span>
-                                        <input aria-label="Espaço entre peças (mm)" type="number" min="0" inputMode="decimal" value={currentSettings.bladeWidth} onChange={event => updateCurrentSettings('bladeWidth', event.target.value)} />
-                                    </label>
-                                    <button type="button" className="cutting-primary cutting-save" onClick={() => handleOptimize(true)} disabled={!result || isOptimizing}>
-                                        {isOptimizing ? <Loader2 size={17} className="animate-spin" aria-hidden="true" /> : <Save size={17} aria-hidden="true" />}
-                                        <span>{isOptimizing ? 'Calculando…' : 'Salvar versão'}</span>
+
+                                    <p className="cutting-group-title">Visualização</p>
+                                    <div className="cutting-group">
+                                        <div className="cutting-row">
+                                            <span className="cutting-row-label">Zoom do mapa<small>toque no valor para voltar</small></span>
+                                            <span className="cutting-stepper" role="group" aria-label="Zoom do mapa">
+                                                <button type="button" aria-label="Diminuir zoom do mapa" disabled={zoomLevel <= 0.5} onClick={() => setZoomLevel(value => Math.max(0.5, value - 0.25))}><Minus size={17} aria-hidden="true" /></button>
+                                                <button type="button" className="cutting-stepper-value" aria-label={`Zoom ${Math.round(zoomLevel * 100)}%. Restaurar visão geral do mapa`} onClick={() => {setZoomLevel(1); scrollContainerRef.current?.scrollTo?.({left: 0, top: 0});}}>{Math.round(zoomLevel * 100)}%</button>
+                                                <button type="button" aria-label="Aumentar zoom do mapa" disabled={zoomLevel >= 3} onClick={() => setZoomLevel(value => Math.min(3, value + 0.25))}><Plus size={17} aria-hidden="true" /></button>
+                                            </span>
+                                        </div>
+                                        <label className="cutting-row" data-disabled={!planCutLines}>
+                                            <span className="cutting-row-label">Linhas de corte<small>{planCutLines ? 'onde passar o estilete' : 'plano sem cortes retos'}</small></span>
+                                            <input className="cutting-switch" type="checkbox" role="switch" aria-label="Linhas de corte" checked={showCutLines && !!planCutLines} disabled={!planCutLines} onChange={toggleCutLines} />
+                                        </label>
+                                    </div>
+
+                                    <button type="button" className="cutting-save-version" onClick={() => handleOptimize(true)} disabled={!result || isOptimizing}>
+                                        {isOptimizing ? <Loader2 size={18} className="animate-spin" aria-hidden="true" /> : <Save size={18} aria-hidden="true" />}
+                                        <span>{isOptimizing ? 'Calculando…' : 'Salvar esta versão'}</span>
                                     </button>
-                                </div>
-                                {isCustomRollWidth && <label className="cutting-mobile-custom">Largura personalizada (cm)<input aria-label="Largura personalizada da bobina em centímetros" type="number" min="1" inputMode="decimal" value={currentSettings.rollWidth} onChange={event => updateCurrentSettings('rollWidth', event.target.value)} /></label>}
-                                <div className="cutting-direct-options">
-                                    <label title="Impede a rotação automática das peças" data-active={currentSettings.respectGrain}>
-                                        <input aria-label="Respeitar sentido da película" type="checkbox" checked={currentSettings.respectGrain} onChange={event => updateCurrentSettings('respectGrain', event.target.checked)} />
-                                        <span>Sentido fixo</span>
-                                    </label>
-                                    <label title="Testa mais combinações de encaixe; pode demorar mais" data-active={useDeepSearch}>
-                                        <input aria-label="Buscar melhor encaixe" type="checkbox" checked={useDeepSearch} onChange={event => setUseDeepSearch(event.target.checked)} />
-                                        <span>Busca ampliada</span>
-                                    </label>
-                                </div>
                                 </div>}
                             </div>
 
