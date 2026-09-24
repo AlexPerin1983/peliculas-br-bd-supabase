@@ -2,7 +2,7 @@ import './cutting-mobile.css';
 import CuttingMobilePiece from './cutting/CuttingMobilePiece';
 import CuttingPieceNavigator from './cutting/CuttingPieceNavigator';
 import CuttingLinesOverlay from './cutting/CuttingLinesOverlay';
-import { buildCutLines } from '../utils/straightCuts';
+import { buildCutLines, formatPieceRanges, getCutBands } from '../utils/straightCuts';
 import { useIsMobile } from '../src/hooks/useIsMobile';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
@@ -1015,6 +1015,10 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
         [result]
     );
     const cutLines = showCutLines ? planCutLines : null;
+    const cutBands = useMemo(
+        () => result && planCutLines ? getCutBands(planCutLines, result.placedItems) : null,
+        [result, planCutLines]
+    );
     const visualSummary = useMemo(() => {
         if (!result) return null;
 
@@ -2700,6 +2704,23 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                             </dl>
                                             {result.straightCuts && <p className="cutting-fs-sheet-straight"><Scissors size={15} aria-hidden="true" /> Só cortes retos: atravesse a bobina em faixas e depois separe as peças.</p>}
                                             {unplacedCount > 0 && <p className="cutting-fs-sheet-warning" role="status">{unplacedCount === 1 ? '1 peça é maior que a bobina e ficou fora do plano.' : `${unplacedCount} peças são maiores que a bobina e ficaram fora do plano.`}</p>}
+                                            {cutBands && cutBands.length > 1 && <>
+                                                <h3 className="cutting-fs-sheet-title">
+                                                    <Scissors size={16} aria-hidden="true" /> Como cortar
+                                                    <span>meça a partir da ponta de cada corte</span>
+                                                </h3>
+                                                <ol className="cutting-fs-bands">
+                                                    {cutBands.map(band => (
+                                                        <li key={band.number}>
+                                                            <span className="cutting-fs-band-number">{band.number}</span>
+                                                            <span className="cutting-fs-band-text">
+                                                                Faixa de <strong>{formatPieceSize(band.height)} m</strong>
+                                                                <small>{band.pieceNumbers.length === 1 ? 'peça' : 'peças'} {formatPieceRanges(band.pieceNumbers)} · corte em {formatPieceSize(band.end)} m</small>
+                                                            </span>
+                                                        </li>
+                                                    ))}
+                                                </ol>
+                                            </>}
                                             <h3 className="cutting-fs-sheet-title">
                                                 <Scissors size={16} aria-hidden="true" /> O que cortar
                                                 <span>{cutDoneCount > 0 ? `${cutDoneCount} de ${result.placedItems.length} cortadas` : 'toque numa peça e marque "Cortei"'}</span>

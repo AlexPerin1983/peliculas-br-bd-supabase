@@ -23,8 +23,23 @@ export default function CuttingLinesOverlay({ lines, scale, landscape = false }:
         return Math.min(Infinity, ...neighbours.map(other => Math.abs(other.position - line.position) * scale));
     };
 
+    // Altura de cada faixa (de corte a corte): é o que se mede com a trena depois de cada corte.
+    const acrossCuts = numbered.filter(line => line.direction === 'across').map(line => line.position);
+    const bands = acrossCuts.map((end, index) => ({ start: index === 0 ? 0 : acrossCuts[index - 1], end }));
+
     return (
         <div className="cutting-lines" aria-hidden="true">
+            {bands.map(({ start, end }, index) => {
+                const size = (end - start) * scale;
+                if (size < (landscape ? 64 : 56)) return null;
+                const middle = ((start + end) / 2) * scale;
+                return (
+                    <span key={`band-${index}`} className="cutting-band-size" data-landscape={landscape}
+                        style={landscape ? { left: middle } : { top: middle }}>
+                        ↕ {meters(end - start)}
+                    </span>
+                );
+            })}
             {lines.map((line, index) => {
                 // No mapa normal, 'across' é horizontal; girado, vira vertical.
                 const horizontal = (line.direction === 'across') !== landscape;

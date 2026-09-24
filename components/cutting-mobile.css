@@ -301,3 +301,18 @@
   .cutting-fs-sheet-tools button[aria-pressed=true] { color: #dc2626; border-color: #fca5a5; background: #fef2f2; }
   .dark .cutting-fs-sheet-tools button[aria-pressed=true] { color: #fca5a5; border-color: #7f1d1d; background: #3f1d1d; }
 }
+
+/* Altura de cada faixa, na borda da bobina (lado da sobra). */
+.cutting-band-size { position: absolute; right: 2px; z-index: 1; padding: 5px 2px; border-radius: 999px; border: 1px solid #fca5a5; background: #fff5f5; color: #b91c1c; font-size: 10px; font-weight: 800; line-height: 1; white-space: nowrap; font-variant-numeric: tabular-nums; writing-mode: vertical-rl; transform: translateY(-50%) rotate(180deg); box-shadow: 0 1px 4px #7f1d1d26; }
+.cutting-band-size[data-landscape=true] { top: auto; right: auto; bottom: 2px; padding: 2px 6px; writing-mode: horizontal-tb; transform: translateX(-50%); }
+.dark .cutting-band-size { border-color: #7f1d1d; background: #2a1215; color: #fca5a5; }
+
+@media (max-width: 639px) {
+  .cutting-fs-bands { margin: 0; padding: 0; list-style: none; }
+  .cutting-fs-bands li { display: flex; align-items: center; gap: 12px; padding: 8px 4px; border-bottom: 1px solid var(--cut-border); }
+  .cutting-fs-bands li:last-child { border-bottom: 0; }
+  .cutting-fs-band-number { width: 28px; height: 28px; flex-shrink: 0; display: grid; place-items: center; border-radius: 50%; background: #dc2626; color: #fff; font-size: 13px; font-weight: 800; }
+  .cutting-fs-band-text { flex: 1; min-width: 0; font-size: 14px; color: var(--cut-ink); }
+  .cutting-fs-band-text strong { font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .cutting-fs-band-text small { display: block; margin-top: 2px; font-size: 11px; color: var(--cut-muted); overflow-wrap: anywhere; }
+}
