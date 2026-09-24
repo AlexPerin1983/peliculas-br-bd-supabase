@@ -1355,19 +1355,22 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                     <div className="p-2 sm:p-6">
                         {/* Settings - Always visible */}
                         <div className={`block mb-2 sm:mb-6`}>
-                            {/* Mobile: cartão de resumo; ajustes em lista agrupada, no estilo dos apps. */}
+                            {/* Mobile: resumo em três números e ajustes num único bloco com divisórias finas. */}
                             <div className="cutting-mobile-controls sm:hidden" data-open={isMobileSettingsOpen}>
-                                <div className="cutting-summary-card">
-                                    <button type="button" className="cutting-summary-main" aria-expanded={isMobileSettingsOpen} aria-controls="cutting-mobile-settings" onClick={() => setIsMobileSettingsOpen(open => !open)}>
-                                        <span className="cutting-summary-figures" aria-live="polite" aria-busy={isOptimizing}>
-                                            {isOptimizing ? <strong>Calculando…</strong> : <>
-                                                <strong>{visualSummary?.linearMeters ?? '—'}<small> m</small></strong>
-                                                {activeFilmMaterialCostText && <em>{activeFilmMaterialCostText}</em>}
-                                            </>}
+                                <div className="cutting-summary">
+                                    <button type="button" className="cutting-summary-stats" aria-expanded={isMobileSettingsOpen} aria-controls="cutting-mobile-settings"
+                                        aria-busy={isOptimizing} onClick={() => setIsMobileSettingsOpen(open => !open)}>
+                                        <span className="cutting-stat">
+                                            <span className="cutting-stat-label">Metros{result?.straightCuts && <Scissors size={11} aria-label="Cortes retos" />}</span>
+                                            <strong>{isOptimizing ? '…' : `${visualSummary?.linearMeters ?? '—'} m`}</strong>
                                         </span>
-                                        <span className="cutting-summary-meta">
-                                            {result?.straightCuts && <span className="cutting-summary-straight"><Scissors size={12} aria-hidden="true" />Cortes retos</span>}
-                                            <span>{visualSummary?.pieces ?? 0} peças · {visualSummary?.efficiency ?? '—'}% uso</span>
+                                        <span className="cutting-stat">
+                                            <span className="cutting-stat-label">Custo</span>
+                                            <strong>{isOptimizing ? '…' : activeFilmMaterialCostText ?? '—'}</strong>
+                                        </span>
+                                        <span className="cutting-stat">
+                                            <span className="cutting-stat-label">Uso</span>
+                                            <strong>{isOptimizing ? '…' : `${visualSummary?.efficiency ?? '—'}%`}</strong>
                                         </span>
                                     </button>
                                     {/* Grupo de botões colados (segmented control). */}
@@ -1375,63 +1378,72 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                         <button type="button" className="cutting-summary-icon" data-active={isMobileSettingsOpen}
                                             title={isMobileSettingsOpen ? 'Fechar ajustes' : 'Ajustes do plano'} aria-label={isMobileSettingsOpen ? 'Recolher ajustes' : 'Abrir ajustes e zoom'}
                                             aria-expanded={isMobileSettingsOpen} aria-controls="cutting-mobile-settings" onClick={() => setIsMobileSettingsOpen(open => !open)}>
-                                            <SlidersHorizontal size={17} aria-hidden="true" />
+                                            <SlidersHorizontal size={16} aria-hidden="true" />
                                         </button>
-                                        <button type="button" className="cutting-summary-icon cutting-icon-primary" title="Expandir tela cheia" aria-label="Expandir tela cheia" onClick={openFullscreenView} disabled={!result}>
-                                            <Maximize2 size={17} aria-hidden="true" />
+                                        <button type="button" className="cutting-summary-icon" title="Expandir tela cheia" aria-label="Expandir tela cheia" onClick={openFullscreenView} disabled={!result}>
+                                            <Maximize2 size={16} aria-hidden="true" />
                                         </button>
                                     </div>
                                 </div>
+
                                 {isMobileSettingsOpen && <div id="cutting-mobile-settings" className="cutting-mobile-settings">
-                                    {/* Grade compacta: duas opções por linha; as explicações ficam no title. */}
-                                    <div className="cutting-quick-grid">
-                                        <button type="button" className="cutting-tile" aria-label={`Largura da bobina: ${selectedRollWidthLabel}. Alterar`} aria-haspopup="dialog" onClick={() => setIsRollWidthPickerOpen(true)}>
-                                            <span className="cutting-tile-caption">Bobina</span>
-                                            <span className="cutting-tile-value">{selectedRollWidthLabel}<ChevronRight size={15} aria-hidden="true" /></span>
-                                        </button>
-                                        <label className="cutting-tile" title="Folga de refile entre as peças">
-                                            <span className="cutting-tile-caption">Espaço</span>
-                                            <span className="cutting-tile-input">
-                                                <input aria-label="Espaço entre peças (mm)" type="number" min="0" inputMode="decimal" value={currentSettings.bladeWidth} onChange={event => updateCurrentSettings('bladeWidth', event.target.value)} />
-                                                <small>mm</small>
-                                            </span>
-                                        </label>
-                                        {isCustomRollWidth && (
-                                            <label className="cutting-tile cutting-tile-wide">
-                                                <span className="cutting-tile-caption">Largura personalizada</span>
-                                                <span className="cutting-tile-input">
-                                                    <input aria-label="Largura personalizada da bobina em centímetros" type="number" min="1" inputMode="decimal" value={currentSettings.rollWidth} onChange={event => updateCurrentSettings('rollWidth', event.target.value)} />
-                                                    <small>cm</small>
+                                    <div className="cutting-settings-table">
+                                        <div className="cutting-settings-line">
+                                            <button type="button" className="cutting-cell" aria-label={`Largura da bobina: ${selectedRollWidthLabel}. Alterar`} aria-haspopup="dialog" onClick={() => setIsRollWidthPickerOpen(true)}>
+                                                <span className="cutting-cell-label">Bobina</span>
+                                                <span className="cutting-cell-value">{selectedRollWidthLabel}<ChevronRight size={14} aria-hidden="true" /></span>
+                                            </button>
+                                            <label className="cutting-cell" title="Folga de refile entre as peças">
+                                                <span className="cutting-cell-label">Espaço</span>
+                                                <span className="cutting-cell-input">
+                                                    <input aria-label="Espaço entre peças (mm)" type="number" min="0" inputMode="decimal" value={currentSettings.bladeWidth} onChange={event => updateCurrentSettings('bladeWidth', event.target.value)} />
+                                                    mm
                                                 </span>
                                             </label>
-                                        )}
-                                        <label className="cutting-tile cutting-tile-toggle" title="Não gira as peças (respeita o sentido da película)">
-                                            <span>Sentido fixo</span>
-                                            <input className="cutting-switch" type="checkbox" role="switch" aria-label="Respeitar sentido da película" checked={currentSettings.respectGrain} onChange={event => updateCurrentSettings('respectGrain', event.target.checked)} />
-                                        </label>
-                                        <label className="cutting-tile cutting-tile-toggle" title="Testa mais combinações de encaixe; pode demorar">
-                                            <span>Busca ampliada</span>
-                                            <input className="cutting-switch" type="checkbox" role="switch" aria-label="Buscar melhor encaixe" checked={useDeepSearch} onChange={event => setUseDeepSearch(event.target.checked)} />
-                                        </label>
-                                        <div className="cutting-tile cutting-tile-stepper">
-                                            <span className="cutting-stepper" role="group" aria-label="Zoom do mapa">
-                                                <button type="button" aria-label="Diminuir zoom do mapa" disabled={zoomLevel <= 0.5} onClick={() => setZoomLevel(value => Math.max(0.5, value - 0.25))}><Minus size={16} aria-hidden="true" /></button>
-                                                <button type="button" className="cutting-stepper-value" title="Toque para voltar à visão geral" aria-label={`Zoom ${Math.round(zoomLevel * 100)}%. Restaurar visão geral do mapa`} onClick={() => {setZoomLevel(1); scrollContainerRef.current?.scrollTo?.({left: 0, top: 0});}}>{Math.round(zoomLevel * 100)}%</button>
-                                                <button type="button" aria-label="Aumentar zoom do mapa" disabled={zoomLevel >= 3} onClick={() => setZoomLevel(value => Math.min(3, value + 0.25))}><Plus size={16} aria-hidden="true" /></button>
-                                            </span>
                                         </div>
-                                        <label className="cutting-tile cutting-tile-toggle" data-disabled={!planCutLines} title={planCutLines ? 'Mostra onde passar o estilete' : 'Plano sem cortes retos'}>
-                                            <span><Scissors size={14} aria-hidden="true" />Linhas</span>
-                                            <input className="cutting-switch" type="checkbox" role="switch" aria-label="Linhas de corte" checked={showCutLines && !!planCutLines} disabled={!planCutLines} onChange={toggleCutLines} />
-                                        </label>
+                                        {isCustomRollWidth && (
+                                            <div className="cutting-settings-line">
+                                                <label className="cutting-cell">
+                                                    <span className="cutting-cell-label">Largura personalizada</span>
+                                                    <span className="cutting-cell-input">
+                                                        <input aria-label="Largura personalizada da bobina em centímetros" type="number" min="1" inputMode="decimal" value={currentSettings.rollWidth} onChange={event => updateCurrentSettings('rollWidth', event.target.value)} />
+                                                        cm
+                                                    </span>
+                                                </label>
+                                            </div>
+                                        )}
+                                        <div className="cutting-settings-line">
+                                            <label className="cutting-cell" title="Não gira as peças (respeita o sentido da película)">
+                                                <span className="cutting-cell-label">Sentido fixo</span>
+                                                <input className="cutting-switch" type="checkbox" role="switch" aria-label="Respeitar sentido da película" checked={currentSettings.respectGrain} onChange={event => updateCurrentSettings('respectGrain', event.target.checked)} />
+                                            </label>
+                                            <label className="cutting-cell" title="Testa mais combinações de encaixe; pode demorar">
+                                                <span className="cutting-cell-label">Busca ampliada</span>
+                                                <input className="cutting-switch" type="checkbox" role="switch" aria-label="Buscar melhor encaixe" checked={useDeepSearch} onChange={event => setUseDeepSearch(event.target.checked)} />
+                                            </label>
+                                        </div>
+                                        <div className="cutting-settings-line">
+                                            <div className="cutting-cell">
+                                                <span className="cutting-cell-label">Zoom</span>
+                                                <span className="cutting-stepper" role="group" aria-label="Zoom do mapa">
+                                                    <button type="button" aria-label="Diminuir zoom do mapa" disabled={zoomLevel <= 0.5} onClick={() => setZoomLevel(value => Math.max(0.5, value - 0.25))}><Minus size={14} aria-hidden="true" /></button>
+                                                    <button type="button" className="cutting-stepper-value" title="Toque para voltar à visão geral" aria-label={`Zoom ${Math.round(zoomLevel * 100)}%. Restaurar visão geral do mapa`} onClick={() => {setZoomLevel(1); scrollContainerRef.current?.scrollTo?.({left: 0, top: 0});}}>{Math.round(zoomLevel * 100)}%</button>
+                                                    <button type="button" aria-label="Aumentar zoom do mapa" disabled={zoomLevel >= 3} onClick={() => setZoomLevel(value => Math.min(3, value + 0.25))}><Plus size={14} aria-hidden="true" /></button>
+                                                </span>
+                                            </div>
+                                            <label className="cutting-cell" data-disabled={!planCutLines} title={planCutLines ? 'Mostra onde passar o estilete' : 'Plano sem cortes retos'}>
+                                                <span className="cutting-cell-label">Linhas de corte</span>
+                                                <input className="cutting-switch" type="checkbox" role="switch" aria-label="Linhas de corte" checked={showCutLines && !!planCutLines} disabled={!planCutLines} onChange={toggleCutLines} />
+                                            </label>
+                                        </div>
                                     </div>
 
-                                    {/* Versões salvas: pílulas roláveis + botão discreto de salvar. */}
+                                    {/* Versões salvas: pílulas roláveis + ação de salvar em texto. */}
                                     <section className="cutting-versions" aria-label="Versões do plano">
                                         <header>
-                                            <span>Versões{history.length > 0 && <small>{history.length}</small>}</span>
+                                            <span>Versões salvas{history.length > 0 && <small>{history.length}</small>}</span>
                                             <button type="button" className="cutting-versions-save" onClick={() => handleOptimize(true)} disabled={!result || isOptimizing}>
-                                                {isOptimizing ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Plus size={15} aria-hidden="true" />}
+                                                {isOptimizing ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <Plus size={14} aria-hidden="true" />}
                                                 {isOptimizing ? 'Calculando…' : 'Salvar'}
                                             </button>
                                         </header>
@@ -1447,7 +1459,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                                             {item.methodName === 'Otimização Profunda' && <i title="Busca ampliada" />}
                                                         </button>
                                                         <button type="button" className="cutting-version-delete" aria-label="Excluir versão" title="Excluir versão" onClick={() => setHistoryToDelete(item.id)}>
-                                                            <X size={13} aria-hidden="true" />
+                                                            <X size={12} aria-hidden="true" />
                                                         </button>
                                                     </div>
                                                 ))}
