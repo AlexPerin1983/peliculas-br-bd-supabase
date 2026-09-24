@@ -1243,18 +1243,34 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
     );
     const renderMobilePieceDetails = () => (
         <div className="cutting-piece-details" aria-live="polite" data-inline-actions={!!selectedMobilePiece && isFullscreen && (fullscreenOrientation === 'landscape' ? selectedMobilePiece.h : selectedMobilePiece.w) * fullscreenScale >= 116 && (fullscreenOrientation === 'landscape' ? selectedMobilePiece.w : selectedMobilePiece.h) * fullscreenScale >= 116}>
-            {selectedMobilePiece && result ? <>
-                <div className="cutting-selection-heading"><div className="cutting-piece-description"><strong>Peça {result.placedItems.indexOf(selectedMobilePiece) + 1} · {getPieceRoom(selectedMobilePiece)}</strong><span>{formatPieceSize(selectedMobilePiece.w)} × {formatPieceSize(selectedMobilePiece.h)} m{lockedItems[selectedMobilePiece.id!] ? ' · Posição travada' : ''}</span></div><button type="button" className="cutting-done-toggle" aria-pressed={!!cutDoneIds[getPieceId(selectedMobilePiece)]} aria-label={cutDoneIds[getPieceId(selectedMobilePiece)] ? 'Desmarcar peça cortada' : 'Marcar peça como cortada'} onClick={() => toggleCutDone(selectedMobilePiece)}><Check size={18} aria-hidden="true" /><span>{cutDoneIds[getPieceId(selectedMobilePiece)] ? 'Cortada' : 'Cortei'}</span></button><button type="button" aria-label="Limpar seleção" onClick={() => {setSelectedPieceId(null); setSelectedGroupKey(null);}}><X size={18} aria-hidden="true" /></button></div>
-                <div className="cutting-piece-actions">
-                    <button type="button" disabled={isOptimizing || !!lockedItems[selectedMobilePiece.id!] || selectedMobilePiece.h > result.rollWidth}
-                        onClick={() => rotateMobilePiece(selectedMobilePiece)}><RotateCcw size={18} aria-hidden="true" /> Girar peça</button>
-                    <button type="button" onClick={() => toggleMobilePieceLock(selectedMobilePiece)}>
-                        {lockedItems[selectedMobilePiece.id!] ? <UnlockKeyhole size={18} aria-hidden="true" /> : <LockKeyhole size={18} aria-hidden="true" />}
-                        {lockedItems[selectedMobilePiece.id!] ? 'Destravar' : 'Travar'}
-                    </button>
-                </div>
-                {(lockedItems[selectedMobilePiece.id!] || selectedMobilePiece.h > result.rollWidth) && <small className="cutting-rotation-hint">{lockedItems[selectedMobilePiece.id!] ? 'Destrave a posição para girar esta peça.' : 'Esta peça não cabe girada na largura atual.'}</small>}
-            </> : <p>Toque em uma peça para ver as medidas, girar ou travar.</p>}
+            {selectedMobilePiece && result ? (() => {
+                // Uma linha só: número, ambiente e medida; girar/travar colados; "Cortei"; fechar.
+                const locked = !!lockedItems[selectedMobilePiece.id!];
+                const done = !!cutDoneIds[getPieceId(selectedMobilePiece)];
+                const tooWideToRotate = selectedMobilePiece.h > result.rollWidth;
+                return (
+                    <div className="cutting-piece-bar">
+                        <span className="cutting-piece-badge" data-done={done}>{result.placedItems.indexOf(selectedMobilePiece) + 1}</span>
+                        <div className="cutting-piece-description">
+                            <strong>{getPieceRoom(selectedMobilePiece)}</strong>
+                            <span>{formatPieceSize(selectedMobilePiece.w)} × {formatPieceSize(selectedMobilePiece.h)} m{locked ? ' · travada' : ''}</span>
+                        </div>
+                        <div className="cutting-piece-tools" role="group" aria-label="Ações da peça">
+                            <button type="button" aria-label="Girar peça" disabled={isOptimizing || locked || tooWideToRotate}
+                                title={locked ? 'Destrave a posição para girar' : tooWideToRotate ? 'Não cabe girada nesta bobina' : 'Girar peça 90°'}
+                                onClick={() => rotateMobilePiece(selectedMobilePiece)}><RotateCcw size={16} aria-hidden="true" /></button>
+                            <button type="button" aria-label={locked ? 'Destravar peça' : 'Travar peça'} aria-pressed={locked} title={locked ? 'Destravar posição' : 'Travar posição'}
+                                onClick={() => toggleMobilePieceLock(selectedMobilePiece)}>
+                                {locked ? <UnlockKeyhole size={16} aria-hidden="true" /> : <LockKeyhole size={16} aria-hidden="true" />}
+                            </button>
+                        </div>
+                        <button type="button" className="cutting-done-toggle" aria-pressed={done} aria-label={done ? 'Desmarcar peça cortada' : 'Marcar peça como cortada'} onClick={() => toggleCutDone(selectedMobilePiece)}>
+                            <Check size={15} aria-hidden="true" /><span>{done ? 'Cortada' : 'Cortei'}</span>
+                        </button>
+                        <button type="button" className="cutting-piece-close" aria-label="Limpar seleção" onClick={() => {setSelectedPieceId(null); setSelectedGroupKey(null);}}><X size={16} aria-hidden="true" /></button>
+                    </div>
+                );
+            })() : <p>Toque em uma peça para ver as medidas, girar ou travar.</p>}
         </div>
     );
 
