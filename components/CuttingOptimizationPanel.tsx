@@ -1,6 +1,8 @@
 import './cutting-mobile.css';
 import CuttingMobilePiece from './cutting/CuttingMobilePiece';
 import CuttingPieceNavigator from './cutting/CuttingPieceNavigator';
+import CuttingLinesOverlay from './cutting/CuttingLinesOverlay';
+import { buildCutLines } from '../utils/straightCuts';
 import { useIsMobile } from '../src/hooks/useIsMobile';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
@@ -36,6 +38,7 @@ const MOBILE_FULLSCREEN_VERTICAL_CHROME_PX = 186;
 const FULLSCREEN_FIT_MODE_STORAGE_KEY = 'peliculas-br-bd-cutting_fit_mode';
 // Prefixo diferente de cutting_history_ para não cair na limpeza de históricos antigos.
 const CUT_DONE_STORAGE_PREFIX = 'peliculas-br-bd-cutting_done_';
+const SHOW_CUT_LINES_STORAGE_KEY = 'peliculas-br-bd-cutting_show_lines';
 
 const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ measurements, clientId, optionId, films, cuttingSettings, onCuttingSettingsChange }) => {
     // Verificar acesso ao módulo de corte inteligente
@@ -160,6 +163,21 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
         }
     });
     const [isFullscreenSummaryOpen, setIsFullscreenSummaryOpen] = useState(false);
+    const [showCutLines, setShowCutLines] = useState(() => {
+        try {
+            return localStorage.getItem(SHOW_CUT_LINES_STORAGE_KEY) !== 'false';
+        } catch {
+            return true;
+        }
+    });
+    const toggleCutLines = () => setShowCutLines(value => {
+        try {
+            localStorage.setItem(SHOW_CUT_LINES_STORAGE_KEY, String(!value));
+        } catch {
+            // Preferência opcional.
+        }
+        return !value;
+    });
     // Mobile: ajustes começam recolhidos para o mapa ganhar destaque.
     const [isMobileSettingsOpen, setIsMobileSettingsOpen] = useState(false);
     const [fullscreenViewportSize, setFullscreenViewportSize] = useState({ width: 0, height: 0 });
@@ -990,6 +1008,13 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
             height: Math.max(64, Math.round(safeHeight * minimapScale)),
         };
     }, [fullscreenAxisHeight, fullscreenAxisWidth, fullscreenOrientation]);
+    // Linhas de corte só existem quando o plano sai todo com cortes retos
+    // (peças giradas ou travadas à mão podem desfazer isso).
+    const planCutLines = useMemo(
+        () => result ? buildCutLines(result.placedItems, result.rollWidth, result.totalHeight) : null,
+        [result]
+    );
+    const cutLines = showCutLines ? planCutLines : null;
     const visualSummary = useMemo(() => {
         if (!result) return null;
 
@@ -1336,6 +1361,8 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                     <button type="button" title="Aumentar zoom" aria-label="Aumentar zoom do mapa" disabled={zoomLevel >= 3} onClick={() => setZoomLevel(value => Math.min(3, value + 0.25))}><Plus size={18} aria-hidden="true" /></button>
                                     <span className="cutting-toolbar-divider" aria-hidden="true" />
                                     <button type="button" title="Visão geral" aria-label="Restaurar visão geral do mapa" disabled={zoomLevel === 1} onClick={() => {setZoomLevel(1); scrollContainerRef.current?.scrollTo?.({left: 0, top: 0});}}><RotateCcw size={17} aria-hidden="true" /></button>
+                                    <span className="cutting-toolbar-divider" aria-hidden="true" />
+                                    <button type="button" title={planCutLines ? 'Linhas de corte' : 'Plano sem cortes retos'} aria-label={showCutLines ? 'Esconder linhas de corte' : 'Mostrar linhas de corte'} aria-pressed={showCutLines && !!planCutLines} disabled={!planCutLines} onClick={toggleCutLines}><Scissors size={17} aria-hidden="true" /></button>
                                 </div>
                                 <div className="cutting-direct-config">
                                     <div>
@@ -1692,6 +1719,18 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                             Travado
                                         </span>
                                     </div>
+                                    {planCutLines && (
+                                        <button
+                                            type="button"
+                                            onClick={toggleCutLines}
+                                            aria-pressed={showCutLines}
+                                            className={`relative z-20 shrink-0 flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${showCutLines ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300' : 'border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800'}`}
+                                            title={showCutLines ? 'Esconder linhas de corte' : 'Mostrar linhas de corte'}
+                                        >
+                                            <Scissors className="h-3.5 w-3.5" aria-hidden="true" />
+                                            <span>Linhas de corte</span>
+                                        </button>
+                                    )}
                                     {/* Botão Expandir - Desktop */}
                                     <button
                                         type="button"
@@ -1791,6 +1830,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                      * but visual rendering was removed for a cleaner interface.
                                      * The spacing is still applied between pieces during calculation.
                                      */}
+                                            {cutLines && <CuttingLinesOverlay lines={cutLines} scale={scale} />}
 
                                             {/* Items - Virtualizados: apenas peças visíveis são renderizadas */}
                                             {visibleItems.map((item) => {
@@ -2392,6 +2432,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                                 backgroundPosition: '-1px -1px'
                                             }}
                                         >
+                                            {cutLines && <CuttingLinesOverlay lines={cutLines} scale={fullscreenScale} landscape={fullscreenOrientation === 'landscape'} />}
                                             {/* Items */}
                                             {result.placedItems.map((item, idx) => {
                                                 const itemFrame = getFullscreenItemFrame(item);
@@ -2698,6 +2739,11 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                                 <button type="button" aria-label={fullscreenOrientation === 'portrait' ? 'Ver mesa na horizontal' : 'Ver mesa na vertical'} onClick={() => {setFullscreenOrientation(value => value === 'portrait' ? 'landscape' : 'portrait'); setFullscreenZoom(1);}}>
                                                     <RotateCw size={18} aria-hidden="true" /><span>{fullscreenOrientation === 'portrait' ? 'Horizontal' : 'Vertical'}</span>
                                                 </button>
+                                                {planCutLines && (
+                                                    <button type="button" aria-pressed={showCutLines} aria-label={showCutLines ? 'Esconder linhas de corte' : 'Mostrar linhas de corte'} onClick={toggleCutLines}>
+                                                        <Scissors size={18} aria-hidden="true" /><span>Linhas</span>
+                                                    </button>
+                                                )}
                                             </div>
                                         </section>
                                     </div>
