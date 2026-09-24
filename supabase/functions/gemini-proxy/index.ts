@@ -4,6 +4,7 @@ import { corsHeaders, createSupabaseAdminClient } from '../_shared/billing.ts';
 
 const MODEL = 'gemini-3.5-flash-lite';
 const MAX_REQUEST_BYTES = 12 * 1024 * 1024;
+const ALLOWED_INLINE_MIME = /^(image\/(png|jpe?g|webp|gif|heic|heif)|audio\/[a-z0-9.+-]+|application\/pdf)(;.*)?$/i;
 const MAX_REQUESTS_PER_MINUTE = 30;
 const MAX_REQUESTS_PER_DAY = 200;
 const OUTPUT_TOKEN_LIMITS: Record<string, { defaultValue: number; maximum: number }> = {
@@ -80,6 +81,13 @@ serve(async (req) => {
     const parts = Array.isArray(body.parts) ? body.parts.slice(0, 12) : [];
     if (!parts.length) {
         return jsonResponse({ error: 'Conteudo vazio' }, 400);
+    }
+
+    // Só fotos, áudio e PDF seguem para o Gemini.
+    const hasUnsupportedFile = parts.some(part => part.inlineData
+        && !ALLOWED_INLINE_MIME.test(String(part.inlineData.mimeType || '')));
+    if (hasUnsupportedFile) {
+        return jsonResponse({ error: 'Tipo de arquivo nao suportado', code: 'UNSUPPORTED_FILE' }, 415);
     }
 
     const requestSize = JSON.stringify(parts).length;

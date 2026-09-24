@@ -50,7 +50,7 @@ export const useAIProcessing = (
             const model = createGeminiModel({ apiKey: userInfo?.aiConfig?.apiKey, feature: 'client_extraction' });
 
             const prompt = `
-                Você é um assistente especialista em extração de dados de clientes.Sua tarefa é extrair o máximo de informações de contato, endereço completo(incluindo CEP, logradouro, número, bairro, cidade e UF) e documento(CPF ou CNPJ) de um cliente a partir da entrada fornecida(texto, imagem ou áudio).
+                Você é um assistente especialista em extração de dados de clientes.Sua tarefa é extrair o máximo de informações de contato, endereço completo(incluindo CEP, logradouro, número, bairro, cidade e UF) e documento(CPF ou CNPJ) de um cliente a partir da entrada fornecida (texto, imagem, PDF ou áudio). Em PDF, leia todas as páginas.
                 
                 ** Instrução Principal:** Analise todo o texto de entrada em busca de dados.Não pare no primeiro dado encontrado.
                 
@@ -283,7 +283,7 @@ export const useAIProcessing = (
         try {
             const model = createGeminiModel({ apiKey: userInfo?.aiConfig?.apiKey, feature: 'film_extraction' });
 
-            const prompt = `Você é um assistente especialista em extração de dados de películas automotivas (insulfilm). Sua tarefa é extrair o máximo de informações técnicas de películas a partir da entrada fornecida (texto ou imagem). Retorne APENAS um objeto JSON válido, sem markdown. Campos: nome, preco (apenas números), uv (%), ir (%), vtl (%), tser (%), espessura (micras), garantiaFabricante (anos), precoMetroLinear. Se algum campo não for encontrado, N?O inclua no JSON.`;
+            const prompt = `Você é um assistente especialista em extração de dados de películas automotivas (insulfilm). Sua tarefa é extrair o máximo de informações técnicas de películas a partir da entrada fornecida (texto, imagem ou PDF de ficha técnica). Retorne APENAS um objeto JSON válido, sem markdown. Campos: nome, preco (apenas números), uv (%), ir (%), vtl (%), tser (%), espessura (micras), garantiaFabricante (anos), precoMetroLinear. Se algum campo não for encontrado, N?O inclua no JSON.`;
 
             const parts: any[] = [prompt];
 
@@ -376,7 +376,7 @@ export const useAIProcessing = (
 
             const prompt = `Você é um assistente especialista em extração de medidas de janelas/vidros para instalação de películas automotivas (insulfilm).
 
-Sua tarefa é extrair TODAS as medidas mencionadas no texto/imagem/áudio e retornar um array JSON com cada medida individual.
+Sua tarefa é extrair TODAS as medidas mencionadas no texto/imagem/PDF/áudio (em PDF, leia todas as páginas) e retornar um array JSON com cada medida individual.
 
 **REGRAS CRÍTICAS:**
 1. Separe cada medida individual em um item do array

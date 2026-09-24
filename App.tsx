@@ -1532,7 +1532,7 @@ const App: React.FC = () => {
             const model = createGeminiModel({ apiKey: userInfo?.aiConfig?.apiKey, feature: 'client_extraction' });
 
             const prompt = `
-                Você é um assistente especialista em extração de dados de clientes.Sua tarefa é extrair o máximo de informações de contato, endereço completo(incluindo CEP, logradouro, número, bairro, cidade e UF) e documento(CPF ou CNPJ) de um cliente a partir da entrada fornecida(texto, imagem ou áudio).
+                Você é um assistente especialista em extração de dados de clientes.Sua tarefa é extrair o máximo de informações de contato, endereço completo(incluindo CEP, logradouro, número, bairro, cidade e UF) e documento(CPF ou CNPJ) de um cliente a partir da entrada fornecida (texto, imagem, PDF ou áudio). Em PDF, leia todas as páginas.
                 
                 ** Instrução Principal:** Analise todo o texto de entrada em busca de dados.Não pare no primeiro dado encontrado.
                 
@@ -1840,7 +1840,7 @@ Regras:
 
         const hasContent = (input.text && input.text.trim()) || (input.images && input.images.length > 0) || !!input.audio;
         if (!hasContent) {
-            showError("Adicione texto, imagem ou áudio para extrair os dados do cliente.");
+            showError("Adicione texto, arquivo ou áudio para extrair os dados do cliente.");
             return;
         }
 
@@ -1868,7 +1868,7 @@ Regras:
 
         const hasContent = (input.text && input.text.trim()) || (input.images && input.images.length > 0) || !!input.audio;
         if (!hasContent) {
-            showError("Adicione texto, imagem ou áudio para extrair os dados da película.");
+            showError("Adicione texto, arquivo ou áudio para extrair os dados da película.");
             return;
         }
 
@@ -1877,7 +1877,7 @@ Regras:
         try {
             const model = createGeminiModel({ apiKey: userInfo?.aiConfig?.apiKey, feature: 'film_extraction' });
 
-            const prompt = `Você é um assistente especialista em extração de dados de películas automotivas (insulfilm). Sua tarefa é extrair o máximo de informações técnicas de películas a partir da entrada fornecida (texto, imagem ou áudio). Retorne APENAS um objeto JSON válido, sem markdown. Campos: nome, preco (apenas números), uv (%), ir (%), vtl (%), tser (%), espessura (micras), garantiaFabricante (anos), precoMetroLinear. Se algum campo não for encontrado, N?O inclua no JSON.`;
+            const prompt = `Você é um assistente especialista em extração de dados de películas automotivas (insulfilm). Sua tarefa é extrair o máximo de informações técnicas de películas a partir da entrada fornecida (texto, imagem, PDF de ficha técnica ou áudio). Retorne APENAS um objeto JSON válido, sem markdown. Campos: nome, preco (apenas números), uv (%), ir (%), vtl (%), tser (%), espessura (micras), garantiaFabricante (anos), precoMetroLinear. Se algum campo não for encontrado, N?O inclua no JSON.`;
 
             const parts: any[] = [prompt];
 
@@ -1954,7 +1954,7 @@ Regras:
 
             const prompt = `
                 Você é um assistente especialista para uma empresa de instalação de películas de vidro.Sua tarefa é extrair dados de medidas de uma entrada fornecida pelo usuário.
-                A entrada pode ser texto, imagem(de uma lista, rascunho ou foto) ou áudio.
+                A entrada pode ser texto, imagem (de uma lista, rascunho ou foto), PDF (lista ou memorial de medidas; leia todas as páginas) ou áudio.
         Extraia as seguintes informações para cada medida: largura, altura, quantidade e uma descrição do ambiente / local(ex: "sala", "quarto", "janela da cozinha").
                 As medidas estão em metros.Se o usuário disser '1 e meio por 2', interprete como 1, 50m por 2,00m.Sempre formate as medidas com duas casas decimais e vírgula como separador.
                 O ambiente deve ser uma descrição curta e útil.
@@ -2559,7 +2559,7 @@ Regras:
     const handleProcessAIMeasurementInput = useCallback(async (input: AIInput) => {
         const hasContent = (input.text && input.text.trim()) || (input.images && input.images.length > 0) || !!input.audio;
         if (!hasContent) {
-            handleShowInfo("Adicione texto, imagem ou áudio para extrair as medidas.");
+            handleShowInfo("Adicione texto, arquivo ou áudio para extrair as medidas.");
             return;
         }
 
@@ -2602,7 +2602,7 @@ Regras:
 
             const prompt = `Você extrai medidas de janelas e vidros para orçamentos de películas.
 
-REGRAS CRÍTICAS PARA IMAGENS E TABELAS:
+REGRAS CRÍTICAS PARA IMAGENS, PDFS E TABELAS:
 1. Leia a tabela de cima para baixo e devolva UMA entrada para CADA linha visível que tenha largura e altura.
 2. NÃO agrupe, não conte repetições e não some linhas da imagem. Em tabela, cada linha deve ter quantidade 1.
 3. Preserve a ordem em linhaOrigem: 1, 2, 3... Isso é essencial para a conferência.
@@ -2610,6 +2610,7 @@ REGRAS CRÍTICAS PARA IMAGENS E TABELAS:
 5. Releia todas as linhas uma segunda vez antes de responder, conferindo especialmente valores repetidos.
 6. totalItens deve ser o número total de peças lidas e deve ser igual à soma das quantidades.
 7. Se qualquer número estiver cortado ou ilegível, marque houveTrechoIlegivel como true. Não invente.
+8. Em PDF com várias páginas, leia todas as páginas em ordem e continue a numeração de linhaOrigem de uma página para a outra.
 
 REGRAS PARA TEXTO OU ÁUDIO:
 1. Uma quantidade declarada pode permanecer agrupada. Ex.: "5 janelas de 1,20 x 2,10" usa quantidade 5.
@@ -2647,7 +2648,7 @@ Ignore botões, menus, propagandas e outros textos da interface. Responda soment
             // Listas grandes recebem uma segunda leitura independente, voltada a detectar
             // exatamente trocas de contagem entre medidas repetidas.
             if (input.images?.length && firstNormalized.totalItems >= 10) {
-                const verificationPrompt = `Confira novamente a imagem, linha por linha e de cima para baixo.
+                const verificationPrompt = `Confira novamente a imagem ou o PDF (todas as páginas), linha por linha e de cima para baixo.
 A leitura anterior está abaixo apenas como referência; não presuma que ela está correta.
 Conte separadamente cada ocorrência repetida e corrija qualquer largura, altura ou linha omitida.
 Em tabelas, devolva uma entrada por linha, quantidade 1 e a ordem em linhaOrigem.
