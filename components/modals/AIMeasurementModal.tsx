@@ -14,7 +14,7 @@ const AIMeasurementModal: React.FC<AIMeasurementModalProps> = props => (
     <AIComposerModal
         {...props}
         title="Medidas com IA"
-        intro="Escreva, fotografe, anexe um PDF ou fale as medidas. A IA monta a lista e você revisa antes de salvar."
+        intro="Escreva, fotografe, anexe um PDF ou fale as medidas. A Inteligência Artificial monta seu orçamento."
         textPlaceholder="Descreva ou cole as medidas…"
         textExample="5 janelas de 1,20 por 2,10 na sala, 2 vidros fixos 0,80 x 1,50 no escritório."
         filesHint="Foto da trena ou do rascunho, print do WhatsApp ou PDF com a lista de medidas."
