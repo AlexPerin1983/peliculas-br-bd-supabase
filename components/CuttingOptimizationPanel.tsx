@@ -1370,14 +1370,15 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                             <span>{visualSummary?.pieces ?? 0} peças · {visualSummary?.efficiency ?? '—'}% uso</span>
                                         </span>
                                     </button>
-                                    <div className="cutting-summary-actions">
+                                    {/* Grupo de botões colados (segmented control). */}
+                                    <div className="cutting-summary-actions" role="group" aria-label="Ações do plano">
                                         <button type="button" className="cutting-summary-icon" data-active={isMobileSettingsOpen}
                                             title={isMobileSettingsOpen ? 'Fechar ajustes' : 'Ajustes do plano'} aria-label={isMobileSettingsOpen ? 'Recolher ajustes' : 'Abrir ajustes e zoom'}
                                             aria-expanded={isMobileSettingsOpen} aria-controls="cutting-mobile-settings" onClick={() => setIsMobileSettingsOpen(open => !open)}>
-                                            {isMobileSettingsOpen ? <X size={19} aria-hidden="true" /> : <SlidersHorizontal size={19} aria-hidden="true" />}
+                                            <SlidersHorizontal size={17} aria-hidden="true" />
                                         </button>
                                         <button type="button" className="cutting-summary-icon cutting-icon-primary" title="Expandir tela cheia" aria-label="Expandir tela cheia" onClick={openFullscreenView} disabled={!result}>
-                                            <Maximize2 size={19} aria-hidden="true" />
+                                            <Maximize2 size={17} aria-hidden="true" />
                                         </button>
                                     </div>
                                 </div>

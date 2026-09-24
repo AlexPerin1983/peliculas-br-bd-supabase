@@ -293,20 +293,11 @@
   .cutting-summary-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; font-size: 12px; font-weight: 500; color: var(--cut-muted); }
   .cutting-summary-straight { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px 2px 6px; border-radius: 999px; background: #dcfce7; color: #15803d; font-size: 11px; font-weight: 700; }
   .dark .cutting-summary-straight { background: #14532d; color: #86efac; }
-  .cutting-summary-actions { display: flex; flex-shrink: 0; gap: 8px; }
-  .cutting-summary-icon { width: 46px; height: 46px; display: grid; place-items: center; border: 1px solid var(--cut-border); border-radius: 14px; background: var(--cut-surface); color: var(--cut-ink); touch-action: manipulation; transition: background-color .15s, color .15s, transform .1s; }
-  .cutting-summary-icon:active { transform: scale(.94); }
-  .cutting-summary-icon[data-active=true] { border-color: transparent; background: var(--cut-ink); color: var(--cut-surface); }
-  .cutting-summary-icon.cutting-icon-primary { border-color: #2563eb; background: #2563eb; color: #fff; box-shadow: 0 8px 18px -8px #2563ebb3; }
-  .cutting-summary-icon:disabled { opacity: .45; }
 
   @keyframes cutting-settings-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
 
 
 
-}
-@media (max-width: 639px) and (prefers-reduced-motion: reduce) {
-  .cutting-summary-icon, .cutting-switch, .cutting-switch::after, .cutting-save-version { transition: none; }
 }
 
 /* Mobile: ajustes em grade compacta de 2 colunas. */
@@ -345,4 +336,20 @@
   .cutting-save-version { width: 100%; min-height: 44px; margin-top: 8px; display: flex; align-items: center; justify-content: center; gap: 8px; border-radius: 12px; background: #2563eb; color: #fff; font-size: 14px; font-weight: 700; box-shadow: 0 8px 18px -12px #2563eb; touch-action: manipulation; transition: transform .1s; }
   .cutting-save-version:active { transform: scale(.98); }
   .cutting-save-version:disabled { opacity: .5; }
+}
+
+/* Mobile: ações do cartão como grupo de botões colados. */
+@media (max-width: 639px) {
+  .cutting-summary-actions { display: inline-flex; flex-shrink: 0; align-self: center; overflow: hidden; border: 1px solid var(--cut-border); border-radius: 12px; background: var(--cut-surface); box-shadow: 0 1px 2px #0f172a14; }
+  .cutting-summary-icon { width: 42px; height: 40px; display: grid; place-items: center; border: 0; border-radius: 0; background: transparent; color: var(--cut-muted); touch-action: manipulation; transition: background-color .15s, color .15s; }
+  .cutting-summary-icon + .cutting-summary-icon { border-left: 1px solid var(--cut-border); }
+  .cutting-summary-icon:active { background: var(--cut-soft); }
+  .cutting-summary-icon[data-active=true] { background: var(--cut-piece); color: var(--cut-accent); }
+  .cutting-summary-icon.cutting-icon-primary { color: var(--cut-accent); }
+  .cutting-summary-icon:disabled { opacity: .45; }
+}
+
+@media (max-width: 639px) and (prefers-reduced-motion: reduce) {
+  .cutting-mobile-settings { animation: none; }
+  .cutting-summary-icon, .cutting-switch, .cutting-switch::after, .cutting-save-version { transition: none; }
 }
