@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CuttingOptimizer, CutPreference, Rect } from './CuttingOptimizer';
-import { buildCutLines, formatPieceRanges, getCutBands, isStraightCuttable } from './straightCuts';
+import { buildCutLines, findRemnants, formatPieceRanges, getCutBands, isStraightCuttable } from './straightCuts';
 
 // Medidas do orçamento "Cliente teste" (largura x altura em cm, quantidade).
 const CLIENTE_TESTE: [number, number, number][] = [
@@ -110,6 +110,48 @@ describe('getCutBands', () => {
     it('resume sequências de peças', () => {
         expect(formatPieceRanges([1, 2, 3, 5, 7, 8])).toBe('1–3, 5, 7–8');
         expect(formatPieceRanges([24])).toBe('24');
+    });
+});
+
+describe('findRemnants', () => {
+    it('guarda a sobra ao lado da peça, descontando metade do espaço como folga', () => {
+        expect(findRemnants([{ x: 0, y: 0, w: 100, h: 50 }], 152, 50, { gap: 5 }))
+            .toEqual([{ x: 102.5, y: 0, w: 49, h: 50 }]);
+    });
+
+    it('não conta a mesma sobra duas vezes quando ela atravessa várias faixas', () => {
+        expect(findRemnants([
+            { x: 0, y: 0, w: 100, h: 40 },
+            { x: 0, y: 45, w: 100, h: 40 },
+        ], 152, 85, { gap: 5 })).toEqual([{ x: 102.5, y: 0, w: 49, h: 85 }]);
+    });
+
+    it('ignora tiras menores que o mínimo', () => {
+        expect(findRemnants([{ x: 0, y: 0, w: 145, h: 50 }], 152, 50, { gap: 5 })).toEqual([]);
+        expect(findRemnants([{ x: 0, y: 0, w: 100, h: 50 }], 152, 50, { gap: 5, minSide: 60 })).toEqual([]);
+    });
+
+    it('não sugere sobras quando o plano não sai com cortes retos', () => {
+        expect(findRemnants([
+            { x: 0, y: 0, w: 60, h: 30 },
+            { x: 60, y: 0, w: 30, h: 60 },
+            { x: 30, y: 60, w: 60, h: 30 },
+            { x: 0, y: 30, w: 30, h: 60 },
+        ], 90, 90)).toEqual([]);
+    });
+
+    it('as sobras do Cliente teste ficam dentro da bobina e não encostam em peças nem umas nas outras', () => {
+        const result = optimize(CLIENTE_TESTE);
+        const remnants = findRemnants(result.placedItems, 152, result.totalHeight, { gap: 5 });
+        expect(remnants.length).toBeGreaterThan(0);
+        remnants.forEach((remnant, index) => {
+            expect(remnant.w).toBeGreaterThanOrEqual(20);
+            expect(remnant.h).toBeGreaterThanOrEqual(20);
+            expect(remnant.x + remnant.w).toBeLessThanOrEqual(152 + 0.01);
+            expect(remnant.y + remnant.h).toBeLessThanOrEqual(result.totalHeight + 0.01);
+            result.placedItems.forEach(item => expect(overlaps(remnant, item)).toBe(false));
+            remnants.slice(index + 1).forEach(other => expect(overlaps(remnant, other)).toBe(false));
+        });
     });
 });
 

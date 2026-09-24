@@ -316,3 +316,12 @@
   .cutting-fs-band-text strong { font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; }
   .cutting-fs-band-text small { display: block; margin-top: 2px; font-size: 11px; color: var(--cut-muted); overflow-wrap: anywhere; }
 }
+
+/* Sobras que viram retalho: verde tracejado, abaixo das linhas de corte. */
+.cutting-remnant { position: absolute; z-index: 0; border: 1.5px dashed #16a34a; border-radius: 3px; background: #22c55e1f; display: flex; align-items: flex-start; justify-content: center; padding-top: 3px; }
+.cutting-remnant span { padding: 1px 5px; border-radius: 999px; background: #16a34a; color: #fff; font-size: 10px; font-weight: 800; line-height: 1.4; }
+.dark .cutting-remnant { border-color: #4ade80; background: #22c55e26; }
+
+@media (max-width: 639px) {
+  .cutting-fs-sheet-remnants { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--cut-border); }
+}
