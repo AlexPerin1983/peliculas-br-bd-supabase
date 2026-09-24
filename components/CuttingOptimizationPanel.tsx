@@ -2,7 +2,8 @@ import './cutting-mobile.css';
 import CuttingMobilePiece from './cutting/CuttingMobilePiece';
 import CuttingPieceNavigator from './cutting/CuttingPieceNavigator';
 import CuttingLinesOverlay from './cutting/CuttingLinesOverlay';
-import { buildCutLines, formatPieceRanges, getCutBands } from '../utils/straightCuts';
+import CuttingRemnants, { NumberedRemnant } from './cutting/CuttingRemnants';
+import { buildCutLines, DEFAULT_REMNANT_MIN_SIDE_CM, findRemnants, formatPieceRanges, getCutBands } from '../utils/straightCuts';
 import { useIsMobile } from '../src/hooks/useIsMobile';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
@@ -42,7 +43,7 @@ const SHOW_CUT_LINES_STORAGE_KEY = 'peliculas-br-bd-cutting_show_lines';
 
 const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ measurements, clientId, optionId, films, cuttingSettings, onCuttingSettingsChange }) => {
     // Verificar acesso ao módulo de corte inteligente
-    const { canUseCorteInteligente } = useSubscription();
+    const { canUseCorteInteligente, canUseEstoque } = useSubscription();
     const onCuttingSettingsChangeRef = useRef(onCuttingSettingsChange);
     useEffect(() => {
         onCuttingSettingsChangeRef.current = onCuttingSettingsChange;
@@ -1019,6 +1020,18 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
         () => result && planCutLines ? getCutBands(planCutLines, result.placedItems) : null,
         [result, planCutLines]
     );
+    // Sobras que saem inteiras seguindo as linhas de corte e valem virar retalho.
+    const planGapCm = (parseFloat(currentSettings.bladeWidth) || 0) / 10;
+    const remnants = useMemo<NumberedRemnant[]>(() => {
+        if (!result || !planCutLines) return [];
+        return findRemnants(result.placedItems, result.rollWidth, result.totalHeight, { gap: planGapCm })
+            .map((remnant, index) => ({
+                ...remnant,
+                number: index + 1,
+                band: cutBands?.find(band => remnant.y >= band.start - 0.01 && remnant.y < band.end - 0.01)?.number,
+            }));
+    }, [result, planCutLines, planGapCm, cutBands]);
+    const remnantsStorageKey = clientId && optionId ? `peliculas-br-bd-cutting_remnants_saved_${clientId}_${optionId}_${activeFilm}` : null;
     const visualSummary = useMemo(() => {
         if (!result) return null;
 
@@ -1834,7 +1847,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                      * but visual rendering was removed for a cleaner interface.
                                      * The spacing is still applied between pieces during calculation.
                                      */}
-                                            {cutLines && <CuttingLinesOverlay lines={cutLines} scale={scale} />}
+                                            {cutLines && <CuttingLinesOverlay lines={cutLines} remnants={remnants} scale={scale} />}
 
                                             {/* Items - Virtualizados: apenas peças visíveis são renderizadas */}
                                             {visibleItems.map((item) => {
@@ -2094,6 +2107,8 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                         </table>
                                     </div>
                                 </div>
+                                <CuttingRemnants remnants={remnants} filmName={activeFilm} minSideCm={DEFAULT_REMNANT_MIN_SIDE_CM}
+                                    canUseStock={canUseEstoque} storageKey={remnantsStorageKey} />
                             </div>
                         )}
 
@@ -2436,7 +2451,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                                 backgroundPosition: '-1px -1px'
                                             }}
                                         >
-                                            {cutLines && <CuttingLinesOverlay lines={cutLines} scale={fullscreenScale} landscape={fullscreenOrientation === 'landscape'} />}
+                                            {cutLines && <CuttingLinesOverlay lines={cutLines} remnants={remnants} scale={fullscreenScale} landscape={fullscreenOrientation === 'landscape'} />}
                                             {/* Items */}
                                             {result.placedItems.map((item, idx) => {
                                                 const itemFrame = getFullscreenItemFrame(item);
@@ -2751,6 +2766,12 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                                     );
                                                 })}
                                             </ul>
+                                            {remnants.length > 0 && (
+                                                <div className="cutting-fs-sheet-remnants">
+                                                    <CuttingRemnants remnants={remnants} filmName={activeFilm} minSideCm={DEFAULT_REMNANT_MIN_SIDE_CM}
+                                                        canUseStock={canUseEstoque} storageKey={remnantsStorageKey} compact />
+                                                </div>
+                                            )}
                                             <div className="cutting-fs-sheet-tools">
                                                 <div className="cutting-zoom-cluster">
                                                     <button type="button" aria-label="Diminuir zoom" disabled={fullscreenZoom <= 0.5} onClick={() => setFullscreenZoom(value => Math.max(0.5, value - 0.25))}><Minus size={19} aria-hidden="true" /></button>

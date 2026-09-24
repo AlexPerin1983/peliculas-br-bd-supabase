@@ -55,23 +55,40 @@ export interface CutLine {
     isEnd?: boolean;
 }
 
-/**
- * Linhas de corte de um plano feito só com cortes retos, no meio do espaço
- * entre as peças. Retorna null se o plano não pode ser cortado assim.
- */
-export const buildCutLines = (items: Box[], rollWidth: number, totalHeight: number): CutLine[] | null => {
-    const lines: CutLine[] = [];
+interface CutNode {
+    group: Box[];
+    region: Box;
+    // Parte da região que segue para os próximos cortes (igual à região, salvo com shrink).
+    area: Box;
+    level: number;
+    // Presente quando a região é dividida por cortes retos.
+    split: { axis: 'x' | 'y'; cuts: number[] } | null;
+}
 
-    const walk = (group: Box[], region: Box, level: number): boolean => {
-        if (group.length <= 1) return true;
+/**
+ * Percorre o plano como uma sequência de cortes retos, da bobina inteira até
+ * cada peça. Os cortes ficam no espaço entre as peças, em centímetro inteiro.
+ * Retorna false se alguma região não pode ser separada com linha reta.
+ */
+const walkStraightCuts = (
+    items: Box[],
+    root: Box,
+    visit: (node: CutNode) => void,
+    // Opcional: recorta a região antes de dividi-la (ex.: tirar a sobra da borda primeiro).
+    shrink?: (group: Box[], region: Box) => Box,
+): boolean => {
+    const walk = (group: Box[], outer: Box, level: number): boolean => {
+        const region = shrink ? shrink(group, outer) : outer;
+        if (group.length <= 1) {
+            visit({ group, region: outer, area: region, level, split: null });
+            return true;
+        }
         const byY = splitByAxis(group, 'y');
         const groups = byY ?? splitByAxis(group, 'x');
         if (!groups) return false;
 
         const axis = byY ? 'y' : 'x';
         const size = axis === 'y' ? 'h' : 'w';
-        const regionStart = region[axis];
-        const regionEnd = region[axis] + region[size];
         const cuts = groups.slice(0, -1).map((current, index) => {
             const end = Math.max(...current.map(item => item[axis] + item[size]));
             const nextStart = Math.min(...groups[index + 1].map(item => item[axis]));
@@ -80,18 +97,29 @@ export const buildCutLines = (items: Box[], rollWidth: number, totalHeight: numb
             const rounded = Math.round(middle);
             return rounded >= end - EPSILON && rounded <= nextStart + EPSILON ? rounded : middle;
         });
+        visit({ group, region: outer, area: region, level, split: { axis, cuts } });
 
-        cuts.forEach(position => lines.push(axis === 'y'
-            ? { direction: 'across', position, from: region.x, to: region.x + region.w, level }
-            : { direction: 'along', position, from: region.y, to: region.y + region.h, level }));
-
-        const bounds = [regionStart, ...cuts, regionEnd];
+        const bounds = [region[axis], ...cuts, region[axis] + region[size]];
         return groups.every((subgroup, index) => walk(subgroup, axis === 'y'
             ? { x: region.x, w: region.w, y: bounds[index], h: bounds[index + 1] - bounds[index] }
             : { y: region.y, h: region.h, x: bounds[index], w: bounds[index + 1] - bounds[index] }, level + 1));
     };
+    return items.length > 0 && walk(items, root, 1);
+};
 
-    if (!items.length || !walk(items, { x: 0, y: 0, w: rollWidth, h: totalHeight }, 1)) return null;
+/**
+ * Linhas de corte de um plano feito só com cortes retos, no meio do espaço
+ * entre as peças. Retorna null se o plano não pode ser cortado assim.
+ */
+export const buildCutLines = (items: Box[], rollWidth: number, totalHeight: number): CutLine[] | null => {
+    const lines: CutLine[] = [];
+    const cuttable = walkStraightCuts(items, { x: 0, y: 0, w: rollWidth, h: totalHeight }, ({ region, level, split }) => {
+        split?.cuts.forEach(position => lines.push(split.axis === 'y'
+            ? { direction: 'across', position, from: region.x, to: region.x + region.w, level }
+            : { direction: 'along', position, from: region.y, to: region.y + region.h, level }));
+    });
+
+    if (!cuttable) return null;
 
     lines.push({ direction: 'across', position: totalHeight, from: 0, to: rollWidth, level: 1, isEnd: true });
     lines
@@ -142,4 +170,74 @@ export const formatPieceRanges = (numbers: number[]) => {
         rangeStart = next;
     });
     return ranges.join(', ');
+};
+
+export interface Remnant {
+    // Posição e medidas no plano, em cm (w atravessa a bobina, h vai ao comprido).
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+}
+
+export interface RemnantOptions {
+    // Espaço entre peças: metade fica como folga da peça vizinha, não entra no retalho.
+    gap?: number;
+    // Menor lado que ainda vale guardar (cm).
+    minSide?: number;
+}
+
+export const DEFAULT_REMNANT_MIN_SIDE_CM = 20;
+
+/**
+ * Sobras retangulares que saem inteiras seguindo os cortes retos do plano:
+ * em cada região, o que fica à direita e abaixo das peças é separado antes
+ * dos próximos cortes. Só volta o que tem os dois lados >= minSide; tiras
+ * estreitas demais continuam na região e podem somar com sobras internas.
+ */
+export const findRemnants = (items: Box[], rollWidth: number, totalHeight: number, options: RemnantOptions = {}): Remnant[] => {
+    const margin = (options.gap ?? 0) / 2;
+    const minSide = options.minSide ?? DEFAULT_REMNANT_MIN_SIDE_CM;
+    const remnants: Remnant[] = [];
+    const usable = (rect: Remnant) => rect.w >= minSide && rect.h >= minSide;
+    const toRemnant = (x: number, y: number, w: number, h: number): Remnant => ({
+        x, y, w: Math.floor(w + EPSILON), h: Math.floor(h + EPSILON),
+    });
+
+    const trimRemnants = (group: Box[], region: Box): Box => {
+        const right = Math.max(...group.map(item => item.x + item.w));
+        const bottom = Math.max(...group.map(item => item.y + item.h));
+        const rightW = region.x + region.w - right - margin;
+        const bottomH = region.y + region.h - bottom - margin;
+
+        // A sobra em "L" sai em dois retângulos; escolhe a divisão que aproveita mais.
+        const rightFirst = {
+            right: toRemnant(right + margin, region.y, rightW, region.h),
+            bottom: toRemnant(region.x, bottom + margin, right - region.x, bottomH),
+        };
+        const bottomFirst = {
+            right: toRemnant(right + margin, region.y, rightW, bottom - region.y),
+            bottom: toRemnant(region.x, bottom + margin, region.w, bottomH),
+        };
+        const keptArea = (option: typeof rightFirst) => [option.right, option.bottom]
+            .filter(usable).reduce((sum, rect) => sum + rect.w * rect.h, 0);
+        const best = keptArea(bottomFirst) > keptArea(rightFirst) ? bottomFirst : rightFirst;
+        const keepRight = usable(best.right);
+        const keepBottom = usable(best.bottom);
+        if (keepRight) remnants.push(best.right);
+        if (keepBottom) remnants.push(best.bottom);
+
+        // Só recorta o que virou retalho; o resto segue para os próximos cortes.
+        return {
+            x: region.x,
+            y: region.y,
+            w: keepRight ? right - region.x : region.w,
+            h: keepBottom ? bottom - region.y : region.h,
+        };
+    };
+
+    const cuttable = walkStraightCuts(items, { x: 0, y: 0, w: rollWidth, h: totalHeight }, () => undefined, trimRemnants);
+
+    if (!cuttable) return [];
+    return remnants.sort((a, b) => a.y - b.y || a.x - b.x);
 };

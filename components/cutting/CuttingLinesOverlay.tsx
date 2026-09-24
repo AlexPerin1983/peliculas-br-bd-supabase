@@ -1,8 +1,10 @@
 import React from 'react';
-import type { CutLine } from '../../utils/straightCuts';
+import type { CutLine, Remnant } from '../../utils/straightCuts';
 
 interface CuttingLinesOverlayProps {
     lines: CutLine[];
+    // Sobras que valem guardar como retalho, numeradas R1, R2...
+    remnants?: (Remnant & { number: number })[];
     scale: number;
     // Mapa girado (tela cheia na horizontal): o comprimento da bobina vai para o eixo x.
     landscape?: boolean;
@@ -14,7 +16,7 @@ const meters = (value: number) => (value / 100).toLocaleString('pt-BR', {
 });
 
 /** Desenha as linhas de corte por cima do mapa, sem capturar toques. */
-export default function CuttingLinesOverlay({ lines, scale, landscape = false }: CuttingLinesOverlayProps) {
+export default function CuttingLinesOverlay({ lines, remnants = [], scale, landscape = false }: CuttingLinesOverlayProps) {
     // Espaço na tela até o corte principal vizinho: decide o tamanho da etiqueta.
     const numbered = lines.filter(line => line.order !== undefined).sort((a, b) => a.position - b.position);
     const labelRoom = (line: CutLine) => {
@@ -29,6 +31,16 @@ export default function CuttingLinesOverlay({ lines, scale, landscape = false }:
 
     return (
         <div className="cutting-lines" aria-hidden="true">
+            {remnants.map(remnant => {
+                const width = (landscape ? remnant.h : remnant.w) * scale;
+                const height = (landscape ? remnant.w : remnant.h) * scale;
+                return (
+                    <div key={`remnant-${remnant.number}`} className="cutting-remnant"
+                        style={{ left: (landscape ? remnant.y : remnant.x) * scale, top: (landscape ? remnant.x : remnant.y) * scale, width, height }}>
+                        {width >= 26 && height >= 18 && <span>R{remnant.number}</span>}
+                    </div>
+                );
+            })}
             {bands.map(({ start, end }, index) => {
                 const size = (end - start) * scale;
                 if (size < (landscape ? 64 : 56)) return null;
