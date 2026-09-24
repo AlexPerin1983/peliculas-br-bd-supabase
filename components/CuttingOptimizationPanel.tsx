@@ -1426,10 +1426,36 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                         </label>
                                     </div>
 
-                                    <button type="button" className="cutting-save-version" onClick={() => handleOptimize(true)} disabled={!result || isOptimizing}>
-                                        {isOptimizing ? <Loader2 size={17} className="animate-spin" aria-hidden="true" /> : <Save size={17} aria-hidden="true" />}
-                                        <span>{isOptimizing ? 'Calculando…' : 'Salvar esta versão'}</span>
-                                    </button>
+                                    {/* Versões salvas: pílulas roláveis + botão discreto de salvar. */}
+                                    <section className="cutting-versions" aria-label="Versões do plano">
+                                        <header>
+                                            <span>Versões{history.length > 0 && <small>{history.length}</small>}</span>
+                                            <button type="button" className="cutting-versions-save" onClick={() => handleOptimize(true)} disabled={!result || isOptimizing}>
+                                                {isOptimizing ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Plus size={15} aria-hidden="true" />}
+                                                {isOptimizing ? 'Calculando…' : 'Salvar'}
+                                            </button>
+                                        </header>
+                                        {history.length > 0 ? (
+                                            <div className="cutting-versions-list">
+                                                {history.map(item => (
+                                                    <div key={item.id} className="cutting-version-chip" data-selected={selectedHistoryId === item.id}>
+                                                        <button type="button" onClick={() => handleSelectHistory(item)} aria-pressed={selectedHistoryId === item.id}
+                                                            aria-label={`Abrir versão das ${new Date(item.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`}>
+                                                            <span>{new Date(item.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                                                            <strong>{(item.result.totalHeight / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m</strong>
+                                                            <span>{item.result.efficiency.toFixed(0)}%</span>
+                                                            {item.methodName === 'Otimização Profunda' && <i title="Busca ampliada" />}
+                                                        </button>
+                                                        <button type="button" className="cutting-version-delete" aria-label="Excluir versão" title="Excluir versão" onClick={() => setHistoryToDelete(item.id)}>
+                                                            <X size={13} aria-hidden="true" />
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <p className="cutting-versions-empty">Salve o plano para comparar com outros ajustes.</p>
+                                        )}
+                                    </section>
                                 </div>}
                             </div>
 
@@ -1492,9 +1518,9 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                             </div>
                         </div>
 
-                        {/* History List - Compact for mobile */}
+                        {/* History List - Desktop (no celular as versões ficam dentro dos ajustes) */}
                         {history.length > 0 && (
-                            <div className={`cutting-history mb-2 sm:mb-6 p-2 sm:p-4 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700`}>
+                            <div className={`cutting-history hidden sm:block mb-2 sm:mb-6 p-2 sm:p-4 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700`}>
                                 <h4 className="text-[10px] sm:text-sm font-bold text-slate-700 dark:text-slate-300 mb-1.5 sm:mb-3 flex items-center gap-1.5">
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-600 dark:text-slate-400">
                                         <path fillRule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25zM12.75 6a.75.75 0 00-1.5 0v6c0 .414.336.75.75.75h4.5a.75.75 0 000-1.5h-3.75V6z" clipRule="evenodd" />
