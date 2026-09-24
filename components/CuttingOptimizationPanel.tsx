@@ -10,7 +10,7 @@ import ConfirmationModal from './modals/ConfirmationModal';
 import Modal from './ui/Modal';
 import { useSubscription } from '../contexts/SubscriptionContext';
 import { PremiumFeatureSection } from './subscription/PremiumFeatureSection';
-import { Check, ChevronDown, Loader2, Maximize2, Minus, Plus, RotateCcw, RotateCw, List, Save, X, LockKeyhole, UnlockKeyhole } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Loader2, Maximize2, Minus, MoveHorizontal, Plus, RotateCcw, RotateCw, List, Save, Scissors, Shrink, X, LockKeyhole, UnlockKeyhole } from 'lucide-react';
 import {
     buildFilmCuttingMeasurementSignature,
     CUTTING_ROLL_WIDTH_PRESETS_CM,
@@ -31,6 +31,11 @@ const FULLSCREEN_SIDE_GUTTER_PX = 96;
 const FULLSCREEN_VERTICAL_GUTTER_PX = 96;
 const FULLSCREEN_MIN_FIT_SCALE = 1.25;
 const FULLSCREEN_MAX_FIT_SCALE = 12;
+// Mobile: régua superior (78) + respiro inferior (28) + barra flutuante (80).
+const MOBILE_FULLSCREEN_VERTICAL_CHROME_PX = 186;
+const FULLSCREEN_FIT_MODE_STORAGE_KEY = 'peliculas-br-bd-cutting_fit_mode';
+// Prefixo diferente de cutting_history_ para não cair na limpeza de históricos antigos.
+const CUT_DONE_STORAGE_PREFIX = 'peliculas-br-bd-cutting_done_';
 
 const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ measurements, clientId, optionId, films, cuttingSettings, onCuttingSettingsChange }) => {
     // Verificar acesso ao módulo de corte inteligente
@@ -147,6 +152,16 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
     const [isPieceNavigatorOpen, setIsPieceNavigatorOpen] = useState(false);
     const [fullscreenZoom, setFullscreenZoom] = useState<number>(1);
     const [fullscreenOrientation, setFullscreenOrientation] = useState<'portrait' | 'landscape'>('portrait');
+    const [fullscreenFitMode, setFullscreenFitMode] = useState<'width' | 'all'>(() => {
+        try {
+            return localStorage.getItem(FULLSCREEN_FIT_MODE_STORAGE_KEY) === 'all' ? 'all' : 'width';
+        } catch {
+            return 'width';
+        }
+    });
+    const [isFullscreenSummaryOpen, setIsFullscreenSummaryOpen] = useState(false);
+    // Mobile: ajustes começam recolhidos para o mapa ganhar destaque.
+    const [isMobileSettingsOpen, setIsMobileSettingsOpen] = useState(false);
     const [fullscreenViewportSize, setFullscreenViewportSize] = useState({ width: 0, height: 0 });
 
     // Virtualização: rastrear posição do scroll para renderizar apenas peças visíveis
@@ -192,6 +207,42 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
     }, [history, storageKey, loadedKey]);
 
 
+
+    useEffect(() => {
+        try {
+            localStorage.setItem(FULLSCREEN_FIT_MODE_STORAGE_KEY, fullscreenFitMode);
+        } catch {
+            // Preferência de visualização é opcional.
+        }
+    }, [fullscreenFitMode]);
+
+    // Checklist de peças já cortadas, salvo no aparelho por cliente/opção/película.
+    const cutDoneStorageKey = clientId && optionId ? `${CUT_DONE_STORAGE_PREFIX}${clientId}_${optionId}_${activeFilm}` : null;
+    const [cutDoneIds, setCutDoneIds] = useState<Record<string, true>>({});
+    const [cutDoneLoadedKey, setCutDoneLoadedKey] = useState<string | null>(null);
+
+    useEffect(() => {
+        let stored: Record<string, true> = {};
+        if (cutDoneStorageKey) {
+            try {
+                stored = JSON.parse(localStorage.getItem(cutDoneStorageKey) || '{}') || {};
+            } catch {
+                stored = {};
+            }
+        }
+        setCutDoneIds(stored);
+        setCutDoneLoadedKey(cutDoneStorageKey);
+    }, [cutDoneStorageKey]);
+
+    useEffect(() => {
+        if (!cutDoneStorageKey || cutDoneLoadedKey !== cutDoneStorageKey) return;
+        try {
+            if (Object.keys(cutDoneIds).length) localStorage.setItem(cutDoneStorageKey, JSON.stringify(cutDoneIds));
+            else localStorage.removeItem(cutDoneStorageKey);
+        } catch {
+            // Sem armazenamento, o checklist vale só para esta sessão.
+        }
+    }, [cutDoneIds, cutDoneStorageKey, cutDoneLoadedKey]);
 
     // Cleanup old histories (run once on mount)
     useEffect(() => {
@@ -322,7 +373,8 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
 
         const handleKeyDown = (event: KeyboardEvent) => {
             if (event.key === 'Escape') {
-                if (isPieceNavigatorOpen) setIsPieceNavigatorOpen(false);
+                if (isFullscreenSummaryOpen) setIsFullscreenSummaryOpen(false);
+                else if (isPieceNavigatorOpen) setIsPieceNavigatorOpen(false);
                 else setIsFullscreen(false);
             }
         };
@@ -332,7 +384,11 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
         return () => {
             window.removeEventListener('keydown', handleKeyDown);
         };
-    }, [isFullscreen, isPieceNavigatorOpen]);
+    }, [isFullscreen, isPieceNavigatorOpen, isFullscreenSummaryOpen]);
+
+    useEffect(() => {
+        if (!isFullscreen) setIsFullscreenSummaryOpen(false);
+    }, [isFullscreen]);
 
     useEffect(() => {
         if (!isFullscreen) return;
@@ -883,7 +939,12 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
     const fullscreenFitWidth = Math.max(1, fullscreenViewportWidth - (isMobile ? 92 : FULLSCREEN_SIDE_GUTTER_PX));
     const fullscreenFitHeight = Math.max(240, fullscreenViewportHeight - FULLSCREEN_VERTICAL_GUTTER_PX);
     const fullscreenFallbackScale = baseScale > 0 ? baseScale : 2;
-    const fullscreenRawFitScale = !isMobile && fullscreenOrientation === 'landscape'
+    const fullscreenRawFitScale = isMobile && fullscreenFitMode === 'all'
+        ? Math.min(
+            fullscreenFitWidth / Math.max(1, fullscreenAxisWidth),
+            Math.max(120, fullscreenViewportHeight - MOBILE_FULLSCREEN_VERTICAL_CHROME_PX) / Math.max(1, fullscreenAxisHeight)
+        )
+        : !isMobile && fullscreenOrientation === 'landscape'
         ? fullscreenFitHeight / Math.max(1, fullscreenAxisHeight)
         : fullscreenFitWidth / Math.max(1, fullscreenAxisWidth);
     const fullscreenBaseScale = Number.isFinite(fullscreenRawFitScale) && fullscreenAxisWidth > 0 && fullscreenAxisHeight > 0
@@ -1093,6 +1154,32 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
             });
         });
     };
+    const cutDoneCount = result ? result.placedItems.filter(item => cutDoneIds[getPieceId(item)]).length : 0;
+    const toggleCutDone = (item: Rect) => {
+        if (!result) return;
+        const id = getPieceId(item);
+        const markingDone = !cutDoneIds[id];
+        setCutDoneIds(previous => {
+            const next = { ...previous };
+            if (next[id]) delete next[id];
+            else next[id] = true;
+            return next;
+        });
+        if (!markingDone) return;
+        // Ao marcar como cortada, já leva para a próxima peça pendente na ordem do mapa.
+        const pieces = result.placedItems;
+        const start = pieces.indexOf(item);
+        const nextPending = [...pieces.slice(start + 1), ...pieces.slice(0, start)]
+            .find(piece => !cutDoneIds[getPieceId(piece)]);
+        if (nextPending && isFullscreen) locateMobilePiece(getPieceId(nextPending));
+        else if (nextPending) {
+            setSelectedPieceId(getPieceId(nextPending));
+            setSelectedGroupKey(getPieceGroupKey(nextPending));
+        } else {
+            setSelectedPieceId(null);
+            setSelectedGroupKey(null);
+        }
+    };
     const rotateMobilePiece = (item: Rect) => {
         if (item.id == null || !result || isOptimizing || lockedItems[item.id] || item.h > result.rollWidth) return;
         setManualRotations(previous => ({ ...previous, [item.id!]: !item.rotated }));
@@ -1115,7 +1202,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
     const renderMobilePieceDetails = () => (
         <div className="cutting-piece-details" aria-live="polite" data-inline-actions={!!selectedMobilePiece && isFullscreen && (fullscreenOrientation === 'landscape' ? selectedMobilePiece.h : selectedMobilePiece.w) * fullscreenScale >= 116 && (fullscreenOrientation === 'landscape' ? selectedMobilePiece.w : selectedMobilePiece.h) * fullscreenScale >= 116}>
             {selectedMobilePiece && result ? <>
-                <div className="cutting-selection-heading"><div className="cutting-piece-description"><strong>Peça {result.placedItems.indexOf(selectedMobilePiece) + 1} · {getPieceRoom(selectedMobilePiece)}</strong><span>{formatPieceSize(selectedMobilePiece.w)} × {formatPieceSize(selectedMobilePiece.h)} m{lockedItems[selectedMobilePiece.id!] ? ' · Posição travada' : ''}</span></div><button type="button" aria-label="Limpar seleção" onClick={() => {setSelectedPieceId(null); setSelectedGroupKey(null);}}><X size={18} aria-hidden="true" /></button></div>
+                <div className="cutting-selection-heading"><div className="cutting-piece-description"><strong>Peça {result.placedItems.indexOf(selectedMobilePiece) + 1} · {getPieceRoom(selectedMobilePiece)}</strong><span>{formatPieceSize(selectedMobilePiece.w)} × {formatPieceSize(selectedMobilePiece.h)} m{lockedItems[selectedMobilePiece.id!] ? ' · Posição travada' : ''}</span></div><button type="button" className="cutting-done-toggle" aria-pressed={!!cutDoneIds[getPieceId(selectedMobilePiece)]} aria-label={cutDoneIds[getPieceId(selectedMobilePiece)] ? 'Desmarcar peça cortada' : 'Marcar peça como cortada'} onClick={() => toggleCutDone(selectedMobilePiece)}><Check size={18} aria-hidden="true" /><span>{cutDoneIds[getPieceId(selectedMobilePiece)] ? 'Cortada' : 'Cortei'}</span></button><button type="button" aria-label="Limpar seleção" onClick={() => {setSelectedPieceId(null); setSelectedGroupKey(null);}}><X size={18} aria-hidden="true" /></button></div>
                 <div className="cutting-piece-actions">
                     <button type="button" disabled={isOptimizing || !!lockedItems[selectedMobilePiece.id!] || selectedMobilePiece.h > result.rollWidth}
                         onClick={() => rotateMobilePiece(selectedMobilePiece)}><RotateCcw size={18} aria-hidden="true" /> Girar peça</button>
@@ -1226,8 +1313,30 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                     <div className="p-2 sm:p-6">
                         {/* Settings - Always visible */}
                         <div className={`block mb-2 sm:mb-6`}>
-                            {/* Mobile: controles diretos e visão geral, como no fluxo validado. */}
-                            <div className="cutting-mobile-controls sm:hidden">
+                            {/* Mobile: resumo compacto; os controles completos abrem em "Ajustes". */}
+                            <div className="cutting-mobile-controls sm:hidden" data-open={isMobileSettingsOpen}>
+                                <div className="cutting-settings-card">
+                                    <button type="button" className="cutting-settings-toggle" aria-expanded={isMobileSettingsOpen} aria-controls="cutting-mobile-settings" onClick={() => setIsMobileSettingsOpen(open => !open)}>
+                                        <span className="cutting-settings-toggle-text">
+                                            <span>Bobina {selectedRollWidthLabel} · Espaço {currentSettings.bladeWidth} mm · {visualSummary?.pieces ?? 0} peças</span>
+                                            <strong aria-live="polite" aria-busy={isOptimizing}>
+                                                {isOptimizing ? 'Calculando…' : <>{visualSummary?.linearMeters ?? '—'} m{activeFilmMaterialCostText ? <> · <em>{activeFilmMaterialCostText}</em></> : null}<small> · {visualSummary?.efficiency ?? '—'}% uso</small></>}
+                                            </strong>
+                                        </span>
+                                    </button>
+                                    <div className="cutting-settings-icons">
+                                        <button type="button" className="cutting-icon-primary" title="Expandir tela cheia" aria-label="Expandir tela cheia" onClick={openFullscreenView} disabled={!result}><Maximize2 size={18} aria-hidden="true" /></button>
+                                        <button type="button" title={isMobileSettingsOpen ? 'Recolher ajustes' : 'Ajustes e zoom'} aria-label={isMobileSettingsOpen ? 'Recolher ajustes' : 'Abrir ajustes e zoom'} aria-expanded={isMobileSettingsOpen} aria-controls="cutting-mobile-settings" onClick={() => setIsMobileSettingsOpen(open => !open)}><ChevronDown size={18} aria-hidden="true" /></button>
+                                    </div>
+                                </div>
+                                {isMobileSettingsOpen && <div id="cutting-mobile-settings" className="cutting-mobile-settings">
+                                <div className="cutting-direct-zoom" role="toolbar" aria-label="Zoom do mapa">
+                                    <button type="button" title="Diminuir zoom" aria-label="Diminuir zoom do mapa" disabled={zoomLevel <= 0.5} onClick={() => setZoomLevel(value => Math.max(0.5, value - 0.25))}><Minus size={18} aria-hidden="true" /></button>
+                                    <output aria-label="Zoom atual do mapa">{Math.round(zoomLevel * 100)}%</output>
+                                    <button type="button" title="Aumentar zoom" aria-label="Aumentar zoom do mapa" disabled={zoomLevel >= 3} onClick={() => setZoomLevel(value => Math.min(3, value + 0.25))}><Plus size={18} aria-hidden="true" /></button>
+                                    <span className="cutting-toolbar-divider" aria-hidden="true" />
+                                    <button type="button" title="Visão geral" aria-label="Restaurar visão geral do mapa" disabled={zoomLevel === 1} onClick={() => {setZoomLevel(1); scrollContainerRef.current?.scrollTo?.({left: 0, top: 0});}}><RotateCcw size={17} aria-hidden="true" /></button>
+                                </div>
                                 <div className="cutting-direct-config">
                                     <div>
                                         <span className="cutting-field-label">Bobina</span>
@@ -1245,12 +1354,6 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                     </button>
                                 </div>
                                 {isCustomRollWidth && <label className="cutting-mobile-custom">Largura personalizada (cm)<input aria-label="Largura personalizada da bobina em centímetros" type="number" min="1" inputMode="decimal" value={currentSettings.rollWidth} onChange={event => updateCurrentSettings('rollWidth', event.target.value)} /></label>}
-                                <div className="cutting-direct-summary" aria-live="polite" aria-busy={isOptimizing}>
-                                    <div><span>Metro linear</span><strong>{visualSummary?.linearMeters ?? '—'} <small>m</small></strong></div>
-                                    <div><span>Uso</span><strong>{visualSummary?.efficiency ?? '—'}<small>%</small></strong></div>
-                                    <div><span>Sobra</span><strong>{visualSummary?.wastePercent ?? '—'}<small>%</small></strong></div>
-                                </div>
-                                <div className="cutting-direct-cost"><span>Material <strong>{activeFilmMaterialCostText ?? '—'}</strong></span><span>{visualSummary?.pieces ?? 0} peças</span></div>
                                 <div className="cutting-direct-options">
                                     <label title="Impede a rotação automática das peças" data-active={currentSettings.respectGrain}>
                                         <input aria-label="Respeitar sentido da película" type="checkbox" checked={currentSettings.respectGrain} onChange={event => updateCurrentSettings('respectGrain', event.target.checked)} />
@@ -1261,6 +1364,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                         <span>Busca ampliada</span>
                                     </label>
                                 </div>
+                                </div>}
                             </div>
 
                             {/* Desktop: barra de configuração */}
@@ -1558,13 +1662,6 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                     </div>
                                 )}
 
-                                <div className="cutting-direct-zoom sm:hidden" aria-label="Zoom do mapa">
-                                    <button type="button" aria-label="Diminuir zoom do mapa" onClick={() => setZoomLevel(value => Math.max(0.5, value - 0.25))}><Minus size={18} aria-hidden="true" /></button>
-                                    <span aria-live="polite">{Math.round(zoomLevel * 100)}%</span>
-                                    <button type="button" aria-label="Aumentar zoom do mapa" onClick={() => setZoomLevel(value => Math.min(3, value + 0.25))}><Plus size={18} aria-hidden="true" /></button>
-                                    <button type="button" className="cutting-overview" aria-label="Restaurar visão geral do mapa" onClick={() => {setZoomLevel(1); scrollContainerRef.current?.scrollTo?.({left: 0, top: 0});}}>Visão geral</button>
-                                    <button type="button" className="cutting-expand" title="Expandir tela cheia" aria-label="Expandir tela cheia" onClick={openFullscreenView}><Maximize2 size={18} aria-hidden="true" /></button>
-                                </div>
                                 {/* Zoom Slider - Desktop only, mobile uses buttons in stats bar */}
                                 <div className="relative z-30 hidden sm:flex mb-4 items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
                                     <span className="shrink-0 text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Zoom</span>
@@ -1712,7 +1809,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                                     <div
                                                         key={item.id || originalIndex}
                                                         onClick={() => togglePieceSelection(item)}
-                                                        data-selected={isSelected} data-locked={!!isLocked} data-group={isGroupHighlighted} className={`cutting-piece pointer-events-auto absolute isolate flex items-center justify-center overflow-visible rounded-[3px] text-xs font-bold border transition-all cursor-pointer backdrop-blur-[1px] ${isSelected
+                                                        data-selected={isSelected} data-locked={!!isLocked} data-group={isGroupHighlighted} data-done={!!cutDoneIds[pieceId]} className={`cutting-piece pointer-events-auto absolute isolate flex items-center justify-center overflow-visible rounded-[3px] text-xs font-bold border transition-all cursor-pointer backdrop-blur-[1px] ${isSelected
                                                             ? 'z-20 shadow-[0_0_0_2px_rgba(250,204,21,0.35),0_12px_28px_rgba(15,23,42,0.28)] scale-[1.01]'
                                                             : isGroupHighlighted
                                                                 ? 'z-10 shadow-[0_0_0_2px_rgba(103,232,249,0.34),0_14px_30px_rgba(8,145,178,0.26)]'
@@ -2076,30 +2173,11 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                     zIndex: 99999,
                                 }}
                             >
-                                {/* Controles mobile com alvos maiores e enquadramento inicial pela largura. */}
-                                {isMobile ? <div className="cutting-fullscreen-mobile sm:hidden">
-                                    <div className="cutting-mobile-heading">
-                                        <div><span className="cutting-eyebrow">Plano de corte</span><div className="cutting-title-line"><strong>{activeFilm}</strong><span className="cutting-orientation">{fullscreenOrientation === 'portrait' ? 'Vertical' : 'Horizontal'}</span></div></div>
-                                        <div className="cutting-heading-actions"><button type="button" className="cutting-find-pieces" aria-label={`Localizar peças (${result.placedItems.length})`} onClick={() => setIsPieceNavigatorOpen(true)}><List size={18} aria-hidden="true" /><span>Peças</span></button><button type="button" aria-label="Fechar mapa ampliado" onClick={() => setIsFullscreen(false)}><X size={22} aria-hidden="true" /></button></div>
-                                    </div>
-                                    <div className="cutting-expanded-tools">
-                                        <div className="cutting-zoom-cluster">
-                                        <button type="button" aria-label="Diminuir zoom" disabled={fullscreenZoom <= 0.5} onClick={() => setFullscreenZoom(value => Math.max(0.5, value - 0.25))}><Minus size={19} aria-hidden="true" /></button>
-                                            <output aria-label="Zoom atual">{Math.round(fullscreenZoom * 100)}%</output>
-                                            <button type="button" aria-label="Aumentar zoom" disabled={fullscreenZoom >= 5} onClick={() => setFullscreenZoom(value => Math.min(5, value + 0.25))}><Plus size={19} aria-hidden="true" /></button>
-                                        </div>
-                                        <button type="button" className="cutting-view-tool" aria-label="Resetar zoom e ajustar à largura" title="Ajustar à largura" onClick={() => {setFullscreenZoom(1); fullscreenScrollRef.current?.scrollTo?.({left: 0, top: 0});}}><RotateCcw size={17} aria-hidden="true" /><span>Ajustar</span></button>
-                                        <button type="button" className="cutting-view-tool" aria-label={fullscreenOrientation === 'portrait' ? 'Ver mesa na horizontal' : 'Ver mesa na vertical'} title="Girar a visualização" onClick={() => {setFullscreenOrientation(value => value === 'portrait' ? 'landscape' : 'portrait'); setFullscreenZoom(1);}}><RotateCw size={17} aria-hidden="true" /><span>Girar</span></button>
-                                        <span className="cutting-unit-label">Medidas<br />em metros</span>
-                                    </div>
-                                    <div className="cutting-stat-strip" aria-label="Resumo do plano">
-                                        <div><span>Metro linear</span><strong>{fullscreenLinearMeters}<small> m</small></strong></div>
-                                        <div className="cutting-stat-material"><span>Material</span><strong>{activeFilmMaterialCostText ?? '—'}</strong></div>
-                                        <div><span>Uso</span><strong>{fullscreenUsage}<small>%</small></strong></div>
-                                        <div className="cutting-stat-waste"><span>Sobra</span><strong>{fullscreenWaste}<small>%</small></strong></div>
-                                    </div>
-                                    {unplacedCount > 0 && <div className="cutting-incomplete" role="status">{unplacedCount} {unplacedCount === 1 ? 'peça fora do plano' : 'peças fora do plano'} · consumo parcial</div>}
-                                </div> :
+                                {/* Mobile: o mapa ocupa a tela toda; só o X flutua no topo e o resto fica na barra inferior. */}
+                                {isMobile ? <>
+                                    <button type="button" className="cutting-fs-close sm:hidden" aria-label="Fechar mapa ampliado" onClick={() => setIsFullscreen(false)}><X size={22} aria-hidden="true" /></button>
+                                    {unplacedCount > 0 && <div className="cutting-fs-warning sm:hidden" role="status">{unplacedCount} {unplacedCount === 1 ? 'peça fora do plano' : 'peças fora do plano'} · consumo parcial</div>}
+                                </> :
                                 /* Barra de controles tecnica */
                                 <div className="hidden sm:grid z-30 grid-cols-1 gap-2 border-b border-slate-200/90 bg-white/95 px-3 py-2 shadow-sm backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/95 xl:grid-cols-[minmax(240px,1fr)_auto_minmax(300px,1fr)_auto] xl:items-center">
                                     {/* Zoom Controls */}
@@ -2232,7 +2310,13 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                         <div
                                             ref={fullscreenContentRef}
                                             className="cutting-fullscreen-content inline-block relative mt-4 mb-14 rounded-lg"
-                                            style={{ marginLeft: '72px', marginTop: '84px', marginBottom: '72px' }}
+                                            style={{
+                                                marginLeft: '72px', marginTop: '84px', marginBottom: '72px',
+                                                // Mobile "Ver tudo": centraliza o mapa (lido pelo cutting-mobile.css).
+                                                ['--cut-fs-offset' as string]: isMobile && fullscreenFitMode === 'all'
+                                                    ? `${Math.max(30, (fullscreenViewportWidth - 24 - fullscreenAxisWidth * fullscreenScale) / 2)}px`
+                                                    : undefined,
+                                            }}
                                         >
 
                                         {/* Horizontal Ruler (Top) - Fullscreen */}
@@ -2325,7 +2409,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                                     <div
                                                         key={item.id || idx}
                                                         onClick={() => togglePieceSelection(item)}
-                                                        data-piece-id={pieceId} data-selected={isSelected} data-locked={!!isLocked} data-group={isGroupHighlighted}
+                                                        data-piece-id={pieceId} data-selected={isSelected} data-locked={!!isLocked} data-group={isGroupHighlighted} data-done={!!cutDoneIds[pieceId]}
                                                         className={`cutting-piece absolute isolate flex items-center justify-center overflow-visible rounded-[3px] text-xs font-bold border transition-all cursor-pointer backdrop-blur-[1px] ${isSelected
                                                             ? 'z-20 shadow-[0_0_0_2px_rgba(250,204,21,0.35),0_16px_34px_rgba(15,23,42,0.3)] scale-[1.01]'
                                                             : isGroupHighlighted
@@ -2524,7 +2608,99 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                         </div>
                                     </div>
                                 </div>
-                                <div className="cutting-expanded-detail sm:hidden">{renderMobilePieceDetails()}</div>
+                                {selectedMobilePiece
+                                    ? <div className="cutting-expanded-detail sm:hidden">{renderMobilePieceDetails()}</div>
+                                    : isMobile && (
+                                        <div className="cutting-fs-dock sm:hidden" role="toolbar" aria-label="Ferramentas do mapa">
+                                            <button type="button" className="cutting-fs-summary-button" aria-label="Ver resumo do corte" onClick={() => setIsFullscreenSummaryOpen(true)}>
+                                                <span>{activeFilm}{cutDoneCount > 0 ? ` · ${cutDoneCount}/${result.placedItems.length} cortadas` : ''}</span>
+                                                <strong>{fullscreenLinearMeters} m{activeFilmMaterialCostText ? ` · ${activeFilmMaterialCostText}` : ''}</strong>
+                                                {cutDoneCount > 0 && <i className="cutting-fs-progress" aria-hidden="true" style={{ width: `${(cutDoneCount / result.placedItems.length) * 100}%` }} />}
+                                            </button>
+                                            <button type="button" aria-pressed={fullscreenFitMode === 'all'}
+                                                aria-label={fullscreenFitMode === 'all' ? 'Ajustar à largura da bobina' : 'Mostrar todas as peças'}
+                                                onClick={() => {
+                                                    setFullscreenFitMode(mode => mode === 'all' ? 'width' : 'all');
+                                                    setFullscreenZoom(1);
+                                                    fullscreenScrollRef.current?.scrollTo?.({ left: 0, top: 0 });
+                                                }}>
+                                                {fullscreenFitMode === 'all' ? <MoveHorizontal size={18} aria-hidden="true" /> : <Shrink size={18} aria-hidden="true" />}
+                                                <span>{fullscreenFitMode === 'all' ? 'Largura' : 'Ver tudo'}</span>
+                                            </button>
+                                            <button type="button" aria-label={`Localizar peças (${result.placedItems.length})`} onClick={() => setIsPieceNavigatorOpen(true)}>
+                                                <List size={18} aria-hidden="true" /><span>Peças</span>
+                                            </button>
+                                        </div>
+                                    )}
+                                {isMobile && isFullscreenSummaryOpen && visualSummary && (
+                                    <div className="cutting-fs-sheet-backdrop sm:hidden" onClick={() => setIsFullscreenSummaryOpen(false)}>
+                                        <section className="cutting-fs-sheet" role="dialog" aria-label="Resumo do corte" onClick={event => event.stopPropagation()}>
+                                            <header className="cutting-fs-sheet-header">
+                                                <div><span className="cutting-eyebrow">Plano de corte</span><strong>{activeFilm}</strong></div>
+                                                <button type="button" aria-label="Fechar resumo" onClick={() => setIsFullscreenSummaryOpen(false)}><X size={20} aria-hidden="true" /></button>
+                                            </header>
+                                            <div className="cutting-fs-sheet-hero">
+                                                <div>
+                                                    <span>Cortar da bobina</span>
+                                                    <strong>{visualSummary.linearMeters} m</strong>
+                                                    <small>bobina de {visualSummary.rollWidthMeters} m de largura</small>
+                                                </div>
+                                                <div className="cutting-fs-sheet-cost">
+                                                    <span>Custo do material</span>
+                                                    <strong>{activeFilmMaterialCostText ?? '—'}</strong>
+                                                    <small>{activeFilmMaterialCostText ? 'pelo metro linear da película' : 'cadastre o preço por metro linear'}</small>
+                                                </div>
+                                            </div>
+                                            <dl className="cutting-fs-sheet-stats">
+                                                <div><dt>Peças</dt><dd>{visualSummary.pieces}</dd></div>
+                                                <div><dt>Uso</dt><dd>{visualSummary.efficiency}%</dd></div>
+                                                <div><dt>Sobra</dt><dd>{visualSummary.wastePercent}%</dd></div>
+                                                <div><dt>Área útil</dt><dd>{visualSummary.usedAreaMeters} m²</dd></div>
+                                            </dl>
+                                            {unplacedCount > 0 && <p className="cutting-fs-sheet-warning" role="status">{unplacedCount === 1 ? '1 peça é maior que a bobina e ficou fora do plano.' : `${unplacedCount} peças são maiores que a bobina e ficaram fora do plano.`}</p>}
+                                            <h3 className="cutting-fs-sheet-title">
+                                                <Scissors size={16} aria-hidden="true" /> O que cortar
+                                                <span>{cutDoneCount > 0 ? `${cutDoneCount} de ${result.placedItems.length} cortadas` : 'toque numa peça e marque "Cortei"'}</span>
+                                            </h3>
+                                            {cutDoneCount > 0 && (
+                                                <div className="cutting-fs-sheet-progress">
+                                                    <div role="progressbar" aria-label="Peças cortadas" aria-valuemin={0} aria-valuemax={result.placedItems.length} aria-valuenow={cutDoneCount}>
+                                                        <i style={{ width: `${(cutDoneCount / result.placedItems.length) * 100}%` }} />
+                                                    </div>
+                                                    <button type="button" onClick={() => setCutDoneIds({})}>Recomeçar</button>
+                                                </div>
+                                            )}
+                                            <ul className="cutting-fs-sheet-list">
+                                                {groupedItems.map(group => {
+                                                    const groupDone = group.indices.filter(number => cutDoneIds[getPieceId(result.placedItems[number - 1])]).length;
+                                                    return (
+                                                    <li key={group.key} data-done={groupDone === group.count}>
+                                                        <button type="button" onClick={() => {
+                                                            setSelectedGroupKey(group.key);
+                                                            setSelectedPieceId(null);
+                                                            setIsFullscreenSummaryOpen(false);
+                                                        }}>
+                                                            <span className="cutting-fs-sheet-qty">{group.count}×</span>
+                                                            <span className="cutting-fs-sheet-size">{formatPieceSize(group.w)} × {formatPieceSize(group.h)} m<small>peças {group.indices.join(', ')}{groupDone > 0 ? ` · ${groupDone}/${group.count} cortadas` : ''}</small></span>
+                                                            {groupDone === group.count ? <Check size={18} aria-label="Grupo cortado" /> : <ChevronRight size={18} aria-hidden="true" />}
+                                                        </button>
+                                                    </li>
+                                                    );
+                                                })}
+                                            </ul>
+                                            <div className="cutting-fs-sheet-tools">
+                                                <div className="cutting-zoom-cluster">
+                                                    <button type="button" aria-label="Diminuir zoom" disabled={fullscreenZoom <= 0.5} onClick={() => setFullscreenZoom(value => Math.max(0.5, value - 0.25))}><Minus size={19} aria-hidden="true" /></button>
+                                                    <output aria-label="Zoom atual">{Math.round(fullscreenZoom * 100)}%</output>
+                                                    <button type="button" aria-label="Aumentar zoom" disabled={fullscreenZoom >= 5} onClick={() => setFullscreenZoom(value => Math.min(5, value + 0.25))}><Plus size={19} aria-hidden="true" /></button>
+                                                </div>
+                                                <button type="button" aria-label={fullscreenOrientation === 'portrait' ? 'Ver mesa na horizontal' : 'Ver mesa na vertical'} onClick={() => {setFullscreenOrientation(value => value === 'portrait' ? 'landscape' : 'portrait'); setFullscreenZoom(1);}}>
+                                                    <RotateCw size={18} aria-hidden="true" /><span>{fullscreenOrientation === 'portrait' ? 'Horizontal' : 'Vertical'}</span>
+                                                </button>
+                                            </div>
+                                        </section>
+                                    </div>
+                                )}
                                 {isMobile && isPieceNavigatorOpen && <CuttingPieceNavigator
                                     pieces={result.placedItems.map((item, index) => ({id: getPieceId(item), number: index + 1, room: getPieceRoom(item), size: `${formatPieceSize(item.w)} × ${formatPieceSize(item.h)}`, locked: !!lockedItems[item.id!]}))}
                                     selectedId={selectedPieceId} onSelect={locateMobilePiece} onClose={() => setIsPieceNavigatorOpen(false)} />}
