@@ -1382,56 +1382,51 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                     </div>
                                 </div>
                                 {isMobileSettingsOpen && <div id="cutting-mobile-settings" className="cutting-mobile-settings">
-                                    <p className="cutting-group-title">Plano</p>
-                                    <div className="cutting-group">
-                                        <button type="button" className="cutting-row" aria-label={`Largura da bobina: ${selectedRollWidthLabel}. Alterar`} aria-haspopup="dialog" onClick={() => setIsRollWidthPickerOpen(true)}>
-                                            <span className="cutting-row-label">Largura da bobina</span>
-                                            <span className="cutting-row-value">{selectedRollWidthLabel}<ChevronRight size={17} aria-hidden="true" /></span>
+                                    {/* Grade compacta: duas opções por linha; as explicações ficam no title. */}
+                                    <div className="cutting-quick-grid">
+                                        <button type="button" className="cutting-tile" aria-label={`Largura da bobina: ${selectedRollWidthLabel}. Alterar`} aria-haspopup="dialog" onClick={() => setIsRollWidthPickerOpen(true)}>
+                                            <span className="cutting-tile-caption">Bobina</span>
+                                            <span className="cutting-tile-value">{selectedRollWidthLabel}<ChevronRight size={15} aria-hidden="true" /></span>
                                         </button>
+                                        <label className="cutting-tile" title="Folga de refile entre as peças">
+                                            <span className="cutting-tile-caption">Espaço</span>
+                                            <span className="cutting-tile-input">
+                                                <input aria-label="Espaço entre peças (mm)" type="number" min="0" inputMode="decimal" value={currentSettings.bladeWidth} onChange={event => updateCurrentSettings('bladeWidth', event.target.value)} />
+                                                <small>mm</small>
+                                            </span>
+                                        </label>
                                         {isCustomRollWidth && (
-                                            <label className="cutting-row">
-                                                <span className="cutting-row-label">Largura personalizada</span>
-                                                <span className="cutting-row-input">
+                                            <label className="cutting-tile cutting-tile-wide">
+                                                <span className="cutting-tile-caption">Largura personalizada</span>
+                                                <span className="cutting-tile-input">
                                                     <input aria-label="Largura personalizada da bobina em centímetros" type="number" min="1" inputMode="decimal" value={currentSettings.rollWidth} onChange={event => updateCurrentSettings('rollWidth', event.target.value)} />
                                                     <small>cm</small>
                                                 </span>
                                             </label>
                                         )}
-                                        <label className="cutting-row">
-                                            <span className="cutting-row-label">Espaço entre peças<small>folga de refile</small></span>
-                                            <span className="cutting-row-input">
-                                                <input aria-label="Espaço entre peças (mm)" type="number" min="0" inputMode="decimal" value={currentSettings.bladeWidth} onChange={event => updateCurrentSettings('bladeWidth', event.target.value)} />
-                                                <small>mm</small>
-                                            </span>
-                                        </label>
-                                        <label className="cutting-row">
-                                            <span className="cutting-row-label">Sentido fixo<small>não gira as peças</small></span>
+                                        <label className="cutting-tile cutting-tile-toggle" title="Não gira as peças (respeita o sentido da película)">
+                                            <span>Sentido fixo</span>
                                             <input className="cutting-switch" type="checkbox" role="switch" aria-label="Respeitar sentido da película" checked={currentSettings.respectGrain} onChange={event => updateCurrentSettings('respectGrain', event.target.checked)} />
                                         </label>
-                                        <label className="cutting-row">
-                                            <span className="cutting-row-label">Busca ampliada<small>testa mais encaixes, pode demorar</small></span>
+                                        <label className="cutting-tile cutting-tile-toggle" title="Testa mais combinações de encaixe; pode demorar">
+                                            <span>Busca ampliada</span>
                                             <input className="cutting-switch" type="checkbox" role="switch" aria-label="Buscar melhor encaixe" checked={useDeepSearch} onChange={event => setUseDeepSearch(event.target.checked)} />
                                         </label>
-                                    </div>
-
-                                    <p className="cutting-group-title">Visualização</p>
-                                    <div className="cutting-group">
-                                        <div className="cutting-row">
-                                            <span className="cutting-row-label">Zoom do mapa<small>toque no valor para voltar</small></span>
+                                        <div className="cutting-tile cutting-tile-stepper">
                                             <span className="cutting-stepper" role="group" aria-label="Zoom do mapa">
-                                                <button type="button" aria-label="Diminuir zoom do mapa" disabled={zoomLevel <= 0.5} onClick={() => setZoomLevel(value => Math.max(0.5, value - 0.25))}><Minus size={17} aria-hidden="true" /></button>
-                                                <button type="button" className="cutting-stepper-value" aria-label={`Zoom ${Math.round(zoomLevel * 100)}%. Restaurar visão geral do mapa`} onClick={() => {setZoomLevel(1); scrollContainerRef.current?.scrollTo?.({left: 0, top: 0});}}>{Math.round(zoomLevel * 100)}%</button>
-                                                <button type="button" aria-label="Aumentar zoom do mapa" disabled={zoomLevel >= 3} onClick={() => setZoomLevel(value => Math.min(3, value + 0.25))}><Plus size={17} aria-hidden="true" /></button>
+                                                <button type="button" aria-label="Diminuir zoom do mapa" disabled={zoomLevel <= 0.5} onClick={() => setZoomLevel(value => Math.max(0.5, value - 0.25))}><Minus size={16} aria-hidden="true" /></button>
+                                                <button type="button" className="cutting-stepper-value" title="Toque para voltar à visão geral" aria-label={`Zoom ${Math.round(zoomLevel * 100)}%. Restaurar visão geral do mapa`} onClick={() => {setZoomLevel(1); scrollContainerRef.current?.scrollTo?.({left: 0, top: 0});}}>{Math.round(zoomLevel * 100)}%</button>
+                                                <button type="button" aria-label="Aumentar zoom do mapa" disabled={zoomLevel >= 3} onClick={() => setZoomLevel(value => Math.min(3, value + 0.25))}><Plus size={16} aria-hidden="true" /></button>
                                             </span>
                                         </div>
-                                        <label className="cutting-row" data-disabled={!planCutLines}>
-                                            <span className="cutting-row-label">Linhas de corte<small>{planCutLines ? 'onde passar o estilete' : 'plano sem cortes retos'}</small></span>
+                                        <label className="cutting-tile cutting-tile-toggle" data-disabled={!planCutLines} title={planCutLines ? 'Mostra onde passar o estilete' : 'Plano sem cortes retos'}>
+                                            <span><Scissors size={14} aria-hidden="true" />Linhas</span>
                                             <input className="cutting-switch" type="checkbox" role="switch" aria-label="Linhas de corte" checked={showCutLines && !!planCutLines} disabled={!planCutLines} onChange={toggleCutLines} />
                                         </label>
                                     </div>
 
                                     <button type="button" className="cutting-save-version" onClick={() => handleOptimize(true)} disabled={!result || isOptimizing}>
-                                        {isOptimizing ? <Loader2 size={18} className="animate-spin" aria-hidden="true" /> : <Save size={18} aria-hidden="true" />}
+                                        {isOptimizing ? <Loader2 size={17} className="animate-spin" aria-hidden="true" /> : <Save size={17} aria-hidden="true" />}
                                         <span>{isOptimizing ? 'Calculando…' : 'Salvar esta versão'}</span>
                                     </button>
                                 </div>}
