@@ -93,6 +93,17 @@ export interface FilmPriceOverride {
 // O override pertence somente à opção/orçamento e nunca altera o catálogo.
 export type FilmPriceOverrides = { [filmName: string]: FilmPriceOverride };
 
+export type WarrantyUnit = 'dias' | 'meses' | 'anos';
+
+// Garantia da película só nesta proposta (ex.: mesma película com garantia maior por um preço maior).
+export interface FilmWarrantyOverride {
+    garantiaFabricante?: number;
+    garantiaMaoDeObra?: number;
+    garantiaMaoDeObraUnidade?: WarrantyUnit;
+}
+
+export type FilmWarrantyOverrides = { [filmName: string]: FilmWarrantyOverride };
+
 export type ProposalExpenseCategory = 'paid_traffic' | 'transport' | 'food' | 'tools' | 'material' | 'other';
 
 export interface ProposalFuelExpenseDetails {
@@ -167,6 +178,8 @@ export interface ProposalDiscount {
     incluirTermoResponsabilidade?: boolean;
     // Validade desta proposta em dias (1 a 60; undefined = usa o padrão da empresa).
     validityDays?: number;
+    // Garantias por película só nesta proposta (undefined = catálogo).
+    filmWarrantyOverrides?: FilmWarrantyOverrides;
 }
 
 export interface SavedProposalDiscount {
@@ -186,6 +199,7 @@ export interface SavedProposalDiscount {
     hideMeasurements?: boolean;
     incluirTermoResponsabilidade?: boolean;
     validityDays?: number;
+    filmWarrantyOverrides?: FilmWarrantyOverrides;
 }
 
 export interface ProposalOption {
@@ -375,6 +389,12 @@ export interface Totals {
             catalogUnitPriceLabor: number;
             catalogUnitPriceLinearMeter: number;
             catalogUnitSalePriceLinearMeter: number;
+            // Garantia do catálogo, como referência para a garantia desta proposta.
+            catalogWarranty?: {
+                garantiaFabricante?: number;
+                garantiaMaoDeObra?: number;
+                garantiaMaoDeObraUnidade?: WarrantyUnit;
+            };
         };
     };
 }

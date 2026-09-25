@@ -332,6 +332,31 @@ describe('useProposalEditor', () => {
     expect(result.current.generalDiscount.validityDays).toBeUndefined();
   });
 
+  it('guarda a garantia escolhida em Totais e volta ao catálogo quando limpa', async () => {
+    mockedDb.getProposalOptions.mockResolvedValue([]);
+
+    const { result } = buildHook();
+
+    await act(async () => {});
+
+    const warranty = { 'Reflecta Clear': { garantiaFabricante: 10, garantiaMaoDeObra: 2, garantiaMaoDeObraUnidade: 'anos' as const } };
+    act(() => {
+      result.current.handleGeneralDiscountChange({ ...result.current.generalDiscount, filmWarrantyOverrides: warranty });
+    });
+    expect(result.current.generalDiscount.filmWarrantyOverrides).toEqual(warranty);
+
+    // Outras mudanças nas opções não podem apagar a garantia.
+    act(() => {
+      result.current.handleProposalPricingModeChange('labor_only');
+    });
+    expect(result.current.generalDiscount.filmWarrantyOverrides).toEqual(warranty);
+
+    act(() => {
+      result.current.handleGeneralDiscountChange({ ...result.current.generalDiscount, filmWarrantyOverrides: undefined });
+    });
+    expect(result.current.generalDiscount.filmWarrantyOverrides).toBeUndefined();
+  });
+
   it('permite trocar o modo de cobranca da opcao ativa', async () => {
     mockedDb.getProposalOptions.mockResolvedValue([]);
 
