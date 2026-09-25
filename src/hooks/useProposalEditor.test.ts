@@ -308,6 +308,30 @@ describe('useProposalEditor', () => {
     });
   });
 
+  it('guarda a validade escolhida em Totais e volta ao padrão quando limpa', async () => {
+    mockedDb.getProposalOptions.mockResolvedValue([]);
+
+    const { result } = buildHook();
+
+    await act(async () => {});
+
+    act(() => {
+      result.current.handleGeneralDiscountChange({ ...result.current.generalDiscount, validityDays: 15 });
+    });
+    expect(result.current.generalDiscount.validityDays).toBe(15);
+
+    // Outras mudanças nas opções não podem apagar a validade.
+    act(() => {
+      result.current.handleProposalPricingModeChange('labor_only');
+    });
+    expect(result.current.generalDiscount.validityDays).toBe(15);
+
+    act(() => {
+      result.current.handleGeneralDiscountChange({ ...result.current.generalDiscount, validityDays: undefined });
+    });
+    expect(result.current.generalDiscount.validityDays).toBeUndefined();
+  });
+
   it('permite trocar o modo de cobranca da opcao ativa', async () => {
     mockedDb.getProposalOptions.mockResolvedValue([]);
 

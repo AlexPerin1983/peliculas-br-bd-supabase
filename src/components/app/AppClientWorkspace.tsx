@@ -78,6 +78,7 @@ interface AppClientWorkspaceProps {
     onOpenAIModal: () => void;
     onOpenPrices: () => void;
     defaultHideMeasurements?: boolean;
+    defaultValidityDays?: number;
 }
 
 const formatCurrencyBR = (value: number) => new Intl.NumberFormat('pt-BR', {
@@ -443,7 +444,8 @@ export const AppClientWorkspace: React.FC<AppClientWorkspaceProps> = ({
     onDuplicateMeasurements,
     onGeneratePdf,
     onOpenAIModal,
-    defaultHideMeasurements
+    defaultHideMeasurements,
+    defaultValidityDays
 }) => {
     const [isDesktopTotalsOpen, setIsDesktopTotalsOpen] = useState(false);
 
@@ -605,6 +607,7 @@ export const AppClientWorkspace: React.FC<AppClientWorkspaceProps> = ({
                         isGeneratingPdf={isGeneratingPdf}
                         onOpenAIModal={onOpenAIModal}
                         defaultHideMeasurements={defaultHideMeasurements}
+                        defaultValidityDays={defaultValidityDays}
                         paymentConfig={proposalPaymentConfig}
                         companyPaymentMethods={companyPaymentMethods}
                         onUpdatePaymentConfig={onUpdateProposalPaymentConfig}
@@ -624,6 +627,7 @@ export const AppClientWorkspace: React.FC<AppClientWorkspaceProps> = ({
                         onGeneratePdf={onGeneratePdf}
                         isGeneratingPdf={isGeneratingPdf}
                         defaultHideMeasurements={defaultHideMeasurements}
+                        defaultValidityDays={defaultValidityDays}
                         paymentConfig={proposalPaymentConfig}
                         companyPaymentMethods={companyPaymentMethods}
                         onUpdatePaymentConfig={onUpdateProposalPaymentConfig}

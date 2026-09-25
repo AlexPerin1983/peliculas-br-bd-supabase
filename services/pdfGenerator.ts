@@ -5,7 +5,7 @@ import { calculatePricingAreaM2 } from '../src/lib/pricingArea';
 import { buildPdfAdjustmentDisplay, type PdfDisplayLineItem } from '../src/lib/pdfAdjustmentDisplay';
 import { calculateProposalAdjustmentAmounts } from '../src/lib/proposalAdjustments';
 import { createDefaultLogo } from './defaultLogo';
-import { clampValidityDays } from '../src/lib/proposalValidity';
+import { resolveProposalValidityDays } from '../src/lib/proposalValidity';
 import { formatGarantiaMaoDeObra } from '../src/lib/filmWarranty';
 import { DEFAULT_TERMO_RESPONSABILIDADE } from '../src/lib/termoResponsabilidade';
 import type { PaymentMethod } from '../types';
@@ -27,6 +27,7 @@ interface GeneralDiscount {
     filmPriceOverrides?: FilmPriceOverrides;
     hideMeasurements?: boolean;
     incluirTermoResponsabilidade?: boolean;
+    validityDays?: number;
 }
 
 const formatNumberBR = (number: number): string => {
@@ -259,6 +260,7 @@ export const regeneratePDFFromSaved = async (client: Client, userInfo: UserInfo,
         filmPriceOverrides: pdf.generalDiscount?.filmPriceOverrides,
         hideMeasurements: pdf.generalDiscount?.hideMeasurements,
         incluirTermoResponsabilidade: pdf.generalDiscount?.incluirTermoResponsabilidade,
+        validityDays: pdf.generalDiscount?.validityDays,
     };
 
     const totals = calculateTotalsFromSavedPDF(pdf, allFilms);
@@ -293,6 +295,7 @@ export const generateCombinedPDF = async (client: Client, userInfo: UserInfo, sa
             filmPriceOverrides: pdf.generalDiscount?.filmPriceOverrides,
             hideMeasurements: pdf.generalDiscount?.hideMeasurements,
             incluirTermoResponsabilidade: pdf.generalDiscount?.incluirTermoResponsabilidade,
+        validityDays: pdf.generalDiscount?.validityDays,
         } as GeneralDiscount,
         totals: calculateTotalsFromSavedPDF(pdf, allFilms),
         paymentConfig: undefined as ProposalPaymentConfig | undefined,
@@ -939,7 +942,7 @@ const renderPdfContent = async (
             const primaryPaymentSummary = buildPrimaryPaymentSummary(optionTotals.finalTotal, optionPaymentConfig);
             const commercialSummaryLines = [
                 primaryPaymentSummary ? `Pagamento: ${primaryPaymentSummary}` : null,
-                `Validade: ${clampValidityDays(userInfo.proposalValidityDays)} dias a partir da emissão`
+                `Validade: ${resolveProposalValidityDays(optionData.generalDiscount?.validityDays, userInfo.proposalValidityDays)} dias a partir da emissão`
             ].filter((line): line is string => Boolean(line));
             const wrappedCommercialLines = commercialSummaryLines.flatMap(line =>
                 doc.splitTextToSize(line, pageWidth - (margin * 2) - 8)
@@ -1188,7 +1191,8 @@ const renderPdfContent = async (
             });
         }
 
-        const validityDays = clampValidityDays(userInfo.proposalValidityDays);
+        // Com várias opções no mesmo PDF, vale a menor validade entre elas.
+        const validityDays = Math.min(...optionsData.map(option => resolveProposalValidityDays(option.generalDiscount?.validityDays, userInfo.proposalValidityDays)));
         const conditions: string[] = [];
         const resolvedPrazoPagamento = (optionsData[0]?.paymentConfig || basePaymentConfig).prazoPagamento;
         if (resolvedPrazoPagamento) {
