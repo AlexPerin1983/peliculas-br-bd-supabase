@@ -127,6 +127,11 @@ export function useProposalTotals({
                     catalogUnitPriceLabor: catalogPrices.maoDeObra,
                     catalogUnitPriceLinearMeter: catalogPrices.precoMetroLinear,
                     catalogUnitSalePriceLinearMeter: catalogPrices.precoVendaMetroLinear,
+                    catalogWarranty: {
+                        garantiaFabricante: film?.garantiaFabricante,
+                        garantiaMaoDeObra: film?.garantiaMaoDeObra,
+                        garantiaMaoDeObraUnidade: film?.garantiaMaoDeObraUnidade,
+                    },
                 };
             }
 

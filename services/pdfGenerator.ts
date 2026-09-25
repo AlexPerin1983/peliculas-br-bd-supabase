@@ -1,4 +1,4 @@
-import type { Client, UserInfo, Measurement, Film, FilmPriceOverrides, ProposalPaymentConfig, ProposalPricingMode, SavedPDF, Totals } from '../types';
+import type { Client, UserInfo, Measurement, Film, FilmPriceOverrides, FilmWarrantyOverrides, ProposalPaymentConfig, ProposalPricingMode, SavedPDF, Totals } from '../types';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { calculatePricingAreaM2 } from '../src/lib/pricingArea';
@@ -7,6 +7,7 @@ import { calculateProposalAdjustmentAmounts } from '../src/lib/proposalAdjustmen
 import { createDefaultLogo } from './defaultLogo';
 import { resolveProposalValidityDays } from '../src/lib/proposalValidity';
 import { formatGarantiaMaoDeObra } from '../src/lib/filmWarranty';
+import { resolveFilmWarranty } from '../src/lib/filmWarrantyOverrides';
 import { DEFAULT_TERMO_RESPONSABILIDADE } from '../src/lib/termoResponsabilidade';
 import type { PaymentMethod } from '../types';
 import { calculateMeasurementPriceAdjustment, getMeasurementAdjustmentInputs } from '../src/lib/measurementPriceAdjustment';
@@ -28,6 +29,7 @@ interface GeneralDiscount {
     hideMeasurements?: boolean;
     incluirTermoResponsabilidade?: boolean;
     validityDays?: number;
+    filmWarrantyOverrides?: FilmWarrantyOverrides;
 }
 
 const formatNumberBR = (number: number): string => {
@@ -261,6 +263,7 @@ export const regeneratePDFFromSaved = async (client: Client, userInfo: UserInfo,
         hideMeasurements: pdf.generalDiscount?.hideMeasurements,
         incluirTermoResponsabilidade: pdf.generalDiscount?.incluirTermoResponsabilidade,
         validityDays: pdf.generalDiscount?.validityDays,
+        filmWarrantyOverrides: pdf.generalDiscount?.filmWarrantyOverrides,
     };
 
     const totals = calculateTotalsFromSavedPDF(pdf, allFilms);
@@ -295,7 +298,8 @@ export const generateCombinedPDF = async (client: Client, userInfo: UserInfo, sa
             filmPriceOverrides: pdf.generalDiscount?.filmPriceOverrides,
             hideMeasurements: pdf.generalDiscount?.hideMeasurements,
             incluirTermoResponsabilidade: pdf.generalDiscount?.incluirTermoResponsabilidade,
-        validityDays: pdf.generalDiscount?.validityDays,
+            validityDays: pdf.generalDiscount?.validityDays,
+            filmWarrantyOverrides: pdf.generalDiscount?.filmWarrantyOverrides,
         } as GeneralDiscount,
         totals: calculateTotalsFromSavedPDF(pdf, allFilms),
         paymentConfig: undefined as ProposalPaymentConfig | undefined,
@@ -307,6 +311,53 @@ export const generateCombinedPDF = async (client: Client, userInfo: UserInfo, sa
     return doc.output('blob');
 };
 
+
+interface PdfWarrantyOption {
+    measurements: Pick<Measurement, 'pelicula'>[];
+    generalDiscount?: Pick<GeneralDiscount, 'filmWarrantyOverrides'>;
+    totals: Pick<Totals, 'pricingMode'>;
+    proposalOptionName: string;
+}
+
+// Seção "Garantias": uma entrada por película. Se a mesma película tem garantias
+// diferentes entre as opções (ex.: garantia maior por um preço maior), cada
+// garantia sai separada com o nome das opções.
+export const buildPdfWarrantyEntries = (optionsData: PdfWarrantyOption[], allFilms: Film[]): { title: string; lines: string[] }[] => {
+    const filmNames = Array.from(new Set(optionsData.flatMap(opt => opt.measurements.map(m => m.pelicula))));
+    const entries: { title: string; lines: string[] }[] = [];
+
+    for (const filmName of filmNames) {
+        const film = allFilms.find(f => f.nome === filmName);
+        const variants: { fabricante?: number; maoDeObra: string; optionNames: string[]; hasCompletePricing: boolean }[] = [];
+
+        for (const opt of optionsData) {
+            if (!opt.measurements.some(m => m.pelicula === filmName)) continue;
+            const warranty = resolveFilmWarranty(film, opt.generalDiscount?.filmWarrantyOverrides, filmName);
+            if (!warranty.garantiaFabricante && !warranty.garantiaMaoDeObra) continue;
+            const maoDeObra = formatGarantiaMaoDeObra(warranty.garantiaMaoDeObra, warranty.garantiaMaoDeObraUnidade);
+            const isComplete = opt.totals.pricingMode !== 'labor_only';
+            const same = variants.find(v => v.fabricante === warranty.garantiaFabricante && v.maoDeObra === maoDeObra);
+            if (same) {
+                same.optionNames.push(opt.proposalOptionName);
+                same.hasCompletePricing = same.hasCompletePricing || isComplete;
+            } else {
+                variants.push({ fabricante: warranty.garantiaFabricante, maoDeObra, optionNames: [opt.proposalOptionName], hasCompletePricing: isComplete });
+            }
+        }
+
+        for (const variant of variants) {
+            const lines: string[] = [];
+            if (variant.hasCompletePricing) lines.push(`  - Garantia Fabricante: ${variant.fabricante || 'N/A'} anos`);
+            lines.push(`  - Garantia Mão de Obra: ${variant.maoDeObra}`);
+            entries.push({
+                title: variants.length > 1 ? `${filmName} (${variant.optionNames.join(', ')})` : filmName,
+                lines,
+            });
+        }
+    }
+
+    return entries;
+};
 
 // Função de renderização unificada
 const renderPdfContent = async (
@@ -1011,21 +1062,16 @@ const renderPdfContent = async (
         const uniqueFilmNames = Array.from(new Set(allFilmsUsed));
 
         await addSectionTitle("Garantias");
-        for (const filmName of uniqueFilmNames) {
-            const film = allFilms.find(f => f.nome === filmName);
-            if (film && (film.garantiaFabricante || film.garantiaMaoDeObra)) {
-                if (yPos > pageHeight - 30) await addNewPage();
-                doc.setFont("helvetica", 'bold');
-                safeText(filmName, margin, yPos);
-                yPos += 6;
-                doc.setFont("helvetica", 'normal');
-                if (hasCompletePricingOption) {
-                    safeText(`  - Garantia Fabricante: ${film.garantiaFabricante || 'N/A'} anos`, margin, yPos);
-                    yPos += 6;
-                }
-                safeText(`  - Garantia Mão de Obra: ${formatGarantiaMaoDeObra(film.garantiaMaoDeObra, film.garantiaMaoDeObraUnidade)}`, margin, yPos);
-                yPos += 8;
-            }
+        for (const entry of buildPdfWarrantyEntries(optionsData, allFilms)) {
+            if (yPos > pageHeight - 30) await addNewPage();
+            doc.setFont("helvetica", 'bold');
+            safeText(entry.title, margin, yPos);
+            yPos += 6;
+            doc.setFont("helvetica", 'normal');
+            entry.lines.forEach((line, index) => {
+                safeText(line, margin, yPos);
+                yPos += index === entry.lines.length - 1 ? 8 : 6;
+            });
         }
 
         const filmsWithTechData = hasCompletePricingOption

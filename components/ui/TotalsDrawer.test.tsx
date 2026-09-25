@@ -133,6 +133,73 @@ describe('TotalsDrawer validade em "Outro"', () => {
     });
 });
 
+describe('TotalsDrawer garantia nesta proposta', () => {
+    const warrantyTotals: Totals = {
+        ...totals,
+        groupedTotals: {
+            Jateada: {
+                ...totals.groupedTotals!.Jateada,
+                catalogWarranty: { garantiaFabricante: 5, garantiaMaoDeObra: 90, garantiaMaoDeObraUnidade: 'dias' },
+            },
+        },
+    };
+    const renderDrawer = (generalDiscount: ProposalDiscount, onUpdate = vi.fn()) => {
+        const view = render(<TotalsDrawer
+            isOpen
+            onClose={vi.fn()}
+            totals={warrantyTotals}
+            generalDiscount={generalDiscount}
+            onUpdateGeneralDiscount={onUpdate}
+            onGeneratePdf={vi.fn()}
+            isGeneratingPdf={false}
+        />);
+        fireEvent.click(screen.getByRole('button', { name: /Jateada/ }));
+        return { onUpdate, ...view };
+    };
+
+    it('mostra a garantia do catálogo e grava uma garantia maior só na proposta', () => {
+        const { onUpdate } = renderDrawer(baseDiscount);
+        expect(screen.getByText(/Catálogo: 5 anos fábrica · 90 dias instalação/)).toBeInTheDocument();
+        const fabricante = screen.getByLabelText('Garantia do fabricante em anos');
+        expect(fabricante).toHaveValue('5');
+
+        fireEvent.change(fabricante, { target: { value: '10' } });
+        expect(onUpdate).toHaveBeenLastCalledWith(expect.objectContaining({
+            filmWarrantyOverrides: { Jateada: { garantiaFabricante: 10 } },
+        }));
+        expect(onUpdate.mock.lastCall?.[0].filmPriceOverrides).toBeUndefined();
+
+        // Apagar para digitar não grava nada.
+        onUpdate.mockClear();
+        fireEvent.change(fabricante, { target: { value: '' } });
+        expect(fabricante).toHaveValue('');
+        expect(onUpdate).not.toHaveBeenCalled();
+    });
+
+    it('troca a unidade da instalação e volta ao catálogo', () => {
+        const { onUpdate } = renderDrawer({
+            ...baseDiscount,
+            filmWarrantyOverrides: { Jateada: { garantiaFabricante: 10 } },
+        });
+        expect(screen.getByTitle('Garantia personalizada nesta proposta')).toHaveTextContent('10a fáb. · 90d inst.');
+
+        const units = screen.getByRole('group', { name: 'Unidade da garantia da instalação' });
+        fireEvent.change(screen.getByLabelText('Garantia da instalação'), { target: { value: '120' } });
+        expect(onUpdate).toHaveBeenLastCalledWith(expect.objectContaining({
+            filmWarrantyOverrides: { Jateada: { garantiaFabricante: 10, garantiaMaoDeObra: 120, garantiaMaoDeObraUnidade: 'dias' } },
+        }));
+
+        // (o drawer é controlado: sem rerender, a instalação salva continua 90)
+        fireEvent.click(within(units).getByRole('button', { name: 'anos' }));
+        expect(onUpdate).toHaveBeenLastCalledWith(expect.objectContaining({
+            filmWarrantyOverrides: { Jateada: { garantiaFabricante: 10, garantiaMaoDeObra: 90, garantiaMaoDeObraUnidade: 'anos' } },
+        }));
+
+        fireEvent.click(screen.getByRole('button', { name: /Usar garantia do catálogo/ }));
+        expect(onUpdate).toHaveBeenLastCalledWith(expect.objectContaining({ filmWarrantyOverrides: undefined }));
+    });
+});
+
 describe('TotalsDrawer preço personalizado', () => {
     it('permite escolher nos totais quais parcelas irão para o orçamento', () => {
         const onUpdatePaymentConfig = vi.fn();

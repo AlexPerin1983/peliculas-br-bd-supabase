@@ -1,4 +1,34 @@
-import { buildPdfInstallmentLines, buildPrimaryPaymentSummary } from './pdfGenerator';
+import { buildPdfInstallmentLines, buildPdfWarrantyEntries, buildPrimaryPaymentSummary } from './pdfGenerator';
+import type { Film } from '../types';
+
+describe('buildPdfWarrantyEntries', () => {
+    const films = [{ nome: 'Reflecta Clear', preco: 150, garantiaFabricante: 5, garantiaMaoDeObra: 90, garantiaMaoDeObraUnidade: 'dias' } as Film];
+    const option = (name: string, generalDiscount?: any) => ({
+        measurements: [{ pelicula: 'Reflecta Clear' }],
+        generalDiscount,
+        totals: { pricingMode: 'complete' as const },
+        proposalOptionName: name,
+    });
+
+    it('usa a garantia do catálogo quando nenhuma opção personaliza', () => {
+        expect(buildPdfWarrantyEntries([option('Opção 1')], films)).toEqual([{
+            title: 'Reflecta Clear',
+            lines: ['  - Garantia Fabricante: 5 anos', '  - Garantia Mão de Obra: 90 dias'],
+        }]);
+    });
+
+    it('separa a mesma película com garantia maior em outra opção', () => {
+        const entries = buildPdfWarrantyEntries([
+            option('Básica'),
+            option('Premium', { filmWarrantyOverrides: { 'Reflecta Clear': { garantiaFabricante: 10, garantiaMaoDeObra: 2, garantiaMaoDeObraUnidade: 'anos' } } }),
+            option('Básica 2'),
+        ], films);
+        expect(entries).toEqual([
+            { title: 'Reflecta Clear (Básica, Básica 2)', lines: ['  - Garantia Fabricante: 5 anos', '  - Garantia Mão de Obra: 90 dias'] },
+            { title: 'Reflecta Clear (Premium)', lines: ['  - Garantia Fabricante: 10 anos', '  - Garantia Mão de Obra: 2 anos'] },
+        ]);
+    });
+});
 
 describe('buildPrimaryPaymentSummary', () => {
     it('resume a condição principal de pagamento perto do valor final', () => {

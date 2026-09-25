@@ -28,6 +28,7 @@ import { PROPOSAL_EXPENSE_CATEGORY_OPTIONS, summarizeProposalExpenses } from '..
 import { matchesSearch, normalizeSearchText } from '../../src/lib/textSearch';
 import { buildReviewFollowUpMessage } from '../../src/lib/reviewMessage';
 import { formatGarantiaMaoDeObra, garantiaEmDias } from '../../src/lib/filmWarranty';
+import { applyFilmWarrantyOverrides } from '../../src/lib/filmWarrantyOverrides';
 import ProposalShareModal from '../modals/ProposalShareModal';
 
 interface PdfHistoryViewProps {
@@ -1068,11 +1069,15 @@ const buildFilmSummary = (filmNames: string[]) => {
     return `as películas ${filmNames[0]}, ${filmNames[1]} e outras`;
 };
 
-const buildWarrantyText = (films: Film[], filmNames: string[]) => {
-    const matchedFilms = filmNames
-        .map(name => films.find(film => film.nome === name))
+// Películas usadas no PDF já com a garantia personalizada naquela proposta.
+const getPdfWarrantyFilms = (pdf: SavedPDF, films: Film[], filmNames: string[]) => {
+    const withOverrides = applyFilmWarrantyOverrides(films, pdf.generalDiscount?.filmWarrantyOverrides);
+    return filmNames
+        .map(name => withOverrides.find(film => film.nome === name))
         .filter((film): film is Film => Boolean(film));
+};
 
+const buildWarrantyTextFromFilms = (matchedFilms: Film[]) => {
     const fabricante = matchedFilms
         .map(film => film.garantiaFabricante)
         .filter((value): value is number => typeof value === 'number' && value > 0);
@@ -1121,7 +1126,7 @@ const buildPersuasiveMessages = (pdf: SavedPDF, clientName: string, films: Film[
 
     const firstName = getFirstName(clientName);
     const filmSummary = buildFilmSummary(orderedFilmNames);
-    const warrantyText = buildWarrantyText(films, orderedFilmNames);
+    const warrantyText = buildWarrantyTextFromFilms(getPdfWarrantyFilms(pdf, films, orderedFilmNames));
     const totalText = formatNumberBR(pdf.totalPreco);
 
     return [
@@ -1138,7 +1143,7 @@ const buildPdfMessageContext = (pdf: SavedPDF, clientName: string, films: Film[]
         cliente: clientName,
         primeiroNome: getFirstName(clientName),
         peliculas: buildFilmSummary(filmNames),
-        garantia: buildWarrantyText(films, filmNames),
+        garantia: buildWarrantyTextFromFilms(getPdfWarrantyFilms(pdf, films, filmNames)),
         valor: formatNumberBR(pdf.totalPreco)
     };
 };
@@ -1196,7 +1201,7 @@ const buildCombinedProposalMessages = (selectedPdfs: SavedPDF[], client: Client 
         (pdf.measurements || []).map(measurement => measurement.pelicula)
     )));
     const filmSummary = filmNames.length > 0 ? buildFilmSummary(filmNames) : 'as películas selecionadas';
-    const warrantyText = buildWarrantyText(films, filmNames);
+    const warrantyText = buildWarrantyTextFromFilms(selectedPdfs.flatMap(pdf => getPdfWarrantyFilms(pdf, films, filmNames)));
     const cheapestOption = optionEntries.reduce((cheapest, option) => (
         option.price < cheapest.price ? option : cheapest
     ), optionEntries[0]);

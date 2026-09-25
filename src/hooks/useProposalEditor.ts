@@ -86,6 +86,10 @@ const normalizeGeneralDiscount = (
         validityDays: discount && Object.prototype.hasOwnProperty.call(discount, 'validityDays')
             ? discount.validityDays
             : fallback?.validityDays,
+        // Mesma regra: undefined explícito = voltou tudo ao catálogo.
+        filmWarrantyOverrides: discount && Object.prototype.hasOwnProperty.call(discount, 'filmWarrantyOverrides')
+            ? discount.filmWarrantyOverrides
+            : fallback?.filmWarrantyOverrides,
     };
 };
 

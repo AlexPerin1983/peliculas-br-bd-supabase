@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Drawer } from 'vaul';
 import { CalendarClock, CircleDollarSign, Eye, EyeOff, MinusCircle, Percent, PlusCircle, RotateCcw, Shield, ShieldCheck, SlidersHorizontal } from 'lucide-react';
 
-import type { FilmPriceOverride, PaymentMethods, ProposalDiscount, ProposalPaymentConfig, Totals } from '../../types';
+import type { FilmPriceOverride, FilmWarrantyOverride, PaymentMethods, ProposalDiscount, ProposalPaymentConfig, Totals, WarrantyUnit } from '../../types';
 import { PaymentSelectionPanel } from './PaymentSelectionPanel';
 import {
     getProposalAdjustmentInputs,
@@ -11,6 +11,8 @@ import {
 } from '../../src/lib/proposalAdjustments';
 import type { FilmPriceField } from '../../src/lib/filmPriceOverrides';
 import { resetFilmPriceOverrides, updateFilmPriceOverrides } from '../../src/lib/filmPriceOverrides';
+import { hasFilmWarrantyOverride, resolveFilmWarranty, updateFilmWarrantyOverrides } from '../../src/lib/filmWarrantyOverrides';
+import { formatGarantiaMaoDeObra, formatGarantiaMaoDeObraCurto, GARANTIA_UNIDADES } from '../../src/lib/filmWarranty';
 import { selectAllOnFocus } from '../../src/lib/selectOnFocus';
 import { clampValidityDays, MAX_PROPOSAL_VALIDITY_DAYS, PROPOSAL_VALIDITY_OPTIONS, resolveProposalValidityDays } from '../../src/lib/proposalValidity';
 
@@ -356,6 +358,169 @@ const FilmPricingEditor: React.FC<FilmPricingEditorProps> = ({
     );
 };
 
+// Selo curto no cabeçalho da película: "10a fáb. · 2a inst."
+const formatWarrantyBadge = (warranty: ReturnType<typeof resolveFilmWarranty>, isLaborOnly: boolean) => [
+    !isLaborOnly && warranty.garantiaFabricante ? `${warranty.garantiaFabricante}a fáb.` : '',
+    warranty.garantiaMaoDeObra ? `${formatGarantiaMaoDeObraCurto(warranty.garantiaMaoDeObra, warranty.garantiaMaoDeObraUnidade)} inst.` : '',
+].filter(Boolean).join(' · ') || 'garantia';
+
+interface WarrantyNumberInputProps {
+    label: string;
+    value?: number;
+    maxLength: number;
+    onCommit: (value: number) => void;
+}
+
+// Campo numérico com o padrão do sistema: ao tocar, esvazia/seleciona para digitar por cima.
+const WarrantyNumberInput: React.FC<WarrantyNumberInputProps> = ({ label, value, maxLength, onCommit }) => {
+    const [draft, setDraft] = useState<string | null>(null);
+    return (
+        <input
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            enterKeyHint="done"
+            maxLength={maxLength}
+            value={draft ?? (value ? String(value) : '')}
+            placeholder="—"
+            onFocus={selectAllOnFocus}
+            onChange={event => {
+                const typed = event.target.value.replace(/\D/g, '').slice(0, maxLength);
+                setDraft(typed);
+                const parsed = Number(typed);
+                if (typed && parsed >= 1) onCommit(parsed);
+            }}
+            onBlur={() => setDraft(null)}
+            aria-label={label}
+            // 16px fixo: o `font: inherit` global venceria a classe, e menos que isso dá zoom no iPhone.
+            style={{ fontSize: 16 }}
+            className="h-9 w-14 rounded-lg border border-slate-200 bg-white px-2 text-right font-semibold text-slate-800 tabular-nums placeholder:text-slate-300 focus:border-emerald-500 focus:outline-none dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+        />
+    );
+};
+
+interface FilmWarrantyEditorProps {
+    group: any;
+    isLaborOnly: boolean;
+    override?: FilmWarrantyOverride;
+    onChange: (patch: Partial<FilmWarrantyOverride> | undefined) => void;
+}
+
+const FilmWarrantyEditor: React.FC<FilmWarrantyEditorProps> = ({ group, isLaborOnly, override, onChange }) => {
+    const catalog = group.catalogWarranty || {};
+    const catalogLaborUnit: WarrantyUnit = catalog.garantiaMaoDeObraUnidade || 'dias';
+    const resolved = resolveFilmWarranty(catalog, override ? { [group.filmName]: override } : undefined, group.filmName);
+    const laborUnit: WarrantyUnit = resolved.garantiaMaoDeObraUnidade || 'dias';
+    const customized = !!override && Object.keys(override).length > 0;
+    const fabricanteCustom = override?.garantiaFabricante !== undefined;
+    const laborCustom = override?.garantiaMaoDeObra !== undefined;
+
+    const catalogSummary = [
+        !isLaborOnly && catalog.garantiaFabricante ? `${catalog.garantiaFabricante} ${catalog.garantiaFabricante === 1 ? 'ano' : 'anos'} fábrica` : '',
+        catalog.garantiaMaoDeObra ? `${formatGarantiaMaoDeObra(catalog.garantiaMaoDeObra, catalogLaborUnit)} instalação` : '',
+    ].filter(Boolean).join(' · ') || 'sem garantia no catálogo';
+
+    const setFabricante = (years: number) => {
+        onChange({ garantiaFabricante: years === catalog.garantiaFabricante ? undefined : years });
+    };
+    const setLabor = (value: number, unit: WarrantyUnit) => {
+        const sameAsCatalog = value === catalog.garantiaMaoDeObra && unit === catalogLaborUnit;
+        onChange(sameAsCatalog
+            ? { garantiaMaoDeObra: undefined, garantiaMaoDeObraUnidade: undefined }
+            : { garantiaMaoDeObra: value, garantiaMaoDeObraUnidade: unit });
+    };
+
+    const fieldTone = (custom: boolean) => custom
+        ? 'text-emerald-700 dark:text-emerald-300'
+        : 'text-slate-600 dark:text-slate-300';
+
+    return (
+        <div className={`space-y-2 rounded-xl border p-2 transition-colors ${customized
+            ? 'border-emerald-300 bg-emerald-50/70 dark:border-emerald-800 dark:bg-emerald-950/20'
+            : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900/60'}`}
+        >
+            <div className="flex items-center justify-between gap-2 px-0.5">
+                <div className="flex min-w-0 items-center gap-2">
+                    <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${customized
+                        ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/50 dark:text-emerald-300'
+                        : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'}`}
+                    >
+                        <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
+                    </span>
+                    <span className="min-w-0">
+                        <span className="block text-[11px] font-black text-slate-800 dark:text-slate-100">Garantia nesta proposta</span>
+                        <span className="block truncate text-[9px] text-slate-500 dark:text-slate-400">
+                            {customized ? 'Personalizada · o catálogo não muda' : `Catálogo: ${catalogSummary}`}
+                        </span>
+                    </span>
+                </div>
+                {customized && (
+                    <span className="shrink-0 text-[10px]">
+                        <button
+                            type="button"
+                            onClick={() => onChange(undefined)}
+                            aria-label={`Usar garantia do catálogo: ${catalogSummary}`}
+                            title={`Catálogo: ${catalogSummary}`}
+                            className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg px-2 py-1.5 font-bold text-emerald-700 hover:bg-emerald-100 dark:text-emerald-300 dark:hover:bg-emerald-900/40"
+                        >
+                            <RotateCcw className="h-3 w-3" aria-hidden="true" />
+                            Usar catálogo
+                        </button>
+                    </span>
+                )}
+            </div>
+
+            <div className="divide-y divide-slate-100 rounded-lg border border-slate-100 bg-white/80 dark:divide-slate-800 dark:border-slate-800 dark:bg-slate-950/40">
+                {!isLaborOnly && (
+                    <div className="flex items-center justify-between gap-2 px-2 py-1.5">
+                        <span className={`text-[11px] font-semibold ${fieldTone(fabricanteCustom)}`}>Fabricante</span>
+                        <span className="flex items-center gap-1.5 text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                            <WarrantyNumberInput
+                                label="Garantia do fabricante em anos"
+                                value={resolved.garantiaFabricante}
+                                maxLength={2}
+                                onCommit={setFabricante}
+                            />
+                            <span className="w-[138px]">{resolved.garantiaFabricante === 1 ? 'ano' : 'anos'}</span>
+                        </span>
+                    </div>
+                )}
+                <div className="flex items-center justify-between gap-2 px-2 py-1.5">
+                    <span className={`text-[11px] font-semibold ${fieldTone(laborCustom)}`}>Instalação</span>
+                    <span className="flex items-center gap-1.5">
+                        <WarrantyNumberInput
+                            label="Garantia da instalação"
+                            value={resolved.garantiaMaoDeObra}
+                            maxLength={3}
+                            onCommit={value => setLabor(value, laborUnit)}
+                        />
+                        {/* Tamanho no grupo: os botões herdam (o `font: inherit` global ignora classes neles). */}
+                        <span className="grid h-9 w-[138px] grid-cols-3 rounded-lg bg-slate-100 p-0.5 text-[11px] dark:bg-slate-800" role="group" aria-label="Unidade da garantia da instalação">
+                            {GARANTIA_UNIDADES.map(unit => {
+                                const selected = laborUnit === unit.value;
+                                return (
+                                    <button
+                                        key={unit.value}
+                                        type="button"
+                                        aria-pressed={selected}
+                                        disabled={!resolved.garantiaMaoDeObra}
+                                        onClick={() => resolved.garantiaMaoDeObra && setLabor(resolved.garantiaMaoDeObra, unit.value)}
+                                        className={`rounded-md font-bold transition-colors disabled:opacity-40 ${selected
+                                            ? 'bg-white text-emerald-700 shadow-sm dark:bg-slate-950 dark:text-emerald-300'
+                                            : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}
+                                    >
+                                        {unit.label.toLowerCase()}
+                                    </button>
+                                );
+                            })}
+                        </span>
+                    </span>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
     isOpen,
     onClose,
@@ -540,6 +705,13 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
         });
     };
 
+    const setFilmWarranty = (filmName: string, patch: Partial<FilmWarrantyOverride> | undefined) => {
+        onUpdateGeneralDiscount({
+            ...generalDiscount,
+            filmWarrantyOverrides: updateFilmWarrantyOverrides(generalDiscount.filmWarrantyOverrides, filmName, patch),
+        });
+    };
+
     const toggleGroup = (filmName: string) => {
         setOpenGroup(openGroup === filmName ? null : filmName);
     };
@@ -651,8 +823,14 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                                                         <span className="truncate text-sm font-semibold text-slate-900 dark:text-white">
                                                             {group.filmName}
                                                         </span>
-                                                        <span className="text-[10px] text-slate-500 dark:text-slate-400">
-                                                            {group.totalM2.toFixed(2)} m² {group.totalLinearMeters > 0 ? `| ${group.totalLinearMeters.toFixed(2)} m` : ''}
+                                                        <span className="flex min-w-0 items-center gap-1.5 text-[10px] text-slate-500 dark:text-slate-400">
+                                                            <span className="shrink-0">{group.totalM2.toFixed(2)} m² {group.totalLinearMeters > 0 ? `| ${group.totalLinearMeters.toFixed(2)} m` : ''}</span>
+                                                            {hasFilmWarrantyOverride(generalDiscount.filmWarrantyOverrides, group.filmName) && (
+                                                                <span className="inline-flex min-w-0 items-center gap-0.5 truncate rounded-full bg-emerald-50 px-1.5 py-px text-[9px] font-bold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" title="Garantia personalizada nesta proposta">
+                                                                    <ShieldCheck className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />
+                                                                    {formatWarrantyBadge(resolveFilmWarranty(group.catalogWarranty, generalDiscount.filmWarrantyOverrides, group.filmName), isLaborOnly)}
+                                                                </span>
+                                                            )}
                                                         </span>
                                                     </div>
                                                     <i className={`fas fa-chevron-down text-[10px] text-slate-400 transition-transform duration-200 ${openGroup === group.filmName ? 'rotate-180' : ''}`} />
@@ -694,6 +872,13 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                                                             onToggleAdvanced={() => setAdvancedPriceGroup(current => current === group.filmName ? null : group.filmName)}
                                                             onChange={(field, value) => setFilmPrice(group.filmName, field, value)}
                                                             onResetAll={() => resetFilmPrices(group.filmName)}
+                                                        />
+
+                                                        <FilmWarrantyEditor
+                                                            group={group}
+                                                            isLaborOnly={isLaborOnly}
+                                                            override={generalDiscount.filmWarrantyOverrides?.[group.filmName]}
+                                                            onChange={(patch) => setFilmWarranty(group.filmName, patch)}
                                                         />
 
                                                         {group.filmPricingMode === 'linear' && (
