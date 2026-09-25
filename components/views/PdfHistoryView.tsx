@@ -855,6 +855,13 @@ type ReviewCampaignCandidate = {
 
 const DEFAULT_PDF_MESSAGE_TEMPLATES = [
     'Segue seu orçamento, {{primeiroNome}}. Considerei {{peliculas}} {{garantia}}. Se quiser, eu também posso te orientar sobre a melhor aplicação para cada ambiente.',
+    '{{primeiroNome}}, preparei seu orçamento. Orcei {{peliculas}} {{garantia}}. Se quiser, ajusto rapidinho qualquer detalhe para chegar na melhor opção para você.',
+    'Segue o orçamento, {{primeiroNome}}. A opção com {{peliculas}} {{garantia}} ficou em {{valor}}. Se fizer sentido para você, já posso te explicar os próximos passos da instalação.'
+];
+
+// Padrões anteriores ao envio por link: quem ainda usa esses textos recebe os novos.
+const PREVIOUS_PDF_MESSAGE_TEMPLATES = [
+    'Segue seu orçamento, {{primeiroNome}}. Considerei {{peliculas}} {{garantia}}. Se quiser, eu também posso te orientar sobre a melhor aplicação para cada ambiente.',
     '{{primeiroNome}}, te enviei o orçamento em PDF. Orcei {{peliculas}} {{garantia}}. Se quiser, ajusto rapidinho qualquer detalhe para chegar na melhor opção para você.',
     'Segue o orçamento, {{primeiroNome}}. A opção com {{peliculas}} {{garantia}} ficou em {{valor}}. Se fizer sentido para você, já posso te explicar os próximos passos da instalação.'
 ];
@@ -870,7 +877,7 @@ const hasSameTemplates = (left: string[], right: string[]) => {
 };
 
 const normalizeStoredPdfMessageTemplates = (templates: string[]) => {
-    return hasSameTemplates(templates, LEGACY_PDF_MESSAGE_TEMPLATES)
+    return hasSameTemplates(templates, LEGACY_PDF_MESSAGE_TEMPLATES) || hasSameTemplates(templates, PREVIOUS_PDF_MESSAGE_TEMPLATES)
         ? [...DEFAULT_PDF_MESSAGE_TEMPLATES]
         : templates;
 };
@@ -933,24 +940,6 @@ const readReadyMessageOverrides = (overrideKey: string): string[] | null => {
     } catch (error) {
         console.error('Erro ao carregar mensagens editadas do orçamento:', error);
         return null;
-    }
-};
-
-const saveReadyMessageOverrides = (overrideKey: string, messages: string[]) => {
-    if (typeof window === 'undefined') return;
-
-    try {
-        const rawOverrides = window.localStorage.getItem(PDF_READY_MESSAGE_OVERRIDES_STORAGE_KEY);
-        const parsedOverrides = rawOverrides ? JSON.parse(rawOverrides) : {};
-        window.localStorage.setItem(
-            PDF_READY_MESSAGE_OVERRIDES_STORAGE_KEY,
-            JSON.stringify({
-                ...parsedOverrides,
-                [overrideKey]: messages,
-            })
-        );
-    } catch (error) {
-        console.error('Erro ao salvar mensagens editadas do orçamento:', error);
     }
 };
 
@@ -2937,14 +2926,11 @@ const PdfHistoryItem: React.FC<{
     onNavigateToOption: (clientId: number, optionId: number) => void;
     isFunnelReference: boolean;
     onSetFunnelReference: (pdf: SavedPDF) => void;
-    onShare: (client: Client, pdf: SavedPDF) => void;
+    onShare: (client: Client, pdf: SavedPDF, messages?: string[]) => void;
     fitContent?: boolean;
 }> = React.memo(({ pdf, client, agendamento, onDownload, onDelete, onUpdateStatus, onRenamePdfOption, onSchedule, onOpenInAgenda, films, messageTemplates, googleReviewsLink, isSelected, onToggleSelect, onNavigateToOption, isFunnelReference, onSetFunnelReference, onShare, fitContent = false }) => {
     const { showToast } = useFeedback();
     const [copiedMessageKey, setCopiedMessageKey] = useState<string | null>(null);
-    const [isMessagesExpanded, setIsMessagesExpanded] = useState(false);
-    const [selectedMessageIndex, setSelectedMessageIndex] = useState(0);
-    const [isEditingMessage, setIsEditingMessage] = useState(false);
     const [whatsAppMessage, setWhatsAppMessage] = useState<string | null>(null);
     const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
     const [renameDraft, setRenameDraft] = useState('');
@@ -3040,16 +3026,6 @@ const PdfHistoryItem: React.FC<{
     useEffect(() => {
         setEditableMessages(readReadyMessageOverrides(readyMessageOverrideKey) || persuasiveMessages);
     }, [readyMessageOverrideKey, persuasiveMessages]);
-
-    const handleReadyMessageChange = useCallback((index: number, value: string) => {
-        setEditableMessages(current => {
-            const nextMessages = current.map((message, messageIndex) => (
-                messageIndex === index ? value : message
-            ));
-            saveReadyMessageOverrides(readyMessageOverrideKey, nextMessages);
-            return nextMessages;
-        });
-    }, [readyMessageOverrideKey]);
 
     const handleCopyMessage = useCallback(async (message: string, key: string) => {
         const isReviewMessage = key === 'review-follow-up';
@@ -3326,15 +3302,15 @@ const PdfHistoryItem: React.FC<{
                         type="button"
                         onClick={(event) => {
                             event.stopPropagation();
-                            onShare(client, pdf);
+                            onShare(client, pdf, editableMessages);
                         }}
                         className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-[12px] bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500/20 dark:bg-blue-500 dark:hover:bg-blue-400"
                     >
-                        <i className="fas fa-link text-xs" aria-hidden="true" />
-                        Criar link para o cliente
+                        <i className="fab fa-whatsapp text-sm" aria-hidden="true" />
+                        Enviar proposta ao cliente
                     </button>
 
-                    <div className="mt-3 space-y-3 border-t border-slate-100 pt-3 dark:border-slate-700/60">
+                    {reviewFollowUpMessage ? (<div className="mt-3 space-y-3 border-t border-slate-100 pt-3 dark:border-slate-700/60">
                         {reviewFollowUpMessage ? (
                             <div className="rounded-2xl border border-emerald-200/80 bg-emerald-50/80 p-3.5 dark:border-emerald-800/60 dark:bg-emerald-950/20">
                                 <div className="flex items-start justify-between gap-3">
@@ -3377,120 +3353,7 @@ const PdfHistoryItem: React.FC<{
                                 </div>
                             </div>
                         ) : null}
-                        <div className="flex flex-col gap-3 rounded-2xl border border-slate-200/80 bg-slate-50/60 p-3.5 dark:border-slate-700/70 dark:bg-slate-900/25">
-                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                <div className="min-w-0">
-                                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
-                                        Mensagens prontas
-                                    </p>
-                                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                                        Escolha a mensagem que fizer mais sentido e envie sem precisar ajustar tudo manualmente.
-                                    </p>
-                                </div>
-                                <ActionButton
-                                    onClick={() => setIsMessagesExpanded(current => !current)}
-                                    variant="ghost"
-                                    size="sm"
-                                    iconClassName={isMessagesExpanded ? 'fas fa-chevron-up' : 'fas fa-chevron-down'}
-                                    className="w-full justify-center sm:w-auto"
-                                >
-                                    {isMessagesExpanded ? 'Recolher' : 'Ver mensagens'}
-                                </ActionButton>
-                            </div>
-                            {isMessagesExpanded && editableMessages.length > 0 && (() => {
-                                const safeIndex = Math.min(Math.max(selectedMessageIndex, 0), editableMessages.length - 1);
-                                const message = editableMessages[safeIndex];
-                                return (
-                                    <div className="space-y-2.5">
-                                        {editableMessages.length > 1 && (
-                                            <div className="flex flex-wrap gap-1.5">
-                                                {editableMessages.map((_, idx) => (
-                                                    <button
-                                                        key={`${pdf.id}-message-pill-${idx}`}
-                                                        type="button"
-                                                        onClick={() => { setSelectedMessageIndex(idx); setIsEditingMessage(false); }}
-                                                        aria-pressed={idx === safeIndex}
-                                                        aria-label={`Mensagem ${idx + 1}`}
-                                                        className={`h-7 min-w-[1.75rem] rounded-full px-2.5 text-[12px] font-semibold tabular-nums transition-colors ${
-                                                            idx === safeIndex
-                                                                ? 'bg-blue-600 text-white shadow-sm'
-                                                                : 'border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800'
-                                                        }`}
-                                                    >
-                                                        {idx + 1}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        )}
-                                        <div className="rounded-[16px] border border-slate-200/80 bg-white/90 p-3 dark:border-slate-700 dark:bg-slate-950/25">
-                                            <div className="flex items-center justify-between gap-2">
-                                                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">
-                                                    Mensagem {safeIndex + 1} de {editableMessages.length}
-                                                </p>
-                                                <div className="flex items-center gap-1.5">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setIsEditingMessage(current => !current)}
-                                                        aria-label={isEditingMessage ? `Concluir edição da mensagem ${safeIndex + 1}` : `Editar mensagem ${safeIndex + 1}`}
-                                                        aria-pressed={isEditingMessage}
-                                                        className={`inline-flex h-8 w-8 items-center justify-center rounded-full border transition-colors ${
-                                                            isEditingMessage
-                                                                ? 'border-amber-300 bg-amber-100 text-amber-700 dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-300'
-                                                                : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300'
-                                                        }`}
-                                                    >
-                                                        <i className={`${isEditingMessage ? 'fas fa-check' : 'fas fa-pen'} text-[12px]`} aria-hidden="true"></i>
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleOpenWhatsApp(message)}
-                                                        aria-label={`Enviar mensagem ${safeIndex + 1} pelo WhatsApp`}
-                                                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 transition-colors hover:bg-emerald-100 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-300"
-                                                    >
-                                                        <i className="fab fa-whatsapp text-[13px]" aria-hidden="true"></i>
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleCopyMessage(message, `template-${safeIndex}`)}
-                                                        aria-label={`Copiar mensagem ${safeIndex + 1}`}
-                                                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-blue-200 bg-blue-50 text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-300"
-                                                    >
-                                                        <i className={`${copiedMessageKey === `template-${safeIndex}` ? 'fas fa-check' : 'fas fa-copy'} text-[12px]`} aria-hidden="true"></i>
-                                                    </button>
-                                                </div>
-                                            </div>
-                                            {isEditingMessage ? (
-                                                <label className="mt-2 block">
-                                                    <span className="sr-only">Editar mensagem {safeIndex + 1}</span>
-                                                    <textarea
-                                                        value={message}
-                                                        autoFocus
-                                                        ref={(el) => {
-                                                            if (el) {
-                                                                el.style.height = 'auto';
-                                                                el.style.height = `${el.scrollHeight}px`;
-                                                            }
-                                                        }}
-                                                        onChange={(event) => {
-                                                            handleReadyMessageChange(safeIndex, event.target.value);
-                                                            event.target.style.height = 'auto';
-                                                            event.target.style.height = `${event.target.scrollHeight}px`;
-                                                        }}
-                                                        rows={3}
-                                                        className="block w-full resize-none overflow-hidden rounded-[12px] border border-blue-300 bg-white p-2.5 text-[13px] leading-6 text-slate-700 outline-none transition focus:ring-4 focus:ring-blue-500/10 dark:border-blue-800 dark:bg-slate-950/70 dark:text-slate-200"
-                                                    />
-                                                </label>
-                                            ) : (
-                                                <p className="mt-2 whitespace-pre-wrap break-words rounded-[12px] border border-slate-100 bg-slate-50/80 p-2.5 text-[13px] leading-6 text-slate-700 dark:border-slate-800/80 dark:bg-slate-900/60 dark:text-slate-300">
-                                                    {message}
-                                                </p>
-                                            )}
-                                        </div>
-                                    </div>
-                                );
-                            })()}
-                        </div>
-                    </div>
+                    </div>) : null}
                 </div>
             </div>
             <Modal
@@ -4235,7 +4098,7 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
     const [editableCombinedProposalMessages, setEditableCombinedProposalMessages] = useState<string[]>([]);
     const [combinedWhatsAppMessage, setCombinedWhatsAppMessage] = useState<string | null>(null);
     const [isCombinedShareOpen, setIsCombinedShareOpen] = useState(false);
-    const [singleProposalShare, setSingleProposalShare] = useState<{ client: Client; pdf: SavedPDF } | null>(null);
+    const [singleProposalShare, setSingleProposalShare] = useState<{ client: Client; pdf: SavedPDF; messages?: string[] } | null>(null);
     const [copiedCombinedMessageIndex, setCopiedCombinedMessageIndex] = useState<number | null>(null);
 
     const handleDeleteSelectedPdfs = useCallback(async () => {
@@ -4271,8 +4134,8 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
         }
     }, [confirm, isDeletingSelectedPdfs, onDeleteMany, selectedPdfs, showToast]);
 
-    const handleOpenSingleProposalShare = useCallback((client: Client, pdf: SavedPDF) => {
-        setSingleProposalShare({ client, pdf });
+    const handleOpenSingleProposalShare = useCallback((client: Client, pdf: SavedPDF, messages?: string[]) => {
+        setSingleProposalShare({ client, pdf, messages });
     }, []);
     const normalizedCombinedClientPhone = useMemo(() => {
         return normalizeWhatsappPhone(selectedClientForCombinedMessages?.telefone);
@@ -5184,6 +5047,7 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
                     isOpen
                     client={singleProposalShare.client}
                     pdfs={[singleProposalShare.pdf]}
+                    messageOptions={singleProposalShare.messages}
                     onClose={() => setSingleProposalShare(null)}
                 />
             ) : null}
@@ -5211,10 +5075,10 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
             >
                 <div className="space-y-2">
                     <p className="text-sm text-slate-600 dark:text-slate-300">
-                        Personalize os 3 textos que aparecem no histórico. Você pode usar:
+                        Personalize os 3 textos enviados junto com o link da proposta. O link entra no fim da mensagem, ou onde você colocar {'{{link}}'}. Você pode usar:
                     </p>
                     <div className="flex flex-wrap gap-2">
-                        {['{{cliente}}', '{{primeiroNome}}', '{{peliculas}}', '{{garantia}}', '{{valor}}'].map(token => (
+                        {['{{cliente}}', '{{primeiroNome}}', '{{peliculas}}', '{{garantia}}', '{{valor}}', '{{link}}', '{{validade}}'].map(token => (
                             <span
                                 key={token}
                                 className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-700 dark:text-slate-200"

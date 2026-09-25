@@ -33,7 +33,7 @@ describe('ProposalShareModal', () => {
         fireEvent.click(screen.getByRole('button', { name: /Criar link da proposta/i }));
         await screen.findByText('Link criado com sucesso');
 
-        fireEvent.click(screen.getByRole('button', { name: 'WhatsApp' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Enviar no WhatsApp' }));
         const appLink = screen.getByRole('link', { name: /WhatsApp do celular/i });
         const businessLink = screen.getByRole('link', { name: /WhatsApp Business/i });
 
@@ -41,6 +41,30 @@ describe('ProposalShareModal', () => {
         expect(businessLink).toHaveAttribute('href', expect.stringContaining('https://wa.me/5583996476052'));
         expect(decodeURIComponent(appLink.getAttribute('href') || '')).toContain(portalUrl);
         expect(decodeURIComponent(businessLink.getAttribute('href') || '')).toContain(portalUrl);
+    });
+
+    it('envia a mensagem pronta escolhida já com o link', async () => {
+        render(<ProposalShareModal isOpen client={client} pdfs={[pdf]} onClose={vi.fn()}
+            messageOptions={['Oi Camila, segue seu orçamento com Blackout.', 'Camila, orçamento aqui: {{link}} (até {{validade}})']} />);
+        fireEvent.click(screen.getByRole('button', { name: /Criar link da proposta/i }));
+        await screen.findByText('Link criado com sucesso');
+
+        fireEvent.click(screen.getByRole('button', { name: 'Mensagem pronta 1' }));
+        const textarea = screen.getByRole('textbox', { name: 'Mensagem que será enviada' }) as HTMLTextAreaElement;
+        expect(textarea.value).toContain('Oi Camila, segue seu orçamento com Blackout.');
+        expect(textarea.value).toContain(portalUrl);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Mensagem pronta 2' }));
+        expect(textarea.value).toBe(`Camila, orçamento aqui: ${portalUrl} (até ${new Date('2026-10-21T23:59:59Z').toLocaleDateString('pt-BR')})`);
+
+        fireEvent.change(textarea, { target: { value: 'Mensagem sem link' } });
+        expect(screen.getByText('O link não está mais na mensagem.')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Refazer' }));
+        expect(textarea.value).toContain(portalUrl);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Enviar no WhatsApp' }));
+        const appLink = screen.getByRole('link', { name: /WhatsApp do celular/i });
+        expect(decodeURIComponent(appLink.getAttribute('href') || '')).toContain('Camila, orçamento aqui:');
     });
 
     it('não oferece envio sem telefone do cliente', async () => {

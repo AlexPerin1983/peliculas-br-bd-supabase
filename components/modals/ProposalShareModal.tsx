@@ -3,6 +3,7 @@ import { CalendarClock, Check, Copy, ExternalLink, Link2, LoaderCircle, MessageC
 import type { Client, SavedPDF } from '../../types';
 import { buildProposalShareMessage, createProposalPortal, type CreatedProposalPortal } from '../../src/lib/proposalPortal';
 import { buildProposalWhatsAppAppUrl, buildProposalWhatsAppBusinessUrl } from '../../src/lib/proposalMessages';
+import { attachProposalLink } from '../../src/lib/proposalShareText';
 import Modal from '../ui/Modal';
 import ProposalWhatsAppChooser from './ProposalWhatsAppChooser';
 
@@ -12,7 +13,12 @@ interface ProposalShareModalProps {
     pdfs: SavedPDF[];
     onClose: () => void;
     autoCreate?: boolean;
+    /** Mensagens prontas da proposta; o link é incluído nelas na hora de enviar. */
+    messageOptions?: string[];
 }
+
+// -1 = mensagem padrão do link (com os valores); 0..n = mensagens prontas.
+const DEFAULT_CHOICE = -1;
 
 const dateInput = (date: Date) => {
     const year = date.getFullYear();
@@ -46,7 +52,7 @@ const copyText = async (value: string) => {
     area.remove();
 };
 
-const ProposalShareModal: React.FC<ProposalShareModalProps> = ({ isOpen, client, pdfs, onClose, autoCreate = false }) => {
+const ProposalShareModal: React.FC<ProposalShareModalProps> = ({ isOpen, client, pdfs, onClose, autoCreate = false, messageOptions = [] }) => {
     const [expiration, setExpiration] = useState(() => getDefaultExpiration(pdfs));
     const [created, setCreated] = useState<CreatedProposalPortal | null>(null);
     const [busy, setBusy] = useState(false);
@@ -63,11 +69,29 @@ const ProposalShareModal: React.FC<ProposalShareModalProps> = ({ isOpen, client,
         setError('');
         setCopied(null);
         setIsWhatsAppChooserOpen(false);
+        setChoice(DEFAULT_CHOICE);
+        setMessage('');
     // A chave evita apagar o link criado quando o pai apenas recria o array.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen, pdfKey]);
 
-    const message = useMemo(() => created ? buildProposalShareMessage(client, pdfs, created.url, created.expiresAt) : '', [client, created, pdfs]);
+    const readyMessages = useMemo(() => messageOptions.map(option => option.trim()).filter(Boolean), [messageOptions]);
+    const [choice, setChoice] = useState(DEFAULT_CHOICE);
+    const [message, setMessage] = useState('');
+
+    const buildChoiceMessage = (nextChoice: number, portal: CreatedProposalPortal) => (
+        nextChoice === DEFAULT_CHOICE || !readyMessages[nextChoice]
+            ? buildProposalShareMessage(client, pdfs, portal.url, portal.expiresAt)
+            : attachProposalLink(readyMessages[nextChoice], portal.url, portal.expiresAt)
+    );
+
+    // Com o link criado, monta a mensagem escolhida já com o link dentro (editável antes de enviar).
+    useEffect(() => {
+        if (created) setMessage(buildChoiceMessage(choice, created));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [created, choice]);
+
+    const linkMissing = !!created && !!message && !message.includes(created.url);
     const whatsappAppUrl = created ? buildProposalWhatsAppAppUrl(client.telefone, message) : null;
     const whatsappBusinessUrl = created ? buildProposalWhatsAppBusinessUrl(client.telefone, message) : null;
 
@@ -137,17 +161,61 @@ const ProposalShareModal: React.FC<ProposalShareModalProps> = ({ isOpen, client,
                     </>
                 ) : (
                     <>
-                        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900/50 dark:bg-emerald-950/20">
-                            <p className="flex items-center gap-2 text-sm font-black text-emerald-800 dark:text-emerald-200"><Check className="h-4 w-4" /> Link criado com sucesso</p>
-                            <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-300">As visualizações, decisões e mensagens ficarão vinculadas a este atendimento.</p>
+                        <div className="flex items-center justify-between gap-3 rounded-xl bg-emerald-50 px-3 py-2.5 dark:bg-emerald-950/25">
+                            <p className="flex min-w-0 items-center gap-2 text-sm font-bold text-emerald-800 dark:text-emerald-200">
+                                <Check className="h-4 w-4 shrink-0" aria-hidden="true" />
+                                <span className="truncate">Link criado com sucesso</span>
+                            </p>
+                            <span className="shrink-0 text-xs font-medium text-emerald-700 dark:text-emerald-300">até {new Date(created.expiresAt).toLocaleDateString('pt-BR')}</span>
                         </div>
-                        <label className="block"><span className="mb-1.5 block text-xs font-bold text-[var(--text-body)]">Link do cliente</span><div className="flex gap-2"><input readOnly value={created.url} className="ui-field h-11 min-w-0 flex-1 px-3 text-xs" /><button type="button" onClick={() => void copy('link', created.url)} className="flex h-11 shrink-0 items-center gap-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] px-3 text-xs font-bold text-[var(--text-strong)]">{copied === 'link' ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />} {copied === 'link' ? 'Copiado' : 'Copiar'}</button></div></label>
-                        <label className="block"><span className="mb-1.5 block text-xs font-bold text-[var(--text-body)]">Mensagem pronta</span><textarea readOnly value={message} rows={6} className="w-full resize-none rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-3 text-xs leading-5 text-[var(--text-body)]" /></label>
-                        <div className="grid gap-2 sm:grid-cols-3">
-                            <button type="button" onClick={() => void copy('message', message)} className="flex h-11 items-center justify-center gap-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] text-xs font-bold text-[var(--text-strong)]">{copied === 'message' ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />} Copiar mensagem</button>
-                            {whatsappAppUrl && whatsappBusinessUrl ? <button type="button" onClick={() => setIsWhatsAppChooserOpen(true)} className="flex h-11 items-center justify-center gap-2 rounded-xl bg-emerald-600 text-xs font-bold text-white"><MessageCircle className="h-4 w-4" /> WhatsApp</button> : <button disabled className="h-11 rounded-xl bg-slate-200 text-xs font-bold text-slate-500">Sem telefone</button>}
-                            <a href={created.url} target="_blank" rel="noreferrer" className="flex h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 text-xs font-bold text-white"><ExternalLink className="h-4 w-4" /> Visualizar página</a>
+
+                        <div className="flex gap-2">
+                            <input readOnly value={created.url} aria-label="Link do cliente" className="ui-field h-10 min-w-0 flex-1 px-3 text-xs text-[var(--text-muted)]" />
+                            <button type="button" onClick={() => void copy('link', created.url)} aria-label="Copiar link"
+                                className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-strong)]">
+                                {copied === 'link' ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
+                            </button>
+                            <a href={created.url} target="_blank" rel="noreferrer" aria-label="Visualizar página"
+                                className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-strong)]">
+                                <ExternalLink className="h-4 w-4" />
+                            </a>
                         </div>
+
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between gap-2">
+                                <span className="text-xs font-bold text-[var(--text-body)]">Mensagem com o link</span>
+                                {readyMessages.length > 0 && (
+                                    <div className="flex gap-1" role="group" aria-label="Escolher mensagem">
+                                        {[DEFAULT_CHOICE, ...readyMessages.map((_, index) => index)].map(option => (
+                                            <button key={option} type="button" aria-pressed={choice === option} onClick={() => setChoice(option)}
+                                                aria-label={option === DEFAULT_CHOICE ? 'Mensagem padrão' : `Mensagem pronta ${option + 1}`}
+                                                className={`h-7 min-w-[28px] rounded-full px-2.5 text-xs font-bold transition-colors ${choice === option
+                                                    ? 'bg-blue-600 text-white'
+                                                    : 'bg-[var(--surface-muted)] text-[var(--text-muted)] hover:text-[var(--text-strong)]'}`}>
+                                                {option === DEFAULT_CHOICE ? 'Padrão' : option + 1}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                            <textarea value={message} onChange={event => setMessage(event.target.value)} rows={8} aria-label="Mensagem que será enviada"
+                                className="w-full resize-none rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-3 text-[13px] leading-5 text-[var(--text-body)] focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
+                            {linkMissing ? (
+                                <p className="flex items-center justify-between gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+                                    O link não está mais na mensagem.
+                                    <button type="button" onClick={() => setMessage(buildChoiceMessage(choice, created))} className="shrink-0 underline">Refazer</button>
+                                </p>
+                            ) : (
+                                <p className="text-[11px] text-[var(--text-muted)]">Pode ajustar o texto à vontade; o link já está incluído.</p>
+                            )}
+                        </div>
+
+                        {whatsappAppUrl && whatsappBusinessUrl
+                            ? <button type="button" onClick={() => setIsWhatsAppChooserOpen(true)} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 text-sm font-bold text-white shadow-sm hover:bg-emerald-700"><MessageCircle className="h-4 w-4" aria-hidden="true" /> Enviar no WhatsApp</button>
+                            : <button disabled className="h-12 w-full rounded-xl bg-slate-200 text-sm font-bold text-slate-500 dark:bg-slate-800">Sem telefone</button>}
+                        <button type="button" onClick={() => void copy('message', message)} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] text-sm font-semibold text-[var(--text-strong)]">
+                            {copied === 'message' ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />} {copied === 'message' ? 'Mensagem copiada' : 'Copiar mensagem'}
+                        </button>
                     </>
                 )}
             </div>
