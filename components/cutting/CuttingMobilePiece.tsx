@@ -39,6 +39,11 @@ export default function CuttingMobilePiece({
                 <span className="cutting-measure-height">{meters(landscape ? item.w : item.h)}</span>
             </>}
             {showInlineSize && <span className="cutting-measure-inline">{meters(item.w)} × {meters(item.h)}</span>}
+            {item.seam && width >= 30 && height >= 24 && (
+                <span className="cutting-seam-tag" title="Faixa de uma peça com emenda de topo">
+                    {width >= 64 ? 'faixa ' : ''}{item.seam.index + 1}/{item.seam.count}
+                </span>
+            )}
             {locked && !showActions && <LockKeyhole className="cutting-lock-mark" size={14} aria-label="Posição travada" />}
             {showActions && <div className="cutting-inline-actions">
                 <button type="button" aria-label="Girar peça no mapa" disabled={!canRotate}

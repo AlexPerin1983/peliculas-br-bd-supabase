@@ -13,12 +13,15 @@ import ConfirmationModal from './modals/ConfirmationModal';
 import Modal from './ui/Modal';
 import { useSubscription } from '../contexts/SubscriptionContext';
 import { PremiumFeatureSection } from './subscription/PremiumFeatureSection';
-import { Check, ChevronDown, ChevronRight, Loader2, Maximize2, Minus, MoveHorizontal, Plus, RotateCcw, RotateCw, List, Save, Scissors, Shrink, SlidersHorizontal, X, LockKeyhole, UnlockKeyhole } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Columns2, Loader2, Maximize2, Minus, MoveHorizontal, Plus, RotateCcw, RotateCw, List, Save, Scissors, Shrink, SlidersHorizontal, X, LockKeyhole, UnlockKeyhole } from 'lucide-react';
 import {
     buildFilmCuttingMeasurementSignature,
+    CUTTING_PLAN_VERSION,
     CUTTING_ROLL_WIDTH_PRESETS_CM,
     normalizeFilmCuttingSettings,
 } from '../src/lib/proposalCutting';
+import type { SeamDirection, SeamStyle } from '../utils/seamStrips';
+import CuttingSeamNotice from './cutting/CuttingSeamNotice';
 
 
 interface CuttingOptimizationPanelProps {
@@ -56,7 +59,13 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
         return sorted.length > 0 ? sorted : ['Padrão'];
     }, [measurements]);
 
-    type LocalFilmSettings = { rollWidth: string; bladeWidth: string; respectGrain: boolean };
+    type LocalFilmSettings = {
+        rollWidth: string;
+        bladeWidth: string;
+        respectGrain: boolean;
+        seamStyle: SeamStyle;
+        seamDirections: Record<string, SeamDirection>;
+    };
 
     const uniqueFilmsKey = uniqueFilms.join('|');
     const [activeFilm, setActiveFilm] = useState<string>(uniqueFilms[0]);
@@ -74,6 +83,8 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                 rollWidth: String(saved.rollWidthCm),
                 bladeWidth: String(saved.bladeWidthMm),
                 respectGrain: saved.respectGrain,
+                seamStyle: saved.seamStyle ?? 'full',
+                seamDirections: saved.seamDirections ?? {},
             };
             nextCustomWidths[filmName] = !CUTTING_ROLL_WIDTH_PRESETS_CM.includes(
                 saved.rollWidthCm as typeof CUTTING_ROLL_WIDTH_PRESETS_CM[number]
@@ -90,7 +101,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
         }
     }, [uniqueFilmsKey, activeFilm]);
 
-    const defaultSettings: LocalFilmSettings = { rollWidth: '152', bladeWidth: '0', respectGrain: false };
+    const defaultSettings: LocalFilmSettings = { rollWidth: '152', bladeWidth: '0', respectGrain: false, seamStyle: 'full', seamDirections: {} };
     const currentSettings = filmSettings[activeFilm] || defaultSettings;
     const isCustomRollWidth = customRollWidthFilms[activeFilm]
         || !CUTTING_ROLL_WIDTH_PRESETS_CM.includes(
@@ -101,7 +112,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
     const selectedRollWidthLabel = `${(Number(currentSettings.rollWidth) / 100).toLocaleString('pt-BR', {
         minimumFractionDigits: 2,
     })} m`;
-    const updateCurrentSettings = (key: keyof LocalFilmSettings, value: string | boolean) => {
+    const updateCurrentSettings = <K extends keyof LocalFilmSettings>(key: K, value: LocalFilmSettings[K]) => {
         const nextSettings = { ...currentSettings, [key]: value } as LocalFilmSettings;
         setFilmSettings(prev => ({ ...prev, [activeFilm]: nextSettings }));
 
@@ -112,8 +123,15 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                 rollWidthCm,
                 bladeWidthMm: Number.isFinite(bladeWidthMm) && bladeWidthMm >= 0 ? bladeWidthMm : 0,
                 respectGrain: nextSettings.respectGrain,
+                seamStyle: nextSettings.seamStyle,
+                seamDirections: nextSettings.seamDirections,
             });
         }
+    };
+    const setSeamDirections = (pieceIds: string[], direction: SeamDirection) => {
+        const next = { ...currentSettings.seamDirections };
+        pieceIds.forEach(id => { next[id] = direction; });
+        updateCurrentSettings('seamDirections', next);
     };
 
     const handleRollWidthSelection = (value: string) => {
@@ -716,6 +734,8 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
             width,
             spacing,
             respectGrain: currentSettings.respectGrain,
+            seamStyle: currentSettings.seamStyle,
+            seamDirections: currentSettings.seamDirections,
             activeFilm,
             measurements: measurements.filter(m => m.pelicula === activeFilm || (uniqueFilms.length === 1 && uniqueFilms[0] === 'Padrão')).map(m => ({
                 id: m.id,
@@ -775,7 +795,9 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
             const optimizer = new CuttingOptimizer({
                 rollWidth: width,
                 bladeWidth: isNaN(spacing) ? 0 : spacing / 10, // mm to cm
-                allowRotation: !currentSettings.respectGrain
+                allowRotation: !currentSettings.respectGrain,
+                seamStyle: currentSettings.seamStyle,
+                seamDirections: currentSettings.seamDirections,
             });
 
             const relevantMeasurements = measurements.filter(m =>
@@ -806,8 +828,11 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                 rollWidthCm: width,
                 bladeWidthMm: Number.isFinite(spacing) && spacing >= 0 ? spacing : 0,
                 respectGrain: currentSettings.respectGrain,
+                seamStyle: currentSettings.seamStyle,
+                seamDirections: currentSettings.seamDirections,
                 totalLinearMeters: newResult.totalHeight / 100,
                 measurementSignature: buildFilmCuttingMeasurementSignature(measurements, activeFilm),
+                planVersion: CUTTING_PLAN_VERSION,
             });
 
             if (saveToHistory && newResult) {
@@ -1253,7 +1278,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                         <span className="cutting-piece-badge" data-done={done}>{result.placedItems.indexOf(selectedMobilePiece) + 1}</span>
                         <div className="cutting-piece-description">
                             <strong>{getPieceRoom(selectedMobilePiece)}</strong>
-                            <span>{formatPieceSize(selectedMobilePiece.w)} × {formatPieceSize(selectedMobilePiece.h)} m{locked ? ' · travada' : ''}</span>
+                            <span>{formatPieceSize(selectedMobilePiece.w)} × {formatPieceSize(selectedMobilePiece.h)} m{selectedMobilePiece.seam ? ` · faixa ${selectedMobilePiece.seam.index + 1}/${selectedMobilePiece.seam.count}` : ''}{locked ? ' · travada' : ''}</span>
                         </div>
                         <div className="cutting-piece-tools" role="group" aria-label="Ações da peça">
                             <button type="button" aria-label="Girar peça" disabled={isOptimizing || locked || tooWideToRotate}
@@ -1750,6 +1775,16 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                     </div>
                                 </div>
 
+                                {/* Peças maiores que a bobina: faixas com emenda de topo */}
+                                <CuttingSeamNotice
+                                    seamPieces={result?.seamPieces ?? []}
+                                    rollWidth={result?.rollWidth ?? 0}
+                                    seamStyle={currentSettings.seamStyle}
+                                    disabled={isOptimizing}
+                                    onSeamStyleChange={style => updateCurrentSettings('seamStyle', style)}
+                                    onDirectionChange={setSeamDirections}
+                                />
+
                                 {/* Aviso de peças que não couberam na bobina */}
                                 {unplacedCount > 0 && visualSummary && (
                                     <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 dark:border-red-800 dark:bg-red-950/30 sm:p-4">
@@ -1998,6 +2033,12 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                                                     </span>
                                                                 </div>
                                                             </>
+                                                        )}
+
+                                                        {item.seam && pieceScaledWidth >= 40 && pieceScaledHeight >= 24 && (
+                                                            <span className="cutting-seam-tag hidden sm:block" title="Faixa de uma peça com emenda de topo">
+                                                                faixa {item.seam.index + 1}/{item.seam.count}
+                                                            </span>
                                                         )}
 
                                                         {/* Rotated indicator (small icon when rotated) */}
@@ -2794,6 +2835,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                                 <div><dt>Área útil</dt><dd>{visualSummary.usedAreaMeters} m²</dd></div>
                                             </dl>
                                             {result.straightCuts && <p className="cutting-fs-sheet-straight"><Scissors size={15} aria-hidden="true" /> Só cortes retos: atravesse a bobina em faixas e depois separe as peças.</p>}
+                                            {!!result.seamPieces?.length && <p className="cutting-fs-sheet-straight"><Columns2 size={15} aria-hidden="true" /> {result.seamPieces.length === 1 ? '1 peça maior que a bobina virou faixas' : `${result.seamPieces.length} peças maiores que a bobina viraram faixas`} (emenda de topo). As faixas já estão no plano e no custo.</p>}
                                             {unplacedCount > 0 && <p className="cutting-fs-sheet-warning" role="status">{unplacedCount === 1 ? '1 peça é maior que a bobina e ficou fora do plano.' : `${unplacedCount} peças são maiores que a bobina e ficaram fora do plano.`}</p>}
                                             {cutBands && cutBands.length > 1 && <>
                                                 <h3 className="cutting-fs-sheet-title">

@@ -7,6 +7,7 @@ import { calculateProposalAdjustmentAmounts } from '../lib/proposalAdjustments';
 import { getCatalogFilmPrices, resolveFilmPrices } from '../lib/filmPriceOverrides';
 import {
     buildFilmCuttingMeasurementSignature,
+    CUTTING_PLAN_VERSION,
     normalizeFilmCuttingSettings,
 } from '../lib/proposalCutting';
 import { calculateMeasurementPriceAdjustment } from '../lib/measurementPriceAdjustment';
@@ -185,7 +186,9 @@ export function useProposalTotals({
             const optimizer = new CuttingOptimizer({
                 rollWidth: cuttingSettings.rollWidthCm,
                 bladeWidth: cuttingSettings.bladeWidthMm / 10,
-                allowRotation: !cuttingSettings.respectGrain
+                allowRotation: !cuttingSettings.respectGrain,
+                seamStyle: cuttingSettings.seamStyle,
+                seamDirections: cuttingSettings.seamDirections,
             });
 
             filmMeasurements.forEach(measurement => {
@@ -195,13 +198,18 @@ export function useProposalTotals({
 
                 if (!isNaN(w) && !isNaN(h) && w > 0 && h > 0) {
                     for (let index = 0; index < qty; index += 1) {
-                        optimizer.addItem(w, h);
+                        // Mesmo id do plano de corte, para seguir a direção de emenda escolhida lá.
+                        optimizer.addItem(w, h, `${measurement.id}-${index}`);
                     }
                 }
             });
 
             const optimizationResult = optimizer.optimize();
+            // Planos salvos antes da emenda deixavam as peças maiores que a bobina de fora.
+            const savedPlanCountsSeams = !optimizationResult.seamPieces?.length
+                || (cuttingSettings.planVersion ?? 1) >= CUTTING_PLAN_VERSION;
             const hasCurrentPlanResult = cuttingSettings.measurementSignature === measurementSignature
+                && savedPlanCountsSeams
                 && Number.isFinite(cuttingSettings.totalLinearMeters)
                 && (cuttingSettings.totalLinearMeters || 0) >= 0;
             const linearMeters = hasCurrentPlanResult

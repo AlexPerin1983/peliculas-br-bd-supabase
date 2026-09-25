@@ -1,4 +1,29 @@
 import { isStraightCuttable } from './straightCuts';
+import { planSeam, type SeamDirection, type SeamOption, type SeamStyle } from './seamStrips';
+
+// Faixa de uma peça maior que a bobina (emenda de topo).
+export interface SeamInfo {
+    pieceId?: number | string;
+    index: number;
+    count: number;
+    direction: SeamDirection;
+    // Medida da peça inteira (cm).
+    pieceW: number;
+    pieceH: number;
+    // Onde a faixa começa na peça (cm): da esquerda (vertical) ou do topo (horizontal).
+    offset: number;
+}
+
+export interface SeamPieceSummary {
+    id?: number | string;
+    label?: string;
+    w: number;
+    h: number;
+    chosen: SeamOption;
+    alternative: SeamOption | null;
+    // Caberia inteira girada, mas "respeitar veio" não deixa girar.
+    fitsIfRotated: boolean;
+}
 
 export interface Rect {
     x: number;
@@ -9,7 +34,12 @@ export interface Rect {
     label?: string;
     rotated?: boolean;
     locked?: boolean;
+    seam?: SeamInfo;
 }
+
+// Faixas de emenda contam como uma peça só (a primeira representa a peça).
+export const countPlacedPieces = (items: Rect[]): number =>
+    items.filter(item => !item.seam || item.seam.index === 0).length;
 
 export interface OptimizationResult {
     placedItems: Rect[];
@@ -23,6 +53,8 @@ export interface OptimizationResult {
     straightCuts?: boolean;
     // Comprimentos (cm) dos melhores planos de cada tipo, para a tela comparar.
     layoutComparison?: { compactHeight: number; straightHeight: number | null };
+    // Peças maiores que a bobina que viraram faixas com emenda.
+    seamPieces?: SeamPieceSummary[];
 }
 
 export type CutPreference = 'straight' | 'compact';
@@ -34,6 +66,9 @@ export interface OptimizerOptions {
     // 'straight' (padrão): prefere plano em faixas se gastar até straightCutTolerance a mais.
     cutPreference?: CutPreference;
     straightCutTolerance?: number;
+    // Peças maiores que a bobina: como dividir as faixas e a direção escolhida por peça (id).
+    seamStyle?: SeamStyle;
+    seamDirections?: Record<string, SeamDirection>;
 }
 
 // Quanto a mais de bobina aceitamos para ter um plano só com cortes retos.
@@ -72,6 +107,8 @@ export class CuttingOptimizer {
     private allowRotation: boolean;
     private cutPreference: CutPreference;
     private straightCutTolerance: number;
+    private seamStyle: SeamStyle;
+    private seamDirections: Record<string, SeamDirection>;
     private items: Rect[] = [];
     private freeRects: Rect[] = [];
     private placedItems: Rect[] = [];
@@ -83,10 +120,66 @@ export class CuttingOptimizer {
         this.allowRotation = options.allowRotation !== undefined ? options.allowRotation : true;
         this.cutPreference = options.cutPreference ?? 'straight';
         this.straightCutTolerance = options.straightCutTolerance ?? DEFAULT_STRAIGHT_CUT_TOLERANCE;
+        this.seamStyle = options.seamStyle ?? 'full';
+        this.seamDirections = options.seamDirections ?? {};
     }
 
     public addItem(w: number, h: number, id?: number | string, label?: string) {
         this.items.push({ x: 0, y: 0, w, h, id, label });
+    }
+
+    // Troca peças maiores que a bobina pelas faixas da emenda (cada faixa vira uma peça).
+    private expandSeams(): { items: Rect[]; seamPieces: SeamPieceSummary[] } {
+        const items: Rect[] = [];
+        const seamPieces: SeamPieceSummary[] = [];
+
+        this.items.forEach(item => {
+            const plan = planSeam(item.w, item.h, this.rollWidth, {
+                allowRotation: this.allowRotation,
+                style: this.seamStyle,
+                direction: item.id !== undefined ? this.seamDirections[String(item.id)] : undefined,
+            });
+            if (!plan) {
+                items.push(item);
+                return;
+            }
+
+            const { chosen } = plan;
+            seamPieces.push({
+                id: item.id,
+                label: item.label,
+                w: item.w,
+                h: item.h,
+                chosen,
+                alternative: plan.alternative,
+                fitsIfRotated: !this.allowRotation && item.h <= this.rollWidth,
+            });
+
+            let offset = 0;
+            chosen.strips.forEach((stripWidth, index) => {
+                items.push({
+                    x: 0,
+                    y: 0,
+                    // Na bobina: largura = faixa, comprimento = lado que não foi dividido.
+                    w: stripWidth,
+                    h: chosen.stripLength,
+                    id: item.id !== undefined ? `${item.id}-f${index + 1}` : undefined,
+                    label: item.label ? `${item.label} · faixa ${index + 1}/${chosen.strips.length}` : undefined,
+                    seam: {
+                        pieceId: item.id,
+                        index,
+                        count: chosen.strips.length,
+                        direction: chosen.direction,
+                        pieceW: item.w,
+                        pieceH: item.h,
+                        offset,
+                    },
+                });
+                offset += stripWidth;
+            });
+        });
+
+        return { items, seamPieces };
     }
 
     public optimize(
@@ -97,8 +190,10 @@ export class CuttingOptimizer {
         // Identify locked IDs
         const lockedIds = new Set(lockedItems.filter(i => i.id).map(i => i.id));
 
+        const { items: expandedItems, seamPieces } = this.expandSeams();
+
         // Prepare items to pack (excluding locked ones)
-        const itemsToPack = this.items
+        const itemsToPack = expandedItems
             .filter(item => !item.id || !lockedIds.has(item.id))
             .map(item => {
                 if (item.id && forcedRotations[item.id] !== undefined) {
@@ -204,7 +299,17 @@ export class CuttingOptimizer {
         const placedIds = new Set(finalResult.placedItems.map(p => p.id));
         const unplacedItems = itemsToPack.filter(item => item.id !== undefined && !placedIds.has(item.id));
 
-        return { ...finalResult, unplacedItems };
+        // As estratégias recriam as peças ao posicionar; devolve a informação da faixa pelo id.
+        const seamById = new Map(expandedItems
+            .filter(item => item.seam && item.id !== undefined)
+            .map(item => [item.id, item.seam!]));
+        const placedItems = seamById.size > 0
+            ? finalResult.placedItems.map(item => (item.id !== undefined && seamById.has(item.id)
+                ? { ...item, seam: seamById.get(item.id) }
+                : item))
+            : finalResult.placedItems;
+
+        return { ...finalResult, placedItems, unplacedItems, seamPieces };
     }
 
     private runRowBasedPacking(items: Rect[]): OptimizationResult | null {

@@ -1,6 +1,8 @@
 import type { FilmCuttingPlanSettings, Measurement } from '../../types';
 
 export const DEFAULT_ROLL_WIDTH_CM = 152;
+// Sobe quando muda a regra do metro linear salvo (2: peças maiores que a bobina viram faixas).
+export const CUTTING_PLAN_VERSION = 2;
 export const CUTTING_ROLL_WIDTH_PRESETS_CM = [100, 122, 150, 152, 182] as const;
 
 export const createDefaultFilmCuttingSettings = (): FilmCuttingPlanSettings => ({
@@ -27,7 +29,18 @@ export const normalizeFilmCuttingSettings = (
             ? settings?.totalLinearMeters
             : undefined,
         measurementSignature: settings?.measurementSignature,
+        seamStyle: settings?.seamStyle === 'equal' ? 'equal' : 'full',
+        seamDirections: normalizeSeamDirections(settings?.seamDirections),
+        planVersion: Number.isFinite(settings?.planVersion) ? settings?.planVersion : undefined,
     };
+};
+
+const normalizeSeamDirections = (
+    value?: FilmCuttingPlanSettings['seamDirections'] | null
+): FilmCuttingPlanSettings['seamDirections'] => {
+    if (!value || typeof value !== 'object') return undefined;
+    const entries = Object.entries(value).filter(([, direction]) => direction === 'vertical' || direction === 'horizontal');
+    return entries.length > 0 ? Object.fromEntries(entries) : undefined;
 };
 
 export const buildFilmCuttingMeasurementSignature = (
