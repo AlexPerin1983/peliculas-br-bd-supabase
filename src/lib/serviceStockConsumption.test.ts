@@ -169,7 +169,7 @@ describe('serviceStockConsumption', () => {
         expect(narrowerRoll.unplacedPieceCount).toBe(0);
     });
 
-    it('reporta pecas maiores que a bobina e nunca zera metragem de um corte valido', () => {
+    it('divide pecas maiores que a bobina em faixas e nunca zera metragem de um corte valido', () => {
         const plan = buildServiceStockPlans([pdf(9, [
             measurement({ id: 1, largura: '1,60', altura: '1,70' }),
             measurement({ id: 2, largura: '0,001', altura: '0,001' }),
@@ -187,8 +187,31 @@ describe('serviceStockConsumption', () => {
             },
         })])[0];
 
-        expect(plan.defaultCalculation.unplacedPieceCount).toBe(1);
+        // 1,60 × 1,70 numa bobina de 1,52: 2 faixas deitadas de 1,60 m (emenda de topo).
+        expect(plan.defaultCalculation.unplacedPieceCount).toBe(0);
+        expect(plan.defaultCalculation.placedPieceCount).toBe(2);
+        expect(plan.defaultCalculation.totalLinearMeters).toBeGreaterThanOrEqual(3.2);
+    });
+
+    it('segue a direção de emenda escolhida no plano de corte', () => {
+        const plan = buildServiceStockPlans([pdf(9, [
+            measurement({ id: 1, largura: '2,20', altura: '3,00' }),
+        ], {
+            generalDiscount: {
+                value: 0,
+                type: 'none',
+                filmCuttingSettings: {
+                    Blackout: {
+                        rollWidthCm: 152,
+                        bladeWidthMm: 0,
+                        respectGrain: false,
+                        seamDirections: { '1-0': 'vertical' },
+                    },
+                },
+            },
+        })])[0];
+
         expect(plan.defaultCalculation.placedPieceCount).toBe(1);
-        expect(plan.defaultCalculation.totalLinearMeters).toBeGreaterThan(0);
+        expect(plan.defaultCalculation.totalLinearMeters).toBe(6);
     });
 });

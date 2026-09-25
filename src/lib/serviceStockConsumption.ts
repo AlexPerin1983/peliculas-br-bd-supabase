@@ -1,5 +1,5 @@
 import { Measurement, SavedPDF } from '../../types';
-import { CuttingOptimizer } from '../../utils/CuttingOptimizer';
+import { countPlacedPieces, CuttingOptimizer } from '../../utils/CuttingOptimizer';
 import { normalizeFilmCuttingSettings } from './proposalCutting';
 
 export interface StockPlanPiece {
@@ -18,6 +18,9 @@ export interface StockPlanCuttingSource {
     bladeWidthMm: number;
     respectGrain: boolean;
     pieceIds: string[];
+    seamStyle?: 'full' | 'equal';
+    // Direções de emenda do plano de corte (ids do plano: "<medida>-<n>").
+    seamDirections?: Record<string, 'vertical' | 'horizontal'>;
 }
 
 export interface StockPlanCalculation {
@@ -126,10 +129,20 @@ const calculateWithSources = (
         const rollWidthCm = rollWidthOverrideCm ?? source.defaultRollWidthCm;
         usedRollWidthsCm.push(rollWidthCm);
 
+        // Peças maiores que a bobina viram faixas; segue a direção escolhida no plano de corte.
+        const seamDirections: Record<string, 'vertical' | 'horizontal'> = {};
+        source.pieceIds.forEach((pieceId) => {
+            const piece = piecesById.get(pieceId);
+            const direction = piece && source.seamDirections?.[`${piece.sourceMeasurementId}-${piece.pieceIndex - 1}`];
+            if (direction) seamDirections[pieceId] = direction;
+        });
+
         const optimizer = new CuttingOptimizer({
             rollWidth: rollWidthCm,
             bladeWidth: source.bladeWidthMm / 10,
             allowRotation: !source.respectGrain,
+            seamStyle: source.seamStyle,
+            seamDirections,
         });
 
         source.pieceIds.forEach((pieceId) => {
@@ -145,7 +158,7 @@ const calculateWithSources = (
 
         const result = optimizer.optimize();
         totalHeightCm += result.totalHeight;
-        placedPieceCount += result.placedItems.length;
+        placedPieceCount += countPlacedPieces(result.placedItems);
         unplacedPieceCount += result.unplacedItems?.length || 0;
     });
 
@@ -235,6 +248,8 @@ export const buildServiceStockPlans = (linkedPdfs: SavedPDF[]): StockFilmPlan[] 
                     bladeWidthMm: settings.bladeWidthMm,
                     respectGrain: settings.respectGrain,
                     pieceIds: [],
+                    seamStyle: settings.seamStyle,
+                    seamDirections: settings.seamDirections,
                 };
                 sourceByFilm.set(normalizedFilmName, cuttingSource);
                 plan.cuttingSources.push(cuttingSource);

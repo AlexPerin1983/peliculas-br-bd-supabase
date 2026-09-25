@@ -724,6 +724,44 @@ describe('useProposalTotals cutting widths', () => {
     expect(at122.result.current.groupedTotals?.['Color Stable'].totalLinearMeters).toBeCloseTo(1.4);
   });
 
+  it('conta as faixas de emenda de peças maiores que a bobina no metro linear e no custo', () => {
+    const films: Film[] = [{ nome: 'Reflecta Clear', preco: 150, precoMetroLinear: 100 }];
+    const measurements: UIMeasurement[] = [{
+      id: 7,
+      largura: '2,20',
+      altura: '3,00',
+      quantidade: 1,
+      ambiente: 'Sala',
+      tipoAplicacao: 'Interna',
+      pelicula: 'Reflecta Clear',
+      active: true,
+    }];
+    const render = (settings: Record<string, unknown>) => renderHook(() => useProposalTotals({
+      measurements,
+      films,
+      generalDiscount: {
+        value: '0',
+        type: 'percentage',
+        filmCuttingSettings: {
+          'Reflecta Clear': { rollWidthCm: 152, bladeWidthMm: 0, respectGrain: false, ...settings },
+        },
+      },
+    })).result.current;
+
+    // Antes a peça ficava fora do plano e o custo de material dela era zero.
+    expect(render({}).totalLinearMeters).toBeCloseTo(4.4);
+    expect(render({}).linearMeterCost).toBeCloseTo(440);
+    // Direção escolhida no plano de corte (faixas em pé de 3,00 m).
+    expect(render({ seamDirections: { '7-0': 'vertical' } }).totalLinearMeters).toBeCloseTo(6);
+    // "Respeitar veio": só faixas em pé.
+    expect(render({ respectGrain: true }).totalLinearMeters).toBeCloseTo(6);
+
+    // Metro linear salvo por um plano antigo (sem as faixas) é ignorado; o salvo pela regra nova vale.
+    const signature = JSON.stringify([{ id: 7, largura: '2,20', altura: '3,00', quantidade: 1 }]);
+    expect(render({ measurementSignature: signature, totalLinearMeters: 0 }).totalLinearMeters).toBeCloseTo(4.4);
+    expect(render({ measurementSignature: signature, totalLinearMeters: 4.5, planVersion: 2 }).totalLinearMeters).toBeCloseTo(4.5);
+  });
+
   it('converte o preço por m² usando a largura selecionada da bobina', () => {
     const films: Film[] = [{
       nome: 'Window Blue',

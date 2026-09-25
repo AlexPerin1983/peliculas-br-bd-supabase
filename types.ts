@@ -155,6 +155,12 @@ export interface FilmCuttingPlanSettings {
     respectGrain: boolean;
     totalLinearMeters?: number;
     measurementSignature?: string;
+    // Peças maiores que a bobina (emenda de topo): faixa inteira + complemento ou faixas iguais.
+    seamStyle?: 'full' | 'equal';
+    // Direção da emenda escolhida por peça (id da peça no plano: "<medida>-<n>").
+    seamDirections?: Record<string, 'vertical' | 'horizontal'>;
+    // Versão da regra que calculou totalLinearMeters (2 = já conta as faixas de emenda).
+    planVersion?: number;
 }
 
 export type FilmCuttingPlanSettingsMap = Record<string, FilmCuttingPlanSettings>;

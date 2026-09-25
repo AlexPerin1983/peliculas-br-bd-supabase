@@ -370,3 +370,8 @@
   .cutting-mobile-settings { animation: none; }
   .cutting-summary-icon, .cutting-switch, .cutting-switch::after { transition: none; }
 }
+
+/* Faixa de peça com emenda de topo (mobile e desktop). */
+.cutting-seam-tag { position: absolute; top: 4px; left: 4px; z-index: 21; padding: 1px 5px; border: 1px solid #f3c969; border-radius: 5px; background: #fff7e0f2; color: #7a4a06; font-size: 10px; font-weight: 800; line-height: 1.3; white-space: nowrap; pointer-events: none; }
+.dark .cutting-seam-tag { border-color: #8a5d12; background: #3b2a0cf2; color: #fde7b0; }
+.cutting-piece[data-done=true] .cutting-seam-tag { left: 27px; }

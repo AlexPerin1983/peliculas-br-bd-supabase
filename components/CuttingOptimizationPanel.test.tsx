@@ -101,6 +101,8 @@ describe('CuttingOptimizationPanel roll widths', () => {
       rollWidthCm: 122,
       bladeWidthMm: 0,
       respectGrain: false,
+      seamStyle: 'full',
+      seamDirections: {},
     });
 
     fireEvent.click(triggers[0]);
