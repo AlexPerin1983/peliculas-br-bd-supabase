@@ -13,6 +13,7 @@ interface MobileFooterProps {
     isGeneratingPdf: boolean;
     onOpenAIModal: () => void;
     defaultHideMeasurements?: boolean;
+    defaultValidityDays?: number;
     paymentConfig?: ProposalPaymentConfig;
     companyPaymentMethods?: PaymentMethods;
     onUpdatePaymentConfig?: (config: ProposalPaymentConfig) => void;
@@ -34,6 +35,7 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
     isGeneratingPdf,
     onOpenAIModal,
     defaultHideMeasurements,
+    defaultValidityDays,
     paymentConfig,
     companyPaymentMethods,
     onUpdatePaymentConfig,
@@ -135,6 +137,7 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
                 onGeneratePdf={onGeneratePdf}
                 isGeneratingPdf={isGeneratingPdf}
                 defaultHideMeasurements={defaultHideMeasurements}
+                defaultValidityDays={defaultValidityDays}
                 paymentConfig={paymentConfig}
                 companyPaymentMethods={companyPaymentMethods}
                 onUpdatePaymentConfig={onUpdatePaymentConfig}

@@ -3296,6 +3296,7 @@ Use somente o JSON definido e não inclua explicações fora dele.`;
                                                 setIsAIMeasurementModalOpen(true);
                                             }}
                                             defaultHideMeasurements={!!userInfo?.hideMeasurementsInPdf}
+                                            defaultValidityDays={userInfo?.proposalValidityDays}
                                         />
                                     </Suspense>
                                 ) : ['history', 'proposals', 'agenda'].includes(activeTab) ? (

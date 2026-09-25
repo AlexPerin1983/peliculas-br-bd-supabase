@@ -31,3 +31,18 @@ export function clampValidityDays(value: number | null | undefined): number {
     }
     return chosen;
 }
+
+/**
+ * Validade de uma proposta específica: a escolhida nela (qualquer número
+ * inteiro de dias, de 1 até o teto) ou, sem escolha, o padrão da empresa.
+ */
+export function resolveProposalValidityDays(
+    proposalDays: number | null | undefined,
+    companyDefault: number | null | undefined
+): number {
+    const parsed = typeof proposalDays === 'number' ? proposalDays : Number(proposalDays);
+    if (proposalDays !== null && proposalDays !== undefined && Number.isFinite(parsed) && parsed >= 1) {
+        return Math.min(MAX_PROPOSAL_VALIDITY_DAYS, Math.round(parsed));
+    }
+    return clampValidityDays(companyDefault);
+}

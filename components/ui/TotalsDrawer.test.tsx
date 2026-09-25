@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { TotalsDrawer } from './TotalsDrawer';
 import type { ProposalDiscount, Totals } from '../../types';
 
@@ -62,6 +62,45 @@ const baseDiscount: ProposalDiscount = {
     type: 'fixed',
     pricingMode: 'complete'
 };
+
+describe('TotalsDrawer validade da proposta', () => {
+    const renderDrawer = (generalDiscount: ProposalDiscount, onUpdate = vi.fn()) => {
+        render(<TotalsDrawer
+            isOpen
+            onClose={vi.fn()}
+            totals={totals}
+            generalDiscount={generalDiscount}
+            onUpdateGeneralDiscount={onUpdate}
+            onGeneratePdf={vi.fn()}
+            isGeneratingPdf={false}
+            defaultValidityDays={30}
+        />);
+        return onUpdate;
+    };
+
+    it('mostra o padrão da empresa e grava uma validade só para a proposta', () => {
+        const onUpdate = renderDrawer(baseDiscount);
+        const group = screen.getByRole('group', { name: 'Validade da proposta em dias' });
+        expect(screen.getByText(/padrão da empresa \(30 dias\)/)).toBeInTheDocument();
+        expect(within(group).getByRole('button', { name: '30' })).toHaveAttribute('aria-pressed', 'true');
+
+        fireEvent.click(within(group).getByRole('button', { name: '15' }));
+        expect(onUpdate).toHaveBeenLastCalledWith(expect.objectContaining({ validityDays: 15 }));
+    });
+
+    it('aceita outro prazo até 60 dias e volta ao padrão ao escolher o mesmo da empresa', () => {
+        const onUpdate = renderDrawer({ ...baseDiscount, validityDays: 45 });
+        expect(screen.getByText(/só nesta proposta/)).toBeInTheDocument();
+        const input = screen.getByLabelText('Validade em dias');
+        expect(input).toHaveValue(45);
+
+        fireEvent.change(input, { target: { value: '90' } });
+        expect(onUpdate).toHaveBeenLastCalledWith(expect.objectContaining({ validityDays: 60 }));
+
+        fireEvent.click(screen.getByRole('button', { name: '30' }));
+        expect(onUpdate).toHaveBeenLastCalledWith(expect.objectContaining({ validityDays: undefined }));
+    });
+});
 
 describe('TotalsDrawer preço personalizado', () => {
     it('permite escolher nos totais quais parcelas irão para o orçamento', () => {

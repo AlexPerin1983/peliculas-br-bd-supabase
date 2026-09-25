@@ -165,6 +165,8 @@ export interface ProposalDiscount {
     hideMeasurements?: boolean;
     // Override por orçamento da inclusão do Termo de Responsabilidade no PDF (undefined = usa o padrão global).
     incluirTermoResponsabilidade?: boolean;
+    // Validade desta proposta em dias (1 a 60; undefined = usa o padrão da empresa).
+    validityDays?: number;
 }
 
 export interface SavedProposalDiscount {
@@ -183,6 +185,7 @@ export interface SavedProposalDiscount {
     expenseSnapshot?: ProposalExpenseSnapshot;
     hideMeasurements?: boolean;
     incluirTermoResponsabilidade?: boolean;
+    validityDays?: number;
 }
 
 export interface ProposalOption {

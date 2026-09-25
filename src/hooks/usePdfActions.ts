@@ -1,7 +1,7 @@
 import { Dispatch, SetStateAction, useCallback, useState } from 'react';
 import * as db from '../../services/db';
 import { Client, Film, ProposalDiscount, ProposalOption, ProposalPaymentConfig, SavedPDF, Totals, UIMeasurement, UserInfo } from '../../types';
-import { clampValidityDays } from '../lib/proposalValidity';
+import { resolveProposalValidityDays } from '../lib/proposalValidity';
 
 type PdfGenerationStatus = 'idle' | 'generating' | 'success';
 type DiscountType = ProposalDiscount;
@@ -220,7 +220,7 @@ export function usePdfActions({
                 }
             };
 
-            const validityDays = clampValidityDays(userInfo!.proposalValidityDays);
+            const validityDays = resolveProposalValidityDays(generalDiscount.validityDays, userInfo!.proposalValidityDays);
             const issueDate = new Date();
             const expirationDate = new Date();
             expirationDate.setDate(issueDate.getDate() + validityDays);
