@@ -92,13 +92,44 @@ describe('TotalsDrawer validade da proposta', () => {
         const onUpdate = renderDrawer({ ...baseDiscount, validityDays: 45 });
         expect(screen.getByText(/só nesta proposta/)).toBeInTheDocument();
         const input = screen.getByLabelText('Validade em dias');
-        expect(input).toHaveValue(45);
+        expect(input).toHaveValue('45');
 
         fireEvent.change(input, { target: { value: '90' } });
         expect(onUpdate).toHaveBeenLastCalledWith(expect.objectContaining({ validityDays: 60 }));
+        expect(screen.getByText('máx. 60')).toBeInTheDocument();
 
         fireEvent.click(screen.getByRole('button', { name: '30' }));
         expect(onUpdate).toHaveBeenLastCalledWith(expect.objectContaining({ validityDays: undefined }));
+    });
+});
+
+describe('TotalsDrawer validade em "Outro"', () => {
+    it('deixa apagar e digitar um prazo curto sem voltar para o valor anterior', () => {
+        const onUpdate = vi.fn();
+        render(<TotalsDrawer
+            isOpen
+            onClose={vi.fn()}
+            totals={totals}
+            generalDiscount={{ ...baseDiscount, validityDays: 45 }}
+            onUpdateGeneralDiscount={onUpdate}
+            onGeneratePdf={vi.fn()}
+            isGeneratingPdf={false}
+            defaultValidityDays={30}
+        />);
+        const input = screen.getByLabelText('Validade em dias');
+
+        // Apagar não grava nada e o campo continua vazio enquanto digita.
+        fireEvent.change(input, { target: { value: '' } });
+        expect(input).toHaveValue('');
+        expect(onUpdate).not.toHaveBeenCalled();
+
+        fireEvent.change(input, { target: { value: '5' } });
+        expect(input).toHaveValue('5');
+        expect(onUpdate).toHaveBeenLastCalledWith(expect.objectContaining({ validityDays: 5 }));
+
+        // Letras são ignoradas.
+        fireEvent.change(input, { target: { value: '5a' } });
+        expect(input).toHaveValue('5');
     });
 });
 

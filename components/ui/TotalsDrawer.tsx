@@ -493,7 +493,10 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
     const hasOwnValidity = generalDiscount.validityDays !== undefined && validityDays !== companyValidityDays;
     const isPresetValidity = (PROPOSAL_VALIDITY_OPTIONS as readonly number[]).includes(validityDays);
     const [isOtherValidityOpen, setIsOtherValidityOpen] = useState(false);
+    // Texto em edição no "Outro": pode ficar vazio enquanto digita (null = mostra o valor salvo).
+    const [validityDraft, setValidityDraft] = useState<string | null>(null);
     const showOtherValidity = isOtherValidityOpen || !isPresetValidity;
+    const validityDraftTooHigh = validityDraft !== null && Number(validityDraft) > MAX_PROPOSAL_VALIDITY_DAYS;
     const setValidityDays = (days: number | undefined) => {
         // Igual ao padrão da empresa = sem escolha própria (acompanha mudanças no padrão).
         const next = days === undefined || days === companyValidityDays ? undefined : days;
@@ -940,15 +943,24 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                                         </button>
                                         {showOtherValidity && (
                                             <label className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-                                                <input type="number" inputMode="numeric" min={1} max={MAX_PROPOSAL_VALIDITY_DAYS} value={validityDays}
+                                                <input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={2}
+                                                    value={validityDraft ?? String(validityDays)}
+                                                    // Mesmo padrão dos outros campos: ao tocar, esvazia/seleciona para digitar por cima.
                                                     onFocus={selectAllOnFocus}
                                                     onChange={event => {
-                                                        const days = Number(event.target.value);
-                                                        if (Number.isFinite(days) && days >= 1) setValidityDays(Math.min(MAX_PROPOSAL_VALIDITY_DAYS, Math.round(days)));
+                                                        const typed = event.target.value.replace(/\D/g, '').slice(0, 2);
+                                                        setValidityDraft(typed);
+                                                        const days = Number(typed);
+                                                        if (typed && days >= 1) setValidityDays(Math.min(MAX_PROPOSAL_VALIDITY_DAYS, days));
                                                     }}
+                                                    onBlur={() => setValidityDraft(null)}
                                                     aria-label="Validade em dias"
-                                                    className="h-7 w-14 rounded-lg border border-slate-200 bg-white px-2 text-right text-base font-semibold text-slate-800 tabular-nums focus:border-blue-500 focus:outline-none dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 sm:text-xs" />
+                                                    aria-invalid={validityDraftTooHigh}
+                                                    className={`h-7 w-14 rounded-lg border bg-white px-2 text-right text-base font-semibold text-slate-800 tabular-nums placeholder:text-slate-400 focus:outline-none dark:bg-slate-900 dark:text-slate-100 sm:text-xs ${validityDraftTooHigh
+                                                        ? 'border-amber-400 focus:border-amber-500'
+                                                        : 'border-slate-200 focus:border-blue-500 dark:border-slate-600'}`} />
                                                 dias
+                                                {validityDraftTooHigh && <span className="font-semibold text-amber-600 dark:text-amber-400">máx. {MAX_PROPOSAL_VALIDITY_DAYS}</span>}
                                             </label>
                                         )}
                                     </div>
