@@ -82,6 +82,10 @@ const normalizeGeneralDiscount = (
         expenses: normalizeProposalExpenses(discount?.expenses ?? fallback?.expenses),
         hideMeasurements: discount?.hideMeasurements ?? fallback?.hideMeasurements,
         incluirTermoResponsabilidade: discount?.incluirTermoResponsabilidade ?? fallback?.incluirTermoResponsabilidade,
+        // `undefined` explícito = voltou ao padrão da empresa; não pode herdar o prazo antigo.
+        validityDays: discount && Object.prototype.hasOwnProperty.call(discount, 'validityDays')
+            ? discount.validityDays
+            : fallback?.validityDays,
     };
 };
 
