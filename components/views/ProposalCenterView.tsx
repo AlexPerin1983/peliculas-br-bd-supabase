@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { BellRing, Clock3, Eye, MessageCircleMore, Plus, Send } from 'lucide-react';
 import ProposalPortalInbox from '../ProposalPortalInbox';
+import ProposalFollowUpQueue from '../ProposalFollowUpQueue';
 import { loadCompanyProposalPortals, type CompanyProposalPortal } from '../../src/lib/proposalPortal';
 import { supabase } from '../../services/supabaseClient';
 import AgendaPushReminderControl from './AgendaPushReminderControl';
@@ -49,7 +50,7 @@ const ProposalCenterView: React.FC<ProposalCenterViewProps> = ({ onOpenHistory }
 
     const summary = useMemo(() => ({
         sent: portals.length,
-        waiting: portals.filter(portal => portal.status === 'active' && portal.messages.every(message => message.sender_type !== 'client')).length,
+        waiting: portals.filter(portal => portal.status === 'active' && !portal.lostAt && portal.messages.every(message => message.sender_type !== 'client')).length,
         unseen: portals.filter(portal => portal.viewCount === 0 && portal.status === 'active').length,
         responded: portals.filter(portal => portal.messages.some(message => message.sender_type === 'client')).length,
         unread: portals.reduce((total, portal) => total + portal.unreadCount, 0),
@@ -111,6 +112,8 @@ const ProposalCenterView: React.FC<ProposalCenterViewProps> = ({ onOpenHistory }
                 <h2 id="proposal-alerts-title" className="sr-only">Notificações das propostas</h2>
                 <AgendaPushReminderControl />
             </section>
+
+            <ProposalFollowUpQueue portals={portals} loading={loading} onChanged={refresh} />
 
             <section className="space-y-2" aria-labelledby="proposal-conversations-title">
                 <div className="flex items-center gap-2 px-1">
