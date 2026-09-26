@@ -561,23 +561,28 @@ export const recordProposalFollowUp = async (portalId: string, step: string, cha
 };
 
 // "Perdida" é interno: o cliente continua vendo o link e pode aprovar depois.
-export const markProposalPortalLost = async (portalId: string, reason: string, note?: string) => {
+// Aceita uma lista para encerrar várias de uma vez (ex.: as vencidas há muito tempo).
+export const markProposalPortalLost = async (portalIds: string | string[], reason: string, note?: string) => {
+    const ids = Array.isArray(portalIds) ? portalIds : [portalIds];
+    if (ids.length === 0) return;
     const { data: auth } = await supabase.auth.getUser();
     if (!auth.user) throw new Error('Sessão encerrada. Entre novamente.');
     const now = new Date().toISOString();
-    const { error } = await supabase.from('proposal_portals').update({ lost_at: now, lost_reason: reason, updated_at: now }).eq('id', portalId);
+    const { error } = await supabase.from('proposal_portals').update({ lost_at: now, lost_reason: reason, updated_at: now }).in('id', ids);
     if (error) throw new Error(error.message || 'Não foi possível marcar como perdida.');
-    await supabase.from('proposal_portal_follow_ups').insert({
-        portal_id: portalId, kind: 'lost', reason, note: note?.trim() || null, created_by: auth.user.id,
-    });
+    await supabase.from('proposal_portal_follow_ups').insert(ids.map(id => ({
+        portal_id: id, kind: 'lost', reason, note: note?.trim() || null, created_by: auth.user!.id,
+    })));
 };
 
-export const reopenProposalPortal = async (portalId: string) => {
+export const reopenProposalPortal = async (portalIds: string | string[]) => {
+    const ids = Array.isArray(portalIds) ? portalIds : [portalIds];
+    if (ids.length === 0) return;
     const { data: auth } = await supabase.auth.getUser();
     if (!auth.user) throw new Error('Sessão encerrada. Entre novamente.');
-    const { error } = await supabase.from('proposal_portals').update({ lost_at: null, lost_reason: null, updated_at: new Date().toISOString() }).eq('id', portalId);
+    const { error } = await supabase.from('proposal_portals').update({ lost_at: null, lost_reason: null, updated_at: new Date().toISOString() }).in('id', ids);
     if (error) throw new Error(error.message || 'Não foi possível reabrir a proposta.');
-    await supabase.from('proposal_portal_follow_ups').insert({ portal_id: portalId, kind: 'reopened', created_by: auth.user.id });
+    await supabase.from('proposal_portal_follow_ups').insert(ids.map(id => ({ portal_id: id, kind: 'reopened', created_by: auth.user!.id })));
 };
 
 export const markCompanyProposalPortalRead = async (portalId: string) => {

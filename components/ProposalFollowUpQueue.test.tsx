@@ -155,6 +155,69 @@ describe('ProposalFollowUpQueue', () => {
         expect(deleteProposalMessageTemplate).toHaveBeenCalledWith(4);
     });
 
+    it('lista compacta: o primeiro já vem aberto e os outros abrem ao tocar', () => {
+        render(<ProposalFollowUpQueue portals={[
+            portal(),
+            portal({ id: 'p2', token: 'tok2', clientName: 'Ana Souza', viewCount: 0, firstViewedAt: null, lastViewedAt: null }),
+        ]} onChanged={vi.fn()} />);
+
+        expect(screen.getAllByRole('link', { name: /Enviar no WhatsApp/ })).toHaveLength(1);
+        expect(screen.getByRole('link', { name: 'WhatsApp para Ana Souza' })).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: /Ana Souza/ }));
+        expect(screen.getByRole('button', { name: /Ana Souza/ })).toHaveAttribute('aria-expanded', 'true');
+        fireEvent.click(screen.getByRole('link', { name: 'WhatsApp para Carlos Lima' }));
+        expect(recordProposalFollowUp).toHaveBeenCalledWith('p1', 'hot', 'whatsapp');
+    });
+
+    it('filtra por situação e mostra 10 por vez', () => {
+        const notOpened = Array.from({ length: 12 }, (_, index) => portal({ id: `n${index}`, token: `t${index}`, clientName: `Cliente ${index}`, viewCount: 0, firstViewedAt: null, lastViewedAt: null }));
+        render(<ProposalFollowUpQueue portals={[portal(), ...notOpened]} onChanged={vi.fn()} />);
+
+        const filters = screen.getByRole('group', { name: 'Filtrar por situação' });
+        expect(within(filters).getByRole('button', { name: 'Todas 13' })).toHaveAttribute('aria-pressed', 'true');
+        expect(screen.getAllByRole('article')).toHaveLength(10);
+        fireEvent.click(screen.getByRole('button', { name: 'Mostrar mais (3)' }));
+        expect(screen.getAllByRole('article')).toHaveLength(13);
+
+        fireEvent.click(within(filters).getByRole('button', { name: 'Interessados 1' }));
+        expect(screen.getAllByRole('article')).toHaveLength(1);
+        expect(screen.getByText('Carlos Lima')).toBeInTheDocument();
+    });
+
+    it('antigas: vencidas há mais de 30 dias saem de "Hoje" e dá para encerrar todas (com desfazer)', async () => {
+        render(<ProposalFollowUpQueue portals={[
+            portal(),
+            portal({ id: 'o1', clientName: 'Antigo Um', expiresAt: ago(40) }),
+            portal({ id: 'o2', clientName: 'Antigo Dois', expiresAt: ago(60) }),
+        ]} onChanged={vi.fn()} />);
+
+        expect(screen.getByRole('tab', { name: 'Hoje (1)' })).toBeInTheDocument();
+        expect(screen.queryByText('Antigo Um')).not.toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Antigas 2' }));
+        expect(screen.getByText('Antigo Um')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: /Encerrar as 2 como perdidas/ }));
+        await waitFor(() => expect(markProposalPortalLost).toHaveBeenCalledWith(['o1', 'o2'], 'no_response', 'Vencida há mais de 30 dias'));
+        expect(await screen.findByText('2 propostas antigas encerradas como perdidas.')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Desfazer' }));
+        await waitFor(() => expect(reopenProposalPortal).toHaveBeenCalledWith(['o1', 'o2']));
+    });
+
+    it('busca pelo nome do cliente (sem acento)', () => {
+        const others = Array.from({ length: 6 }, (_, index) => portal({ id: `x${index}`, token: `x${index}`, clientName: `Cliente ${index}` }));
+        render(<ProposalFollowUpQueue portals={[portal({ id: 'j', clientName: 'José Alves' }), ...others]} onChanged={vi.fn()} />);
+
+        expect(screen.getByRole('tab', { name: 'Hoje (7)' })).toBeInTheDocument();
+        fireEvent.change(screen.getByLabelText('Buscar cliente'), { target: { value: 'jose' } });
+        expect(screen.getByRole('tab', { name: 'Hoje (1)' })).toBeInTheDocument();
+        expect(screen.getByText('José Alves')).toBeInTheDocument();
+
+        fireEvent.change(screen.getByLabelText('Buscar cliente'), { target: { value: 'ninguém' } });
+        expect(screen.getByText('Nenhum cliente encontrado para "ninguém".')).toBeInTheDocument();
+    });
+
     it('mostra a linha do tempo da proposta', () => {
         render(<ProposalFollowUpQueue portals={[portal({ followUps: [{ id: 3, kind: 'contact', step: 'value', channel: 'whatsapp', created_at: ago(2) }] })]} onChanged={vi.fn()} />);
         fireEvent.click(screen.getByRole('button', { name: /Histórico da proposta/ }));

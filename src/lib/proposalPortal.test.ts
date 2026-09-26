@@ -340,11 +340,28 @@ describe('acompanhamento das propostas', () => {
 
         await markProposalPortalLost('p1', 'price', ' achou caro ');
         expect(portals.update).toHaveBeenCalledWith(expect.objectContaining({ lost_reason: 'price', lost_at: expect.any(String) }));
-        expect(portals.eq).toHaveBeenCalledWith('id', 'p1');
-        expect(events.insert).toHaveBeenCalledWith(expect.objectContaining({ kind: 'lost', reason: 'price', note: 'achou caro' }));
+        expect(portals.in).toHaveBeenCalledWith('id', ['p1']);
+        expect(events.insert).toHaveBeenCalledWith([expect.objectContaining({ portal_id: 'p1', kind: 'lost', reason: 'price', note: 'achou caro' })]);
 
         await reopenProposalPortal('p1');
         expect(portals.update).toHaveBeenLastCalledWith(expect.objectContaining({ lost_at: null, lost_reason: null }));
-        expect(events.insert).toHaveBeenLastCalledWith(expect.objectContaining({ kind: 'reopened' }));
+        expect(events.insert).toHaveBeenLastCalledWith([expect.objectContaining({ portal_id: 'p1', kind: 'reopened' })]);
+    });
+
+    it('encerra várias de uma vez (e reabre todas)', async () => {
+        const portals = chain({ error: null });
+        const events = chain({ error: null });
+        fromMock.mockImplementation((table: string) => table === 'proposal_portals' ? portals : events);
+
+        await markProposalPortalLost(['a', 'b'], 'no_response');
+        expect(portals.in).toHaveBeenCalledWith('id', ['a', 'b']);
+        expect(events.insert).toHaveBeenCalledWith([
+            expect.objectContaining({ portal_id: 'a', kind: 'lost', reason: 'no_response' }),
+            expect.objectContaining({ portal_id: 'b', kind: 'lost', reason: 'no_response' }),
+        ]);
+
+        await reopenProposalPortal(['a', 'b']);
+        expect(portals.in).toHaveBeenLastCalledWith('id', ['a', 'b']);
+        expect(events.insert).toHaveBeenLastCalledWith([expect.objectContaining({ portal_id: 'a', kind: 'reopened' }), expect.objectContaining({ portal_id: 'b', kind: 'reopened' })]);
     });
 });

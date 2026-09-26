@@ -89,6 +89,16 @@ describe('Para acompanhar hoje', () => {
         expect(waiting.map(item => item.portal.id)).toEqual(['d']);
     });
 
+    it('vencidas há mais de 30 dias ficam separadas como antigas', () => {
+        const { due, stale } = buildFollowUpQueue([
+            portal({ id: 'recent', expiresAt: at(-3) }),
+            portal({ id: 'old', expiresAt: at(-45) }),
+            portal({ id: 'older', expiresAt: at(-90), followUps: [{ id: 1, kind: 'contact', step: 'expired', channel: 'whatsapp', created_at: at(-80) }] }),
+        ], NOW);
+        expect(due.map(item => item.portal.id)).toEqual(['recent']);
+        expect(stale.map(item => [item.portal.id, item.step])).toEqual([['old', 'expired'], ['older', 'close']]);
+    });
+
     it('linha do tempo em ordem, com contatos e perda', () => {
         const timeline = buildFollowUpTimeline(portal({
             viewCount: 3,

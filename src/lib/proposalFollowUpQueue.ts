@@ -68,6 +68,20 @@ const STEP_LABELS: Record<FollowUpStep, string> = {
 };
 export const followUpStepLabel = (step?: string | null) => STEP_LABELS[step as FollowUpStep] ?? 'contato';
 
+// Filtros da lista, na ordem de prioridade.
+export const FOLLOW_UP_FILTERS: Array<{ step: FollowUpStep; label: string }> = [
+    { step: 'reply', label: 'Responderam' },
+    { step: 'expiring', label: 'Vencendo' },
+    { step: 'hot', label: 'Interessados' },
+    { step: 'not_opened', label: 'Não abriram' },
+    { step: 'value', label: 'Reforço' },
+    { step: 'expired', label: 'Vencidas' },
+    { step: 'close', label: 'Sem retorno' },
+];
+
+// Vencidas há mais de 30 dias saem de "Hoje": viram uma limpeza (encerrar como perdidas).
+export const STALE_AFTER_DAYS = 30;
+
 export interface FollowUpItem {
     portal: CompanyProposalPortal;
     step: FollowUpStep;
@@ -148,7 +162,7 @@ export const getFollowUpItem = (portal: CompanyProposalPortal, now = Date.now(),
     if (lastMessage?.sender_type === 'client' && ['message', 'negotiation'].includes(lastMessage.kind)) {
         return make('reply', 0,
             lastMessage.kind === 'negotiation' ? 'Mandou uma contraproposta' : 'Respondeu e aguarda você',
-            'Responda na conversa abaixo enquanto o interesse está quente.', time(lastMessage.created_at));
+            'Responda na conversa enquanto o interesse está quente.', time(lastMessage.created_at));
     }
 
     const lastContact = lastFollowUpContactAt(portal);
@@ -192,17 +206,23 @@ export const getFollowUpItem = (portal: CompanyProposalPortal, now = Date.now(),
         'Reforce o valor: garantia, fotos de trabalhos parecidos e avaliações de clientes.', beforeExpiry(lastTouch + 2 * DAY));
 };
 
+const isStale = (item: FollowUpItem, now: number) =>
+    (item.step === 'expired' || item.step === 'close') && now - time(item.portal.expiresAt) > STALE_AFTER_DAYS * DAY;
+
 export const buildFollowUpQueue = (portals: CompanyProposalPortal[], now = Date.now(), templates: FollowUpTemplates = {}) => {
     const due: FollowUpItem[] = [];
     const waiting: FollowUpItem[] = [];
+    const stale: FollowUpItem[] = [];
     for (const portal of portals) {
         const item = getFollowUpItem(portal, now, templates);
         if (!item) continue;
-        (item.due ? due : waiting).push(item);
+        (!item.due ? waiting : isStale(item, now) ? stale : due).push(item);
     }
-    due.sort((a, b) => a.priority - b.priority || time(a.portal.expiresAt) - time(b.portal.expiresAt));
+    // Mesma prioridade: o mais perto de vencer (ou o que venceu por último) primeiro.
+    due.sort((a, b) => a.priority - b.priority || Math.abs(time(a.portal.expiresAt) - now) - Math.abs(time(b.portal.expiresAt) - now));
     waiting.sort((a, b) => a.dueAt - b.dueAt);
-    return { due, waiting };
+    stale.sort((a, b) => time(b.portal.expiresAt) - time(a.portal.expiresAt));
+    return { due, waiting, stale };
 };
 
 export const describeNextContact = (dueAt: number, now = Date.now()) => {

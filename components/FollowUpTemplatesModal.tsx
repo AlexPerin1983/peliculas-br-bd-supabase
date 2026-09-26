@@ -84,7 +84,7 @@ const FollowUpTemplatesModal: React.FC<FollowUpTemplatesModalProps> = ({ isOpen,
             title="Mensagens de acompanhamento"
             keyboardAwareFooter
             footer={(
-                <div className="flex gap-2">
+                <div className="flex w-full gap-2 text-sm font-semibold">
                     <button type="button" onClick={onClose} className="h-11 flex-1 rounded-xl border border-[var(--border-subtle)] text-sm font-semibold text-[var(--text-body)]">Cancelar</button>
                     <button type="button" disabled={busy} onClick={() => void save()} className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-blue-600 text-sm font-bold text-white disabled:opacity-60">
                         {busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null} Salvar mensagens
@@ -108,8 +108,8 @@ const FollowUpTemplatesModal: React.FC<FollowUpTemplatesModalProps> = ({ isOpen,
                                 </div>
                                 {!isDefault ? (
                                     <button type="button" onClick={() => setDrafts(current => ({ ...current, [step]: DEFAULT_FOLLOW_UP_TEMPLATES[step] }))}
-                                        className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-blue-600">
-                                        <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" /> Restaurar padrão
+                                        className="shrink-0 text-blue-600">
+                                        <span className="inline-flex items-center gap-1 text-xs font-semibold"><RotateCcw className="h-3.5 w-3.5" aria-hidden="true" /> Restaurar padrão</span>
                                     </button>
                                 ) : null}
                             </div>
@@ -119,7 +119,8 @@ const FollowUpTemplatesModal: React.FC<FollowUpTemplatesModalProps> = ({ isOpen,
                                 onChange={event => setDrafts(current => ({ ...current, [step]: event.target.value }))}
                                 rows={4}
                                 aria-label={`Mensagem: ${label}`}
-                                className="w-full resize-y rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] p-3 text-[15px] leading-6 text-[var(--text-body)] focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                                style={{ fontSize: 16 }}
+                                className="w-full resize-y rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] p-3 leading-6 text-[var(--text-body)] focus:outline-none focus:ring-2 focus:ring-blue-500/30"
                             />
                             <div className="flex flex-wrap gap-1.5 text-[11px]" role="group" aria-label={`Marcadores para ${label}`}>
                                 {FOLLOW_UP_MESSAGE_TAGS.map(({ tag, label: tagLabel }) => (
