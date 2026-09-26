@@ -751,6 +751,11 @@ describe('useProposalTotals cutting widths', () => {
     // Antes a peça ficava fora do plano e o custo de material dela era zero.
     expect(render({}).totalLinearMeters).toBeCloseTo(4.4);
     expect(render({}).linearMeterCost).toBeCloseTo(440);
+    // Aviso na lista de medidas e selo em Totais usam a mesma conta.
+    expect(render({}).seamsByMeasurement?.['7']).toEqual({
+      pieces: 1, direction: 'horizontal', strips: [152, 148], stripLength: 220, linearCm: 440, rollWidthCm: 152,
+    });
+    expect(render({}).groupedTotals?.['Reflecta Clear']).toMatchObject({ seamPieceCount: 1, seamStripsLinearMeters: 4.4 });
     // Direção escolhida no plano de corte (faixas em pé de 3,00 m).
     expect(render({ seamDirections: { '7-0': 'vertical' } }).totalLinearMeters).toBeCloseTo(6);
     // "Respeitar veio": só faixas em pé.

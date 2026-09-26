@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Measurement, Film, ProposalPricingMode } from '../types';
+import { Measurement, Film, MeasurementSeamSummary, ProposalPricingMode } from '../types';
 import { AMBIENTES, TIPOS_APLICACAO } from '../constants';
 import DynamicSelector from './ui/DynamicSelector';
 import Tooltip from './ui/Tooltip';
@@ -53,8 +53,11 @@ interface MeasurementGroupProps {
     isCheckingEstoque?: boolean;
     onOpenRetalhoSuggestions?: (measurementId: number) => void;
     onOpenMeasurementInputSettings: () => void;
+    // Maior que a bobina: vai com emenda (mesma conta do custo).
+    seam?: MeasurementSeamSummary;
 }
 const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+const formatSeamMeters = (valueCm: number) => (valueCm / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
     measurement,
@@ -85,7 +88,8 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
     compatibleRetalhosCount = 0,
     isCheckingEstoque = false,
     onOpenRetalhoSuggestions,
-    onOpenMeasurementInputSettings
+    onOpenMeasurementInputSettings,
+    seam,
 }) => {
     const { mode: measurementInputMode } = useMeasurementInputMode();
     const liveNumpadDraft = useNumpadDraft(measurement.id);
@@ -727,6 +731,15 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
                                     <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-400">
                                         <i className="fas fa-spinner fa-spin"></i>
                                         Consultando estoque
+                                    </div>
+                                )}
+                                {seam && (
+                                    <div
+                                        className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-800 dark:bg-amber-900/30 dark:text-amber-200"
+                                        title={`Maior que a bobina de ${formatSeamMeters(seam.rollWidthCm)} m: ${seam.strips.length} faixas ${seam.direction === 'vertical' ? 'em pé' : 'deitadas'} de ${formatSeamMeters(seam.stripLength)} m (${seam.strips.map(formatSeamMeters).join(' + ')}), emenda de topo. Já está no custo; ajuste no plano de corte.`}
+                                    >
+                                        <i className="fas fa-grip-lines-vertical" aria-hidden="true"></i>
+                                        {seam.pieces > 1 ? `${seam.pieces} peças com emenda` : 'Com emenda'} · {seam.strips.length} faixas · {formatSeamMeters(seam.linearCm * seam.pieces)} m
                                     </div>
                                 )}
                                 {shouldShowRetalhoAction && (

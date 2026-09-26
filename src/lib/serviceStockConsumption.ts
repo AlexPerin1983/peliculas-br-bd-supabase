@@ -19,8 +19,9 @@ export interface StockPlanCuttingSource {
     respectGrain: boolean;
     pieceIds: string[];
     seamStyle?: 'full' | 'equal';
-    // Direções de emenda do plano de corte (ids do plano: "<medida>-<n>").
+    // Escolhas de emenda do plano de corte (ids do plano: "<medida>-<n>").
     seamDirections?: Record<string, 'vertical' | 'horizontal'>;
+    seamComplementFirst?: Record<string, boolean>;
 }
 
 export interface StockPlanCalculation {
@@ -131,10 +132,14 @@ const calculateWithSources = (
 
         // Peças maiores que a bobina viram faixas; segue a direção escolhida no plano de corte.
         const seamDirections: Record<string, 'vertical' | 'horizontal'> = {};
+        const seamComplementFirst: Record<string, boolean> = {};
         source.pieceIds.forEach((pieceId) => {
             const piece = piecesById.get(pieceId);
-            const direction = piece && source.seamDirections?.[`${piece.sourceMeasurementId}-${piece.pieceIndex - 1}`];
+            if (!piece) return;
+            const planPieceId = `${piece.sourceMeasurementId}-${piece.pieceIndex - 1}`;
+            const direction = source.seamDirections?.[planPieceId];
             if (direction) seamDirections[pieceId] = direction;
+            if (source.seamComplementFirst?.[planPieceId]) seamComplementFirst[pieceId] = true;
         });
 
         const optimizer = new CuttingOptimizer({
@@ -143,6 +148,7 @@ const calculateWithSources = (
             allowRotation: !source.respectGrain,
             seamStyle: source.seamStyle,
             seamDirections,
+            seamComplementFirst,
         });
 
         source.pieceIds.forEach((pieceId) => {
@@ -250,6 +256,7 @@ export const buildServiceStockPlans = (linkedPdfs: SavedPDF[]): StockFilmPlan[] 
                     pieceIds: [],
                     seamStyle: settings.seamStyle,
                     seamDirections: settings.seamDirections,
+                    seamComplementFirst: settings.seamComplementFirst,
                 };
                 sourceByFilm.set(normalizedFilmName, cuttingSource);
                 plan.cuttingSources.push(cuttingSource);

@@ -29,22 +29,34 @@ export interface SeamPlan {
 
 const round2 = (value: number) => Math.round(value * 100) / 100;
 
-export const splitSeamLength = (length: number, max: number, style: SeamStyle = 'full'): number[] => {
+// complementFirst: a faixa do complemento vai primeiro (em cima / à esquerda).
+export const splitSeamLength = (length: number, max: number, style: SeamStyle = 'full', complementFirst = false): number[] => {
     const count = Math.max(1, Math.ceil(length / max - 1e-9));
     if (count === 1) return [length];
     const each = style === 'equal' ? round2(length / count) : max;
     const strips = Array.from({ length: count - 1 }, () => each);
     strips.push(round2(length - each * (count - 1)));
-    return strips;
+    return complementFirst && style === 'full' ? strips.reverse() : strips;
 };
+
+// Há um complemento (faixa mais estreita) para escolher o lado.
+export const hasSeamComplement = (strips: number[]): boolean =>
+    strips.length > 1 && Math.abs(strips[0] - strips[strips.length - 1]) >= 0.5;
 
 // Mesma regra de "cabe" do otimizador (sem tolerância).
 export const needsSeam = (w: number, h: number, rollWidth: number, allowRotation: boolean): boolean =>
     w > rollWidth && (!allowRotation || h > rollWidth);
 
-const buildOption = (w: number, h: number, rollWidth: number, direction: SeamDirection, style: SeamStyle): SeamOption => {
-    const strips = splitSeamLength(direction === 'vertical' ? w : h, rollWidth, style);
-    const stripLength = direction === 'vertical' ? h : w;
+const buildOption = (
+    w: number,
+    h: number,
+    rollWidth: number,
+    direction: SeamDirection,
+    style: SeamStyle,
+    complementFirst: boolean,
+): SeamOption => {
+    const strips = splitSeamLength(direction === 'vertical' ? w : h, rollWidth, style, complementFirst);
+    const stripLength = round2(direction === 'vertical' ? h : w);
     return { direction, strips, stripLength, linearCm: round2(strips.length * stripLength) };
 };
 
@@ -57,14 +69,15 @@ export const planSeam = (
     w: number,
     h: number,
     rollWidth: number,
-    options: { allowRotation: boolean; style?: SeamStyle; direction?: SeamDirection },
+    options: { allowRotation: boolean; style?: SeamStyle; direction?: SeamDirection; complementFirst?: boolean },
 ): SeamPlan | null => {
     if (!(rollWidth > 0) || !needsSeam(w, h, rollWidth, options.allowRotation)) return null;
     const style = options.style ?? 'full';
-    const vertical = buildOption(w, h, rollWidth, 'vertical', style);
+    const complementFirst = options.complementFirst === true;
+    const vertical = buildOption(w, h, rollWidth, 'vertical', style, complementFirst);
     if (!options.allowRotation) return { chosen: vertical, alternative: null };
 
-    const horizontal = buildOption(w, h, rollWidth, 'horizontal', style);
+    const horizontal = buildOption(w, h, rollWidth, 'horizontal', style, complementFirst);
     const preferred = options.direction
         ?? (horizontal.linearCm < vertical.linearCm ? 'horizontal' : 'vertical');
     return preferred === 'horizontal'

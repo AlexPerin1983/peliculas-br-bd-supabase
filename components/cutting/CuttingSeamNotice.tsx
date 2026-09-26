@@ -1,6 +1,6 @@
 import React from 'react';
 import type { SeamPieceSummary } from '../../utils/CuttingOptimizer';
-import type { SeamDirection, SeamOption, SeamStyle } from '../../utils/seamStrips';
+import { hasSeamComplement, type SeamDirection, type SeamOption, type SeamStyle } from '../../utils/seamStrips';
 import { groupSeamPieces } from '../../utils/seamGroups';
 
 interface CuttingSeamNoticeProps {
@@ -15,6 +15,8 @@ interface CuttingSeamNoticeProps {
     disabled?: boolean;
     onSeamStyleChange: (style: SeamStyle) => void;
     onDirectionChange: (pieceIds: string[], direction: SeamDirection) => void;
+    // Lado da faixa do complemento (primeiro = em cima / à esquerda).
+    onComplementSideChange?: (pieceIds: string[], complementFirst: boolean) => void;
 }
 
 const meters = (valueCm: number) => (valueCm / 100).toLocaleString('pt-BR', {
@@ -79,6 +81,7 @@ export function SeamPreview({ w, h, option, size = 44, label }: { w: number; h: 
 /** Peças maiores que a bobina: mostra as faixas, onde fica a emenda e o gasto de cada direção. */
 export default function CuttingSeamNotice({
     seamPieces, rollWidth, planTotalCm, alternativeTotals, pricePerMeter, seamStyle, disabled, onSeamStyleChange, onDirectionChange,
+    onComplementSideChange,
 }: CuttingSeamNoticeProps) {
     if (seamPieces.length === 0) return null;
     const groups = groupSeamPieces(seamPieces);
@@ -191,6 +194,40 @@ export default function CuttingSeamNotice({
                                     })}
                                 </div>
                             )}
+                            {onComplementSideChange && seamStyle === 'full' && ids.length > 0 && hasSeamComplement(piece.chosen.strips) && (() => {
+                                const strips = piece.chosen.strips;
+                                const complementWidth = piece.complementFirst ? strips[0] : strips[strips.length - 1];
+                                const sides = piece.chosen.direction === 'horizontal'
+                                    ? ['em cima', 'embaixo'] as const
+                                    : ['à esquerda', 'à direita'] as const;
+                                return (
+                                    <div className="mt-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-[11px]">
+                                        <span className="font-medium text-slate-600 dark:text-slate-300">
+                                            Faixa estreita ({meters(complementWidth)} m)
+                                        </span>
+                                        <span className="flex rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800" role="group" aria-label={`Lado da faixa estreita de ${meters(piece.w)} × ${meters(piece.h)} m`}>
+                                            {sides.map((side, index) => {
+                                                const first = index === 0;
+                                                const selected = piece.complementFirst === first;
+                                                return (
+                                                    <button
+                                                        key={side}
+                                                        type="button"
+                                                        aria-pressed={selected}
+                                                        disabled={disabled || selected}
+                                                        onClick={() => onComplementSideChange(ids, first)}
+                                                        className={`rounded-md px-2 py-1 font-semibold transition-colors ${selected
+                                                            ? 'bg-white text-amber-900 shadow-sm dark:bg-slate-950 dark:text-amber-100'
+                                                            : 'text-slate-500 hover:text-slate-700 disabled:opacity-60 dark:text-slate-400'}`}
+                                                    >
+                                                        {side}
+                                                    </button>
+                                                );
+                                            })}
+                                        </span>
+                                    </div>
+                                );
+                            })()}
                             {options.length > 1 && comparePlans && options.some(({ option }) => Math.min(...option.strips) <= rollWidth - 20) && (
                                 <p className="mt-1.5 text-[10px] text-slate-500 dark:text-slate-400">
                                     O plano conta a sobra ao lado da faixa mais estreita, que recebe outras peças.

@@ -12,7 +12,7 @@ export interface SeamGroup {
 export const groupSeamPieces = (pieces: SeamPieceSummary[]): SeamGroup[] => {
     const groups = new Map<string, SeamGroup>();
     pieces.forEach(piece => {
-        const key = `${piece.w}x${piece.h}|${piece.chosen.direction}`;
+        const key = `${piece.w}x${piece.h}|${piece.chosen.direction}${piece.complementFirst ? '|c' : ''}`;
         const group = groups.get(key) ?? { key, piece, ids: [], count: 0 };
         group.count += 1;
         if (piece.id !== undefined) group.ids.push(String(piece.id));

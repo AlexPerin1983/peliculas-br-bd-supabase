@@ -23,6 +23,8 @@ export interface SeamPieceSummary {
     alternative: SeamOption | null;
     // Caberia inteira girada, mas "respeitar veio" não deixa girar.
     fitsIfRotated: boolean;
+    // A faixa do complemento vai primeiro (em cima / à esquerda).
+    complementFirst: boolean;
 }
 
 export interface Rect {
@@ -71,6 +73,8 @@ export interface OptimizerOptions {
     // Peças maiores que a bobina: como dividir as faixas e a direção escolhida por peça (id).
     seamStyle?: SeamStyle;
     seamDirections?: Record<string, SeamDirection>;
+    // Peças (id) em que a faixa do complemento vai primeiro (em cima / à esquerda).
+    seamComplementFirst?: Record<string, boolean>;
 }
 
 // Quanto a mais de bobina aceitamos para ter um plano só com cortes retos.
@@ -111,6 +115,7 @@ export class CuttingOptimizer {
     private straightCutTolerance: number;
     private seamStyle: SeamStyle;
     private seamDirections: Record<string, SeamDirection>;
+    private seamComplementFirst: Record<string, boolean>;
     private items: Rect[] = [];
     private freeRects: Rect[] = [];
     private placedItems: Rect[] = [];
@@ -124,6 +129,7 @@ export class CuttingOptimizer {
         this.straightCutTolerance = options.straightCutTolerance ?? DEFAULT_STRAIGHT_CUT_TOLERANCE;
         this.seamStyle = options.seamStyle ?? 'full';
         this.seamDirections = options.seamDirections ?? {};
+        this.seamComplementFirst = options.seamComplementFirst ?? {};
     }
 
     public addItem(w: number, h: number, id?: number | string, label?: string) {
@@ -136,10 +142,12 @@ export class CuttingOptimizer {
         const seamPieces: SeamPieceSummary[] = [];
 
         this.items.forEach(item => {
+            const complementFirst = item.id !== undefined && this.seamComplementFirst[String(item.id)] === true;
             const plan = planSeam(item.w, item.h, this.rollWidth, {
                 allowRotation: this.allowRotation,
                 style: this.seamStyle,
                 direction: item.id !== undefined ? this.seamDirections[String(item.id)] : undefined,
+                complementFirst,
             });
             if (!plan) {
                 items.push(item);
@@ -155,6 +163,7 @@ export class CuttingOptimizer {
                 chosen,
                 alternative: plan.alternative,
                 fitsIfRotated: !this.allowRotation && item.h <= this.rollWidth,
+                complementFirst,
             });
 
             let offset = 0;

@@ -31,6 +31,7 @@ export const normalizeFilmCuttingSettings = (
         measurementSignature: settings?.measurementSignature,
         seamStyle: settings?.seamStyle === 'equal' ? 'equal' : 'full',
         seamDirections: normalizeSeamDirections(settings?.seamDirections),
+        seamComplementFirst: normalizeSeamComplementFirst(settings?.seamComplementFirst),
         planVersion: Number.isFinite(settings?.planVersion) ? settings?.planVersion : undefined,
     };
 };
@@ -40,6 +41,14 @@ const normalizeSeamDirections = (
 ): FilmCuttingPlanSettings['seamDirections'] => {
     if (!value || typeof value !== 'object') return undefined;
     const entries = Object.entries(value).filter(([, direction]) => direction === 'vertical' || direction === 'horizontal');
+    return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+};
+
+const normalizeSeamComplementFirst = (
+    value?: FilmCuttingPlanSettings['seamComplementFirst'] | null
+): FilmCuttingPlanSettings['seamComplementFirst'] => {
+    if (!value || typeof value !== 'object') return undefined;
+    const entries = Object.entries(value).filter(([, first]) => first === true);
     return entries.length > 0 ? Object.fromEntries(entries) : undefined;
 };
 

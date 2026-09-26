@@ -103,6 +103,7 @@ describe('CuttingOptimizationPanel roll widths', () => {
       respectGrain: false,
       seamStyle: 'full',
       seamDirections: {},
+      seamComplementFirst: {},
     });
 
     fireEvent.click(triggers[0]);
