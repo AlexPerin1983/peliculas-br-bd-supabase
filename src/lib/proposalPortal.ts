@@ -470,12 +470,30 @@ export interface CompanyProposalPortal {
     proposals: Array<{ id: number; name: string; total: number } & ProposalConditionFields>;
     messages: ProposalPortalMessage[];
     unreadCount: number;
+    // Acompanhamento ("Para acompanhar hoje").
+    createdAt?: string;
+    firstViewedAt?: string | null;
+    lastViewedAt?: string | null;
+    clientPhone?: string | null;
+    lostAt?: string | null;
+    lostReason?: string | null;
+    followUps?: ProposalFollowUpEvent[];
+}
+
+export interface ProposalFollowUpEvent {
+    id: number;
+    kind: 'contact' | 'lost' | 'reopened';
+    step?: string | null;
+    channel?: 'whatsapp' | 'call' | 'other' | null;
+    reason?: string | null;
+    note?: string | null;
+    created_at: string;
 }
 
 export const loadCompanyProposalPortals = async (): Promise<CompanyProposalPortal[]> => {
     const { data: portals, error } = await supabase
         .from('proposal_portals')
-        .select('id, token, share_code, client_id, expires_at, status, last_activity_at, last_read_by_company_at, view_count')
+        .select('id, token, share_code, client_id, expires_at, status, last_activity_at, last_read_by_company_at, view_count, created_at, first_viewed_at, last_viewed_at, lost_at, lost_reason')
         .neq('status', 'revoked')
         .order('last_activity_at', { ascending: false });
     if (error) throw error;
@@ -483,13 +501,17 @@ export const loadCompanyProposalPortals = async (): Promise<CompanyProposalPorta
 
     const portalIds = portals.map(item => item.id);
     const clientIds = Array.from(new Set(portals.map(item => item.client_id)));
-    const [{ data: clients }, { data: items }, { data: messages }] = await Promise.all([
-        supabase.from('clients').select('id, nome').in('id', clientIds),
+    const [{ data: clients }, { data: items }, { data: messages }, followUpResult] = await Promise.all([
+        supabase.from('clients').select('id, nome, telefone').in('id', clientIds),
         supabase.from('proposal_portal_items').select('portal_id, saved_pdf_id, position, condition_original_value, condition_final_value, condition_discount_amount, condition_discount_percent, condition_expires_at, saved_pdfs(proposal_option_name, nome_arquivo, total_preco, follow_up_base_value, follow_up_discount_percent, follow_up_discount_amount, follow_up_revision)').in('portal_id', portalIds).order('position'),
         supabase.from('proposal_portal_messages').select('id, portal_id, saved_pdf_id, sender_type, kind, body, offer_type, offer_value, condition_value, payment_selection, created_at').in('portal_id', portalIds).order('created_at'),
+        supabase.from('proposal_portal_follow_ups').select('id, portal_id, kind, step, channel, reason, note, created_at').in('portal_id', portalIds).order('created_at'),
     ]);
+    // O histórico de contatos é complemento: se falhar, as conversas continuam aparecendo.
+    const followUps = followUpResult?.error ? [] : (followUpResult?.data || []);
 
     const clientNames = new Map((clients || []).map(client => [Number(client.id), client.nome]));
+    const clientPhones = new Map((clients || []).map((client: any) => [Number(client.id), client.telefone as string | null]));
     return portals.map(portal => {
         const portalMessages = (messages || []).filter(message => message.portal_id === portal.id) as Array<ProposalPortalMessage & { portal_id: string }>;
         const readAt = portal.last_read_by_company_at ? new Date(portal.last_read_by_company_at).getTime() : 0;
@@ -512,8 +534,55 @@ export const loadCompanyProposalPortals = async (): Promise<CompanyProposalPorta
             })),
             messages: portalMessages,
             unreadCount: portalMessages.filter(message => message.sender_type === 'client' && new Date(message.created_at).getTime() > readAt).length,
+            createdAt: portal.created_at,
+            firstViewedAt: portal.first_viewed_at,
+            lastViewedAt: portal.last_viewed_at,
+            clientPhone: clientPhones.get(Number(portal.client_id)) ?? null,
+            lostAt: portal.lost_at,
+            lostReason: portal.lost_reason,
+            followUps: (followUps as Array<ProposalFollowUpEvent & { portal_id: string }>).filter(event => event.portal_id === portal.id),
         };
     });
+};
+
+// Registra um contato de acompanhamento (mensagem, ligação...).
+export const recordProposalFollowUp = async (portalId: string, step: string, channel: 'whatsapp' | 'call' | 'other', note?: string) => {
+    const { data: auth } = await supabase.auth.getUser();
+    if (!auth.user) throw new Error('Sessão encerrada. Entre novamente.');
+    const { error } = await supabase.from('proposal_portal_follow_ups').insert({
+        portal_id: portalId,
+        kind: 'contact',
+        step,
+        channel,
+        note: note?.trim() || null,
+        created_by: auth.user.id,
+    });
+    if (error) throw new Error(error.message || 'Não foi possível registrar o contato.');
+};
+
+// "Perdida" é interno: o cliente continua vendo o link e pode aprovar depois.
+// Aceita uma lista para encerrar várias de uma vez (ex.: as vencidas há muito tempo).
+export const markProposalPortalLost = async (portalIds: string | string[], reason: string, note?: string) => {
+    const ids = Array.isArray(portalIds) ? portalIds : [portalIds];
+    if (ids.length === 0) return;
+    const { data: auth } = await supabase.auth.getUser();
+    if (!auth.user) throw new Error('Sessão encerrada. Entre novamente.');
+    const now = new Date().toISOString();
+    const { error } = await supabase.from('proposal_portals').update({ lost_at: now, lost_reason: reason, updated_at: now }).in('id', ids);
+    if (error) throw new Error(error.message || 'Não foi possível marcar como perdida.');
+    await supabase.from('proposal_portal_follow_ups').insert(ids.map(id => ({
+        portal_id: id, kind: 'lost', reason, note: note?.trim() || null, created_by: auth.user!.id,
+    })));
+};
+
+export const reopenProposalPortal = async (portalIds: string | string[]) => {
+    const ids = Array.isArray(portalIds) ? portalIds : [portalIds];
+    if (ids.length === 0) return;
+    const { data: auth } = await supabase.auth.getUser();
+    if (!auth.user) throw new Error('Sessão encerrada. Entre novamente.');
+    const { error } = await supabase.from('proposal_portals').update({ lost_at: null, lost_reason: null, updated_at: new Date().toISOString() }).in('id', ids);
+    if (error) throw new Error(error.message || 'Não foi possível reabrir a proposta.');
+    await supabase.from('proposal_portal_follow_ups').insert(ids.map(id => ({ portal_id: id, kind: 'reopened', created_by: auth.user!.id })));
 };
 
 export const markCompanyProposalPortalRead = async (portalId: string) => {

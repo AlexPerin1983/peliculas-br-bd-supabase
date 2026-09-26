@@ -1,6 +1,6 @@
 import { vi } from 'vitest';
 import type { SavedPDF } from '../../types';
-import { createProposalPortal, findClientProposalPortals, loadPublicProposalPortal, openPublicProposalPdf, refreshProposalPortal, revokeProposalPortal } from './proposalPortal';
+import { createProposalPortal, findClientProposalPortals, loadPublicProposalPortal, markProposalPortalLost, openPublicProposalPdf, recordProposalFollowUp, refreshProposalPortal, reopenProposalPortal, revokeProposalPortal } from './proposalPortal';
 
 const {
     rpcMock,
@@ -10,6 +10,7 @@ const {
     syncAllPendingMock,
     findLocalPdfMock,
     listPdfSyncQueueMock,
+    getUserMock,
 } = vi.hoisted(() => ({
     rpcMock: vi.fn(),
     fromMock: vi.fn(),
@@ -18,10 +19,11 @@ const {
     syncAllPendingMock: vi.fn(),
     findLocalPdfMock: vi.fn(),
     listPdfSyncQueueMock: vi.fn(),
+    getUserMock: vi.fn(async () => ({ data: { user: { id: 'user-1' } } })),
 }));
 
 vi.mock('../../services/supabaseClient', () => ({
-    supabase: { rpc: rpcMock, from: fromMock, functions: { invoke: functionsInvokeMock } },
+    supabase: { rpc: rpcMock, from: fromMock, functions: { invoke: functionsInvokeMock }, auth: { getUser: getUserMock } },
 }));
 
 vi.mock('../../services/syncService', () => ({
@@ -308,5 +310,58 @@ describe('links já enviados ao cliente', () => {
         expect(fromMock).toHaveBeenCalledWith('proposal_portals');
         expect(builder.update).toHaveBeenCalledWith(expect.objectContaining({ status: 'revoked' }));
         expect(builder.eq).toHaveBeenCalledWith('id', 'p2');
+    });
+});
+
+describe('acompanhamento das propostas', () => {
+    const chain = (result: unknown) => {
+        const builder: any = {};
+        for (const method of ['select', 'in', 'eq', 'update', 'insert']) builder[method] = vi.fn(() => builder);
+        builder.then = (resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) => Promise.resolve(result).then(resolve, reject);
+        return builder;
+    };
+
+    beforeEach(() => {
+        fromMock.mockReset();
+    });
+
+    it('registra o contato com o passo e o canal', async () => {
+        const builder = chain({ error: null });
+        fromMock.mockReturnValue(builder);
+        await recordProposalFollowUp('p1', 'hot', 'whatsapp');
+        expect(fromMock).toHaveBeenCalledWith('proposal_portal_follow_ups');
+        expect(builder.insert).toHaveBeenCalledWith(expect.objectContaining({ portal_id: 'p1', kind: 'contact', step: 'hot', channel: 'whatsapp', created_by: 'user-1' }));
+    });
+
+    it('marca como perdida (no link e no histórico) e reabre', async () => {
+        const portals = chain({ error: null });
+        const events = chain({ error: null });
+        fromMock.mockImplementation((table: string) => table === 'proposal_portals' ? portals : events);
+
+        await markProposalPortalLost('p1', 'price', ' achou caro ');
+        expect(portals.update).toHaveBeenCalledWith(expect.objectContaining({ lost_reason: 'price', lost_at: expect.any(String) }));
+        expect(portals.in).toHaveBeenCalledWith('id', ['p1']);
+        expect(events.insert).toHaveBeenCalledWith([expect.objectContaining({ portal_id: 'p1', kind: 'lost', reason: 'price', note: 'achou caro' })]);
+
+        await reopenProposalPortal('p1');
+        expect(portals.update).toHaveBeenLastCalledWith(expect.objectContaining({ lost_at: null, lost_reason: null }));
+        expect(events.insert).toHaveBeenLastCalledWith([expect.objectContaining({ portal_id: 'p1', kind: 'reopened' })]);
+    });
+
+    it('encerra várias de uma vez (e reabre todas)', async () => {
+        const portals = chain({ error: null });
+        const events = chain({ error: null });
+        fromMock.mockImplementation((table: string) => table === 'proposal_portals' ? portals : events);
+
+        await markProposalPortalLost(['a', 'b'], 'no_response');
+        expect(portals.in).toHaveBeenCalledWith('id', ['a', 'b']);
+        expect(events.insert).toHaveBeenCalledWith([
+            expect.objectContaining({ portal_id: 'a', kind: 'lost', reason: 'no_response' }),
+            expect.objectContaining({ portal_id: 'b', kind: 'lost', reason: 'no_response' }),
+        ]);
+
+        await reopenProposalPortal(['a', 'b']);
+        expect(portals.in).toHaveBeenLastCalledWith('id', ['a', 'b']);
+        expect(events.insert).toHaveBeenLastCalledWith([expect.objectContaining({ portal_id: 'a', kind: 'reopened' }), expect.objectContaining({ portal_id: 'b', kind: 'reopened' })]);
     });
 });
