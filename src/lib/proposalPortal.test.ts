@@ -1,6 +1,6 @@
 import { vi } from 'vitest';
 import type { SavedPDF } from '../../types';
-import { createProposalPortal, loadPublicProposalPortal } from './proposalPortal';
+import { createProposalPortal, loadPublicProposalPortal, openPublicProposalPdf } from './proposalPortal';
 
 const {
     rpcMock,
@@ -213,3 +213,37 @@ describe('links amigáveis de proposta', () => {
     });
 });
 
+
+describe('ver PDF pelo link', () => {
+    const fakeTab = () => ({ closed: false, close: vi.fn(), location: { href: '' }, document: { title: '', body: { innerHTML: '' } } });
+
+    it('abre o PDF numa aba nova, criada no toque', async () => {
+        const tab = fakeTab();
+        const openSpy = vi.spyOn(window, 'open').mockReturnValue(tab as unknown as Window);
+        functionsInvokeMock.mockResolvedValue({ data: { url: 'https://storage/pdfs/a.pdf?token=x' }, error: null });
+
+        await openPublicProposalPdf('tok', 7);
+
+        expect(openSpy).toHaveBeenCalledWith('', '_blank');
+        expect(functionsInvokeMock).toHaveBeenCalledWith('proposal-portal', { body: { token: 'tok', action: 'download', proposalId: 7, mode: 'view' } });
+        expect(tab.location.href).toBe('https://storage/pdfs/a.pdf?token=x');
+        expect(tab.close).not.toHaveBeenCalled();
+        openSpy.mockRestore();
+    });
+
+    it('com servidor antigo (endereço de download) fecha a aba e baixa como antes', async () => {
+        const tab = fakeTab();
+        const openSpy = vi.spyOn(window, 'open').mockReturnValue(tab as unknown as Window);
+        const assignSpy = vi.fn();
+        const originalLocation = window.location;
+        Object.defineProperty(window, 'location', { configurable: true, value: { ...originalLocation, assign: assignSpy } });
+        functionsInvokeMock.mockResolvedValue({ data: { url: 'https://storage/pdfs/a.pdf?token=x&download=proposta.pdf' }, error: null });
+
+        await openPublicProposalPdf('tok', 7);
+
+        expect(tab.close).toHaveBeenCalled();
+        expect(assignSpy).toHaveBeenCalledWith('https://storage/pdfs/a.pdf?token=x&download=proposta.pdf');
+        Object.defineProperty(window, 'location', { configurable: true, value: originalLocation });
+        openSpy.mockRestore();
+    });
+});

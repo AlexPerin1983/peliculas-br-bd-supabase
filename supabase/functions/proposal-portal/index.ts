@@ -308,9 +308,13 @@ Deno.serve(async (request) => {
         .maybeSingle();
       const pdf = (item as any)?.saved_pdfs;
       if (!pdf?.pdf_path) return json({ error: 'PDF indisponivel para download.' }, 404);
-      const { data: signed, error: signedError } = await admin.storage.from('pdfs').createSignedUrl(pdf.pdf_path, 90, {
-        download: pdf.nome_arquivo || 'proposta.pdf',
-      });
+      // mode 'view': abre no leitor do navegador; sem ele, baixa o arquivo.
+      const viewInline = payload.mode === 'view';
+      const { data: signed, error: signedError } = await admin.storage.from('pdfs').createSignedUrl(
+        pdf.pdf_path,
+        viewInline ? 300 : 90,
+        viewInline ? undefined : { download: pdf.nome_arquivo || 'proposta.pdf' },
+      );
       if (signedError || !signed?.signedUrl) return json({ error: 'Nao foi possivel preparar o PDF.' }, 500);
       return json({ url: signed.signedUrl });
     }

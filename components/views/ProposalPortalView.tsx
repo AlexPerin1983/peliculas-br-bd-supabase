@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import {
     buildProposalDecisionWhatsAppMessage,
-    downloadPublicProposal,
+    openPublicProposalPdf,
     loadPublicProposalPortal,
     type ProposalOfferType,
     type ProposalPortalDecision,
@@ -534,9 +534,9 @@ const ProposalPortalView: React.FC = () => {
         setDownloadingId(proposalId);
         try {
             if (import.meta.env.DEV && token === 'demo') return;
-            await downloadPublicProposal(token, proposalId);
+            await openPublicProposalPdf(token, proposalId);
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Não foi possível baixar o PDF.');
+            setError(err instanceof Error ? err.message : 'Não foi possível abrir o PDF.');
         } finally {
             setDownloadingId(null);
         }

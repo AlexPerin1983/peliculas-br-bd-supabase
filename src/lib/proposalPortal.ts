@@ -65,9 +65,32 @@ export const loadPublicProposalPortal = (token: string, trackView = false, known
         knownActivityAt,
     });
 
-export const downloadPublicProposal = async (token: string, proposalId: number) => {
-    const result = await invokePublicPortal<{ url: string }>({ token, action: 'download', proposalId });
-    window.location.assign(result.url);
+// Abre o PDF no leitor do navegador. A aba nasce no toque (senão o celular bloqueia
+// a janela aberta depois da espera) e recebe o endereço quando ele chega.
+export const openPublicProposalPdf = async (token: string, proposalId: number) => {
+    const tab = window.open('', '_blank');
+    if (tab) {
+        try {
+            tab.document.title = 'Abrindo proposta…';
+            tab.document.body.innerHTML = '<p style="font:15px system-ui,sans-serif;color:#64748b;padding:32px;text-align:center">Abrindo o PDF…</p>';
+        } catch {
+            // A aba pode não permitir escrever; segue só com o endereço.
+        }
+    }
+    try {
+        const result = await invokePublicPortal<{ url: string }>({ token, action: 'download', proposalId, mode: 'view' });
+        // Servidor ainda sem o modo "ver" devolve endereço de download: baixa como antes, sem aba parada.
+        const isDownload = /[?&]download=/.test(result.url);
+        if (tab && !tab.closed && !isDownload) {
+            tab.location.href = result.url;
+        } else {
+            tab?.close();
+            window.location.assign(result.url);
+        }
+    } catch (error) {
+        tab?.close();
+        throw error;
+    }
 };
 
 export const sendPublicProposalMessage = (token: string, body: string) =>
