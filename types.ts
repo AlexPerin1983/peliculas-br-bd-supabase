@@ -273,6 +273,8 @@ export interface ProposalPaymentSelection extends ProposalPaymentChoice {
     baseTotal: number;
     customerTotal: number;
     installmentValue: number;
+    // Só quando a última parcela é diferente (sem juros: absorve os centavos).
+    lastInstallmentValue?: number;
     ratePercent: number;
     discountPercent: number;
 }

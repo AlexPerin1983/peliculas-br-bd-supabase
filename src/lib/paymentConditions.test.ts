@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildProposalPaymentOptions, resolveProposalPaymentChoice } from './paymentConditions';
+import { buildPaymentOptions } from '../../supabase/functions/proposal-portal/paymentOptions';
 
 describe('payment conditions', () => {
     it('repassa a taxa da operadora sem reduzir o valor líquido', () => {
@@ -53,6 +54,36 @@ describe('payment conditions', () => {
         ]);
         expect(options.find(option => option.methodType === 'parcelado_com_juros' && option.installments === 6)?.ratePercent).toBe(8);
         expect(resolveProposalPaymentChoice(1200, [{ tipo: 'parcelado_com_juros', ativo: true, parcelas_max: 12, selectedInstallments: [3], juros: 2 }], { methodType: 'parcelado_com_juros', installments: 12 })).toBeNull();
+    });
+
+    it('o servidor da aprovação usa as parcelas escolhidas na proposta', () => {
+        // Antes o servidor ignorava a escolha: com "sem juros até 6x" achava que ia até 10x
+        // e recusava "7x no cartão" ("Escolha como deseja pagar antes de aprovar").
+        const methods = [
+            { tipo: 'parcelado_sem_juros', ativo: true, parcelas_max: 10, selectedInstallments: [1, 2, 3, 4, 5, 6] },
+            { tipo: 'parcelado_com_juros', ativo: true, parcelas_max: 12, juros: 2, selectedInstallments: [7, 8, 9, 10, 11, 12] },
+        ];
+        const serverOptions = buildPaymentOptions(365, methods);
+        expect(serverOptions.find(option => option.methodType === 'parcelado_com_juros' && option.installments === 7)).toBeDefined();
+        expect(serverOptions.find(option => option.methodType === 'parcelado_sem_juros' && option.installments === 8)).toBeUndefined();
+        // App e servidor calculam igual.
+        expect(buildProposalPaymentOptions(365, methods as any)).toEqual(serverOptions);
+    });
+
+    it('sem juros soma exatamente o valor da proposta (a última parcela fica com os centavos)', () => {
+        const options = buildProposalPaymentOptions(365, [{ tipo: 'parcelado_sem_juros', ativo: true, parcelas_max: 10 }]);
+        options.forEach(option => {
+            expect(option.customerTotal).toBe(365);
+            const last = option.lastInstallmentValue ?? option.installmentValue;
+            expect(Math.round((option.installmentValue * (option.installments - 1) + last) * 100) / 100).toBe(365);
+        });
+        const threeX = options.find(option => option.installments === 3)!;
+        expect(threeX).toMatchObject({ installmentValue: 121.67, lastInstallmentValue: 121.66, customerTotal: 365 });
+        // Divisão exata não mostra "última".
+        expect(options.find(option => option.installments === 2)!.lastInstallmentValue).toBeUndefined();
+        // 7x de 100: 14,29 × 6 + 14,26.
+        expect(buildProposalPaymentOptions(100, [{ tipo: 'parcelado_sem_juros', ativo: true, parcelas_max: 7 }]).at(-1))
+            .toMatchObject({ installmentValue: 14.29, lastInstallmentValue: 14.26, customerTotal: 100 });
     });
 
     it('com juros só depois da última parcela sem juros, mesmo em orçamentos já salvos', () => {
