@@ -2,7 +2,7 @@
 import { MobileActionsDrawer } from './MobileActionsDrawer';
 import { CheckSquare, ChevronDown, ChevronUp, ClipboardCheck, ClipboardPaste, Copy, History, Layers3, Share2, Trash2, X } from 'lucide-react';
 import { useMemo } from 'react';
-import { Measurement, Film, ProposalPricingMode, Retalho, UIMeasurement } from '../types';
+import { Measurement, Film, MeasurementSeamSummary, ProposalPricingMode, Retalho, UIMeasurement } from '../types';
 import MeasurementGroup from './MeasurementGroup';
 import ConfirmationModal from './modals/ConfirmationModal';
 import RetalhoSuggestionModal from './modals/RetalhoSuggestionModal';
@@ -91,6 +91,8 @@ interface MeasurementListProps {
     onPasteCopiedMeasurements?: () => void | Promise<void>;
     onOpenMeasurementHistory?: () => void;
     proposalOptionsSlot?: React.ReactNode;
+    // Medidas (id) maiores que a bobina, que vão com emenda.
+    seamsByMeasurement?: { [measurementId: string]: MeasurementSeamSummary };
 }
 
 const MeasurementList: React.FC<MeasurementListProps> = ({
@@ -118,7 +120,8 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
     onOpenFilmSelectionModal,
     onPasteCopiedMeasurements,
     onOpenMeasurementHistory,
-    proposalOptionsSlot
+    proposalOptionsSlot,
+    seamsByMeasurement,
 }) => {
     const { showToast } = useFeedback();
     const useTouchNumpad = useTouchNumpadPreference();
@@ -1083,6 +1086,7 @@ const MeasurementList: React.FC<MeasurementListProps> = ({
                             isCheckingEstoque={isLoadingRetalhos}
                             onOpenRetalhoSuggestions={handleOpenRetalhoSuggestions}
                             onOpenMeasurementInputSettings={handleOpenMeasurementInputSettings}
+                            seam={seamsByMeasurement?.[String(measurement.id)]}
                         />
                     </React.Fragment>
                 ))}

@@ -1,6 +1,6 @@
 import React, { ReactNode, Suspense, lazy } from 'react';
 import { Bolt, ClipboardPaste, History, Plus, Ruler, Sparkles, UserCheck, Users } from 'lucide-react';
-import { Client, Film, Agendamento, AgendamentoServiceStatus, AgendamentoStockStatus, ProposalOption, ProposalPricingMode, SavedPDF, UserInfo, UIMeasurement } from '../../../types';
+import { Client, Film, Agendamento, AgendamentoServiceStatus, AgendamentoStockStatus, ProposalOption, ProposalPricingMode, SavedPDF, Totals, UserInfo, UIMeasurement } from '../../../types';
 import { ServiceStockConsumptionInput } from '../../../services/estoqueDb';
 import { FeatureGate } from '../../../components/subscription/SubscriptionComponents';
 import { PremiumFeatureSection } from '../../../components/subscription/PremiumFeatureSection';
@@ -94,7 +94,7 @@ interface AppContentRouterProps {
     proposalOptions: ProposalOption[];
     activeOptionId: number | null;
     pricingMode: ProposalPricingMode;
-    totals: { totalM2: number; totalQuantity: number };
+    totals: { totalM2: number; totalQuantity: number; seamsByMeasurement?: Totals['seamsByMeasurement'] };
     numpadConfig: NumpadConfig;
     swipeDirection: 'left' | 'right' | null;
     swipeDistance: number;
@@ -567,6 +567,7 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
                 totalM2={totals.totalM2}
                 totalQuantity={totals.totalQuantity}
                 proposalOptionsSlot={mobileProposalOptionsSlot}
+                seamsByMeasurement={totals.seamsByMeasurement}
             />,
             clientLoadingView
         );

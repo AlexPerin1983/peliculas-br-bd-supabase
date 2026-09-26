@@ -159,6 +159,8 @@ export interface FilmCuttingPlanSettings {
     seamStyle?: 'full' | 'equal';
     // Direção da emenda escolhida por peça (id da peça no plano: "<medida>-<n>").
     seamDirections?: Record<string, 'vertical' | 'horizontal'>;
+    // Peças em que a faixa do complemento vai primeiro (em cima / à esquerda).
+    seamComplementFirst?: Record<string, boolean>;
     // Versão da regra que calculou totalLinearMeters (2 = já conta as faixas de emenda).
     planVersion?: number;
 }
@@ -352,6 +354,19 @@ export interface Agendamento {
     stockSourcePdfIds?: number[];
 }
 
+// Medida maior que a bobina: vai com emenda de topo (calculado com a bobina e as escolhas do plano).
+export interface MeasurementSeamSummary {
+    // Quantas peças desta medida têm emenda.
+    pieces: number;
+    direction: 'vertical' | 'horizontal';
+    // Larguras das faixas (cm) e comprimento de cada faixa (cm).
+    strips: number[];
+    stripLength: number;
+    // Bobina das faixas de uma peça (cm).
+    linearCm: number;
+    rollWidthCm: number;
+}
+
 export interface Totals {
     totalM2: number;
     subtotal: number;
@@ -401,8 +416,13 @@ export interface Totals {
                 garantiaMaoDeObra?: number;
                 garantiaMaoDeObraUnidade?: WarrantyUnit;
             };
+            // Peças desta película com emenda e a bobina só das faixas (m).
+            seamPieceCount?: number;
+            seamStripsLinearMeters?: number;
         };
     };
+    // Medidas (id) que vão com emenda.
+    seamsByMeasurement?: { [measurementId: string]: MeasurementSeamSummary };
 }
 
 export interface SavedPDF {

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Drawer } from 'vaul';
-import { CalendarClock, CircleDollarSign, Eye, EyeOff, MinusCircle, Percent, PlusCircle, RotateCcw, Shield, ShieldCheck, SlidersHorizontal } from 'lucide-react';
+import { CalendarClock, CircleDollarSign, Columns2, Eye, EyeOff, MinusCircle, Percent, PlusCircle, RotateCcw, Shield, ShieldCheck, SlidersHorizontal } from 'lucide-react';
 
 import type { FilmPriceOverride, FilmWarrantyOverride, PaymentMethods, ProposalDiscount, ProposalPaymentConfig, Totals, WarrantyUnit } from '../../types';
 import { PaymentSelectionPanel } from './PaymentSelectionPanel';
@@ -357,6 +357,8 @@ const FilmPricingEditor: React.FC<FilmPricingEditorProps> = ({
         </div>
     );
 };
+
+const formatSeamMeters = (value: number = 0) => value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 // Selo curto no cabeçalho da película: "10a fáb. · 2a inst."
 const formatWarrantyBadge = (warranty: ReturnType<typeof resolveFilmWarranty>, isLaborOnly: boolean) => [
@@ -831,6 +833,15 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                                                                     {formatWarrantyBadge(resolveFilmWarranty(group.catalogWarranty, generalDiscount.filmWarrantyOverrides, group.filmName), isLaborOnly)}
                                                                 </span>
                                                             )}
+                                                            {group.seamPieceCount > 0 && (
+                                                                <span
+                                                                    className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-amber-50 px-1.5 py-px text-[9px] font-bold text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
+                                                                    title={`${group.seamPieceCount === 1 ? '1 peça maior que a bobina vai' : `${group.seamPieceCount} peças maiores que a bobina vão`} com emenda de topo; as faixas somam ${formatSeamMeters(group.seamStripsLinearMeters)} m e já estão no custo.`}
+                                                                >
+                                                                    <Columns2 className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />
+                                                                    {group.seamPieceCount === 1 ? '1 emenda' : `${group.seamPieceCount} emendas`}
+                                                                </span>
+                                                            )}
                                                         </span>
                                                     </div>
                                                     <i className={`fas fa-chevron-down text-[10px] text-slate-400 transition-transform duration-200 ${openGroup === group.filmName ? 'rotate-180' : ''}`} />
@@ -889,6 +900,15 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                                                                 </div>
                                                                 <span className="text-xs font-bold text-blue-700 dark:text-blue-300">{formatNumberBR(group.linearSaleSubtotal)}</span>
                                                             </div>
+                                                        )}
+
+                                                        {group.seamPieceCount > 0 && (
+                                                            <p className="flex items-start gap-1.5 rounded-lg bg-amber-50 px-2 py-1.5 text-[10px] font-medium leading-4 text-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+                                                                <Columns2 className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
+                                                                <span>
+                                                                    {group.seamPieceCount === 1 ? '1 peça maior que a bobina vai' : `${group.seamPieceCount} peças maiores que a bobina vão`} com emenda: as faixas somam {formatSeamMeters(group.seamStripsLinearMeters)} m, já no custo de material. Se cobra a emenda, ajuste o preço aqui.
+                                                                </span>
+                                                            </p>
                                                         )}
 
                                                         <div className="flex items-center justify-between">

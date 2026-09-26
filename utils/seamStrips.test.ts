@@ -1,12 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import { countPlacedPieces, CuttingOptimizer } from './CuttingOptimizer';
-import { needsSeam, planSeam, splitSeamLength } from './seamStrips';
+import { hasSeamComplement, needsSeam, planSeam, splitSeamLength } from './seamStrips';
 
 describe('splitSeamLength', () => {
     it('faixa inteira + complemento por padrão', () => {
         expect(splitSeamLength(220, 152)).toEqual([152, 68]);
         expect(splitSeamLength(400, 152)).toEqual([152, 152, 96]);
         expect(splitSeamLength(304, 152)).toEqual([152, 152]);
+    });
+
+    it('complemento primeiro (em cima / à esquerda) só muda a ordem', () => {
+        expect(splitSeamLength(220, 152, 'full', true)).toEqual([68, 152]);
+        expect(splitSeamLength(400, 152, 'full', true)).toEqual([96, 152, 152]);
+        expect(splitSeamLength(220, 152, 'equal', true)).toEqual([110, 110]);
+        expect(hasSeamComplement([152, 68])).toBe(true);
+        expect(hasSeamComplement([110, 110])).toBe(false);
     });
 
     it('faixas iguais como opção', () => {
@@ -69,6 +77,22 @@ describe('CuttingOptimizer com emenda', () => {
 
         // Faixas em pé de 3,00 m (152 + 68); a peça de 0,80 × 1,40 cabe ao lado da faixa de 0,68.
         expect(result.unplacedItems).toEqual([]);
+        expect(result.totalHeight).toBeCloseTo(600);
+    });
+
+    it('coloca a faixa estreita primeiro quando pedido (emenda a 0,68 m da esquerda)', () => {
+        const optimizer = new CuttingOptimizer({
+            rollWidth: 152,
+            allowRotation: false,
+            seamComplementFirst: { p: true },
+        });
+        optimizer.addItem(220, 300, 'p');
+        const result = optimizer.optimize();
+        const first = result.placedItems.find(item => item.id === 'p-f1')!;
+        const second = result.placedItems.find(item => item.id === 'p-f2')!;
+        expect(first.w).toBe(68);
+        expect(second.seam).toMatchObject({ index: 1, offset: 68 });
+        expect(result.seamPieces![0].complementFirst).toBe(true);
         expect(result.totalHeight).toBeCloseTo(600);
     });
 

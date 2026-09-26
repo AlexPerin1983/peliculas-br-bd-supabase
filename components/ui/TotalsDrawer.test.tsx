@@ -200,6 +200,29 @@ describe('TotalsDrawer garantia nesta proposta', () => {
     });
 });
 
+describe('TotalsDrawer emenda', () => {
+    it('mostra o selo e explica que as faixas já estão no custo', () => {
+        render(<TotalsDrawer
+            isOpen
+            onClose={vi.fn()}
+            totals={{
+                ...totals,
+                groupedTotals: {
+                    Jateada: { ...totals.groupedTotals!.Jateada, seamPieceCount: 1, seamStripsLinearMeters: 4.4 },
+                },
+            }}
+            generalDiscount={baseDiscount}
+            onUpdateGeneralDiscount={vi.fn()}
+            onGeneratePdf={vi.fn()}
+            isGeneratingPdf={false}
+        />);
+
+        expect(screen.getByText('1 emenda')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: /Jateada/ }));
+        expect(screen.getByText(/1 peça maior que a bobina vai com emenda: as faixas somam 4,40 m/)).toBeInTheDocument();
+    });
+});
+
 describe('TotalsDrawer preço personalizado', () => {
     it('permite escolher nos totais quais parcelas irão para o orçamento', () => {
         const onUpdatePaymentConfig = vi.fn();

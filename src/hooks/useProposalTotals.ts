@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Film, FilmPricingMode, Measurement, ProposalDiscount, Totals, UIMeasurement } from '../../types';
+import { Film, FilmPricingMode, Measurement, MeasurementSeamSummary, ProposalDiscount, Totals, UIMeasurement } from '../../types';
 import { CuttingOptimizer } from '../../utils/CuttingOptimizer';
 import { summarizeProposalExpenses } from '../lib/proposalExpenses';
 import { calculatePricingAreaM2, roundAreaForPricing } from '../lib/pricingArea';
@@ -170,6 +170,7 @@ export function useProposalTotals({
 
         let totalLinearMeters = 0;
         let linearMeterCost = 0;
+        const seamsByMeasurement: { [measurementId: string]: MeasurementSeamSummary } = {};
 
         Object.entries(groupedByFilm).forEach(([filmName, filmMeasurements]) => {
             const film = films.find(item => item.nome === filmName);
@@ -189,6 +190,7 @@ export function useProposalTotals({
                 allowRotation: !cuttingSettings.respectGrain,
                 seamStyle: cuttingSettings.seamStyle,
                 seamDirections: cuttingSettings.seamDirections,
+                seamComplementFirst: cuttingSettings.seamComplementFirst,
             });
 
             filmMeasurements.forEach(measurement => {
@@ -205,6 +207,30 @@ export function useProposalTotals({
             });
 
             const optimizationResult = optimizer.optimize();
+
+            // Medidas maiores que a bobina: aviso na lista de medidas e selo em Totais.
+            let seamStripsCm = 0;
+            (optimizationResult.seamPieces ?? []).forEach(piece => {
+                const pieceId = String(piece.id ?? '');
+                const measurementId = pieceId.slice(0, pieceId.lastIndexOf('-'));
+                seamStripsCm += piece.chosen.linearCm;
+                if (!measurementId) return;
+                const current = seamsByMeasurement[measurementId];
+                seamsByMeasurement[measurementId] = current
+                    ? { ...current, pieces: current.pieces + 1 }
+                    : {
+                        pieces: 1,
+                        direction: piece.chosen.direction,
+                        strips: piece.chosen.strips,
+                        stripLength: piece.chosen.stripLength,
+                        linearCm: piece.chosen.linearCm,
+                        rollWidthCm: cuttingSettings.rollWidthCm,
+                    };
+            });
+            if (groupedTotals[filmName] && optimizationResult.seamPieces?.length) {
+                groupedTotals[filmName].seamPieceCount = optimizationResult.seamPieces.length;
+                groupedTotals[filmName].seamStripsLinearMeters = seamStripsCm / 100;
+            }
             // Planos salvos antes da emenda deixavam as peças maiores que a bobina de fora.
             const savedPlanCountsSeams = !optimizationResult.seamPieces?.length
                 || (cuttingSettings.planVersion ?? 1) >= CUTTING_PLAN_VERSION;
@@ -266,7 +292,8 @@ export function useProposalTotals({
             estimatedProfit,
             estimatedMarginPercentage,
             pricingMode,
-            groupedTotals
+            groupedTotals,
+            seamsByMeasurement: Object.keys(seamsByMeasurement).length > 0 ? seamsByMeasurement : undefined,
         };
     }, [measurements, films, generalDiscount]);
 }

@@ -56,6 +56,36 @@ describe('CuttingSeamNotice', () => {
         expect(screen.getByText(/sobra ao lado da faixa mais estreita/)).toBeInTheDocument();
     });
 
+    it('troca o lado da faixa estreita (só com faixa inteira + complemento)', () => {
+        const onComplementSideChange = vi.fn();
+        const seamPieces = seamPiecesFor({ rollWidth: 152, allowRotation: false }, [[220, 300, '5-0']]);
+        const { rerender } = render(<CuttingSeamNotice
+            seamPieces={seamPieces}
+            seamStyle="full"
+            rollWidth={152}
+            onSeamStyleChange={vi.fn()}
+            onDirectionChange={vi.fn()}
+            onComplementSideChange={onComplementSideChange}
+        />);
+
+        expect(screen.getByText('Faixa estreita (0,68 m)')).toBeInTheDocument();
+        const sides = screen.getByRole('group', { name: /Lado da faixa estreita/ });
+        expect(within(sides).getByRole('button', { name: 'à direita' })).toHaveAttribute('aria-pressed', 'true');
+        fireEvent.click(within(sides).getByRole('button', { name: 'à esquerda' }));
+        expect(onComplementSideChange).toHaveBeenCalledWith(['5-0'], true);
+
+        // Faixas iguais não têm complemento.
+        rerender(<CuttingSeamNotice
+            seamPieces={seamPiecesFor({ rollWidth: 152, allowRotation: false, seamStyle: 'equal' }, [[220, 300, '5-0']])}
+            seamStyle="equal"
+            rollWidth={152}
+            onSeamStyleChange={vi.fn()}
+            onDirectionChange={vi.fn()}
+            onComplementSideChange={onComplementSideChange}
+        />);
+        expect(screen.queryByRole('group', { name: /Lado da faixa estreita/ })).not.toBeInTheDocument();
+    });
+
     it('com "Resp. Veio" explica que a peça caberia girada', () => {
         render(<CuttingSeamNotice
             seamPieces={seamPiecesFor({ rollWidth: 152, allowRotation: false }, [[220, 120, '3-0']])}

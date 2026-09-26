@@ -2917,7 +2917,7 @@ Use somente o JSON definido e não inclua explicações fora dele.`;
             proposalOptions={proposalOptions}
             activeOptionId={activeOptionId}
             pricingMode={generalDiscount.pricingMode === 'labor_only' ? 'labor_only' : 'complete'}
-            totals={{ totalM2: totals.totalM2, totalQuantity: totals.totalQuantity }}
+            totals={{ totalM2: totals.totalM2, totalQuantity: totals.totalQuantity, seamsByMeasurement: totals.seamsByMeasurement }}
             numpadConfig={numpadConfig}
             swipeDirection={swipeDirection}
             swipeDistance={swipeDistance}

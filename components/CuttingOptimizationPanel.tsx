@@ -66,6 +66,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
         respectGrain: boolean;
         seamStyle: SeamStyle;
         seamDirections: Record<string, SeamDirection>;
+        seamComplementFirst: Record<string, boolean>;
     };
 
     const uniqueFilmsKey = uniqueFilms.join('|');
@@ -86,6 +87,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                 respectGrain: saved.respectGrain,
                 seamStyle: saved.seamStyle ?? 'full',
                 seamDirections: saved.seamDirections ?? {},
+                seamComplementFirst: saved.seamComplementFirst ?? {},
             };
             nextCustomWidths[filmName] = !CUTTING_ROLL_WIDTH_PRESETS_CM.includes(
                 saved.rollWidthCm as typeof CUTTING_ROLL_WIDTH_PRESETS_CM[number]
@@ -102,7 +104,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
         }
     }, [uniqueFilmsKey, activeFilm]);
 
-    const defaultSettings: LocalFilmSettings = { rollWidth: '152', bladeWidth: '0', respectGrain: false, seamStyle: 'full', seamDirections: {} };
+    const defaultSettings: LocalFilmSettings = { rollWidth: '152', bladeWidth: '0', respectGrain: false, seamStyle: 'full', seamDirections: {}, seamComplementFirst: {} };
     const currentSettings = filmSettings[activeFilm] || defaultSettings;
     const isCustomRollWidth = customRollWidthFilms[activeFilm]
         || !CUTTING_ROLL_WIDTH_PRESETS_CM.includes(
@@ -126,6 +128,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                 respectGrain: nextSettings.respectGrain,
                 seamStyle: nextSettings.seamStyle,
                 seamDirections: nextSettings.seamDirections,
+                seamComplementFirst: nextSettings.seamComplementFirst,
             });
         }
     };
@@ -149,6 +152,16 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
     const setSeamStyle = (style: SeamStyle) => {
         unlockSeamStrips(() => true);
         updateCurrentSettings('seamStyle', style);
+    };
+    const setSeamComplementSide = (pieceIds: string[], complementFirst: boolean) => {
+        const ids = new Set(pieceIds);
+        unlockSeamStrips(item => ids.has(String(item.seam!.pieceId)));
+        const next = { ...currentSettings.seamComplementFirst };
+        pieceIds.forEach(id => {
+            if (complementFirst) next[id] = true;
+            else delete next[id];
+        });
+        updateCurrentSettings('seamComplementFirst', next);
     };
 
     const handleRollWidthSelection = (value: string) => {
@@ -753,6 +766,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
             respectGrain: currentSettings.respectGrain,
             seamStyle: currentSettings.seamStyle,
             seamDirections: currentSettings.seamDirections,
+            seamComplementFirst: currentSettings.seamComplementFirst,
             activeFilm,
             measurements: measurements.filter(m => m.pelicula === activeFilm || (uniqueFilms.length === 1 && uniqueFilms[0] === 'Padrão')).map(m => ({
                 id: m.id,
@@ -820,6 +834,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                     allowRotation: !currentSettings.respectGrain,
                     seamStyle: currentSettings.seamStyle,
                     seamDirections: { ...currentSettings.seamDirections, ...extraSeamDirections },
+                    seamComplementFirst: currentSettings.seamComplementFirst,
                 });
 
                 relevantMeasurements.forEach(m => {
@@ -863,6 +878,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                 respectGrain: currentSettings.respectGrain,
                 seamStyle: currentSettings.seamStyle,
                 seamDirections: currentSettings.seamDirections,
+                seamComplementFirst: currentSettings.seamComplementFirst,
                 totalLinearMeters: newResult.totalHeight / 100,
                 measurementSignature: buildFilmCuttingMeasurementSignature(measurements, activeFilm),
                 planVersion: CUTTING_PLAN_VERSION,
@@ -1819,6 +1835,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                     disabled={isOptimizing}
                                     onSeamStyleChange={setSeamStyle}
                                     onDirectionChange={setSeamDirections}
+                                    onComplementSideChange={setSeamComplementSide}
                                 />
 
                                 {/* Aviso de peças que não couberam na bobina */}
