@@ -191,7 +191,7 @@ const ResponseModal: React.FC<ResponseModalProps> = ({ kind, proposalName, propo
                                                 </span>
                                                 <span className="shrink-0 text-right">
                                                     <span className="block text-sm font-black text-slate-950">{option.installments > 1 ? `${option.installments}x de ${currency.format(option.installmentValue)}` : currency.format(option.customerTotal)}</span>
-                                                    {option.installments > 1 ? <span className="text-[11px] font-semibold text-slate-500">total {currency.format(option.customerTotal)}</span> : null}
+                                                    {option.installments > 1 ? <span className="text-[11px] font-semibold text-slate-500">total {currency.format(option.customerTotal)}{option.lastInstallmentValue != null ? ` · última ${currency.format(option.lastInstallmentValue)}` : ''}</span> : null}
                                                 </span>
                                             </button>
                                         );
@@ -627,7 +627,7 @@ const ProposalPortalView: React.FC = () => {
                                                 </span>
                                                 <span>
                                                     <span className="block text-sm font-extrabold text-slate-950">{option.label}</span>
-                                                    {option.discountPercent > 0 ? <span className="mt-0.5 block text-xs font-bold text-emerald-700">Economize {currency.format(option.baseTotal - option.customerTotal)}</span> : option.installments > 1 ? <span className="mt-0.5 block text-xs text-slate-500">Total no cartão: {currency.format(option.customerTotal)}</span> : null}
+                                                    {option.discountPercent > 0 ? <span className="mt-0.5 block text-xs font-bold text-emerald-700">Economize {currency.format(option.baseTotal - option.customerTotal)}</span> : option.installments > 1 ? <span className="mt-0.5 block text-xs text-slate-500">Total no cartão: {currency.format(option.customerTotal)}{option.lastInstallmentValue != null ? ` · última ${currency.format(option.lastInstallmentValue)}` : ''}</span> : null}
                                                 </span>
                                             </span>
                                             <span className="shrink-0 text-right text-sm font-black text-slate-950">
@@ -692,7 +692,7 @@ const ProposalPortalView: React.FC = () => {
                             {item.kind !== 'message' ? <p className="mb-1 text-[10px] font-black uppercase tracking-[0.12em] opacity-75">{item.kind === 'approved' ? 'Proposta aprovada' : item.kind === 'rejected' ? 'Proposta recusada' : item.kind === 'negotiation' ? 'Contraproposta enviada' : item.kind === 'condition_extended' ? 'Condição prorrogada' : 'Condição atualizada'}</p> : null}
                             {item.offer_value != null ? <p className="font-extrabold">{item.offer_type === 'percentage' ? `${item.offer_value}% de desconto` : `Valor desejado: ${currency.format(item.offer_value)}`}</p> : null}
                             {item.condition_value != null ? <p className="font-extrabold">Valor da condição: {currency.format(item.condition_value)}</p> : null}
-                            {item.payment_selection ? <p className="font-extrabold">{item.payment_selection.installments > 1 ? `${item.payment_selection.installments}x de ${currency.format(item.payment_selection.installmentValue)} · total ${currency.format(item.payment_selection.customerTotal)}` : `${item.payment_selection.label}: ${currency.format(item.payment_selection.customerTotal)}`}</p> : null}
+                            {item.payment_selection ? <p className="font-extrabold">{item.payment_selection.installments > 1 ? `${item.payment_selection.installments}x de ${currency.format(item.payment_selection.installmentValue)}${item.payment_selection.lastInstallmentValue != null ? ` (última ${currency.format(item.payment_selection.lastInstallmentValue)})` : ''} · total ${currency.format(item.payment_selection.customerTotal)}` : `${item.payment_selection.label}: ${currency.format(item.payment_selection.customerTotal)}`}</p> : null}
                             {item.body ? <p>{item.body}</p> : null}<p className="mt-1 text-[10px] opacity-60">{new Date(item.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</p></div></div>)}
                     </div>
                     <div className="flex gap-2 border-t border-slate-100 p-3 sm:p-4"><textarea value={message} onChange={event => setMessage(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void sendMessage(); } }} rows={1} placeholder="Digite sua mensagem…" className="min-h-11 flex-1 resize-none rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-blue-500" /><button type="button" disabled={busy || !message.trim()} onClick={() => void sendMessage()} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white disabled:opacity-50"><Send className="h-4 w-4" /></button></div>

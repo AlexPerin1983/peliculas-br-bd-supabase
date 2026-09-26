@@ -156,7 +156,8 @@ export const buildPdfInstallmentLines = (total: number, method: PaymentMethod, i
         : options.slice(-1);
     return selected.flatMap(option => {
         if (method.tipo === 'parcelado_sem_juros') {
-            return [`${indent}• Parcelado s/ Juros: ${option.installments}x de R$ ${formatNumberBR(option.installmentValue)}`];
+            const last = option.lastInstallmentValue != null ? ` (última R$ ${formatNumberBR(option.lastInstallmentValue)})` : '';
+            return [`${indent}• Parcelado s/ Juros: ${option.installments}x de R$ ${formatNumberBR(option.installmentValue)}${last}`];
         }
         if (method.calculation_mode === 'operator_fee') {
             return [

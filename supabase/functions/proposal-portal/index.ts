@@ -3,6 +3,7 @@ import webpush from 'npm:web-push@3.6.7';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { selectCompanyBranding } from './companyBranding.ts';
 import { resolvePortalPricing } from './followUpPricing.ts';
+import { buildPaymentOptions } from './paymentOptions.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -18,82 +19,9 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 const cleanText = (value: unknown, max = 2000) =>
   typeof value === 'string' ? value.trim().slice(0, max) : '';
 
-const roundMoney = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
-const ceilMoney = (value: number) => Math.ceil((value - Number.EPSILON) * 100) / 100;
-
-const buildPaymentOptions = (totalValue: unknown, paymentConfig: any) => {
-  const total = Math.max(0, Number(totalValue) || 0);
-  const methods = Array.isArray(paymentConfig?.paymentMethods) ? paymentConfig.paymentMethods : [];
-  const options: any[] = [];
-  const addCash = (method: any) => {
-    const discountPercent = Math.min(99.99, Math.max(0, Number(method.porcentagem) || 0));
-    const customerTotal = roundMoney(total * (1 - discountPercent / 100));
-    options.push({
-      methodType: method.tipo,
-      installments: 1,
-      label: method.tipo === 'pix'
-        ? discountPercent > 0 ? `Pix à vista com ${discountPercent}% de desconto` : 'Pix à vista'
-        : 'Boleto à vista',
-      calculationMode: 'cash',
-      baseTotal: roundMoney(total),
-      customerTotal,
-      installmentValue: customerTotal,
-      ratePercent: 0,
-      discountPercent,
-    });
-  };
-  methods.filter((method: any) => method.ativo && ['pix', 'boleto'].includes(method.tipo)).forEach(addCash);
-
-  const noInterest = methods.find((method: any) => method.ativo && method.tipo === 'parcelado_sem_juros');
-  const noInterestMax = noInterest ? Math.min(12, Math.max(1, Math.trunc(Number(noInterest.parcelas_max) || 1))) : 0;
-  for (let installments = 1; installments <= noInterestMax; installments += 1) {
-    const installmentValue = ceilMoney(total / installments);
-    options.push({
-      methodType: 'parcelado_sem_juros',
-      installments,
-      label: `${installments}x sem juros`,
-      calculationMode: 'no_interest',
-      baseTotal: roundMoney(total),
-      customerTotal: roundMoney(installmentValue * installments),
-      installmentValue,
-      ratePercent: 0,
-      discountPercent: 0,
-    });
-  }
-
-  const withInterest = methods.find((method: any) => method.ativo && method.tipo === 'parcelado_com_juros');
-  if (withInterest) {
-    const max = Math.min(12, Math.max(1, Math.trunc(Number(withInterest.parcelas_max) || 1)));
-    for (let installments = noInterestMax + 1; installments <= max; installments += 1) {
-      const mode = withInterest.calculation_mode || 'monthly_interest';
-      let ratePercent = 0;
-      let rawInstallment = total / installments;
-      if (mode === 'operator_fee') {
-        if (withInterest.operator_fee_rates?.[String(installments)] == null) continue;
-        ratePercent = Math.min(99.99, Math.max(0, Number(withInterest.operator_fee_rates[String(installments)]) || 0));
-        rawInstallment = (total / (1 - ratePercent / 100)) / installments;
-      } else {
-        ratePercent = Math.max(0, Number(withInterest.juros) || 0);
-        const monthlyRate = ratePercent / 100;
-        const power = Math.pow(1 + monthlyRate, installments);
-        rawInstallment = monthlyRate > 0 ? total * (monthlyRate * power) / (power - 1) : total / installments;
-      }
-      const installmentValue = ceilMoney(rawInstallment);
-      options.push({
-        methodType: 'parcelado_com_juros',
-        installments,
-        label: `${installments}x no cartão`,
-        calculationMode: mode,
-        baseTotal: roundMoney(total),
-        customerTotal: roundMoney(installmentValue * installments),
-        installmentValue,
-        ratePercent,
-        discountPercent: 0,
-      });
-    }
-  }
-  return options;
-};
+// Mesma conta do app (tela, PDF e link): paymentOptions.ts é compartilhado.
+const buildPortalPaymentOptions = (totalValue: unknown, paymentConfig: any) =>
+  buildPaymentOptions(totalValue, Array.isArray(paymentConfig?.paymentMethods) ? paymentConfig.paymentMethods : []);
 
 type ProposalPushKind = 'message' | 'approved' | 'rejected' | 'negotiation';
 
@@ -436,7 +364,7 @@ Deno.serve(async (request) => {
       const approvedValue = pricing.conditionFinalValue != null
         ? Number(pricing.conditionFinalValue)
         : Number(pdf?.total_preco || 0);
-      const paymentOptions = buildPaymentOptions(approvedValue, pdf?.payment_config);
+      const paymentOptions = buildPortalPaymentOptions(approvedValue, pdf?.payment_config);
       let paymentSelection = null;
       if (kind === 'approved' && paymentOptions.length > 0) {
         const requestedMethod = cleanText(payload.paymentChoice?.methodType, 40);
