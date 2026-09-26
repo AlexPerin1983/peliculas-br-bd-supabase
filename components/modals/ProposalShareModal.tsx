@@ -1,7 +1,15 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { CalendarClock, Check, Copy, ExternalLink, Link2, LoaderCircle, MessageCircle, ShieldCheck } from 'lucide-react';
+import { Ban, CalendarClock, Check, Copy, ExternalLink, Link2, LoaderCircle, MessageCircle, RefreshCw, ShieldCheck } from 'lucide-react';
 import type { Client, SavedPDF } from '../../types';
-import { buildProposalShareMessage, createProposalPortal, type CreatedProposalPortal } from '../../src/lib/proposalPortal';
+import {
+    buildProposalShareMessage,
+    createProposalPortal,
+    findClientProposalPortals,
+    refreshProposalPortal,
+    revokeProposalPortal,
+    type CreatedProposalPortal,
+    type ExistingProposalPortal,
+} from '../../src/lib/proposalPortal';
 import { buildProposalWhatsAppAppUrl, buildProposalWhatsAppBusinessUrl } from '../../src/lib/proposalMessages';
 import { attachProposalLink } from '../../src/lib/proposalShareText';
 import Modal from '../ui/Modal';
@@ -52,32 +60,133 @@ const copyText = async (value: string) => {
     area.remove();
 };
 
+const shortDate = (value: string) => new Date(value).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+
+const describePortal = (portal: ExistingProposalPortal) => [
+    `enviado em ${shortDate(portal.createdAt)}`,
+    portal.viewCount > 0 ? `aberto ${portal.viewCount}x` : 'ainda não aberto',
+    portal.expired ? 'vencido' : portal.status === 'negotiating' ? 'em negociação' : `válido até ${shortDate(portal.expiresAt)}`,
+].join(' · ');
+
 const ProposalShareModal: React.FC<ProposalShareModalProps> = ({ isOpen, client, pdfs, onClose, autoCreate = false, messageOptions = [] }) => {
     const [expiration, setExpiration] = useState(() => getDefaultExpiration(pdfs));
     const [created, setCreated] = useState<CreatedProposalPortal | null>(null);
+    // Como o link da tela chegou: criado agora, atualizado agora ou já existia.
+    const [origin, setOrigin] = useState<'created' | 'updated' | 'existing'>('created');
+    const [shownPortal, setShownPortal] = useState<ExistingProposalPortal | null>(null);
+    const [existing, setExisting] = useState<ExistingProposalPortal[]>([]);
+    const [checking, setChecking] = useState(false);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
-    const [copied, setCopied] = useState<'link' | 'message' | null>(null);
+    const [notice, setNotice] = useState('');
+    const [copied, setCopied] = useState<'link' | 'message' | string | null>(null);
     const [isWhatsAppChooserOpen, setIsWhatsAppChooserOpen] = useState(false);
+    const [editingValidity, setEditingValidity] = useState(false);
+    const [confirmingRevoke, setConfirmingRevoke] = useState(false);
     const autoCreateKeyRef = useRef<string | null>(null);
     const pdfKey = pdfs.map(pdf => pdf.id).join(',');
+
+    const readyMessages = useMemo(() => messageOptions.map(option => option.trim()).filter(Boolean), [messageOptions]);
+    const [choice, setChoice] = useState(DEFAULT_CHOICE);
+    const [message, setMessage] = useState('');
+
+    // Links que ainda podem receber estas propostas (o mais recente primeiro).
+    const updatablePortals = existing.filter(portal => portal.updatable && !(portal.sameProposals && !portal.expired));
+
+    const showPortal = (portal: ExistingProposalPortal) => {
+        setShownPortal(portal);
+        setOrigin('existing');
+        setCreated({ portalId: portal.id, token: '', shareCode: '', expiresAt: portal.expiresAt, url: portal.url });
+    };
+
+    const create = async () => {
+        setBusy(true);
+        setError('');
+        try {
+            setCreated(await createProposalPortal(pdfs, expiration, client.nome));
+            setOrigin('created');
+            setShownPortal(null);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Não foi possível criar o link.');
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const update = async (portal: ExistingProposalPortal) => {
+        setBusy(true);
+        setError('');
+        try {
+            setCreated(await refreshProposalPortal(portal.id, pdfs, expiration, client.nome));
+            setOrigin('updated');
+            setShownPortal({ ...portal, expired: false, status: 'active' });
+            setEditingValidity(false);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Não foi possível atualizar o link.');
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const revoke = async (portalId: string) => {
+        setBusy(true);
+        setError('');
+        try {
+            await revokeProposalPortal(portalId);
+            setExisting(current => current.filter(portal => portal.id !== portalId));
+            if (created?.portalId === portalId) {
+                setCreated(null);
+                setShownPortal(null);
+            }
+            setConfirmingRevoke(false);
+            setNotice('Link encerrado. O cliente não consegue mais abrir esse endereço.');
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Não foi possível encerrar o link.');
+        } finally {
+            setBusy(false);
+        }
+    };
 
     useEffect(() => {
         if (!isOpen) return;
         setExpiration(getDefaultExpiration(pdfs));
         setCreated(null);
+        setShownPortal(null);
+        setOrigin('created');
+        setExisting([]);
         setError('');
+        setNotice('');
         setCopied(null);
         setIsWhatsAppChooserOpen(false);
+        setEditingValidity(false);
+        setConfirmingRevoke(false);
         setChoice(DEFAULT_CHOICE);
         setMessage('');
-    // A chave evita apagar o link criado quando o pai apenas recria o array.
+
+        // Antes de criar, procura os links que este cliente já recebeu.
+        let cancelled = false;
+        setChecking(true);
+        findClientProposalPortals(pdfs, client.nome)
+            .catch(() => [] as ExistingProposalPortal[])
+            .then(list => {
+                if (cancelled) return;
+                setExisting(list);
+                const current = list.find(portal => portal.sameProposals && !portal.expired && portal.updatable);
+                if (current) {
+                    showPortal(current);
+                    return;
+                }
+                const hasOther = list.some(portal => portal.updatable);
+                if (autoCreate && !hasOther && autoCreateKeyRef.current !== pdfKey) {
+                    autoCreateKeyRef.current = pdfKey;
+                    void create();
+                }
+            })
+            .finally(() => { if (!cancelled) setChecking(false); });
+        return () => { cancelled = true; };
+    // A chave evita refazer a busca quando o pai apenas recria o array.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen, pdfKey]);
-
-    const readyMessages = useMemo(() => messageOptions.map(option => option.trim()).filter(Boolean), [messageOptions]);
-    const [choice, setChoice] = useState(DEFAULT_CHOICE);
-    const [message, setMessage] = useState('');
 
     const buildChoiceMessage = (nextChoice: number, portal: CreatedProposalPortal) => (
         nextChoice === DEFAULT_CHOICE || !readyMessages[nextChoice]
@@ -85,7 +194,7 @@ const ProposalShareModal: React.FC<ProposalShareModalProps> = ({ isOpen, client,
             : attachProposalLink(readyMessages[nextChoice], portal.url, portal.expiresAt)
     );
 
-    // Com o link criado, monta a mensagem escolhida já com o link dentro (editável antes de enviar).
+    // Com o link na tela, monta a mensagem escolhida já com o link dentro (editável antes de enviar).
     useEffect(() => {
         if (created) setMessage(buildChoiceMessage(choice, created));
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -95,27 +204,7 @@ const ProposalShareModal: React.FC<ProposalShareModalProps> = ({ isOpen, client,
     const whatsappAppUrl = created ? buildProposalWhatsAppAppUrl(client.telefone, message) : null;
     const whatsappBusinessUrl = created ? buildProposalWhatsAppBusinessUrl(client.telefone, message) : null;
 
-    const create = async () => {
-        setBusy(true);
-        setError('');
-        try {
-            setCreated(await createProposalPortal(pdfs, expiration, client.nome));
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Não foi possível criar o link.');
-        } finally {
-            setBusy(false);
-        }
-    };
-
-    useEffect(() => {
-        if (!isOpen || !autoCreate || !pdfKey || autoCreateKeyRef.current === pdfKey) return;
-        autoCreateKeyRef.current = pdfKey;
-        void create();
-        // A criação deve acontecer uma única vez para o conjunto aberto.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isOpen, autoCreate, pdfKey]);
-
-    const copy = async (type: 'link' | 'message', value: string) => {
+    const copy = async (type: string, value: string) => {
         try {
             await copyText(value);
             setCopied(type);
@@ -124,6 +213,20 @@ const ProposalShareModal: React.FC<ProposalShareModalProps> = ({ isOpen, client,
             setError('Não foi possível copiar automaticamente. Selecione o texto e copie.');
         }
     };
+
+    const validityField = (
+        <label className="block">
+            <span className="mb-1.5 flex items-center gap-1.5 text-xs font-bold text-[var(--text-body)]"><CalendarClock className="h-4 w-4 text-[var(--brand-primary)]" /> Válido até</span>
+            <input type="date" min={dateInput(new Date(Date.now() + 86_400_000))} value={expiration} onChange={event => setExpiration(event.target.value)} className="ui-field h-12 w-full px-3 text-sm font-bold" />
+            <span className="mt-1 block text-[11px] text-[var(--text-muted)]">O contador termina às 23:59 desta data. Depois disso, decisões e download ficam bloqueados.</span>
+        </label>
+    );
+
+    const headline = origin === 'existing'
+        ? 'Link já enviado para este cliente'
+        : origin === 'updated'
+            ? 'Link atualizado (mesmo endereço)'
+            : 'Link criado com sucesso';
 
     return (
         <>
@@ -140,7 +243,11 @@ const ProposalShareModal: React.FC<ProposalShareModalProps> = ({ isOpen, client,
                     </div>
                 </section>
 
-                {!created ? (
+                {notice ? <p className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-200">{notice}</p> : null}
+
+                {checking ? (
+                    <p className="flex items-center justify-center gap-2 py-6 text-sm text-[var(--text-muted)]"><LoaderCircle className="h-4 w-4 animate-spin" /> Procurando links deste cliente…</p>
+                ) : !created ? (
                     <>
                         <div className="space-y-2">
                             <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--text-muted)]">Propostas incluídas</p>
@@ -151,23 +258,47 @@ const ProposalShareModal: React.FC<ProposalShareModalProps> = ({ isOpen, client,
                         {pdfs.some(pdf => (pdf.followUpDiscountAmount || 0) > 0 && pdf.expirationDate && new Date(pdf.expirationDate).getTime() <= Date.now()) && (
                             <p className="rounded-xl bg-amber-50 p-3 text-xs font-semibold text-amber-800">Esta proposta venceu. Sugerimos uma nova validade para a oferta com desconto; confira a data abaixo.</p>
                         )}
-                        <label className="block">
-                            <span className="mb-1.5 flex items-center gap-1.5 text-xs font-bold text-[var(--text-body)]"><CalendarClock className="h-4 w-4 text-[var(--brand-primary)]" /> Válido até</span>
-                            <input type="date" min={dateInput(new Date(Date.now() + 86_400_000))} value={expiration} onChange={event => setExpiration(event.target.value)} className="ui-field h-12 w-full px-3 text-sm font-bold" />
-                            <span className="mt-1 block text-[11px] text-[var(--text-muted)]">O contador termina às 23:59 desta data. Depois disso, decisões e download ficam bloqueados.</span>
-                        </label>
+
+                        {updatablePortals.length > 0 ? (
+                            <section className="space-y-2 rounded-xl border border-amber-200 bg-amber-50/70 p-3 dark:border-amber-800/60 dark:bg-amber-950/20" aria-label="Links já enviados">
+                                <p className="text-xs font-bold text-amber-900 dark:text-amber-100">{updatablePortals.length === 1 ? 'Este cliente já tem um link' : `Este cliente já tem ${updatablePortals.length} links`}</p>
+                                {updatablePortals.slice(0, 3).map(portal => (
+                                    <div key={portal.id} className="rounded-lg bg-[var(--surface)] px-3 py-2">
+                                        <p className="truncate text-xs font-semibold text-[var(--text-strong)]">{portal.proposals.map(item => item.name).join(', ') || 'Proposta'}</p>
+                                        <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">{describePortal(portal)}</p>
+                                        <div className="mt-1.5 flex gap-3 text-[11px] font-semibold">
+                                            <button type="button" onClick={() => void copy(portal.id, portal.url)} className="text-[var(--brand-primary)]">{copied === portal.id ? 'Copiado' : 'Copiar link'}</button>
+                                            <button type="button" onClick={() => showPortal(portal)} className="text-[var(--brand-primary)]">Ver e enviar</button>
+                                            <button type="button" disabled={busy} onClick={() => void revoke(portal.id)} className="text-red-600 disabled:opacity-50">Encerrar</button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </section>
+                        ) : null}
+
+                        {validityField}
                         {error ? <p className="rounded-xl bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 dark:bg-red-950/30 dark:text-red-300">{error}</p> : null}
-                        <button type="button" disabled={busy || pdfs.length === 0} onClick={() => void create()} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[var(--brand-primary)] text-sm font-black text-white shadow-lg shadow-blue-500/15 disabled:opacity-60">{busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />} {busy ? 'Criando link…' : 'Criar link da proposta'}</button>
+
+                        {updatablePortals.length > 0 ? (
+                            <div className="space-y-2">
+                                <button type="button" disabled={busy || pdfs.length === 0} onClick={() => void update(updatablePortals[0])} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[var(--brand-primary)] text-sm font-black text-white shadow-lg shadow-blue-500/15 disabled:opacity-60">{busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} {busy ? 'Atualizando…' : `Atualizar o link de ${shortDate(updatablePortals[0].createdAt)}`}</button>
+                                <p className="text-center text-[11px] leading-4 text-[var(--text-muted)]">O cliente continua no mesmo endereço e passa a ver as propostas acima. A conversa é mantida.</p>
+                                <button type="button" disabled={busy || pdfs.length === 0} onClick={() => void create()} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] text-sm font-semibold text-[var(--text-strong)] disabled:opacity-60"><Link2 className="h-4 w-4" /> Criar um link separado</button>
+                            </div>
+                        ) : (
+                            <button type="button" disabled={busy || pdfs.length === 0} onClick={() => void create()} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[var(--brand-primary)] text-sm font-black text-white shadow-lg shadow-blue-500/15 disabled:opacity-60">{busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />} {busy ? 'Criando link…' : 'Criar link da proposta'}</button>
+                        )}
                     </>
                 ) : (
                     <>
                         <div className="flex items-center justify-between gap-3 rounded-xl bg-emerald-50 px-3 py-2.5 dark:bg-emerald-950/25">
                             <p className="flex min-w-0 items-center gap-2 text-sm font-bold text-emerald-800 dark:text-emerald-200">
                                 <Check className="h-4 w-4 shrink-0" aria-hidden="true" />
-                                <span className="truncate">Link criado com sucesso</span>
+                                <span className="truncate">{headline}</span>
                             </p>
                             <span className="shrink-0 text-xs font-medium text-emerald-700 dark:text-emerald-300">até {new Date(created.expiresAt).toLocaleDateString('pt-BR')}</span>
                         </div>
+                        {origin === 'existing' && shownPortal ? <p className="-mt-2 text-[11px] text-[var(--text-muted)]">{describePortal(shownPortal)}. Não precisa criar outro: use este mesmo link.</p> : null}
 
                         <div className="flex gap-2">
                             <input readOnly value={created.url} aria-label="Link do cliente" className="ui-field h-10 min-w-0 flex-1 px-3 text-xs text-[var(--text-muted)]" />
@@ -216,6 +347,34 @@ const ProposalShareModal: React.FC<ProposalShareModalProps> = ({ isOpen, client,
                         <button type="button" onClick={() => void copy('message', message)} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] text-sm font-semibold text-[var(--text-strong)]">
                             {copied === 'message' ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />} {copied === 'message' ? 'Mensagem copiada' : 'Copiar mensagem'}
                         </button>
+
+                        {/* Gerenciar o link: prorrogar, encerrar ou criar outro. */}
+                        <div className="space-y-2 border-t border-[var(--border-subtle)] pt-3">
+                            {editingValidity ? (
+                                <div className="space-y-2">
+                                    {validityField}
+                                    <div className="flex gap-2">
+                                        <button type="button" disabled={busy} onClick={() => setEditingValidity(false)} className="h-10 flex-1 rounded-xl border border-[var(--border-subtle)] text-sm font-semibold text-[var(--text-body)]">Cancelar</button>
+                                        <button type="button" disabled={busy} onClick={() => void update(shownPortal ?? { id: created.portalId } as ExistingProposalPortal)} className="flex h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-[var(--brand-primary)] text-sm font-bold text-white disabled:opacity-60">{busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null} Salvar validade</button>
+                                    </div>
+                                </div>
+                            ) : confirmingRevoke ? (
+                                <div className="rounded-xl bg-red-50 p-3 dark:bg-red-950/30">
+                                    <p className="text-xs font-semibold text-red-800 dark:text-red-200">Encerrar este link? O cliente não vai mais conseguir abrir a proposta por ele.</p>
+                                    <div className="mt-2 flex gap-2">
+                                        <button type="button" disabled={busy} onClick={() => setConfirmingRevoke(false)} className="h-9 flex-1 rounded-lg border border-red-200 bg-white text-xs font-semibold text-slate-700 dark:bg-slate-900 dark:text-slate-200">Manter</button>
+                                        <button type="button" disabled={busy} onClick={() => void revoke(created.portalId)} className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-red-600 text-xs font-bold text-white disabled:opacity-60">{busy ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : null} Encerrar link</button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-xs font-semibold">
+                                    <button type="button" onClick={() => { setExpiration(dateInput(new Date(created.expiresAt))); setEditingValidity(true); }} className="inline-flex items-center gap-1.5 text-[var(--brand-primary)]"><CalendarClock className="h-3.5 w-3.5" /> Alterar validade</button>
+                                    {origin === 'existing' ? <button type="button" disabled={busy} onClick={() => void create()} className="inline-flex items-center gap-1.5 text-[var(--text-muted)] hover:text-[var(--text-strong)]"><Link2 className="h-3.5 w-3.5" /> Criar um link separado</button> : null}
+                                    <button type="button" onClick={() => setConfirmingRevoke(true)} className="inline-flex items-center gap-1.5 text-red-600"><Ban className="h-3.5 w-3.5" /> Encerrar link</button>
+                                </div>
+                            )}
+                            {error ? <p className="rounded-xl bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 dark:bg-red-950/30 dark:text-red-300">{error}</p> : null}
+                        </div>
                     </>
                 )}
             </div>

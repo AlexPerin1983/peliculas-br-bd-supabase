@@ -285,6 +285,106 @@ export const createProposalPortal = async (pdfs: SavedPDF[], expirationDate: str
     };
 };
 
+// Links já criados para o cliente destas propostas (sem os encerrados), do mais novo ao mais antigo.
+export interface ExistingProposalPortal {
+    id: string;
+    url: string;
+    status: PublicProposalPortal['portal']['status'];
+    expiresAt: string;
+    createdAt: string;
+    expired: boolean;
+    viewCount: number;
+    lastViewedAt?: string | null;
+    proposals: Array<{ id: number; name: string; total: number }>;
+    // Mostra exatamente as propostas selecionadas agora.
+    sameProposals: boolean;
+    // Ainda pode ser atualizado (não foi aprovado nem recusado).
+    updatable: boolean;
+}
+
+export const findClientProposalPortals = async (pdfs: SavedPDF[], clientName: string): Promise<ExistingProposalPortal[]> => {
+    const pdfIds = pdfs.map(pdf => pdf.id).filter((id): id is number => typeof id === 'number');
+    if (pdfIds.length === 0 || !isOnlineNow()) return [];
+
+    const persistedPdfIds = await resolvePersistedProposalPdfIds(pdfIds);
+    const { data: pdfRows, error: pdfError } = await supabase.from('saved_pdfs').select('client_id').in('id', persistedPdfIds);
+    if (pdfError) throw pdfError;
+    const clientIds = Array.from(new Set((pdfRows || []).map(row => Number(row.client_id))));
+    if (clientIds.length !== 1) return [];
+
+    const { data: portals, error } = await supabase
+        .from('proposal_portals')
+        .select('id, token, status, expires_at, created_at, view_count, last_viewed_at, proposal_portal_items(saved_pdf_id, position, saved_pdfs(proposal_option_name, nome_arquivo, total_preco))')
+        .eq('client_id', clientIds[0])
+        .neq('status', 'revoked')
+        .order('created_at', { ascending: false })
+        .limit(20);
+    if (error) throw error;
+
+    const selectedKey = [...persistedPdfIds].sort((a, b) => a - b).join(',');
+    return (portals || []).map((portal: any) => {
+        const items = [...(portal.proposal_portal_items || [])].sort((a: any, b: any) => a.position - b.position);
+        const expired = portal.status === 'expired' || new Date(portal.expires_at).getTime() <= Date.now();
+        return {
+            id: portal.id,
+            // O mesmo endereço que foi enviado ao cliente.
+            url: buildProposalPortalUrl(portal.token, clientName),
+            status: portal.status,
+            expiresAt: portal.expires_at,
+            createdAt: portal.created_at,
+            expired,
+            viewCount: Number(portal.view_count || 0),
+            lastViewedAt: portal.last_viewed_at,
+            proposals: items.map((item: any) => ({
+                id: Number(item.saved_pdf_id),
+                name: item.saved_pdfs?.proposal_option_name || item.saved_pdfs?.nome_arquivo || `Proposta #${item.saved_pdf_id}`,
+                total: Number(item.saved_pdfs?.total_preco || 0),
+            })),
+            sameProposals: items.map((item: any) => Number(item.saved_pdf_id)).sort((a: number, b: number) => a - b).join(',') === selectedKey,
+            updatable: !['approved', 'rejected'].includes(portal.status),
+        };
+    });
+};
+
+// Mantém o endereço e a conversa; troca as propostas mostradas e a validade.
+export const refreshProposalPortal = async (portalId: string, pdfs: SavedPDF[], expirationDate: string, clientName: string): Promise<CreatedProposalPortal> => {
+    const pdfIds = pdfs.map(pdf => pdf.id).filter((id): id is number => typeof id === 'number');
+    if (pdfIds.length !== pdfs.length || pdfIds.length === 0) {
+        throw new Error('Salve as propostas antes de atualizar o link.');
+    }
+    const expiresAt = new Date(`${expirationDate}T23:59:59`);
+    if (Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() <= Date.now()) {
+        throw new Error('Escolha uma validade futura.');
+    }
+
+    const persistedPdfIds = await resolvePersistedProposalPdfIds(pdfIds);
+    const { data, error } = await supabase.rpc('refresh_proposal_portal', {
+        p_portal_id: portalId,
+        p_pdf_ids: persistedPdfIds,
+        p_expires_at: expiresAt.toISOString(),
+    });
+    if (error) throw new Error(error.message || 'Não foi possível atualizar o link.');
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row?.portal_token) throw new Error('O link não foi atualizado.');
+    return {
+        portalId: row.portal_id,
+        token: row.portal_token,
+        shareCode: row.portal_token,
+        expiresAt: row.expires_at,
+        url: buildProposalPortalUrl(row.portal_token, clientName),
+    };
+};
+
+// Encerra o link: o cliente passa a ver "proposta indisponível".
+export const revokeProposalPortal = async (portalId: string) => {
+    const now = new Date().toISOString();
+    const { error } = await supabase
+        .from('proposal_portals')
+        .update({ status: 'revoked', updated_at: now, last_activity_at: now })
+        .eq('id', portalId);
+    if (error) throw new Error(error.message || 'Não foi possível encerrar o link.');
+};
+
 export const buildProposalShareMessage = (client: Client, pdfs: SavedPDF[], portalUrl: string, expiresAt: string) => {
     const firstName = client.nome.trim().split(/\s+/)[0] || 'Olá';
     const optionText = pdfs.length === 1 ? 'sua proposta' : `suas ${pdfs.length} opções de proposta`;

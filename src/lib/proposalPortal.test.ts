@@ -1,6 +1,6 @@
 import { vi } from 'vitest';
 import type { SavedPDF } from '../../types';
-import { createProposalPortal, loadPublicProposalPortal, openPublicProposalPdf } from './proposalPortal';
+import { createProposalPortal, findClientProposalPortals, loadPublicProposalPortal, openPublicProposalPdf, refreshProposalPortal, revokeProposalPortal } from './proposalPortal';
 
 const {
     rpcMock,
@@ -245,5 +245,68 @@ describe('ver PDF pelo link', () => {
         expect(assignSpy).toHaveBeenCalledWith('https://storage/pdfs/a.pdf?token=x&download=proposta.pdf');
         Object.defineProperty(window, 'location', { configurable: true, value: originalLocation });
         openSpy.mockRestore();
+    });
+});
+
+describe('links já enviados ao cliente', () => {
+    // Imita o encadeamento do Supabase (select().eq()...) terminando no resultado.
+    const chain = (result: unknown) => {
+        const builder: any = {};
+        for (const method of ['select', 'in', 'eq', 'neq', 'order', 'limit', 'update']) builder[method] = vi.fn(() => builder);
+        builder.then = (resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) => Promise.resolve(result).then(resolve, reject);
+        return builder;
+    };
+
+    beforeEach(() => {
+        fromMock.mockReset();
+        rpcMock.mockReset();
+        isOnlineNowMock.mockReturnValue(true);
+        findLocalPdfMock.mockResolvedValue(undefined);
+        listPdfSyncQueueMock.mockResolvedValue([]);
+    });
+
+    it('acha os links do cliente e marca o que tem as mesmas propostas', async () => {
+        const portals = chain({
+            data: [
+                { id: 'p2', token: 'tok-novo', status: 'active', expires_at: '2099-01-01T00:00:00Z', created_at: '2026-09-25T10:00:00Z', view_count: 2, last_viewed_at: null, proposal_portal_items: [{ saved_pdf_id: 42, position: 0, saved_pdfs: { proposal_option_name: 'Opção 1', total_preco: 365 } }] },
+                { id: 'p1', token: 'tok-velho', status: 'approved', expires_at: '2020-01-01T00:00:00Z', created_at: '2026-09-01T10:00:00Z', view_count: 5, last_viewed_at: null, proposal_portal_items: [{ saved_pdf_id: 30, position: 0, saved_pdfs: { nome_arquivo: 'antigo.pdf', total_preco: 300 } }] },
+            ],
+            error: null,
+        });
+        fromMock.mockImplementation((table: string) => table === 'saved_pdfs' ? chain({ data: [{ client_id: 7 }], error: null }) : portals);
+
+        const result = await findClientProposalPortals([{ id: 42 } as SavedPDF], 'Carlos Lima');
+
+        expect(portals.eq).toHaveBeenCalledWith('client_id', 7);
+        expect(portals.neq).toHaveBeenCalledWith('status', 'revoked');
+        expect(result[0]).toMatchObject({ id: 'p2', url: 'http://localhost:3000/p/carlos/tok-novo', sameProposals: true, updatable: true, expired: false, viewCount: 2 });
+        expect(result[0].proposals).toEqual([{ id: 42, name: 'Opção 1', total: 365 }]);
+        expect(result[1]).toMatchObject({ id: 'p1', sameProposals: false, updatable: false, expired: true });
+    });
+
+    it('sem internet não procura', async () => {
+        isOnlineNowMock.mockReturnValue(false);
+        expect(await findClientProposalPortals([{ id: 42 } as SavedPDF], 'Carlos')).toEqual([]);
+        expect(fromMock).not.toHaveBeenCalled();
+    });
+
+    it('atualiza o link mantendo o mesmo endereço', async () => {
+        rpcMock.mockResolvedValue({ data: [{ portal_id: 'p2', portal_token: 'tok-novo', expires_at: '2099-12-31T23:59:59.000Z' }], error: null });
+
+        const result = await refreshProposalPortal('p2', [{ id: 42 } as SavedPDF], '2099-12-31', 'Carlos');
+
+        expect(rpcMock).toHaveBeenCalledWith('refresh_proposal_portal', expect.objectContaining({ p_portal_id: 'p2', p_pdf_ids: [42] }));
+        expect(result.url).toBe('http://localhost:3000/p/carlos/tok-novo');
+    });
+
+    it('encerra o link marcando como encerrado', async () => {
+        const builder = chain({ error: null });
+        fromMock.mockReturnValue(builder);
+
+        await revokeProposalPortal('p2');
+
+        expect(fromMock).toHaveBeenCalledWith('proposal_portals');
+        expect(builder.update).toHaveBeenCalledWith(expect.objectContaining({ status: 'revoked' }));
+        expect(builder.eq).toHaveBeenCalledWith('id', 'p2');
     });
 });
