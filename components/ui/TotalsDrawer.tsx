@@ -1066,6 +1066,7 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                                 onChange={onUpdatePaymentConfig}
                                 onReset={onResetPaymentConfig}
                                 hasOverride={hasCustomPaymentConfig}
+                                total={totals.finalTotal}
                             />}
 
                             <div className="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800/50">
