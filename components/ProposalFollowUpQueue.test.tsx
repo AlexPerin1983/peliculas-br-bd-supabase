@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CompanyProposalPortal } from '../src/lib/proposalPortal';
 import { markProposalPortalLost, recordProposalFollowUp, reopenProposalPortal } from '../src/lib/proposalPortal';
+import { deleteProposalMessageTemplate, getFollowUpMessageTemplates, saveFollowUpMessageTemplate } from '../services/supabaseDb';
 import ProposalFollowUpQueue from './ProposalFollowUpQueue';
 
 vi.mock('../src/lib/proposalPortal', async importOriginal => ({
@@ -10,6 +11,12 @@ vi.mock('../src/lib/proposalPortal', async importOriginal => ({
     recordProposalFollowUp: vi.fn(),
     markProposalPortalLost: vi.fn(),
     reopenProposalPortal: vi.fn(),
+}));
+
+vi.mock('../services/supabaseDb', () => ({
+    getFollowUpMessageTemplates: vi.fn(),
+    saveFollowUpMessageTemplate: vi.fn(),
+    deleteProposalMessageTemplate: vi.fn(),
 }));
 
 const DAY = 86_400_000;
@@ -35,27 +42,46 @@ const portal = (overrides: Partial<CompanyProposalPortal> = {}): CompanyProposal
     ...overrides,
 });
 
+const whatsappText = () => decodeURIComponent(screen.getByRole('link', { name: /Enviar no WhatsApp/ }).getAttribute('href') || '');
+
 describe('ProposalFollowUpQueue', () => {
     beforeEach(() => {
         vi.mocked(recordProposalFollowUp).mockReset().mockResolvedValue(undefined);
         vi.mocked(markProposalPortalLost).mockReset().mockResolvedValue(undefined);
         vi.mocked(reopenProposalPortal).mockReset().mockResolvedValue(undefined);
+        vi.mocked(getFollowUpMessageTemplates).mockReset().mockResolvedValue([]);
+        vi.mocked(saveFollowUpMessageTemplate).mockReset();
+        vi.mocked(deleteProposalMessageTemplate).mockReset().mockResolvedValue(undefined);
     });
 
     it('mostra a sugestão e abre o WhatsApp com a mensagem e o mesmo link', () => {
-        const onChanged = vi.fn();
-        render(<ProposalFollowUpQueue portals={[portal()]} onChanged={onChanged} />);
+        render(<ProposalFollowUpQueue portals={[portal()]} onChanged={vi.fn()} />);
 
-        expect(screen.getByText('Para acompanhar hoje (1)')).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: 'Hoje (1)' })).toHaveAttribute('aria-selected', 'true');
         expect(screen.getByText('Abriu 4 vezes e não respondeu')).toBeInTheDocument();
-        const whatsapp = screen.getByRole('link', { name: /Enviar no WhatsApp/ });
-        const href = decodeURIComponent(whatsapp.getAttribute('href') || '');
-        expect(href).toContain('https://wa.me/5585999991234');
-        expect(href).toContain('Oi, Carlos!');
-        expect(href).toContain('/p/carlos/tok123');
+        expect(whatsappText()).toContain('https://wa.me/5585999991234');
+        expect(whatsappText()).toContain('Oi, Carlos!');
+        expect(whatsappText()).toContain('/p/carlos/tok123');
 
-        fireEvent.click(whatsapp);
+        fireEvent.click(screen.getByRole('link', { name: /Enviar no WhatsApp/ }));
         expect(recordProposalFollowUp).toHaveBeenCalledWith('p1', 'hot', 'whatsapp');
+    });
+
+    it('edita a mensagem antes de enviar e troca por outro modelo', () => {
+        render(<ProposalFollowUpQueue portals={[portal()]} onChanged={vi.fn()} />);
+
+        fireEvent.click(screen.getByRole('button', { name: /Editar/ }));
+        fireEvent.change(screen.getByLabelText('Mensagem para Carlos Lima'), { target: { value: 'Carlos, fechamos por R$ 340?' } });
+        expect(whatsappText()).toContain('Carlos, fechamos por R$ 340?');
+
+        fireEvent.change(screen.getByLabelText('Trocar mensagem'), { target: { value: 'value' } });
+        expect(whatsappText()).toContain('A instalação tem garantia');
+    });
+
+    it('usa a mensagem salva pela empresa', async () => {
+        vi.mocked(getFollowUpMessageTemplates).mockResolvedValue([{ id: 9, step: 'hot', text: '{{primeiro_nome}}, abriu {{aberturas}}! {{link}}' }]);
+        render(<ProposalFollowUpQueue portals={[portal()]} onChanged={vi.fn()} />);
+        await waitFor(() => expect(whatsappText()).toContain('Carlos, abriu 4 vezes!'));
     });
 
     it('registra ligação e marca como perdida com motivo (com desfazer)', async () => {
@@ -79,27 +105,54 @@ describe('ProposalFollowUpQueue', () => {
         expect(onChanged).toHaveBeenCalled();
     });
 
-    it('cliente respondeu: abre a conversa; sem pendências mostra "nada para hoje"', () => {
+    it('abas: aguardando mostra o próximo contato; perdidas permite reabrir', async () => {
+        render(<ProposalFollowUpQueue portals={[
+            portal({ id: 'w', clientName: 'Ana Souza', createdAt: ago(0.1), viewCount: 0, firstViewedAt: null, lastViewedAt: null }),
+            portal({ id: 'l', clientName: 'Bruno Reis', lostAt: ago(2), lostReason: 'trust' }),
+        ]} onChanged={vi.fn()} />);
+
+        expect(screen.getByText(/Nada para hoje. 1 proposta está aguardando o momento certo./)).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('tab', { name: 'Aguardando (1)' }));
+        expect(screen.getByText('Ana Souza')).toBeInTheDocument();
+        expect(screen.getByText('Próximo contato: amanhã')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('tab', { name: 'Perdidas (1)' }));
+        expect(screen.getByText(/Confiança ·/)).toBeInTheDocument();
+        expect(screen.getByText('confiança')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: /Reabrir/ }));
+        await waitFor(() => expect(reopenProposalPortal).toHaveBeenCalledWith('l'));
+    });
+
+    it('cliente respondeu: abre a conversa', () => {
         const listener = vi.fn();
         window.addEventListener('proposal-portal-open', listener);
-        const { rerender } = render(<ProposalFollowUpQueue portals={[portal({ messages: [{ id: 1, sender_type: 'client', kind: 'message', body: 'Tem desconto?', created_at: ago(0.1) }] })]} onChanged={vi.fn()} />);
+        render(<ProposalFollowUpQueue portals={[portal({ messages: [{ id: 1, sender_type: 'client', kind: 'message', body: 'Tem desconto?', created_at: ago(0.1) }] })]} onChanged={vi.fn()} />);
 
         expect(screen.getByText('Respondeu e aguarda você')).toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: /Abrir conversa/ }));
         expect(listener).toHaveBeenCalled();
         window.removeEventListener('proposal-portal-open', listener);
-
-        rerender(<ProposalFollowUpQueue portals={[portal({ createdAt: ago(0.1), viewCount: 0, firstViewedAt: null, lastViewedAt: null })]} onChanged={vi.fn()} />);
-        expect(screen.getByText(/Nada para hoje. 1 proposta está aguardando o momento certo./)).toBeInTheDocument();
     });
 
-    it('lista as perdidas com o motivo e permite reabrir', async () => {
-        render(<ProposalFollowUpQueue portals={[portal({ lostAt: ago(2), lostReason: 'trust' })]} onChanged={vi.fn()} />);
+    it('edita as mensagens da empresa: salva a alterada e apaga a que voltou ao padrão', async () => {
+        vi.mocked(getFollowUpMessageTemplates).mockResolvedValue([{ id: 4, step: 'value', text: 'Texto antigo {{link}}' }]);
+        vi.mocked(saveFollowUpMessageTemplate).mockResolvedValue({ id: 5, step: 'hot', text: 'x' });
+        render(<ProposalFollowUpQueue portals={[portal()]} onChanged={vi.fn()} />);
+        await waitFor(() => expect(getFollowUpMessageTemplates).toHaveBeenCalled());
 
-        fireEvent.click(screen.getByRole('button', { name: /Perdidas \(1\)/ }));
-        expect(screen.getByText(/Confiança ·/)).toBeInTheDocument();
-        fireEvent.click(screen.getByRole('button', { name: /Reabrir/ }));
-        await waitFor(() => expect(reopenProposalPortal).toHaveBeenCalledWith('p1'));
+        fireEvent.click(screen.getByRole('button', { name: /Mensagens/ }));
+        const hot = await screen.findByLabelText('Mensagem: Abriu várias vezes');
+        fireEvent.change(hot, { target: { value: 'Oi {{primeiro_nome}}!' } });
+        fireEvent.click(within(screen.getByRole('group', { name: 'Marcadores para Abriu várias vezes' })).getByRole('button', { name: 'Link da proposta' }));
+        expect((hot as HTMLTextAreaElement).value).toContain('{{link}}');
+
+        const valueSection = screen.getByRole('region', { name: 'Reforço de valor' });
+        fireEvent.click(within(valueSection).getByRole('button', { name: /Restaurar padrão/ }));
+        fireEvent.click(screen.getByRole('button', { name: 'Salvar mensagens' }));
+
+        await waitFor(() => expect(saveFollowUpMessageTemplate).toHaveBeenCalledWith('hot', 'Abriu várias vezes', expect.stringContaining('{{link}}'), undefined));
+        expect(deleteProposalMessageTemplate).toHaveBeenCalledWith(4);
     });
 
     it('mostra a linha do tempo da proposta', () => {

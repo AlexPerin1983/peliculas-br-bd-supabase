@@ -1055,6 +1055,8 @@ export const getProposalMessageTemplates = async (): Promise<ProposalMessageTemp
     const { data, error } = await supabase
         .from('proposal_message_templates')
         .select('*')
+        // Os modelos do "Para acompanhar hoje" têm tela própria.
+        .is('follow_up_step', null)
         .order('sort_order', { ascending: true })
         .order('id', { ascending: true });
 
@@ -1109,6 +1111,48 @@ export const saveProposalMessageTemplate = async (
 
     if (error) throw error;
     return mapRowToProposalMessageTemplate(data);
+};
+
+// Modelos do "Para acompanhar hoje": um por situação; sem modelo salvo vale o texto padrão.
+export interface FollowUpMessageTemplateRow {
+    id: number;
+    step: string;
+    text: string;
+}
+
+export const getFollowUpMessageTemplates = async (): Promise<FollowUpMessageTemplateRow[]> => {
+    const userId = await getCurrentUserId();
+    if (!userId) return [];
+    const { data, error } = await supabase
+        .from('proposal_message_templates')
+        .select('id, follow_up_step, body')
+        .not('follow_up_step', 'is', null)
+        .order('id', { ascending: true });
+    if (error) throw error;
+    return (data || []).map((row: any) => ({ id: row.id, step: row.follow_up_step, text: row.body || '' }));
+};
+
+export const saveFollowUpMessageTemplate = async (step: string, title: string, text: string, id?: number): Promise<FollowUpMessageTemplateRow> => {
+    const userId = await getCurrentUserId();
+    if (!userId) throw new Error('User not authenticated');
+    if (id) {
+        const { data, error } = await supabase
+            .from('proposal_message_templates')
+            .update({ body: text, title })
+            .eq('id', id)
+            .select('id, follow_up_step, body')
+            .single();
+        if (error) throw error;
+        return { id: data.id, step: data.follow_up_step, text: data.body || '' };
+    }
+    const orgId = await getEffectiveOrganizationId();
+    const { data, error } = await supabase
+        .from('proposal_message_templates')
+        .insert({ user_id: userId, organization_id: orgId, title, body: text, sort_order: 0, follow_up_step: step })
+        .select('id, follow_up_step, body')
+        .single();
+    if (error) throw error;
+    return { id: data.id, step: data.follow_up_step, text: data.body || '' };
 };
 
 export const deleteProposalMessageTemplate = async (id: number): Promise<void> => {

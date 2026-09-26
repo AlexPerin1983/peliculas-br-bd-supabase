@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { Check, ChevronDown, Copy, Eye, History, LoaderCircle, MessageCircle, MessageSquareText, PhoneCall, RotateCcw, Target, ThumbsDown, X } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Check, ChevronDown, Copy, Eye, History, LoaderCircle, MessageCircle, MessageSquareText, PencilLine, PhoneCall, RotateCcw, Settings2, ThumbsDown, X } from 'lucide-react';
 import {
     markProposalPortalLost,
     recordProposalFollowUp,
@@ -7,20 +7,29 @@ import {
     type CompanyProposalPortal,
 } from '../src/lib/proposalPortal';
 import {
+    buildFollowUpMessage,
     buildFollowUpQueue,
     buildFollowUpTimeline,
+    describeNextContact,
+    FOLLOW_UP_TEMPLATE_STEPS,
     LOST_REASONS,
     lostReasonLabel,
     summarizeLostProposals,
     type FollowUpItem,
+    type FollowUpTemplates,
+    type FollowUpTemplateStep,
 } from '../src/lib/proposalFollowUpQueue';
 import { buildProposalWhatsAppUrl } from '../src/lib/proposalMessages';
+import { getFollowUpMessageTemplates, type FollowUpMessageTemplateRow } from '../services/supabaseDb';
+import FollowUpTemplatesModal from './FollowUpTemplatesModal';
 
 interface ProposalFollowUpQueueProps {
     portals: CompanyProposalPortal[];
     loading?: boolean;
     onChanged: () => Promise<void> | void;
 }
+
+type Tab = 'today' | 'waiting' | 'lost';
 
 const currency = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 const shortDate = (value: string) => new Date(value).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
@@ -43,37 +52,79 @@ const copyText = async (value: string) => {
     area.remove();
 };
 
+const isTemplateStep = (step: string): step is FollowUpTemplateStep => FOLLOW_UP_TEMPLATE_STEPS.some(item => item.step === step);
+
 const FollowUpCard: React.FC<{
     item: FollowUpItem;
+    templates: FollowUpTemplates;
     busy: boolean;
     onContact: (item: FollowUpItem, channel: 'whatsapp' | 'call' | 'other') => void;
     onLost: (item: FollowUpItem, reason: string, note: string) => void;
-}> = ({ item, busy, onContact, onLost }) => {
+}> = ({ item, templates, busy, onContact, onLost }) => {
     const { portal } = item;
     const [showHistory, setShowHistory] = useState(false);
     const [losing, setLosing] = useState(false);
     const [reason, setReason] = useState('');
     const [note, setNote] = useState('');
     const [copied, setCopied] = useState(false);
-    const whatsappUrl = item.message ? buildProposalWhatsAppUrl(portal.clientPhone || undefined, item.message) : null;
+    const [editing, setEditing] = useState(false);
+    const [templateStep, setTemplateStep] = useState<FollowUpTemplateStep | null>(isTemplateStep(item.step) ? item.step : null);
+    const [text, setText] = useState(item.message || '');
+    const [edited, setEdited] = useState(false);
+
+    // Sem edição manual, a mensagem acompanha o modelo escolhido (e os modelos salvos).
+    useEffect(() => {
+        if (edited) return;
+        setText(templateStep ? buildFollowUpMessage(templateStep, portal, Date.now(), templates) || '' : item.message || '');
+    }, [edited, templateStep, templates, portal, item.message]);
+
+    const whatsappUrl = text ? buildProposalWhatsAppUrl(portal.clientPhone || undefined, text) : null;
     const total = portal.proposals.reduce((sum, proposal) => sum + (proposal.conditionFinalValue ?? proposal.total), 0);
-    const proposalNames = portal.proposals.map(proposal => proposal.name).join(', ');
     const timeline = useMemo(() => buildFollowUpTimeline(portal), [portal]);
+    const hasMessage = item.step !== 'reply' && item.step !== 'close';
 
     return (
-        <article className="rounded-[var(--radius-card)] border border-[var(--border-subtle)] bg-[var(--surface)] p-3.5 shadow-[var(--shadow-hairline)] sm:p-4">
+        <article className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface)] p-4">
             <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                    <p className="truncate text-sm font-bold text-[var(--text-strong)]">{portal.clientName}</p>
-                    <p className="truncate text-xs text-[var(--text-muted)]">{proposalNames} · {currency.format(total)}</p>
+                    <p className="truncate text-[15px] font-semibold text-[var(--text-strong)]">{portal.clientName}</p>
+                    <p className="truncate text-xs text-[var(--text-muted)]">{portal.proposals.map(proposal => proposal.name).join(', ')} · {currency.format(total)}</p>
                 </div>
-                <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[var(--surface-muted)] px-2 py-1 text-[11px] font-semibold text-[var(--text-muted)]" title="Vezes que o cliente abriu o link">
+                <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[var(--surface-muted)] px-2 py-0.5 text-[11px] font-medium tabular-nums text-[var(--text-muted)]" title="Vezes que o cliente abriu o link">
                     <Eye className="h-3.5 w-3.5" aria-hidden="true" /> {portal.viewCount}
                 </span>
             </div>
 
             <p className={`mt-3 text-sm font-semibold ${item.step === 'reply' ? 'text-blue-700 dark:text-blue-300' : item.step === 'expiring' || item.step === 'expired' ? 'text-amber-700 dark:text-amber-300' : 'text-[var(--text-strong)]'}`}>{item.title}</p>
             <p className="mt-0.5 text-[13px] leading-5 text-[var(--text-muted)]">{item.hint}</p>
+            {!item.due ? <p className="mt-1 text-xs font-medium text-[var(--text-muted)]">Próximo contato: {describeNextContact(item.dueAt)}</p> : null}
+
+            {hasMessage && !losing ? (
+                <div className="mt-3 rounded-xl bg-[var(--surface-muted)] p-3">
+                    <div className="flex items-center justify-between gap-2">
+                        <label className="flex min-w-0 items-center gap-1.5 text-[11px] font-medium text-[var(--text-muted)]">
+                            Mensagem
+                            <select
+                                value={templateStep ?? ''}
+                                onChange={event => { setTemplateStep(event.target.value as FollowUpTemplateStep); setEdited(false); }}
+                                aria-label="Trocar mensagem"
+                                className="min-w-0 truncate rounded-md bg-transparent py-0.5 text-[11px] font-semibold text-[var(--text-strong)] focus:outline-none"
+                            >
+                                {FOLLOW_UP_TEMPLATE_STEPS.map(option => <option key={option.step} value={option.step}>{option.label}</option>)}
+                            </select>
+                        </label>
+                        <button type="button" onClick={() => setEditing(current => !current)} className="inline-flex shrink-0 items-center gap-1 text-[11px] font-semibold text-blue-600">
+                            {editing ? <><Check className="h-3.5 w-3.5" aria-hidden="true" /> Pronto</> : <><PencilLine className="h-3.5 w-3.5" aria-hidden="true" /> Editar</>}
+                        </button>
+                    </div>
+                    {editing ? (
+                        <textarea value={text} onChange={event => { setText(event.target.value); setEdited(true); }} rows={5} aria-label={`Mensagem para ${portal.clientName}`}
+                            className="mt-2 w-full resize-y rounded-lg border border-[var(--border-subtle)] bg-[var(--surface)] p-2.5 text-[15px] leading-6 text-[var(--text-body)] focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
+                    ) : (
+                        <p className="mt-1.5 line-clamp-4 whitespace-pre-line text-[13px] leading-5 text-[var(--text-body)]">{text}</p>
+                    )}
+                </div>
+            ) : null}
 
             {losing ? (
                 <div className="mt-3 rounded-xl bg-[var(--surface-muted)] p-3">
@@ -102,18 +153,18 @@ const FollowUpCard: React.FC<{
                         }} className="inline-flex h-10 items-center gap-2 rounded-xl bg-blue-600 px-3.5 text-sm font-semibold text-white">
                             <MessageSquareText className="h-4 w-4" aria-hidden="true" /> Abrir conversa
                         </button>
-                    ) : whatsappUrl ? (
+                    ) : hasMessage && whatsappUrl ? (
                         <a href={whatsappUrl} target="_blank" rel="noreferrer" onClick={() => onContact(item, 'whatsapp')}
                             className="inline-flex h-10 items-center gap-2 rounded-xl bg-emerald-600 px-3.5 text-sm font-semibold text-white">
                             <MessageCircle className="h-4 w-4" aria-hidden="true" /> Enviar no WhatsApp
                         </a>
-                    ) : item.message ? (
-                        <button type="button" onClick={() => { void copyText(item.message!).then(() => { setCopied(true); window.setTimeout(() => setCopied(false), 1800); }); }}
+                    ) : hasMessage && text ? (
+                        <button type="button" onClick={() => { void copyText(text).then(() => { setCopied(true); window.setTimeout(() => setCopied(false), 1800); }); }}
                             className="inline-flex h-10 items-center gap-2 rounded-xl border border-[var(--border-subtle)] px-3.5 text-sm font-semibold text-[var(--text-strong)]">
                             {copied ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />} {copied ? 'Mensagem copiada' : 'Copiar mensagem'}
                         </button>
                     ) : null}
-                    {item.step !== 'reply' && item.step !== 'close' ? (
+                    {hasMessage ? (
                         <button type="button" disabled={busy} onClick={() => onContact(item, 'call')} title="Registrar que você já falou com o cliente (ligação ou pessoalmente)"
                             className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-[var(--border-subtle)] px-3 text-sm font-medium text-[var(--text-body)] disabled:opacity-50">
                             <PhoneCall className="h-4 w-4" aria-hidden="true" /> Já falei
@@ -144,13 +195,25 @@ const FollowUpCard: React.FC<{
     );
 };
 
-/** Propostas enviadas por link que pedem uma ação hoje, com a mensagem pronta. */
+/** Propostas enviadas por link que pedem uma ação, com a mensagem pronta (e editável). */
 const ProposalFollowUpQueue: React.FC<ProposalFollowUpQueueProps> = ({ portals, loading = false, onChanged }) => {
+    const [tab, setTab] = useState<Tab>('today');
     const [busyId, setBusyId] = useState<string | null>(null);
     const [error, setError] = useState('');
     const [lastLost, setLastLost] = useState<{ id: string; name: string } | null>(null);
-    const [showLost, setShowLost] = useState(false);
-    const { due, waiting } = useMemo(() => buildFollowUpQueue(portals), [portals]);
+    const [savedTemplates, setSavedTemplates] = useState<FollowUpMessageTemplateRow[]>([]);
+    const [templatesOpen, setTemplatesOpen] = useState(false);
+
+    const loadTemplates = useCallback(() => {
+        getFollowUpMessageTemplates().then(setSavedTemplates).catch(() => setSavedTemplates([]));
+    }, []);
+    useEffect(() => { loadTemplates(); }, [loadTemplates]);
+
+    const templates = useMemo<FollowUpTemplates>(
+        () => Object.fromEntries(savedTemplates.map(row => [row.step, row.text])),
+        [savedTemplates],
+    );
+    const { due, waiting } = useMemo(() => buildFollowUpQueue(portals, Date.now(), templates), [portals, templates]);
     const lostPortals = useMemo(() => portals.filter(portal => portal.lostAt && !['approved', 'revoked'].includes(portal.status)), [portals]);
     const lostSummary = useMemo(() => summarizeLostProposals(portals), [portals]);
 
@@ -182,16 +245,31 @@ const ProposalFollowUpQueue: React.FC<ProposalFollowUpQueueProps> = ({ portals, 
             setLastLost(current => (current?.id === portalId ? null : current));
         });
 
+    const tabs: Array<{ id: Tab; label: string; count: number }> = [
+        { id: 'today', label: 'Hoje', count: due.length },
+        { id: 'waiting', label: 'Aguardando', count: waiting.length },
+        { id: 'lost', label: 'Perdidas', count: lostPortals.length },
+    ];
+    const items = tab === 'today' ? due : waiting;
+
     return (
-        <section className="space-y-2" aria-labelledby="proposal-follow-up-title">
-            <div className="flex items-end justify-between gap-2 px-1">
-                <div className="flex items-center gap-2">
-                    <Target className="h-4 w-4 text-blue-600" aria-hidden="true" />
-                    <h2 id="proposal-follow-up-title" className="text-sm font-black text-[var(--text-strong)]">Para acompanhar hoje{due.length > 0 ? ` (${due.length})` : ''}</h2>
-                </div>
-                {busyId ? <LoaderCircle className="h-4 w-4 animate-spin text-[var(--text-muted)]" aria-label="Salvando" /> : null}
+        <section className="space-y-3" aria-labelledby="proposal-follow-up-title">
+            <div className="flex items-center justify-between gap-2 px-1">
+                <h2 id="proposal-follow-up-title" className="text-base font-semibold tracking-[-0.01em] text-[var(--text-strong)]">Para acompanhar</h2>
+                <button type="button" onClick={() => setTemplatesOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30">
+                    <Settings2 className="h-3.5 w-3.5" aria-hidden="true" /> Mensagens
+                </button>
             </div>
-            <p className="px-1 text-xs text-[var(--text-muted)]">Sugestões pelo que o cliente fez no link. A mensagem já vai com o mesmo link.</p>
+
+            <div className="grid grid-cols-3 rounded-xl bg-[var(--surface-muted)] p-1 text-[13px]" role="tablist" aria-label="Acompanhamento">
+                {tabs.map(item => (
+                    <button key={item.id} type="button" role="tab" aria-selected={tab === item.id} aria-label={`${item.label} (${item.count})`} onClick={() => setTab(item.id)}
+                        className={`flex h-9 items-center justify-center gap-1.5 rounded-lg font-semibold transition-colors ${tab === item.id ? 'bg-[var(--surface)] text-[var(--text-strong)] shadow-sm' : 'text-[var(--text-muted)]'}`}>
+                        {item.label}
+                        <span className={`min-w-5 rounded-full px-1.5 text-[11px] tabular-nums ${tab === item.id && item.id === 'today' && item.count > 0 ? 'bg-blue-600 text-white' : 'bg-black/5 dark:bg-white/10'}`}>{item.count}</span>
+                    </button>
+                ))}
+            </div>
 
             {lastLost ? (
                 <div className="flex items-center justify-between gap-3 rounded-xl bg-[var(--surface-muted)] px-3 py-2 text-xs text-[var(--text-body)]">
@@ -206,33 +284,18 @@ const ProposalFollowUpQueue: React.FC<ProposalFollowUpQueueProps> = ({ portals, 
 
             {loading ? (
                 <p className="flex items-center gap-2 px-1 py-4 text-sm text-[var(--text-muted)]"><LoaderCircle className="h-4 w-4 animate-spin" /> Carregando…</p>
-            ) : due.length === 0 ? (
-                <p className="rounded-[var(--radius-card)] border border-dashed border-[var(--border-subtle)] px-4 py-5 text-center text-sm text-[var(--text-muted)]">
-                    Nada para hoje.{waiting > 0 ? ` ${waiting === 1 ? '1 proposta está' : `${waiting} propostas estão`} aguardando o momento certo.` : ''}
-                </p>
-            ) : (
-                <div className="space-y-2">
-                    {due.map(item => (
-                        <FollowUpCard key={item.portal.id} item={item} busy={busyId === item.portal.id} onContact={contact} onLost={lose} />
-                    ))}
-                    {waiting > 0 ? <p className="px-1 text-xs text-[var(--text-muted)]">{waiting === 1 ? 'Mais 1 proposta aguarda' : `Mais ${waiting} propostas aguardam`} o momento certo.</p> : null}
-                </div>
-            )}
-
-            {lostPortals.length > 0 ? (
-                <div className="px-1 pt-1">
-                    <button type="button" onClick={() => setShowLost(current => !current)} aria-expanded={showLost}
-                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-strong)]">
-                        Perdidas ({lostPortals.length}){lostSummary.topReason ? ` · nos últimos 30 dias o motivo mais comum foi ${lostSummary.topReason.toLowerCase()}` : ''}
-                        <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showLost ? 'rotate-180' : ''}`} aria-hidden="true" />
-                    </button>
-                    {showLost ? (
-                        <ul className="mt-2 space-y-1.5">
+            ) : tab === 'lost' ? (
+                lostPortals.length === 0 ? (
+                    <p className="rounded-2xl border border-dashed border-[var(--border-subtle)] px-4 py-6 text-center text-sm text-[var(--text-muted)]">Nenhuma proposta marcada como perdida.</p>
+                ) : (
+                    <div className="space-y-2">
+                        {lostSummary.topReason ? <p className="px-1 text-xs text-[var(--text-muted)]">Nos últimos 30 dias, o motivo mais comum foi <strong className="font-semibold text-[var(--text-strong)]">{lostSummary.topReason.toLowerCase()}</strong>.</p> : null}
+                        <ul className="space-y-2">
                             {lostPortals.map(portal => (
-                                <li key={portal.id} className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] px-3 py-2">
+                                <li key={portal.id} className="flex items-center justify-between gap-3 rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface)] px-4 py-3">
                                     <span className="min-w-0">
                                         <span className="block truncate text-sm font-semibold text-[var(--text-strong)]">{portal.clientName}</span>
-                                        <span className="block text-[11px] text-[var(--text-muted)]">{lostReasonLabel(portal.lostReason)} · {shortDate(portal.lostAt!)}</span>
+                                        <span className="block text-xs text-[var(--text-muted)]">{lostReasonLabel(portal.lostReason)} · {shortDate(portal.lostAt!)}</span>
                                     </span>
                                     <button type="button" disabled={busyId === portal.id} onClick={() => reopen(portal.id)} className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-blue-600 disabled:opacity-50">
                                         <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" /> Reabrir
@@ -240,9 +303,23 @@ const ProposalFollowUpQueue: React.FC<ProposalFollowUpQueueProps> = ({ portals, 
                                 </li>
                             ))}
                         </ul>
-                    ) : null}
+                    </div>
+                )
+            ) : items.length === 0 ? (
+                <p className="rounded-2xl border border-dashed border-[var(--border-subtle)] px-4 py-6 text-center text-sm text-[var(--text-muted)]">
+                    {tab === 'today'
+                        ? `Nada para hoje.${waiting.length > 0 ? ` ${waiting.length === 1 ? '1 proposta está' : `${waiting.length} propostas estão`} aguardando o momento certo.` : ''}`
+                        : 'Nenhuma proposta aguardando.'}
+                </p>
+            ) : (
+                <div className="space-y-2">
+                    {items.map(item => (
+                        <FollowUpCard key={item.portal.id} item={item} templates={templates} busy={busyId === item.portal.id} onContact={contact} onLost={lose} />
+                    ))}
                 </div>
-            ) : null}
+            )}
+
+            <FollowUpTemplatesModal isOpen={templatesOpen} saved={savedTemplates} onClose={() => setTemplatesOpen(false)} onSaved={loadTemplates} />
         </section>
     );
 };

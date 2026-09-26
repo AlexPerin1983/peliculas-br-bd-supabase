@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { BellRing, Clock3, Eye, MessageCircleMore, Plus, Send } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import ProposalPortalInbox from '../ProposalPortalInbox';
 import ProposalFollowUpQueue from '../ProposalFollowUpQueue';
 import { loadCompanyProposalPortals, type CompanyProposalPortal } from '../../src/lib/proposalPortal';
@@ -56,71 +56,55 @@ const ProposalCenterView: React.FC<ProposalCenterViewProps> = ({ onOpenHistory }
         unread: portals.reduce((total, portal) => total + portal.unreadCount, 0),
     }), [portals]);
 
-    const cards = [
-        { label: 'Enviadas', value: summary.sent, hint: 'links acompanhados', icon: Send, tone: 'bg-blue-50 text-blue-600 dark:bg-blue-950/35 dark:text-blue-300' },
-        { label: 'Aguardando', value: summary.waiting, hint: 'sem resposta', icon: Clock3, tone: 'bg-amber-50 text-amber-600 dark:bg-amber-950/35 dark:text-amber-300' },
-        { label: 'Não visualizaram', value: summary.unseen, hint: 'ainda não abriram', icon: Eye, tone: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300' },
-        { label: 'Responderam', value: summary.responded, hint: summary.unread > 0 ? `${summary.unread} nova${summary.unread > 1 ? 's' : ''}` : 'tudo acompanhado', icon: MessageCircleMore, tone: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/35 dark:text-emerald-300' },
+    const stats = [
+        { label: 'Enviadas', value: summary.sent },
+        { label: 'Aguardando', value: summary.waiting },
+        { label: 'Não abriram', value: summary.unseen },
+        { label: 'Responderam', value: summary.responded, badge: summary.unread },
     ];
 
     return (
-        <div className="space-y-3 pb-28 sm:space-y-4 sm:pb-0">
-            <header className="overflow-hidden rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface)] shadow-[var(--shadow-hairline)]">
-                <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
-                    <div className="flex min-w-0 items-start gap-3">
-                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-sm">
-                            <MessageCircleMore className="h-5 w-5" aria-hidden="true" />
-                        </span>
-                        <div className="min-w-0">
-                            <p className="ui-kicker text-blue-600 dark:text-blue-300">Vendas e negociação</p>
-                            <h1 className="mt-1 text-2xl font-bold tracking-[-0.03em] text-[var(--text-strong)] sm:text-3xl">Central de propostas</h1>
-                            <p className="mt-1 max-w-2xl text-sm leading-6 text-[var(--text-muted)]">
-                                Veja quem abriu, acompanhe respostas e converse com o cliente sem misturar tudo com os PDFs antigos.
-                            </p>
-                        </div>
-                    </div>
-                    <button
-                        type="button"
-                        onClick={onOpenHistory}
-                        className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-black text-white shadow-sm transition hover:bg-blue-700"
-                    >
-                        <Plus className="h-4 w-4" aria-hidden="true" />
-                        Criar novo link
-                    </button>
+        <div className="space-y-5 pb-28 sm:pb-0">
+            <header className="flex items-start justify-between gap-3 px-1 pt-1">
+                <div className="min-w-0">
+                    <h1 className="text-[26px] font-semibold leading-tight tracking-[-0.02em] text-[var(--text-strong)]">Propostas</h1>
+                    <p className="mt-1 text-sm leading-5 text-[var(--text-muted)]">Quem abriu, quem respondeu e o próximo passo de cada cliente.</p>
                 </div>
-                <div className="border-t border-[var(--border-subtle)] bg-[var(--surface-muted)]/65 px-4 py-2.5 text-xs font-semibold text-[var(--text-muted)] sm:px-5">
-                    Para criar um link, escolha um orçamento no Histórico. As respostas aparecerão automaticamente aqui.
-                </div>
+                <button
+                    type="button"
+                    onClick={onOpenHistory}
+                    title="Escolha um orçamento no Histórico para criar o link"
+                    className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-3.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+                >
+                    <Plus className="h-4 w-4" aria-hidden="true" />
+                    Novo link
+                </button>
             </header>
 
-            <section className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3" aria-label="Resumo das propostas">
-                {cards.map(({ label, value, hint, icon: Icon, tone }) => (
-                    <article key={label} className="rounded-[var(--radius-card)] border border-[var(--border-subtle)] bg-[var(--surface)] p-3 shadow-[var(--shadow-hairline)] sm:p-4">
-                        <div className="flex items-center justify-between gap-2">
-                            <span className={`flex h-8 w-8 items-center justify-center rounded-xl ${tone}`}><Icon className="h-4 w-4" aria-hidden="true" /></span>
-                            <strong className="text-2xl font-black tabular-nums text-[var(--text-strong)]">{loading ? '–' : value}</strong>
-                        </div>
-                        <p className="mt-3 text-xs font-black text-[var(--text-strong)]">{label}</p>
-                        <p className="mt-0.5 truncate text-[11px] font-semibold text-[var(--text-muted)]">{hint}</p>
-                    </article>
+            <section className="grid grid-cols-4 divide-x divide-[var(--border-subtle)] rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface)]" aria-label="Resumo das propostas">
+                {stats.map(stat => (
+                    <div key={stat.label} className="px-2 py-3 text-center">
+                        <p className="relative inline-block text-xl font-semibold tabular-nums text-[var(--text-strong)]">
+                            {loading ? '–' : stat.value}
+                            {stat.badge ? <span className="absolute -right-3 -top-1 h-2 w-2 rounded-full bg-blue-600" aria-label={`${stat.badge} novas respostas`} /> : null}
+                        </p>
+                        <p className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">{stat.label}</p>
+                    </div>
                 ))}
             </section>
 
             {error ? <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/25 dark:text-amber-200">{error}</p> : null}
 
+            <ProposalFollowUpQueue portals={portals} loading={loading} onChanged={refresh} />
+
+            <section className="space-y-3" aria-labelledby="proposal-conversations-title">
+                <h2 id="proposal-conversations-title" className="px-1 text-base font-semibold tracking-[-0.01em] text-[var(--text-strong)]">Conversas</h2>
+                <ProposalPortalInbox defaultOpen />
+            </section>
+
             <section aria-labelledby="proposal-alerts-title">
                 <h2 id="proposal-alerts-title" className="sr-only">Notificações das propostas</h2>
                 <AgendaPushReminderControl />
-            </section>
-
-            <ProposalFollowUpQueue portals={portals} loading={loading} onChanged={refresh} />
-
-            <section className="space-y-2" aria-labelledby="proposal-conversations-title">
-                <div className="flex items-center gap-2 px-1">
-                    <BellRing className="h-4 w-4 text-blue-600" aria-hidden="true" />
-                    <h2 id="proposal-conversations-title" className="text-sm font-black text-[var(--text-strong)]">Conversas e respostas</h2>
-                </div>
-                <ProposalPortalInbox defaultOpen />
             </section>
         </div>
     );

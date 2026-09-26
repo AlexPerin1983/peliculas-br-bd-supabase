@@ -8,6 +8,43 @@ import { buildProposalPortalUrl, type CompanyProposalPortal } from './proposalPo
 
 export type FollowUpStep = 'reply' | 'expiring' | 'hot' | 'not_opened' | 'value' | 'expired' | 'close';
 
+// Situações com mensagem (e modelo editável).
+export type FollowUpTemplateStep = 'not_opened' | 'hot' | 'value' | 'expiring' | 'expired';
+
+export const FOLLOW_UP_TEMPLATE_STEPS: Array<{ step: FollowUpTemplateStep; label: string; when: string }> = [
+    { step: 'not_opened', label: 'Não abriu o link', when: '1 dia depois do envio, se o cliente não abriu' },
+    { step: 'hot', label: 'Abriu várias vezes', when: 'abriu 3 vezes ou mais e não respondeu' },
+    { step: 'value', label: 'Reforço de valor', when: 'abriu 1 ou 2 vezes e não respondeu em 2 dias' },
+    { step: 'expiring', label: 'Proposta vencendo', when: 'faltando 2 dias ou menos para vencer' },
+    { step: 'expired', label: 'Proposta vencida', when: 'venceu sem resposta' },
+];
+
+export const DEFAULT_FOLLOW_UP_TEMPLATES: Record<FollowUpTemplateStep, string> = {
+    not_opened: 'Oi, {{primeiro_nome}}! Tudo bem? Te enviei a proposta das películas, conseguiu abrir? Segue o link de novo: {{link}}',
+    hot: 'Oi, {{primeiro_nome}}! Vi que você olhou a proposta com calma. Ficou alguma dúvida sobre as películas ou a instalação? Se o valor pesou, me fala que vejo uma condição especial para você. {{link}}',
+    value: 'Oi, {{primeiro_nome}}! Passando para saber se deu para ver a proposta. A instalação tem garantia e posso te mandar fotos de trabalhos parecidos, se ajudar na decisão. {{link}}',
+    expiring: 'Oi, {{primeiro_nome}}! Sua proposta vence {{quando_vence}} ({{validade}}). Quer que eu já reserve uma data na agenda para você? {{link}}',
+    expired: 'Oi, {{primeiro_nome}}! Sua proposta venceu, mas consigo segurar os valores por mais alguns dias. Quer que eu atualize para você?',
+};
+
+export const FOLLOW_UP_MESSAGE_TAGS = [
+    { tag: 'primeiro_nome', label: 'Primeiro nome' },
+    { tag: 'nome_cliente', label: 'Nome completo' },
+    { tag: 'link', label: 'Link da proposta' },
+    { tag: 'valor', label: 'Valor' },
+    { tag: 'validade', label: 'Data de validade' },
+    { tag: 'quando_vence', label: 'Quando vence' },
+    { tag: 'aberturas', label: 'Vezes que abriu' },
+] as const;
+
+export type FollowUpTemplates = Partial<Record<FollowUpTemplateStep, string>>;
+
+const TAG_PATTERN = /{{\s*([^{}]+?)\s*}}/g;
+const KNOWN_TAGS = new Set<string>(FOLLOW_UP_MESSAGE_TAGS.map(item => item.tag));
+
+export const findUnknownFollowUpTags = (template: string) =>
+    [...new Set([...template.matchAll(TAG_PATTERN)].map(match => match[1].trim()).filter(tag => !KNOWN_TAGS.has(tag)))];
+
 export const LOST_REASONS = [
     { id: 'price', label: 'Preço' },
     { id: 'trust', label: 'Confiança' },
@@ -38,6 +75,9 @@ export interface FollowUpItem {
     title: string;
     hint: string;
     message: string | null;
+    // Quando vale a pena agir (antes disso a proposta fica em "Aguardando").
+    dueAt: number;
+    due: boolean;
 }
 
 const DAY = 86_400_000;
@@ -51,107 +91,123 @@ export const lastFollowUpContactAt = (portal: CompanyProposalPortal) => Math.max
     ...portal.messages.filter(message => message.sender_type === 'company').map(message => time(message.created_at)),
 );
 
-const whenLabel = (expiresAt: number, now: number) => {
+const whenLabel = (target: number, now: number) => {
     const today = new Date(now); today.setHours(0, 0, 0, 0);
-    const days = Math.round((new Date(expiresAt).setHours(0, 0, 0, 0) - today.getTime()) / DAY);
+    const days = Math.round((new Date(target).setHours(0, 0, 0, 0) - today.getTime()) / DAY);
     return days <= 0 ? 'hoje' : days === 1 ? 'amanhã' : `em ${days} dias`;
 };
 
 const timesLabel = (count: number) => (count === 1 ? '1 vez' : `${count} vezes`);
 
-export const buildFollowUpMessage = (step: FollowUpStep, portal: CompanyProposalPortal, now = Date.now()): string | null => {
-    const first = portal.clientName.trim().split(/\s+/)[0] || 'tudo bem';
-    const url = buildProposalPortalUrl(portal.token, portal.clientName);
+const portalTotal = (portal: CompanyProposalPortal) =>
+    portal.proposals.reduce((sum, proposal) => sum + (proposal.conditionFinalValue ?? proposal.total), 0);
+
+export const followUpTagValues = (portal: CompanyProposalPortal, now = Date.now()): Record<string, string> => {
     const expires = time(portal.expiresAt);
-    switch (step) {
-        case 'not_opened':
-            return `Oi, ${first}! Tudo bem? Te enviei a proposta das películas, conseguiu abrir? Segue o link de novo: ${url}`;
-        case 'hot':
-            return `Oi, ${first}! Vi que você olhou a proposta com calma. Ficou alguma dúvida sobre as películas ou a instalação? Se o valor pesou, me fala que vejo uma condição especial para você. ${url}`;
-        case 'value':
-            return `Oi, ${first}! Passando para saber se deu para ver a proposta. A instalação tem garantia e posso te mandar fotos de trabalhos parecidos, se ajudar na decisão. ${url}`;
-        case 'expiring':
-            return `Oi, ${first}! Sua proposta vence ${whenLabel(expires, now)} (${new Date(expires).toLocaleDateString('pt-BR')}). Quer que eu já reserve uma data na agenda para você? ${url}`;
-        case 'expired':
-            return `Oi, ${first}! Sua proposta venceu, mas consigo segurar os valores por mais alguns dias. Quer que eu atualize para você?`;
-        default:
-            return null;
-    }
+    return {
+        primeiro_nome: portal.clientName.trim().split(/\s+/)[0] || '',
+        nome_cliente: portal.clientName.trim(),
+        link: buildProposalPortalUrl(portal.token, portal.clientName),
+        valor: portalTotal(portal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+        validade: new Date(expires).toLocaleDateString('pt-BR'),
+        quando_vence: whenLabel(expires, now),
+        aberturas: timesLabel(portal.viewCount),
+    };
 };
 
-/** Próximo passo de um link, ou null quando não há o que fazer agora (ou nunca mais). */
-export const getFollowUpItem = (portal: CompanyProposalPortal, now = Date.now()): FollowUpItem | null | 'waiting' => {
+export const fillFollowUpMessage = (template: string, values: Record<string, string>) =>
+    template.replace(TAG_PATTERN, (match, raw: string) => {
+        const tag = raw.trim();
+        return KNOWN_TAGS.has(tag) ? (values[tag] ?? '') : match;
+    });
+
+const isTemplateStep = (step: FollowUpStep): step is FollowUpTemplateStep =>
+    FOLLOW_UP_TEMPLATE_STEPS.some(item => item.step === step);
+
+export const buildFollowUpMessage = (
+    step: FollowUpStep,
+    portal: CompanyProposalPortal,
+    now = Date.now(),
+    templates: FollowUpTemplates = {},
+): string | null => {
+    if (!isTemplateStep(step)) return null;
+    const template = templates[step]?.trim() ? templates[step]! : DEFAULT_FOLLOW_UP_TEMPLATES[step];
+    return fillFollowUpMessage(template, followUpTagValues(portal, now));
+};
+
+/** Próximo passo do link (com a data em que vale agir), ou null quando não há mais o que fazer. */
+export const getFollowUpItem = (portal: CompanyProposalPortal, now = Date.now(), templates: FollowUpTemplates = {}): FollowUpItem | null => {
     if (['approved', 'rejected', 'revoked'].includes(portal.status) || portal.lostAt) return null;
 
-    const make = (step: FollowUpStep, priority: number, title: string, hint: string): FollowUpItem => ({
-        portal, step, priority, title, hint, message: buildFollowUpMessage(step, portal, now),
+    const make = (step: FollowUpStep, priority: number, title: string, hint: string, dueAt: number): FollowUpItem => ({
+        portal, step, priority, title, hint, dueAt, due: dueAt <= now,
+        message: buildFollowUpMessage(step, portal, now, templates),
     });
 
     const lastMessage = portal.messages[portal.messages.length - 1];
     if (lastMessage?.sender_type === 'client' && ['message', 'negotiation'].includes(lastMessage.kind)) {
         return make('reply', 0,
             lastMessage.kind === 'negotiation' ? 'Mandou uma contraproposta' : 'Respondeu e aguarda você',
-            'Responda na conversa abaixo enquanto o interesse está quente.');
+            'Responda na conversa abaixo enquanto o interesse está quente.', time(lastMessage.created_at));
     }
 
     const lastContact = lastFollowUpContactAt(portal);
     const lastTouch = Math.max(time(portal.createdAt), lastContact);
-    const sinceTouch = now - lastTouch;
     const expires = time(portal.expiresAt);
     const views = portal.viewCount;
 
     if (portal.status === 'expired' || expires <= now) {
         if (lastContact < expires) {
             return make('expired', 4, 'Venceu sem resposta',
-                'Ofereça renovar os valores. Se ele topar, use "Criar link" no Histórico para atualizar o mesmo link.');
+                'Ofereça renovar os valores. Se ele topar, use "Criar link" no Histórico para atualizar o mesmo link.', expires);
         }
-        if (sinceTouch >= 3 * DAY) {
-            return make('close', 5, 'Sem retorno depois do vencimento',
-                'Marque como perdida para tirar da lista (motivo: sem resposta).');
-        }
-        return 'waiting';
+        return make('close', 5, 'Sem retorno depois do vencimento',
+            'Marque como perdida para tirar da lista (motivo: sem resposta).', lastTouch + 3 * DAY);
     }
 
-    if (expires - now <= 2 * DAY && now - lastContact >= DAY) {
+    if (expires - now <= 2 * DAY) {
         return make('expiring', 1, `Vence ${whenLabel(expires, now)}`,
             views > 0
                 ? 'Avise do prazo. Se ele estiver em dúvida pelo valor, ofereça uma condição com data para acabar.'
-                : 'Avise do prazo e confirme se ele recebeu o link.');
+                : 'Avise do prazo e confirme se ele recebeu o link.',
+            Math.max(expires - 2 * DAY, lastContact + DAY));
     }
 
+    // Os outros passos também são antecipados pelo aviso de vencimento.
+    const beforeExpiry = (dueAt: number) => Math.min(dueAt, expires - 2 * DAY);
+
     if (views === 0) {
-        if (sinceTouch >= DAY) {
-            return make('not_opened', 3, 'Ainda não abriu o link',
-                'Confirme se ele recebeu. Se não responder, ligue: pode ter ido para outro número.');
-        }
-        return 'waiting';
+        return make('not_opened', 3, 'Ainda não abriu o link',
+            'Confirme se ele recebeu. Se não responder, ligue: pode ter ido para outro número.', beforeExpiry(lastTouch + DAY));
     }
 
     if (views >= 3) {
-        if (time(portal.lastViewedAt) > lastContact || sinceTouch >= 2 * DAY) {
-            return make('hot', 2, `Abriu ${timesLabel(views)} e não respondeu`,
-                'Tem interesse. Pergunte se ficou dúvida; se for o preço, ofereça uma condição com prazo (ou mais garantia).');
-        }
-        return 'waiting';
+        const newInterest = time(portal.lastViewedAt) > lastContact;
+        return make('hot', 2, `Abriu ${timesLabel(views)} e não respondeu`,
+            'Tem interesse. Pergunte se ficou dúvida; se for o preço, ofereça uma condição com prazo (ou mais garantia).',
+            beforeExpiry(newInterest ? time(portal.lastViewedAt) : lastTouch + 2 * DAY));
     }
 
-    if (sinceTouch >= 2 * DAY) {
-        return make('value', 3, `Abriu ${timesLabel(views)} e não respondeu`,
-            'Reforce o valor: garantia, fotos de trabalhos parecidos e avaliações de clientes.');
-    }
-    return 'waiting';
+    return make('value', 3, `Abriu ${timesLabel(views)} e não respondeu`,
+        'Reforce o valor: garantia, fotos de trabalhos parecidos e avaliações de clientes.', beforeExpiry(lastTouch + 2 * DAY));
 };
 
-export const buildFollowUpQueue = (portals: CompanyProposalPortal[], now = Date.now()) => {
+export const buildFollowUpQueue = (portals: CompanyProposalPortal[], now = Date.now(), templates: FollowUpTemplates = {}) => {
     const due: FollowUpItem[] = [];
-    let waiting = 0;
+    const waiting: FollowUpItem[] = [];
     for (const portal of portals) {
-        const item = getFollowUpItem(portal, now);
-        if (item === 'waiting') waiting += 1;
-        else if (item) due.push(item);
+        const item = getFollowUpItem(portal, now, templates);
+        if (!item) continue;
+        (item.due ? due : waiting).push(item);
     }
     due.sort((a, b) => a.priority - b.priority || time(a.portal.expiresAt) - time(b.portal.expiresAt));
+    waiting.sort((a, b) => a.dueAt - b.dueAt);
     return { due, waiting };
+};
+
+export const describeNextContact = (dueAt: number, now = Date.now()) => {
+    const label = whenLabel(dueAt, now);
+    return label === 'hoje' ? 'mais tarde hoje' : label === 'amanhã' ? 'amanhã' : `${label} (${new Date(dueAt).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })})`;
 };
 
 export interface FollowUpTimelineEntry {
