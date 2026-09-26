@@ -4,7 +4,6 @@ import {
     Check,
     CheckCircle2,
     ChevronRight,
-    Clock3,
     Download,
     FileText,
     HandCoins,
@@ -12,10 +11,7 @@ import {
     MessageCircle,
     MessageSquareText,
     Send,
-    ShieldCheck,
     ThumbsDown,
-    ThumbsUp,
-    TimerReset,
     X,
 } from 'lucide-react';
 import {
@@ -44,19 +40,36 @@ const formatRemaining = (expiresAt: string, now: number) => {
     return { remaining, days, hours, minutes, seconds };
 };
 
-const statusLabel: Record<PublicProposalPortal['portal']['status'], string> = {
-    active: 'Aguardando sua resposta',
-    approved: 'Proposta aprovada',
-    rejected: 'Proposta recusada',
-    negotiating: 'Em negociação',
-    expired: 'Prazo encerrado',
-    revoked: 'Link encerrado',
+const formatLongDate = (value: string) => new Date(value).toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' });
+
+// Texto legível sobre a cor da empresa (cores claras pedem texto escuro).
+const readableInk = (hex: string) => {
+    const match = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+    if (!match) return '#ffffff';
+    const value = parseInt(match[1], 16);
+    const luminance = (0.2126 * ((value >> 16) & 255) + 0.7152 * ((value >> 8) & 255) + 0.0722 * (value & 255)) / 255;
+    return luminance > 0.62 ? '#111827' : '#ffffff';
 };
+
+const Radio: React.FC<{ active: boolean }> = ({ active }) => (
+    <span className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] ${active ? 'border-[var(--portal-brand)]' : 'border-slate-300'}`} aria-hidden="true">
+        {active ? <span className="h-2 w-2 rounded-full bg-[var(--portal-brand)]" /> : null}
+    </span>
+);
 
 const buildLocalDemoPortal = (): PublicProposalPortal => {
     const expires = new Date();
     expires.setDate(expires.getDate() + 3);
     expires.setHours(23, 59, 59, 0);
+    const paymentConfig = {
+        prazoPagamento: '',
+        paymentMethods: [
+            { tipo: 'pix' as const, ativo: true, porcentagem: 5 },
+            { tipo: 'boleto' as const, ativo: true },
+            { tipo: 'parcelado_sem_juros' as const, ativo: true, parcelas_max: 4 },
+            { tipo: 'parcelado_com_juros' as const, ativo: true, parcelas_max: 12, calculation_mode: 'operator_fee' as const, operator_fee_rates: { '5': 6, '6': 7, '7': 8, '8': 9, '9': 10, '10': 11, '11': 12, '12': 13 } },
+        ],
+    };
     return {
         portal: {
             id: 'demo',
@@ -72,8 +85,8 @@ const buildLocalDemoPortal = (): PublicProposalPortal => {
             colors: { primaria: '#155eef', secundaria: '#0f172a' },
         },
         proposals: [
-            { id: 101, proposalOptionName: 'Opção Premium', nomeArquivo: 'proposta-premium.pdf', totalPreco: 4850, totalM2: 36.8, date: new Date().toISOString(), status: 'pending', conditionOriginalValue: 5350, conditionFinalValue: 4850, conditionDiscountAmount: 500, conditionDiscountPercent: 9.35, conditionExpiresAt: expires.toISOString() },
-            { id: 102, proposalOptionName: 'Opção Essencial', nomeArquivo: 'proposta-essencial.pdf', totalPreco: 3290, totalM2: 36.8, date: new Date().toISOString(), status: 'pending' },
+            { id: 101, proposalOptionName: 'Opção Premium', nomeArquivo: 'proposta-premium.pdf', totalPreco: 4850, totalM2: 36.8, date: new Date().toISOString(), status: 'pending', conditionOriginalValue: 5350, conditionFinalValue: 4850, conditionDiscountAmount: 500, conditionDiscountPercent: 9.35, conditionExpiresAt: expires.toISOString(), paymentConfig },
+            { id: 102, proposalOptionName: 'Opção Essencial', nomeArquivo: 'proposta-essencial.pdf', totalPreco: 3290, totalM2: 36.8, date: new Date().toISOString(), status: 'pending', paymentConfig },
         ],
         messages: [
             { id: 1, sender_type: 'company', kind: 'message', body: 'Olá, Marcos! Se tiver qualquer dúvida sobre as opções, pode falar comigo por aqui.', created_at: new Date(Date.now() - 3_600_000).toISOString() },
@@ -116,6 +129,8 @@ const ResponseModal: React.FC<ResponseModalProps> = ({ kind, proposalName, propo
     const [offerValue, setOfferValue] = useState('');
     const [error, setError] = useState('');
     const [paymentKey, setPaymentKey] = useState(initialPaymentKey);
+    const [changingPayment, setChangingPayment] = useState(false);
+    const chosenPayment = paymentOptions.find(option => `${option.methodType}:${option.installments}` === paymentKey);
 
     const submit = () => {
         if (kind === 'rejected' && !body.trim()) {
@@ -154,11 +169,11 @@ const ResponseModal: React.FC<ResponseModalProps> = ({ kind, proposalName, propo
     return (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-sm sm:items-center sm:p-5" role="dialog" aria-modal="true">
             <button className="absolute inset-0" onClick={onClose} aria-label="Fechar janela" />
-            <div className="relative w-full max-w-lg rounded-t-[28px] bg-white p-5 shadow-2xl sm:rounded-[24px] sm:p-7">
+            <div className="relative max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-3xl bg-white p-5 shadow-2xl sm:rounded-2xl sm:p-6" style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom, 0px))' }}>
                 <div className="flex items-start justify-between gap-4">
                     <div>
-                        <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-blue-600">{proposalName}</p>
-                        <h2 className="mt-1 text-2xl font-bold text-slate-950">{title}</h2>
+                        <p className="text-sm text-slate-500">{proposalName}</p>
+                        <h2 className="mt-0.5 text-xl font-semibold tracking-[-0.01em] text-slate-950">{title}</h2>
                     </div>
                     <button type="button" onClick={onClose} className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500" aria-label="Fechar">
                         <X className="h-5 w-5" />
@@ -167,12 +182,22 @@ const ResponseModal: React.FC<ResponseModalProps> = ({ kind, proposalName, propo
 
                 {kind === 'approved' ? (
                     <>
-                        <div className="mt-6 rounded-2xl bg-emerald-50 p-4 text-sm leading-6 text-emerald-900">
-                            Ao confirmar, a empresa será avisada imediatamente e esta proposta ficará marcada como aprovada no sistema.
-                        </div>
-                        {paymentOptions.length > 0 ? (
+                        <p className="mt-3 text-sm leading-6 text-slate-500">
+                            Ao confirmar, a empresa é avisada na hora para combinar a instalação com você.
+                        </p>
+                        {chosenPayment && !changingPayment ? (
+                            // Já escolhido na página: mostra o resumo, com opção de trocar.
+                            <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-black/[0.08] px-4 py-3">
+                                <span className="min-w-0">
+                                    <span className="block text-xs text-slate-500">Forma de pagamento</span>
+                                    <span className="block text-[15px] font-medium text-slate-900">{chosenPayment.installments > 1 ? `${chosenPayment.installments}x de ${currency.format(chosenPayment.installmentValue)}${chosenPayment.methodType === 'parcelado_sem_juros' ? ' sem juros' : ''}` : chosenPayment.label}</span>
+                                    <span className="block text-xs tabular-nums text-slate-500">Total {currency.format(chosenPayment.customerTotal)}{chosenPayment.lastInstallmentValue != null ? ` · última ${currency.format(chosenPayment.lastInstallmentValue)}` : ''}</span>
+                                </span>
+                                <button type="button" onClick={() => setChangingPayment(true)} className="shrink-0 text-sm font-medium text-[var(--portal-brand)]">Alterar</button>
+                            </div>
+                        ) : paymentOptions.length > 0 ? (
                             <div className="mt-5">
-                                <p className="text-sm font-extrabold text-slate-950">Como você prefere pagar?</p>
+                                <p className="text-sm font-semibold text-slate-900">Forma de pagamento</p>
                                 <p className="mt-1 text-xs leading-5 text-slate-500">Escolha uma condição para ver e registrar o valor final.</p>
                                 <div className="mt-3 max-h-[260px] space-y-2 overflow-y-auto pr-1">
                                     {paymentOptions.map(option => {
@@ -183,15 +208,15 @@ const ResponseModal: React.FC<ResponseModalProps> = ({ kind, proposalName, propo
                                                 key={key}
                                                 type="button"
                                                 onClick={() => { setPaymentKey(key); setError(''); }}
-                                                className={`flex w-full items-center justify-between gap-3 rounded-xl border p-3 text-left transition ${selected ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-500/10' : 'border-slate-200 bg-white hover:border-slate-300'}`}
+                                                className={`flex w-full items-center justify-between gap-3 rounded-xl border p-3 text-left transition ${selected ? 'border-[var(--portal-brand)] bg-[var(--portal-brand)]/[0.05]' : 'border-black/[0.08] bg-white hover:border-black/20'}`}
                                             >
                                                 <span>
-                                                    <span className="block text-sm font-extrabold text-slate-900">{option.label}</span>
-                                                    {option.discountPercent > 0 ? <span className="mt-0.5 block text-xs font-bold text-emerald-700">Você economiza {currency.format(option.baseTotal - option.customerTotal)}</span> : null}
+                                                    <span className="block text-sm font-medium text-slate-900">{option.label}</span>
+                                                    {option.discountPercent > 0 ? <span className="mt-0.5 block text-xs text-emerald-700">Você economiza {currency.format(option.baseTotal - option.customerTotal)}</span> : null}
                                                 </span>
                                                 <span className="shrink-0 text-right">
-                                                    <span className="block text-sm font-black text-slate-950">{option.installments > 1 ? `${option.installments}x de ${currency.format(option.installmentValue)}` : currency.format(option.customerTotal)}</span>
-                                                    {option.installments > 1 ? <span className="text-[11px] font-semibold text-slate-500">total {currency.format(option.customerTotal)}{option.lastInstallmentValue != null ? ` · última ${currency.format(option.lastInstallmentValue)}` : ''}</span> : null}
+                                                    <span className="block text-sm font-semibold tabular-nums text-slate-950">{option.installments > 1 ? `${option.installments}x de ${currency.format(option.installmentValue)}` : currency.format(option.customerTotal)}</span>
+                                                    {option.installments > 1 ? <span className="text-[11px] tabular-nums text-slate-500">total {currency.format(option.customerTotal)}{option.lastInstallmentValue != null ? ` · última ${currency.format(option.lastInstallmentValue)}` : ''}</span> : null}
                                                 </span>
                                             </button>
                                         );
@@ -204,19 +229,19 @@ const ResponseModal: React.FC<ResponseModalProps> = ({ kind, proposalName, propo
 
                 {kind === 'negotiation' ? (
                     <div className="mt-6 space-y-4">
-                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                            <p className="text-xs font-bold text-slate-500">Valor atual</p>
-                            <p className="mt-1 text-xl font-extrabold text-slate-950">{currency.format(proposalValue)}</p>
+                        <div className="rounded-xl bg-slate-50 px-4 py-3">
+                            <p className="text-xs text-slate-500">Valor atual</p>
+                            <p className="mt-1 text-xl font-semibold tabular-nums text-slate-950">{currency.format(proposalValue)}</p>
                         </div>
                         <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1">
-                            <button type="button" onClick={() => setOfferType('fixed')} className={`h-10 rounded-lg text-xs font-bold ${offerType === 'fixed' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500'}`}>Valor que pagaria</button>
-                            <button type="button" onClick={() => setOfferType('percentage')} className={`h-10 rounded-lg text-xs font-bold ${offerType === 'percentage' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500'}`}>Desconto em %</button>
+                            <button type="button" onClick={() => setOfferType('fixed')} className={`h-10 rounded-lg text-sm font-medium ${offerType === 'fixed' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>Valor que pagaria</button>
+                            <button type="button" onClick={() => setOfferType('percentage')} className={`h-10 rounded-lg text-sm font-medium ${offerType === 'percentage' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>Desconto em %</button>
                         </div>
                         <label className="block">
-                            <span className="mb-1.5 block text-xs font-bold text-slate-600">{offerType === 'fixed' ? 'Quanto deseja pagar?' : 'Qual desconto deseja?'}</span>
+                            <span className="mb-1.5 block text-sm font-medium text-slate-700">{offerType === 'fixed' ? 'Quanto deseja pagar?' : 'Qual desconto deseja?'}</span>
                             <div className="relative">
-                                <span className="absolute left-4 top-1/2 -translate-y-1/2 font-extrabold text-slate-500">{offerType === 'fixed' ? 'R$' : '%'}</span>
-                                <input autoFocus type="number" inputMode="decimal" min="0" max={offerType === 'percentage' ? 100 : undefined} value={offerValue} onChange={event => setOfferValue(event.target.value)} className="h-14 w-full rounded-xl border border-slate-200 bg-white pl-12 pr-4 text-lg font-extrabold text-slate-950 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10" placeholder="0,00" />
+                                <span className="absolute left-4 top-1/2 -translate-y-1/2 font-medium text-slate-400">{offerType === 'fixed' ? 'R$' : '%'}</span>
+                                <input autoFocus type="number" inputMode="decimal" min="0" max={offerType === 'percentage' ? 100 : undefined} value={offerValue} onChange={event => setOfferValue(event.target.value)} className="h-14 w-full rounded-xl border border-black/[0.1] bg-white pl-12 pr-4 text-lg font-semibold tabular-nums text-slate-950 outline-none focus:border-[var(--portal-brand)] focus:ring-4 focus:ring-[var(--portal-brand)]/10" placeholder="0,00" />
                             </div>
                         </label>
                     </div>
@@ -224,15 +249,15 @@ const ResponseModal: React.FC<ResponseModalProps> = ({ kind, proposalName, propo
 
                 {kind !== 'approved' ? (
                     <label className="mt-4 block">
-                        <span className="mb-1.5 block text-xs font-bold text-slate-600">{kind === 'rejected' ? 'Por que esta proposta não funcionou para você?' : 'Observação para a empresa (opcional)'}</span>
-                        <textarea value={body} onChange={event => setBody(event.target.value)} rows={4} className="w-full resize-none rounded-xl border border-slate-200 p-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10" placeholder={kind === 'rejected' ? 'Ex.: o prazo não atende, escolhi outra solução, valor acima do esperado…' : 'Explique sua condição ou tire uma dúvida.'} />
+                        <span className="mb-1.5 block text-sm font-medium text-slate-700">{kind === 'rejected' ? 'Por que esta proposta não funcionou para você?' : 'Observação para a empresa (opcional)'}</span>
+                        <textarea value={body} onChange={event => setBody(event.target.value)} rows={4} className="w-full resize-none rounded-xl border border-black/[0.1] p-3 text-[15px] text-slate-900 outline-none focus:border-[var(--portal-brand)] focus:ring-4 focus:ring-[var(--portal-brand)]/10" placeholder={kind === 'rejected' ? 'Ex.: o prazo não atende, escolhi outra solução, valor acima do esperado…' : 'Explique sua condição ou tire uma dúvida.'} />
                     </label>
                 ) : null}
 
                 {error ? <p className="mt-3 text-sm font-semibold text-red-600">{error}</p> : null}
-                <button type="button" disabled={busy} onClick={submit} className={`mt-5 flex h-13 w-full items-center justify-center gap-2 rounded-xl px-4 text-sm font-extrabold text-white disabled:opacity-60 ${kind === 'approved' ? 'bg-emerald-600' : kind === 'rejected' ? 'bg-red-600' : 'bg-blue-600'}`}>
+                <button type="button" disabled={busy} onClick={submit} className={`mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-xl px-4 text-[15px] font-medium disabled:opacity-60 ${kind === 'rejected' ? 'bg-red-600 text-white' : 'bg-[var(--portal-brand)] text-[var(--portal-brand-ink)]'}`}>
                     {busy ? <LoaderCircle className="h-5 w-5 animate-spin" /> : kind === 'approved' ? <Check className="h-5 w-5" /> : kind === 'rejected' ? <ThumbsDown className="h-5 w-5" /> : <HandCoins className="h-5 w-5" />}
-                    {busy ? 'Enviando…' : 'Confirmar resposta'}
+                    {busy ? 'Enviando…' : kind === 'approved' ? 'Confirmar aprovação' : kind === 'rejected' ? 'Enviar recusa' : 'Enviar contraproposta'}
                 </button>
             </div>
         </div>
@@ -283,14 +308,14 @@ const DecisionAssistantModal: React.FC<{
     return (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/55 backdrop-blur-sm sm:items-center sm:p-5" role="dialog" aria-modal="true" aria-label="Conversar com a empresa">
             <button type="button" className="absolute inset-0" onClick={onClose} aria-label="Fechar janela" />
-            <section className="relative max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-[28px] bg-white p-5 shadow-2xl sm:rounded-[24px] sm:p-7">
-                <div className="flex items-start gap-3"><span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-white"><MessageSquareText className="h-5 w-5" /></span><div className="min-w-0 flex-1"><p className="text-xs font-black uppercase tracking-[.14em] text-blue-600">Converse com a empresa</p><h2 className="mt-1 text-2xl font-black text-slate-950">{selected ? selected.label : 'Como podemos ajudar?'}</h2><p className="mt-1 text-sm leading-5 text-slate-500">{selected ? 'Só mais uma informação rápida.' : 'Escolha a opção que melhor representa seu momento.'}</p></div><button type="button" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-500" aria-label="Fechar"><X className="h-4 w-4" /></button></div>
+            <section className="relative max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-3xl bg-white p-5 shadow-2xl sm:rounded-2xl sm:p-6" style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom, 0px))' }}>
+                <div className="flex items-start gap-3"><div className="min-w-0 flex-1"><h2 className="text-xl font-semibold tracking-[-0.01em] text-slate-950">{selected ? selected.label : 'Como podemos ajudar?'}</h2><p className="mt-1 text-sm leading-5 text-slate-500">{selected ? 'Só mais uma informação rápida.' : 'Escolha a opção que melhor representa seu momento.'}</p></div><button type="button" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-500" aria-label="Fechar"><X className="h-4 w-4" /></button></div>
 
-                {!selected ? <div className="mt-5 space-y-2">{CONVERSATION_REASONS.map(reason => <button key={reason.id} type="button" disabled={busy} onClick={() => selectReason(reason.id)} className="flex min-h-14 w-full items-center justify-between gap-3 rounded-xl border border-slate-200 px-4 py-3 text-left transition hover:border-blue-400 hover:bg-blue-50 disabled:opacity-50"><span><strong className="block text-sm text-slate-800">{reason.label}</strong><small className="mt-0.5 block text-[11px] font-medium text-slate-500">{reason.hint}</small></span><ChevronRight className="h-4 w-4 shrink-0 text-blue-500" /></button>)}</div> : <div className="mt-5">
-                    {selectedId === 'later' ? <div className="grid gap-2">{FOLLOW_UP_OPTIONS.map(item => <button key={item} type="button" onClick={() => setChoice(item)} className={`min-h-11 rounded-xl border px-3 text-left text-sm font-bold ${choice === item ? 'border-blue-500 bg-blue-50 text-blue-800' : 'border-slate-200 text-slate-700'}`}>{item}</button>)}</div> : null}
-                    {selectedId !== 'later' ? <label className="block"><span className="mb-1.5 block text-xs font-bold text-slate-600">{selectedId === 'decline' ? 'Quer contar o motivo? (opcional)' : selectedId === 'question' ? 'Qual é a sua dúvida?' : 'O que gostaria de ajustar?'}</span><textarea autoFocus value={detail} onChange={event => setDetail(event.target.value)} rows={3} placeholder={selectedId === 'decline' ? 'Sua observação ajuda a empresa a melhorar.' : selectedId === 'question' ? 'Escreva sua dúvida.' : 'Ex.: valor, forma de pagamento ou prazo.'} className="w-full resize-none rounded-xl border border-slate-200 p-3 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10" /></label> : null}
+                {!selected ? <div className="mt-5 space-y-2">{CONVERSATION_REASONS.map(reason => <button key={reason.id} type="button" disabled={busy} onClick={() => selectReason(reason.id)} className="flex min-h-14 w-full items-center justify-between gap-3 rounded-xl border border-black/[0.08] px-4 py-3 text-left transition hover:border-black/20 hover:bg-slate-50 disabled:opacity-50"><span><span className="block text-[15px] font-medium text-slate-900">{reason.label}</span><span className="mt-0.5 block text-[13px] text-slate-500">{reason.hint}</span></span><ChevronRight className="h-4 w-4 shrink-0 text-slate-400" /></button>)}</div> : <div className="mt-5">
+                    {selectedId === 'later' ? <div className="grid gap-2">{FOLLOW_UP_OPTIONS.map(item => <button key={item} type="button" onClick={() => setChoice(item)} className={`min-h-11 rounded-xl border px-3 text-left text-[15px] font-medium ${choice === item ? 'border-[var(--portal-brand)] bg-[var(--portal-brand)]/[0.05] text-slate-900' : 'border-black/[0.08] text-slate-700'}`}>{item}</button>)}</div> : null}
+                    {selectedId !== 'later' ? <label className="block"><span className="mb-1.5 block text-sm font-medium text-slate-700">{selectedId === 'decline' ? 'Quer contar o motivo? (opcional)' : selectedId === 'question' ? 'Qual é a sua dúvida?' : 'O que gostaria de ajustar?'}</span><textarea autoFocus value={detail} onChange={event => setDetail(event.target.value)} rows={3} placeholder={selectedId === 'decline' ? 'Sua observação ajuda a empresa a melhorar.' : selectedId === 'question' ? 'Escreva sua dúvida.' : 'Ex.: valor, forma de pagamento ou prazo.'} className="w-full resize-none rounded-xl border border-black/[0.1] p-3 text-[15px] outline-none focus:border-[var(--portal-brand)] focus:ring-4 focus:ring-[var(--portal-brand)]/10" /></label> : null}
 
-                    <div className="mt-5 flex gap-2"><button type="button" onClick={() => selectReason('')} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-600" aria-label="Voltar"><ArrowLeft className="h-4 w-4" /></button><button type="button" disabled={busy || !canSubmit} onClick={submit} className={`flex h-12 flex-1 items-center justify-center gap-2 rounded-xl text-sm font-black text-white disabled:opacity-50 ${selectedId === 'decline' ? 'bg-slate-800' : 'bg-blue-600'}`}>{busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : selectedId === 'decline' ? <CheckCircle2 className="h-4 w-4" /> : <Send className="h-4 w-4" />} {selectedId === 'decline' ? 'Enviar retorno e encerrar' : 'Enviar para a empresa'}</button></div>
+                    <div className="mt-5 flex gap-2"><button type="button" onClick={() => selectReason('')} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-black/[0.1] text-slate-600" aria-label="Voltar"><ArrowLeft className="h-4 w-4" /></button><button type="button" disabled={busy || !canSubmit} onClick={submit} className={`flex h-12 flex-1 items-center justify-center gap-2 rounded-xl text-[15px] font-medium disabled:opacity-50 ${selectedId === 'decline' ? 'bg-slate-800 text-white' : 'bg-[var(--portal-brand)] text-[var(--portal-brand-ink)]'}`}>{busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : selectedId === 'decline' ? <CheckCircle2 className="h-4 w-4" /> : <Send className="h-4 w-4" />} {selectedId === 'decline' ? 'Enviar retorno e encerrar' : 'Enviar para a empresa'}</button></div>
                 </div>}
             </section>
         </div>
@@ -317,7 +342,6 @@ const ProposalPortalView: React.FC = () => {
     const [decisionAssistant, setDecisionAssistant] = useState(false);
     const [responseInitialBody, setResponseInitialBody] = useState('');
     const [selectedPaymentKey, setSelectedPaymentKey] = useState('');
-    const [showAllPayments, setShowAllPayments] = useState(false);
     const portalActivityRef = useRef<string | undefined>(undefined);
 
     const reload = useCallback(async (trackView = false) => {
@@ -388,16 +412,6 @@ const ProposalPortalView: React.FC = () => {
         [selected, selectedCondition?.finalValue],
     );
     const selectedPayment = paymentOptions.find(option => `${option.methodType}:${option.installments}` === selectedPaymentKey);
-    const featuredPaymentOptions = useMemo(() => {
-        const pix = paymentOptions.find(option => option.methodType === 'pix');
-        const cardOptions = paymentOptions.filter(option => option.methodType === 'parcelado_sem_juros' || option.methodType === 'parcelado_com_juros');
-        const longestCard = cardOptions.at(-1);
-        const featured = [pix, longestCard].filter((option, index, list): option is ProposalPaymentSelection =>
-            Boolean(option) && list.findIndex(item => item?.methodType === option?.methodType && item?.installments === option?.installments) === index
-        );
-        return featured.length > 0 ? featured : paymentOptions.slice(0, 1);
-    }, [paymentOptions]);
-    const displayedPaymentOptions = showAllPayments ? paymentOptions : featuredPaymentOptions;
 
     const latestDecision = useMemo(() => (
         [...(data?.messages || [])].reverse().find(message => (
@@ -428,19 +442,11 @@ const ProposalPortalView: React.FC = () => {
 
     useEffect(() => {
         setSelectedPaymentKey('');
-        setShowAllPayments(false);
     }, [selected?.id]);
-
-    const approvalLabel = selectedPayment
-        ? selectedPayment.installments > 1
-            ? `Aprovar em ${selectedPayment.installments}x de ${currency.format(selectedPayment.installmentValue)}`
-            : `Aprovar no ${selectedPayment.methodType === 'pix' ? 'Pix' : 'boleto'} por ${currency.format(selectedPayment.customerTotal)}`
-        : paymentOptions.length > 0 ? 'Escolher forma de pagamento' : 'Aprovar proposta';
 
     const startApproval = () => {
         if (paymentOptions.length > 0 && !selectedPayment) {
-            setShowAllPayments(true);
-            window.setTimeout(() => document.getElementById('formas-pagamento')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 30);
+            document.getElementById('formas-pagamento')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
             return;
         }
         setModal('approved');
@@ -536,168 +542,263 @@ const ProposalPortalView: React.FC = () => {
         }
     };
 
-    if (loading) return <div className="flex min-h-screen items-center justify-center bg-slate-50"><LoaderCircle className="h-8 w-8 animate-spin text-blue-600" /></div>;
-    if (!data) return <div className="flex min-h-screen items-center justify-center bg-slate-50 p-6"><div className="max-w-md rounded-3xl bg-white p-8 text-center shadow-xl"><FileText className="mx-auto h-10 w-10 text-slate-400" /><h1 className="mt-4 text-2xl font-bold text-slate-950">Proposta indisponível</h1><p className="mt-2 text-sm leading-6 text-slate-500">{error}</p></div></div>;
+    if (loading) return <div className="flex min-h-screen items-center justify-center bg-[#f6f6f3]"><LoaderCircle className="h-7 w-7 animate-spin text-slate-400" /></div>;
+    if (!data) return <div className="flex min-h-screen items-center justify-center bg-[#f6f6f3] p-6"><div className="max-w-sm text-center"><FileText className="mx-auto h-8 w-8 text-slate-300" /><h1 className="mt-4 text-xl font-semibold text-slate-900">Proposta indisponível</h1><p className="mt-2 text-sm leading-6 text-slate-500">{error}</p></div></div>;
+
+    const firstName = data.clientName.split(/\s+/)[0];
+    const validUntil = formatLongDate(data.portal.expires_at);
+    const sentOn = selected?.date ? formatLongDate(selected.date) : null;
+    const daysLeft = remaining?.remaining
+        ? remaining.days > 1 ? `faltam ${remaining.days} dias` : remaining.days === 1 ? 'falta 1 dia' : `faltam ${Math.max(1, remaining.hours)}h`
+        : null;
+    const singleProposal = data.proposals.length === 1;
+    const cashOptions = paymentOptions.filter(option => option.methodType === 'pix' || option.methodType === 'boleto');
+    const cardOptions = paymentOptions.filter(option => option.methodType === 'parcelado_sem_juros' || option.methodType === 'parcelado_com_juros');
+    const noInterestTop = cardOptions.filter(option => option.methodType === 'parcelado_sem_juros').at(-1)?.installments ?? 0;
+    const selectedCard = selectedPayment && cardOptions.includes(selectedPayment) ? selectedPayment : null;
+    const payTotal = selectedCondition?.finalValue ?? selected?.totalPreco ?? 0;
+    const optionKey = (option: ProposalPaymentSelection) => `${option.methodType}:${option.installments}`;
+    const scrollTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const showActionBar = !hasFinalDecision;
+    const heading = data.portal.status === 'approved'
+        ? `Obrigado, ${firstName}. Proposta aprovada.`
+        : data.portal.status === 'rejected' || data.portal.status === 'negotiating'
+            ? `${firstName}, recebemos sua resposta.`
+            : data.portal.status === 'revoked' || data.portal.status === 'expired' || !remaining?.remaining
+                ? `${firstName}, esta proposta foi encerrada.`
+                : `${firstName}, sua proposta está pronta.`;
 
     return (
-        <div className="min-h-screen bg-slate-50 pb-8 text-slate-900" style={{ '--portal-brand': brand } as React.CSSProperties}>
+        <div className="min-h-screen bg-[#f6f6f3] text-slate-900 antialiased" style={{ '--portal-brand': brand, '--portal-brand-ink': readableInk(brand) } as React.CSSProperties}>
             {confetti ? <Confetti /> : null}
             <style>{`@keyframes portal-confetti { 0% { transform: translateY(-5vh) rotate(0); opacity: 1; } 100% { transform: translateY(110vh) rotate(760deg); opacity: .1; } }`}</style>
 
-            <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/95 backdrop-blur-xl">
-                <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
+            <header className="border-b border-black/[0.06] bg-white">
+                <div className="mx-auto flex max-w-2xl items-center justify-between gap-4 px-5 py-3.5">
                     <div className="flex min-w-0 items-center gap-3">
-                        {data.company.logo ? <img src={data.company.logo} alt={data.company.name} className="h-10 w-10 rounded-xl object-contain" /> : <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--portal-brand)] text-lg font-black text-white">{data.company.name.charAt(0)}</div>}
-                        <div className="min-w-0"><p className="truncate text-sm font-extrabold text-slate-950">{data.company.name}</p><p className="flex items-center gap-1 text-[11px] font-semibold text-emerald-700"><ShieldCheck className="h-3.5 w-3.5" /> Proposta segura</p></div>
+                        {data.company.logo
+                            ? <img src={data.company.logo} alt={data.company.name} className="h-9 w-9 rounded-lg object-contain" />
+                            : <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--portal-brand)] text-sm font-semibold text-[var(--portal-brand-ink)]">{data.company.name.charAt(0)}</div>}
+                        <p className="truncate text-[15px] font-semibold text-slate-900">{data.company.name}</p>
                     </div>
-                    <div className={`rounded-lg border px-2.5 py-1.5 text-right ${remaining?.remaining ? 'border-slate-200 bg-slate-50 text-slate-700' : 'border-red-100 bg-red-50 text-red-800'}`}>
-                        <p className="flex items-center justify-end gap-1 text-[10px] font-bold uppercase tracking-[0.12em]"><Clock3 className="h-3.5 w-3.5" /> {remaining?.remaining ? 'Prazo restante' : 'Prazo encerrado'}</p>
-                        {remaining?.remaining ? <p className="mt-0.5 text-xs font-extrabold tabular-nums sm:text-sm">{remaining.days}d {String(remaining.hours).padStart(2, '0')}h {String(remaining.minutes).padStart(2, '0')}min</p> : null}
-                    </div>
+                    {!remaining?.remaining ? <p className="shrink-0 text-xs font-medium text-red-600">Prazo encerrado</p> : null}
                 </div>
             </header>
 
-            <main className="mx-auto max-w-3xl px-4 py-5 sm:px-6 sm:py-8">
-                <section className="border-b border-slate-200 pb-5">
-                    <div className="max-w-3xl">
-                        <span className="inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-bold text-blue-700">{statusLabel[data.portal.status]}</span>
-                        <h1 className="mt-3 text-2xl font-extrabold tracking-tight text-slate-950 sm:text-3xl">Olá, {data.clientName.split(/\s+/)[0]}. Sua proposta está pronta.</h1>
-                        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">Confira os valores, baixe o PDF e responda quando estiver pronto.</p>
+            <main className={`mx-auto max-w-2xl px-5 ${showActionBar ? 'pb-32' : 'pb-12'}`}>
+                <section className="pt-8">
+                    <h1 className="text-[28px] font-semibold leading-[1.15] tracking-[-0.02em] text-slate-950">{heading}</h1>
+                    <p className="mt-2.5 text-[15px] leading-6 text-slate-500">
+                        {sentOn ? `Preparada por ${data.company.name} em ${sentOn}. ` : ''}
+                        {hasFinalDecision ? null : remaining?.remaining ? <>Válida até {validUntil} <span className="text-slate-400">({daysLeft})</span>.</> : 'O prazo desta proposta terminou.'}
+                    </p>
+                </section>
+
+                {error ? <div className="mt-6 flex items-start justify-between gap-3 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700"><span>{error}</span><button type="button" onClick={() => setError('')} aria-label="Fechar aviso"><X className="h-4 w-4" /></button></div> : null}
+
+                {/* Próximo passo depois da decisão */}
+                {latestDecision && decisionWhatsAppUrl ? (
+                    <section className="mt-6 rounded-2xl border border-black/[0.07] bg-white px-5 py-5">
+                        <p className="flex items-center gap-2 text-sm font-semibold text-emerald-700"><CheckCircle2 className="h-4 w-4" /> {latestDecision.kind === 'approved' ? 'Próximo passo' : 'Resposta enviada'}</p>
+                        <h2 className="mt-2 text-lg font-semibold text-slate-950">{latestDecision.kind === 'approved' ? 'Agora é só combinar a instalação.' : `Continue a conversa com ${data.company.name}.`}</h2>
+                        <p className="mt-1 text-sm leading-6 text-slate-500">
+                            {latestDecision.kind === 'approved'
+                                ? `A ${data.company.name} já foi avisada. Chame no WhatsApp para agendar o serviço.`
+                                : 'Sua resposta foi registrada. Se preferir, continue pelo WhatsApp.'}
+                        </p>
+                        <a href={decisionWhatsAppUrl} target="_blank" rel="noreferrer" className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[var(--portal-brand)] px-4 text-[15px] font-medium text-[var(--portal-brand-ink)] transition hover:opacity-90">
+                            <MessageCircle className="h-4 w-4" /> {latestDecision.kind === 'approved' ? 'Agendar pelo WhatsApp' : 'Continuar no WhatsApp'}
+                        </a>
+                    </section>
+                ) : null}
+
+                {/* Opções da proposta */}
+                <section className="mt-8" aria-label="Opções da proposta">
+                    {!singleProposal ? <h2 className="mb-3 text-sm font-medium text-slate-500">{hasFinalDecision ? 'Opções da proposta' : `${data.proposals.length} opções para você comparar`}</h2> : null}
+                    <div className="overflow-hidden rounded-2xl border border-black/[0.07] bg-white">
+                        {data.proposals.map((proposal, index) => {
+                            const active = proposal.id === selected?.id;
+                            const proposalCondition = getProposalCondition(proposal, now);
+                            const name = proposal.proposalOptionName || proposal.nomeArquivo || `Proposta ${index + 1}`;
+                            const price = proposalCondition?.finalValue ?? proposal.totalPreco ?? 0;
+                            return (
+                                <div key={proposal.id} className={`relative ${index > 0 ? 'border-t border-black/[0.06]' : ''}`}>
+                                    {!singleProposal && active ? <span className="absolute inset-y-0 left-0 w-[3px] bg-[var(--portal-brand)]" aria-hidden="true" /> : null}
+                                    <button
+                                        type="button"
+                                        onClick={() => setSelectedId(proposal.id!)}
+                                        aria-pressed={singleProposal ? undefined : active}
+                                        className="flex w-full items-start gap-3 px-5 pt-5 text-left disabled:cursor-default"
+                                    >
+                                        {!singleProposal ? <span className={`mt-1 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] ${active ? 'border-[var(--portal-brand)]' : 'border-slate-300'}`}>{active ? <span className="h-2 w-2 rounded-full bg-[var(--portal-brand)]" /> : null}</span> : null}
+                                        <span className="min-w-0 flex-1">
+                                            <span className="block text-[17px] font-semibold text-slate-900">{name}</span>
+                                            <span className="mt-0.5 block text-sm text-slate-500">{proposal.totalM2 ? `${proposal.totalM2.toFixed(2).replace('.', ',')} m² de película` : 'Detalhes completos no PDF'}</span>
+                                        </span>
+                                        <span className="shrink-0 text-right">
+                                            {proposalCondition ? <span className="block text-xs tabular-nums text-slate-400 line-through">{currency.format(proposalCondition.originalValue)}</span> : null}
+                                            <span className="block text-[19px] font-semibold tabular-nums tracking-[-0.01em] text-slate-950">{currency.format(price)}</span>
+                                        </span>
+                                    </button>
+                                    <div className="flex items-center justify-between gap-3 px-5 pb-4 pt-3">
+                                        {proposalCondition ? <span className={`text-xs font-medium ${proposalCondition.expired ? 'text-slate-400' : 'text-emerald-700'}`}>{proposalCondition.expired ? 'Condição especial expirada' : `Você economiza ${currency.format(proposalCondition.discountAmount)}`}</span> : <span />}
+                                        <button type="button" disabled={isDownloadBlocked || downloadingId === proposal.id} onClick={() => void download(proposal.id!)} className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--portal-brand)] disabled:text-slate-300">
+                                            {downloadingId === proposal.id ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Ver PDF
+                                        </button>
+                                    </div>
+                                </div>
+                            );
+                        })}
                     </div>
                 </section>
 
-                {error ? <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700"><span>{error}</span><button onClick={() => setError('')}><X className="h-4 w-4" /></button></div> : null}
-
-                {selectedCondition ? <section className={`mt-6 overflow-hidden rounded-[24px] border bg-white shadow-lg ${selectedCondition.expired ? 'border-slate-300 shadow-slate-200/50' : 'border-blue-200 shadow-blue-200/40'}`}>
-                    <div className={`p-5 sm:p-6 ${selectedCondition.expired ? 'bg-slate-50' : 'bg-gradient-to-br from-blue-50 via-white to-indigo-50'}`}>
-                        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                            <div><p className={`text-xs font-black uppercase tracking-[.16em] ${selectedCondition.expired ? 'text-slate-500' : 'text-blue-600'}`}>{selectedCondition.expired ? 'Esta condição expirou' : 'Condição especial para você'}</p><h2 className="mt-2 text-2xl font-black text-slate-950 sm:text-3xl">{selected?.proposalOptionName || 'Sua proposta'}</h2><p className="mt-2 text-sm leading-6 text-slate-600">{selectedCondition.expired ? `O valor ficou reservado até ${formatConditionExpiry(selectedCondition.expiresAt)}. Converse com a empresa para reativar esta condição.` : `Seu desconto está reservado até ${formatConditionExpiry(selectedCondition.expiresAt)}.`}</p></div>
-                            <div className={`shrink-0 rounded-2xl border px-4 py-3 text-center ${selectedCondition.expired ? 'border-slate-200 bg-white text-slate-600' : 'border-blue-200 bg-white text-blue-900'}`}><p className="flex items-center justify-center gap-1.5 text-[10px] font-black uppercase tracking-[.12em]"><TimerReset className="h-3.5 w-3.5" /> {selectedCondition.expired ? 'Prazo encerrado' : 'Condição reservada'}</p>{!selectedCondition.expired && conditionRemaining ? <p className="mt-1 font-mono text-lg font-black tabular-nums">{conditionRemaining.days}d {String(conditionRemaining.hours).padStart(2, '0')}:{String(conditionRemaining.minutes).padStart(2, '0')}:{String(conditionRemaining.seconds).padStart(2, '0')}</p> : <p className="mt-1 text-sm font-black">Expirada</p>}</div>
-                        </div>
-
-                        <div className="mt-5 grid gap-3 rounded-2xl border border-white/80 bg-white/90 p-4 shadow-sm sm:grid-cols-3">
-                            <div><p className="text-[10px] font-black uppercase tracking-[.12em] text-slate-400">Valor original</p><p className="mt-1 text-base font-bold text-slate-500 line-through decoration-slate-400">{currency.format(selectedCondition.originalValue)}</p></div>
-                            <div><p className="text-[10px] font-black uppercase tracking-[.12em] text-slate-400">Você economiza</p><p className="mt-1 text-base font-black text-blue-700">{currency.format(selectedCondition.discountAmount)}{selectedCondition.discountPercent ? <span className="ml-1 text-xs">({selectedCondition.discountPercent.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%)</span> : null}</p></div>
-                            <div className="sm:text-right"><p className="text-[10px] font-black uppercase tracking-[.12em] text-slate-400">Valor final</p><p className="mt-1 text-2xl font-black text-slate-950">{currency.format(selectedCondition.finalValue)}</p></div>
-                        </div>
-
-                        <button type="button" disabled={isApprovalBlocked} onClick={startApproval} className="mt-4 flex h-13 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 text-sm font-black text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700 disabled:bg-slate-300 disabled:shadow-none"><ThumbsUp className="h-4 w-4" /> {selectedCondition.expired ? 'Condição expirada' : approvalLabel}</button>
-                        <p className="mt-3 text-center text-xs font-semibold leading-5 text-slate-500">{selectedCondition.expired ? 'A empresa pode reativar ou criar uma nova condição sem apagar este histórico.' : 'Ao aprovar dentro do prazo, o valor com desconto fica garantido para você.'}</p>
-                    </div>
-                </section> : null}
-
-                <div className="mt-6">
-                    <section>
-                        <div className="mb-3 flex items-end justify-between"><div><p className="text-xs font-extrabold uppercase tracking-[0.14em] text-blue-600">Suas opções</p><h2 className="mt-1 text-2xl font-bold text-slate-950">Escolha a melhor proposta</h2></div><span className="hidden text-xs font-bold text-slate-400 sm:inline">{data.proposals.length} {data.proposals.length === 1 ? 'opção' : 'opções'}</span></div>
-                        <div className="space-y-3">
-                            {data.proposals.map((proposal, index) => {
-                                const active = proposal.id === selected?.id;
-                                const proposalCondition = getProposalCondition(proposal, now);
-                                return <article key={proposal.id} className={`rounded-2xl border bg-white p-4 transition sm:p-5 ${active ? 'border-blue-500 ring-2 ring-blue-500/10' : 'border-slate-200'}`}>
-                                    <button type="button" onClick={() => setSelectedId(proposal.id!)} className="w-full text-left">
-                                        <div className="flex items-start gap-3"><span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sm font-black ${active ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500'}`}>{index + 1}</span><div className="min-w-0 flex-1"><h3 className="truncate text-base font-extrabold text-slate-950">{proposal.proposalOptionName || proposal.nomeArquivo || `Proposta ${index + 1}`}</h3><p className="mt-0.5 text-xs text-slate-500">{proposal.totalM2 ? `${proposal.totalM2.toFixed(2).replace('.', ',')} m²` : 'Detalhes completos no PDF'}</p></div><div className="shrink-0 text-right">{proposalCondition ? <p className="text-[10px] font-bold text-slate-400 line-through">De {currency.format(proposalCondition.originalValue)}</p> : null}<p className="text-lg font-black text-slate-950">{proposalCondition ? 'Por ' : ''}{currency.format(proposalCondition?.finalValue ?? proposal.totalPreco ?? 0)}</p>{proposalCondition ? <span className="rounded-full bg-emerald-100 px-2 py-1 text-xs font-black text-emerald-700">-{new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 }).format(proposalCondition.discountPercent || 0)}%</span> : null}{proposalCondition?.expired ? <p className="text-[9px] font-black uppercase text-red-500">Expirou</p> : null}</div></div>
-                                    </button>
-                                    <div className="mt-4 flex items-center gap-2 border-t border-slate-100 pt-3"><button type="button" disabled={isDownloadBlocked || downloadingId === proposal.id} onClick={() => void download(proposal.id!)} className="flex h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-slate-100 text-xs font-extrabold text-slate-700 disabled:opacity-50">{downloadingId === proposal.id ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Baixar PDF</button><button type="button" onClick={() => { setSelectedId(proposal.id!); document.getElementById('conversa')?.scrollIntoView({ behavior: 'smooth' }); }} className="flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 px-3 text-xs font-bold text-slate-600"><MessageCircle className="h-4 w-4" /> Dúvida</button></div>
-                                </article>;
-                            })}
+                {/* Condição especial */}
+                {selectedCondition ? (
+                    <section className={`mt-4 rounded-2xl border px-5 py-4 ${selectedCondition.expired ? 'border-black/[0.07] bg-white' : 'border-emerald-900/10 bg-emerald-50/60'}`} aria-label="Condição especial">
+                        <div className="flex items-start justify-between gap-4">
+                            <div className="min-w-0">
+                                <p className={`text-sm font-semibold ${selectedCondition.expired ? 'text-slate-700' : 'text-emerald-900'}`}>{selectedCondition.expired ? 'A condição especial expirou' : 'Condição especial para você'}</p>
+                                <p className={`mt-1 text-sm leading-5 ${selectedCondition.expired ? 'text-slate-500' : 'text-emerald-900/70'}`}>
+                                    {selectedCondition.expired
+                                        ? `O valor ficou reservado até ${formatConditionExpiry(selectedCondition.expiresAt)}. Converse com a empresa para reativar.`
+                                        : `De ${currency.format(selectedCondition.originalValue)} por ${currency.format(selectedCondition.finalValue)}${selectedCondition.discountPercent ? ` (${selectedCondition.discountPercent.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}% de desconto)` : ''}, reservado até ${formatConditionExpiry(selectedCondition.expiresAt)}.`}
+                                </p>
+                            </div>
+                            {!selectedCondition.expired && !hasFinalDecision && conditionRemaining ? <span className="shrink-0 rounded-md bg-white/80 px-2 py-1 text-xs font-medium tabular-nums text-emerald-900">{conditionRemaining.days > 0 ? `${conditionRemaining.days}d ` : ''}{String(conditionRemaining.hours).padStart(2, '0')}h{String(conditionRemaining.minutes).padStart(2, '0')}</span> : null}
                         </div>
                     </section>
+                ) : null}
 
-                    {paymentOptions.length > 0 && !hasFinalDecision ? (
-                        <section id="formas-pagamento" className="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white">
-                            <div className="border-b border-slate-100 p-4 sm:p-5">
-                                <p className="text-[11px] font-black uppercase tracking-[.15em] text-blue-600">Forma de pagamento</p>
-                                <h2 className="mt-1 text-xl font-extrabold text-slate-950">Como prefere pagar?</h2>
-                                <p className="mt-1 text-sm leading-5 text-slate-500">Escolha uma condição antes de aprovar. Você ainda poderá conferir tudo na confirmação.</p>
-                            </div>
-                            <div className="space-y-2 p-4 sm:p-5">
-                                {displayedPaymentOptions.map(option => {
-                                    const key = `${option.methodType}:${option.installments}`;
-                                    const active = selectedPaymentKey === key;
+                {/* Forma de pagamento */}
+                {paymentOptions.length > 0 && !hasFinalDecision ? (
+                    <section id="formas-pagamento" className="mt-10 scroll-mt-6" aria-label="Forma de pagamento">
+                        <h2 className="text-lg font-semibold tracking-[-0.01em] text-slate-950">Forma de pagamento</h2>
+                        <p className="mt-1 text-sm text-slate-500">Escolha antes de aprovar. Valores para {currency.format(payTotal)}.</p>
+                        <div className="mt-4 overflow-hidden rounded-2xl border border-black/[0.07] bg-white" role="radiogroup" aria-label="Formas de pagamento">
+                            {cashOptions.map((option, index) => {
+                                const active = selectedPaymentKey === optionKey(option);
+                                return (
+                                    <button
+                                        key={optionKey(option)}
+                                        type="button"
+                                        role="radio"
+                                        aria-checked={active}
+                                        onClick={() => setSelectedPaymentKey(optionKey(option))}
+                                        className={`flex w-full items-center gap-3 px-5 py-4 text-left transition-colors ${index > 0 ? 'border-t border-black/[0.06]' : ''} ${active ? 'bg-[var(--portal-brand)]/[0.05]' : 'hover:bg-slate-50'}`}
+                                    >
+                                        <Radio active={active} />
+                                        <span className="min-w-0 flex-1">
+                                            <span className="block text-[15px] font-medium text-slate-900">{option.methodType === 'pix' ? 'Pix' : 'Boleto'}</span>
+                                            <span className={`block text-[13px] ${option.discountPercent > 0 ? 'text-emerald-700' : 'text-slate-500'}`}>{option.discountPercent > 0 ? `${option.discountPercent.toLocaleString('pt-BR')}% de desconto à vista` : 'À vista'}</span>
+                                        </span>
+                                        <span className="shrink-0 text-right text-[15px] font-semibold tabular-nums text-slate-900">{currency.format(option.customerTotal)}</span>
+                                    </button>
+                                );
+                            })}
+                            {cardOptions.length > 0 ? (
+                                <div className={`px-5 py-4 ${cashOptions.length > 0 ? 'border-t border-black/[0.06]' : ''} ${selectedCard ? 'bg-[var(--portal-brand)]/[0.05]' : ''}`}>
+                                    <div className="flex items-center gap-3">
+                                        <Radio active={Boolean(selectedCard)} />
+                                        <span className="min-w-0 flex-1">
+                                            <span className="block text-[15px] font-medium text-slate-900">Cartão de crédito</span>
+                                            <span className="block text-[13px] text-slate-500">{noInterestTop > 1 ? `Até ${noInterestTop}x sem juros` : 'Parcelado'}{cardOptions.at(-1)!.installments > noInterestTop ? ` · até ${cardOptions.at(-1)!.installments}x no cartão` : ''}</span>
+                                        </span>
+                                    </div>
+                                    <div className="mt-3 grid grid-cols-6 gap-1.5 pl-[30px]" role="radiogroup" aria-label="Parcelas no cartão">
+                                        {cardOptions.map(option => {
+                                            const active = selectedPaymentKey === optionKey(option);
+                                            const noInterest = option.methodType === 'parcelado_sem_juros';
+                                            return (
+                                                <button
+                                                    key={optionKey(option)}
+                                                    type="button"
+                                                    role="radio"
+                                                    aria-checked={active}
+                                                    aria-label={`${option.installments}x ${noInterest ? 'sem juros' : 'no cartão'}`}
+                                                    onClick={() => setSelectedPaymentKey(optionKey(option))}
+                                                    className={`relative h-10 rounded-lg border text-sm tabular-nums transition-colors ${active
+                                                        ? 'border-[var(--portal-brand)] bg-[var(--portal-brand)] font-semibold text-[var(--portal-brand-ink)]'
+                                                        : 'border-black/[0.08] bg-white font-medium text-slate-700 hover:border-black/20'}`}
+                                                >
+                                                    {option.installments}x
+                                                    {noInterest && !active ? <span className="absolute right-1 top-1 h-1 w-1 rounded-full bg-emerald-500" aria-hidden="true" /> : null}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                    <p className="mt-3 min-h-10 pl-[30px] text-[13px] leading-5 text-slate-600">
+                                        {selectedCard ? <>
+                                            <span className="font-semibold tabular-nums text-slate-900">{selectedCard.installments}x de {currency.format(selectedCard.installmentValue)}</span>
+                                            {selectedCard.methodType === 'parcelado_sem_juros' ? <span className="text-emerald-700"> sem juros</span> : null}
+                                            <span className="block tabular-nums text-slate-500">
+                                                Total {currency.format(selectedCard.customerTotal)}
+                                                {selectedCard.lastInstallmentValue != null ? ` · última parcela ${currency.format(selectedCard.lastInstallmentValue)}` : ''}
+                                            </span>
+                                        </> : <span className="text-slate-400">{noInterestTop > 1 ? <><span className="mr-1 inline-block h-1 w-1 rounded-full bg-emerald-500 align-middle" />sem juros · </> : null}escolha em quantas vezes</span>}
+                                    </p>
+                                </div>
+                            ) : null}
+                        </div>
+                    </section>
+                ) : null}
+
+
+                {/* Mensagens */}
+                <section id="conversa" className="mt-10 scroll-mt-6" aria-label="Mensagens">
+                    <h2 className="text-lg font-semibold tracking-[-0.01em] text-slate-950">Mensagens</h2>
+                    <p className="mt-1 text-sm text-slate-500">Fale direto com {data.company.name}.</p>
+                    <div className="mt-4 overflow-hidden rounded-2xl border border-black/[0.07] bg-white">
+                        <div className="max-h-[320px] space-y-2.5 overflow-y-auto px-4 py-4">
+                            {data.messages.length === 0
+                                ? <p className="py-4 text-center text-sm text-slate-400">Nenhuma mensagem ainda.</p>
+                                : data.messages.map(item => {
+                                    const mine = item.sender_type === 'client';
                                     return (
-                                        <button
-                                            key={key}
-                                            type="button"
-                                            onClick={() => setSelectedPaymentKey(key)}
-                                            className={`flex w-full items-center justify-between gap-3 rounded-xl border p-3.5 text-left transition ${active ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-500/10' : 'border-slate-200 bg-white hover:border-blue-300'}`}
-                                        >
-                                            <span className="flex min-w-0 items-center gap-3">
-                                                <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${active ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300'}`}>
-                                                    {active ? <Check className="h-3 w-3" /> : null}
-                                                </span>
-                                                <span>
-                                                    <span className="block text-sm font-extrabold text-slate-950">{option.label}</span>
-                                                    {option.discountPercent > 0 ? <span className="mt-0.5 block text-xs font-bold text-emerald-700">Economize {currency.format(option.baseTotal - option.customerTotal)}</span> : option.installments > 1 ? <span className="mt-0.5 block text-xs text-slate-500">Total no cartão: {currency.format(option.customerTotal)}{option.lastInstallmentValue != null ? ` · última ${currency.format(option.lastInstallmentValue)}` : ''}</span> : null}
-                                                </span>
-                                            </span>
-                                            <span className="shrink-0 text-right text-sm font-black text-slate-950">
-                                                {option.installments > 1 ? <><span className="block">{option.installments}x de</span><span className="block text-blue-700">{currency.format(option.installmentValue)}</span></> : currency.format(option.customerTotal)}
-                                            </span>
-                                        </button>
+                                        <div key={item.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+                                            <div className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-6 ${mine ? 'rounded-br-md bg-[var(--portal-brand)] text-[var(--portal-brand-ink)]' : 'rounded-bl-md bg-slate-100 text-slate-800'}`}>
+                                                {item.kind !== 'message' ? <p className="text-xs font-semibold opacity-80">{item.kind === 'approved' ? 'Proposta aprovada' : item.kind === 'rejected' ? 'Proposta recusada' : item.kind === 'negotiation' ? 'Contraproposta' : item.kind === 'condition_extended' ? 'Condição prorrogada' : 'Condição atualizada'}</p> : null}
+                                                {item.offer_value != null ? <p className="font-medium">{item.offer_type === 'percentage' ? `${item.offer_value}% de desconto` : `Valor desejado: ${currency.format(item.offer_value)}`}</p> : null}
+                                                {item.condition_value != null ? <p className="font-medium">Valor da condição: {currency.format(item.condition_value)}</p> : null}
+                                                {item.payment_selection ? <p className="font-medium">{item.payment_selection.installments > 1 ? `${item.payment_selection.installments}x de ${currency.format(item.payment_selection.installmentValue)}${item.payment_selection.lastInstallmentValue != null ? ` (última ${currency.format(item.payment_selection.lastInstallmentValue)})` : ''} · total ${currency.format(item.payment_selection.customerTotal)}` : `${item.payment_selection.label}: ${currency.format(item.payment_selection.customerTotal)}`}</p> : null}
+                                                {item.body ? <p>{item.body}</p> : null}
+                                                <p className="mt-0.5 text-[11px] opacity-60">{new Date(item.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</p>
+                                            </div>
+                                        </div>
                                     );
                                 })}
-                                {paymentOptions.length > featuredPaymentOptions.length ? (
-                                    <button type="button" onClick={() => setShowAllPayments(current => !current)} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-extrabold text-blue-700 hover:bg-blue-50">
-                                        {showAllPayments ? 'Mostrar apenas as principais' : `Ver todas as ${paymentOptions.length} opções`}
-                                        <ChevronRight className={`h-4 w-4 transition ${showAllPayments ? '-rotate-90' : 'rotate-90'}`} />
-                                    </button>
-                                ) : null}
-                            </div>
-                        </section>
-                    ) : null}
-
-                    {!hasFinalDecision ? <section className="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white">
-                        <div className="p-4 sm:p-5">
-                            <p className="text-[11px] font-black uppercase tracking-[.15em] text-blue-600">Responder proposta</p>
-                            <h2 className="mt-1 text-xl font-extrabold text-slate-950">Como deseja continuar?</h2>
-                            <p className="mt-1 text-sm leading-5 text-slate-500">{selectedPayment ? `Pagamento escolhido: ${selectedPayment.label}.` : paymentOptions.length > 0 ? 'Escolha acima como prefere pagar ou converse com a empresa.' : 'Aprove agora ou converse com a empresa.'}</p>
-                            <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                                <button type="button" disabled={isApprovalBlocked} onClick={startApproval} className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-center text-sm font-bold text-white transition hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-500"><ThumbsUp className="h-4 w-4 shrink-0" /> {approvalLabel}</button>
-                                <button type="button" onClick={() => setDecisionAssistant(true)} className="flex h-12 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-bold text-white transition hover:bg-blue-700"><MessageSquareText className="h-4 w-4" /> Conversar com a empresa</button>
-                            </div>
                         </div>
-                    </section> : null}
-
-                    {latestDecision && decisionWhatsAppUrl ? (
-                        <section className="mt-5 overflow-hidden rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-green-50">
-                            <div className="p-4 sm:p-5">
-                                <p className="text-[11px] font-black uppercase tracking-[.15em] text-emerald-700">{'Pr\u00f3ximo passo'}</p>
-                                <h2 className="mt-1 text-xl font-extrabold text-slate-950">
-                                    {latestDecision.kind === 'approved' ? 'Tudo certo!' : `Continuar com ${data.company.name} no WhatsApp`}
-                                </h2>
-                                <p className="mt-1 text-sm leading-6 text-slate-600">
-                                    {latestDecision.kind === 'approved'
-                                        ? `Sua aprova\u00e7\u00e3o foi registrada. Fale com a ${data.company.name} para agendar o servi\u00e7o.`
-                                        : 'Sua decis\u00e3o j\u00e1 foi registrada. Continue a conversa com a empresa pelo WhatsApp.'}
-                                </p>
-                                <a href={decisionWhatsAppUrl} target="_blank" rel="noreferrer" className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 text-sm font-extrabold text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700">
-                                    <MessageCircle className="h-4 w-4" /> {latestDecision.kind === 'approved' ? 'Agendar' : 'Continuar no WhatsApp'}
-                                </a>
-                            </div>
-                        </section>
-                    ) : null}
-
-                    <aside className="hidden">
-                        <div className="sticky top-24 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                            <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-slate-400">Sua decisão</p><h2 className="mt-1 text-xl font-bold text-slate-950">{selected?.proposalOptionName || 'Proposta selecionada'}</h2>{selectedCondition ? <p className="mt-2 text-xs font-bold text-slate-400 line-through">{currency.format(selectedCondition.originalValue)}</p> : null}<p className="mt-1 text-2xl font-black text-slate-950">{currency.format(selectedCondition?.finalValue ?? selected?.totalPreco ?? 0)}</p>
-                            <div className="mt-5 grid gap-2"><button disabled={isApprovalBlocked} onClick={startApproval} className="flex h-12 items-center justify-center gap-2 rounded-xl bg-emerald-600 text-sm font-extrabold text-white disabled:opacity-50"><ThumbsUp className="h-4 w-4" /> {approvalLabel}</button><button disabled={hasFinalDecision} onClick={() => setDecisionAssistant(true)} className="flex h-12 items-center justify-center gap-2 rounded-xl bg-blue-600 text-sm font-extrabold text-white disabled:opacity-50"><MessageSquareText className="h-4 w-4" /> Conversar com a empresa</button></div>
+                        <div className="flex items-end gap-2 border-t border-black/[0.06] p-3">
+                            <textarea value={message} onChange={event => setMessage(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void sendMessage(); } }} rows={1} placeholder="Escreva uma mensagem" aria-label="Mensagem para a empresa" className="min-h-11 flex-1 resize-none rounded-xl bg-slate-100 px-3.5 py-2.5 text-[15px] text-slate-900 outline-none placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-[var(--portal-brand)]/25" />
+                            <button type="button" disabled={busy || !message.trim()} onClick={() => void sendMessage()} aria-label="Enviar mensagem" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--portal-brand)] text-[var(--portal-brand-ink)] transition disabled:bg-slate-200 disabled:text-slate-400"><Send className="h-4 w-4" /></button>
                         </div>
-                    </aside>
-                </div>
-
-                <section id="conversa" className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white">
-                    <div className="border-b border-slate-100 p-4 sm:p-5"><h2 className="text-lg font-extrabold text-slate-950">Fale com a empresa</h2><p className="mt-1 text-xs text-slate-500">Tire uma dúvida ou envie uma observação.</p></div>
-                    <div className="max-h-[300px] space-y-3 overflow-y-auto bg-slate-50/70 p-4">
-                        {data.messages.length === 0 ? <div className="py-5 text-center text-sm text-slate-400"><MessageCircle className="mx-auto mb-2 h-6 w-6" /> Nenhuma mensagem ainda.</div> : data.messages.map(item => <div key={item.id} className={`flex ${item.sender_type === 'client' ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[86%] rounded-2xl px-4 py-3 text-sm leading-6 ${item.sender_type === 'client' ? 'rounded-br-md bg-blue-600 text-white' : 'rounded-bl-md bg-white text-slate-700 shadow-sm'}`}>
-                            {item.kind !== 'message' ? <p className="mb-1 text-[10px] font-black uppercase tracking-[0.12em] opacity-75">{item.kind === 'approved' ? 'Proposta aprovada' : item.kind === 'rejected' ? 'Proposta recusada' : item.kind === 'negotiation' ? 'Contraproposta enviada' : item.kind === 'condition_extended' ? 'Condição prorrogada' : 'Condição atualizada'}</p> : null}
-                            {item.offer_value != null ? <p className="font-extrabold">{item.offer_type === 'percentage' ? `${item.offer_value}% de desconto` : `Valor desejado: ${currency.format(item.offer_value)}`}</p> : null}
-                            {item.condition_value != null ? <p className="font-extrabold">Valor da condição: {currency.format(item.condition_value)}</p> : null}
-                            {item.payment_selection ? <p className="font-extrabold">{item.payment_selection.installments > 1 ? `${item.payment_selection.installments}x de ${currency.format(item.payment_selection.installmentValue)}${item.payment_selection.lastInstallmentValue != null ? ` (última ${currency.format(item.payment_selection.lastInstallmentValue)})` : ''} · total ${currency.format(item.payment_selection.customerTotal)}` : `${item.payment_selection.label}: ${currency.format(item.payment_selection.customerTotal)}`}</p> : null}
-                            {item.body ? <p>{item.body}</p> : null}<p className="mt-1 text-[10px] opacity-60">{new Date(item.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</p></div></div>)}
                     </div>
-                    <div className="flex gap-2 border-t border-slate-100 p-3 sm:p-4"><textarea value={message} onChange={event => setMessage(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void sendMessage(); } }} rows={1} placeholder="Digite sua mensagem…" className="min-h-11 flex-1 resize-none rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-blue-500" /><button type="button" disabled={busy || !message.trim()} onClick={() => void sendMessage()} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white disabled:opacity-50"><Send className="h-4 w-4" /></button></div>
                 </section>
+
+                <footer className="mt-10 text-center text-xs leading-5 text-slate-400">
+                    Proposta de {data.company.name}{data.company.phone ? ` · ${data.company.phone}` : ''}
+                </footer>
             </main>
+
+            {/* Barra de decisão: sempre à mão, com o pagamento escolhido */}
+            {showActionBar ? (
+                <div className="fixed inset-x-0 bottom-0 z-40 border-t border-black/[0.07] bg-white/95 backdrop-blur-md" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+                    <div className="mx-auto flex max-w-2xl items-center gap-3 px-5 py-3">
+                        <div className="min-w-0 flex-1">
+                            <p className="truncate text-xs text-slate-500">{isApprovalBlocked ? (selectedCondition?.expired ? 'Condição expirada' : 'Prazo encerrado') : selectedPayment ? selectedPayment.methodType === 'pix' ? 'Pix à vista' : selectedPayment.methodType === 'boleto' ? 'Boleto à vista' : selectedPayment.methodType === 'parcelado_sem_juros' ? 'Cartão sem juros' : 'Cartão de crédito' : 'Total'}</p>
+                            <p className="truncate text-base font-semibold tabular-nums tracking-[-0.01em] text-slate-950">{selectedPayment && selectedPayment.installments > 1 ? `${selectedPayment.installments}x de ${currency.format(selectedPayment.installmentValue)}` : currency.format(selectedPayment?.customerTotal ?? payTotal)}</p>
+                        </div>
+                        <button type="button" onClick={() => setDecisionAssistant(true)} aria-label="Conversar com a empresa" className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-black/[0.1] text-slate-700 transition hover:bg-slate-50"><MessageSquareText className="h-5 w-5" /></button>
+                        <button
+                            type="button"
+                            disabled={isApprovalBlocked}
+                            onClick={() => { if (paymentOptions.length > 0 && !selectedPayment) scrollTo('formas-pagamento'); else startApproval(); }}
+                            className="flex h-12 shrink-0 items-center justify-center rounded-xl bg-[var(--portal-brand)] px-5 text-[15px] font-medium text-[var(--portal-brand-ink)] transition hover:opacity-90 disabled:bg-slate-200 disabled:text-slate-400"
+                        >
+                            {paymentOptions.length > 0 && !selectedPayment ? 'Continuar' : 'Aprovar'}
+                        </button>
+                    </div>
+                </div>
+            ) : null}
 
             {modal && selected ? <ResponseModal kind={modal} proposalName={selected.proposalOptionName || selected.nomeArquivo || 'Proposta'} proposalValue={selectedCondition?.finalValue ?? selected.totalPreco ?? 0} paymentOptions={paymentOptions} initialPaymentKey={selectedPaymentKey} busy={busy} initialBody={responseInitialBody} onClose={() => { setModal(null); setResponseInitialBody(''); }} onSubmit={submitResponse} /> : null}
             {decisionAssistant ? <DecisionAssistantModal busy={busy} onClose={() => setDecisionAssistant(false)} onMessage={body => void sendGuidedMessage(body)} onNegotiate={body => { if (isDownloadBlocked) void sendGuidedMessage(body); else void performResponse('negotiation', { body }); }} onReject={body => { if (isDownloadBlocked) void sendGuidedMessage(body); else void performResponse('rejected', { body }); }} /> : null}
