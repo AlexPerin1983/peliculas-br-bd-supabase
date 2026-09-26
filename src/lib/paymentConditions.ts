@@ -107,7 +107,8 @@ export const buildProposalPaymentOptions = (
 
     const noInterest = paymentMethods.find(method => method.ativo && method.tipo === 'parcelado_sem_juros');
     const noInterestInstallments = noInterest ? getAvailableInstallments(noInterest) : [];
-    const noInterestMax = noInterest && !Array.isArray(noInterest.selectedInstallments) ? clampInstallments(noInterest.parcelas_max) : 0;
+    // Com juros só depois da última parcela sem juros (nunca "3x sem juros" e "3x com juros").
+    const noInterestTop = noInterestInstallments.length ? Math.max(...noInterestInstallments) : 0;
     if (noInterest) {
         for (const installments of noInterestInstallments) {
             options.push(buildNoInterestSelection(baseTotal, installments));
@@ -118,7 +119,7 @@ export const buildProposalPaymentOptions = (
     if (withInterest) {
         const mode = withInterest.calculation_mode || 'monthly_interest';
         for (const installments of getAvailableInstallments(withInterest)) {
-            if (!Array.isArray(withInterest.selectedInstallments) && (installments <= noInterestMax || noInterestInstallments.includes(installments))) continue;
+            if (installments <= noInterestTop) continue;
             if (mode === 'operator_fee') {
                 const configuredRate = withInterest.operator_fee_rates?.[String(installments)];
                 if (configuredRate == null) continue;

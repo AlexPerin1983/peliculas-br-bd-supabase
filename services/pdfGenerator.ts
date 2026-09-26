@@ -129,7 +129,9 @@ export const buildPrimaryPaymentSummary = (total: number, paymentConfig: Proposa
             return selected ? `${selected.installments}x de R$ ${formatNumberBR(selected.installmentValue)} sem juros` : null;
         }
         case 'parcelado_com_juros': {
-            const selections = buildProposalPaymentOptions(total, [method]);
+            // Com todas as formas: o "com juros" só vale depois do "sem juros".
+            const selections = buildProposalPaymentOptions(total, paymentConfig.paymentMethods)
+                .filter(option => option.methodType === 'parcelado_com_juros');
             const selected = selections.at(-1);
             return selected ? `${selected.installments}x de R$ ${formatNumberBR(selected.installmentValue)} no cartão` : null;
         }
@@ -142,9 +144,14 @@ export const buildPrimaryPaymentSummary = (total: number, paymentConfig: Proposa
     }
 };
 
-export const buildPdfInstallmentLines = (total: number, method: PaymentMethod, indent = ''): string[] => {
-    const options = buildProposalPaymentOptions(total, [method]);
-    const selected = Array.isArray(method.selectedInstallments)
+// allMethods: todas as formas da proposta, para o "com juros" começar depois do "sem juros".
+export const buildPdfInstallmentLines = (total: number, method: PaymentMethod, indent = '', allMethods?: PaymentMethod[]): string[] => {
+    const options = buildProposalPaymentOptions(total, allMethods ?? [method])
+        .filter(option => option.methodType === method.tipo);
+    // Sem juros em faixa (1x até Nx) sai numa linha só, com a maior parcela.
+    const noInterestRange = method.tipo === 'parcelado_sem_juros'
+        && options.every((option, index) => option.installments === index + 1);
+    const selected = Array.isArray(method.selectedInstallments) && !noInterestRange
         ? options
         : options.slice(-1);
     return selected.flatMap(option => {
@@ -1152,10 +1159,10 @@ const renderPdfContent = async (
                         lines.push(`  • Boleto Bancário: R$ ${formatNumberBR(total)}`);
                         break;
                     case 'parcelado_sem_juros':
-                        lines.push(...buildPdfInstallmentLines(total, method, '  '));
+                        lines.push(...buildPdfInstallmentLines(total, method, '  ', paymentMethods));
                         break;
                     case 'parcelado_com_juros':
-                        lines.push(...buildPdfInstallmentLines(total, method, '  '));
+                        lines.push(...buildPdfInstallmentLines(total, method, '  ', paymentMethods));
                         break;
                     case 'adiantamento':
                         const va = calculateAdvancePayment(total, method.porcentagem);
@@ -1221,10 +1228,10 @@ const renderPdfContent = async (
                         paymentLines.push(`• Boleto Bancário: R$ ${formatNumberBR(finalTotalForPayment)}`);
                         break;
                     case 'parcelado_sem_juros':
-                        paymentLines.push(...buildPdfInstallmentLines(finalTotalForPayment, method));
+                        paymentLines.push(...buildPdfInstallmentLines(finalTotalForPayment, method, '', singlePaymentConfig.paymentMethods));
                         break;
                     case 'parcelado_com_juros':
-                        paymentLines.push(...buildPdfInstallmentLines(finalTotalForPayment, method));
+                        paymentLines.push(...buildPdfInstallmentLines(finalTotalForPayment, method, '', singlePaymentConfig.paymentMethods));
                         break;
                     case 'adiantamento':
                         const valorAdiantamento = calculateAdvancePayment(finalTotalForPayment, method.porcentagem);

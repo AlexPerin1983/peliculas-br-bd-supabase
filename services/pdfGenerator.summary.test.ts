@@ -30,6 +30,23 @@ describe('buildPdfWarrantyEntries', () => {
     });
 });
 
+describe('parcelas no PDF', () => {
+    it('sem juros em faixa sai numa linha e com juros só depois dele', () => {
+        const methods = [
+            { tipo: 'parcelado_sem_juros' as const, ativo: true, parcelas_max: 10, selectedInstallments: [1, 2, 3, 4, 5, 6] },
+            { tipo: 'parcelado_com_juros' as const, ativo: true, parcelas_max: 12, juros: 2, selectedInstallments: [3, 11, 12] },
+        ];
+        expect(buildPdfInstallmentLines(600, methods[0], '', methods)).toEqual(['• Parcelado s/ Juros: 6x de R$ 100,00']);
+        const withInterest = buildPdfInstallmentLines(600, methods[1], '', methods);
+        expect(withInterest.join(' ')).not.toContain(' 3x');
+        expect(withInterest.filter(line => line.startsWith('• '))).toHaveLength(2);
+
+        // Buraco antigo (sem o 5x) continua listando cada parcela.
+        const withGap = { ...methods[0], selectedInstallments: [1, 2, 3, 4, 6] };
+        expect(buildPdfInstallmentLines(600, withGap, '', [withGap])).toHaveLength(5);
+    });
+});
+
 describe('buildPrimaryPaymentSummary', () => {
     it('resume a condição principal de pagamento perto do valor final', () => {
         expect(buildPrimaryPaymentSummary(1000, {
