@@ -1,6 +1,7 @@
 import React from 'react';
 import { LockKeyhole, RotateCcw, UnlockKeyhole } from 'lucide-react';
 import type { Rect } from '../../utils/CuttingOptimizer';
+import { describeStripSpot } from '../../utils/seamGroups';
 
 interface CuttingMobilePieceProps {
     item: Rect;
@@ -40,7 +41,7 @@ export default function CuttingMobilePiece({
             </>}
             {showInlineSize && <span className="cutting-measure-inline">{meters(item.w)} × {meters(item.h)}</span>}
             {item.seam && width >= 30 && height >= 24 && (
-                <span className="cutting-seam-tag" title="Faixa de uma peça com emenda de topo">
+                <span className="cutting-seam-tag" title={`Faixa ${item.seam.index + 1}/${item.seam.count}: vai ${describeStripSpot(item.seam)} no vidro (emenda de topo)`}>
                     {width >= 64 ? 'faixa ' : ''}{item.seam.index + 1}/{item.seam.count}
                 </span>
             )}

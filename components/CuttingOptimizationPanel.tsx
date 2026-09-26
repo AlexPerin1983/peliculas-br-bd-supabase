@@ -21,6 +21,7 @@ import {
     normalizeFilmCuttingSettings,
 } from '../src/lib/proposalCutting';
 import type { SeamDirection, SeamStyle } from '../utils/seamStrips';
+import { describeStripSpot, estimateSeamAlternatives, groupSeamPieces } from '../utils/seamGroups';
 import CuttingSeamNotice from './cutting/CuttingSeamNotice';
 
 
@@ -128,10 +129,26 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
             });
         }
     };
+    // Faixas travadas guardam a medida antiga; ao refazer a emenda elas são destravadas.
+    const unlockSeamStrips = (shouldUnlock: (item: Rect) => boolean) => {
+        const current = lockedItemsRef.current;
+        const kept: Record<string, Rect> = Object.fromEntries(
+            (Object.entries(current) as [string, Rect][]).filter(([, item]) => !(item.seam && shouldUnlock(item)))
+        );
+        if (Object.keys(kept).length === Object.keys(current).length) return;
+        lockedItemsRef.current = kept;
+        setLockedItems(kept);
+    };
     const setSeamDirections = (pieceIds: string[], direction: SeamDirection) => {
+        const ids = new Set(pieceIds);
+        unlockSeamStrips(item => ids.has(String(item.seam!.pieceId)));
         const next = { ...currentSettings.seamDirections };
         pieceIds.forEach(id => { next[id] = direction; });
         updateCurrentSettings('seamDirections', next);
+    };
+    const setSeamStyle = (style: SeamStyle) => {
+        unlockSeamStrips(() => true);
+        updateCurrentSettings('seamStyle', style);
     };
 
     const handleRollWidthSelection = (value: string) => {
@@ -792,33 +809,49 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
 
         // Use setTimeout to allow UI to update (show loading state) before heavy calculation
         setTimeout(() => {
-            const optimizer = new CuttingOptimizer({
-                rollWidth: width,
-                bladeWidth: isNaN(spacing) ? 0 : spacing / 10, // mm to cm
-                allowRotation: !currentSettings.respectGrain,
-                seamStyle: currentSettings.seamStyle,
-                seamDirections: currentSettings.seamDirections,
-            });
-
             const relevantMeasurements = measurements.filter(m =>
                 (m.pelicula === activeFilm || (uniqueFilms.length === 1 && uniqueFilms[0] === 'Padrão')) && m.active
             );
 
-            relevantMeasurements.forEach(m => {
-                const qty = Math.max(1, Math.floor(m.quantidade || 1));
-                // Assumes input is in meters, converts to cm
-                const w = parseFloat(String(m.largura).replace(',', '.')) * 100;
-                const h = parseFloat(String(m.altura).replace(',', '.')) * 100;
+            const createOptimizer = (extraSeamDirections: Record<string, SeamDirection> = {}) => {
+                const optimizer = new CuttingOptimizer({
+                    rollWidth: width,
+                    bladeWidth: isNaN(spacing) ? 0 : spacing / 10, // mm to cm
+                    allowRotation: !currentSettings.respectGrain,
+                    seamStyle: currentSettings.seamStyle,
+                    seamDirections: { ...currentSettings.seamDirections, ...extraSeamDirections },
+                });
 
-                if (!isNaN(w) && !isNaN(h) && w > 0 && h > 0) {
-                    for (let i = 0; i < qty; i++) {
-                        // Use unique ID for each piece to allow individual rotation
-                        optimizer.addItem(w, h, `${m.id}-${i}`, `${(w / 100).toFixed(2)}x${(h / 100).toFixed(2)}`);
+                relevantMeasurements.forEach(m => {
+                    const qty = Math.max(1, Math.floor(m.quantidade || 1));
+                    // Assumes input is in meters, converts to cm
+                    const w = parseFloat(String(m.largura).replace(',', '.')) * 100;
+                    const h = parseFloat(String(m.altura).replace(',', '.')) * 100;
+
+                    if (!isNaN(w) && !isNaN(h) && w > 0 && h > 0) {
+                        for (let i = 0; i < qty; i++) {
+                            // Use unique ID for each piece to allow individual rotation
+                            optimizer.addItem(w, h, `${m.id}-${i}`, `${(w / 100).toFixed(2)}x${(h / 100).toFixed(2)}`);
+                        }
                     }
-                }
-            });
+                });
+                return optimizer;
+            };
 
-            const newResult = optimizer.optimize(manualRotations, useDeepSearch, Object.values(lockedItemsRef.current));
+            const lockedList = Object.values(lockedItemsRef.current) as Rect[];
+            const plan = createOptimizer().optimize(manualRotations, useDeepSearch, lockedList);
+            // Plano inteiro da outra direção de cada emenda, para comparar o gasto real.
+            const seamAlternativeTotals = estimateSeamAlternatives(
+                groupSeamPieces(plan.seamPieces ?? []),
+                (directions, pieceIds) => createOptimizer(directions).optimize(
+                    manualRotations,
+                    useDeepSearch,
+                    lockedList.filter(item => !(item.seam && pieceIds.has(String(item.seam.pieceId)))),
+                ).totalHeight,
+            );
+            const newResult: OptimizationResult = Object.keys(seamAlternativeTotals).length > 0
+                ? { ...plan, seamAlternativeTotals }
+                : plan;
 
             setResult(newResult);
             lastParamsRef.current = fullParams;
@@ -1278,7 +1311,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                         <span className="cutting-piece-badge" data-done={done}>{result.placedItems.indexOf(selectedMobilePiece) + 1}</span>
                         <div className="cutting-piece-description">
                             <strong>{getPieceRoom(selectedMobilePiece)}</strong>
-                            <span>{formatPieceSize(selectedMobilePiece.w)} × {formatPieceSize(selectedMobilePiece.h)} m{selectedMobilePiece.seam ? ` · faixa ${selectedMobilePiece.seam.index + 1}/${selectedMobilePiece.seam.count}` : ''}{locked ? ' · travada' : ''}</span>
+                            <span>{formatPieceSize(selectedMobilePiece.w)} × {formatPieceSize(selectedMobilePiece.h)} m{selectedMobilePiece.seam ? ` · faixa ${selectedMobilePiece.seam.index + 1}/${selectedMobilePiece.seam.count} ${describeStripSpot(selectedMobilePiece.seam)}` : ''}{locked ? ' · travada' : ''}</span>
                         </div>
                         <div className="cutting-piece-tools" role="group" aria-label="Ações da peça">
                             <button type="button" aria-label="Girar peça" disabled={isOptimizing || locked || tooWideToRotate}
@@ -1779,9 +1812,12 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                 <CuttingSeamNotice
                                     seamPieces={result?.seamPieces ?? []}
                                     rollWidth={result?.rollWidth ?? 0}
+                                    planTotalCm={result?.totalHeight}
+                                    alternativeTotals={result?.seamAlternativeTotals}
+                                    pricePerMeter={films.find(film => film.nome === activeFilm)?.precoMetroLinear || undefined}
                                     seamStyle={currentSettings.seamStyle}
                                     disabled={isOptimizing}
-                                    onSeamStyleChange={style => updateCurrentSettings('seamStyle', style)}
+                                    onSeamStyleChange={setSeamStyle}
                                     onDirectionChange={setSeamDirections}
                                 />
 
@@ -2036,7 +2072,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                                         )}
 
                                                         {item.seam && pieceScaledWidth >= 40 && pieceScaledHeight >= 24 && (
-                                                            <span className="cutting-seam-tag hidden sm:block" title="Faixa de uma peça com emenda de topo">
+                                                            <span className="cutting-seam-tag hidden sm:block" title={`Faixa ${item.seam.index + 1}/${item.seam.count}: vai ${describeStripSpot(item.seam)} no vidro (emenda de topo)`}>
                                                                 faixa {item.seam.index + 1}/{item.seam.count}
                                                             </span>
                                                         )}

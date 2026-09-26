@@ -55,6 +55,8 @@ export interface OptimizationResult {
     layoutComparison?: { compactHeight: number; straightHeight: number | null };
     // Peças maiores que a bobina que viraram faixas com emenda.
     seamPieces?: SeamPieceSummary[];
+    // Preenchido pelo painel: comprimento do plano (cm) se cada grupo de emenda trocasse de direção.
+    seamAlternativeTotals?: Record<string, number>;
 }
 
 export type CutPreference = 'straight' | 'compact';
