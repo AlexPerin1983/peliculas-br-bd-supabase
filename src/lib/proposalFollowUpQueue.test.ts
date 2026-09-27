@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CompanyProposalPortal } from './proposalPortal';
-import { buildFollowUpMessage, buildFollowUpQueue, buildFollowUpTimeline, describeNextContact, findUnknownFollowUpTags, getFollowUpItem, summarizeLostProposals } from './proposalFollowUpQueue';
+import { buildFollowUpMessage, buildFollowUpQueue, buildFollowUpTimeline, describeNextContact, findUnknownFollowUpTags, getFollowUpItem, openedRecently, summarizeLostProposals, summarizeProposalResults } from './proposalFollowUpQueue';
 
 const NOW = new Date('2026-09-26T12:00:00Z').getTime();
 const DAY = 86_400_000;
@@ -97,6 +97,28 @@ describe('Para acompanhar hoje', () => {
         ], NOW);
         expect(due.map(item => item.portal.id)).toEqual(['recent']);
         expect(stale.map(item => [item.portal.id, item.step])).toEqual([['old', 'expired'], ['older', 'close']]);
+    });
+
+    it('quem acabou de abrir o link vem logo depois de quem respondeu', () => {
+        const { due } = buildFollowUpQueue([
+            portal({ id: 'exp', clientId: 1, viewCount: 2, lastViewedAt: at(-3), expiresAt: at(1) }),
+            portal({ id: 'now', clientId: 2, viewCount: 1, firstViewedAt: at(-4), lastViewedAt: new Date(NOW - 3 * 60_000).toISOString() }),
+            portal({ id: 'rep', clientId: 3, messages: [{ id: 1, sender_type: 'client', kind: 'message', created_at: at(-1) }] }),
+        ], NOW);
+        expect(due.map(item => item.portal.id)).toEqual(['rep', 'now', 'exp']);
+        expect(openedRecently(due[1].portal, NOW)).toBe(true);
+        expect(openedRecently(due[2].portal, NOW)).toBe(false);
+    });
+
+    it('resumo em reais: em aberto, aprovado no mês (opção escolhida) e fechamento', () => {
+        expect(summarizeProposalResults([
+            portal({ id: 'a', clientId: 1, proposals: [{ id: 1, name: 'A', total: 1000 }] }),
+            portal({ id: 'b', clientId: 2, createdAt: at(-0.1), lastActivityAt: at(-0.1), proposals: [{ id: 2, name: 'B', total: 500 }] }),
+            portal({ id: 'c', clientId: 3, expiresAt: at(-40), proposals: [{ id: 3, name: 'C', total: 9999 }] }),
+            portal({ id: 'd', clientId: 4, status: 'approved', proposals: [{ id: 41, name: 'Opção 1', total: 800 }, { id: 42, name: 'Opção 2', total: 1200 }], messages: [{ id: 1, sender_type: 'client', kind: 'approved', saved_pdf_id: 42, created_at: at(-2) }] }),
+            portal({ id: 'e', clientId: 5, status: 'approved', messages: [{ id: 2, sender_type: 'client', kind: 'approved', created_at: at(-40) }] }),
+            portal({ id: 'f', clientId: 6, lostAt: at(-3), lostReason: 'price' }),
+        ], NOW)).toEqual({ openValue: 1500, openCount: 2, approvedValue: 1200, approvedCount: 1, decidedCount: 3, wonCount: 2, closeRate: 2 / 3 });
     });
 
     it('linha do tempo em ordem, com contatos e perda', () => {

@@ -113,7 +113,7 @@ const whenLabel = (target: number, now: number) => {
 
 const timesLabel = (count: number) => (count === 1 ? '1 vez' : `${count} vezes`);
 
-const portalTotal = (portal: CompanyProposalPortal) =>
+export const portalTotal = (portal: CompanyProposalPortal) =>
     portal.proposals.reduce((sum, proposal) => sum + (proposal.conditionFinalValue ?? proposal.total), 0);
 
 export const followUpTagValues = (portal: CompanyProposalPortal, now = Date.now()): Record<string, string> => {
@@ -206,6 +206,13 @@ export const getFollowUpItem = (portal: CompanyProposalPortal, now = Date.now(),
         'Reforce o valor: garantia, fotos de trabalhos parecidos e avaliações de clientes.', beforeExpiry(lastTouch + 2 * DAY));
 };
 
+// "Abriu agora": o link foi aberto nos últimos minutos.
+export const OPENED_RECENTLY_MINUTES = 10;
+export const openedRecently = (portal: CompanyProposalPortal, now = Date.now()) => {
+    const elapsed = now - time(portal.lastViewedAt);
+    return Boolean(portal.lastViewedAt) && elapsed >= 0 && elapsed <= OPENED_RECENTLY_MINUTES * 60_000;
+};
+
 const isStale = (item: FollowUpItem, now: number) =>
     (item.step === 'expired' || item.step === 'close') && now - time(item.portal.expiresAt) > STALE_AFTER_DAYS * DAY;
 
@@ -218,8 +225,10 @@ export const buildFollowUpQueue = (portals: CompanyProposalPortal[], now = Date.
         if (!item) continue;
         (!item.due ? waiting : isStale(item, now) ? stale : due).push(item);
     }
+    // Quem acabou de abrir o link vem logo depois de quem respondeu: é a melhor hora de chamar.
+    const rank = (item: FollowUpItem) => (item.step !== 'reply' && openedRecently(item.portal, now) ? 0.5 : item.priority);
     // Mesma prioridade: o mais perto de vencer (ou o que venceu por último) primeiro.
-    due.sort((a, b) => a.priority - b.priority || Math.abs(time(a.portal.expiresAt) - now) - Math.abs(time(b.portal.expiresAt) - now));
+    due.sort((a, b) => rank(a) - rank(b) || Math.abs(time(a.portal.expiresAt) - now) - Math.abs(time(b.portal.expiresAt) - now));
     waiting.sort((a, b) => a.dueAt - b.dueAt);
     stale.sort((a, b) => time(b.portal.expiresAt) - time(a.portal.expiresAt));
     return { due, waiting, stale };
@@ -275,6 +284,44 @@ export const describeClosed = (portal: CompanyProposalPortal) => {
     if (kind === 'approved') return { kind, label: `Aprovada em ${when}` };
     if (kind === 'rejected') return { kind, label: `Recusada em ${when}` };
     return { kind, label: `Perdida: ${lostReasonLabel(portal.lostReason).toLowerCase()} · ${when}` };
+};
+
+// Resumo em reais do topo da Central.
+export const summarizeProposalResults = (portals: CompanyProposalPortal[], now = Date.now(), decidedDays = 90) => {
+    const groups = groupPortalsByClient(portals);
+    const { due, waiting } = buildFollowUpQueue(groups.map(group => group.primary), now);
+    const open = [...due, ...waiting];
+
+    const monthStart = new Date(now);
+    monthStart.setDate(1);
+    monthStart.setHours(0, 0, 0, 0);
+    let approvedValue = 0;
+    let approvedCount = 0;
+    for (const portal of portals) {
+        if (portal.status !== 'approved') continue;
+        const approval = [...portal.messages].reverse().find(message => message.kind === 'approved');
+        if (time(approval?.created_at || portal.lastActivityAt) < monthStart.getTime()) continue;
+        const chosen = portal.proposals.find(proposal => proposal.id === approval?.saved_pdf_id);
+        approvedValue += chosen ? (chosen.conditionFinalValue ?? chosen.total) : portalTotal(portal);
+        approvedCount += 1;
+    }
+
+    // Fechamento: dos clientes decididos no período (aprovou, recusou ou perdida), quantos aprovaram.
+    const decided = groups.filter(group => {
+        const kind = closedKind(group.primary);
+        return kind !== null && now - time(decisionAt(group.primary, kind)) <= decidedDays * DAY;
+    });
+    const won = decided.filter(group => closedKind(group.primary) === 'approved').length;
+
+    return {
+        openValue: open.reduce((sum, item) => sum + portalTotal(item.portal), 0),
+        openCount: open.length,
+        approvedValue,
+        approvedCount,
+        decidedCount: decided.length,
+        wonCount: won,
+        closeRate: decided.length > 0 ? won / decided.length : null,
+    };
 };
 
 export const lastClientMessage = (portal: CompanyProposalPortal) =>

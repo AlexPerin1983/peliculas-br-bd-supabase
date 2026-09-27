@@ -45,6 +45,7 @@ import AIQuickFab from './components/AIQuickFab';
 import OnboardingTour from './components/onboarding/OnboardingTour';
 import { seedExampleDataIfNeeded } from './services/seedData';
 import { createPastedMeasurementsFromClipboard } from './src/lib/measurementClipboard';
+import { consumeBackButton } from './src/lib/backButton';
 import { createGeminiModel, GLOBAL_GEMINI_UNAVAILABLE_EVENT } from './services/geminiGateway';
 import {
     getFriendlyMeasurementExtractionError,
@@ -1048,6 +1049,13 @@ const App: React.FC = () => {
     // Intercepta o botão voltar do navegador/Android
     useEffect(() => {
         const handleBackButton = (event: PopStateEvent) => {
+            // Telas abertas por cima (ex.: ficha do cliente em Propostas) fecham primeiro.
+            if (consumeBackButton()) {
+                event.preventDefault();
+                window.history.pushState(null, '', window.location.pathname);
+                return;
+            }
+
             // Se o teclado numérico estiver aberto, fecha ele primeiro
             if (numpadConfig.isOpen) {
                 event.preventDefault();

@@ -4,7 +4,6 @@ import {
     markProposalPortalLost,
     recordProposalFollowUp,
     reopenProposalPortal,
-    type CompanyProposalPortal,
 } from '../src/lib/proposalPortal';
 import {
     buildFollowUpQueue,
@@ -14,6 +13,8 @@ import {
     describeNextContact,
     FOLLOW_UP_FILTERS,
     lastClientMessage,
+    openedRecently,
+    portalTotal,
     STALE_AFTER_DAYS,
     summarizeLostProposals,
     type ClientProposalGroup,
@@ -22,6 +23,7 @@ import {
     type FollowUpTemplates,
 } from '../src/lib/proposalFollowUpQueue';
 import { buildProposalWhatsAppUrl } from '../src/lib/proposalMessages';
+import { OpenedNowBadge } from './ProposalDetailPanel';
 
 export type ProposalListTab = 'today' | 'waiting' | 'closed';
 
@@ -38,6 +40,8 @@ interface ProposalClientListProps {
     groups: ClientProposalGroup[];
     templates: FollowUpTemplates;
     loading?: boolean;
+    // Hora de referência (a Central atualiza a cada minuto para o "Abriu agora" sumir sozinho).
+    now?: number;
     view: ProposalListView;
     onViewChange: (next: Partial<ProposalListView>) => void;
     onOpen: (portalId: string) => void;
@@ -50,7 +54,6 @@ const SEARCH_MIN_CLIENTS = 7;
 
 const currency = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 export const normalizeSearch = (value: string) => value.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
-export const portalTotal = (portal: CompanyProposalPortal) => portal.proposals.reduce((sum, proposal) => sum + (proposal.conditionFinalValue ?? proposal.total), 0);
 
 export const stepDot: Record<FollowUpStep, string> = {
     reply: 'bg-blue-600',
@@ -80,9 +83,10 @@ const ClientRow: React.FC<{
     group: ClientProposalGroup;
     dot: string;
     subtitle: React.ReactNode;
+    badge?: React.ReactNode;
     onOpen: () => void;
     action?: React.ReactNode;
-}> = ({ group, dot, subtitle, onOpen, action }) => {
+}> = ({ group, dot, subtitle, badge, onOpen, action }) => {
     const { primary } = group;
     return (
         <article className="flex items-center gap-1 rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface)] pr-2">
@@ -90,7 +94,10 @@ const ClientRow: React.FC<{
                 <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${dot}`} aria-hidden="true" />
                 <span className="min-w-0 flex-1">
                     <span className="flex items-baseline gap-2">
-                        <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-[var(--text-strong)]">{primary.clientName}</span>
+                        <span className="flex min-w-0 flex-1 items-center gap-1.5">
+                            <span className="truncate text-[15px] font-semibold text-[var(--text-strong)]">{primary.clientName}</span>
+                            {badge}
+                        </span>
                         <span className="shrink-0 text-xs tabular-nums text-[var(--text-muted)]">{currency.format(portalTotal(primary))}</span>
                     </span>
                     <span className="mt-0.5 block truncate text-xs text-[var(--text-muted)]">{subtitle}</span>
@@ -106,7 +113,7 @@ const ClientRow: React.FC<{
 };
 
 /** Lista única de clientes com proposta enviada por link: o que fazer hoje, quem está aguardando e as encerradas. */
-const ProposalClientList: React.FC<ProposalClientListProps> = ({ groups, templates, loading = false, view, onViewChange, onOpen, onChanged }) => {
+const ProposalClientList: React.FC<ProposalClientListProps> = ({ groups, templates, loading = false, now = Date.now(), view, onViewChange, onOpen, onChanged }) => {
     const { tab, filter, query } = view;
     const [visible, setVisible] = useState(PAGE_SIZE);
     const [busyId, setBusyId] = useState<string | null>(null);
@@ -120,7 +127,7 @@ const ProposalClientList: React.FC<ProposalClientListProps> = ({ groups, templat
         return term ? groups.filter(group => normalizeSearch(group.primary.clientName).includes(term)) : groups;
     }, [groups, query]);
     const groupByPortal = useMemo(() => new Map(searched.map(group => [group.primary.id, group])), [searched]);
-    const { due, waiting, stale } = useMemo(() => buildFollowUpQueue(searched.map(group => group.primary), Date.now(), templates), [searched, templates]);
+    const { due, waiting, stale } = useMemo(() => buildFollowUpQueue(searched.map(group => group.primary), now, templates), [searched, now, templates]);
     const closed = useMemo(() => searched.filter(group => closedKind(group.primary)), [searched]);
     const lostSummary = useMemo(() => summarizeLostProposals(groups.map(group => group.primary)), [groups]);
 
@@ -220,7 +227,7 @@ const ProposalClientList: React.FC<ProposalClientListProps> = ({ groups, templat
                 <MessageCircle className="h-5 w-5" aria-hidden="true" />
             </a>
         ) : null;
-        return <ClientRow key={portal.id} group={group} dot={stepDot[item.step]} subtitle={subtitle} onOpen={() => onOpen(portal.id)} action={action} />;
+        return <ClientRow key={portal.id} group={group} dot={stepDot[item.step]} subtitle={subtitle} badge={openedRecently(portal, now) ? <OpenedNowBadge /> : null} onOpen={() => onOpen(portal.id)} action={action} />;
     };
 
     return (
@@ -278,7 +285,19 @@ const ProposalClientList: React.FC<ProposalClientListProps> = ({ groups, templat
             {error ? <p className="rounded-xl bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 dark:bg-red-950/30 dark:text-red-300">{error}</p> : null}
 
             {loading ? (
-                <p className="flex items-center gap-2 px-1 py-4 text-[var(--text-muted)]"><LoaderCircle className="h-4 w-4 animate-spin" /> Carregando…</p>
+                <div className="space-y-2" role="status">
+                    {[0, 1, 2, 3].map(index => (
+                        <div key={index} className="flex animate-pulse items-center gap-3 rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface)] px-4 py-3.5" aria-hidden="true">
+                            <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-slate-200 dark:bg-slate-700" />
+                            <span className="min-w-0 flex-1 space-y-2">
+                                <span className="block h-3.5 rounded bg-slate-200 dark:bg-slate-700" style={{ width: `${[46, 38, 52, 34][index]}%` }} />
+                                <span className="block h-3 rounded bg-slate-100 dark:bg-slate-800" style={{ width: `${[64, 58, 70, 50][index]}%` }} />
+                            </span>
+                            <span className="h-3 w-14 shrink-0 rounded bg-slate-100 dark:bg-slate-800" />
+                        </div>
+                    ))}
+                    <span className="sr-only">Carregando…</span>
+                </div>
             ) : tab === 'closed' ? (
                 closedItems.length === 0 ? empty(term ? notFound : 'Nenhuma proposta encerrada.') : (
                     <div className="space-y-2">
