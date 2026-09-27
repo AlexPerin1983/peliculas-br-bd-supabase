@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import {
+    AlarmClock,
     AlertTriangle,
     ArrowLeft,
+    BadgePercent,
     CalendarClock,
     Check,
     CheckCircle2,
@@ -30,6 +32,7 @@ import {
     recordProposalFollowUp,
     reopenProposalPortal,
     sendCompanyProposalMessage,
+    snoozeProposalFollowUp,
     type CompanyProposalPortal,
     type ProposalPortalMessage,
 } from '../src/lib/proposalPortal';
@@ -43,6 +46,8 @@ import {
     LOST_REASONS,
     openedRecently,
     portalTotal,
+    snoozeDate,
+    SNOOZE_PRESETS,
     type ClientProposalGroup,
     type FollowUpItem,
     type FollowUpTemplates,
@@ -52,6 +57,7 @@ import { buildProposalReactivationMessages, formatConditionExpiry, getProposalCo
 import { buildProposalWhatsAppUrl } from '../src/lib/proposalMessages';
 import { registerBackHandler } from '../src/lib/backButton';
 import ProposalConditionModal from './modals/ProposalConditionModal';
+import ProposalOfferSheet from './ProposalOfferSheet';
 
 type CompanyProposal = CompanyProposalPortal['proposals'][number];
 
@@ -158,9 +164,15 @@ const NextStepCard: React.FC<{
     onContact: (channel: 'whatsapp' | 'call') => void;
     onLost: (reason: string, note: string) => void;
     onReply: () => void;
-}> = ({ item, templates, busy, onContact, onLost, onReply }) => {
+    onSnooze: (remindAt: Date, note: string) => void;
+    onOffer?: () => void;
+}> = ({ item, templates, busy, onContact, onLost, onReply, onSnooze, onOffer }) => {
     const { portal } = item;
     const [losing, setLosing] = useState(false);
+    const [snoozing, setSnoozing] = useState(false);
+    const [snoozePick, setSnoozePick] = useState<string>('tomorrow');
+    const [snoozeCustom, setSnoozeCustom] = useState('');
+    const [snoozeNote, setSnoozeNote] = useState('');
     const [reason, setReason] = useState('');
     const [note, setNote] = useState('');
     const [copied, setCopied] = useState(false);
@@ -183,6 +195,10 @@ const NextStepCard: React.FC<{
 
     const whatsappUrl = text ? buildProposalWhatsAppUrl(portal.clientPhone || undefined, text) : null;
     const hasMessage = item.step !== 'reply' && item.step !== 'close';
+    const snoozeTarget = snoozePick === 'custom'
+        ? (snoozeCustom ? snoozeDate(snoozeCustom) : null)
+        : snoozeDate(snoozePick);
+    const snoozeValid = snoozeTarget != null && snoozeTarget.getTime() > Date.now();
     const titleTone = item.step === 'reply' ? 'text-blue-700 dark:text-blue-300'
         : item.step === 'expiring' || item.step === 'expired' ? 'text-amber-700 dark:text-amber-300'
             : 'text-[var(--text-strong)]';
@@ -192,9 +208,11 @@ const NextStepCard: React.FC<{
             <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">Próximo passo</p>
             <p className={`mt-1 text-[15px] font-semibold ${titleTone}`}>{item.title}</p>
             <p className="mt-0.5 text-[13px] leading-5 text-[var(--text-body)]">{item.hint}</p>
-            {!item.due ? <p className="mt-1 text-xs font-medium text-[var(--text-muted)]">Próximo contato: {describeNextContact(item.dueAt)}</p> : null}
+            {item.snoozedUntil ? (
+                <p className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-[var(--text-muted)]"><AlarmClock className="h-3.5 w-3.5" aria-hidden="true" /> Lembrete: {describeNextContact(item.snoozedUntil)}</p>
+            ) : !item.due ? <p className="mt-1 text-xs font-medium text-[var(--text-muted)]">Próximo contato: {describeNextContact(item.dueAt)}</p> : null}
 
-            {hasMessage && !losing ? (
+            {hasMessage && !losing && !snoozing ? (
                 <div className="mt-3 rounded-xl bg-[var(--surface-muted)] p-3">
                     <div className="flex items-center justify-between gap-2 text-[11px] font-semibold">
                         <label className="flex min-w-0 items-center gap-1.5 font-medium text-[var(--text-muted)]">
@@ -217,7 +235,7 @@ const NextStepCard: React.FC<{
                             style={{ fontSize: 16 }}
                             className="mt-2 w-full resize-y rounded-lg border border-[var(--border-subtle)] bg-[var(--surface)] p-2.5 leading-6 text-[var(--text-body)] focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
                     ) : (
-                        <p className="mt-1.5 whitespace-pre-line text-[13px] leading-5 text-[var(--text-body)]">{text}</p>
+                        <p className="mt-1.5 whitespace-pre-line text-[13px] leading-5 text-[var(--text-body)] [overflow-wrap:anywhere]">{text}</p>
                     )}
                 </div>
             ) : null}
@@ -238,6 +256,29 @@ const NextStepCard: React.FC<{
                     <div className="mt-2 flex gap-2 text-xs font-semibold">
                         <button type="button" onClick={() => { setLosing(false); setReason(''); setNote(''); }} className="h-9 flex-1 rounded-lg border border-[var(--border-subtle)] text-[var(--text-body)]">Cancelar</button>
                         <button type="button" disabled={!reason || busy} onClick={() => onLost(reason, note)} className="h-9 flex-1 rounded-lg bg-red-600 text-white disabled:opacity-50">Marcar como perdida</button>
+                    </div>
+                </div>
+            ) : snoozing ? (
+                <div className="mt-3 rounded-xl bg-[var(--surface-muted)] p-3">
+                    <p className="text-xs font-semibold text-[var(--text-strong)]">Lembrar quando?</p>
+                    <div className="mt-2 flex flex-wrap gap-1.5 text-xs font-medium" role="group" aria-label="Quando lembrar">
+                        {[...SNOOZE_PRESETS, { id: 'custom', label: 'Outra data' }].map(option => (
+                            <button key={option.id} type="button" aria-pressed={snoozePick === option.id} onClick={() => setSnoozePick(option.id)}
+                                className={`rounded-full border px-2.5 py-1 transition-colors ${snoozePick === option.id ? 'border-blue-600 bg-blue-600 text-white' : 'border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-body)]'}`}>
+                                {option.label}
+                            </button>
+                        ))}
+                    </div>
+                    {snoozePick === 'custom' ? (
+                        <input type="date" value={snoozeCustom} onChange={event => setSnoozeCustom(event.target.value)} aria-label="Data do lembrete" style={{ fontSize: 16 }} className="ui-field mt-2 h-10 w-full px-3" />
+                    ) : null}
+                    <input value={snoozeNote} onChange={event => setSnoozeNote(event.target.value)} placeholder="Anotação (opcional): pediu para chamar depois do dia 10" aria-label="Anotação do lembrete"
+                        style={{ fontSize: 16 }} className="ui-field mt-2 h-10 w-full px-3" />
+                    {snoozeValid && snoozeTarget ? <p className="mt-2 text-xs text-[var(--text-muted)]">Volta para "Hoje" {describeNextContact(snoozeTarget.getTime())}, às 9h.</p> : null}
+                    <div className="mt-2 flex gap-2 text-xs font-semibold">
+                        <button type="button" onClick={() => { setSnoozing(false); setSnoozeNote(''); }} className="h-9 flex-1 rounded-lg border border-[var(--border-subtle)] text-[var(--text-body)]">Cancelar</button>
+                        <button type="button" disabled={!snoozeValid || busy} onClick={() => { if (snoozeValid && snoozeTarget) { onSnooze(snoozeTarget, snoozeNote); setSnoozing(false); setSnoozeNote(''); } }}
+                            className="h-9 flex-1 rounded-lg bg-blue-600 text-white disabled:opacity-50">Salvar lembrete</button>
                     </div>
                 </div>
             ) : (
@@ -263,6 +304,16 @@ const NextStepCard: React.FC<{
                             <PhoneCall className="h-4 w-4" aria-hidden="true" /> Já falei
                         </button>
                     ) : null}
+                    {onOffer ? (
+                        <button type="button" onClick={onOffer} title="Dar um desconto com prazo: o cliente vê a contagem regressiva no link"
+                            className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-[var(--border-subtle)] px-3 font-medium text-[var(--text-body)]">
+                            <BadgePercent className="h-4 w-4" aria-hidden="true" /> Oferecer condição
+                        </button>
+                    ) : null}
+                    <button type="button" onClick={() => setSnoozing(true)} title="O cliente pediu para chamar em outra data"
+                        className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-[var(--border-subtle)] px-3 font-medium text-[var(--text-body)]">
+                        <AlarmClock className="h-4 w-4" aria-hidden="true" /> Lembrar depois
+                    </button>
                     <button type="button" onClick={() => setLosing(true)} className={`inline-flex h-10 items-center gap-1.5 rounded-xl px-3 font-medium ${item.step === 'close' ? 'bg-red-600 text-white' : 'text-red-600'}`}>
                         <ThumbsDown className="h-4 w-4" aria-hidden="true" /> Perdida
                     </button>
@@ -282,6 +333,7 @@ const ProposalDetailPanel: React.FC<ProposalDetailPanelProps> = ({ group, initia
     const [showHistory, setShowHistory] = useState(false);
     const [conditionModal, setConditionModal] = useState<{ proposal: CompanyProposal; mode: 'extend' | 'edit' } | null>(null);
     const [reactivationProposal, setReactivationProposal] = useState<CompanyProposal | null>(null);
+    const [offerOpen, setOfferOpen] = useState(false);
     const replyRef = useRef<HTMLTextAreaElement>(null);
     const threadEndRef = useRef<HTMLDivElement>(null);
 
@@ -308,18 +360,19 @@ const ProposalDetailPanel: React.FC<ProposalDetailPanelProps> = ({ group, initia
 
     // Voltar do celular: fecha primeiro o que estiver por cima e depois a ficha.
     useEffect(() => registerBackHandler(() => {
-        if (conditionModal) setConditionModal(null);
+        if (offerOpen) setOfferOpen(false);
+        else if (conditionModal) setConditionModal(null);
         else if (reactivationProposal) setReactivationProposal(null);
         else onClose();
-    }), [conditionModal, reactivationProposal, onClose]);
+    }), [offerOpen, conditionModal, reactivationProposal, onClose]);
 
     useEffect(() => {
         const handleKey = (event: KeyboardEvent) => {
-            if (event.key === 'Escape' && !conditionModal && !reactivationProposal) onClose();
+            if (event.key === 'Escape' && !conditionModal && !reactivationProposal && !offerOpen) onClose();
         };
         window.addEventListener('keydown', handleKey);
         return () => window.removeEventListener('keydown', handleKey);
-    }, [conditionModal, reactivationProposal, onClose]);
+    }, [conditionModal, reactivationProposal, offerOpen, onClose]);
 
     const run = async (action: () => Promise<void>) => {
         setBusy(true);
@@ -434,6 +487,8 @@ const ProposalDetailPanel: React.FC<ProposalDetailPanelProps> = ({ group, initia
                             onContact={channel => void run(() => recordProposalFollowUp(portal.id, item.step, channel))}
                             onLost={(reason, note) => void run(() => markProposalPortalLost(portal.id, reason, note))}
                             onReply={focusReply}
+                            onSnooze={(remindAt, note) => void run(() => snoozeProposalFollowUp(portal.id, item.step, remindAt, note))}
+                            onOffer={() => setOfferOpen(true)}
                         />
                     ) : null}
 
@@ -478,7 +533,7 @@ const ProposalDetailPanel: React.FC<ProposalDetailPanelProps> = ({ group, initia
                                                     <p>{message.payment_selection.installments > 1 ? `${message.payment_selection.installments}x de ${currency.format(message.payment_selection.installmentValue)}${message.payment_selection.lastInstallmentValue != null ? ` (última ${currency.format(message.payment_selection.lastInstallmentValue)})` : ''} · total ${currency.format(message.payment_selection.customerTotal)}` : currency.format(message.payment_selection.customerTotal)}</p>
                                                 </div>
                                             ) : null}
-                                            {message.body ? <p className="whitespace-pre-line">{message.body}</p> : null}
+                                            {message.body ? <p className="whitespace-pre-line [overflow-wrap:anywhere]">{message.body}</p> : null}
                                             <p className="mt-1 text-[10px] opacity-60">{dateTime(message.created_at)}</p>
                                         </div>
                                     </div>
@@ -549,6 +604,7 @@ const ProposalDetailPanel: React.FC<ProposalDetailPanelProps> = ({ group, initia
 
             {conditionModal ? <ProposalConditionModal isOpen mode={conditionModal.mode} portal={portal} proposal={conditionModal.proposal} onClose={() => setConditionModal(null)} onSaved={onChanged} /> : null}
             {reactivationProposal ? <ReactivationMessagesModal portal={portal} proposal={reactivationProposal} onChoose={chooseReadyMessage} onClose={() => setReactivationProposal(null)} /> : null}
+            {offerOpen ? <ProposalOfferSheet isOpen portal={portal} step={item?.step ?? 'hot'} onClose={() => setOfferOpen(false)} onApplied={onChanged} /> : null}
         </div>,
         document.body,
     );
