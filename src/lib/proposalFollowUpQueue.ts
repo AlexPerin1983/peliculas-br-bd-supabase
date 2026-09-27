@@ -92,6 +92,8 @@ export interface FollowUpItem {
     // Quando vale a pena agir (antes disso a proposta fica em "Aguardando").
     dueAt: number;
     due: boolean;
+    // "Lembrar depois" ativo: a data escolhida para voltar a "Hoje".
+    snoozedUntil?: number;
 }
 
 const DAY = 86_400_000;
@@ -149,16 +151,87 @@ export const buildFollowUpMessage = (
     return fillFollowUpMessage(template, followUpTagValues(portal, now));
 };
 
+// ---- "Lembrar depois" e condição especial com prazo ----
+
+export type SnoozePreset = 'tomorrow' | '3d' | 'week';
+export const SNOOZE_PRESETS: Array<{ id: SnoozePreset; label: string }> = [
+    { id: 'tomorrow', label: 'Amanhã' },
+    { id: '3d', label: 'Em 3 dias' },
+    { id: 'week', label: 'Semana que vem' },
+];
+
+const atHour = (date: Date, hour: number, minute = 0) => {
+    const copy = new Date(date);
+    copy.setHours(hour, minute, 0, 0);
+    return copy;
+};
+
+// Lembrete de manhã (9h): é quando a lista de "Hoje" é vista.
+export const snoozeDate = (preset: SnoozePreset | string, now = Date.now()) => {
+    const base = new Date(now);
+    if (preset === 'tomorrow') base.setDate(base.getDate() + 1);
+    else if (preset === '3d') base.setDate(base.getDate() + 3);
+    else if (preset === 'week') base.setDate(base.getDate() + (((8 - base.getDay()) % 7) || 7)); // próxima segunda
+    else return atHour(new Date(`${preset}T00:00:00`), 9);
+    return atHour(base, 9);
+};
+
+export type OfferDeadlinePreset = '24h' | '48h' | '3d' | '7d';
+export const OFFER_DEADLINE_PRESETS: Array<{ id: OfferDeadlinePreset; label: string }> = [
+    { id: '24h', label: '24 horas' },
+    { id: '48h', label: '48 horas' },
+    { id: '3d', label: '3 dias' },
+    { id: '7d', label: '7 dias' },
+];
+
+// Em dias, a condição vale até o fim do dia (23h59): "vale até sexta".
+export const offerDeadline = (preset: OfferDeadlinePreset | string, now = Date.now()) => {
+    if (preset === '24h') return new Date(now + DAY);
+    if (preset === '48h') return new Date(now + 2 * DAY);
+    const base = new Date(now);
+    if (preset === '3d') base.setDate(base.getDate() + 3);
+    else if (preset === '7d') base.setDate(base.getDate() + 7);
+    else return atHour(new Date(`${preset}T00:00:00`), 23, 59);
+    return atHour(base, 23, 59);
+};
+
+export const formatDeadline = (deadline: Date) =>
+    `${deadline.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit' })} às ${deadline.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+
+export const buildOfferMessage = (portal: CompanyProposalPortal, params: { from: number; to: number; discountLabel: string; deadline: Date }) => {
+    const brl = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const name = portal.clientName.trim().split(/\s+/)[0] || '';
+    return `Oi, ${name}! Consegui uma condição especial para você: de ${brl(params.from)} por ${brl(params.to)} (${params.discountLabel} de desconto). Vale até ${formatDeadline(params.deadline)}. Confira aqui: ${buildProposalPortalUrl(portal.token, portal.clientName)}`;
+};
+
+// Lembrete vale enquanto for a última ação (contato ou lembrete) e o cliente não tiver escrito depois dele.
+export const activeSnoozeUntil = (portal: CompanyProposalPortal, now = Date.now()): number | undefined => {
+    const lastAction = (portal.followUps || [])
+        .filter(event => event.kind === 'contact' || event.kind === 'snooze')
+        .sort((a, b) => time(b.created_at) - time(a.created_at))[0];
+    if (lastAction?.kind !== 'snooze' || !lastAction.remind_at) return undefined;
+    const remindAt = time(lastAction.remind_at);
+    if (remindAt <= now) return undefined;
+    const clientWroteAfter = portal.messages.some(message => message.sender_type === 'client' && time(message.created_at) > time(lastAction.created_at));
+    return clientWroteAfter ? undefined : remindAt;
+};
+
 /** Próximo passo do link (com a data em que vale agir), ou null quando não há mais o que fazer. */
 export const getFollowUpItem = (portal: CompanyProposalPortal, now = Date.now(), templates: FollowUpTemplates = {}): FollowUpItem | null => {
     if (['approved', 'rejected', 'revoked'].includes(portal.status) || portal.lostAt) return null;
 
-    const make = (step: FollowUpStep, priority: number, title: string, hint: string, dueAt: number): FollowUpItem => ({
-        portal, step, priority, title, hint, dueAt, due: dueAt <= now,
-        message: buildFollowUpMessage(step, portal, now, templates),
-    });
-
     const lastMessage = portal.messages[portal.messages.length - 1];
+    const snoozedUntil = activeSnoozeUntil(portal, now);
+
+    const make = (step: FollowUpStep, priority: number, title: string, hint: string, computedDueAt: number): FollowUpItem => {
+        // O lembrete manda: a proposta só volta para "Hoje" na data escolhida.
+        const dueAt = snoozedUntil ? Math.max(computedDueAt, snoozedUntil) : computedDueAt;
+        return {
+            portal, step, priority, title, hint, dueAt, due: dueAt <= now, snoozedUntil,
+            message: buildFollowUpMessage(step, portal, now, templates),
+        };
+    };
+
     if (lastMessage?.sender_type === 'client' && ['message', 'negotiation'].includes(lastMessage.kind)) {
         return make('reply', 0,
             lastMessage.kind === 'negotiation' ? 'Mandou uma contraproposta' : 'Respondeu e aguarda você',
@@ -362,6 +435,11 @@ export const buildFollowUpTimeline = (portal: CompanyProposalPortal, now = Date.
             entries.push({ at: event.created_at, label: `${event.channel === 'call' ? 'Você ligou' : event.channel === 'whatsapp' ? 'Você mandou mensagem' : 'Você falou com o cliente'} (${followUpStepLabel(event.step)})`, tone: 'neutral' });
         } else if (event.kind === 'lost') {
             entries.push({ at: event.created_at, label: `Marcada como perdida: ${lostReasonLabel(event.reason)}`, tone: 'bad' });
+        } else if (event.kind === 'snooze') {
+            const when = event.remind_at ? new Date(event.remind_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '';
+            entries.push({ at: event.created_at, label: `Lembrete para ${when}${event.note ? `: ${event.note}` : ''}`, tone: 'neutral' });
+        } else if (event.kind === 'offer') {
+            entries.push({ at: event.created_at, label: `Condição especial oferecida${event.note ? `: ${event.note}` : ''}`, tone: 'good' });
         } else {
             entries.push({ at: event.created_at, label: 'Reaberta', tone: 'neutral' });
         }

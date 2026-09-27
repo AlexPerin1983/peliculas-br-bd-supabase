@@ -213,7 +213,7 @@ const ProposalClientList: React.FC<ProposalClientListProps> = ({ groups, templat
             ? <span className="text-blue-700 dark:text-blue-300">“{clientMessage.body}”</span>
             : <>
                 <span className={item.step === 'reply' ? 'text-blue-700 dark:text-blue-300' : item.step === 'expiring' || item.step === 'expired' ? 'text-amber-700 dark:text-amber-300' : ''}>{item.title}</span>
-                {!item.due ? <> · <span>Próximo contato: {describeNextContact(item.dueAt)}</span></> : null}
+                {item.snoozedUntil ? <> · <span>Lembrete: {describeNextContact(item.snoozedUntil)}</span></> : !item.due ? <> · <span>Próximo contato: {describeNextContact(item.dueAt)}</span></> : null}
             </>;
         const action = item.step === 'reply' ? (
             <button type="button" onClick={() => onOpen(portal.id)} aria-label={`Responder ${portal.clientName}`}

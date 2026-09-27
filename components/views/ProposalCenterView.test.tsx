@@ -9,8 +9,11 @@ import {
     recordProposalFollowUp,
     reopenProposalPortal,
     sendCompanyProposalMessage,
+    setProposalOfferDeadline,
+    snoozeProposalFollowUp,
 } from '../../src/lib/proposalPortal';
-import { deleteProposalMessageTemplate, getFollowUpMessageTemplates, saveFollowUpMessageTemplate } from '../../services/supabaseDb';
+import { deleteProposalMessageTemplate, getClientById, getFollowUpMessageTemplates, getSavedPdfById, saveFollowUpMessageTemplate } from '../../services/supabaseDb';
+import { applyProposalFollowUp } from '../../services/proposalFollowUp';
 import { consumeBackButton } from '../../src/lib/backButton';
 import ProposalCenterView from './ProposalCenterView';
 
@@ -29,12 +32,18 @@ vi.mock('../../src/lib/proposalPortal', async importOriginal => ({
     reopenProposalPortal: vi.fn(),
     markCompanyProposalPortalRead: vi.fn(),
     sendCompanyProposalMessage: vi.fn(),
+    snoozeProposalFollowUp: vi.fn(),
+    setProposalOfferDeadline: vi.fn(),
 }));
+
+vi.mock('../../services/proposalFollowUp', () => ({ applyProposalFollowUp: vi.fn() }));
 
 vi.mock('../../services/supabaseDb', () => ({
     getFollowUpMessageTemplates: vi.fn(),
     saveFollowUpMessageTemplate: vi.fn(),
     deleteProposalMessageTemplate: vi.fn(),
+    getSavedPdfById: vi.fn(),
+    getClientById: vi.fn(),
 }));
 
 vi.mock('./AgendaPushReminderControl', () => ({ default: () => null }));
@@ -91,6 +100,8 @@ describe('Central de propostas', () => {
         vi.mocked(reopenProposalPortal).mockReset().mockResolvedValue(undefined);
         vi.mocked(markCompanyProposalPortalRead).mockReset().mockResolvedValue(undefined);
         vi.mocked(sendCompanyProposalMessage).mockReset().mockResolvedValue(undefined);
+        vi.mocked(snoozeProposalFollowUp).mockReset().mockResolvedValue(undefined);
+        vi.mocked(setProposalOfferDeadline).mockReset().mockResolvedValue(undefined);
         vi.mocked(getFollowUpMessageTemplates).mockReset().mockResolvedValue([]);
         vi.mocked(saveFollowUpMessageTemplate).mockReset();
         vi.mocked(deleteProposalMessageTemplate).mockReset().mockResolvedValue(undefined);
@@ -154,6 +165,46 @@ describe('Central de propostas', () => {
         fireEvent.change(within(sheet).getByLabelText('Responder no link da proposta'), { target: { value: 'Faço 5% à vista.' } });
         fireEvent.click(within(sheet).getByRole('button', { name: 'Enviar resposta' }));
         await waitFor(() => expect(sendCompanyProposalMessage).toHaveBeenCalledWith('p1', 'Faço 5% à vista.'));
+    });
+
+    it('ficha: lembrar depois guarda a data escolhida (às 9h) e a anotação', async () => {
+        await setup([portal()]);
+        const sheet = openClient('Carlos Lima');
+
+        fireEvent.click(within(sheet).getByRole('button', { name: /Lembrar depois/ }));
+        fireEvent.click(within(within(sheet).getByRole('group', { name: 'Quando lembrar' })).getByRole('button', { name: 'Em 3 dias' }));
+        fireEvent.change(within(sheet).getByLabelText('Anotação do lembrete'), { target: { value: 'depois do dia 10' } });
+        fireEvent.click(within(sheet).getByRole('button', { name: 'Salvar lembrete' }));
+
+        await waitFor(() => expect(snoozeProposalFollowUp).toHaveBeenCalledWith('p1', 'hot', expect.any(Date), 'depois do dia 10'));
+        const remindAt = vi.mocked(snoozeProposalFollowUp).mock.calls[0][2] as Date;
+        expect(remindAt.getHours()).toBe(9);
+        expect(Math.round((remindAt.getTime() - Date.now()) / 86_400_000)).toBeGreaterThanOrEqual(2);
+    });
+
+    it('ficha: oferece condição especial com prazo e manda no WhatsApp', async () => {
+        vi.mocked(getSavedPdfById).mockResolvedValue({ id: 10, clienteId: 1, date: ago(4), totalPreco: 1000, totalM2: 5, nomeArquivo: 'p.pdf' });
+        vi.mocked(getClientById).mockResolvedValue({ id: 1, nome: 'Carlos Lima', telefone: '(85) 99999-1234', email: '', cpfCnpj: '' });
+        vi.mocked(applyProposalFollowUp).mockReset().mockResolvedValue({} as never);
+        await setup([portal()]);
+        const sheet = openClient('Carlos Lima');
+
+        fireEvent.click(within(sheet).getByRole('button', { name: /Oferecer condição/ }));
+        const dialog = await screen.findByRole('dialog', { name: 'Condição especial' });
+        await waitFor(() => expect(within(dialog).getByText((content) => content.replace(/\s/g, ' ') === 'R$ 900,00')).toBeInTheDocument());
+        fireEvent.click(within(within(dialog).getByRole('group', { name: 'Prazo da condição' })).getByRole('button', { name: '3 dias' }));
+        fireEvent.click(within(dialog).getByRole('button', { name: /Aplicar condição/ }));
+
+        await waitFor(() => expect(applyProposalFollowUp).toHaveBeenCalledWith(expect.objectContaining({ id: 10 }), expect.objectContaining({ id: 1 }), '10', 'percentage'));
+        expect(setProposalOfferDeadline).toHaveBeenCalledWith('p1', expect.any(Date), expect.stringContaining('10%'));
+        const deadline = vi.mocked(setProposalOfferDeadline).mock.calls[0][1] as Date;
+        expect([deadline.getHours(), deadline.getMinutes()]).toEqual([23, 59]);
+
+        const link = await within(dialog).findByRole('link', { name: /Enviar no WhatsApp/ });
+        expect(hrefText(link)).toContain('(10% de desconto)');
+        expect(hrefText(link)).toContain('/p/carlos/tok123');
+        fireEvent.click(link);
+        await waitFor(() => expect(recordProposalFollowUp).toHaveBeenCalledWith('p1', 'hot', 'whatsapp'));
     });
 
     it('ficha: histórico da proposta', async () => {
