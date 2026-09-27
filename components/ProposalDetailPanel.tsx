@@ -41,6 +41,8 @@ import {
     FOLLOW_UP_TEMPLATE_STEPS,
     getFollowUpItem,
     LOST_REASONS,
+    openedRecently,
+    portalTotal,
     type ClientProposalGroup,
     type FollowUpItem,
     type FollowUpTemplates,
@@ -48,8 +50,8 @@ import {
 } from '../src/lib/proposalFollowUpQueue';
 import { buildProposalReactivationMessages, formatConditionExpiry, getProposalCondition } from '../src/lib/proposalCondition';
 import { buildProposalWhatsAppUrl } from '../src/lib/proposalMessages';
+import { registerBackHandler } from '../src/lib/backButton';
 import ProposalConditionModal from './modals/ProposalConditionModal';
-import { portalTotal } from './ProposalClientList';
 
 type CompanyProposal = CompanyProposalPortal['proposals'][number];
 
@@ -58,6 +60,7 @@ interface ProposalDetailPanelProps {
     // Link aberto primeiro (ex.: notificação de um link anterior); padrão: o principal.
     initialPortalId?: string | null;
     templates: FollowUpTemplates;
+    now?: number;
     onClose: () => void;
     onChanged: () => Promise<void> | void;
 }
@@ -93,6 +96,16 @@ const copyText = async (value: string) => {
     document.execCommand('copy');
     area.remove();
 };
+
+export const OpenedNowBadge: React.FC = () => (
+    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300" title="O cliente abriu o link nos últimos minutos">
+        <span className="relative flex h-1.5 w-1.5" aria-hidden="true">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-75" />
+            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+        </span>
+        Abriu agora
+    </span>
+);
 
 const isTemplateStep = (step: string): step is FollowUpTemplateStep => FOLLOW_UP_TEMPLATE_STEPS.some(item => item.step === step);
 
@@ -260,7 +273,7 @@ const NextStepCard: React.FC<{
 };
 
 /** Ficha do cliente: próximo passo, condições, conversa no link, histórico e links anteriores. */
-const ProposalDetailPanel: React.FC<ProposalDetailPanelProps> = ({ group, initialPortalId, templates, onClose, onChanged }) => {
+const ProposalDetailPanel: React.FC<ProposalDetailPanelProps> = ({ group, initialPortalId, templates, now = Date.now(), onClose, onChanged }) => {
     const [activeId, setActiveId] = useState(initialPortalId || group.primary.id);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
@@ -292,6 +305,13 @@ const ProposalDetailPanel: React.FC<ProposalDetailPanelProps> = ({ group, initia
         if (portal.unreadCount <= 0) return;
         markCompanyProposalPortalRead(portal.id).then(() => onChanged()).catch(err => console.error('[ProposalDetailPanel] Falha ao marcar como lida:', err));
     }, [portal.id, portal.unreadCount, onChanged]);
+
+    // Voltar do celular: fecha primeiro o que estiver por cima e depois a ficha.
+    useEffect(() => registerBackHandler(() => {
+        if (conditionModal) setConditionModal(null);
+        else if (reactivationProposal) setReactivationProposal(null);
+        else onClose();
+    }), [conditionModal, reactivationProposal, onClose]);
 
     useEffect(() => {
         const handleKey = (event: KeyboardEvent) => {
@@ -350,7 +370,10 @@ const ProposalDetailPanel: React.FC<ProposalDetailPanelProps> = ({ group, initia
                         <ArrowLeft className="h-5 w-5" aria-hidden="true" />
                     </button>
                     <div className="min-w-0 flex-1">
-                        <h2 className="truncate text-base font-semibold text-[var(--text-strong)]">{portal.clientName}</h2>
+                        <h2 className="flex min-w-0 items-center gap-2 text-base font-semibold text-[var(--text-strong)]">
+                            <span className="truncate">{portal.clientName}</span>
+                            {openedRecently(portal, now) ? <OpenedNowBadge /> : null}
+                        </h2>
                         <p className="truncate text-xs text-[var(--text-muted)]">{currency.format(portalTotal(portal))} · {closedInfo ? closedInfo.label : expired ? `Venceu em ${shortDate(portal.expiresAt)}` : `Vale até ${shortDate(portal.expiresAt)}`}</p>
                     </div>
                     <a href={buildProposalPortalUrl(portal.token, portal.clientName)} target="_blank" rel="noreferrer" className="flex h-9 shrink-0 items-center gap-1.5 rounded-xl border border-[var(--border-subtle)] px-3 text-xs text-[var(--text-body)]">

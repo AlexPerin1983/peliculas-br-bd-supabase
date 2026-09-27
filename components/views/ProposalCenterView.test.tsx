@@ -11,6 +11,7 @@ import {
     sendCompanyProposalMessage,
 } from '../../src/lib/proposalPortal';
 import { deleteProposalMessageTemplate, getFollowUpMessageTemplates, saveFollowUpMessageTemplate } from '../../services/supabaseDb';
+import { consumeBackButton } from '../../src/lib/backButton';
 import ProposalCenterView from './ProposalCenterView';
 
 vi.mock('../../services/supabaseClient', async importOriginal => {
@@ -270,6 +271,35 @@ describe('Central de propostas', () => {
 
         await waitFor(() => expect(saveFollowUpMessageTemplate).toHaveBeenCalledWith('hot', 'Abriu várias vezes', expect.stringContaining('{{link}}'), undefined));
         expect(deleteProposalMessageTemplate).toHaveBeenCalledWith(4);
+    });
+
+    it('resumo em reais no topo', async () => {
+        await setup([
+            portal(),
+            other('a', 'Bia Rocha', { status: 'approved', proposals: [{ id: 5, name: 'Opção 1', total: 2500 }], messages: [{ id: 9, sender_type: 'client', kind: 'approved', saved_pdf_id: 5, created_at: new Date().toISOString() }] }),
+        ]);
+        const summary = screen.getByRole('region', { name: 'Resumo das propostas' });
+        expect(within(summary).getByText('R$ 365')).toBeInTheDocument();
+        expect(within(summary).getByText('1 cliente')).toBeInTheDocument();
+        expect(within(summary).getByText('R$ 2,5 mil')).toBeInTheDocument();
+        expect(within(summary).getByText('1 proposta')).toBeInTheDocument();
+        expect(within(summary).getByText('100%')).toBeInTheDocument();
+        expect(within(summary).getByText('1 de 1 · 90 dias')).toBeInTheDocument();
+    });
+
+    it('"Abriu agora" quando o cliente acabou de abrir o link', async () => {
+        await setup([portal({ lastViewedAt: new Date(Date.now() - 2 * 60_000).toISOString() })]);
+        expect(screen.getByText('Abriu agora')).toBeInTheDocument();
+        const sheet = openClient('Carlos Lima');
+        expect(within(sheet).getByText('Abriu agora')).toBeInTheDocument();
+    });
+
+    it('botão voltar do celular fecha a ficha', async () => {
+        await setup([portal()]);
+        expect(consumeBackButton()).toBe(false);
+        openClient('Carlos Lima');
+        act(() => { expect(consumeBackButton()).toBe(true); });
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
 
     it('usa a mensagem salva pela empresa', async () => {

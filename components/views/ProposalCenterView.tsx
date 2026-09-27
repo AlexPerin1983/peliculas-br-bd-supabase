@@ -4,7 +4,7 @@ import ProposalClientList, { INITIAL_PROPOSAL_LIST_VIEW, type ProposalListView }
 import ProposalDetailPanel from '../ProposalDetailPanel';
 import FollowUpTemplatesModal from '../FollowUpTemplatesModal';
 import { loadCompanyProposalPortals, type CompanyProposalPortal } from '../../src/lib/proposalPortal';
-import { buildFollowUpQueue, closedKind, groupPortalsByClient, type FollowUpTemplates } from '../../src/lib/proposalFollowUpQueue';
+import { buildFollowUpQueue, groupPortalsByClient, summarizeProposalResults, type FollowUpTemplates } from '../../src/lib/proposalFollowUpQueue';
 import { getFollowUpMessageTemplates, type FollowUpMessageTemplateRow } from '../../services/supabaseDb';
 import { supabase } from '../../services/supabaseClient';
 import AgendaPushReminderControl from './AgendaPushReminderControl';
@@ -14,6 +14,9 @@ interface ProposalCenterViewProps {
 }
 
 const FALLBACK_REFRESH_INTERVAL_MS = 5 * 60_000;
+const CLOCK_TICK_MS = 60_000;
+const money = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', notation: 'compact', maximumFractionDigits: 1 });
+const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
 const PORTAL_PARAM = 'proposalPortal';
 
 const scrollToId = (id: string, block: ScrollLogicalPosition = 'start') =>
@@ -102,10 +105,18 @@ const ProposalCenterView: React.FC<ProposalCenterViewProps> = ({ onOpenHistory }
     const [openPortalId, setOpenPortalId] = useState<string | null>(readPortalParam);
     const [templatesOpen, setTemplatesOpen] = useState(false);
     const [savedTemplates, setSavedTemplates] = useState<FollowUpMessageTemplateRow[]>([]);
+    // Relógio da tela: o "Abriu agora" e o "próximo contato" mudam com o tempo, sem novos dados.
+    const [now, setNow] = useState(() => Date.now());
+
+    useEffect(() => {
+        const timer = window.setInterval(() => setNow(Date.now()), CLOCK_TICK_MS);
+        return () => window.clearInterval(timer);
+    }, []);
 
     const refresh = useCallback(async () => {
         try {
             setPortals(await loadCompanyProposalPortals());
+            setNow(Date.now());
             setError(null);
         } catch (nextError) {
             console.error('[ProposalCenterView] Falha ao carregar propostas:', nextError);
@@ -156,7 +167,7 @@ const ProposalCenterView: React.FC<ProposalCenterViewProps> = ({ onOpenHistory }
     );
     const groups = useMemo(() => groupPortalsByClient(portals), [portals]);
     const primaries = useMemo(() => groups.map(group => group.primary), [groups]);
-    const queue = useMemo(() => buildFollowUpQueue(primaries), [primaries]);
+    const queue = useMemo(() => buildFollowUpQueue(primaries, now), [primaries, now]);
     const openGroup = openPortalId
         ? groups.find(group => group.primary.id === openPortalId || group.others.some(link => link.id === openPortalId)) || null
         : null;
@@ -169,19 +180,28 @@ const ProposalCenterView: React.FC<ProposalCenterViewProps> = ({ onOpenHistory }
         }
     }, [loading, openPortalId, openGroup]);
 
-    const summary = useMemo(() => ({
-        clients: groups.length,
-        open: primaries.filter(portal => !closedKind(portal)).length,
-        unseen: primaries.filter(portal => portal.viewCount === 0 && portal.status === 'active' && !portal.lostAt).length,
-        approved: primaries.filter(portal => portal.status === 'approved').length,
-    }), [groups, primaries]);
+    const results = useMemo(() => summarizeProposalResults(portals, now), [portals, now]);
     const replyCount = queue.due.filter(item => item.step === 'reply').length;
 
     const stats = [
-        { label: 'Clientes', value: summary.clients },
-        { label: 'Em aberto', value: summary.open },
-        { label: 'Não abriram', value: summary.unseen },
-        { label: 'Aprovadas', value: summary.approved },
+        {
+            label: 'Em aberto',
+            value: money.format(results.openValue),
+            detail: plural(results.openCount, 'cliente', 'clientes'),
+            title: 'Soma das propostas em "Hoje" e "Aguardando"',
+        },
+        {
+            label: 'Aprovado no mês',
+            value: money.format(results.approvedValue),
+            detail: results.approvedCount > 0 ? plural(results.approvedCount, 'proposta', 'propostas') : 'nenhuma ainda',
+            title: 'Propostas aprovadas pelo link neste mês (valor da opção escolhida)',
+        },
+        {
+            label: 'Fechamento',
+            value: results.closeRate == null ? '—' : `${Math.round(results.closeRate * 100)}%`,
+            detail: results.decidedCount > 0 ? `${results.wonCount} de ${results.decidedCount} · 90 dias` : 'últimos 90 dias',
+            title: 'Dos clientes que decidiram nos últimos 90 dias (aprovou, recusou ou perdida), quantos aprovaram',
+        },
     ];
 
     const changeView = useCallback((next: Partial<ProposalListView>) => setView(current => ({ ...current, ...next })), []);
@@ -229,11 +249,16 @@ const ProposalCenterView: React.FC<ProposalCenterViewProps> = ({ onOpenHistory }
                 </div>
             </header>
 
-            <section className="grid grid-cols-4 divide-x divide-[var(--border-subtle)] rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface)]" aria-label="Resumo das propostas">
+            <section className="grid grid-cols-3 divide-x divide-[var(--border-subtle)] rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface)]" aria-label="Resumo das propostas">
                 {stats.map(stat => (
-                    <div key={stat.label} className="px-2 py-3 text-center">
-                        <p className="text-xl font-semibold tabular-nums text-[var(--text-strong)]">{loading ? '–' : stat.value}</p>
-                        <p className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">{stat.label}</p>
+                    <div key={stat.label} className="min-w-0 px-2 py-3 text-center" title={stat.title}>
+                        <p className="truncate text-[11px] text-[var(--text-muted)]">{stat.label}</p>
+                        {loading ? (
+                            <span className="mx-auto mt-1.5 block h-5 w-16 animate-pulse rounded bg-slate-200 dark:bg-slate-700" aria-hidden="true" />
+                        ) : (
+                            <p className="mt-0.5 truncate text-lg font-semibold tabular-nums tracking-[-0.01em] text-[var(--text-strong)]">{stat.value}</p>
+                        )}
+                        <p className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">{loading ? ' ' : stat.detail}</p>
                     </div>
                 ))}
             </section>
@@ -244,6 +269,7 @@ const ProposalCenterView: React.FC<ProposalCenterViewProps> = ({ onOpenHistory }
                 groups={groups}
                 templates={templates}
                 loading={loading}
+                now={now}
                 view={view}
                 onViewChange={changeView}
                 onOpen={setOpenPortalId}
@@ -261,6 +287,7 @@ const ProposalCenterView: React.FC<ProposalCenterViewProps> = ({ onOpenHistory }
                     group={openGroup}
                     initialPortalId={openPortalId}
                     templates={templates}
+                    now={now}
                     onClose={closeDetail}
                     onChanged={refresh}
                 />
