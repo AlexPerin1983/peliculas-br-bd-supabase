@@ -1,5 +1,26 @@
 import type { Agendamento, Client, SavedPDF } from '../../types';
 import type { CompanyProposalPortal } from './proposalPortal';
+import { buildReviewFollowUpMessage } from './reviewMessage';
+
+// ---- Pós-venda (pedido de avaliação e de indicação) ----
+
+export type ClientFollowUpKind = 'review_request' | 'referral_request';
+
+export interface ClientFollowUpEvent {
+    id: number;
+    kind: ClientFollowUpKind;
+    agendamentoId?: number | null;
+    channel?: string | null;
+    note?: string | null;
+    createdAt: string;
+}
+
+// Avaliação: até 30 dias depois do serviço. Indicação: 5 dias depois do pedido de
+// avaliação (ou 10 dias depois do serviço), até 4 meses.
+export const REVIEW_WINDOW_DAYS = 30;
+export const REFERRAL_AFTER_REVIEW_DAYS = 5;
+export const REFERRAL_AFTER_SERVICE_DAYS = 10;
+export const REFERRAL_WINDOW_DAYS = 120;
 
 // Visão 360 do cliente: estágio, números, próximo passo e linha do tempo,
 // a partir dos orçamentos, serviços (agenda) e links de proposta dele.
@@ -147,7 +168,9 @@ export type ClientNextStepAction =
     | { type: 'schedule'; pdf: SavedPDF }
     | { type: 'follow_up'; pdf: SavedPDF }
     | { type: 'whatsapp'; message: string }
-    | { type: 'new_proposal' };
+    | { type: 'new_proposal' }
+    | { type: 'review'; agendamento: Agendamento }
+    | { type: 'referral'; agendamento: Agendamento };
 
 export interface ClientNextStep {
     tone: 'blue' | 'green' | 'amber' | 'slate';
@@ -191,13 +214,26 @@ const portalForPdfs = (portals: CompanyProposalPortal[], pdfs: SavedPDF[]) => {
         .sort((a, b) => time(b.lastActivityAt) - time(a.lastActivityAt))[0] || null;
 };
 
+// Último serviço concluído e o que já foi pedido depois dele.
+export const getPostSaleState = (agendamentos: Agendamento[], postSale: ClientFollowUpEvent[] = [], now = Date.now()) => {
+    const lastDone = agendamentos.filter(isDoneService).sort((a, b) => time(b.end || b.start) - time(a.end || a.start))[0] || null;
+    if (!lastDone) return null;
+    const doneAt = time(lastDone.end || lastDone.start);
+    const after = (kind: ClientFollowUpKind) => postSale
+        .filter(event => event.kind === kind && time(event.createdAt) >= time(lastDone.start) - DAY)
+        .sort((a, b) => time(b.createdAt) - time(a.createdAt))[0] || null;
+    return { lastDone, doneAt, daysSince: (now - doneAt) / DAY, review: after('review_request'), referral: after('referral_request') };
+};
+
 export const getClientNextStep = (
     client: Client,
     summary: ClientSummary,
     agendamentos: Agendamento[],
     portals: CompanyProposalPortal[] = [],
     now = Date.now(),
+    postSale: ClientFollowUpEvent[] = [],
 ): ClientNextStep | null => {
+    const postSaleState = getPostSaleState(agendamentos, postSale, now);
     // 1) Respondeu no link: responder enquanto está quente.
     const replied = portals
         .filter(portal => !['approved', 'rejected', 'revoked'].includes(portal.status) && !portal.lostAt)
@@ -240,6 +276,17 @@ export const getClientNextStep = (
         };
     }
 
+    // Pós-venda 1) Serviço concluído há pouco: pedir a avaliação no Google.
+    if (postSaleState && !postSaleState.review && postSaleState.daysSince >= 0 && postSaleState.daysSince <= REVIEW_WINDOW_DAYS) {
+        return {
+            tone: 'green',
+            title: 'Serviço concluído: peça a avaliação',
+            detail: `Concluído ${relativeDays(postSaleState.doneAt, now)}. Avaliação no Google traz novos clientes.`,
+            cta: 'Pedir avaliação',
+            action: { type: 'review', agendamento: postSaleState.lastDone },
+        };
+    }
+
     // 4) Orçamento esperando resposta.
     const open = summary.openGroups[0];
     if (open) {
@@ -260,6 +307,22 @@ export const getClientNextStep = (
             cta: 'Mandar mensagem',
             action: { type: 'follow_up', pdf: open.latest },
         };
+    }
+
+    // Pós-venda 2) Cliente satisfeito: pedir uma indicação.
+    if (postSaleState && !postSaleState.referral && postSaleState.daysSince <= REFERRAL_WINDOW_DAYS) {
+        const ready = postSaleState.review
+            ? now - time(postSaleState.review.createdAt) >= REFERRAL_AFTER_REVIEW_DAYS * DAY
+            : postSaleState.daysSince >= REFERRAL_AFTER_SERVICE_DAYS;
+        if (ready) {
+            return {
+                tone: 'blue',
+                title: 'Peça uma indicação',
+                detail: 'Cliente satisfeito é a melhor propaganda: peça para indicar amigos, vizinhos e a empresa onde trabalha.',
+                cta: 'Pedir indicação',
+                action: { type: 'referral', agendamento: postSaleState.lastDone },
+            };
+        }
     }
 
     // 5) Cliente antigo: oferecer revisão ou outro ambiente.
@@ -290,6 +353,28 @@ export const getClientNextStep = (
     return null;
 };
 
+// ---- Mensagens do pós-venda ----
+
+// Mesma mensagem do pedido de avaliação da Agenda (com o link do Google e a dica de bairro/película).
+export const buildReviewRequestMessage = (
+    client: Client,
+    googleReviewsLink?: string,
+    source?: { clientName?: string; measurements?: SavedPDF['measurements'] },
+    companyName?: string,
+) => {
+    const withLink = buildReviewFollowUpMessage(source || { clientName: client.nome }, client, googleReviewsLink);
+    if (withLink) return withLink;
+    return `Olá, ${firstName(client.nome)}! Obrigado pela confiança no nosso trabalho. Se puder, deixe uma avaliação no Google${companyName ? ` (procure por ${companyName})` : ''}: isso ajuda muito novos clientes a nos conhecerem. Obrigado!`;
+};
+
+export const buildReferralMessage = (client: Client, companyPhone?: string) => [
+    `Oi, ${firstName(client.nome)}! Tudo certo com as películas?`,
+    '',
+    `Se conhecer alguém que também queira deixar a casa, o carro ou a empresa mais fresca e protegida do sol, pode me indicar? É só passar o meu contato${companyPhone?.trim() ? `: ${companyPhone.trim()}` : ''}.`,
+    '',
+    'Indicação de cliente é o que mais ajuda o nosso trabalho. Muito obrigado!',
+].join('\n');
+
 // ---- Linha do tempo ----
 
 export interface ClientTimelineEntry {
@@ -304,8 +389,12 @@ export const buildClientTimeline = (
     agendamentos: Agendamento[],
     portals: CompanyProposalPortal[] = [],
     now = Date.now(),
+    postSale: ClientFollowUpEvent[] = [],
 ): ClientTimelineEntry[] => {
     const entries: ClientTimelineEntry[] = [];
+    for (const event of postSale) {
+        entries.push({ at: time(event.createdAt), tone: 'good', title: event.kind === 'review_request' ? 'Pediu avaliação no Google' : 'Pediu indicação' });
+    }
     for (const pdf of pdfs) {
         entries.push({
             at: time(pdf.date),

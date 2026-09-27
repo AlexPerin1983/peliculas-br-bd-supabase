@@ -1,15 +1,21 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, CalendarPlus, MessageCircle, Phone, Plus, UserRound } from 'lucide-react';
 import { Agendamento, Client, SavedPDF, SchedulingInfo } from '../../types';
 import { loadCompanyProposalPortals, type CompanyProposalPortal } from '../../src/lib/proposalPortal';
 import {
     buildClientTimeline,
     buildClientWhatsAppUrl,
+    buildReferralMessage,
+    buildReviewRequestMessage,
     clientPhoneDigits,
     getClientNextStep,
+    getPostSaleState,
     summarizeClient,
+    type ClientFollowUpEvent,
+    type ClientFollowUpKind,
     type ClientNextStepAction,
 } from '../../src/lib/clientInsights';
+import { getClientFollowUps, recordClientFollowUp } from '../../services/supabaseDb';
 import ActionButton from '../ui/ActionButton';
 import ContentState from '../ui/ContentState';
 import ProposalMessagesModal from '../modals/ProposalMessagesModal';
@@ -20,6 +26,7 @@ import ClientServicesSection from '../client/ClientServicesSection';
 import ClientDetailsCard from '../client/ClientDetailsCard';
 import ClientNotesCard from '../client/ClientNotesCard';
 import ClientTimeline from '../client/ClientTimeline';
+import ClientPostSaleSheet from '../client/ClientPostSaleSheet';
 
 interface ClientHubViewProps {
     client: Client | null;
@@ -36,6 +43,10 @@ interface ClientHubViewProps {
     // Abre o Propostas (na ficha do link, quando informado).
     onOpenProposals?: (portalId?: string) => void;
     onTogglePin?: (clientId: number) => void;
+    // Pós-venda: link de avaliação do Google e contato da empresa (para a indicação).
+    googleReviewsLink?: string;
+    companyName?: string;
+    companyPhone?: string;
 }
 
 type Section = 'overview' | 'proposals' | 'services' | 'details';
@@ -73,11 +84,24 @@ const ClientHubView: React.FC<ClientHubViewProps> = ({
     onSchedule,
     onOpenProposals,
     onTogglePin,
+    googleReviewsLink,
+    companyName,
+    companyPhone,
 }) => {
     const [section, setSection] = useState<Section>('overview');
     const [portals, setPortals] = useState<CompanyProposalPortal[]>([]);
     const [messagePdf, setMessagePdf] = useState<SavedPDF | null>(null);
+    const [postSale, setPostSale] = useState<ClientFollowUpEvent[]>([]);
+    const [postSaleSheet, setPostSaleSheet] = useState<{ kind: ClientFollowUpKind; agendamento: Agendamento } | null>(null);
     const clientId = client?.id ?? null;
+
+    const loadPostSale = useCallback(() => {
+        if (clientId == null) return;
+        getClientFollowUps(clientId)
+            .then(setPostSale)
+            .catch(error => { console.warn('[ClientHubView] Pós-venda indisponível:', error); setPostSale([]); });
+    }, [clientId]);
+    useEffect(() => { setPostSale([]); loadPostSale(); }, [loadPostSale]);
 
     // Links de proposta do cliente (status de abertura, respostas). Sem eles a ficha continua completa.
     useEffect(() => {
@@ -105,10 +129,11 @@ const ClientHubView: React.FC<ClientHubViewProps> = ({
         [client, clientPdfs, clientAgendamentos, portals],
     );
     const nextStep = useMemo(
-        () => (client && summary ? getClientNextStep(client, summary, clientAgendamentos, portals) : null),
-        [client, summary, clientAgendamentos, portals],
+        () => (client && summary ? getClientNextStep(client, summary, clientAgendamentos, portals, Date.now(), postSale) : null),
+        [client, summary, clientAgendamentos, portals, postSale],
     );
-    const timeline = useMemo(() => buildClientTimeline(clientPdfs, clientAgendamentos, portals), [clientPdfs, clientAgendamentos, portals]);
+    const timeline = useMemo(() => buildClientTimeline(clientPdfs, clientAgendamentos, portals, Date.now(), postSale), [clientPdfs, clientAgendamentos, portals, postSale]);
+    const postSaleState = useMemo(() => getPostSaleState(clientAgendamentos, postSale), [clientAgendamentos, postSale]);
 
     if (!client || clientId == null || !summary) {
         return (
@@ -137,6 +162,24 @@ const ClientHubView: React.FC<ClientHubViewProps> = ({
         else if (action.type === 'schedule') onSchedule?.({ pdf: action.pdf });
         else if (action.type === 'follow_up') setMessagePdf(action.pdf);
         else if (action.type === 'new_proposal') onNewProposal();
+        else if (action.type === 'review') setPostSaleSheet({ kind: 'review_request', agendamento: action.agendamento });
+        else if (action.type === 'referral') setPostSaleSheet({ kind: 'referral_request', agendamento: action.agendamento });
+    };
+
+    const openPostSale = (kind: ClientFollowUpKind) => {
+        if (postSaleState) setPostSaleSheet({ kind, agendamento: postSaleState.lastDone });
+    };
+    const postSaleSource = postSaleSheet
+        ? clientPdfs.find(pdf => pdf.id != null && (pdf.id === postSaleSheet.agendamento.pdfId || postSaleSheet.agendamento.pdfIds?.includes(pdf.id)))
+        : undefined;
+    const postSaleMessage = postSaleSheet?.kind === 'review_request'
+        ? buildReviewRequestMessage(client, googleReviewsLink, postSaleSource ? { clientName: client.nome, measurements: postSaleSource.measurements } : undefined, companyName)
+        : buildReferralMessage(client, companyPhone);
+    const markPostSaleSent = (channel: 'whatsapp' | 'other') => {
+        if (!postSaleSheet) return;
+        recordClientFollowUp(clientId, postSaleSheet.kind, { agendamentoId: postSaleSheet.agendamento.id ?? null, channel })
+            .then(loadPostSale)
+            .catch(error => console.error('[ClientHubView] Falha ao registrar o pós-venda:', error));
     };
 
     const tabs: Array<{ id: Section; label: string; count?: number; mobileOnly?: boolean }> = [
@@ -209,7 +252,7 @@ const ClientHubView: React.FC<ClientHubViewProps> = ({
                             />
                         ) : null}
                         {section === 'services' ? (
-                            <ClientServicesSection agendamentos={clientAgendamentos} now={now} onOpen={onEditAgendamento} onSchedule={scheduleNew} />
+                            <ClientServicesSection agendamentos={clientAgendamentos} now={now} postSale={postSaleState} onOpen={onEditAgendamento} onSchedule={scheduleNew} onPostSale={openPostSale} />
                         ) : null}
                         {section === 'details' ? (
                             <>
@@ -244,6 +287,17 @@ const ClientHubView: React.FC<ClientHubViewProps> = ({
             </div>
 
             <ProposalMessagesModal isOpen={messagePdf != null} client={client} pdf={messagePdf} onClose={() => setMessagePdf(null)} />
+            {postSaleSheet ? (
+                <ClientPostSaleSheet
+                    isOpen
+                    kind={postSaleSheet.kind}
+                    client={client}
+                    message={postSaleMessage}
+                    missingReviewLink={!googleReviewsLink?.trim()}
+                    onClose={() => setPostSaleSheet(null)}
+                    onSent={markPostSaleSent}
+                />
+            ) : null}
         </div>
     );
 };
