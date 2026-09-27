@@ -1,7 +1,7 @@
 import React from 'react';
-import { CalendarDays, CalendarPlus, ChevronRight } from 'lucide-react';
+import { CalendarDays, CalendarPlus, ChevronRight, Star, Users } from 'lucide-react';
 import type { Agendamento, AgendamentoServiceStatus } from '../../types';
-import { formatServiceDate } from '../../src/lib/clientInsights';
+import { formatServiceDate, relativeDays, type ClientFollowUpKind, type getPostSaleState } from '../../src/lib/clientInsights';
 
 const currency = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -37,13 +37,37 @@ const ServiceRow: React.FC<{ agendamento: Agendamento; now: number; onOpen: () =
     );
 };
 
-/** Serviços do cliente: o que vem pela frente e o histórico. */
+type PostSaleState = NonNullable<ReturnType<typeof getPostSaleState>>;
+
+// Depois do serviço: pedir avaliação no Google e indicação (e ver o que já foi pedido).
+const PostSaleCard: React.FC<{ state: PostSaleState; now: number; onPostSale: (kind: ClientFollowUpKind) => void }> = ({ state, now, onPostSale }) => (
+    <section className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-3 dark:border-emerald-900/60 dark:bg-emerald-950/20" aria-label="Pós-venda">
+        <p className="text-xs font-semibold uppercase tracking-[0.08em] text-emerald-800 dark:text-emerald-300">Pós-venda</p>
+        <p className="mt-0.5 text-[13px] text-[var(--text-body)]">Último serviço concluído {relativeDays(state.doneAt, now)}.</p>
+        <div className="mt-2 grid grid-cols-2 gap-2 text-xs font-semibold">
+            <button type="button" onClick={() => onPostSale('review_request')}
+                className="flex min-h-10 flex-col items-center justify-center rounded-xl border border-emerald-200 bg-[var(--surface)] px-2 py-1.5 text-emerald-800 dark:border-emerald-900/60 dark:text-emerald-200">
+                <span className="inline-flex items-center gap-1.5"><Star className="h-3.5 w-3.5" aria-hidden="true" /> Pedir avaliação</span>
+                {state.review ? <span className="mt-0.5 text-[10px] font-medium opacity-75">pedida {relativeDays(new Date(state.review.createdAt).getTime(), now)}</span> : null}
+            </button>
+            <button type="button" onClick={() => onPostSale('referral_request')}
+                className="flex min-h-10 flex-col items-center justify-center rounded-xl border border-emerald-200 bg-[var(--surface)] px-2 py-1.5 text-emerald-800 dark:border-emerald-900/60 dark:text-emerald-200">
+                <span className="inline-flex items-center gap-1.5"><Users className="h-3.5 w-3.5" aria-hidden="true" /> Pedir indicação</span>
+                {state.referral ? <span className="mt-0.5 text-[10px] font-medium opacity-75">pedida {relativeDays(new Date(state.referral.createdAt).getTime(), now)}</span> : null}
+            </button>
+        </div>
+    </section>
+);
+
+/** Serviços do cliente: o que vem pela frente, o histórico e o pós-venda. */
 const ClientServicesSection: React.FC<{
     agendamentos: Agendamento[];
     now?: number;
+    postSale?: PostSaleState | null;
     onOpen: (agendamento: Agendamento) => void;
     onSchedule: () => void;
-}> = ({ agendamentos, now = Date.now(), onOpen, onSchedule }) => {
+    onPostSale?: (kind: ClientFollowUpKind) => void;
+}> = ({ agendamentos, now = Date.now(), postSale, onOpen, onSchedule, onPostSale }) => {
     const upcoming = agendamentos
         .filter(item => (item.serviceStatus ?? 'scheduled') === 'scheduled' && new Date(item.start).getTime() >= now)
         .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
@@ -59,6 +83,8 @@ const ClientServicesSection: React.FC<{
                     <CalendarPlus className="h-4 w-4" aria-hidden="true" /> Agendar serviço
                 </button>
             </div>
+
+            {postSale && onPostSale ? <PostSaleCard state={postSale} now={now} onPostSale={onPostSale} /> : null}
 
             {agendamentos.length === 0 ? (
                 <p className="rounded-2xl border border-dashed border-[var(--border-subtle)] px-4 py-6 text-center text-[var(--text-muted)]">Nenhum serviço marcado para este cliente.</p>

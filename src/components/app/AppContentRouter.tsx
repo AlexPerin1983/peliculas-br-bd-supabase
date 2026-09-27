@@ -519,6 +519,9 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
                 onSchedule={onSchedulePdf}
                 onOpenProposals={openProposals}
                 onTogglePin={onTogglePin}
+                googleReviewsLink={userInfo?.socialLinks?.googleReviews}
+                companyName={userInfo?.empresa}
+                companyPhone={userInfo?.telefone}
             />,
             defaultLoadingView
         );

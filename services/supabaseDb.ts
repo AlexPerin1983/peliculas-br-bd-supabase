@@ -3,6 +3,7 @@
 import { supabase } from './supabaseClient';
 import { Client, Measurement, UserInfo, Film, SavedPDF, Agendamento, ProposalOption, StandaloneExpense } from '../types';
 import { DEFAULT_PROPOSAL_MESSAGE_TEMPLATES, ProposalMessageTemplate } from '../src/lib/proposalMessages';
+import type { ClientFollowUpEvent, ClientFollowUpKind } from '../src/lib/clientInsights';
 import { sanitizeShowcase, type PortalShowcase } from '../supabase/functions/proposal-portal/portalShowcase';
 import { mockUserInfo } from './mockData';
 import {
@@ -173,6 +174,47 @@ export const getClientNotes = async (clientId: number): Promise<string> => {
 
 export const saveClientNotes = async (clientId: number, notes: string): Promise<void> => {
     const { error } = await supabase.from('clients').update({ notes: notes.trim() || null }).eq('id', clientId);
+    if (error) throw error;
+};
+
+export const getClientById = async (clientId: number): Promise<Client | null> => {
+    const { data, error } = await supabase.from('clients').select('*').eq('id', clientId).maybeSingle();
+    if (error) throw error;
+    return data ? mapRowToClient(data) : null;
+};
+
+// Pós-venda: pedidos de avaliação e de indicação feitos ao cliente.
+export const getClientFollowUps = async (clientId: number): Promise<ClientFollowUpEvent[]> => {
+    const { data, error } = await supabase
+        .from('client_follow_ups')
+        .select('id, kind, agendamento_id, channel, note, created_at')
+        .eq('client_id', clientId)
+        .order('created_at');
+    if (error) throw error;
+    return (data || []).map((row: any) => ({
+        id: row.id,
+        kind: row.kind,
+        agendamentoId: row.agendamento_id,
+        channel: row.channel,
+        note: row.note,
+        createdAt: row.created_at,
+    }));
+};
+
+export const recordClientFollowUp = async (
+    clientId: number,
+    kind: ClientFollowUpKind,
+    options: { agendamentoId?: number | null; channel?: 'whatsapp' | 'other' } = {},
+): Promise<void> => {
+    const userId = await getCurrentUserId();
+    if (!userId) throw new Error('Sessão encerrada. Entre novamente.');
+    const { error } = await supabase.from('client_follow_ups').insert({
+        client_id: clientId,
+        kind,
+        agendamento_id: options.agendamentoId ?? null,
+        channel: options.channel ?? 'whatsapp',
+        created_by: userId,
+    });
     if (error) throw error;
 };
 
@@ -1308,6 +1350,12 @@ export const mapRowToPDF = async (row: any): Promise<SavedPDF> => ({
     archivedAt: row.archived_at ?? null,
     paymentConfig: row.payment_config ?? undefined
 });
+
+export const getSavedPdfById = async (pdfId: number): Promise<SavedPDF | null> => {
+    const { data, error } = await supabase.from('saved_pdfs').select('*').eq('id', pdfId).maybeSingle();
+    if (error) throw error;
+    return data ? mapRowToPDF(data) : null;
+};
 
 // ============================================
 // AGENDAMENTO FUNCTIONS

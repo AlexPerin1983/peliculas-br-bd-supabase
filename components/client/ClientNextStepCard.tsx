@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowRight, CalendarCheck2, MessageCircle, MessageSquareText, Plus, Sparkles } from 'lucide-react';
+import { ArrowRight, CalendarCheck2, MessageCircle, MessageSquareText, Plus, Sparkles, Star, Users } from 'lucide-react';
 import type { Client } from '../../types';
 import { buildClientWhatsAppUrl, type ClientNextStep, type ClientNextStepAction } from '../../src/lib/clientInsights';
 
@@ -31,6 +31,8 @@ const actionIcon = (action: ClientNextStepAction) => {
     if (action.type === 'open_portal' || action.type === 'follow_up') return <MessageSquareText className="h-4 w-4" aria-hidden="true" />;
     if (action.type === 'schedule' || action.type === 'open_agendamento') return <CalendarCheck2 className="h-4 w-4" aria-hidden="true" />;
     if (action.type === 'new_proposal') return <Plus className="h-4 w-4" aria-hidden="true" />;
+    if (action.type === 'review') return <Star className="h-4 w-4" aria-hidden="true" />;
+    if (action.type === 'referral') return <Users className="h-4 w-4" aria-hidden="true" />;
     return <ArrowRight className="h-4 w-4" aria-hidden="true" />;
 };
 

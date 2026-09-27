@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import ClientHubView from './ClientHubView';
 import { Agendamento, Client, SavedPDF } from '../../types';
 import { loadCompanyProposalPortals, type CompanyProposalPortal } from '../../src/lib/proposalPortal';
-import { getClientNotes, saveClientNotes } from '../../services/supabaseDb';
+import { getClientFollowUps, getClientNotes, recordClientFollowUp, saveClientNotes } from '../../services/supabaseDb';
 
 vi.mock('../../src/lib/proposalPortal', async importOriginal => ({
     ...(await importOriginal<typeof import('../../src/lib/proposalPortal')>()),
@@ -14,6 +14,8 @@ vi.mock('../../services/supabaseDb', async importOriginal => ({
     ...(await importOriginal<typeof import('../../services/supabaseDb')>()),
     getClientNotes: vi.fn(),
     saveClientNotes: vi.fn(),
+    getClientFollowUps: vi.fn(),
+    recordClientFollowUp: vi.fn(),
 }));
 
 const DAY = 86_400_000;
@@ -82,6 +84,8 @@ describe('ClientHubView (ficha do cliente)', () => {
         vi.mocked(loadCompanyProposalPortals).mockResolvedValue([]);
         vi.mocked(getClientNotes).mockResolvedValue('');
         vi.mocked(saveClientNotes).mockResolvedValue(undefined);
+        vi.mocked(getClientFollowUps).mockResolvedValue([]);
+        vi.mocked(recordClientFollowUp).mockResolvedValue(undefined);
     });
 
     it('cabeçalho com estágio, ações rápidas e números do cliente', async () => {
@@ -198,6 +202,37 @@ describe('ClientHubView (ficha do cliente)', () => {
         expect(props.onEditClient).toHaveBeenCalled();
         fireEvent.click(within(details).getByRole('button', { name: /Fixar no topo/ }));
         expect(props.onTogglePin).toHaveBeenCalledWith(1);
+    });
+
+    it('pós-venda: pede avaliação no Google pelo WhatsApp e registra o pedido', async () => {
+        const done = makeAgendamento({ id: 7, start: ago(2), end: ago(2), serviceStatus: 'completed' });
+        render(<ClientHubView {...baseProps()} agendamentos={[done]} googleReviewsLink="https://g.page/r/abc/review" companyPhone="(83) 99999-0000" />);
+
+        const step = screen.getByRole('region', { name: 'Próximo passo' });
+        expect(within(step).getByText('Serviço concluído: peça a avaliação')).toBeInTheDocument();
+        fireEvent.click(within(step).getByRole('button', { name: /Pedir avaliação/ }));
+
+        const sheet = await screen.findByRole('dialog', { name: 'Pedir avaliação no Google' });
+        expect((within(sheet).getByLabelText('Mensagem do pós-venda') as HTMLTextAreaElement).value).toContain('https://g.page/r/abc/review');
+        const link = within(sheet).getByRole('link', { name: /Enviar no WhatsApp/ });
+        expect(decodeURIComponent(link.getAttribute('href') || '')).toContain('https://wa.me/5511999998888?text=');
+        fireEvent.click(link);
+        await waitFor(() => expect(recordClientFollowUp).toHaveBeenCalledWith(1, 'review_request', { agendamentoId: 7, channel: 'whatsapp' }));
+        expect(getClientFollowUps).toHaveBeenCalledTimes(2);
+    });
+
+    it('pós-venda: na aba Serviços, pede indicação com o contato da empresa', async () => {
+        const done = makeAgendamento({ id: 7, start: ago(20), end: ago(20), serviceStatus: 'completed' });
+        vi.mocked(getClientFollowUps).mockResolvedValue([{ id: 1, kind: 'review_request', createdAt: ago(15) }]);
+        render(<ClientHubView {...baseProps()} agendamentos={[done]} companyPhone="(83) 99999-0000" />);
+
+        await waitFor(() => expect(screen.getByRole('region', { name: 'Próximo passo' })).toHaveTextContent('Peça uma indicação'));
+        openTab(/Serviços/);
+        const card = screen.getByRole('region', { name: 'Pós-venda' });
+        expect(within(card).getByText(/pedida há 15 dias/)).toBeInTheDocument();
+        fireEvent.click(within(card).getByRole('button', { name: /Pedir indicação/ }));
+        const sheet = await screen.findByRole('dialog', { name: 'Pedir indicação' });
+        expect((within(sheet).getByLabelText('Mensagem do pós-venda') as HTMLTextAreaElement).value).toContain('(83) 99999-0000');
     });
 
     it('sem orçamento: sugere começar e cria o primeiro', () => {
