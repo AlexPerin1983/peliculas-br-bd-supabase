@@ -163,6 +163,18 @@ export const saveClient = async (client: Omit<Client, 'id'> | Client): Promise<C
     }
 };
 
+// Observações do cliente: lidas e gravadas à parte, para o cadastro (e a sincronização) não apagarem.
+export const getClientNotes = async (clientId: number): Promise<string> => {
+    const { data, error } = await supabase.from('clients').select('notes').eq('id', clientId).maybeSingle();
+    if (error) throw error;
+    return (data?.notes as string | null) || '';
+};
+
+export const saveClientNotes = async (clientId: number, notes: string): Promise<void> => {
+    const { error } = await supabase.from('clients').update({ notes: notes.trim() || null }).eq('id', clientId);
+    if (error) throw error;
+};
+
 export const deleteClient = async (id: number): Promise<void> => {
     const userId = await getCurrentUserId();
     if (!userId) throw new Error('User not authenticated');
