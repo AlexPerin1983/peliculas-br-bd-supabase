@@ -225,6 +225,61 @@ export const buildFollowUpQueue = (portals: CompanyProposalPortal[], now = Date.
     return { due, waiting, stale };
 };
 
+// ---- Lista única por cliente ----
+
+export interface ClientProposalGroup {
+    clientId: number;
+    // Link principal: o de atividade mais recente (é por ele que o cliente está falando).
+    primary: CompanyProposalPortal;
+    // Links anteriores do mesmo cliente (criados antes de reaproveitar o mesmo link).
+    others: CompanyProposalPortal[];
+    unreadCount: number;
+}
+
+const portalActivityAt = (portal: CompanyProposalPortal) =>
+    Math.max(time(portal.lastActivityAt), time(portal.createdAt), time(portal.lastViewedAt));
+
+export const groupPortalsByClient = (portals: CompanyProposalPortal[]): ClientProposalGroup[] => {
+    const byClient = new Map<number, CompanyProposalPortal[]>();
+    for (const portal of portals) byClient.set(portal.clientId, [...(byClient.get(portal.clientId) || []), portal]);
+    return [...byClient.values()]
+        .map(list => {
+            const [primary, ...others] = [...list].sort((a, b) => portalActivityAt(b) - portalActivityAt(a));
+            return { clientId: primary.clientId, primary, others, unreadCount: list.reduce((sum, portal) => sum + portal.unreadCount, 0) };
+        })
+        .sort((a, b) => portalActivityAt(b.primary) - portalActivityAt(a.primary));
+};
+
+export type ClosedKind = 'approved' | 'rejected' | 'lost';
+
+// Aprovada vale mais que "perdida": o cliente pode aprovar depois de marcada como perdida.
+export const closedKind = (portal: CompanyProposalPortal): ClosedKind | null =>
+    portal.status === 'approved' ? 'approved' : portal.lostAt ? 'lost' : portal.status === 'rejected' ? 'rejected' : null;
+
+export const CLOSED_FILTERS: Array<{ kind: ClosedKind; label: string }> = [
+    { kind: 'approved', label: 'Aprovadas' },
+    { kind: 'rejected', label: 'Recusadas' },
+    { kind: 'lost', label: 'Perdidas' },
+];
+
+const decisionAt = (portal: CompanyProposalPortal, kind: ClosedKind) => {
+    if (kind === 'lost') return portal.lostAt || portal.lastActivityAt;
+    const decision = [...portal.messages].reverse().find(message => message.kind === kind);
+    return decision?.created_at || portal.lastActivityAt;
+};
+
+export const describeClosed = (portal: CompanyProposalPortal) => {
+    const kind = closedKind(portal);
+    if (!kind) return null;
+    const when = new Date(decisionAt(portal, kind)).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+    if (kind === 'approved') return { kind, label: `Aprovada em ${when}` };
+    if (kind === 'rejected') return { kind, label: `Recusada em ${when}` };
+    return { kind, label: `Perdida: ${lostReasonLabel(portal.lostReason).toLowerCase()} · ${when}` };
+};
+
+export const lastClientMessage = (portal: CompanyProposalPortal) =>
+    [...portal.messages].reverse().find(message => message.sender_type === 'client' && message.body?.trim()) || null;
+
 export const describeNextContact = (dueAt: number, now = Date.now()) => {
     const label = whenLabel(dueAt, now);
     return label === 'hoje' ? 'mais tarde hoje' : label === 'amanhã' ? 'amanhã' : `${label} (${new Date(dueAt).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })})`;
