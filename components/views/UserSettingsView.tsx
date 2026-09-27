@@ -15,6 +15,7 @@ import { useTheme } from '../../src/contexts/ThemeContext';
 import { useFeedback } from '../../src/contexts/FeedbackContext';
 import { CheckCircle2, DollarSign, Facebook, FileSignature, Instagram, Loader2, MessageSquare, Moon, Palette, QrCode, Save, Settings, Share2, Shield, Smartphone, Sun, Users, Clock, Building2, Bot, Youtube, ChevronDown, Sparkles, X, Layers } from 'lucide-react';
 import { FeatureGate } from '../subscription/SubscriptionComponents';
+import PortalShowcaseSettings from '../settings/PortalShowcaseSettings';
 import { PremiumFeatureSection } from '../subscription/PremiumFeatureSection';
 
 interface UserSettingsViewProps {
@@ -755,6 +756,17 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({
                         placeholder="https://g.page/r/seu-link-de-avaliacao"
                     />
                 </div>
+            </SettingsSection>
+
+            {/* ===== SECAO: PAGINA DA PROPOSTA (vitrine) ===== */}
+            <SettingsSection
+                title="Página da proposta"
+                subtitle="Nota do Google, depoimentos e fotos de trabalhos"
+                icon={<Sparkles className="w-5 h-5" />}
+                showFooterSave={false}
+                sectionId="pagina-da-proposta"
+            >
+                <PortalShowcaseSettings />
             </SettingsSection>
 
             {/* ===== SECAO: APARENCIA ===== */}

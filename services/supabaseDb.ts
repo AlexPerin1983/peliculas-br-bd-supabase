@@ -4,6 +4,7 @@ import { supabase } from './supabaseClient';
 import { Client, Measurement, UserInfo, Film, SavedPDF, Agendamento, ProposalOption, StandaloneExpense } from '../types';
 import { DEFAULT_PROPOSAL_MESSAGE_TEMPLATES, ProposalMessageTemplate } from '../src/lib/proposalMessages';
 import type { ClientFollowUpEvent, ClientFollowUpKind } from '../src/lib/clientInsights';
+import { sanitizeShowcase, type PortalShowcase } from '../supabase/functions/proposal-portal/portalShowcase';
 import { mockUserInfo } from './mockData';
 import {
     buildProposalOperations,
@@ -489,6 +490,41 @@ const patchUserInfoFields = async (patch: Record<string, unknown>): Promise<User
 
     return await getUserInfo();
 };
+
+// ---- Vitrine da página da proposta (nota do Google, depoimentos e fotos) ----
+// Fica na linha do dono (como a marca), lida e gravada à parte do cadastro.
+
+export const getPortalShowcase = async (): Promise<PortalShowcase> => {
+    const userId = await getCurrentUserId();
+    if (!userId) throw new Error('User not authenticated');
+    const targetUserId = await getOwnerUserId() || userId;
+    const { data, error } = await supabase.from('user_info').select('portal_showcase').eq('user_id', targetUserId).maybeSingle();
+    if (error) throw error;
+    return sanitizeShowcase(data?.portal_showcase);
+};
+
+export const savePortalShowcase = async (showcase: PortalShowcase): Promise<void> => {
+    await patchUserInfoFields({ portal_showcase: sanitizeShowcase(showcase) });
+};
+
+const PORTFOLIO_BUCKET = 'portfolio';
+
+export const uploadPortfolioPhoto = async (blob: Blob): Promise<string> => {
+    const prefix = await getPdfStoragePrefix();
+    const name = generatePdfStorageName().replace(/\.pdf$/, '.jpg');
+    const path = `${prefix}/${name}`;
+    const { error } = await supabase.storage.from(PORTFOLIO_BUCKET).upload(path, blob, { contentType: blob.type || 'image/jpeg', upsert: false });
+    if (error) throw error;
+    return path;
+};
+
+export const deletePortfolioPhoto = async (path: string): Promise<void> => {
+    const { error } = await supabase.storage.from(PORTFOLIO_BUCKET).remove([path]);
+    if (error) throw error;
+};
+
+export const getPortfolioPhotoUrl = (path: string): string =>
+    supabase.storage.from(PORTFOLIO_BUCKET).getPublicUrl(path).data.publicUrl;
 
 // Atualiza APENAS o campo payment_methods sem sobrescrever outros campos
 export const updatePaymentMethodsOnly = async (paymentMethods: any[]): Promise<UserInfo | null> => {

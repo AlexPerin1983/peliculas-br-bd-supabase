@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Ban, CalendarClock, Check, Copy, ExternalLink, Link2, LoaderCircle, MessageCircle, RefreshCw, ShieldCheck } from 'lucide-react';
+import { Ban, CalendarClock, Check, Copy, ExternalLink, Link2, LoaderCircle, MessageCircle, RefreshCw, ShieldCheck, Star } from 'lucide-react';
 import type { Client, SavedPDF } from '../../types';
 import {
     buildProposalShareMessage,
@@ -7,6 +7,7 @@ import {
     findClientProposalPortals,
     refreshProposalPortal,
     revokeProposalPortal,
+    setProposalPortalHighlight,
     type CreatedProposalPortal,
     type ExistingProposalPortal,
 } from '../../src/lib/proposalPortal';
@@ -84,6 +85,8 @@ const ProposalShareModal: React.FC<ProposalShareModalProps> = ({ isOpen, client,
     const [editingValidity, setEditingValidity] = useState(false);
     const [confirmingRevoke, setConfirmingRevoke] = useState(false);
     const autoCreateKeyRef = useRef<string | null>(null);
+    // Opção destacada como "Recomendada" na página do cliente (só com 2 ou mais opções).
+    const [highlightId, setHighlightId] = useState<number | null>(null);
     const pdfKey = pdfs.map(pdf => pdf.id).join(',');
 
     const readyMessages = useMemo(() => messageOptions.map(option => option.trim()).filter(Boolean), [messageOptions]);
@@ -99,11 +102,24 @@ const ProposalShareModal: React.FC<ProposalShareModalProps> = ({ isOpen, client,
         setCreated({ portalId: portal.id, token: '', shareCode: '', expiresAt: portal.expiresAt, url: portal.url });
     };
 
+    // O destaque é um extra: se falhar, o link continua valendo.
+    const applyHighlight = async (portalId: string) => {
+        if (pdfs.length < 2) return;
+        try {
+            await setProposalPortalHighlight(portalId, highlightId);
+        } catch (err) {
+            console.warn('[ProposalShareModal] Destaque não salvo:', err);
+            setNotice('O link foi criado, mas não deu para marcar a opção recomendada.');
+        }
+    };
+
     const create = async () => {
         setBusy(true);
         setError('');
         try {
-            setCreated(await createProposalPortal(pdfs, expiration, client.nome));
+            const next = await createProposalPortal(pdfs, expiration, client.nome);
+            await applyHighlight(next.portalId);
+            setCreated(next);
             setOrigin('created');
             setShownPortal(null);
         } catch (err) {
@@ -117,7 +133,9 @@ const ProposalShareModal: React.FC<ProposalShareModalProps> = ({ isOpen, client,
         setBusy(true);
         setError('');
         try {
-            setCreated(await refreshProposalPortal(portal.id, pdfs, expiration, client.nome));
+            const next = await refreshProposalPortal(portal.id, pdfs, expiration, client.nome);
+            await applyHighlight(next.portalId);
+            setCreated(next);
             setOrigin('updated');
             setShownPortal({ ...portal, expired: false, status: 'active' });
             setEditingValidity(false);
@@ -252,8 +270,27 @@ const ProposalShareModal: React.FC<ProposalShareModalProps> = ({ isOpen, client,
                         <div className="space-y-2">
                             <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--text-muted)]">Propostas incluídas</p>
                             <div className="max-h-40 space-y-2 overflow-y-auto">
-                                {pdfs.map((pdf, index) => <div key={pdf.id ?? index} className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] px-3 py-2.5"><span className="truncate text-xs font-bold text-[var(--text-strong)]">{pdf.proposalOptionName || pdf.nomeArquivo || `Proposta ${index + 1}`}</span><span className="shrink-0 text-xs font-black text-[var(--brand-primary)]">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(pdf.totalPreco || 0)}</span></div>)}
+                                {pdfs.map((pdf, index) => {
+                                    const name = pdf.proposalOptionName || pdf.nomeArquivo || `Proposta ${index + 1}`;
+                                    const highlighted = pdf.id != null && pdf.id === highlightId;
+                                    return (
+                                        <div key={pdf.id ?? index} className={`flex items-center justify-between gap-3 rounded-xl border bg-[var(--surface)] px-3 py-2.5 ${highlighted ? 'border-amber-300 dark:border-amber-700' : 'border-[var(--border-subtle)]'}`}>
+                                            <span className="min-w-0 truncate text-xs font-bold text-[var(--text-strong)]">{name}</span>
+                                            <span className="flex shrink-0 items-center gap-2">
+                                                <span className="text-xs font-black text-[var(--brand-primary)]">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(pdf.totalPreco || 0)}</span>
+                                                {pdfs.length > 1 && pdf.id != null ? (
+                                                    <button type="button" aria-pressed={highlighted} onClick={() => setHighlightId(highlighted ? null : pdf.id!)}
+                                                        aria-label={highlighted ? `Tirar destaque de ${name}` : `Recomendar ${name}`} title="Mostrar esta opção como Recomendada para o cliente"
+                                                        className={`flex h-7 w-7 items-center justify-center rounded-lg ${highlighted ? 'bg-amber-100 text-amber-600 dark:bg-amber-950/40' : 'text-[var(--text-soft)] hover:text-amber-500'}`}>
+                                                        <Star className="h-4 w-4" fill={highlighted ? 'currentColor' : 'none'} aria-hidden="true" />
+                                                    </button>
+                                                ) : null}
+                                            </span>
+                                        </div>
+                                    );
+                                })}
                             </div>
+                            {pdfs.length > 1 ? <p className="text-[11px] text-[var(--text-muted)]">Toque na estrela para mostrar uma opção como <strong className="font-semibold">Recomendada</strong> para o cliente.</p> : null}
                         </div>
                         {pdfs.some(pdf => (pdf.followUpDiscountAmount || 0) > 0 && pdf.expirationDate && new Date(pdf.expirationDate).getTime() <= Date.now()) && (
                             <p className="rounded-xl bg-amber-50 p-3 text-xs font-semibold text-amber-800">Esta proposta venceu. Sugerimos uma nova validade para a oferta com desconto; confira a data abaixo.</p>

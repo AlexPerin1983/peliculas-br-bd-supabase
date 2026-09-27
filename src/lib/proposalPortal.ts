@@ -4,6 +4,7 @@ import { offlineDb, type LocalSavedPDF, type SyncQueueItem } from '../../service
 import { isOnlineNow, syncAllPending } from '../../services/syncService';
 import type { Client, ProposalPaymentChoice, ProposalPaymentSelection, SavedPDF } from '../../types';
 import type { ProposalConditionFields } from './proposalCondition';
+import type { PublicPortalShowcase } from '../../supabase/functions/proposal-portal/portalShowcase';
 
 export type ProposalPortalDecision = 'approved' | 'rejected' | 'negotiation';
 export type ProposalOfferType = 'percentage' | 'fixed';
@@ -40,8 +41,10 @@ export interface PublicProposalPortal {
         email?: string;
         logo?: string;
         colors?: { primaria?: string; secundaria?: string };
+        // Nota do Google, depoimentos e fotos de trabalhos (quando a empresa preencheu).
+        showcase?: PublicPortalShowcase | null;
     };
-    proposals: Array<Pick<SavedPDF, 'id' | 'proposalOptionName' | 'nomeArquivo' | 'totalPreco' | 'totalM2' | 'date' | 'expirationDate' | 'status' | 'paymentConfig'> & ProposalConditionFields>;
+    proposals: Array<Pick<SavedPDF, 'id' | 'proposalOptionName' | 'nomeArquivo' | 'totalPreco' | 'totalM2' | 'date' | 'expirationDate' | 'status' | 'paymentConfig'> & ProposalConditionFields & { highlighted?: boolean }>;
     messages: ProposalPortalMessage[];
 }
 
@@ -620,6 +623,13 @@ export const setProposalOfferDeadline = async (portalId: string, deadline: Date,
     await supabase.from('proposal_portal_follow_ups').insert({
         portal_id: portalId, kind: 'offer', note: note.trim() || null, created_by: auth.user.id,
     });
+};
+
+// Opção destacada como "Recomendada" na página do cliente (null tira o destaque).
+export const setProposalPortalHighlight = async (portalId: string, pdfId: number | null) => {
+    const [persistedId] = pdfId == null ? [null] : await resolvePersistedProposalPdfIds([pdfId]);
+    const { error } = await supabase.from('proposal_portals').update({ highlighted_pdf_id: persistedId ?? null }).eq('id', portalId);
+    if (error) throw new Error(error.message || 'Não foi possível destacar a opção.');
 };
 
 export const markCompanyProposalPortalRead = async (portalId: string) => {
