@@ -131,6 +131,8 @@ interface AppContentRouterProps {
     onOpenClientModal: (mode: 'add' | 'edit') => void;
     onOpenClientFromList: (clientId: number) => void;
     onNavigateBack: () => void;
+    // Sem tela anterior (ex.: app aberto direto na ficha), o voltar da ficha leva à lista de clientes.
+    canNavigateBack?: boolean;
     onOpenAIQuickProposal: () => void;
     onCreateProposal: () => void;
     onTabChange: (tab: ActiveTab) => void;
@@ -230,6 +232,7 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
     onOpenClientModal,
     onOpenClientFromList,
     onNavigateBack,
+    canNavigateBack = true,
     onOpenAIQuickProposal,
     onCreateProposal,
     onTabChange,
@@ -284,6 +287,16 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
             </Suspense>
         </div>
     ) : null;
+
+    // Abre o Propostas já na ficha daquele link (a Central lê o ?proposalPortal= ao abrir).
+    const openProposals = (portalId?: string) => {
+        if (portalId) {
+            const url = new URL(window.location.href);
+            url.searchParams.set('proposalPortal', portalId);
+            window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+        }
+        onTabChange('proposals');
+    };
 
     const renderDeferred = (content: ReactNode, fallback: ReactNode = defaultLoadingView) => (
         <Suspense fallback={fallback}>{content}</Suspense>
@@ -475,6 +488,7 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
             <ClientListView
                 clients={hasLoadedAllClients ? clients : clientListClients}
                 pdfs={allSavedPdfs}
+                agendamentos={agendamentos}
                 isLoading={isClientsLoading || isClientListLoading}
                 onOpenClient={onOpenClientFromList}
                 onAddClient={() => onOpenClientModal('add')}
@@ -501,7 +515,10 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
                 onEditAgendamento={onEditAgendamento}
                 onEditClient={() => onOpenClientModal('edit')}
                 onNewProposal={() => onTabChange('client')}
-                onBack={onNavigateBack}
+                onBack={canNavigateBack ? onNavigateBack : () => onTabChange('clients_list')}
+                onSchedule={onSchedulePdf}
+                onOpenProposals={openProposals}
+                onTogglePin={onTogglePin}
             />,
             defaultLoadingView
         );

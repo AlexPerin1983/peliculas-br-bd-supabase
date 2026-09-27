@@ -2958,6 +2958,7 @@ Use somente o JSON definido e não inclua explicações fora dele.`;
             onOpenClientModal={handleOpenClientModal}
             onOpenClientFromList={handleOpenClientFromList}
             onNavigateBack={handleGoBack}
+            canNavigateBack={tabHistory.length > 0}
             onOpenAIQuickProposal={handleOpenAIQuickProposalModal}
             onCreateProposal={handleOpenClientSelectionModal}
             onTabChange={handleTabChange}

@@ -490,12 +490,14 @@ export interface ProposalFollowUpEvent {
     created_at: string;
 }
 
-export const loadCompanyProposalPortals = async (): Promise<CompanyProposalPortal[]> => {
-    const { data: portals, error } = await supabase
+// Com clientId, só os links daquele cliente (ficha do cliente).
+export const loadCompanyProposalPortals = async (options: { clientId?: number } = {}): Promise<CompanyProposalPortal[]> => {
+    let query = supabase
         .from('proposal_portals')
         .select('id, token, share_code, client_id, expires_at, status, last_activity_at, last_read_by_company_at, view_count, created_at, first_viewed_at, last_viewed_at, lost_at, lost_reason')
-        .neq('status', 'revoked')
-        .order('last_activity_at', { ascending: false });
+        .neq('status', 'revoked');
+    if (options.clientId != null) query = query.eq('client_id', options.clientId);
+    const { data: portals, error } = await query.order('last_activity_at', { ascending: false });
     if (error) throw error;
     if (!portals?.length) return [];
 
