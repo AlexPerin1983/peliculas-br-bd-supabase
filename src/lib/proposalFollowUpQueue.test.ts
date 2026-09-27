@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CompanyProposalPortal } from './proposalPortal';
-import { buildFollowUpMessage, buildFollowUpQueue, buildFollowUpTimeline, describeNextContact, findUnknownFollowUpTags, getFollowUpItem, openedRecently, summarizeLostProposals, summarizeProposalResults } from './proposalFollowUpQueue';
+import { buildFollowUpMessage, buildFollowUpQueue, buildFollowUpTimeline, buildOfferMessage, describeNextContact, findUnknownFollowUpTags, getFollowUpItem, offerDeadline, openedRecently, snoozeDate, summarizeLostProposals, summarizeProposalResults } from './proposalFollowUpQueue';
 
 const NOW = new Date('2026-09-26T12:00:00Z').getTime();
 const DAY = 86_400_000;
@@ -121,6 +121,45 @@ describe('Para acompanhar hoje', () => {
         ], NOW)).toEqual({ openValue: 1500, openCount: 2, approvedValue: 1200, approvedCount: 1, decidedCount: 3, wonCount: 2, closeRate: 2 / 3 });
     });
 
+    it('lembrar depois: fica em "Aguardando" até a data; resposta do cliente ou novo contato cancelam', () => {
+        const hot = { viewCount: 4, firstViewedAt: at(-4), lastViewedAt: at(-1) };
+        const snooze = { id: 9, kind: 'snooze' as const, step: 'hot', remind_at: at(3), note: 'depois do dia 10', created_at: at(-0.5) };
+
+        const snoozed = getFollowUpItem(portal({ ...hot, followUps: [snooze] }), NOW)!;
+        expect(snoozed.due).toBe(false);
+        expect(snoozed.snoozedUntil).toBe(NOW + 3 * DAY);
+        expect(snoozed.dueAt).toBe(NOW + 3 * DAY);
+
+        // Passou a data: volta para "Hoje".
+        expect(getFollowUpItem(portal({ ...hot, followUps: [{ ...snooze, remind_at: at(-0.1) }] }), NOW)!.due).toBe(true);
+        // O cliente escreveu depois do lembrete: responder agora.
+        const replied = getFollowUpItem(portal({ ...hot, followUps: [snooze], messages: [{ id: 1, sender_type: 'client', kind: 'message', created_at: at(-0.1) }] }), NOW)!;
+        expect([replied.step, replied.due, replied.snoozedUntil]).toEqual(['reply', true, undefined]);
+        // Contato registrado depois do lembrete: vale a regra normal.
+        const contacted = getFollowUpItem(portal({ ...hot, followUps: [snooze, { id: 10, kind: 'contact', step: 'hot', channel: 'whatsapp', created_at: at(-0.2) }] }), NOW)!;
+        expect(contacted.snoozedUntil).toBeUndefined();
+    });
+
+    it('datas do lembrete (9h) e do prazo da condição (fim do dia)', () => {
+        const friday = new Date('2026-09-25T15:00:00').getTime();
+        expect(snoozeDate('tomorrow', friday)).toEqual(new Date('2026-09-26T09:00:00'));
+        expect(snoozeDate('3d', friday)).toEqual(new Date('2026-09-28T09:00:00'));
+        expect(snoozeDate('week', friday)).toEqual(new Date('2026-09-28T09:00:00'));
+        expect(snoozeDate('2026-10-10', friday)).toEqual(new Date('2026-10-10T09:00:00'));
+
+        expect(offerDeadline('48h', friday)).toEqual(new Date(friday + 2 * DAY));
+        expect(offerDeadline('3d', friday)).toEqual(new Date('2026-09-28T23:59:00'));
+        expect(offerDeadline('2026-10-02', friday)).toEqual(new Date('2026-10-02T23:59:00'));
+    });
+
+    it('mensagem da condição especial com valores, prazo e o mesmo link', () => {
+        const message = buildOfferMessage(portal(), { from: 1000, to: 900, discountLabel: '10%', deadline: new Date('2026-10-02T23:59:00') });
+        expect(message).toContain('Oi, Carlos!');
+        expect(message).toContain(`de ${(1000).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} por ${(900).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} (10% de desconto)`);
+        expect(message).toContain('02/10');
+        expect(message).toContain('/p/carlos/tok');
+    });
+
     it('linha do tempo em ordem, com contatos e perda', () => {
         const timeline = buildFollowUpTimeline(portal({
             viewCount: 3,
@@ -131,6 +170,14 @@ describe('Para acompanhar hoje', () => {
                 { id: 2, kind: 'lost', reason: 'price', created_at: at(-0.5) },
             ],
         }), NOW);
+        const extra = buildFollowUpTimeline(portal({
+            followUps: [
+                { id: 3, kind: 'offer', note: '10% · de R$ 1.000 por R$ 900', created_at: at(-2) },
+                { id: 4, kind: 'snooze', remind_at: new Date('2026-10-05T09:00:00').toISOString(), note: 'depois do dia 5', created_at: at(-1) },
+            ],
+        }), NOW).map(entry => entry.label);
+        expect(extra).toContain('Condição especial oferecida: 10% · de R$ 1.000 por R$ 900');
+        expect(extra).toContain('Lembrete para 05/10: depois do dia 5');
         expect(timeline.map(entry => entry.label)).toEqual([
             'Link enviado',
             'Abriu pela primeira vez',

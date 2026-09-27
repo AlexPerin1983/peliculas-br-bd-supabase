@@ -482,11 +482,13 @@ export interface CompanyProposalPortal {
 
 export interface ProposalFollowUpEvent {
     id: number;
-    kind: 'contact' | 'lost' | 'reopened';
+    kind: 'contact' | 'lost' | 'reopened' | 'snooze' | 'offer';
     step?: string | null;
     channel?: 'whatsapp' | 'call' | 'other' | null;
     reason?: string | null;
     note?: string | null;
+    // "Lembrar depois": quando a proposta volta para "Hoje".
+    remind_at?: string | null;
     created_at: string;
 }
 
@@ -507,7 +509,7 @@ export const loadCompanyProposalPortals = async (options: { clientId?: number } 
         supabase.from('clients').select('id, nome, telefone').in('id', clientIds),
         supabase.from('proposal_portal_items').select('portal_id, saved_pdf_id, position, condition_original_value, condition_final_value, condition_discount_amount, condition_discount_percent, condition_expires_at, saved_pdfs(proposal_option_name, nome_arquivo, total_preco, follow_up_base_value, follow_up_discount_percent, follow_up_discount_amount, follow_up_revision)').in('portal_id', portalIds).order('position'),
         supabase.from('proposal_portal_messages').select('id, portal_id, saved_pdf_id, sender_type, kind, body, offer_type, offer_value, condition_value, payment_selection, created_at').in('portal_id', portalIds).order('created_at'),
-        supabase.from('proposal_portal_follow_ups').select('id, portal_id, kind, step, channel, reason, note, created_at').in('portal_id', portalIds).order('created_at'),
+        supabase.from('proposal_portal_follow_ups').select('id, portal_id, kind, step, channel, reason, note, remind_at, created_at').in('portal_id', portalIds).order('created_at'),
     ]);
     // O histórico de contatos é complemento: se falhar, as conversas continuam aparecendo.
     const followUps = followUpResult?.error ? [] : (followUpResult?.data || []);
@@ -585,6 +587,39 @@ export const reopenProposalPortal = async (portalIds: string | string[]) => {
     const { error } = await supabase.from('proposal_portals').update({ lost_at: null, lost_reason: null, updated_at: new Date().toISOString() }).in('id', ids);
     if (error) throw new Error(error.message || 'Não foi possível reabrir a proposta.');
     await supabase.from('proposal_portal_follow_ups').insert(ids.map(id => ({ portal_id: id, kind: 'reopened', created_by: auth.user!.id })));
+};
+
+// "Lembrar depois": o cliente pediu para chamar em outra data.
+export const snoozeProposalFollowUp = async (portalId: string, step: string, remindAt: Date, note?: string) => {
+    const { data: auth } = await supabase.auth.getUser();
+    if (!auth.user) throw new Error('Sessão encerrada. Entre novamente.');
+    if (!(remindAt.getTime() > Date.now())) throw new Error('Escolha uma data futura para o lembrete.');
+    const { error } = await supabase.from('proposal_portal_follow_ups').insert({
+        portal_id: portalId,
+        kind: 'snooze',
+        step,
+        remind_at: remindAt.toISOString(),
+        note: note?.trim() || null,
+        created_by: auth.user.id,
+    });
+    if (error) throw new Error(error.message || 'Não foi possível salvar o lembrete.');
+};
+
+// Condição especial com prazo: o prazo passa a ser a validade do link (a página
+// do cliente mostra a contagem regressiva) e a oferta entra no histórico.
+export const setProposalOfferDeadline = async (portalId: string, deadline: Date, note: string) => {
+    const { data: auth } = await supabase.auth.getUser();
+    if (!auth.user) throw new Error('Sessão encerrada. Entre novamente.');
+    if (!(deadline.getTime() > Date.now())) throw new Error('Escolha um prazo futuro.');
+    const now = new Date().toISOString();
+    const { error } = await supabase.from('proposal_portals')
+        .update({ expires_at: deadline.toISOString(), last_activity_at: now, updated_at: now })
+        .eq('id', portalId);
+    if (error) throw new Error(error.message || 'Não foi possível atualizar o prazo do link.');
+    await supabase.from('proposal_portals').update({ status: 'active' }).eq('id', portalId).eq('status', 'expired');
+    await supabase.from('proposal_portal_follow_ups').insert({
+        portal_id: portalId, kind: 'offer', note: note.trim() || null, created_by: auth.user.id,
+    });
 };
 
 export const markCompanyProposalPortalRead = async (portalId: string) => {

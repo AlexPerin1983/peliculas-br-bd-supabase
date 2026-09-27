@@ -175,6 +175,12 @@ export const saveClientNotes = async (clientId: number, notes: string): Promise<
     if (error) throw error;
 };
 
+export const getClientById = async (clientId: number): Promise<Client | null> => {
+    const { data, error } = await supabase.from('clients').select('*').eq('id', clientId).maybeSingle();
+    if (error) throw error;
+    return data ? mapRowToClient(data) : null;
+};
+
 export const deleteClient = async (id: number): Promise<void> => {
     const userId = await getCurrentUserId();
     if (!userId) throw new Error('User not authenticated');
@@ -1272,6 +1278,12 @@ export const mapRowToPDF = async (row: any): Promise<SavedPDF> => ({
     archivedAt: row.archived_at ?? null,
     paymentConfig: row.payment_config ?? undefined
 });
+
+export const getSavedPdfById = async (pdfId: number): Promise<SavedPDF | null> => {
+    const { data, error } = await supabase.from('saved_pdfs').select('*').eq('id', pdfId).maybeSingle();
+    if (error) throw error;
+    return data ? mapRowToPDF(data) : null;
+};
 
 // ============================================
 // AGENDAMENTO FUNCTIONS

@@ -1,6 +1,6 @@
 import { vi } from 'vitest';
 import type { SavedPDF } from '../../types';
-import { createProposalPortal, findClientProposalPortals, loadPublicProposalPortal, markProposalPortalLost, openPublicProposalPdf, recordProposalFollowUp, refreshProposalPortal, reopenProposalPortal, revokeProposalPortal } from './proposalPortal';
+import { createProposalPortal, findClientProposalPortals, loadPublicProposalPortal, markProposalPortalLost, openPublicProposalPdf, recordProposalFollowUp, refreshProposalPortal, reopenProposalPortal, revokeProposalPortal, setProposalOfferDeadline, snoozeProposalFollowUp } from './proposalPortal';
 
 const {
     rpcMock,
@@ -346,6 +346,29 @@ describe('acompanhamento das propostas', () => {
         await reopenProposalPortal('p1');
         expect(portals.update).toHaveBeenLastCalledWith(expect.objectContaining({ lost_at: null, lost_reason: null }));
         expect(events.insert).toHaveBeenLastCalledWith([expect.objectContaining({ portal_id: 'p1', kind: 'reopened' })]);
+    });
+
+    it('lembrar depois: grava a data (e recusa data passada)', async () => {
+        const builder = chain({ error: null });
+        fromMock.mockReturnValue(builder);
+        const remindAt = new Date(Date.now() + 3 * 86_400_000);
+
+        await snoozeProposalFollowUp('p1', 'hot', remindAt, ' depois do dia 10 ');
+        expect(builder.insert).toHaveBeenCalledWith(expect.objectContaining({ portal_id: 'p1', kind: 'snooze', step: 'hot', remind_at: remindAt.toISOString(), note: 'depois do dia 10' }));
+        await expect(snoozeProposalFollowUp('p1', 'hot', new Date(Date.now() - 1000))).rejects.toThrow('Escolha uma data futura');
+    });
+
+    it('condição especial: o prazo vira a validade do link e a oferta entra no histórico', async () => {
+        const portals = chain({ error: null });
+        const events = chain({ error: null });
+        fromMock.mockImplementation((table: string) => table === 'proposal_portals' ? portals : events);
+        const deadline = new Date(Date.now() + 2 * 86_400_000);
+
+        await setProposalOfferDeadline('p1', deadline, '10% · de R$ 1.000 por R$ 900');
+        expect(portals.update).toHaveBeenCalledWith(expect.objectContaining({ expires_at: deadline.toISOString() }));
+        expect(portals.update).toHaveBeenCalledWith({ status: 'active' });
+        expect(portals.eq).toHaveBeenCalledWith('status', 'expired');
+        expect(events.insert).toHaveBeenCalledWith(expect.objectContaining({ portal_id: 'p1', kind: 'offer', note: '10% · de R$ 1.000 por R$ 900' }));
     });
 
     it('encerra várias de uma vez (e reabre todas)', async () => {
