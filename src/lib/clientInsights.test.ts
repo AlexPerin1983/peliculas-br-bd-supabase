@@ -4,6 +4,8 @@ import type { CompanyProposalPortal } from './proposalPortal';
 import {
     buildClientMapsUrl,
     buildClientTimeline,
+    buildReferralMessage,
+    buildReviewRequestMessage,
     clientInitials,
     formatMoneyShort,
     getClientNextStep,
@@ -92,12 +94,42 @@ describe('cliente 360', () => {
     });
 
     it('próximo passo: reativar cliente antigo e começar pelo orçamento', () => {
-        const old = [service({ start: at(-250), valorFinal: 800 })];
+        const old = [service({ start: at(-250), end: at(-250), valorFinal: 800 })];
         const step = getClientNextStep(client, summarizeClient(client, [], old, [], NOW), old, [], NOW);
         expect(step).toMatchObject({ title: 'Hora de reativar', action: { type: 'whatsapp' } });
         expect(step?.action.type === 'whatsapp' && step.action.message).toContain('Oi, Carlos!');
 
         expect(getClientNextStep(client, summarizeClient(client, [], [], [], NOW), [], [], NOW)).toMatchObject({ action: { type: 'new_proposal' } });
+    });
+
+    it('pós-venda: pede avaliação logo depois do serviço e indicação alguns dias depois', () => {
+        const done = service({ id: 7, start: at(-2), end: at(-2) });
+        const summary = summarizeClient(client, [], [done], [], NOW);
+        const review = getClientNextStep(client, summary, [done], [], NOW, []);
+        expect(review).toMatchObject({ title: 'Serviço concluído: peça a avaliação', action: { type: 'review', agendamento: done } });
+
+        // Avaliação pedida ontem: indicação ainda não (espera 5 dias).
+        const askedYesterday = [{ id: 1, kind: 'review_request' as const, createdAt: at(-1) }];
+        expect(getClientNextStep(client, summary, [done], [], NOW, askedYesterday)?.action.type).not.toBe('referral');
+        // Avaliação pedida há 6 dias: hora da indicação.
+        const older = service({ id: 8, start: at(-8), end: at(-8) });
+        const summaryOlder = summarizeClient(client, [], [older], [], NOW);
+        expect(getClientNextStep(client, summaryOlder, [older], [], NOW, [{ id: 2, kind: 'review_request', createdAt: at(-6) }]))
+            .toMatchObject({ title: 'Peça uma indicação', action: { type: 'referral' } });
+        // Sem pedido de avaliação: indicação só 10 dias depois do serviço.
+        const tenDays = service({ id: 9, start: at(-12), end: at(-12) });
+        const summaryTen = summarizeClient(client, [], [tenDays], [], NOW);
+        expect(getClientNextStep(client, summaryTen, [tenDays], [], NOW, [{ id: 3, kind: 'review_request', createdAt: at(-11) }, { id: 4, kind: 'referral_request', createdAt: at(-1) }])?.action.type).not.toBe('referral');
+    });
+
+    it('pós-venda: mensagens de avaliação (com o link do Google) e de indicação', () => {
+        expect(buildReviewRequestMessage(client, 'https://g.page/r/abc/review')).toContain('https://g.page/r/abc/review');
+        expect(buildReviewRequestMessage(client, '', undefined, 'Películas BR')).toContain('procure por Películas BR');
+        const referral = buildReferralMessage(client, '(83) 99999-0000');
+        expect(referral).toContain('Oi, Carlos!');
+        expect(referral).toContain('(83) 99999-0000');
+        expect(buildClientTimeline([], [], [], NOW, [{ id: 1, kind: 'review_request', createdAt: at(-1) }, { id: 2, kind: 'referral_request', createdAt: at(-0.5) }]).map(entry => entry.title))
+            .toEqual(['Pediu indicação', 'Pediu avaliação no Google']);
     });
 
     it('para reativar: com telefone, nada em andamento e parado há mais de 90 dias', () => {
