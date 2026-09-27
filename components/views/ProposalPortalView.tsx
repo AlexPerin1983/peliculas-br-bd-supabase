@@ -28,6 +28,10 @@ import { formatConditionExpiry, getProposalCondition } from '../../src/lib/propo
 import { buildProposalPaymentOptions } from '../../src/lib/paymentConditions';
 import { buildProposalWhatsAppUrl } from '../../src/lib/proposalMessages';
 import type { ProposalPaymentChoice, ProposalPaymentSelection } from '../../types';
+import { PortalRatingLine, PortalShowcaseSection } from '../portal/PortalShowcase';
+
+// Foto de exemplo para a página de demonstração (sem depender de arquivos externos).
+const demoPhoto = (label: string, from: string, to: string) => `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${from}"/><stop offset="1" stop-color="${to}"/></linearGradient></defs><rect width="800" height="600" fill="url(#g)"/><text x="40" y="560" font-family="Arial" font-size="40" fill="white">${label}</text></svg>`)}`;
 
 const currency = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -83,9 +87,23 @@ const buildLocalDemoPortal = (): PublicProposalPortal => {
             name: 'Películas Brasil',
             phone: '(85) 99999-0000',
             colors: { primaria: '#155eef', secundaria: '#0f172a' },
+            showcase: {
+                rating: 4.9,
+                reviewCount: 127,
+                reviewsUrl: 'https://www.google.com/maps',
+                testimonials: [
+                    { name: 'Juliana R.', text: 'A sala ficou bem mais fresca e sem reflexo na TV. Equipe pontual e caprichosa, deixaram tudo limpo.' },
+                    { name: 'Roberto M.', text: 'Fiz a fachada da loja. O calor diminuiu muito e a vitrine continua bonita. Recomendo.' },
+                ],
+                photos: [
+                    { url: demoPhoto('Sala de estar', '#0f172a', '#155eef'), caption: 'Sala com película de controle solar' },
+                    { url: demoPhoto('Fachada comercial', '#134e4a', '#0ea5e9'), caption: 'Fachada de loja' },
+                    { url: demoPhoto('Varanda', '#3f3f46', '#f59e0b'), caption: 'Varanda gourmet' },
+                ],
+            },
         },
         proposals: [
-            { id: 101, proposalOptionName: 'Opção Premium', nomeArquivo: 'proposta-premium.pdf', totalPreco: 4850, totalM2: 36.8, date: new Date().toISOString(), status: 'pending', conditionOriginalValue: 5350, conditionFinalValue: 4850, conditionDiscountAmount: 500, conditionDiscountPercent: 9.35, conditionExpiresAt: expires.toISOString(), paymentConfig },
+            { id: 101, proposalOptionName: 'Opção Premium', nomeArquivo: 'proposta-premium.pdf', totalPreco: 4850, totalM2: 36.8, date: new Date().toISOString(), status: 'pending', conditionOriginalValue: 5350, conditionFinalValue: 4850, conditionDiscountAmount: 500, conditionDiscountPercent: 9.35, conditionExpiresAt: expires.toISOString(), paymentConfig, highlighted: true },
             { id: 102, proposalOptionName: 'Opção Essencial', nomeArquivo: 'proposta-essencial.pdf', totalPreco: 3290, totalM2: 36.8, date: new Date().toISOString(), status: 'pending', paymentConfig },
         ],
         messages: [
@@ -348,7 +366,7 @@ const ProposalPortalView: React.FC = () => {
         if (import.meta.env.DEV && token === 'demo') {
             const demo = buildLocalDemoPortal();
             setData(demo);
-            setSelectedId(current => current ?? demo.proposals[0]?.id ?? null);
+            setSelectedId(current => current ?? demo.proposals.find(proposal => proposal.highlighted)?.id ?? demo.proposals[0]?.id ?? null);
             setLoading(false);
             return;
         }
@@ -366,7 +384,8 @@ const ProposalPortalView: React.FC = () => {
             }
             portalActivityRef.current = next.portal.last_activity_at;
             setData(next);
-            setSelectedId(current => current ?? next.proposals[0]?.id ?? null);
+            // A opção recomendada pela empresa já vem marcada.
+            setSelectedId(current => current ?? next.proposals.find(proposal => proposal.highlighted)?.id ?? next.proposals[0]?.id ?? null);
             setError('');
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Não foi possível abrir esta proposta.');
@@ -592,6 +611,7 @@ const ProposalPortalView: React.FC = () => {
                         {sentOn ? `Preparada por ${data.company.name} em ${sentOn}. ` : ''}
                         {hasFinalDecision ? null : remaining?.remaining ? <>Válida até {validUntil} <span className="text-slate-400">({daysLeft})</span>.</> : 'O prazo desta proposta terminou.'}
                     </p>
+                    <PortalRatingLine showcase={data.company.showcase} />
                 </section>
 
                 {error ? <div className="mt-6 flex items-start justify-between gap-3 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700"><span>{error}</span><button type="button" onClick={() => setError('')} aria-label="Fechar aviso"><X className="h-4 w-4" /></button></div> : null}
@@ -632,7 +652,10 @@ const ProposalPortalView: React.FC = () => {
                                     >
                                         {!singleProposal ? <span className={`mt-1 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] ${active ? 'border-[var(--portal-brand)]' : 'border-slate-300'}`}>{active ? <span className="h-2 w-2 rounded-full bg-[var(--portal-brand)]" /> : null}</span> : null}
                                         <span className="min-w-0 flex-1">
-                                            <span className="block text-[17px] font-semibold text-slate-900">{name}</span>
+                                            <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                                <span className="text-[17px] font-semibold text-slate-900">{name}</span>
+                                                {proposal.highlighted && !singleProposal ? <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">Recomendada</span> : null}
+                                            </span>
                                             <span className="mt-0.5 block text-sm text-slate-500">{proposal.totalM2 ? `${proposal.totalM2.toFixed(2).replace('.', ',')} m² de película` : 'Detalhes completos no PDF'}</span>
                                         </span>
                                         <span className="shrink-0 text-right">
@@ -668,6 +691,8 @@ const ProposalPortalView: React.FC = () => {
                         </div>
                     </section>
                 ) : null}
+
+                <PortalShowcaseSection showcase={data.company.showcase} companyName={data.company.name} />
 
                 {/* Forma de pagamento */}
                 {paymentOptions.length > 0 && !hasFinalDecision ? (

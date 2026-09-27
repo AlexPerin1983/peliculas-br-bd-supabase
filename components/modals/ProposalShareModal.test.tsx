@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Client, SavedPDF } from '../../types';
-import { createProposalPortal, findClientProposalPortals, refreshProposalPortal, revokeProposalPortal, type ExistingProposalPortal } from '../../src/lib/proposalPortal';
+import { createProposalPortal, findClientProposalPortals, refreshProposalPortal, revokeProposalPortal, setProposalPortalHighlight, type ExistingProposalPortal } from '../../src/lib/proposalPortal';
 import ProposalShareModal from './ProposalShareModal';
 
 vi.mock('../../src/lib/proposalPortal', () => ({
@@ -9,6 +9,7 @@ vi.mock('../../src/lib/proposalPortal', () => ({
     findClientProposalPortals: vi.fn(),
     refreshProposalPortal: vi.fn(),
     revokeProposalPortal: vi.fn(),
+    setProposalPortalHighlight: vi.fn(),
     buildProposalShareMessage: (_client: Client, _pdfs: SavedPDF[], url: string) => `Veja sua proposta: ${url}`,
 }));
 
@@ -28,10 +29,32 @@ describe('ProposalShareModal', () => {
         vi.mocked(findClientProposalPortals).mockReset().mockResolvedValue([]);
         vi.mocked(refreshProposalPortal).mockReset();
         vi.mocked(revokeProposalPortal).mockReset().mockResolvedValue(undefined);
+        vi.mocked(setProposalPortalHighlight).mockReset().mockResolvedValue(undefined);
         vi.mocked(createProposalPortal).mockResolvedValue({
             portalId: 'portal-1', token: 'abc123', shareCode: 'abc123',
             expiresAt: '2026-10-21T23:59:59Z', url: portalUrl,
         });
+    });
+
+    it('marca uma opção como "Recomendada" ao criar o link (só com 2 ou mais opções)', async () => {
+        const other = { id: 43, proposalOptionName: 'Opção 3', totalPreco: 790 } as SavedPDF;
+        render(<ProposalShareModal isOpen client={client} pdfs={[pdf, other]} onClose={vi.fn()} />);
+
+        const star = await screen.findByRole('button', { name: 'Recomendar Opção 3' });
+        fireEvent.click(star);
+        expect(screen.getByRole('button', { name: 'Tirar destaque de Opção 3' })).toHaveAttribute('aria-pressed', 'true');
+        fireEvent.click(screen.getByRole('button', { name: /Criar link da proposta/i }));
+
+        await screen.findByText('Link criado com sucesso');
+        expect(setProposalPortalHighlight).toHaveBeenCalledWith('portal-1', 43);
+    });
+
+    it('com uma opção só, não há estrela nem destaque', async () => {
+        render(<ProposalShareModal isOpen client={client} pdfs={[pdf]} onClose={vi.fn()} />);
+        fireEvent.click(await screen.findByRole('button', { name: /Criar link da proposta/i }));
+        await screen.findByText('Link criado com sucesso');
+        expect(screen.queryByRole('button', { name: /Recomendar/ })).not.toBeInTheDocument();
+        expect(setProposalPortalHighlight).not.toHaveBeenCalled();
     });
 
     it('oferece WhatsApp comum e Business com o mesmo link criado', async () => {

@@ -157,11 +157,14 @@ const loadCompanyBranding = async (
   const { data: infos } = userIds.length
     ? await admin
       .from('user_info')
-      .select('user_id, empresa, telefone, email, logo, cores')
+      .select('user_id, empresa, telefone, email, logo, cores, portal_showcase, social_links')
       .in('user_id', userIds)
     : { data: [] };
 
-  return selectCompanyBranding(organization, infos || [], createdBy);
+  // Fotos da vitrine ficam no bucket público "portfolio".
+  const storageBase = `${Deno.env.get('SUPABASE_URL') || ''}/storage/v1/object/public/portfolio/`;
+  const photoUrl = (path: string) => storageBase + path.split('/').map(encodeURIComponent).join('/');
+  return selectCompanyBranding(organization, infos || [], createdBy, photoUrl);
 };
 
 Deno.serve(async (request) => {
@@ -181,7 +184,7 @@ Deno.serve(async (request) => {
     const token = cleanText(url.searchParams.get('token') || payload.token || payload.shareCode, 96);
     if (!token) return json({ error: 'Link de proposta invalido.' }, 400);
 
-    const portalColumns = 'id, token, share_code, organization_id, client_id, created_by, expires_at, status, decision_pdf_id, decision_at, view_count, last_activity_at, created_at';
+    const portalColumns = 'id, token, share_code, organization_id, client_id, created_by, expires_at, status, decision_pdf_id, decision_at, view_count, last_activity_at, created_at, highlighted_pdf_id';
     const looksLikeLegacyToken = /^[a-f0-9]{48}$/i.test(token);
     const primaryLookupColumn = looksLikeLegacyToken ? 'token' : 'share_code';
     const fallbackLookupColumn = looksLikeLegacyToken ? 'share_code' : 'token';
@@ -289,6 +292,8 @@ Deno.serve(async (request) => {
             paymentConfig: pdf.payment_config || undefined,
             ...resolvePortalPricing(pdf, item, portal.expires_at),
             conditionUpdatedAt: item.condition_updated_at,
+            // Opção que a empresa recomenda (selo "Recomendada").
+            highlighted: portal.highlighted_pdf_id != null && Number(portal.highlighted_pdf_id) === Number(pdf.id),
           };
         }),
         messages: messages || [],
