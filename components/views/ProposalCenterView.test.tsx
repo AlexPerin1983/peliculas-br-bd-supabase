@@ -139,8 +139,14 @@ describe('Central de propostas', () => {
         fireEvent.click(within(sheet).getByRole('button', { name: /Editar/ }));
         fireEvent.change(within(sheet).getByLabelText('Mensagem para Carlos Lima'), { target: { value: 'Carlos, fechamos por R$ 340?' } });
         expect(hrefText(within(sheet).getByRole('link', { name: /Enviar no WhatsApp/ }))).toContain('Carlos, fechamos por R$ 340?');
-        fireEvent.change(within(sheet).getByLabelText('Trocar mensagem'), { target: { value: 'value' } });
+        fireEvent.change(within(sheet).getByLabelText('Trocar mensagem'), { target: { value: 'value:principal' } });
         expect(hrefText(within(sheet).getByRole('link', { name: /Enviar no WhatsApp/ }))).toContain('A instalação tem garantia');
+        // Variação com a pergunta do "não".
+        fireEvent.change(within(sheet).getByLabelText('Trocar mensagem'), { target: { value: 'hot:nao' } });
+        expect(hrefText(within(sheet).getByRole('link', { name: /Enviar no WhatsApp/ }))).toContain('Seria loucura a gente conversar');
+        // Dica de negociação da situação.
+        fireEvent.click(within(sheet).getByRole('button', { name: /Dica de negociação: Nomeie a dúvida/ }));
+        expect(within(sheet).getByText(/parece que o valor pesou/)).toBeInTheDocument();
 
         fireEvent.click(within(sheet).getByRole('button', { name: /Já falei/ }));
         await waitFor(() => expect(recordProposalFollowUp).toHaveBeenCalledWith('p1', 'hot', 'call'));
@@ -205,6 +211,26 @@ describe('Central de propostas', () => {
         expect(hrefText(link)).toContain('/p/carlos/tok123');
         fireEvent.click(link);
         await waitFor(() => expect(recordProposalFollowUp).toHaveBeenCalledWith('p1', 'hot', 'whatsapp'));
+    });
+
+    it('ficha: oferece brinde sem baixar o preço (vai para a conversa do link)', async () => {
+        vi.mocked(getSavedPdfById).mockResolvedValue({ id: 10, clienteId: 1, date: ago(4), totalPreco: 1000, totalM2: 5, nomeArquivo: 'p.pdf' });
+        vi.mocked(getClientById).mockResolvedValue({ id: 1, nome: 'Carlos Lima', telefone: '(85) 99999-1234', email: '', cpfCnpj: '' });
+        vi.mocked(applyProposalFollowUp).mockReset();
+        await setup([portal()]);
+        const sheet = openClient('Carlos Lima');
+
+        fireEvent.click(within(sheet).getByRole('button', { name: /Oferecer condição/ }));
+        const dialog = await screen.findByRole('dialog', { name: 'Condição especial' });
+        fireEvent.click(within(within(dialog).getByRole('group', { name: 'Tipo de condição' })).getByRole('button', { name: /Brinde/ }));
+        fireEvent.click(within(within(dialog).getByRole('group', { name: 'Escolha o brinde' })).getByRole('button', { name: 'Garantia estendida' }));
+        fireEvent.click(within(dialog).getByRole('button', { name: /Aplicar condição/ }));
+
+        await waitFor(() => expect(setProposalOfferDeadline).toHaveBeenCalledWith('p1', expect.any(Date), expect.stringContaining('Brinde: garantia estendida')));
+        expect(sendCompanyProposalMessage).toHaveBeenCalledWith('p1', expect.stringContaining('incluímos garantia estendida sem custo'));
+        expect(applyProposalFollowUp).not.toHaveBeenCalled();
+        const link = await within(dialog).findByRole('link', { name: /Enviar no WhatsApp/ });
+        expect(hrefText(link)).toContain('mantendo o valor da proposta, incluo garantia estendida sem custo');
     });
 
     it('ficha: histórico da proposta', async () => {
