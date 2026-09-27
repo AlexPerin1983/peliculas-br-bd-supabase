@@ -181,14 +181,16 @@ const NextStepCard: React.FC<{
     const [copied, setCopied] = useState(false);
     const [editing, setEditing] = useState(false);
     // Mensagem escolhida: "situação:variação" (ex.: "hot:principal", "expired:renovar").
-    const [choice, setChoice] = useState(isTemplateStep(item.step) ? `${item.step}:principal` : '');
+    // "Sem retorno" usa a despedida da proposta vencida.
+    const defaultChoice = (step: string) => (isTemplateStep(step) ? `${step}:principal` : step === 'close' ? 'expired:despedida' : '');
+    const [choice, setChoice] = useState(defaultChoice(item.step));
     const [text, setText] = useState(item.message || '');
     const [edited, setEdited] = useState(false);
     const [showTip, setShowTip] = useState(false);
     const tip = getNegotiationTip(item);
 
     useEffect(() => {
-        setChoice(isTemplateStep(item.step) ? `${item.step}:principal` : '');
+        setChoice(defaultChoice(item.step));
         setEdited(false);
         setEditing(false);
     }, [item.step, portal.id]);
@@ -201,7 +203,7 @@ const NextStepCard: React.FC<{
     }, [edited, choice, templates, portal, item.message]);
 
     const whatsappUrl = text ? buildProposalWhatsAppUrl(portal.clientPhone || undefined, text) : null;
-    const hasMessage = item.step !== 'reply' && item.step !== 'close';
+    const hasMessage = item.step !== 'reply';
     const snoozeTarget = snoozePick === 'custom'
         ? (snoozeCustom ? snoozeDate(snoozeCustom) : null)
         : snoozeDate(snoozePick);

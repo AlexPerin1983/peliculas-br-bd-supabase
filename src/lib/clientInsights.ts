@@ -335,7 +335,7 @@ export const getClientNextStep = (
             cta: 'Chamar no WhatsApp',
             action: {
                 type: 'whatsapp',
-                message: `Oi, ${firstName(client.nome)}! Tudo bem? Passando para saber como estão as películas. Se quiser revisar algum vidro ou fazer outro ambiente, faço uma condição especial para você.`,
+                message: `Oi, ${firstName(client.nome)}! Tudo bem? Faz um tempinho que instalamos as suas películas e passei pra saber se está tudo certo com elas 🙂\nSe estiver pensando em outro ambiente (quarto, varanda, escritório ou carro), me avisa que faço uma condição especial de cliente.`,
             },
         };
     }
@@ -364,15 +364,14 @@ export const buildReviewRequestMessage = (
 ) => {
     const withLink = buildReviewFollowUpMessage(source || { clientName: client.nome }, client, googleReviewsLink);
     if (withLink) return withLink;
-    return `Olá, ${firstName(client.nome)}! Obrigado pela confiança no nosso trabalho. Se puder, deixe uma avaliação no Google${companyName ? ` (procure por ${companyName})` : ''}: isso ajuda muito novos clientes a nos conhecerem. Obrigado!`;
+    return `Olá, ${firstName(client.nome)}! Muito obrigado pela confiança no nosso trabalho 🙏\nSe puder, deixe uma avaliação no Google${companyName ? ` (procure por ${companyName})` : ''}: leva menos de 1 minuto e ajuda muito outras pessoas a nos conhecerem.`;
 };
 
 export const buildReferralMessage = (client: Client, companyPhone?: string) => [
-    `Oi, ${firstName(client.nome)}! Tudo certo com as películas?`,
-    '',
-    `Se conhecer alguém que também queira deixar a casa, o carro ou a empresa mais fresca e protegida do sol, pode me indicar? É só passar o meu contato${companyPhone?.trim() ? `: ${companyPhone.trim()}` : ''}.`,
-    '',
-    'Indicação de cliente é o que mais ajuda o nosso trabalho. Muito obrigado!',
+    `Oi, ${firstName(client.nome)}! Tudo certo com as películas? 🙂`,
+    'Uma pergunta rápida: você conhece alguém (vizinho, familiar ou colega de trabalho) que sofre com calor ou claridade em casa ou no trabalho?',
+    companyPhone?.trim() ? `Se puder me indicar, é só passar o meu contato: ${companyPhone.trim()}` : 'Se puder me indicar, é só passar o meu contato.',
+    'Indicação ajuda demais o meu trabalho. Muito obrigado pela confiança!',
 ].join('\n');
 
 // ---- Linha do tempo ----

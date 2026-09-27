@@ -33,25 +33,30 @@ export interface FollowUpVariant {
 
 export const FOLLOW_UP_VARIANTS: Record<FollowUpTemplateStep, FollowUpVariant[]> = {
     not_opened: [
-        { id: 'principal', label: 'Principal', text: 'Oi, {{primeiro_nome}}! Tudo bem? Te enviei a proposta das películas. Conseguiu abrir? Deixo o link aqui de novo: {{link}}' },
-        { id: 'nao', label: 'Pergunta do “não”', text: 'Oi, {{primeiro_nome}}! Seria ruim eu te reenviar a proposta das películas? Acho que a mensagem pode ter se perdido por aqui. {{link}}' },
+        { id: 'principal', label: 'Leve', text: 'Oi, {{primeiro_nome}}! Conseguiu ver a proposta das películas que te mandei?\nDeixo o link aqui de novo, caso a mensagem tenha se perdido:\n{{link}}' },
+        { id: 'audio', label: 'Oferecer áudio', text: 'Oi, {{primeiro_nome}}! Quer que eu te explique a proposta das películas num áudio rapidinho?\nÀs vezes fica mais fácil do que ler tudo 🙂\n{{link}}' },
+        { id: 'nao', label: 'Pergunta do “não”', text: 'Oi, {{primeiro_nome}}! É uma má hora pra falar da proposta das películas?\nSe preferir, te chamo outro dia, sem problema.\n{{link}}' },
     ],
     hot: [
-        { id: 'principal', label: 'Principal', text: 'Oi, {{primeiro_nome}}! Vi que você deu uma boa olhada na proposta. Parece que ficou alguma dúvida, ou talvez o valor tenha pesado um pouco. O que é mais importante pra você nessa decisão? {{link}}' },
-        { id: 'nao', label: 'Pergunta do “não”', text: 'Oi, {{primeiro_nome}}! Seria loucura a gente conversar 5 minutinhos sobre a proposta? Quero entender se ela está fazendo sentido pra você. {{link}}' },
-        { id: 'preco', label: 'Antecipar o preço', text: 'Oi, {{primeiro_nome}}! Sei que o valor pode parecer alto à primeira vista. É por isso que a instalação tem garantia, usa material de primeira linha e eu deixo tudo limpo no mesmo dia. O que ainda está te deixando em dúvida? {{link}}' },
+        { id: 'principal', label: 'Entender a dúvida', text: 'Oi, {{primeiro_nome}}! Ficou alguma dúvida na proposta das películas?\nImagino que você esteja avaliando com calma, e faz todo sentido.\nMe conta: o que pesa mais pra você agora — o valor, o tipo de película ou a data da instalação?\n{{link}}' },
+        { id: 'nao', label: 'Pergunta do “não”', text: 'Oi, {{primeiro_nome}}! A proposta ficou acima do que você esperava?\nSe for isso, me fala sem problema: dá pra ajustar o projeto pra caber melhor no seu orçamento.\n{{link}}' },
+        { id: 'decisao', label: 'Decisão em conjunto', text: 'Oi, {{primeiro_nome}}! Tem mais alguém participando dessa decisão aí (esposa, marido, sócio)?\nSe ajudar, te mando um resumo curtinho das opções ou explico por áudio pra vocês.\n{{link}}' },
+        { id: 'preco', label: 'Antecipar o preço', text: 'Oi, {{primeiro_nome}}! Talvez o valor tenha parecido alto à primeira vista — é normal pensar duas vezes.\nNele já está tudo incluso: instalação caprichada, acabamento limpo e garantia do serviço.\nPosso te ajudar com alguma dúvida?\n{{link}}' },
     ],
     value: [
-        { id: 'principal', label: 'Principal', text: 'Oi, {{primeiro_nome}}! Passando pra saber se deu pra ver a proposta com calma. A instalação tem garantia e posso te mandar fotos de trabalhos parecidos. O que ainda falta pra você decidir? {{link}}' },
-        { id: 'nao', label: 'Pergunta do “não”', text: 'Oi, {{primeiro_nome}}! A proposta ficou fora do que você esperava? Pode falar com sinceridade, assim eu ajusto o que for preciso. {{link}}' },
+        { id: 'principal', label: 'Fotos e dúvidas', text: 'Oi, {{primeiro_nome}}! O que achou da proposta das películas?\nSe ajudar na decisão, te mando fotos de trabalhos parecidos com o seu 📸\n{{link}}' },
+        { id: 'beneficios', label: 'Benefícios', text: 'Oi, {{primeiro_nome}}! Só pra lembrar o que a película resolve no dia a dia:\n• menos calor dentro do ambiente\n• menos claridade e reflexo na TV e no computador\n• proteção dos móveis e do piso contra o desbotamento\nFicou alguma dúvida?\n{{link}}' },
+        { id: 'nao', label: 'Pergunta do “não”', text: 'Oi, {{primeiro_nome}}! Teve alguma coisa na proposta que não te agradou?\nPode falar com sinceridade, assim eu consigo te ajudar melhor.\n{{link}}' },
     ],
     expiring: [
-        { id: 'principal', label: 'Principal', text: 'Oi, {{primeiro_nome}}! Sua proposta vale até {{quando_vence}} ({{validade}}). Depois disso não consigo garantir esses valores. Quer que eu já reserve um horário na agenda pra você? {{link}}' },
-        { id: 'nao', label: 'Pergunta do “não”', text: 'Oi, {{primeiro_nome}}! Sua proposta vence {{quando_vence}}. Seria um problema eu segurar um horário na agenda pra você até lá, sem compromisso? {{link}}' },
+        { id: 'principal', label: 'Prazo', text: 'Oi, {{primeiro_nome}}! Passando pra lembrar que a sua proposta vence {{quando_vence}} ({{validade}}).\nDepois disso não consigo garantir os mesmos valores.\nQuer que eu já reserve a sua data na agenda?\n{{link}}' },
+        { id: 'agenda', label: 'Reservar a data', text: 'Oi, {{primeiro_nome}}! Estou organizando a agenda dos próximos dias.\nSe quiser garantir a instalação com os valores da proposta (válida até {{validade}}), me avisa que eu seguro um horário pra você.\n{{link}}' },
+        { id: 'nao', label: 'Pergunta do “não”', text: 'Oi, {{primeiro_nome}}! É uma má hora pra gente combinar a data da instalação?\nA sua proposta vence {{quando_vence}} e depois disso os valores podem mudar.\n{{link}}' },
     ],
     expired: [
-        { id: 'principal', label: 'Principal', text: 'Oi, {{primeiro_nome}}! Você desistiu das películas? Se ainda fizer sentido, eu atualizo a proposta pra você. Pode falar com sinceridade, sem problema.' },
-        { id: 'renovar', label: 'Oferecer renovar', text: 'Oi, {{primeiro_nome}}! Sua proposta venceu, mas consigo segurar os valores por mais alguns dias. Quer que eu atualize pra você?' },
+        { id: 'principal', label: 'Pergunta do “não”', text: 'Oi, {{primeiro_nome}}! Você desistiu das películas ou só ficou corrido por aí? 🙂' },
+        { id: 'renovar', label: 'Oferecer renovar', text: 'Oi, {{primeiro_nome}}! A sua proposta venceu, mas se ainda tiver interesse eu consigo atualizar pra você.\nQuer que eu veja isso?' },
+        { id: 'despedida', label: 'Despedida', text: 'Oi, {{primeiro_nome}}! Como não tive retorno, vou entender que as películas não são prioridade agora e vou encerrar a sua proposta por aqui.\nSe mudar de ideia, é só me chamar que eu atualizo pra você 🙂' },
     ],
 };
 
@@ -157,7 +162,7 @@ export const followUpTagValues = (portal: CompanyProposalPortal, now = Date.now(
         nome_cliente: portal.clientName.trim(),
         link: buildProposalPortalUrl(portal.token, portal.clientName),
         valor: portalTotal(portal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
-        validade: new Date(expires).toLocaleDateString('pt-BR'),
+        validade: new Date(expires).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
         quando_vence: whenLabel(expires, now),
         aberturas: timesLabel(portal.viewCount),
     };
@@ -178,6 +183,8 @@ export const buildFollowUpMessage = (
     now = Date.now(),
     templates: FollowUpTemplates = {},
 ): string | null => {
+    // "Sem retorno" depois do vencimento: a mensagem de despedida (muita gente responde a ela).
+    if (step === 'close') return fillFollowUpMessage(FOLLOW_UP_VARIANTS.expired.find(item => item.id === 'despedida')!.text, followUpTagValues(portal, now));
     if (!isTemplateStep(step)) return null;
     const template = templates[step]?.trim() ? templates[step]! : DEFAULT_FOLLOW_UP_TEMPLATES[step];
     return fillFollowUpMessage(template, followUpTagValues(portal, now));
@@ -233,8 +240,8 @@ const NEGOTIATION_TIPS: Record<FollowUpStep | 'negotiation', NegotiationTip> = {
         text: '"Você desistiu?" é fácil de responder e costuma destravar quem sumiu. A resposta mostra se vale renovar ou encerrar.',
     },
     close: {
-        title: 'Encerrar também é resultado',
-        text: 'Marque como perdida com o motivo. Os motivos mostram onde ajustar o preço ou a oferta.',
+        title: 'A mensagem de despedida',
+        text: 'Avisar que vai encerrar a proposta costuma trazer resposta de quem sumiu. Se ainda assim não responder, marque como perdida com o motivo: os motivos mostram onde ajustar o preço ou a oferta.',
     },
 };
 
@@ -293,7 +300,13 @@ export const formatDeadline = (deadline: Date) =>
 export const buildOfferMessage = (portal: CompanyProposalPortal, params: { from: number; to: number; discountLabel: string; deadline: Date }) => {
     const brl = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     const name = portal.clientName.trim().split(/\s+/)[0] || '';
-    return `Oi, ${name}! Consegui uma condição especial para você: de ${brl(params.from)} por ${brl(params.to)} (${params.discountLabel} de desconto). Vale até ${formatDeadline(params.deadline)}. Depois disso, volta ao valor normal. Confira aqui: ${buildProposalPortalUrl(portal.token, portal.clientName)}`;
+    // Formatação do WhatsApp: ~riscado~ e *negrito*.
+    return [
+        `Oi, ${name}! Tenho uma notícia boa 🙂`,
+        `Consegui uma condição especial pra você fechar a instalação: de ~${brl(params.from)}~ por *${brl(params.to)}* (${params.discountLabel} de desconto).`,
+        `Vale até ${formatDeadline(params.deadline)}. Depois disso, volta ao valor normal.`,
+        buildProposalPortalUrl(portal.token, portal.clientName),
+    ].join('\n');
 };
 
 // Brinde em vez de desconto: mantém o preço e acrescenta valor (com prazo).
@@ -306,7 +319,12 @@ export const OFFER_BONUS_PRESETS: Array<{ label: string; phrase: string }> = [
 
 export const buildBonusOfferMessage = (portal: CompanyProposalPortal, params: { bonus: string; deadline: Date }) => {
     const name = portal.clientName.trim().split(/\s+/)[0] || '';
-    return `Oi, ${name}! Consegui uma condição especial pra você: mantendo o valor da proposta, incluo ${params.bonus} sem custo. Vale até ${formatDeadline(params.deadline)}; depois disso não consigo manter o brinde. Confira aqui: ${buildProposalPortalUrl(portal.token, portal.clientName)}`;
+    return [
+        `Oi, ${name}! Tenho uma notícia boa 🙂`,
+        `Mantendo o valor da sua proposta, consigo incluir *${params.bonus}* sem custo.`,
+        `Vale até ${formatDeadline(params.deadline)}. Depois disso não consigo manter o brinde.`,
+        buildProposalPortalUrl(portal.token, portal.clientName),
+    ].join('\n');
 };
 
 // Lembrete vale enquanto for a última ação (contato ou lembrete) e o cliente não tiver escrito depois dele.
@@ -354,7 +372,7 @@ export const getFollowUpItem = (portal: CompanyProposalPortal, now = Date.now(),
                 'Ofereça renovar os valores. Se ele topar, use "Criar link" no Histórico para atualizar o mesmo link.', expires);
         }
         return make('close', 5, 'Sem retorno depois do vencimento',
-            'Marque como perdida para tirar da lista (motivo: sem resposta).', lastTouch + 3 * DAY);
+            'Mande a mensagem de despedida. Se não responder, marque como perdida (motivo: sem resposta).', lastTouch + 3 * DAY);
     }
 
     if (expires - now <= 2 * DAY) {

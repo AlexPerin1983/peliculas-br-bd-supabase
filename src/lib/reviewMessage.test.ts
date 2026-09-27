@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Client, Measurement } from '../../types';
 import {
+    buildReviewFollowUpMessage,
     buildShortReviewMessage,
     getReviewTokens,
     renderReviewTemplate,
@@ -33,6 +34,21 @@ describe('buildShortReviewMessage', () => {
 
     it('retorna vazio sem link do Google', () => {
         expect(buildShortReviewMessage(makeSource(['X']), makeClient(), '')).toBe('');
+    });
+});
+
+describe('buildReviewFollowUpMessage', () => {
+    it('mensagem com acentos, o link e a dica, sem nome de empresa fixo', () => {
+        const msg = buildReviewFollowUpMessage(makeSource(['Fumê espelhado']), makeClient(), LINK);
+        expect(msg.split('\n')[0]).toBe('Olá, Polyana! Tudo bem?');
+        expect(msg).toContain(LINK);
+        expect(msg).toContain('a película Fumê espelhado');
+        expect(msg).toContain('Isso ajuda outras pessoas a nos encontrarem no Google.');
+        expect(msg).not.toMatch(/Peliculas Brasil|avaliacao|servico/);
+    });
+
+    it('retorna vazio sem link do Google', () => {
+        expect(buildReviewFollowUpMessage(makeSource(['X']), makeClient(), '')).toBe('');
     });
 });
 

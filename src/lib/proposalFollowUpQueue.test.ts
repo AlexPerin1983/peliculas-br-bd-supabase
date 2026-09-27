@@ -155,13 +155,13 @@ describe('Para acompanhar hoje', () => {
     it('mensagem da condição especial com valores, prazo e o mesmo link', () => {
         const message = buildOfferMessage(portal(), { from: 1000, to: 900, discountLabel: '10%', deadline: new Date('2026-10-02T23:59:00') });
         expect(message).toContain('Oi, Carlos!');
-        expect(message).toContain(`de ${(1000).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} por ${(900).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} (10% de desconto)`);
+        expect(message).toContain(`de ~${(1000).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}~ por *${(900).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}* (10% de desconto)`);
         expect(message).toContain('02/10');
         expect(message).toContain('Depois disso, volta ao valor normal.');
         expect(message).toContain('/p/carlos/tok');
 
         const bonus = buildBonusOfferMessage(portal(), { bonus: 'a remoção da película antiga', deadline: new Date('2026-10-02T23:59:00') });
-        expect(bonus).toContain('mantendo o valor da proposta, incluo a remoção da película antiga sem custo');
+        expect(bonus).toContain('Mantendo o valor da sua proposta, consigo incluir *a remoção da película antiga* sem custo');
         expect(bonus).toContain('não consigo manter o brinde');
         expect(bonus).toContain('/p/carlos/tok');
     });
@@ -206,9 +206,9 @@ describe('Para acompanhar hoje', () => {
         const message = buildFollowUpMessage('hot', portal({ viewCount: 4 }), NOW, {
             hot: '{{primeiro_nome}}, vi que abriu {{aberturas}}. Valor: {{valor}}. Vale até {{validade}}. {{link}}',
         });
-        expect(message).toBe(`Carlos, vi que abriu 4 vezes. Valor: ${(365).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}. Vale até ${new Date(at(20)).toLocaleDateString('pt-BR')}. http://localhost:3000/p/carlos/tok`);
+        expect(message).toBe(`Carlos, vi que abriu 4 vezes. Valor: ${(365).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}. Vale até ${new Date(at(20)).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}. http://localhost:3000/p/carlos/tok`);
         // Modelo vazio volta para o padrão.
-        expect(buildFollowUpMessage('hot', portal({ viewCount: 4 }), NOW, { hot: '   ' })).toContain('Vi que você deu uma boa olhada na proposta');
+        expect(buildFollowUpMessage('hot', portal({ viewCount: 4 }), NOW, { hot: '   ' })).toContain('Ficou alguma dúvida na proposta das películas?');
         expect(findUnknownFollowUpTags('Oi {{primeiro_nome}} {{cupom}}')).toEqual(['cupom']);
     });
 
@@ -221,9 +221,17 @@ describe('Para acompanhar hoje', () => {
             }
         }
         const hot = portal({ viewCount: 4 });
-        expect(buildFollowUpVariantMessage('hot', 'nao', hot, NOW)).toContain('Seria loucura a gente conversar');
+        expect(buildFollowUpVariantMessage('hot', 'nao', hot, NOW)).toContain('A proposta ficou acima do que você esperava?');
         expect(buildFollowUpVariantMessage('hot', 'principal', hot, NOW, { hot: 'Texto da empresa {{link}}' })).toContain('Texto da empresa');
-        expect(buildFollowUpVariantMessage('expired', 'principal', portal(), NOW)).toContain('Você desistiu das películas?');
+        expect(buildFollowUpVariantMessage('expired', 'principal', portal(), NOW)).toBe('Oi, Carlos! Você desistiu das películas ou só ficou corrido por aí? 🙂');
+        // A pergunta vem na primeira linha (é o que aparece na notificação) e o link fica na última.
+        const notOpened = buildFollowUpVariantMessage('not_opened', 'principal', portal(), NOW).split('\n');
+        expect(notOpened[0]).toBe('Oi, Carlos! Conseguiu ver a proposta das películas que te mandei?');
+        expect(notOpened.at(-1)).toBe('http://localhost:3000/p/carlos/tok');
+        // "Vence amanhã (data)", nunca "vale até em 2 dias".
+        expect(buildFollowUpVariantMessage('expiring', 'principal', portal({ expiresAt: at(2) }), NOW)).toContain('vence em 2 dias (');
+        // "Sem retorno" depois do vencimento: mensagem de despedida.
+        expect(buildFollowUpMessage('close', portal(), NOW)).toContain('vou encerrar a sua proposta por aqui');
     });
 
     it('dica de negociação conforme a situação (contraproposta tem dica própria)', () => {

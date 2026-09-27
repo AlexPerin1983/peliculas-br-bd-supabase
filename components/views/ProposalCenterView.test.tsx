@@ -140,10 +140,10 @@ describe('Central de propostas', () => {
         fireEvent.change(within(sheet).getByLabelText('Mensagem para Carlos Lima'), { target: { value: 'Carlos, fechamos por R$ 340?' } });
         expect(hrefText(within(sheet).getByRole('link', { name: /Enviar no WhatsApp/ }))).toContain('Carlos, fechamos por R$ 340?');
         fireEvent.change(within(sheet).getByLabelText('Trocar mensagem'), { target: { value: 'value:principal' } });
-        expect(hrefText(within(sheet).getByRole('link', { name: /Enviar no WhatsApp/ }))).toContain('A instalação tem garantia');
+        expect(hrefText(within(sheet).getByRole('link', { name: /Enviar no WhatsApp/ }))).toContain('O que achou da proposta das películas?');
         // Variação com a pergunta do "não".
         fireEvent.change(within(sheet).getByLabelText('Trocar mensagem'), { target: { value: 'hot:nao' } });
-        expect(hrefText(within(sheet).getByRole('link', { name: /Enviar no WhatsApp/ }))).toContain('Seria loucura a gente conversar');
+        expect(hrefText(within(sheet).getByRole('link', { name: /Enviar no WhatsApp/ }))).toContain('A proposta ficou acima do que você esperava?');
         // Dica de negociação da situação.
         fireEvent.click(within(sheet).getByRole('button', { name: /Dica de negociação: Nomeie a dúvida/ }));
         expect(within(sheet).getByText(/parece que o valor pesou/)).toBeInTheDocument();
@@ -230,7 +230,7 @@ describe('Central de propostas', () => {
         expect(sendCompanyProposalMessage).toHaveBeenCalledWith('p1', expect.stringContaining('incluímos garantia estendida sem custo'));
         expect(applyProposalFollowUp).not.toHaveBeenCalled();
         const link = await within(dialog).findByRole('link', { name: /Enviar no WhatsApp/ });
-        expect(hrefText(link)).toContain('mantendo o valor da proposta, incluo garantia estendida sem custo');
+        expect(hrefText(link)).toContain('Mantendo o valor da sua proposta, consigo incluir *garantia estendida* sem custo');
     });
 
     it('ficha: histórico da proposta', async () => {
