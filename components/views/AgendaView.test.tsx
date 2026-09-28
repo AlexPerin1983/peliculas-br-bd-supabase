@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { act } from 'react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import AgendaView from './AgendaView';
 import { Agendamento, Client, SavedPDF } from '../../types';
 

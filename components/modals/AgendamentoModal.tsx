@@ -5,6 +5,7 @@ import ActionButton from '../ui/ActionButton';
 import Input from '../ui/Input';
 import SearchableSelect from '../ui/SearchableSelect';
 import * as db from '../../services/db';
+import { getAgendamentoSlotError } from '../../src/lib/agendamentoRules';
 
 interface AgendamentoModalProps {
     isOpen: boolean;
@@ -77,37 +78,6 @@ const toDateInputValue = (date: Date) => {
 };
 
 const toTimeInputValue = (date: Date) => date.toTimeString().split(' ')[0].substring(0, 5);
-
-const timeToMinutes = (value: string): number => {
-    const [hours = '0', minutes = '0'] = value.split(':');
-    return Number(hours) * 60 + Number(minutes);
-};
-
-const isWithinWorkingHours = (
-    startTime: string,
-    endTime: string,
-    scheduleStart: string,
-    scheduleEnd: string
-): boolean => {
-    const appointmentStart = timeToMinutes(startTime);
-    const appointmentEnd = timeToMinutes(endTime);
-    const workingStart = timeToMinutes(scheduleStart);
-    let workingEnd = timeToMinutes(scheduleEnd);
-
-    if (workingEnd <= workingStart) {
-        workingEnd += 24 * 60;
-    }
-
-    return appointmentStart >= workingStart && appointmentEnd <= workingEnd;
-};
-
-const getWorkingEndLabel = (scheduleStart: string, scheduleEnd: string): string => {
-    if (timeToMinutes(scheduleEnd) <= timeToMinutes(scheduleStart)) {
-        return `${scheduleEnd} (meia-noite)`;
-    }
-
-    return scheduleEnd;
-};
 
 const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, onSave, onDelete, schedulingInfo, clients, savedPdfs, onAddNewClient, onCreateQuickClient, userInfo, agendamentos }) => {
     const agendamento = schedulingInfo.agendamento;
@@ -280,43 +250,17 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
         const startDateTime = new Date(year, month - 1, day, startHours, startMinutes);
         const endDateTime = new Date(year, month - 1, day, endHours, endMinutes);
 
-        if (!userInfo || !userInfo.workingHours) {
-            setValidationError("Configure o horário de funcionamento da empresa nas Configurações para agendar.");
-            return;
-        }
-
-        // Capacidade = colaboradores ativos da organização (mínimo 1 = o dono).
-        const maxAppointments = teamCapacity;
-
-        if (startDateTime >= endDateTime) {
-            setValidationError('O horário de término deve ser posterior ao de início.');
-            return;
-        }
-
-        const selectedDayOfWeek = startDateTime.getDay();
-        if (!userInfo.workingHours.days.includes(selectedDayOfWeek)) {
-            setValidationError('A data selecionada não é um dia de trabalho.');
-            return;
-        }
-
-        const scheduleStart = userInfo.workingHours.start;
-        const scheduleEnd = userInfo.workingHours.end;
-        if (!isWithinWorkingHours(startTime, endTime, scheduleStart, scheduleEnd)) {
-            setValidationError(`O horário deve ser entre ${scheduleStart} e ${getWorkingEndLabel(scheduleStart, scheduleEnd)}.`);
-            return;
-        }
-
-        const conflictingAppointments = agendamentos.filter(ag => {
-            if (isEditing && ag.id === agendamento?.id) return false;
-            // Cancelados / não comparecidos não ocupam colaborador, então liberam o horário.
-            if (ag.serviceStatus === 'cancelled' || ag.serviceStatus === 'no_show') return false;
-            const existingStart = new Date(ag.start);
-            const existingEnd = new Date(ag.end);
-            return startDateTime < existingEnd && endDateTime > existingStart;
+        const slotError = getAgendamentoSlotError({
+            start: startDateTime,
+            end: endDateTime,
+            workingHours: userInfo?.workingHours,
+            agendamentos,
+            // Capacidade = colaboradores ativos da organização (mínimo 1 = o dono).
+            capacity: teamCapacity,
+            ignoreId: isEditing ? agendamento?.id : undefined,
         });
-
-        if (conflictingAppointments.length >= maxAppointments) {
-            setValidationError(`Todos os ${maxAppointments} colaboradores já estão ocupados neste horário.`);
+        if (slotError) {
+            setValidationError(slotError);
             return;
         }
         const proposalIds = selectedProposalIds.filter((id, index, ids) => ids.indexOf(id) === index);

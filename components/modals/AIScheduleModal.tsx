@@ -8,21 +8,54 @@ interface AIScheduleModalProps {
     onProcess: (input: AIInput) => Promise<void>;
     isProcessing: boolean;
     provider: 'gemini' | 'openai' | 'local_ocr';
+    // "Salvar direto na agenda": parar o áudio já processa e salva, sem conferência.
+    autoSave: boolean;
+    onToggleAutoSave: (enabled: boolean) => void;
 }
 
-// Abre direto no microfone: a pessoa fala e confere o agendamento antes de salvar.
-const AIScheduleModal: React.FC<AIScheduleModalProps> = props => (
+// Abre direto no microfone: a pessoa fala e confere o agendamento antes de salvar
+// (ou, com a chave ligada, a IA já salva ao parar o áudio).
+const AIScheduleModal: React.FC<AIScheduleModalProps> = ({ autoSave, onToggleAutoSave, ...props }) => (
     <AIComposerModal
         {...props}
         title="Agendamento com IA"
-        intro="Fale o nome do cliente, o local, o dia e a hora. A IA preenche o agendamento e você confere antes de salvar."
+        intro={autoSave
+            ? 'Fale o nome do cliente, o local, o dia e a hora. Ao parar, a IA já salva na agenda.'
+            : 'Fale o nome do cliente, o local, o dia e a hora. A IA preenche o agendamento e você confere antes de salvar.'}
+        options={(
+            <button
+                type="button"
+                role="switch"
+                aria-checked={autoSave}
+                onClick={() => onToggleAutoSave(!autoSave)}
+                disabled={props.isProcessing}
+                className={`flex w-full items-center justify-between gap-3 rounded-xl border p-3 text-left transition-colors disabled:opacity-60 ${autoSave
+                    ? 'border-[var(--brand-primary)] bg-[rgba(21,94,239,0.06)]'
+                    : 'border-[var(--border-subtle)] bg-[var(--surface-muted)]'
+                    }`}
+            >
+                <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-[var(--text-strong)]">Salvar direto na agenda</span>
+                    <span className="block text-xs text-[var(--text-muted)]">
+                        Sem conferir. Se algo não ficar claro ou o horário não puder ser agendado, abre a conferência.
+                    </span>
+                </span>
+                <span className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${autoSave ? 'bg-[var(--brand-primary)]' : 'bg-slate-300 dark:bg-slate-600'}`}>
+                    <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${autoSave ? 'left-[22px]' : 'left-0.5'}`} />
+                </span>
+            </button>
+        )}
         textPlaceholder="Cliente, local, dia e hora…"
         textExample="Maria Souza, Rua das Flores 120, Centro, sexta às 9h."
         filesHint="Print da conversa em que o cliente combinou o dia e o horário."
         voiceHint="Ex.: “Maria Souza, Rua das Flores 120, sexta às 9 da manhã”."
-        submitLabel="Preencher agendamento"
-        stages={['Entendendo o pedido…', 'Separando dia e horário…', 'Montando o agendamento…']}
+        submitLabel={autoSave ? 'Salvar na agenda' : 'Preencher agendamento'}
+        stages={['Entendendo o pedido…', 'Separando dia e horário…', autoSave ? 'Salvando na agenda…' : 'Montando o agendamento…']}
+        processingNote={autoSave
+            ? 'Leva alguns segundos. Se algo não ficar claro, você confere antes de salvar.'
+            : 'Leva alguns segundos. Você revisa tudo antes de salvar.'}
         initialMode="voice"
+        autoSubmitVoice={autoSave}
         keyboardAwareFooter
     />
 );
