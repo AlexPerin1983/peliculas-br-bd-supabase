@@ -241,6 +241,37 @@ export const buildVoiceScheduleDraft = (extraction: ScheduleExtraction, now: Dat
     };
 };
 
+// Chave "Salvar direto na agenda", guardada no aparelho: com ela ligada, a IA
+// salva sem a conferência quando nome, dia e horário ficaram claros.
+const AUTO_SAVE_STORAGE_KEY = 'peliculas-br-agenda-voz-salvar-direto';
+
+export const readScheduleAutoSave = (): boolean => {
+    try {
+        return window.localStorage.getItem(AUTO_SAVE_STORAGE_KEY) === '1';
+    } catch {
+        return false;
+    }
+};
+
+export const writeScheduleAutoSave = (enabled: boolean) => {
+    try {
+        if (enabled) window.localStorage.setItem(AUTO_SAVE_STORAGE_KEY, '1');
+        else window.localStorage.removeItem(AUTO_SAVE_STORAGE_KEY);
+    } catch {
+        // Sem armazenamento no aparelho: a chave vale só enquanto o app estiver aberto.
+    }
+};
+
+// Resumo do aviso depois de salvar direto, com dia e hora primeiro (é o que se
+// confere): "sex., 02/10, 09:00–12:00 · Maria Souza".
+export const describeVoiceSchedule = (nome: string, startIso: string, endIso: string) => {
+    const start = new Date(startIso);
+    const end = new Date(endIso);
+    const day = start.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
+    const time = (date: Date) => `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    return `${day}, ${time(start)}–${time(end)} · ${nome}`;
+};
+
 // Cadastro mínimo do cliente ditado. As partes do endereço separadas pela IA só
 // valem enquanto o local não foi editado na conferência.
 export const buildQuickClientRecord = (

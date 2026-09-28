@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import AIComposerModal, { AIComposerModalProps } from './AIComposerModal';
 
 vi.mock('../../ui/Modal', () => ({
@@ -99,6 +99,90 @@ describe('AIComposerModal', () => {
         renderComposer({ provider: 'openai', initialMode: 'voice' });
         expect(screen.getByRole('tab', { name: 'Texto' })).toHaveAttribute('aria-selected', 'true');
         expect(screen.getByRole('textbox')).toBeInTheDocument();
+    });
+
+    describe('gravação', () => {
+        let recorders: FakeRecorder[] = [];
+
+        class FakeRecorder {
+            state: 'inactive' | 'recording' = 'inactive';
+            ondataavailable: ((event: { data: Blob }) => void) | null = null;
+            onstop: (() => void) | null = null;
+            constructor(public stream: { getTracks: () => { stop: () => void }[] }) {
+                recorders.push(this);
+            }
+            start() { this.state = 'recording'; }
+            stop() {
+                this.state = 'inactive';
+                this.ondataavailable?.({ data: new Blob(['audio'], { type: 'audio/webm' }) });
+                this.onstop?.();
+            }
+        }
+
+        beforeEach(() => {
+            recorders = [];
+            vi.stubGlobal('MediaRecorder', FakeRecorder);
+            Object.defineProperty(navigator, 'mediaDevices', {
+                configurable: true,
+                value: { getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop: vi.fn() }] }) },
+            });
+        });
+
+        afterEach(() => {
+            vi.unstubAllGlobals();
+        });
+
+        it('com envio automático, parar a gravação já manda o áudio para a IA', async () => {
+            const { onProcess } = renderComposer({ initialMode: 'voice', autoSubmitVoice: true });
+
+            fireEvent.click(screen.getByRole('button', { name: 'Começar a gravar' }));
+            fireEvent.click(await screen.findByRole('button', { name: 'Parar gravação' }));
+
+            await waitFor(() => expect(onProcess).toHaveBeenCalledTimes(1));
+            expect(onProcess).toHaveBeenCalledWith({ text: undefined, images: undefined, audio: expect.any(Blob) });
+        });
+
+        it('sem envio automático, parar só guarda o áudio para revisar', async () => {
+            const { onProcess } = renderComposer({ initialMode: 'voice' });
+
+            fireEvent.click(screen.getByRole('button', { name: 'Começar a gravar' }));
+            fireEvent.click(await screen.findByRole('button', { name: 'Parar gravação' }));
+
+            expect(await screen.findByRole('button', { name: /Gravar de novo/ })).toBeInTheDocument();
+            expect(onProcess).not.toHaveBeenCalled();
+        });
+
+        it('tocar em enviar durante a gravação manda o texto junto com o áudio', async () => {
+            const { onProcess } = renderComposer();
+
+            fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Maria, sexta' } });
+            fireEvent.click(screen.getByRole('tab', { name: /Voz/ }));
+            fireEvent.click(screen.getByRole('button', { name: 'Começar a gravar' }));
+            await screen.findByRole('button', { name: 'Parar gravação' });
+            fireEvent.click(screen.getByRole('button', { name: 'Preencher medidas' }));
+
+            await waitFor(() => expect(onProcess).toHaveBeenCalledTimes(1));
+            expect(onProcess).toHaveBeenCalledWith({ text: 'Maria, sexta', images: undefined, audio: expect.any(Blob) });
+        });
+
+        it('fechar a tela no meio da gravação não envia nada', async () => {
+            const onProcess = vi.fn().mockResolvedValue(undefined);
+            const { unmount } = render(
+                <AIComposerModal
+                    isOpen onClose={vi.fn()} onProcess={onProcess} isProcessing={false} provider="gemini"
+                    title="Agenda" intro="Fale." textPlaceholder="" textExample="" filesHint="" voiceHint=""
+                    submitLabel="Enviar" stages={['…']} initialMode="voice" autoSubmitVoice
+                />
+            );
+
+            fireEvent.click(screen.getByRole('button', { name: 'Começar a gravar' }));
+            await screen.findByRole('button', { name: 'Parar gravação' });
+            unmount();
+            // O navegador encerra a gravação quando o microfone é desligado.
+            recorders[0].stop();
+
+            expect(onProcess).not.toHaveBeenCalled();
+        });
     });
 
     it('"Usar" preenche o exemplo no texto', () => {

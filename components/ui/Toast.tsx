@@ -106,7 +106,7 @@ const Toast: React.FC<ToastProps> = ({
                                 <ToneIcon className="h-4 w-4" aria-hidden="true" />
                             )}
                         </div>
-                        <span className="truncate text-sm font-medium text-white">{message}</span>
+                        <span className="line-clamp-2 text-sm font-medium text-white">{message}</span>
                     </div>
 
                     <div className="ml-4 flex flex-shrink-0 items-center gap-2">

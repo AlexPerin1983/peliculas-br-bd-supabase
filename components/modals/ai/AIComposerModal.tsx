@@ -35,6 +35,12 @@ export interface AIComposerModalProps {
     keyboardAwareFooter?: boolean;
     /** Aba aberta primeiro. Voz só vale com Gemini; sem ele abre em texto. */
     initialMode?: AIComposerMode;
+    /** Ao parar a gravação, já envia para a IA (sem tocar no botão). */
+    autoSubmitVoice?: boolean;
+    /** Opções da tela, mostradas logo abaixo da introdução (ex.: uma chave). */
+    options?: React.ReactNode;
+    /** Frase abaixo do progresso enquanto a IA trabalha. */
+    processingNote?: string;
 }
 
 const formatTime = (seconds: number) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
@@ -46,6 +52,7 @@ const formatTime = (seconds: number) => `${Math.floor(seconds / 60)}:${String(se
 const AIComposerModal: React.FC<AIComposerModalProps> = ({
     isOpen, onClose, onProcess, isProcessing, provider, title, intro,
     textPlaceholder, textExample, filesHint, voiceHint, submitLabel, stages, keyboardAwareFooter, initialMode = 'text',
+    autoSubmitVoice = false, options, processingNote = 'Leva alguns segundos. Você revisa tudo antes de salvar.',
 }) => {
     const { showAlert, showToast } = useFeedback();
     const allowPdf = provider === 'gemini';
@@ -66,13 +73,26 @@ const AIComposerModal: React.FC<AIComposerModalProps> = ({
     const chunksRef = useRef<Blob[]>([]);
     const filesRef = useRef<AttachedFile[]>([]);
     filesRef.current = files;
+    // O fim da gravação chega depois (onstop): lê sempre os valores atuais.
+    const textRef = useRef(text);
+    textRef.current = text;
+    const onProcessRef = useRef(onProcess);
+    onProcessRef.current = onProcess;
+    const autoSubmitVoiceRef = useRef(autoSubmitVoice);
+    autoSubmitVoiceRef.current = autoSubmitVoice;
+    const submitAfterStopRef = useRef(false);
+    const closedRef = useRef(false);
 
     const stopStream = () => recorderRef.current?.stream.getTracks().forEach(track => track.stop());
 
     // Libera prévias, áudio e microfone ao fechar.
-    useEffect(() => () => {
-        stopStream();
-        filesRef.current.forEach(item => item.previewUrl && URL.revokeObjectURL(item.previewUrl));
+    useEffect(() => {
+        closedRef.current = false;
+        return () => {
+            closedRef.current = true;
+            stopStream();
+            filesRef.current.forEach(item => item.previewUrl && URL.revokeObjectURL(item.previewUrl));
+        };
     }, []);
     useEffect(() => () => { if (audioUrl) URL.revokeObjectURL(audioUrl); }, [audioUrl]);
 
@@ -147,6 +167,16 @@ const AIComposerModal: React.FC<AIComposerModalProps> = ({
         void addFiles(event.dataTransfer.files);
     };
 
+    // Tudo junto numa só chamada: texto, fotos/PDF e áudio se completam.
+    const processInput = async (input: AIInput) => {
+        setErrorMessage(null);
+        try {
+            await onProcessRef.current(input);
+        } catch (error: any) {
+            setErrorMessage(error?.message || 'Não foi possível processar. Tente novamente.');
+        }
+    };
+
     const startRecording = async () => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -155,9 +185,21 @@ const AIComposerModal: React.FC<AIComposerModalProps> = ({
             recorder.onstop = () => {
                 const blob = new Blob(chunksRef.current, { type: 'audio/webm;codecs=opus' });
                 chunksRef.current = [];
+                stopStream();
+                // Fechar a tela no meio da gravação cancela: nada segue para a IA.
+                if (closedRef.current) return;
                 setAudioBlob(blob);
                 setAudioUrl(URL.createObjectURL(blob));
-                stopStream();
+                // Envia ao parar: com a opção ligada, ou quando tocaram no botão durante a gravação.
+                if (autoSubmitVoiceRef.current || submitAfterStopRef.current) {
+                    submitAfterStopRef.current = false;
+                    const typed = textRef.current;
+                    void processInput({
+                        text: typed.trim() ? typed : undefined,
+                        images: filesRef.current.length ? filesRef.current.map(item => item.file) : undefined,
+                        audio: blob,
+                    });
+                }
             };
             recorderRef.current = recorder;
             chunksRef.current = [];
@@ -189,22 +231,21 @@ const AIComposerModal: React.FC<AIComposerModalProps> = ({
     const handleSubmit = async (event: FormEvent) => {
         event.preventDefault();
         if (isProcessing || isPreparing) return;
+        // Tocar no botão gravando: para e envia com o áudio (que só fica pronto no onstop).
+        if (isRecording) {
+            submitAfterStopRef.current = true;
+            stopRecording();
+            return;
+        }
         if (!hasContent) {
             showToast('Escreva, anexe um arquivo ou grave um áudio para continuar.', { tone: 'warning' });
             return;
         }
-        if (isRecording) stopRecording();
-        setErrorMessage(null);
-        try {
-            // Tudo junto numa só chamada: texto, fotos/PDF e áudio se completam.
-            await onProcess({
-                text: hasText ? text : undefined,
-                images: files.length ? files.map(item => item.file) : undefined,
-                audio: audioBlob || undefined,
-            });
-        } catch (error: any) {
-            setErrorMessage(error?.message || 'Não foi possível processar. Tente novamente.');
-        }
+        await processInput({
+            text: hasText ? text : undefined,
+            images: files.length ? files.map(item => item.file) : undefined,
+            audio: audioBlob || undefined,
+        });
     };
 
     const sources = [
@@ -236,6 +277,7 @@ const AIComposerModal: React.FC<AIComposerModalProps> = ({
         <Modal isOpen={isOpen} onClose={onClose} title={title} footer={footer} fullScreenOnMobile keyboardAwareFooter={keyboardAwareFooter}>
             <form id="aiComposerForm" onSubmit={handleSubmit} aria-busy={isProcessing} className="flex flex-col gap-4">
                 <p className="text-sm leading-relaxed text-slate-500 dark:text-slate-400">{intro}</p>
+                {options}
 
                 {/* Modo de entrada: segmented control com marcador quando já tem conteúdo. */}
                 <div role="tablist" aria-label="Forma de envio" className="grid gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800/80" style={{ gridTemplateColumns: `repeat(${modes.length}, minmax(0, 1fr))` }}>
@@ -356,7 +398,9 @@ const AIComposerModal: React.FC<AIComposerModalProps> = ({
                                             {isRecording ? `Gravando ${formatTime(recordSeconds)}` : 'Toque para gravar'}
                                         </p>
                                         <p className="mt-1 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
-                                            {isRecording ? 'Toque de novo para parar.' : voiceHint}
+                                            {isRecording
+                                                ? (autoSubmitVoice ? 'Toque de novo para parar e enviar.' : 'Toque de novo para parar.')
+                                                : voiceHint}
                                         </p>
                                     </div>
                                 </>
@@ -368,7 +412,7 @@ const AIComposerModal: React.FC<AIComposerModalProps> = ({
                         <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 rounded-xl bg-white/95 text-center dark:bg-slate-900/95" aria-live="polite">
                             <Loader2 className="h-8 w-8 animate-spin text-slate-900 dark:text-slate-100" aria-hidden="true" />
                             <p className="text-[15px] font-semibold text-slate-800 dark:text-slate-100">{stages[stageIndex] || 'Processando…'}</p>
-                            <p className="text-xs text-slate-500 dark:text-slate-400">Leva alguns segundos. Você revisa tudo antes de salvar.</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">{processingNote}</p>
                         </div>
                     )}
 

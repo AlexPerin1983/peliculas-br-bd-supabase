@@ -3,12 +3,15 @@ import {
     buildQuickClientRecord,
     buildScheduleExtractionPrompt,
     buildVoiceScheduleDraft,
+    describeVoiceSchedule,
     extractScheduleWithGemini,
     getFriendlyScheduleError,
     normalizeDateKey,
     normalizeTime,
     parseScheduleExtraction,
+    readScheduleAutoSave,
     VoiceScheduleError,
+    writeScheduleAutoSave,
 } from './voiceSchedule';
 import { GeminiGatewayError } from '../../services/geminiGateway';
 
@@ -202,6 +205,24 @@ describe('extractScheduleWithGemini', () => {
         });
 
         await expect(extractScheduleWithGemini({ text: 'oi' }, { now })).rejects.toThrow('Não entendi o agendamento');
+    });
+});
+
+describe('salvar direto na agenda', () => {
+    it('lembra a chave no aparelho', () => {
+        writeScheduleAutoSave(true);
+        expect(readScheduleAutoSave()).toBe(true);
+        writeScheduleAutoSave(false);
+        expect(readScheduleAutoSave()).toBe(false);
+    });
+
+    it('resume o que foi salvo para o aviso', () => {
+        const summary = describeVoiceSchedule(
+            'Maria Souza',
+            new Date(2026, 9, 2, 9, 0).toISOString(),
+            new Date(2026, 9, 2, 12, 0).toISOString(),
+        );
+        expect(summary).toMatch(/^sex.*02\/10, 09:00–12:00 · Maria Souza$/);
     });
 });
 

@@ -159,6 +159,8 @@ interface ModalsContainerProps {
     isAIScheduleModalOpen: boolean;
     setIsAIScheduleModalOpen: (value: boolean) => void;
     handleProcessAIScheduleInput: (input: AIInput) => Promise<void>;
+    scheduleAutoSave: boolean;
+    handleToggleScheduleAutoSave: (enabled: boolean) => void;
 
     // API Key Modal
     isApiKeyModalOpen: boolean;
@@ -557,6 +559,8 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
                     onProcess={props.handleProcessAIScheduleInput}
                     isProcessing={props.isProcessingAI}
                     provider={props.userInfo?.aiConfig?.provider || 'gemini'}
+                    autoSave={props.scheduleAutoSave}
+                    onToggleAutoSave={props.handleToggleScheduleAutoSave}
                 />
             )}
 
