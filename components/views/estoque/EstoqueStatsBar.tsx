@@ -56,76 +56,35 @@ const statCards = (stats: EstoqueStats) => [
 const EstoqueStatsBar: React.FC<EstoqueStatsBarProps> = ({ stats }) => {
     const items = statCards(stats);
 
+    // Só no computador: no celular o resumo fica no topo (EstoqueMobileHeader).
     return (
-        <>
-            <section className="sm:hidden">
-                <div className="flex items-center justify-between gap-3 px-1">
-                    <p className="ui-kicker">
-                        Resumo rapido
-                    </p>
-                    <p className="text-[11px] font-medium text-[var(--text-muted)]">
-                        Estoque ao vivo
-                    </p>
-                </div>
-
-                <div className="mt-2 grid grid-cols-2 gap-2">
-                    {items.map((item) => (
-                        <article
-                            key={item.label}
-                            className="relative min-w-0 overflow-hidden rounded-[var(--radius-card)] border border-[var(--border-subtle)] bg-[var(--surface)] p-3 shadow-[var(--shadow-hairline)]"
-                        >
-                            <span className={`absolute inset-x-0 top-0 h-1 ${item.accent}`} aria-hidden="true" />
-                            <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0">
-                                    <p className="text-[10px] font-semibold uppercase text-[var(--text-soft)]">
-                                        {item.label}
-                                    </p>
-                                    <p className="mt-2 text-[1.2rem] font-semibold text-[var(--text-strong)]">
-                                        {item.value}
-                                    </p>
-                                </div>
-
-                                <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[12px] ${item.tone}`}>
-                                    {item.icon}
-                                </span>
-                            </div>
-
-                            <p className="mt-2 text-[11px] leading-5 text-[var(--text-muted)]">
+        <section className="hidden gap-2.5 sm:grid sm:grid-cols-2 xl:grid-cols-4">
+            {items.map((item) => (
+                <article
+                    key={item.label}
+                    className="relative overflow-hidden rounded-[var(--radius-card)] border border-[var(--border-subtle)] bg-[var(--surface)] p-3.5 shadow-[var(--shadow-hairline)] transition-all duration-200 hover:-translate-y-px hover:shadow-[var(--shadow-soft)]"
+                >
+                    <span className={`absolute inset-x-0 top-0 h-1 ${item.accent}`} aria-hidden="true" />
+                    <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                            <p className="text-[11px] font-semibold uppercase text-[var(--text-muted)]">
+                                {item.label}
+                            </p>
+                            <p className="mt-2 text-[1.45rem] font-semibold text-[var(--text-strong)]">
+                                {item.value}
+                            </p>
+                            <p className="mt-1 text-[12px] text-[var(--text-muted)]">
                                 {item.detail}
                             </p>
-                        </article>
-                    ))}
-                </div>
-            </section>
-
-            <section className="hidden gap-2.5 sm:grid sm:grid-cols-2 xl:grid-cols-4">
-                {items.map((item) => (
-                    <article
-                        key={item.label}
-                        className="relative overflow-hidden rounded-[var(--radius-card)] border border-[var(--border-subtle)] bg-[var(--surface)] p-3.5 shadow-[var(--shadow-hairline)] transition-all duration-200 hover:-translate-y-px hover:shadow-[var(--shadow-soft)]"
-                    >
-                        <span className={`absolute inset-x-0 top-0 h-1 ${item.accent}`} aria-hidden="true" />
-                        <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                                <p className="text-[11px] font-semibold uppercase text-[var(--text-muted)]">
-                                    {item.label}
-                                </p>
-                                <p className="mt-2 text-[1.45rem] font-semibold text-[var(--text-strong)]">
-                                    {item.value}
-                                </p>
-                                <p className="mt-1 text-[12px] text-[var(--text-muted)]">
-                                    {item.detail}
-                                </p>
-                            </div>
-
-                            <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] ${item.tone}`}>
-                                {item.icon}
-                            </span>
                         </div>
-                    </article>
-                ))}
-            </section>
-        </>
+
+                        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] ${item.tone}`}>
+                            {item.icon}
+                        </span>
+                    </div>
+                </article>
+            ))}
+        </section>
     );
 };
 
