@@ -13,10 +13,11 @@ const AIMeasurementModal = lazy(() => import('./modals/AIMeasurementModal'));
 const AIClientModal = lazy(() => import('./modals/AIClientModal'));
 const AIFilmModal = lazy(() => import('./modals/AIFilmModal'));
 const AIQuickProposalModal = lazy(() => import('./modals/AIQuickProposalModal'));
+const AIScheduleModal = lazy(() => import('./modals/AIScheduleModal'));
 const ApiKeyModal = lazy(() => import('./modals/ApiKeyModal'));
 const PdfGenerationStatusModal = lazy(() => import('./modals/PdfGenerationStatusModal'));
 const ImageGalleryModal = lazy(() => import('./modals/ImageGalleryModal'));
-import { Client, Film, UserInfo, SavedPDF, Agendamento, ProposalOption, SchedulingInfo, ProposalDiscount, MeasurementPriceAdjustment } from '../types';
+import { AIInput, Client, Film, UserInfo, SavedPDF, Agendamento, ProposalOption, QuickClientDraft, SchedulingInfo, ProposalDiscount, MeasurementPriceAdjustment } from '../types';
 
 type UIMeasurement = any; // Temporary - will be properly typed later
 
@@ -154,6 +155,11 @@ interface ModalsContainerProps {
     isAIFilmModalOpen: boolean;
     handleProcessAIFilmInput: (input: any) => void;
 
+    // AI Schedule Modal (agendamento por voz)
+    isAIScheduleModalOpen: boolean;
+    setIsAIScheduleModalOpen: (value: boolean) => void;
+    handleProcessAIScheduleInput: (input: AIInput) => Promise<void>;
+
     // API Key Modal
     isApiKeyModalOpen: boolean;
     setIsApiKeyModalOpen: (value: boolean) => void;
@@ -174,6 +180,7 @@ interface ModalsContainerProps {
     handleConfirmAgendamento: (clientId: number) => void;
     handleRequestDeleteAgendamento: (agendamento: Agendamento) => void;
     handleAddNewClientFromAgendamento: (clientName: string) => void;
+    handleCreateQuickClient: (values: { nome: string; local: string }, draft?: QuickClientDraft) => Promise<Client>;
     allSavedPdfs: SavedPDF[];
     agendamentos: Agendamento[];
 
@@ -355,6 +362,7 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
                     clients={props.clients}
                     savedPdfs={props.allSavedPdfs}
                     onAddNewClient={props.handleAddNewClientFromAgendamento}
+                    onCreateQuickClient={props.handleCreateQuickClient}
                     userInfo={props.userInfo}
                     agendamentos={props.agendamentos}
                 />
@@ -536,6 +544,17 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
                     isOpen={props.isAIQuickProposalModalOpen}
                     onClose={() => props.setIsAIQuickProposalModalOpen(false)}
                     onProcess={props.handleProcessAIQuickProposalInput}
+                    isProcessing={props.isProcessingAI}
+                    provider={props.userInfo?.aiConfig?.provider || 'gemini'}
+                />
+            )}
+
+            {/* AI Schedule Modal */}
+            {props.isAIScheduleModalOpen && (
+                <AIScheduleModal
+                    isOpen={props.isAIScheduleModalOpen}
+                    onClose={() => props.setIsAIScheduleModalOpen(false)}
+                    onProcess={props.handleProcessAIScheduleInput}
                     isProcessing={props.isProcessingAI}
                     provider={props.userInfo?.aiConfig?.provider || 'gemini'}
                 />

@@ -455,12 +455,25 @@ export interface SavedPDF {
     archivedAt?: string | null; // Quando o arquivo foi removido do Storage (orçamento vencido). PDF é regenerado sob demanda.
     paymentConfig?: ProposalPaymentConfig;
 }
+export type QuickClientAddress = Pick<Client, 'logradouro' | 'numero' | 'bairro' | 'cidade' | 'uf'>;
+
+// Cliente ditado no agendamento por voz: vira um cadastro simples ao salvar,
+// sem procurar na lista de clientes.
+export interface QuickClientDraft {
+    nome: string;
+    local: string;
+    endereco?: QuickClientAddress;
+    // O que a IA não entendeu com certeza (nome, dia, horário).
+    reviewHints?: string[];
+}
+
 export type SchedulingInfo = {
     pdf: SavedPDF;
     agendamento?: Agendamento;
 } | {
     agendamento: Partial<Agendamento>;
     pdf?: SavedPDF;
+    quickClient?: QuickClientDraft;
 };
 
 export interface ExtractedClientData {

@@ -12,14 +12,16 @@ const OUTPUT_TOKEN_LIMITS: Record<string, { defaultValue: number; maximum: numbe
     quick_proposal: { defaultValue: 4096, maximum: 8192 },
     client_extraction: { defaultValue: 1600, maximum: 4096 },
     film_extraction: { defaultValue: 1600, maximum: 4096 },
-    stock_extraction: { defaultValue: 2400, maximum: 4096 }
+    stock_extraction: { defaultValue: 2400, maximum: 4096 },
+    schedule_extraction: { defaultValue: 1024, maximum: 2048 }
 };
 const ALLOWED_FEATURES = new Set([
     'client_extraction',
     'quick_proposal',
     'film_extraction',
     'measurement_extraction',
-    'stock_extraction'
+    'stock_extraction',
+    'schedule_extraction'
 ]);
 
 interface GeminiProxyRequest {

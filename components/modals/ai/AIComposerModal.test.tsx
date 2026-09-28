@@ -89,6 +89,18 @@ describe('AIComposerModal', () => {
         expect(screen.queryByText('planilha.xlsx')).not.toBeInTheDocument();
     });
 
+    it('pode abrir direto no microfone', () => {
+        renderComposer({ initialMode: 'voice' });
+        expect(screen.getByRole('tab', { name: /Voz/ })).toHaveAttribute('aria-selected', 'true');
+        expect(screen.getByRole('button', { name: 'Começar a gravar' })).toBeInTheDocument();
+    });
+
+    it('sem Gemini, pedir o microfone abre no texto', () => {
+        renderComposer({ provider: 'openai', initialMode: 'voice' });
+        expect(screen.getByRole('tab', { name: 'Texto' })).toHaveAttribute('aria-selected', 'true');
+        expect(screen.getByRole('textbox')).toBeInTheDocument();
+    });
+
     it('"Usar" preenche o exemplo no texto', () => {
         renderComposer();
         fireEvent.click(screen.getByRole('button', { name: 'Usar' }));

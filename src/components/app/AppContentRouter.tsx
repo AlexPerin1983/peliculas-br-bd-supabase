@@ -124,6 +124,7 @@ interface AppContentRouterProps {
     onContinueAgendamento: (agendamento: Agendamento) => void;
     onRescheduleAgendamento: (agendamento: Agendamento) => void;
     onCreateNewAgendamento: (date: Date) => void;
+    onCreateAgendamentoByVoice?: () => void;
     onAddFilm: () => void;
     onEditFilm: (film: Film | null) => void;
     onDeleteFilm: (filmName: string) => void;
@@ -225,6 +226,7 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
     onContinueAgendamento,
     onRescheduleAgendamento,
     onCreateNewAgendamento,
+    onCreateAgendamentoByVoice,
     onAddFilm,
     onEditFilm,
     onDeleteFilm,
@@ -406,6 +408,7 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
                 onContinueAgendamento={onContinueAgendamento}
                 onRescheduleAgendamento={onRescheduleAgendamento}
                 onCreateNewAgendamento={onCreateNewAgendamento}
+                onCreateAgendamentoByVoice={onCreateAgendamentoByVoice}
                 googleReviewsLink={userInfo?.socialLinks?.googleReviews}
                 userInfo={userInfo}
             />,

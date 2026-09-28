@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense, useRef } from 'react';
 import './src/estoque-dark-mode.css';
-import { Client, Measurement, UserInfo, Film, PaymentMethods, SavedPDF, Agendamento, AgendamentoServiceStatus, SchedulingInfo, ExtractedClientData, UIMeasurement, ProposalExpense, ProposalOption, ProposalDiscount, AIInput } from './types';
+import { Client, Measurement, UserInfo, Film, PaymentMethods, SavedPDF, Agendamento, AgendamentoServiceStatus, SchedulingInfo, ExtractedClientData, UIMeasurement, ProposalExpense, ProposalOption, ProposalDiscount, AIInput, QuickClientDraft } from './types';
 import { CuttingOptimizer } from './utils/CuttingOptimizer';
 import * as db from './services/db';
 import { supabase } from './services/supabaseClient';
@@ -45,6 +45,7 @@ import AIQuickFab from './components/AIQuickFab';
 import OnboardingTour from './components/onboarding/OnboardingTour';
 import { seedExampleDataIfNeeded } from './services/seedData';
 import { createPastedMeasurementsFromClipboard } from './src/lib/measurementClipboard';
+import { buildQuickClientRecord, buildVoiceScheduleDraft, extractScheduleWithGemini, getFriendlyScheduleError } from './src/lib/voiceSchedule';
 import { consumeBackButton } from './src/lib/backButton';
 import { createGeminiModel, GLOBAL_GEMINI_UNAVAILABLE_EVENT } from './services/geminiGateway';
 import {
@@ -463,6 +464,7 @@ const App: React.FC = () => {
     const [isAIMeasurementModalOpen, setIsAIMeasurementModalOpen] = useState(false);
     const [isAIClientModalOpen, setIsAIClientModalOpen] = useState(false);
     const [isAIQuickProposalModalOpen, setIsAIQuickProposalModalOpen] = useState(false);
+    const [isAIScheduleModalOpen, setIsAIScheduleModalOpen] = useState(false);
     const [aiClientData, setAiClientData] = useState<Partial<Client> | undefined>(undefined);
     const [isAIFilmModalOpen, setIsAIFilmModalOpen] = useState(false);
     const [aiFilmData, setAiFilmData] = useState<Partial<Film> | undefined>(undefined);
@@ -2560,9 +2562,39 @@ Regras:
         setInitialEstoqueAction(null);
     }, []);
 
-    const handleQuickFabAgenda = useCallback(() => {
-        handleCreateNewAgendamento(new Date());
-    }, [handleCreateNewAgendamento]);
+    const handleOpenAIScheduleModal = useCallback(() => {
+        if (!ensureAiReady()) return;
+        setIsAIScheduleModalOpen(true);
+    }, [ensureAiReady]);
+
+    // Agendamento por voz: a IA separa nome, local, dia e hora e o modal de
+    // agendamento abre preenchido, com cliente novo (sem buscar na lista).
+    const handleProcessAIScheduleInput = useCallback(async (input: AIInput) => {
+        if (userInfo?.aiConfig?.provider && userInfo.aiConfig.provider !== 'gemini') {
+            throw new Error('O agendamento com IA usa o Gemini. Troque o provedor de IA nas configurações.');
+        }
+
+        setIsProcessingAI(true);
+        try {
+            const now = new Date();
+            const extraction = await extractScheduleWithGemini(input, { apiKey: userInfo?.aiConfig?.apiKey, now });
+            const draft = buildVoiceScheduleDraft(extraction, now);
+            setIsAIScheduleModalOpen(false);
+            handleOpenAgendamentoModal({ agendamento: draft.agendamento, quickClient: draft.quickClient });
+        } catch (error) {
+            console.error('Erro ao montar agendamento com IA:', error);
+            throw new Error(getFriendlyScheduleError(error));
+        } finally {
+            setIsProcessingAI(false);
+        }
+    }, [userInfo, handleOpenAgendamentoModal]);
+
+    const handleCreateQuickClient = useCallback(async (values: { nome: string; local: string }, draft?: QuickClientDraft) => {
+        const savedClient = await db.saveClient(buildQuickClientRecord(values, draft));
+        // Entra na lista já carregada sem recarregar tudo nem trocar o cliente aberto no orçamento.
+        setClients(current => [savedClient, ...current.filter(client => client.id !== savedClient.id)]);
+        return savedClient;
+    }, []);
 
     const handleProcessAIMeasurementInput = useCallback(async (input: AIInput) => {
         const hasContent = (input.text && input.text.trim()) || (input.images && input.images.length > 0) || !!input.audio;
@@ -2951,6 +2983,7 @@ Use somente o JSON definido e não inclua explicações fora dele.`;
             onContinueAgendamento={handleContinueAgendamento}
             onRescheduleAgendamento={handleRescheduleAgendamento}
             onCreateNewAgendamento={handleCreateNewAgendamento}
+            onCreateAgendamentoByVoice={handleOpenAIScheduleModal}
             onAddFilm={() => handleOpenFilmModal(null)}
             onEditFilm={handleOpenFilmModal}
             onDeleteFilm={handleRequestDeleteFilm}
@@ -3059,6 +3092,7 @@ Use somente o JSON definido e não inclua explicações fora dele.`;
         handleRequestDeleteAgendamento,
         agendamentos,
         handleAddNewClientFromAgendamento,
+        handleCreateQuickClient,
         isSaveBeforePdfModalOpen,
         setIsSaveBeforePdfModalOpen,
         handleConfirmSaveBeforePdf,
@@ -3099,6 +3133,9 @@ Use somente o JSON definido e não inclua explicações fora dele.`;
         isAIQuickProposalModalOpen,
         setIsAIQuickProposalModalOpen,
         handleProcessAIQuickProposalInput,
+        isAIScheduleModalOpen,
+        setIsAIScheduleModalOpen,
+        handleProcessAIScheduleInput,
         isAIClientModalOpen,
         setIsAIClientModalOpen,
         handleProcessAIClientInput,
@@ -3335,7 +3372,7 @@ Use somente o JSON definido e não inclua explicações fora dele.`;
                               onCreateClient={handleOpenAIClientModal}
                               onCreateBobina={() => handleQuickFabEstoqueAI('bobinas')}
                               onCreateRetalho={() => handleQuickFabEstoqueAI('retalhos')}
-                              onCreateAgenda={handleQuickFabAgenda}
+                              onCreateAgenda={handleOpenAIScheduleModal}
                           />
                       )}
 
