@@ -22,6 +22,16 @@ type StatusModalState = { type: 'bobina' | 'retalho'; item: Bobina | Retalho } |
 type DeleteConfirmState = { type: 'bobina' | 'retalho'; id: number } | null;
 const RETALHO_BATCH_MAX = 100;
 
+const STATUS_LABELS: Record<string, string> = {
+    ativa: 'Ativa',
+    finalizada: 'Finalizada',
+    descartada: 'Descartada',
+    disponivel: 'Disponível',
+    reservado: 'Reservado',
+    usado: 'Usado',
+    descartado: 'Descartado',
+};
+
 type FormState = {
     formFilmId: string;
     formLargura: string;
@@ -423,6 +433,8 @@ export function useEstoqueOperations({
             }
             await loadData();
             setShowStatusModal(null);
+            // O item pode sair da lista filtrada: o aviso diz o que aconteceu com ele.
+            showToast(`${type === 'bobina' ? 'Bobina' : 'Retalho'} #${item.id}: ${(STATUS_LABELS[newStatus] || newStatus).toLowerCase()}.`, { tone: 'success' });
         } catch (error: any) {
             console.error('Erro ao alterar status:', error);
             showToast('Erro ao alterar status.', { tone: 'error' });
@@ -437,7 +449,7 @@ export function useEstoqueOperations({
                 { value: 'descartada', label: 'Descartada', emoji: 'D', color: '#ef4444' },
             ]
             : [
-                { value: 'disponivel', label: 'Disponivel', emoji: 'D', color: '#22c55e' },
+                { value: 'disponivel', label: 'Disponível', emoji: 'D', color: '#22c55e' },
                 { value: 'reservado', label: 'Reservado', emoji: 'R', color: '#f59e0b' },
                 { value: 'usado', label: 'Usado', emoji: 'U', color: '#f97316' },
                 { value: 'descartado', label: 'Descartado', emoji: 'X', color: '#ef4444' },
@@ -460,18 +472,7 @@ export function useEstoqueOperations({
         }
     }, []);
 
-    const getStatusLabel = useCallback((status: string) => {
-        const labels: Record<string, string> = {
-            ativa: 'Ativa',
-            finalizada: 'Finalizada',
-            descartada: 'Descartada',
-            disponivel: 'Disponivel',
-            reservado: 'Reservado',
-            usado: 'Usado',
-            descartado: 'Descartado',
-        };
-        return labels[status] || status;
-    }, []);
+    const getStatusLabel = useCallback((status: string) => STATUS_LABELS[status] || status, []);
 
     return {
         handleShowQR,

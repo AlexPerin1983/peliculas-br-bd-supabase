@@ -1,8 +1,49 @@
 import React from 'react';
 import { Skeleton } from '../../ui/Skeleton';
 
+// Celular: o mesmo formato da tela (resumo, abas, busca, filtros e cartões).
+const MobileEstoqueSkeleton = () => (
+    <div className="space-y-4 pb-28 sm:hidden" aria-busy="true" aria-label="Carregando estoque">
+        <div className="space-y-2 px-1 pt-1">
+            <Skeleton variant="text" height={30} width="40%" />
+            <Skeleton variant="text" height={16} width="52%" />
+        </div>
+        <div className="grid grid-cols-3 divide-x divide-[var(--border-subtle)] rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface)]">
+            {[0, 1, 2].map(item => (
+                <div key={item} className="flex flex-col items-center gap-1.5 px-2 py-3">
+                    <Skeleton variant="text" height={11} width="70%" />
+                    <Skeleton variant="text" height={22} width="55%" />
+                    <Skeleton variant="text" height={11} width="60%" />
+                </div>
+            ))}
+        </div>
+        <Skeleton variant="rounded" height={48} width="100%" className="rounded-xl" />
+        <Skeleton variant="rounded" height={44} width="100%" className="rounded-xl" />
+        <div className="flex gap-1.5">
+            {[64, 72, 88, 80].map(width => <Skeleton key={width} variant="rounded" height={32} width={width} className="rounded-full" />)}
+        </div>
+        <div className="space-y-2">
+            {[0, 1, 2, 3, 4].map(item => (
+                <div key={item} className="flex items-center gap-3 rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-raised)] p-3">
+                    <Skeleton variant="circular" width={44} height={44} />
+                    <div className="min-w-0 flex-1 space-y-2">
+                        <Skeleton variant="text" height={15} width="55%" />
+                        <Skeleton variant="text" height={12} width="75%" />
+                    </div>
+                    <div className="space-y-1.5">
+                        <Skeleton variant="text" height={16} width={56} />
+                        <Skeleton variant="text" height={11} width={44} />
+                    </div>
+                </div>
+            ))}
+        </div>
+    </div>
+);
+
 export const EstoqueSkeleton = () => (
-    <div className="estoque-view flex flex-col gap-4 p-4">
+    <>
+    <MobileEstoqueSkeleton />
+    <div className="estoque-view hidden flex-col gap-4 p-4 sm:flex">
         <div className="order-1 rounded-[24px] border border-slate-200/80 bg-white/96 p-3.5 shadow-[0_14px_32px_rgba(15,23,42,0.05)] sm:order-2 sm:p-5">
             <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1 space-y-2">
@@ -111,6 +152,7 @@ export const EstoqueSkeleton = () => (
             </div>
         </div>
     </div>
+    </>
 );
 
 export default EstoqueSkeleton;

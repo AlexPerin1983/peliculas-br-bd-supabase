@@ -1,8 +1,10 @@
 import React from 'react';
-import { MoreVertical } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { Bobina } from '../../../types';
 import { formatStockMeters } from '../../../src/lib/estoqueDimensions';
+import { bobinaRemainingRatio, isBobinaLow } from '../../../src/lib/estoqueQuickFilters';
 import { PackageIcon, QrCodeIcon, TrashIcon } from './EstoqueIcons';
+import { StockBadge, StockRing } from './EstoqueVisuals';
 
 type Props = {
     viewMode: 'grid' | 'list';
@@ -15,7 +17,7 @@ type Props = {
     getStatusColor: (status: string) => string;
 };
 
-const ratio = (item: Bobina) => item.comprimentoTotalM ? Math.max(0, Math.min(1, item.comprimentoRestanteM / item.comprimentoTotalM)) : 0;
+const ratio = bobinaRemainingRatio;
 const tone = (value: number) => value > .5 ? 'bg-emerald-500' : value > .2 ? 'bg-amber-500' : 'bg-rose-500';
 const statusButton = 'inline-flex h-9 items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] px-3 text-[12px] font-semibold text-[var(--text-body)]';
 const iconButton = 'inline-flex h-9 w-9 items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-muted)]';
@@ -29,31 +31,35 @@ export default function EstoqueBobinasPanel({ viewMode, filteredBobinas, onShowQ
         </div>
     );
 
+    // Celular: um cartão por bobina, com o anel do quanto ainda resta.
     const mobile = (
-        <div className="overflow-hidden rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface)] shadow-[var(--shadow-hairline)] sm:hidden">
-            {filteredBobinas.map((item, index) => {
+        <ul className="space-y-2 sm:hidden" aria-label="Bobinas">
+            {filteredBobinas.map(item => {
                 const remaining = ratio(item);
+                const details = [`#${item.id}`, `${item.larguraCm} cm`, item.lote ? `Lote ${item.lote}` : '', item.localizacao || ''].filter(Boolean).join(' · ');
                 return (
-                    <button key={item.id} type="button" onClick={() => onOpenDetails({ type: 'bobina', item })} className={`block w-full px-3.5 py-3 text-left active:bg-[var(--surface-muted)] ${index ? 'border-t border-[var(--border-subtle)]' : ''}`}>
-                        <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0 flex-1">
-                                <div className="flex min-w-0 items-center gap-2">
-                                    <p className="truncate text-[13px] font-semibold text-[var(--text-strong)]">{item.filmId}</p>
-                                    <span className="shrink-0 rounded-full px-2 py-0.5 text-[8px] font-semibold uppercase tracking-wider text-white" style={{ backgroundColor: getStatusColor(item.status) }}>{getStatusLabel(item.status)}</span>
-                                </div>
-                                <p className="mt-1 truncate text-[10px] text-[var(--text-muted)]">#{item.id} · {item.larguraCm} cm{item.lote ? ` · Lote ${item.lote}` : ''}</p>
-                            </div>
-                            <div className="flex shrink-0 items-center gap-2">
-                                <div className="text-right"><p className="text-[8px] font-semibold uppercase text-[var(--text-muted)]">Restante</p><p className="mt-0.5 text-[15px] font-semibold tabular-nums text-[var(--text-strong)]">{formatStockMeters(item.comprimentoRestanteM)}m</p></div>
-                                <MoreVertical className="h-4 w-4 text-[var(--text-muted)]" aria-hidden="true" />
-                            </div>
-                        </div>
-                        <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-[var(--surface-muted)]"><div className={`h-full rounded-full ${tone(remaining)}`} style={{ width: `${remaining * 100}%` }} /></div>
-                        <p className="mt-1.5 truncate text-[9px] text-[var(--text-soft)]">{formatStockMeters(item.comprimentoTotalM)}m total{item.fornecedor ? ` · ${item.fornecedor}` : ''}{item.localizacao ? ` · ${item.localizacao}` : ''}</p>
-                    </button>
+                    <li key={item.id}>
+                        <button type="button" onClick={() => onOpenDetails({ type: 'bobina', item })}
+                            className="flex w-full items-center gap-3 rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-raised)] p-3 text-left shadow-[var(--shadow-hairline)] transition-colors active:bg-[var(--surface-muted)]">
+                            <StockRing ratio={remaining} active={item.status === 'ativa'} />
+                            <span className="min-w-0 flex-1">
+                                <span className="flex min-w-0 items-center gap-1.5">
+                                    <span className="truncate text-[15px] font-semibold text-[var(--text-strong)]">{item.filmId}</span>
+                                    {isBobinaLow(item) ? <StockBadge tone="warn">Acabando</StockBadge>
+                                        : item.status !== 'ativa' ? <StockBadge tone={item.status === 'descartada' ? 'danger' : 'muted'}>{getStatusLabel(item.status)}</StockBadge> : null}
+                                </span>
+                                <span className="mt-0.5 block truncate text-xs text-[var(--text-muted)]">{details}</span>
+                            </span>
+                            <span className="shrink-0 text-right">
+                                <span className="block text-base font-semibold tabular-nums text-[var(--text-strong)]">{formatStockMeters(item.comprimentoRestanteM)} m</span>
+                                <span className="block text-[11px] tabular-nums text-[var(--text-muted)]">de {formatStockMeters(item.comprimentoTotalM)} m</span>
+                            </span>
+                            <ChevronRight className="h-4 w-4 shrink-0 text-[var(--text-soft)]" aria-hidden="true" />
+                        </button>
+                    </li>
                 );
             })}
-        </div>
+        </ul>
     );
 
     const desktopGrid = (

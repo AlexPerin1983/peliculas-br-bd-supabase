@@ -3,6 +3,7 @@ import { Bobina, Retalho } from '../../types';
 import { normalizeSearchText } from '../lib/textSearch';
 import { getRetalhosForDimensions } from '../lib/retalhoMatching';
 import { parseFlexibleCentimeterInput } from '../lib/estoqueDimensions';
+import { matchesBobinaFilter, matchesRetalhoFilter } from '../lib/estoqueQuickFilters';
 
 const ESTOQUE_VIEW_MODE_STORAGE_KEY = 'estoque-view-mode';
 
@@ -47,8 +48,7 @@ export function useEstoqueFilters(bobinas: Bobina[], retalhos: Retalho[]) {
                 (b.localizacao && normalizeSearchText(b.localizacao).includes(normalizedSearch)) ||
                 (b.lote && normalizeSearchText(b.lote).includes(normalizedSearch));
 
-            const matchesStatus = statusFilter === 'todos' || b.status === statusFilter;
-            return matchesSearch && matchesStatus;
+            return matchesSearch && matchesBobinaFilter(b, statusFilter);
         });
     }, [bobinas, searchTerm, statusFilter]);
 
@@ -64,13 +64,14 @@ export function useEstoqueFilters(bobinas: Bobina[], retalhos: Retalho[]) {
                 normalizeSearchText(r.filmId).includes(normalizedSearch) ||
                 (r.localizacao && normalizeSearchText(r.localizacao).includes(normalizedSearch));
 
-            const matchesStatus = statusFilter === 'todos' || r.status === statusFilter;
-            return matchesSearch && matchesStatus;
+            return matchesSearch && matchesRetalhoFilter(r, statusFilter);
         });
 
-        // Busca por medida: mantém só os retalhos disponíveis que cabem, do menor desperdício.
+        // Busca por medida: mantém só os retalhos disponíveis que cabem, do menor desperdício
+        // (usado ou descartado não existe mais; outro status só se for o filtro escolhido).
         if (buscandoPorMedida) {
-            return getRetalhosForDimensions(larguraCm, comprimentoCm, base);
+            const pool = statusFilter === 'todos' ? base.filter(r => r.status === 'disponivel') : base;
+            return getRetalhosForDimensions(larguraCm, comprimentoCm, pool);
         }
         return base;
     }, [retalhos, searchTerm, statusFilter, buscandoPorMedida, larguraCm, comprimentoCm]);

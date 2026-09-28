@@ -1,88 +1,72 @@
 import React from 'react';
+import { Layers3, Plus, ScanLine, Scissors, Search } from 'lucide-react';
+import type { EstoqueTab } from '../../../src/lib/estoqueQuickFilters';
 
 interface EstoqueMobileFooterProps {
-    activeTab: 'bobinas' | 'retalhos';
-    viewMode: 'grid' | 'list';
+    activeTab: EstoqueTab;
+    lowStockCount: number;
+    onChangeTab: (tab: EstoqueTab) => void;
     onAdd: () => void;
-    onAI: () => void;
     onScan: () => void;
-    onOpenSearch: () => void;
-    onOpenFilter: () => void;
-    onToggleView: () => void;
-    filterActive?: boolean;
+    onSearch: () => void;
+    // Some enquanto o teclado está aberto (ficaria por cima do campo).
+    hidden?: boolean;
 }
 
-const FooterButton: React.FC<{ onClick: () => void; label: string; icon: string; active?: boolean }> = ({ onClick, label, icon, active }) => (
+const FooterButton: React.FC<{
+    onClick: () => void;
+    label: string;
+    icon: React.ReactNode;
+    active?: boolean;
+    badge?: number;
+}> = ({ onClick, label, icon, active, badge }) => (
     <button
+        type="button"
         onClick={onClick}
         aria-label={label}
-        className={`flex h-14 w-16 flex-col items-center justify-center rounded-xl transition-all duration-300 group ${active
+        aria-pressed={active}
+        className={`group relative flex h-14 w-16 flex-col items-center justify-center rounded-xl transition-all duration-200 ${active
             ? 'text-blue-600 dark:text-blue-400'
-            : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white'
-            }`}
+            : 'text-[var(--text-muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)]'}`}
     >
-        <i className={`${icon} text-lg transition-transform duration-300 group-active:scale-90`}></i>
+        <span className="transition-transform duration-300 group-active:scale-90">{icon}</span>
         <span className="mt-1 text-[9px] font-bold uppercase tracking-wider">{label}</span>
+        {badge && badge > 0 ? (
+            <span className="absolute right-1.5 top-1 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-amber-500 px-1 text-[9px] font-bold leading-none text-white">
+                {badge > 99 ? '99+' : badge}
+            </span>
+        ) : null}
     </button>
 );
 
-/** Footer flutuante de ações rápidas do Estoque (somente mobile). */
-const EstoqueMobileFooter: React.FC<EstoqueMobileFooterProps> = ({
-    activeTab,
-    viewMode,
-    onAdd,
-    onAI,
-    onScan,
-    onOpenSearch,
-    onOpenFilter,
-    onToggleView,
-    filterActive,
-}) => {
-    return (
-        <div
-            className="fixed left-4 right-4 z-40 sm:hidden"
-            style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)' }}
-        >
-            <div className="rounded-2xl border border-white/20 bg-white/95 px-2 py-2 shadow-[0_8px_32px_rgba(0,0,0,0.15)] backdrop-blur-xl dark:border-slate-800/50 dark:bg-slate-900/95 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
-                <div className="relative flex items-center justify-between">
-                    <div className="flex gap-1">
-                        <FooterButton onClick={onOpenSearch} label="Buscar" icon="fas fa-search" />
-                        <FooterButton onClick={onScan} label="QR" icon="fas fa-qrcode" />
-                    </div>
+/** Menu fixo do estoque (somente celular), no mesmo formato das outras telas. */
+const EstoqueMobileFooter: React.FC<EstoqueMobileFooterProps> = ({ activeTab, lowStockCount, onChangeTab, onAdd, onScan, onSearch, hidden = false }) => (
+    <div aria-hidden={hidden || undefined} className={`fixed left-4 right-4 z-40 transition-all duration-200 sm:hidden ${hidden ? 'pointer-events-none translate-y-[140%] opacity-0' : ''}`} style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)' }}>
+        <nav aria-label="Menu do estoque" className="rounded-2xl border border-white/20 bg-white/95 px-2 py-2 shadow-[0_8px_32px_rgba(0,0,0,0.15)] backdrop-blur-xl dark:border-slate-800/50 dark:bg-slate-900/95 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
+            <div className="relative flex items-center justify-between">
+                <div className="flex gap-1">
+                    <FooterButton onClick={() => onChangeTab('bobinas')} label="Bobinas" icon={<Layers3 className="h-5 w-5" aria-hidden="true" />} active={activeTab === 'bobinas'} badge={lowStockCount} />
+                    <FooterButton onClick={() => onChangeTab('retalhos')} label="Retalhos" icon={<Scissors className="h-5 w-5" aria-hidden="true" />} active={activeTab === 'retalhos'} />
+                </div>
 
-                    <div className="absolute left-1/2 -top-12 -translate-x-1/2">
-                        <button
-                            onClick={onAdd}
-                            aria-label={activeTab === 'bobinas' ? 'Nova bobina' : 'Novo retalho'}
-                            className="flex h-16 w-16 items-center justify-center rounded-2xl border-4 border-white bg-gradient-to-br from-blue-600 to-blue-700 text-white shadow-[0_8px_20px_rgba(21,94,239,0.4)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_12px_24px_rgba(21,94,239,0.5)] active:scale-95 dark:border-slate-900"
-                        >
-                            <i className="fas fa-plus text-2xl"></i>
-                        </button>
-                    </div>
+                <div className="absolute left-1/2 -top-12 -translate-x-1/2">
+                    <button
+                        type="button"
+                        onClick={onAdd}
+                        aria-label="Cadastrar material"
+                        className="flex h-16 w-16 items-center justify-center rounded-2xl border-4 border-white bg-gradient-to-br from-blue-600 to-blue-700 text-white shadow-[0_8px_20px_rgba(21,94,239,0.4)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_12px_24px_rgba(21,94,239,0.5)] active:scale-95 dark:border-slate-900"
+                    >
+                        <Plus className="h-7 w-7" aria-hidden="true" />
+                    </button>
+                </div>
 
-                    {/* Mini-FAB satélite: adicionar por voz com IA */}
-                    <div className="absolute left-1/2 -top-11 translate-x-[44px]">
-                        <button
-                            onClick={onAI}
-                            aria-label="Adicionar com IA por voz"
-                            className="flex h-12 w-12 items-center justify-center rounded-2xl border-4 border-white bg-gradient-to-br from-violet-600 to-indigo-600 text-white shadow-[0_8px_20px_rgba(109,40,217,0.4)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_12px_24px_rgba(109,40,217,0.5)] active:scale-95 dark:border-slate-900"
-                        >
-                            <i className="fas fa-wand-magic-sparkles text-lg"></i>
-                        </button>
-                    </div>
-
-                    <div className="flex gap-1">
-                        <FooterButton onClick={onOpenFilter} label="Filtro" icon="fas fa-sliders-h" active={filterActive} />
-                        <FooterButton
-                            onClick={onToggleView}
-                            label="Ver"
-                            icon={viewMode === 'grid' ? 'fas fa-list' : 'fas fa-th-large'}
-                        />
-                    </div>
+                <div className="flex gap-1">
+                    <FooterButton onClick={onScan} label="Escanear" icon={<ScanLine className="h-5 w-5" aria-hidden="true" />} />
+                    <FooterButton onClick={onSearch} label="Buscar" icon={<Search className="h-5 w-5" aria-hidden="true" />} />
                 </div>
             </div>
-        </div>
-    );
-};
+        </nav>
+    </div>
+);
 
 export default EstoqueMobileFooter;

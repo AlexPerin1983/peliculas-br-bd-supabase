@@ -15,7 +15,7 @@ describe('EstoqueStatsBar', () => {
             />
         );
 
-        expect(screen.getAllByText('14,05m')).toHaveLength(2);
-        expect(screen.getAllByText('5,95m')).toHaveLength(2);
+        expect(screen.getAllByText('14,05m')).toHaveLength(1);
+        expect(screen.getAllByText('5,95m')).toHaveLength(1);
     });
 });

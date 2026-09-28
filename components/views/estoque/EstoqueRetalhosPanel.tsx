@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { ChevronRight, MapPin } from 'lucide-react';
 import { Retalho } from '../../../types';
 import { QrCodeIcon, ScissorsIcon, TrashIcon } from './EstoqueIcons';
+import { PieceShape, StockBadge } from './EstoqueVisuals';
 
 type SearchDimensions = {
     larguraCm: number;
@@ -80,54 +81,54 @@ export default function EstoqueRetalhosPanel({
         );
     }
 
+    // Celular: retalhos agrupados por película, cada um desenhado na proporção da peça.
     let resultIndex = 0;
     const mobile = (
-        <div className="space-y-3 sm:hidden">
+        <div className="space-y-4 sm:hidden">
             {groups.map(([filmName, items]) => (
-                <section key={filmName} className="overflow-hidden rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface)] shadow-[var(--shadow-hairline)]">
-                    <header className="flex items-center justify-between gap-3 border-b border-[var(--border-subtle)] bg-[var(--surface-raised)] px-3.5 py-2.5">
+                <section key={filmName} aria-label={filmName}>
+                    <header className="flex items-baseline justify-between gap-3 px-1 pb-1.5">
                         <h3 className="min-w-0 truncate text-[13px] font-semibold text-[var(--text-strong)]">{filmName}</h3>
-                        <span className="shrink-0 text-[10px] font-medium text-[var(--text-muted)]">
+                        <span className="shrink-0 text-xs text-[var(--text-muted)]">
                             {items.length} retalho{items.length === 1 ? '' : 's'}
                         </span>
                     </header>
 
-                    {items.map((item, itemIndex) => {
-                        const currentIndex = resultIndex++;
-                        const fit = getFitLabel(item, currentIndex, searchDimensions);
-                        return (
-                            <button
-                                key={item.id}
-                                type="button"
-                                onClick={() => onOpenDetails({ type: 'retalho', item })}
-                                className={`block w-full px-3.5 py-3 text-left transition-colors active:bg-[var(--surface-muted)] ${itemIndex ? 'border-t border-[var(--border-subtle)]' : ''}`}
-                            >
-                                <div className="flex items-center gap-3">
-                                    <div className="min-w-0 flex-1">
-                                        <div className="flex flex-wrap items-center gap-1.5">
-                                            <span className="text-[10px] font-semibold text-[var(--text-muted)]">#{item.id}</span>
-                                            <span className="rounded-full px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-wide text-white" style={{ backgroundColor: getStatusColor(item.status) }}>
-                                                {getStatusLabel(item.status)}
+                    <ul className="space-y-2">
+                        {items.map(item => {
+                            const currentIndex = resultIndex++;
+                            const fit = getFitLabel(item, currentIndex, searchDimensions);
+                            return (
+                                <li key={item.id}>
+                                    <button
+                                        type="button"
+                                        onClick={() => onOpenDetails({ type: 'retalho', item })}
+                                        className="flex w-full items-center gap-3 rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-raised)] p-3 text-left shadow-[var(--shadow-hairline)] transition-colors active:bg-[var(--surface-muted)]"
+                                    >
+                                        <PieceShape larguraCm={item.larguraCm} comprimentoCm={item.comprimentoCm} status={item.status} />
+                                        <span className="min-w-0 flex-1">
+                                            <span className="flex flex-wrap items-center gap-1.5">
+                                                <span className="text-[15px] font-semibold tabular-nums text-[var(--text-strong)]">{meters(item.larguraCm)} × {meters(item.comprimentoCm)} m</span>
+                                                {item.status !== 'disponivel' ? (
+                                                    <StockBadge tone={item.status === 'reservado' ? 'warn' : item.status === 'descartado' ? 'danger' : 'muted'}>{getStatusLabel(item.status)}</StockBadge>
+                                                ) : null}
+                                                {fit && <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${fit.className}`}>{fit.label}</span>}
                                             </span>
-                                            {fit && <span className={`rounded-full px-2 py-0.5 text-[9px] font-semibold ${fit.className}`}>{fit.label}</span>}
-                                        </div>
-                                        <p className="mt-1 text-[16px] font-semibold leading-tight text-[var(--text-strong)]">
-                                            {meters(item.larguraCm)} × {meters(item.comprimentoCm)} m
-                                        </p>
-                                        <p className={`mt-1 flex items-center gap-1 truncate text-[10px] ${item.localizacao ? 'text-[var(--text-muted)]' : 'font-semibold text-amber-600 dark:text-amber-300'}`}>
-                                            <MapPin className="h-3 w-3 shrink-0" />
-                                            {item.localizacao || 'Sem localização'}
-                                        </p>
-                                    </div>
-                                    <div className="shrink-0 text-right">
-                                        <p className="text-[9px] font-medium uppercase tracking-wide text-[var(--text-muted)]">Área</p>
-                                        <p className="mt-0.5 text-[12px] font-semibold text-[var(--text-body)]">{area(item)} m²</p>
-                                    </div>
-                                    <ChevronRight className="h-4 w-4 shrink-0 text-[var(--text-muted)]" />
-                                </div>
-                            </button>
-                        );
-                    })}
+                                            <span className="mt-0.5 flex min-w-0 items-center gap-1 text-xs">
+                                                <MapPin className={`h-3.5 w-3.5 shrink-0 ${item.localizacao ? 'text-[var(--text-soft)]' : 'text-amber-600 dark:text-amber-300'}`} aria-hidden="true" />
+                                                <span className={`truncate ${item.localizacao ? 'text-[var(--text-muted)]' : 'font-semibold text-amber-700 dark:text-amber-300'}`}>{item.localizacao || 'Sem localização'}</span>
+                                                <span className="shrink-0 text-[var(--text-soft)]">· #{item.id}</span>
+                                            </span>
+                                        </span>
+                                        <span className="shrink-0 text-right">
+                                            <span className="block text-[13px] font-semibold tabular-nums text-[var(--text-body)]">{area(item)} m²</span>
+                                        </span>
+                                        <ChevronRight className="h-4 w-4 shrink-0 text-[var(--text-soft)]" aria-hidden="true" />
+                                    </button>
+                                </li>
+                            );
+                        })}
+                    </ul>
                 </section>
             ))}
         </div>
