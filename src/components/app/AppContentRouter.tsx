@@ -388,7 +388,7 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
 
     if (activeTab === 'proposals') {
         return renderDeferred(
-            <ProposalCenterView onOpenHistory={() => onTabChange('history')} />,
+            <ProposalCenterView onOpenHistory={() => onTabChange('history')} agendamentos={agendamentos} onSchedule={onSchedulePdf} />,
             defaultLoadingView
         );
     }
