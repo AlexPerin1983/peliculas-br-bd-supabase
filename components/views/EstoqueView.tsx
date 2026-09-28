@@ -16,11 +16,12 @@ import EstoqueTopControls from './estoque/EstoqueTopControls';
 import EstoqueBobinasPanel from './estoque/EstoqueBobinasPanel';
 import EstoqueRetalhosPanel from './estoque/EstoqueRetalhosPanel';
 import EstoqueRetalhoMedidaSearch from './estoque/EstoqueRetalhoMedidaSearch';
-import EstoqueMobileHeader, { ESTOQUE_SEARCH_ID } from './estoque/EstoqueMobileHeader';
+import EstoqueMobileHeader, { ESTOQUE_SEARCH_ID, scrollSearchAreaToTop } from './estoque/EstoqueMobileHeader';
 import EstoqueMobileAddSheet from './estoque/EstoqueMobileAddSheet';
 import EstoqueMobileFooter from './estoque/EstoqueMobileFooter';
 import EstoqueItemSheet, { EstoqueSelectedItem } from './estoque/EstoqueItemSheet';
 import { isBobinaLow } from '../../src/lib/estoqueQuickFilters';
+import { useTypingFocus } from '../../src/hooks/useTypingFocus';
 import EstoqueAddModal from './estoque/EstoqueAddModal';
 import EstoqueAIModal from './estoque/EstoqueAIModal';
 import EstoqueQrModal from './estoque/EstoqueQrModal';
@@ -69,6 +70,8 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
     const [showDeleteConfirm, setShowDeleteConfirm] = useState<{ type: 'bobina' | 'retalho', id: number } | null>(null);
     const [isGenerating, setIsGenerating] = useState(false);
     const [mobileAddOpen, setMobileAddOpen] = useState(false);
+    // Teclado aberto no celular: o menu fixo sai da frente dos campos.
+    const typing = useTypingFocus();
     const [selectedMobileItem, setSelectedMobileItem] = useState<EstoqueSelectedItem | null>(null);
     const {
         searchTerm,
@@ -197,10 +200,8 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
     };
     const focusMobileSearch = () => {
         window.requestAnimationFrame(() => {
-            const field = document.getElementById(ESTOQUE_SEARCH_ID);
-            if (!field) return;
-            field.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
-            field.focus({ preventScroll: true });
+            document.getElementById(ESTOQUE_SEARCH_ID)?.focus({ preventScroll: true });
+            scrollSearchAreaToTop();
         });
     };
 
@@ -269,6 +270,15 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
                     onChangeTab={handleTabChange}
                     onSearchChange={setSearchTerm}
                     onStatusFilterChange={setStatusFilter}
+                    sizeSearch={activeTab === 'retalhos' ? {
+                        larguraCm: medidaLarguraCm,
+                        comprimentoCm: medidaComprimentoCm,
+                        onLarguraChange: setMedidaLarguraCm,
+                        onComprimentoChange: setMedidaComprimentoCm,
+                        onClear: limparBuscaPorMedida,
+                        active: buscandoPorMedida,
+                        matchCount: filteredRetalhos.length,
+                    } : undefined}
                 />
                 <div className="hidden sm:block">
                     <EstoqueTopControls
@@ -292,8 +302,9 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
                 </div>
             </div>
 
+            {/* No celular a busca por medida fica no topo, junto da busca (EstoqueMobileHeader). */}
             {activeTab === 'retalhos' && (
-                <div className="order-2 sm:order-3">
+                <div className="hidden sm:order-3 sm:block">
                     <EstoqueRetalhoMedidaSearch
                         larguraCm={medidaLarguraCm}
                         comprimentoCm={medidaComprimentoCm}
@@ -405,6 +416,7 @@ const EstoqueView: React.FC<EstoqueViewProps> = ({ films: initialFilms, initialA
                 onAdd={() => setMobileAddOpen(true)}
                 onScan={() => setShowScannerModal(true)}
                 onSearch={focusMobileSearch}
+                hidden={typing}
             />
 
             <EstoqueMobileAddSheet

@@ -33,7 +33,9 @@ const Modal: React.FC<ModalProps> = ({
     keyboardAwareFooter = false,
 }) => {
     const isMobile = useIsMobile();
-    const scrollRef = useRef<HTMLDivElement>(null);
+    // Estado (e não ref): o conteúdo do sheet monta depois de abrir, e o efeito do teclado
+    // precisa rodar de novo quando a área rolável existir.
+    const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
     const dialogRef = useRef<HTMLDivElement>(null);
     const onCloseRef = useRef(onClose);
     const disableCloseRef = useRef(disableClose);
@@ -69,7 +71,7 @@ const Modal: React.FC<ModalProps> = ({
     // aqui cuidamos apenas do scroll do conteúdo, sem deslocar o footer isolado.
     useEffect(() => {
         if (!isOpen || (!isMobile && !keyboardAwareFooter)) return;
-        const container = scrollRef.current;
+        const container = scrollEl;
         const vv = window.visualViewport;
         if (!container) return;
 
@@ -81,25 +83,49 @@ const Modal: React.FC<ModalProps> = ({
             const viewport = getViewport();
             return Math.max(0, window.innerHeight - viewport.height - viewport.top);
         };
+        // Campos que abrem o teclado (checkbox e afins não mexem na rolagem).
         const isFormControl = (target: HTMLElement | null): target is HTMLElement => (
-            !!target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)
+            !!target && (/^(TEXTAREA|SELECT)$/.test(target.tagName)
+                || (target.tagName === 'INPUT' && !/^(checkbox|radio|button|submit|reset|range|file|color)$/i.test((target as HTMLInputElement).type)))
         );
+        const isTypingInside = () => {
+            const active = document.activeElement as HTMLElement | null;
+            return isFormControl(active) && container.contains(active);
+        };
 
         const syncKeyboardSpace = () => {
             const kb = keyboardHeight();
             // Quando o vaul redimensiona o Drawer, a região rolável já encolhe
-            // junto com ele. O padding manual continua apenas no fluxo legado.
-            container.style.paddingBottom = !keyboardAwareFooter && kb > 120 ? `${kb}px` : '';
+            // junto com ele. O padding do teclado continua apenas no fluxo legado.
+            const legacyKeyboard = !keyboardAwareFooter && kb > 120 ? kb : 0;
+            // Enquanto digita, sobra espaço no fim para qualquer campo (até o último) subir ao topo.
+            // Mede sem o espaço anterior e fica abaixo da altura da área: assim não empurra o rodapé.
+            let roomToTop = 0;
+            if (isTypingInside()) {
+                container.style.paddingBottom = '';
+                roomToTop = Math.max(0, container.clientHeight - 72);
+            }
+            const padding = Math.max(legacyKeyboard, roomToTop);
+            container.style.paddingBottom = padding ? `${padding}px` : '';
         };
 
+        // O campo em foco sobe para o topo da área visível, junto com o rótulo: longe do
+        // teclado e do rodapé. Se já está à vista na parte de cima, fica onde está.
         const ensureVisible = (el: HTMLElement) => {
-            const top = container.getBoundingClientRect().top + 12;
+            const containerRect = container.getBoundingClientRect();
+            const top = containerRect.top + 12;
             const viewport = getViewport();
-            const viewportBottom = viewport.top + viewport.height;
-            const bottom = Math.min(viewportBottom, container.getBoundingClientRect().bottom) - 12;
+            const bottom = Math.min(viewport.top + viewport.height, containerRect.bottom) - 12;
             const rect = el.getBoundingClientRect();
-            if (rect.bottom > bottom) container.scrollTop += rect.bottom - bottom;
-            else if (rect.top < top) container.scrollTop -= top - rect.top;
+            const visibleHeight = Math.max(0, bottom - top);
+            if (rect.top >= top && rect.bottom <= bottom && rect.top - top <= visibleHeight * 0.5) return;
+
+            const anchor = (el.closest('label') as HTMLElement | null) ?? el.parentElement;
+            const anchorRect = anchor?.getBoundingClientRect();
+            // O bloco do campo (rótulo + campo) só serve de referência se for pequeno.
+            const useAnchor = anchorRect && anchorRect.top <= rect.top && anchorRect.height <= visibleHeight * 0.6;
+            const targetTop = useAnchor ? anchorRect.top : rect.top - 28;
+            container.scrollTop += targetTop - top;
         };
 
         let disposed = false;
@@ -136,7 +162,17 @@ const Modal: React.FC<ModalProps> = ({
             }, 450);
         };
 
+        // Saiu do campo (teclado fechou): tira o espaço extra do fim.
+        let blurTimer: number | undefined;
+        const onFocusOut = () => {
+            if (blurTimer !== undefined) window.clearTimeout(blurTimer);
+            blurTimer = window.setTimeout(() => {
+                if (!disposed) syncKeyboardSpace();
+            }, 80);
+        };
+
         container.addEventListener('focusin', onFocusIn);
+        container.addEventListener('focusout', onFocusOut);
         vv?.addEventListener('resize', syncViewport);
         vv?.addEventListener('scroll', syncViewport);
         window.addEventListener('resize', syncViewport);
@@ -144,6 +180,8 @@ const Modal: React.FC<ModalProps> = ({
         return () => {
             disposed = true;
             container.removeEventListener('focusin', onFocusIn);
+            container.removeEventListener('focusout', onFocusOut);
+            if (blurTimer !== undefined) window.clearTimeout(blurTimer);
             vv?.removeEventListener('resize', syncViewport);
             vv?.removeEventListener('scroll', syncViewport);
             window.removeEventListener('resize', syncViewport);
@@ -151,7 +189,7 @@ const Modal: React.FC<ModalProps> = ({
             if (ensureFrame !== undefined) window.cancelAnimationFrame(ensureFrame);
             container.style.paddingBottom = '';
         };
-    }, [isMobile, isOpen, keyboardAwareFooter]);
+    }, [isMobile, isOpen, keyboardAwareFooter, scrollEl]);
 
     // Fallback para navegadores que ignoram interactive-widget=resizes-content:
     // enquadra o sheet inteiro na área visual, como já fazemos no seletor mobile.
@@ -273,7 +311,7 @@ const Modal: React.FC<ModalProps> = ({
                                 </button>
                             </div>
                         </div>
-                        <div ref={scrollRef} className="min-h-0 flex-1 space-y-6 overflow-y-auto bg-[var(--surface)] p-5">
+                        <div ref={setScrollEl} className="min-h-0 flex-1 space-y-6 overflow-y-auto bg-[var(--surface)] p-5">
                             {children}
                         </div>
                         {footer && (
@@ -325,7 +363,7 @@ const Modal: React.FC<ModalProps> = ({
                         <X className="h-4 w-4" aria-hidden="true" />
                     </button>
                 </div>
-                <div ref={scrollRef} className="min-h-0 max-h-[70vh] space-y-6 overflow-y-auto bg-[var(--surface)] p-5 text-[var(--text-body)]">
+                <div ref={setScrollEl} className="min-h-0 max-h-[70vh] space-y-6 overflow-y-auto bg-[var(--surface)] p-5 text-[var(--text-body)]">
                     {children}
                 </div>
                 {footer && (

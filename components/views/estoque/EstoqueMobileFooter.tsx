@@ -9,6 +9,8 @@ interface EstoqueMobileFooterProps {
     onAdd: () => void;
     onScan: () => void;
     onSearch: () => void;
+    // Some enquanto o teclado está aberto (ficaria por cima do campo).
+    hidden?: boolean;
 }
 
 const FooterButton: React.FC<{
@@ -38,8 +40,8 @@ const FooterButton: React.FC<{
 );
 
 /** Menu fixo do estoque (somente celular), no mesmo formato das outras telas. */
-const EstoqueMobileFooter: React.FC<EstoqueMobileFooterProps> = ({ activeTab, lowStockCount, onChangeTab, onAdd, onScan, onSearch }) => (
-    <div className="fixed left-4 right-4 z-40 sm:hidden" style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)' }}>
+const EstoqueMobileFooter: React.FC<EstoqueMobileFooterProps> = ({ activeTab, lowStockCount, onChangeTab, onAdd, onScan, onSearch, hidden = false }) => (
+    <div aria-hidden={hidden || undefined} className={`fixed left-4 right-4 z-40 transition-all duration-200 sm:hidden ${hidden ? 'pointer-events-none translate-y-[140%] opacity-0' : ''}`} style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)' }}>
         <nav aria-label="Menu do estoque" className="rounded-2xl border border-white/20 bg-white/95 px-2 py-2 shadow-[0_8px_32px_rgba(0,0,0,0.15)] backdrop-blur-xl dark:border-slate-800/50 dark:bg-slate-900/95 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
             <div className="relative flex items-center justify-between">
                 <div className="flex gap-1">

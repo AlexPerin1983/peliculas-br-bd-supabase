@@ -71,6 +71,55 @@ describe('redesenho mobile do estoque', () => {
         expect(onChangeTab).toHaveBeenCalledWith('retalhos');
     });
 
+    it('retalhos: busca por medida no topo, junto da busca, com "próximo" no teclado', () => {
+        const onLarguraChange = vi.fn();
+        const onClear = vi.fn();
+        const props = {
+            activeTab: 'retalhos' as const,
+            bobinas: [],
+            retalhos: [retalho()],
+            stats: null,
+            searchTerm: '',
+            statusFilter: 'todos',
+            onChangeTab: vi.fn(),
+            onSearchChange: vi.fn(),
+            onStatusFilterChange: vi.fn(),
+        };
+        const sizeSearch = { larguraCm: '', comprimentoCm: '', onLarguraChange, onComprimentoChange: vi.fn(), onClear, active: false, matchCount: 0 };
+        const { rerender } = render(<EstoqueMobileHeader {...props} sizeSearch={sizeSearch} />);
+
+        expect(screen.queryByRole('group', { name: 'Buscar retalho por medida' })).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Buscar retalho por medida' }));
+        const group = screen.getByRole('group', { name: 'Buscar retalho por medida' });
+        const largura = within(group).getByRole('textbox', { name: 'Largura (cm)' });
+        const comprimento = within(group).getByRole('textbox', { name: 'Comprimento (cm)' });
+        expect(largura).toHaveAttribute('inputmode', 'decimal');
+        expect(largura).toHaveAttribute('enterkeyhint', 'next');
+        fireEvent.change(largura, { target: { value: '80cm' } });
+        expect(onLarguraChange).toHaveBeenCalledWith('80');
+        // "Próximo" no teclado vai para o comprimento.
+        largura.focus();
+        fireEvent.keyDown(largura, { key: 'Enter' });
+        expect(comprimento).toHaveFocus();
+
+        rerender(<EstoqueMobileHeader {...props} sizeSearch={{ ...sizeSearch, larguraCm: '80', comprimentoCm: '20', active: true, matchCount: 3 }} />);
+        expect(screen.getByText('3 retalhos cabem nessa medida, do menor desperdício.')).toBeInTheDocument();
+        // Tocar de novo na régua fecha e limpa a medida.
+        fireEvent.click(screen.getByRole('button', { name: 'Fechar busca por medida' }));
+        expect(onClear).toHaveBeenCalled();
+
+        // Na aba de bobinas não há busca por medida.
+        rerender(<EstoqueMobileHeader {...props} activeTab="bobinas" />);
+        expect(screen.queryByRole('button', { name: /por medida/ })).not.toBeInTheDocument();
+    });
+
+    it('menu fixo some enquanto o teclado está aberto', () => {
+        const { rerender } = render(<EstoqueMobileFooter activeTab="bobinas" lowStockCount={0} onChangeTab={vi.fn()} onAdd={vi.fn()} onScan={vi.fn()} onSearch={vi.fn()} hidden />);
+        expect(screen.queryByRole('navigation', { name: 'Menu do estoque' })).not.toBeInTheDocument();
+        rerender(<EstoqueMobileFooter activeTab="bobinas" lowStockCount={0} onChangeTab={vi.fn()} onAdd={vi.fn()} onScan={vi.fn()} onSearch={vi.fn()} />);
+        expect(screen.getByRole('navigation', { name: 'Menu do estoque' })).toBeInTheDocument();
+    });
+
     it('menu fixo: abas, cadastrar no botão central, escanear e buscar', () => {
         const onChangeTab = vi.fn();
         const onAdd = vi.fn();
