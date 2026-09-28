@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, FormEvent } from 'react';
-import { Agendamento, AgendamentoServiceStatus, Client, UserInfo, SavedPDF, SchedulingInfo } from '../../types';
+import { Agendamento, AgendamentoServiceStatus, Client, QuickClientDraft, UserInfo, SavedPDF, SchedulingInfo } from '../../types';
 import Modal from '../ui/Modal';
 import ActionButton from '../ui/ActionButton';
 import Input from '../ui/Input';
@@ -15,6 +15,8 @@ interface AgendamentoModalProps {
     clients: Client[];
     savedPdfs: SavedPDF[];
     onAddNewClient: (clientName: string) => void;
+    // Cria o cadastro simples do cliente ditado por voz (só nome e local).
+    onCreateQuickClient?: (values: { nome: string; local: string }, draft?: QuickClientDraft) => Promise<Client>;
     userInfo: UserInfo | null;
     agendamentos: Agendamento[];
 }
@@ -66,6 +68,16 @@ const colorForName = (nome: string): string =>
 const clientSubtitle = (client: Client): string =>
     [client.telefone, [client.cidade, client.uf].filter(Boolean).join('/')].filter(Boolean).join('  ·  ');
 
+// Data e hora locais para os inputs. toISOString usaria UTC e trocaria o dia à noite.
+const toDateInputValue = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
+const toTimeInputValue = (date: Date) => date.toTimeString().split(' ')[0].substring(0, 5);
+
 const timeToMinutes = (value: string): number => {
     const [hours = '0', minutes = '0'] = value.split(':');
     return Number(hours) * 60 + Number(minutes);
@@ -97,9 +109,10 @@ const getWorkingEndLabel = (scheduleStart: string, scheduleEnd: string): string 
     return scheduleEnd;
 };
 
-const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, onSave, onDelete, schedulingInfo, clients, savedPdfs, onAddNewClient, userInfo, agendamentos }) => {
+const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, onSave, onDelete, schedulingInfo, clients, savedPdfs, onAddNewClient, onCreateQuickClient, userInfo, agendamentos }) => {
     const agendamento = schedulingInfo.agendamento;
     const pdf = 'pdf' in schedulingInfo ? schedulingInfo.pdf : undefined;
+    const quickClient = 'quickClient' in schedulingInfo ? schedulingInfo.quickClient : undefined;
 
     const isEditing = !!agendamento?.id;
     const isClientLocked = !!pdf?.clienteId || !!agendamento?.pdfId;
@@ -113,6 +126,10 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
     const [selectedProposalIds, setSelectedProposalIds] = useState<number[]>([]);
     const [validationError, setValidationError] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
+    // Cliente ditado por voz: nome e local digitáveis no lugar da busca na lista.
+    const [isQuickClient, setIsQuickClient] = useState(false);
+    const [quickName, setQuickName] = useState('');
+    const [quickLocal, setQuickLocal] = useState('');
     // Capacidade = nº de colaboradores ATIVOS da organização (dono + convidados).
     // Org-wide e igual em qualquer conta logada (corrige a antiga contagem por
     // "Equipe" manual, que não crescia ao convidar e variava por conta).
@@ -174,30 +191,38 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
 
             setServiceStatus(agendamento?.serviceStatus || 'scheduled');
 
+            setIsQuickClient(!!quickClient && !initialClientId);
+            setQuickName(quickClient?.nome || '');
+            setQuickLocal(quickClient?.local || '');
+
             if (isEditing && agendamento?.start && agendamento?.end) {
                 const startDate = new Date(agendamento.start);
                 const endDate = new Date(agendamento.end);
-                setDate(startDate.toISOString().split('T')[0]);
-                setStartTime(startDate.toTimeString().split(' ')[0].substring(0, 5));
-                setEndTime(endDate.toTimeString().split(' ')[0].substring(0, 5));
+                setDate(toDateInputValue(startDate));
+                setStartTime(toTimeInputValue(startDate));
+                setEndTime(toTimeInputValue(endDate));
                 setNotes(agendamento.notes || '');
             } else if (agendamento?.start) {
                 const startDate = new Date(agendamento.start);
-                setDate(startDate.toISOString().split('T')[0]);
-                setStartTime(startDate.toTimeString().split(' ')[0].substring(0, 5));
-                const endDate = new Date(startDate.getTime() + 2 * 60 * 60 * 1000);
-                setEndTime(endDate.toTimeString().split(' ')[0].substring(0, 5));
+                setDate(toDateInputValue(startDate));
+                setStartTime(toTimeInputValue(startDate));
+                // Término sugerido (ex.: "das 9 às 12" ditado por voz); sem ele, 2 horas.
+                const suggestedEnd = agendamento.end ? new Date(agendamento.end) : null;
+                const endDate = suggestedEnd && suggestedEnd > startDate
+                    ? suggestedEnd
+                    : new Date(startDate.getTime() + 2 * 60 * 60 * 1000);
+                setEndTime(toTimeInputValue(endDate));
                 setNotes(agendamento.notes || '');
             } else {
                 const tomorrow = new Date();
                 tomorrow.setDate(tomorrow.getDate() + 1);
-                setDate(tomorrow.toISOString().split('T')[0]);
+                setDate(toDateInputValue(tomorrow));
                 setStartTime('09:00');
                 setEndTime('11:00');
                 setNotes('');
             }
         }
-    }, [isOpen, agendamento, pdf, isEditing]);
+    }, [isOpen, agendamento, pdf, isEditing, quickClient]);
 
     // Disponibilidade ao vivo: quantos colaboradores ficam livres no horário escolhido.
     // Usado para avisar antes de salvar (ex.: reagendar/continuar num dia já cheio).
@@ -229,15 +254,24 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
         if (isSaving) return;
         setValidationError(null);
 
-        if (!selectedClientId) {
-            setValidationError("Por favor, selecione um cliente.");
-            return;
-        }
+        const quickNameValue = quickName.trim();
+        let selectedClient: Client | undefined;
+        if (isQuickClient) {
+            if (!quickNameValue) {
+                setValidationError('Informe o nome do cliente.');
+                return;
+            }
+        } else {
+            if (!selectedClientId) {
+                setValidationError("Por favor, selecione um cliente.");
+                return;
+            }
 
-        const client = clients.find(c => c.id === selectedClientId);
-        if (!client) {
-            setValidationError("Cliente selecionado é inválido.");
-            return;
+            selectedClient = clients.find(c => c.id === selectedClientId);
+            if (!selectedClient) {
+                setValidationError("Cliente selecionado é inválido.");
+                return;
+            }
         }
 
         const [year, month, day] = date.split('-').map(Number);
@@ -287,34 +321,56 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
         }
         const proposalIds = selectedProposalIds.filter((id, index, ids) => ids.indexOf(id) === index);
 
+        const buildPayload = (client: Client) => {
+            const agendamentoPayload: Omit<Agendamento, 'id'> | Agendamento = {
+                clienteId: client.id!,
+                clienteNome: client.nome,
+                start: startDateTime.toISOString(),
+                end: endDateTime.toISOString(),
+                notes: notes,
+                pdfId: proposalIds[0],
+                pdfIds: proposalIds,
+                serviceStatus,
+                valorFinal: agendamento?.valorFinal,
+                receiptDescription: agendamento?.receiptDescription,
+                stockStatus: agendamento?.stockStatus,
+                stockConsumedAt: agendamento?.stockConsumedAt,
+                stockSourcePdfIds: agendamento?.stockSourcePdfIds,
+            };
 
-        const agendamentoPayload: Omit<Agendamento, 'id'> | Agendamento = {
-            clienteId: client.id!,
-            clienteNome: client.nome,
-            start: startDateTime.toISOString(),
-            end: endDateTime.toISOString(),
-            notes: notes,
-            pdfId: proposalIds[0],
-            pdfIds: proposalIds,
-            serviceStatus,
-            valorFinal: agendamento?.valorFinal,
-            receiptDescription: agendamento?.receiptDescription,
-            stockStatus: agendamento?.stockStatus,
-            stockConsumedAt: agendamento?.stockConsumedAt,
-            stockSourcePdfIds: agendamento?.stockSourcePdfIds,
+            if (isEditing) {
+                (agendamentoPayload as Agendamento).id = agendamento!.id;
+            }
+            return agendamentoPayload;
         };
 
-        if (isEditing) {
-            (agendamentoPayload as Agendamento).id = agendamento!.id;
-        }
-
         setIsSaving(true);
+        let createdClient: Client | null = null;
         try {
-            await onSave(agendamentoPayload);
+            // O cadastro simples só nasce aqui, depois de validar data e horário.
+            if (isQuickClient) {
+                if (!onCreateQuickClient) throw new Error('Não foi possível cadastrar o cliente. Escolha um cliente da lista.');
+                createdClient = await onCreateQuickClient({ nome: quickNameValue, local: quickLocal.trim() }, quickClient);
+            }
+            await onSave(buildPayload(createdClient || selectedClient!));
         } catch (err: any) {
+            if (createdClient?.id) {
+                // O cliente já foi cadastrado: a nova tentativa usa ele em vez de repetir o cadastro.
+                setSelectedClientId(createdClient.id);
+                setIsQuickClient(false);
+            }
             setValidationError(err.message || 'Erro ao salvar agendamento. Tente novamente.');
             setIsSaving(false);
         }
+    };
+
+    // "Já é cliente?": volta para a busca na lista sem perder o local ditado.
+    const handleChooseExistingClient = () => {
+        const local = quickLocal.trim();
+        if (local && !notes.includes(local)) {
+            setNotes(current => (current.trim() ? `${current}\nLocal: ${local}` : `Local: ${local}`));
+        }
+        setIsQuickClient(false);
     };
 
     const handleDelete = () => {
@@ -427,6 +483,50 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
         <Modal isOpen={isOpen} onClose={isSaving ? () => {} : onClose} title={modalTitle} footer={footerContent} disableClose={isSaving} fullScreenOnMobile>
             <form id="agendamentoForm" onSubmit={handleSubmit} className="space-y-5">
                 <fieldset disabled={isSaving} className="space-y-5">
+                    {quickClient?.reviewHints?.length ? (
+                        <div role="status" className="flex gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+                            <i className="fas fa-triangle-exclamation mt-0.5" aria-hidden="true"></i>
+                            <div>
+                                <p className="font-semibold">Confira antes de salvar</p>
+                                <ul className="mt-0.5 space-y-0.5">
+                                    {quickClient.reviewHints.map((hint) => <li key={hint}>{hint}</li>)}
+                                </ul>
+                            </div>
+                        </div>
+                    ) : null}
+
+                    {isQuickClient ? (
+                        <section aria-label="Cliente novo" className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-600 dark:bg-slate-800/70">
+                            <Input
+                                id="quickClientName"
+                                label="Nome do cliente"
+                                value={quickName}
+                                onChange={(e) => setQuickName((e.target as HTMLInputElement).value)}
+                                placeholder="Nome do cliente"
+                                className={inputClassName}
+                            />
+                            <Input
+                                id="quickClientLocal"
+                                label="Local"
+                                value={quickLocal}
+                                onChange={(e) => setQuickLocal((e.target as HTMLInputElement).value)}
+                                placeholder="Rua, número e bairro"
+                                className={inputClassName}
+                            />
+                            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                                <p className="text-xs text-slate-500 dark:text-slate-400">
+                                    Vira um cliente novo. Telefone e outros dados você completa depois.
+                                </p>
+                                <button
+                                    type="button"
+                                    onClick={handleChooseExistingClient}
+                                    className="text-xs font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                                >
+                                    Já é cliente? Escolher da lista
+                                </button>
+                            </div>
+                        </section>
+                    ) : (
                     <div>
                         <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Cliente</label>
                         <SearchableSelect
@@ -500,6 +600,7 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                             )}
                         />
                     </div>
+                    )}
 
                     {pdf && clientProposals.length === 0 && (
                         <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-600 space-y-2">

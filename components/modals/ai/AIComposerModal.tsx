@@ -5,7 +5,8 @@ import { useFeedback } from '../../../src/contexts/FeedbackContext';
 import { AIInput } from '../../../types';
 import { AI_MAX_FILES, AI_MAX_PDF_BYTES, AI_MAX_TOTAL_BYTES, AIFileKind, formatFileSize, getAIFileKind, prepareAIFile } from './aiFiles';
 
-type Mode = 'text' | 'files' | 'voice';
+export type AIComposerMode = 'text' | 'files' | 'voice';
+type Mode = AIComposerMode;
 
 interface AttachedFile {
     id: string;
@@ -32,6 +33,8 @@ export interface AIComposerModalProps {
     /** Mensagens mostradas em sequência enquanto a IA trabalha. */
     stages: string[];
     keyboardAwareFooter?: boolean;
+    /** Aba aberta primeiro. Voz só vale com Gemini; sem ele abre em texto. */
+    initialMode?: AIComposerMode;
 }
 
 const formatTime = (seconds: number) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
@@ -42,13 +45,13 @@ const formatTime = (seconds: number) => `${Math.floor(seconds / 60)}:${String(se
  */
 const AIComposerModal: React.FC<AIComposerModalProps> = ({
     isOpen, onClose, onProcess, isProcessing, provider, title, intro,
-    textPlaceholder, textExample, filesHint, voiceHint, submitLabel, stages, keyboardAwareFooter,
+    textPlaceholder, textExample, filesHint, voiceHint, submitLabel, stages, keyboardAwareFooter, initialMode = 'text',
 }) => {
     const { showAlert, showToast } = useFeedback();
     const allowPdf = provider === 'gemini';
     const allowVoice = provider === 'gemini';
 
-    const [mode, setMode] = useState<Mode>('text');
+    const [mode, setMode] = useState<Mode>(initialMode === 'voice' && !allowVoice ? 'text' : initialMode);
     const [text, setText] = useState('');
     const [files, setFiles] = useState<AttachedFile[]>([]);
     const [isPreparing, setIsPreparing] = useState(false);

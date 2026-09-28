@@ -77,6 +77,35 @@ describe('AgendaView', () => {
         vi.useRealTimers();
     });
 
+    it('oferece agendar por voz ao lado do novo agendamento', () => {
+        const onCreateAgendamentoByVoice = vi.fn();
+        render(
+            <AgendaView
+                agendamentos={[appointment]}
+                pdfs={[]}
+                clients={[clientWithAddress]}
+                onEditAgendamento={vi.fn()}
+                onUpdateServiceStatus={vi.fn()}
+                onSaveReceiptDescription={vi.fn().mockResolvedValue(undefined)}
+                onCompleteAgendamentoWithValue={vi.fn().mockResolvedValue(true)}
+                onContinueAgendamento={vi.fn()}
+                onRescheduleAgendamento={vi.fn()}
+                onCreateNewAgendamento={vi.fn()}
+                onCreateAgendamentoByVoice={onCreateAgendamentoByVoice}
+            />
+        );
+
+        const voiceButtons = screen.getAllByRole('button', { name: 'Agendar por voz' });
+        expect(voiceButtons.length).toBeGreaterThan(0);
+        fireEvent.click(voiceButtons[0]);
+        expect(onCreateAgendamentoByVoice).toHaveBeenCalledTimes(1);
+    });
+
+    it('sem a acao de voz nao mostra o microfone', () => {
+        renderAgenda();
+        expect(screen.queryByRole('button', { name: 'Agendar por voz' })).not.toBeInTheDocument();
+    });
+
     it('mostra link de navegacao quando o cliente tem endereco', () => {
         renderAgenda();
 

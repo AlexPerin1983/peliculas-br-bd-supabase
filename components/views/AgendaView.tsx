@@ -38,6 +38,7 @@ interface AgendaViewProps {
     onContinueAgendamento: (agendamento: Agendamento) => void;
     onRescheduleAgendamento: (agendamento: Agendamento) => void;
     onCreateNewAgendamento: (date: Date) => void;
+    onCreateAgendamentoByVoice?: () => void;
     googleReviewsLink?: string;
     userInfo?: UserInfo | null;
 }
@@ -1502,9 +1503,24 @@ const AgendaQuickButton: React.FC<{
     </button>
 );
 
+// Microfone ao lado do "+": agenda falando nome, local, dia e hora.
+const VoiceScheduleButton: React.FC<{ onClick?: () => void }> = ({ onClick }) => (
+    onClick ? (
+        <ActionButton
+            onClick={onClick}
+            variant="secondary"
+            size="md"
+            iconOnly
+            iconClassName="fas fa-microphone"
+            aria-label="Agendar por voz"
+            title="Agendar por voz"
+        />
+    ) : null
+);
+
 const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
 
-const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, onEditAgendamento, onUpdateServiceStatus, onSaveReceiptDescription, onCompleteAgendamentoWithValue, onContinueAgendamento, onRescheduleAgendamento, onCreateNewAgendamento, googleReviewsLink, userInfo }) => {
+const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, onEditAgendamento, onUpdateServiceStatus, onSaveReceiptDescription, onCompleteAgendamentoWithValue, onContinueAgendamento, onRescheduleAgendamento, onCreateNewAgendamento, onCreateAgendamentoByVoice, googleReviewsLink, userInfo }) => {
     const { canUseEstoque } = useSubscription();
     const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState(new Date());
@@ -2019,15 +2035,18 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                                 </button>
                             ) : null}
                         </div>
-                        <ActionButton
-                            onClick={() => onCreateNewAgendamento(selectedDate)}
-                            variant="primary"
-                            size="md"
-                            iconOnly
-                            iconClassName="fas fa-plus"
-                            aria-label="Criar novo agendamento para o dia selecionado"
-                            className="shadow-lg shadow-blue-900/20"
-                        />
+                        <div className="flex shrink-0 items-center gap-2">
+                            <VoiceScheduleButton onClick={onCreateAgendamentoByVoice} />
+                            <ActionButton
+                                onClick={() => onCreateNewAgendamento(selectedDate)}
+                                variant="primary"
+                                size="md"
+                                iconOnly
+                                iconClassName="fas fa-plus"
+                                aria-label="Criar novo agendamento para o dia selecionado"
+                                className="shadow-lg shadow-blue-900/20"
+                            />
+                        </div>
                     </div>
 
                     <div
@@ -2068,15 +2087,18 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                                 {upcomingCount > 0 ? `${upcomingCount} agendamento${upcomingCount > 1 ? 's' : ''}` : 'Nada à vista'}
                             </h3>
                         </div>
-                        <ActionButton
-                            onClick={() => onCreateNewAgendamento(new Date())}
-                            variant="primary"
-                            size="md"
-                            iconOnly
-                            iconClassName="fas fa-plus"
-                            aria-label="Criar novo agendamento"
-                            className="shadow-lg shadow-blue-900/20"
-                        />
+                        <div className="flex shrink-0 items-center gap-2">
+                            <VoiceScheduleButton onClick={onCreateAgendamentoByVoice} />
+                            <ActionButton
+                                onClick={() => onCreateNewAgendamento(new Date())}
+                                variant="primary"
+                                size="md"
+                                iconOnly
+                                iconClassName="fas fa-plus"
+                                aria-label="Criar novo agendamento"
+                                className="shadow-lg shadow-blue-900/20"
+                            />
+                        </div>
                     </div>
 
                     {upcomingGroups.length > 0 ? (
@@ -2189,14 +2211,17 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                                 {selectedDateString}
                             </h3>
                         </div>
-                        <ActionButton
-                            onClick={() => onCreateNewAgendamento(selectedDate)}
-                            variant="primary"
-                            size="md"
-                            iconOnly
-                            iconClassName="fas fa-plus"
-                            aria-label="Criar novo agendamento para o dia selecionado"
-                        />
+                        <div className="flex shrink-0 items-center gap-2">
+                            <VoiceScheduleButton onClick={onCreateAgendamentoByVoice} />
+                            <ActionButton
+                                onClick={() => onCreateNewAgendamento(selectedDate)}
+                                variant="primary"
+                                size="md"
+                                iconOnly
+                                iconClassName="fas fa-plus"
+                                aria-label="Criar novo agendamento para o dia selecionado"
+                            />
+                        </div>
                     </div>
 
                     <DayAgendaSummary agendamentos={selectedDayAgendamentos} />

@@ -56,7 +56,7 @@ const AIQuickFab: React.FC<AIQuickFabProps> = ({
             accentClass: 'bg-gradient-to-br from-amber-500 to-orange-600'
         },
         {
-            label: 'Agendamento',
+            label: 'Agendamento com IA',
             icon: <CalendarPlus className="h-5 w-5" aria-hidden="true" />,
             onClick: () => runAction(onCreateAgenda),
             accentClass: 'bg-gradient-to-br from-rose-500 to-rose-600'
