@@ -13,6 +13,7 @@ import {
     ExternalLink,
     HandCoins,
     History,
+    Lightbulb,
     LoaderCircle,
     MessageCircle,
     MessageSquareText,
@@ -37,7 +38,9 @@ import {
     type ProposalPortalMessage,
 } from '../src/lib/proposalPortal';
 import {
-    buildFollowUpMessage,
+    buildFollowUpVariantMessage,
+    FOLLOW_UP_VARIANTS,
+    getNegotiationTip,
     buildFollowUpTimeline,
     describeClosed,
     describeNextContact,
@@ -177,24 +180,30 @@ const NextStepCard: React.FC<{
     const [note, setNote] = useState('');
     const [copied, setCopied] = useState(false);
     const [editing, setEditing] = useState(false);
-    const [templateStep, setTemplateStep] = useState<FollowUpTemplateStep | null>(isTemplateStep(item.step) ? item.step : null);
+    // Mensagem escolhida: "situação:variação" (ex.: "hot:principal", "expired:renovar").
+    // "Sem retorno" usa a despedida da proposta vencida.
+    const defaultChoice = (step: string) => (isTemplateStep(step) ? `${step}:principal` : step === 'close' ? 'expired:despedida' : '');
+    const [choice, setChoice] = useState(defaultChoice(item.step));
     const [text, setText] = useState(item.message || '');
     const [edited, setEdited] = useState(false);
+    const [showTip, setShowTip] = useState(false);
+    const tip = getNegotiationTip(item);
 
     useEffect(() => {
-        setTemplateStep(isTemplateStep(item.step) ? item.step : null);
+        setChoice(defaultChoice(item.step));
         setEdited(false);
         setEditing(false);
     }, [item.step, portal.id]);
 
-    // Sem edição manual, a mensagem acompanha o modelo escolhido (e os modelos salvos).
+    // Sem edição manual, a mensagem acompanha a variação escolhida (e os modelos salvos).
     useEffect(() => {
         if (edited) return;
-        setText(templateStep ? buildFollowUpMessage(templateStep, portal, Date.now(), templates) || '' : item.message || '');
-    }, [edited, templateStep, templates, portal, item.message]);
+        const [step, variantId] = choice.split(':');
+        setText(isTemplateStep(step) ? buildFollowUpVariantMessage(step, variantId, portal, Date.now(), templates) : item.message || '');
+    }, [edited, choice, templates, portal, item.message]);
 
     const whatsappUrl = text ? buildProposalWhatsAppUrl(portal.clientPhone || undefined, text) : null;
-    const hasMessage = item.step !== 'reply' && item.step !== 'close';
+    const hasMessage = item.step !== 'reply';
     const snoozeTarget = snoozePick === 'custom'
         ? (snoozeCustom ? snoozeDate(snoozeCustom) : null)
         : snoozeDate(snoozePick);
@@ -208,6 +217,16 @@ const NextStepCard: React.FC<{
             <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">Próximo passo</p>
             <p className={`mt-1 text-[15px] font-semibold ${titleTone}`}>{item.title}</p>
             <p className="mt-0.5 text-[13px] leading-5 text-[var(--text-body)]">{item.hint}</p>
+            <div className="mt-2 rounded-xl bg-amber-50/70 px-3 py-2 text-amber-900 dark:bg-amber-950/25 dark:text-amber-100">
+                <div className="text-xs">
+                    <button type="button" onClick={() => setShowTip(current => !current)} aria-expanded={showTip} className="flex w-full items-center gap-1.5 text-left">
+                        <Lightbulb className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                        <span className="min-w-0 flex-1">Dica de negociação: <span className="font-semibold">{tip.title}</span></span>
+                        <ChevronDown className={`h-3.5 w-3.5 shrink-0 transition-transform ${showTip ? 'rotate-180' : ''}`} aria-hidden="true" />
+                    </button>
+                </div>
+                {showTip ? <p className="mt-1.5 text-[13px] leading-5">{tip.text}</p> : null}
+            </div>
             {item.snoozedUntil ? (
                 <p className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-[var(--text-muted)]"><AlarmClock className="h-3.5 w-3.5" aria-hidden="true" /> Lembrete: {describeNextContact(item.snoozedUntil)}</p>
             ) : !item.due ? <p className="mt-1 text-xs font-medium text-[var(--text-muted)]">Próximo contato: {describeNextContact(item.dueAt)}</p> : null}
@@ -218,12 +237,18 @@ const NextStepCard: React.FC<{
                         <label className="flex min-w-0 items-center gap-1.5 font-medium text-[var(--text-muted)]">
                             Mensagem
                             <select
-                                value={templateStep ?? ''}
-                                onChange={event => { setTemplateStep(event.target.value as FollowUpTemplateStep); setEdited(false); }}
+                                value={choice}
+                                onChange={event => { setChoice(event.target.value); setEdited(false); }}
                                 aria-label="Trocar mensagem"
                                 className="min-w-0 truncate rounded-md bg-transparent py-0.5 font-semibold text-[var(--text-strong)] focus:outline-none"
                             >
-                                {FOLLOW_UP_TEMPLATE_STEPS.map(option => <option key={option.step} value={option.step}>{option.label}</option>)}
+                                {FOLLOW_UP_TEMPLATE_STEPS.map(option => (
+                                    <optgroup key={option.step} label={option.label}>
+                                        {FOLLOW_UP_VARIANTS[option.step].map(variant => (
+                                            <option key={variant.id} value={`${option.step}:${variant.id}`}>{variant.id === 'principal' ? option.label : variant.label}</option>
+                                        ))}
+                                    </optgroup>
+                                ))}
                             </select>
                         </label>
                         <button type="button" onClick={() => setEditing(current => !current)} className="inline-flex shrink-0 items-center gap-1 text-blue-600">

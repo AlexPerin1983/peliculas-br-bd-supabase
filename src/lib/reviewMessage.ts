@@ -80,17 +80,20 @@ export const buildReviewLocationHint = (source: ReviewSource, client: Client) =>
         : '';
 
     const details = [filmDetail, applicationDetail, neighborhoodDetail].filter(Boolean);
+    // Sem nome de empresa fixo: o app atende várias empresas.
+    const keywords = 'palavras como película para vidro, controle solar, privacidade, segurança, insulfilm e a sua cidade/bairro';
+    const helps = 'Isso ajuda outras pessoas a nos encontrarem no Google.';
     if (details.length === 0) {
-        return 'Se puder, use palavras que descrevam o servico feito, como pelicula para vidro, controle solar, privacidade, seguranca, insulfilm residencial ou comercial e sua cidade/bairro. Isso ajuda outras pessoas a encontrarem a Peliculas Brasil no Google.';
+        return `Dica: se puder, use ${keywords}. ${helps}`;
     }
 
     if (details.length === 1) {
-        return `Se puder, mencione ${details[0]} e palavras relacionadas ao servico, como pelicula para vidro, controle solar, privacidade, seguranca, insulfilm residencial ou comercial e sua cidade/bairro. Isso ajuda outras pessoas a encontrarem a Peliculas Brasil no Google.`;
+        return `Dica: se puder, mencione ${details[0]} e ${keywords}. ${helps}`;
     }
 
     const intro = details.slice(0, -1).join(', ');
     const lastDetail = details[details.length - 1];
-    return `Se puder, mencione ${intro} e ${lastDetail}, junto com palavras relacionadas ao servico, como pelicula para vidro, controle solar, privacidade, seguranca, insulfilm residencial ou comercial e sua cidade/bairro. Isso ajuda outras pessoas a encontrarem a Peliculas Brasil no Google.`;
+    return `Dica: se puder, mencione ${intro} e ${lastDetail}, junto com ${keywords}. ${helps}`;
 };
 
 /**
@@ -164,16 +167,13 @@ export const buildReviewFollowUpMessage = (source: ReviewSource, client: Client,
     const locationHint = buildReviewLocationHint(source, client);
 
     return [
-        `Ola ${firstName}, essa e uma pesquisa de satisfacao para avaliar nosso trabalho.`,
+        `Olá, ${firstName}! Tudo bem?`,
+        'Muito obrigado pela confiança no nosso trabalho 🙏',
         '',
-        'Seu retorno ajuda a gente a melhorar e tambem ajuda novos clientes a conhecerem a qualidade do servico.',
-        '',
-        'Se puder, deixe sua avaliacao no Google pelo link abaixo:',
+        'Se puder, deixe sua avaliação no Google pelo link abaixo. Leva menos de 1 minuto e ajuda muito outras pessoas a nos conhecerem:',
         reviewLink,
         ...(locationHint ? ['', locationHint] : []),
         '',
-        'Se tambem puder enviar 1 ou 2 fotos do resultado, registramos junto do pos-venda e da garantia.',
-        '',
-        'Obrigado pela confianca.',
+        'Se quiser, pode me mandar também 1 ou 2 fotos do resultado: guardo junto com a sua garantia.',
     ].join('\n');
 };

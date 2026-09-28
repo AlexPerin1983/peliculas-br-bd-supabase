@@ -94,7 +94,7 @@ const FollowUpTemplatesModal: React.FC<FollowUpTemplatesModalProps> = ({ isOpen,
         >
             <div className="space-y-5">
                 <p className="text-sm leading-6 text-[var(--text-muted)]">
-                    Estas mensagens aparecem prontas em "Para acompanhar hoje". Toque num marcador para colocar o dado do cliente no texto.
+                    Estas são as mensagens principais de cada situação. Na ficha da proposta, "Trocar mensagem" também traz outras versões prontas (como a pergunta do “não”). Toque num marcador para colocar o dado do cliente no texto.
                 </p>
                 {FOLLOW_UP_TEMPLATE_STEPS.map(({ step, label, when }) => {
                     const unknown = findUnknownFollowUpTags(drafts[step]);

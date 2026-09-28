@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { BadgePercent, Check, Copy, LoaderCircle, MessageCircle } from 'lucide-react';
+import { BadgePercent, Check, Copy, Gift, LoaderCircle, MessageCircle } from 'lucide-react';
 import Modal from './ui/Modal';
 import type { Client, SavedPDF } from '../types';
-import { recordProposalFollowUp, setProposalOfferDeadline, type CompanyProposalPortal } from '../src/lib/proposalPortal';
-import { buildOfferMessage, formatDeadline, OFFER_DEADLINE_PRESETS, offerDeadline } from '../src/lib/proposalFollowUpQueue';
+import { recordProposalFollowUp, sendCompanyProposalMessage, setProposalOfferDeadline, type CompanyProposalPortal } from '../src/lib/proposalPortal';
+import { buildBonusOfferMessage, buildOfferMessage, formatDeadline, OFFER_BONUS_PRESETS, OFFER_DEADLINE_PRESETS, offerDeadline } from '../src/lib/proposalFollowUpQueue';
 import { getFollowUpBase, previewProposalFollowUp } from '../src/lib/proposalFollowUp';
 import { buildProposalWhatsAppUrl, type FollowUpDiscountType } from '../src/lib/proposalMessages';
 import { getClientById, getSavedPdfById } from '../services/supabaseDb';
@@ -35,12 +35,16 @@ const copyText = async (value: string) => {
     area.remove();
 };
 
-/** Condição especial com prazo: aplica o desconto na proposta (PDF novo) e o prazo no link. */
+/** Condição especial com prazo: desconto na proposta (PDF novo) ou brinde sem baixar o preço, com o prazo no link. */
 const ProposalOfferSheet: React.FC<ProposalOfferSheetProps> = ({ isOpen, portal, step, onClose, onApplied }) => {
     const [proposalId, setProposalId] = useState<number>(portal.proposals[0]?.id);
     const [pdf, setPdf] = useState<SavedPDF | null>(null);
     const [client, setClient] = useState<Client | null>(null);
     const [loading, setLoading] = useState(false);
+    // Brinde em vez de desconto: mantém o valor e acrescenta algo (garantia, remoção, prioridade…).
+    const [mode, setMode] = useState<'discount' | 'bonus'>('discount');
+    const [bonusPick, setBonusPick] = useState(OFFER_BONUS_PRESETS[0].phrase);
+    const [bonusCustom, setBonusCustom] = useState('');
     const [type, setType] = useState<FollowUpDiscountType>('percentage');
     const [raw, setRaw] = useState('10');
     const [preset, setPreset] = useState<string>('48h');
@@ -81,14 +85,34 @@ const ProposalOfferSheet: React.FC<ProposalOfferSheetProps> = ({ isOpen, portal,
     const discountLabel = type === 'percentage'
         ? `${(preview?.followUpDiscountPercent ?? 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`
         : currency.format(preview?.followUpDiscountAmount ?? 0);
-    const invalid = !preview || (preview.followUpDiscountAmount ?? 0) <= 0
-        ? 'Informe um desconto maior que zero.'
-        : !(deadline.getTime() > Date.now())
-            ? 'Escolha um prazo futuro.'
-            : '';
+    const bonus = (bonusPick === 'custom' ? bonusCustom : bonusPick).trim();
+    const invalid = mode === 'bonus'
+        ? !bonus ? 'Escolha ou escreva o brinde.' : !(deadline.getTime() > Date.now()) ? 'Escolha um prazo futuro.' : ''
+        : !preview || (preview.followUpDiscountAmount ?? 0) <= 0
+            ? 'Informe um desconto maior que zero.'
+            : !(deadline.getTime() > Date.now())
+                ? 'Escolha um prazo futuro.'
+                : '';
 
     const apply = async () => {
-        if (!pdf || !client || !preview || invalid) return;
+        if (invalid) return;
+        if (mode === 'bonus') {
+            setStage('saving');
+            setError('');
+            try {
+                await setProposalOfferDeadline(portal.id, deadline, `Brinde: ${bonus} até ${deadline.toLocaleDateString('pt-BR')}`);
+                // Aparece na conversa da página do cliente, junto da contagem regressiva.
+                await sendCompanyProposalMessage(portal.id, `Condição especial até ${formatDeadline(deadline)}: mantendo o valor da proposta, incluímos ${bonus} sem custo.`);
+                setMessage(buildBonusOfferMessage(portal, { bonus, deadline }));
+                setStage('done');
+                await onApplied();
+            } catch (err) {
+                setError(err instanceof Error ? err.message : 'Não foi possível aplicar a condição. Tente novamente.');
+                setStage('form');
+            }
+            return;
+        }
+        if (!pdf || !client || !preview) return;
         setStage('saving');
         setError('');
         try {
@@ -123,9 +147,9 @@ const ProposalOfferSheet: React.FC<ProposalOfferSheetProps> = ({ isOpen, portal,
     ) : (
         <div className="flex w-full gap-2 text-sm font-semibold">
             <button type="button" onClick={onClose} className="h-11 flex-1 rounded-xl border border-[var(--border-subtle)] text-[var(--text-body)]">Cancelar</button>
-            <button type="button" onClick={() => void apply()} disabled={Boolean(invalid) || loading || stage === 'saving'}
+            <button type="button" onClick={() => void apply()} disabled={Boolean(invalid) || (mode === 'discount' && loading) || stage === 'saving'}
                 className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-blue-600 text-white disabled:opacity-50">
-                {stage === 'saving' ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" /> : <BadgePercent className="h-4 w-4" aria-hidden="true" />}
+                {stage === 'saving' ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" /> : mode === 'bonus' ? <Gift className="h-4 w-4" aria-hidden="true" /> : <BadgePercent className="h-4 w-4" aria-hidden="true" />}
                 {stage === 'saving' ? 'Aplicando…' : 'Aplicar condição'}
             </button>
         </div>
@@ -137,7 +161,11 @@ const ProposalOfferSheet: React.FC<ProposalOfferSheetProps> = ({ isOpen, portal,
                 <div className="space-y-4 text-sm">
                     <div className="rounded-2xl bg-emerald-50 p-4 text-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100">
                         <p className="font-semibold">Condição aplicada</p>
-                        <p className="mt-1 text-[13px] leading-5">O PDF e o valor da proposta foram atualizados. O link mostra a contagem regressiva até {formatDeadline(deadline)}.</p>
+                        <p className="mt-1 text-[13px] leading-5">
+                            {mode === 'bonus'
+                                ? `O valor continua o mesmo. O brinde aparece na conversa da página do cliente, com a contagem regressiva até ${formatDeadline(deadline)}.`
+                                : `O PDF e o valor da proposta foram atualizados. O link mostra a contagem regressiva até ${formatDeadline(deadline)}.`}
+                        </p>
                     </div>
                     <label className="block">
                         <span className="text-xs font-semibold text-[var(--text-muted)]">Mensagem para {portal.clientName}</span>
@@ -147,11 +175,40 @@ const ProposalOfferSheet: React.FC<ProposalOfferSheetProps> = ({ isOpen, portal,
                 </div>
             ) : (
                 <div className="space-y-5 text-sm">
+                    <div className="grid grid-cols-2 rounded-xl bg-[var(--surface-muted)] p-1 text-[13px] font-semibold" role="group" aria-label="Tipo de condição">
+                        <button type="button" aria-pressed={mode === 'discount'} onClick={() => setMode('discount')} className={`flex h-9 items-center justify-center gap-1.5 rounded-lg ${mode === 'discount' ? 'bg-[var(--surface)] text-[var(--text-strong)] shadow-sm' : 'text-[var(--text-muted)]'}`}>
+                            <BadgePercent className="h-4 w-4" aria-hidden="true" /> Desconto
+                        </button>
+                        <button type="button" aria-pressed={mode === 'bonus'} onClick={() => setMode('bonus')} className={`flex h-9 items-center justify-center gap-1.5 rounded-lg ${mode === 'bonus' ? 'bg-[var(--surface)] text-[var(--text-strong)] shadow-sm' : 'text-[var(--text-muted)]'}`}>
+                            <Gift className="h-4 w-4" aria-hidden="true" /> Brinde
+                        </button>
+                    </div>
+
                     <p className="text-[13px] leading-5 text-[var(--text-muted)]">
-                        O desconto entra na proposta (com PDF novo) e o prazo vira a validade do link: o cliente vê a contagem regressiva. Depois do prazo, o link vence.
+                        {mode === 'bonus'
+                            ? 'Mantém o preço e acrescenta valor, sem baixar o seu ganho. O prazo vira a validade do link e o brinde aparece na conversa da página do cliente.'
+                            : 'O desconto entra na proposta (com PDF novo) e o prazo vira a validade do link: o cliente vê a contagem regressiva. Depois do prazo, o link vence.'}
                     </p>
 
-                    {portal.proposals.length > 1 ? (
+                    {mode === 'bonus' ? (
+                        <div>
+                            <span className="text-xs font-semibold text-[var(--text-muted)]">Brinde</span>
+                            <div className="mt-1 flex flex-wrap gap-1.5 text-xs font-semibold" role="group" aria-label="Escolha o brinde">
+                                {[...OFFER_BONUS_PRESETS, { label: 'Outro', phrase: 'custom' }].map(option => (
+                                    <button key={option.phrase} type="button" aria-pressed={bonusPick === option.phrase} onClick={() => setBonusPick(option.phrase)}
+                                        className={`h-8 rounded-full border px-3 ${bonusPick === option.phrase ? 'border-blue-600 bg-blue-600 text-white' : 'border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-body)]'}`}>
+                                        {option.label}
+                                    </button>
+                                ))}
+                            </div>
+                            {bonusPick === 'custom' ? (
+                                <input value={bonusCustom} onChange={event => setBonusCustom(event.target.value)} placeholder="Ex.: a película da porta de entrada" aria-label="Qual brinde"
+                                    style={{ fontSize: 16 }} className="mt-2 h-11 w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] px-3 text-[var(--text-strong)]" />
+                            ) : null}
+                        </div>
+                    ) : null}
+
+                    {mode === 'discount' && portal.proposals.length > 1 ? (
                         <label className="block">
                             <span className="text-xs font-semibold text-[var(--text-muted)]">Opção</span>
                             <select value={proposalId} onChange={event => setProposalId(Number(event.target.value))} aria-label="Opção da proposta" style={{ fontSize: 16 }}
@@ -161,7 +218,7 @@ const ProposalOfferSheet: React.FC<ProposalOfferSheetProps> = ({ isOpen, portal,
                         </label>
                     ) : null}
 
-                    <div>
+                    {mode === 'discount' ? <div>
                         <span className="text-xs font-semibold text-[var(--text-muted)]">Desconto</span>
                         <div className="mt-1 flex gap-2">
                             <div className="grid shrink-0 grid-cols-2 rounded-xl bg-[var(--surface-muted)] p-1 text-[13px] font-semibold" role="group" aria-label="Tipo de desconto">
@@ -182,7 +239,7 @@ const ProposalOfferSheet: React.FC<ProposalOfferSheetProps> = ({ isOpen, portal,
                                 </p>
                             ) : null}
                         </div>
-                    </div>
+                    </div> : null}
 
                     <div>
                         <span className="text-xs font-semibold text-[var(--text-muted)]">Vale por</span>
@@ -201,7 +258,7 @@ const ProposalOfferSheet: React.FC<ProposalOfferSheetProps> = ({ isOpen, portal,
                         <p className="mt-2 text-xs text-[var(--text-muted)]">Até {formatDeadline(deadline)}.</p>
                     </div>
 
-                    {error || (invalid && preview) ? <p className="rounded-xl bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 dark:bg-red-950/30 dark:text-red-300">{error || invalid}</p> : null}
+                    {error || (invalid && (preview || mode === 'bonus')) ? <p className="rounded-xl bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 dark:bg-red-950/30 dark:text-red-300">{error || invalid}</p> : null}
                 </div>
             )}
         </Modal>
