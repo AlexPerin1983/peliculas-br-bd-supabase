@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import {
     AlarmClock,
@@ -44,6 +44,7 @@ import {
     buildFollowUpTimeline,
     describeClosed,
     describeNextContact,
+    formatDeadline,
     FOLLOW_UP_TEMPLATE_STEPS,
     getFollowUpItem,
     LOST_REASONS,
@@ -59,8 +60,23 @@ import {
 import { buildProposalReactivationMessages, formatConditionExpiry, getProposalCondition } from '../src/lib/proposalCondition';
 import { buildProposalWhatsAppUrl } from '../src/lib/proposalMessages';
 import { registerBackHandler } from '../src/lib/backButton';
+import {
+    AGREEMENT_WINDOW_DAYS,
+    approvedValue,
+    findApproval,
+    findUpcomingInstallation,
+    installationDoneSince,
+    isAgreementReply,
+    stripWhatsAppFormatting,
+    suggestQuickReplies,
+    type QuickReply,
+} from '../src/lib/proposalQuickReplies';
+import { getSavedPdfById } from '../services/supabaseDb';
+import type { Agendamento, SchedulingInfo } from '../types';
 import ProposalConditionModal from './modals/ProposalConditionModal';
 import ProposalOfferSheet from './ProposalOfferSheet';
+import ProposalAgreementCard from './ProposalAgreementCard';
+import { QuickRepliesModal, QuickReplyChips } from './ProposalQuickReplies';
 
 type CompanyProposal = CompanyProposalPortal['proposals'][number];
 
@@ -70,6 +86,9 @@ interface ProposalDetailPanelProps {
     initialPortalId?: string | null;
     templates: FollowUpTemplates;
     now?: number;
+    // Agenda da empresa: data da instalação na confirmação do combinado.
+    agendamentos?: Agendamento[];
+    onSchedule?: (info: SchedulingInfo) => void;
     onClose: () => void;
     onChanged: () => Promise<void> | void;
 }
@@ -188,6 +207,9 @@ const NextStepCard: React.FC<{
     const [edited, setEdited] = useState(false);
     const [showTip, setShowTip] = useState(false);
     const tip = getNegotiationTip(item);
+    // O que o cliente escreveu, à vista na hora de responder.
+    const lastMessage = item.step === 'reply' ? portal.messages[portal.messages.length - 1] : undefined;
+    const quote = lastMessage && (lastMessage.offer_value != null || lastMessage.body?.trim()) ? lastMessage : null;
 
     useEffect(() => {
         setChoice(defaultChoice(item.step));
@@ -217,6 +239,12 @@ const NextStepCard: React.FC<{
             <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">Próximo passo</p>
             <p className={`mt-1 text-[15px] font-semibold ${titleTone}`}>{item.title}</p>
             <p className="mt-0.5 text-[13px] leading-5 text-[var(--text-body)]">{item.hint}</p>
+            {quote ? (
+                <blockquote className="mt-2 rounded-xl border-l-[3px] border-blue-500 bg-blue-50/60 px-3 py-2 text-[13px] leading-5 text-[var(--text-body)] dark:bg-blue-950/25">
+                    {quote.offer_value != null ? <p className="font-semibold text-[var(--text-strong)]">{quote.offer_type === 'percentage' ? `Pediu ${quote.offer_value}% de desconto` : `Quer pagar ${currency.format(quote.offer_value)}`}</p> : null}
+                    {quote.body?.trim() ? <p className="whitespace-pre-line [overflow-wrap:anywhere]">{quote.body.trim()}</p> : null}
+                </blockquote>
+            ) : null}
             <div className="mt-2 rounded-xl bg-amber-50/70 px-3 py-2 text-amber-900 dark:bg-amber-950/25 dark:text-amber-100">
                 <div className="text-xs">
                     <button type="button" onClick={() => setShowTip(current => !current)} aria-expanded={showTip} className="flex w-full items-center gap-1.5 text-left">
@@ -349,7 +377,7 @@ const NextStepCard: React.FC<{
 };
 
 /** Ficha do cliente: próximo passo, condições, conversa no link, histórico e links anteriores. */
-const ProposalDetailPanel: React.FC<ProposalDetailPanelProps> = ({ group, initialPortalId, templates, now = Date.now(), onClose, onChanged }) => {
+const ProposalDetailPanel: React.FC<ProposalDetailPanelProps> = ({ group, initialPortalId, templates, now = Date.now(), agendamentos, onSchedule, onClose, onChanged }) => {
     const [activeId, setActiveId] = useState(initialPortalId || group.primary.id);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
@@ -359,6 +387,9 @@ const ProposalDetailPanel: React.FC<ProposalDetailPanelProps> = ({ group, initia
     const [conditionModal, setConditionModal] = useState<{ proposal: CompanyProposal; mode: 'extend' | 'edit' } | null>(null);
     const [reactivationProposal, setReactivationProposal] = useState<CompanyProposal | null>(null);
     const [offerOpen, setOfferOpen] = useState(false);
+    const [quickOpen, setQuickOpen] = useState(false);
+    // A resposta é a confirmação do combinado: ao enviar, fica registrada.
+    const [confirmPending, setConfirmPending] = useState(false);
     const replyRef = useRef<HTMLTextAreaElement>(null);
     const threadEndRef = useRef<HTMLDivElement>(null);
 
@@ -376,6 +407,22 @@ const ProposalDetailPanel: React.FC<ProposalDetailPanelProps> = ({ group, initia
             ));
     }, [portal, closedInfo]);
     const expired = new Date(portal.expiresAt).getTime() <= Date.now();
+    const installation = useMemo(() => findUpcomingInstallation(agendamentos, portal.clientId), [agendamentos, portal.clientId]);
+    const suggestions = useMemo(() => suggestQuickReplies(portal, { installation }), [portal, installation]);
+    const showSuggestions = suggestions.length > 0 && (!reply.trim() || suggestions.some(suggestion => suggestion.text === reply));
+    const approval = closedInfo?.kind === 'approved' ? findApproval(portal) : null;
+    const approvedAt = approval?.message ? new Date(approval.message.created_at).getTime() : null;
+    const installedAt = approvedAt != null ? installationDoneSince(agendamentos, portal.clientId, approvedAt) : null;
+    // Confirmar o combinado: aprovada há pouco e a instalação ainda não aconteceu.
+    const confirmAgreement = approvedAt != null && !installedAt && Date.now() - approvedAt <= AGREEMENT_WINDOW_DAYS * 86_400_000;
+
+    // A caixa de resposta cresce com o texto (até o limite da altura).
+    useLayoutEffect(() => {
+        const area = replyRef.current;
+        if (!area) return;
+        area.style.height = 'auto';
+        area.style.height = `${area.scrollHeight + area.offsetHeight - area.clientHeight}px`;
+    }, [reply]);
 
     // Abrir a ficha já marca as respostas do cliente como lidas.
     useEffect(() => {
@@ -385,19 +432,22 @@ const ProposalDetailPanel: React.FC<ProposalDetailPanelProps> = ({ group, initia
 
     // Voltar do celular: fecha primeiro o que estiver por cima e depois a ficha.
     useEffect(() => registerBackHandler(() => {
-        if (offerOpen) setOfferOpen(false);
+        if (quickOpen) setQuickOpen(false);
+        else if (offerOpen) setOfferOpen(false);
         else if (conditionModal) setConditionModal(null);
         else if (reactivationProposal) setReactivationProposal(null);
         else onClose();
-    }), [offerOpen, conditionModal, reactivationProposal, onClose]);
+    }), [quickOpen, offerOpen, conditionModal, reactivationProposal, onClose]);
 
     useEffect(() => {
         const handleKey = (event: KeyboardEvent) => {
-            if (event.key === 'Escape' && !conditionModal && !reactivationProposal && !offerOpen) onClose();
+            if (event.key !== 'Escape') return;
+            if (quickOpen) setQuickOpen(false);
+            else if (!conditionModal && !reactivationProposal && !offerOpen) onClose();
         };
         window.addEventListener('keydown', handleKey);
         return () => window.removeEventListener('keydown', handleKey);
-    }, [conditionModal, reactivationProposal, offerOpen, onClose]);
+    }, [quickOpen, conditionModal, reactivationProposal, offerOpen, onClose]);
 
     const run = async (action: () => Promise<void>) => {
         setBusy(true);
@@ -418,7 +468,12 @@ const ProposalDetailPanel: React.FC<ProposalDetailPanelProps> = ({ group, initia
         setError('');
         try {
             await sendCompanyProposalMessage(portal.id, reply);
+            if (confirmPending) {
+                await recordProposalFollowUp(portal.id, 'confirm', 'other')
+                    .catch(err => console.error('[ProposalDetailPanel] Falha ao registrar a confirmação:', err));
+            }
             setReply('');
+            setConfirmPending(false);
             await onChanged();
             window.requestAnimationFrame(() => threadEndRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'end' }));
         } catch (err) {
@@ -435,8 +490,29 @@ const ProposalDetailPanel: React.FC<ProposalDetailPanelProps> = ({ group, initia
 
     const chooseReadyMessage = (text: string) => {
         setReply(text);
+        setConfirmPending(false);
         setReactivationProposal(null);
         window.setTimeout(focusReply, 50);
+    };
+
+    // No celular não abre o teclado: dá para revisar e enviar direto (ou tocar para editar).
+    const applyReply = (text: string, agreement = false) => {
+        setReply(text);
+        setConfirmPending(agreement);
+        setQuickOpen(false);
+        if (window.matchMedia?.('(pointer: fine)').matches) window.setTimeout(focusReply, 50);
+    };
+    const chooseQuickReply = (quickReply: QuickReply) => applyReply(quickReply.text, isAgreementReply(quickReply));
+
+    // Agenda por cima da ficha: fecha a ficha para o "voltar" do celular fechar a agenda.
+    const scheduleInstallation = async () => {
+        if (!onSchedule) return;
+        const proposalId = findApproval(portal).proposal?.id;
+        const pdf = proposalId != null
+            ? await getSavedPdfById(proposalId).catch(err => { console.error('[ProposalDetailPanel] Falha ao carregar a proposta:', err); return null; })
+            : null;
+        onClose();
+        onSchedule(pdf ? { pdf } : { agendamento: { clienteId: portal.clientId, clienteNome: portal.clientName } });
     };
 
     return ReactDOM.createPortal(
@@ -493,6 +569,14 @@ const ProposalDetailPanel: React.FC<ProposalDetailPanelProps> = ({ group, initia
                     {closedInfo ? (
                         <section className={`rounded-2xl p-4 ${closedInfo.kind === 'approved' ? 'bg-emerald-50 text-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100' : closedInfo.kind === 'rejected' ? 'bg-red-50 text-red-900 dark:bg-red-950/30 dark:text-red-100' : 'bg-[var(--surface-muted)] text-[var(--text-body)]'}`} aria-label="Situação">
                             <p className="font-semibold">{closedInfo.label}</p>
+                            {approval ? (
+                                <div className="mt-1 space-y-0.5 text-xs opacity-90">
+                                    {approval.proposal ? (
+                                        <p>{approval.proposal.name} · {currency.format(approvedValue(portal))}{approval.payment ? ` · ${approval.payment.label}` : ''}</p>
+                                    ) : null}
+                                    <p>{installation ? `Instalação: ${formatDeadline(installation)}` : installedAt ? `Instalação em ${shortDate(installedAt.toISOString())}` : 'Instalação ainda não agendada'}</p>
+                                </div>
+                            ) : null}
                             {closedInfo.kind === 'lost' ? (
                                 <>
                                     <p className="mt-0.5 text-xs opacity-80">O cliente continua vendo o link e ainda pode aprovar.</p>
@@ -504,7 +588,19 @@ const ProposalDetailPanel: React.FC<ProposalDetailPanelProps> = ({ group, initia
                                 </>
                             ) : null}
                         </section>
-                    ) : item ? (
+                    ) : null}
+
+                    {confirmAgreement ? (
+                        <ProposalAgreementCard
+                            key={portal.id}
+                            portal={portal}
+                            installation={installation}
+                            busy={busy}
+                            onConfirmed={channel => void run(() => recordProposalFollowUp(portal.id, 'confirm', channel))}
+                            onUseInLink={text => applyReply(stripWhatsAppFormatting(text), true)}
+                            onSchedule={onSchedule ? () => void scheduleInstallation() : undefined}
+                        />
+                    ) : !closedInfo && item ? (
                         <NextStepCard
                             item={item}
                             templates={templates}
@@ -608,28 +704,36 @@ const ProposalDetailPanel: React.FC<ProposalDetailPanelProps> = ({ group, initia
                     ) : null}
                 </div>
 
-                <footer className="flex items-end gap-2 border-t border-[var(--border-subtle)] bg-[var(--surface)] p-3" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.75rem)' }}>
-                    <textarea
-                        ref={replyRef}
-                        value={reply}
-                        onChange={event => setReply(event.target.value)}
-                        onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && window.matchMedia?.('(pointer: fine)').matches) { event.preventDefault(); void send(); } }}
-                        rows={1}
-                        placeholder="Responder no link da proposta…"
-                        aria-label="Responder no link da proposta"
-                        style={{ fontSize: 16 }}
-                        className="max-h-32 min-h-11 flex-1 resize-none rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] px-3 py-2.5 text-[var(--text-strong)] outline-none focus:border-blue-500"
-                    />
-                    <button type="button" disabled={sending || !reply.trim()} onClick={() => void send()} aria-label="Enviar resposta"
-                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white disabled:opacity-50">
-                        {sending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                    </button>
+                <footer className="border-t border-[var(--border-subtle)] bg-[var(--surface)] p-3" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.75rem)' }}>
+                    {showSuggestions ? <QuickReplyChips replies={suggestions} current={reply} onChoose={chooseQuickReply} /> : null}
+                    <div className="flex items-end gap-2">
+                        <button type="button" onClick={() => setQuickOpen(true)} aria-label="Respostas prontas" title="Respostas prontas"
+                            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[var(--border-subtle)] text-amber-500 hover:bg-[var(--surface-muted)]">
+                            <Sparkles className="h-4 w-4" />
+                        </button>
+                        <textarea
+                            ref={replyRef}
+                            value={reply}
+                            onChange={event => { setReply(event.target.value); if (!event.target.value.trim()) setConfirmPending(false); }}
+                            onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && window.matchMedia?.('(pointer: fine)').matches) { event.preventDefault(); void send(); } }}
+                            rows={1}
+                            placeholder="Responder no link…"
+                            aria-label="Responder no link da proposta"
+                            style={{ fontSize: 16 }}
+                            className="max-h-40 min-h-11 min-w-0 flex-1 resize-none rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] px-3 py-2.5 leading-6 text-[var(--text-strong)] outline-none focus:border-blue-500"
+                        />
+                        <button type="button" disabled={sending || !reply.trim()} onClick={() => void send()} aria-label="Enviar resposta"
+                            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white disabled:opacity-50">
+                            {sending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                        </button>
+                    </div>
                 </footer>
             </section>
 
             {conditionModal ? <ProposalConditionModal isOpen mode={conditionModal.mode} portal={portal} proposal={conditionModal.proposal} onClose={() => setConditionModal(null)} onSaved={onChanged} /> : null}
             {reactivationProposal ? <ReactivationMessagesModal portal={portal} proposal={reactivationProposal} onChoose={chooseReadyMessage} onClose={() => setReactivationProposal(null)} /> : null}
             {offerOpen ? <ProposalOfferSheet isOpen portal={portal} step={item?.step ?? 'hot'} onClose={() => setOfferOpen(false)} onApplied={onChanged} /> : null}
+            {quickOpen ? <QuickRepliesModal portal={portal} installation={installation} onChoose={chooseQuickReply} onClose={() => setQuickOpen(false)} /> : null}
         </div>,
         document.body,
     );

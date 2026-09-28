@@ -75,10 +75,10 @@ const portal = (overrides: Partial<CompanyProposalPortal> = {}): CompanyProposal
 const other = (id: string, clientName: string, overrides: Partial<CompanyProposalPortal> = {}) =>
     portal({ id, token: `t-${id}`, clientId: nextClient++, clientName, ...overrides });
 
-const setup = async (portals: CompanyProposalPortal[]) => {
+const setup = async (portals: CompanyProposalPortal[], props: Partial<React.ComponentProps<typeof ProposalCenterView>> = {}) => {
     vi.mocked(loadCompanyProposalPortals).mockResolvedValue(portals);
     const onOpenHistory = vi.fn();
-    render(<ProposalCenterView onOpenHistory={onOpenHistory} />);
+    render(<ProposalCenterView onOpenHistory={onOpenHistory} {...props} />);
     await screen.findByRole('tab', { name: /^Hoje/ });
     await waitFor(() => expect(screen.queryByText('Carregando…')).not.toBeInTheDocument());
     return { onOpenHistory };
@@ -90,6 +90,16 @@ const openClient = (name: string) => {
 };
 
 const hrefText = (element: HTMLElement) => decodeURIComponent(element.getAttribute('href') || '');
+
+// Aprovou a opção 10 pagando no Pix (com desconto).
+const approvedPortal = (overrides: Partial<CompanyProposalPortal> = {}) => portal({
+    status: 'approved',
+    messages: [{
+        id: 9, sender_type: 'client', kind: 'approved', saved_pdf_id: 10, created_at: ago(0.2),
+        payment_selection: { methodType: 'pix', installments: 1, label: 'Pix à vista', calculationMode: 'cash', baseTotal: 365, customerTotal: 350, installmentValue: 350, ratePercent: 0, discountPercent: 4 },
+    }],
+    ...overrides,
+});
 
 describe('Central de propostas', () => {
     beforeEach(() => {
@@ -171,6 +181,132 @@ describe('Central de propostas', () => {
         fireEvent.change(within(sheet).getByLabelText('Responder no link da proposta'), { target: { value: 'Faço 5% à vista.' } });
         fireEvent.click(within(sheet).getByRole('button', { name: 'Enviar resposta' }));
         await waitFor(() => expect(sendCompanyProposalMessage).toHaveBeenCalledWith('p1', 'Faço 5% à vista.'));
+    });
+
+    it('ficha: respostas rápidas para "achei caro" e a lista completa de respostas prontas', async () => {
+        await setup([portal({ messages: [{ id: 1, sender_type: 'client', kind: 'message', body: 'Achei caro', created_at: ago(0.1) }] })]);
+        const sheet = openClient('Carlos Lima');
+        const box = within(sheet).getByLabelText('Responder no link da proposta') as HTMLTextAreaElement;
+
+        const chips = within(sheet).getByRole('group', { name: 'Respostas rápidas' });
+        fireEvent.click(within(chips).getByRole('button', { name: 'Nomear a dúvida' }));
+        expect(box.value).toBe('Entendi, Carlos. Parece que o valor ficou acima do que você tinha planejado, é isso?');
+        // Enquanto não editar, dá para trocar de sugestão.
+        fireEvent.click(within(chips).getByRole('button', { name: 'Parcelar' }));
+        expect(box.value).toContain('consigo parcelar');
+
+        fireEvent.click(within(sheet).getByRole('button', { name: 'Respostas prontas' }));
+        expect(screen.getByRole('dialog', { name: 'Respostas prontas' })).toBeInTheDocument();
+        // "Voltar" do celular fecha primeiro a lista.
+        act(() => { expect(consumeBackButton()).toBe(true); });
+        expect(screen.queryByRole('dialog', { name: 'Respostas prontas' })).not.toBeInTheDocument();
+        expect(screen.getByRole('dialog', { name: 'Proposta de Carlos Lima' })).toBeInTheDocument();
+
+        fireEvent.click(within(sheet).getByRole('button', { name: 'Respostas prontas' }));
+        const dialog = screen.getByRole('dialog', { name: 'Respostas prontas' });
+        fireEvent.click(within(within(dialog).getByRole('region', { name: 'Data da instalação' })).getByRole('button', { name: /Combinar a data/ }));
+        expect(screen.queryByRole('dialog', { name: 'Respostas prontas' })).not.toBeInTheDocument();
+        expect(box.value).toBe('Tenho horários nos próximos dias. Qual dia e período ficam melhor pra você: manhã ou tarde?');
+
+        fireEvent.click(within(sheet).getByRole('button', { name: 'Enviar resposta' }));
+        await waitFor(() => expect(sendCompanyProposalMessage).toHaveBeenCalledWith('p1', expect.stringContaining('Tenho horários nos próximos dias')));
+        expect(recordProposalFollowUp).not.toHaveBeenCalled();
+    });
+
+    it('ficha: contraproposta aparece no próximo passo, com respostas para negociar', async () => {
+        await setup([portal({ messages: [{ id: 1, sender_type: 'client', kind: 'negotiation', offer_type: 'fixed', offer_value: 300, body: 'Consigo pagar isso à vista', created_at: ago(0.1) }] })]);
+        const sheet = openClient('Carlos Lima');
+
+        const next = within(sheet).getByRole('region', { name: 'Próximo passo' });
+        expect(next).toHaveTextContent('Mandou uma contraproposta');
+        expect(next).toHaveTextContent(/Quer pagar R\$\s300,00/);
+        expect(next).toHaveTextContent('Consigo pagar isso à vista');
+        const chips = within(sheet).getByRole('group', { name: 'Respostas rápidas' });
+        expect(within(chips).getAllByRole('button').map(button => button.textContent)).toEqual(['Entender o motivo', 'Dizer não com uma pergunta', 'Ajustar o projeto', 'Parcelar']);
+    });
+
+    it('aprovada: confirma o combinado no WhatsApp, com a data da agenda', async () => {
+        const start = new Date(Date.now() + 3 * DAY);
+        start.setHours(9, 0, 0, 0);
+        await setup([approvedPortal()], { agendamentos: [{ id: 1, clienteId: 1, clienteNome: 'Carlos Lima', start: start.toISOString(), end: start.toISOString() }], onSchedule: vi.fn() });
+        fireEvent.click(screen.getByRole('tab', { name: 'Encerradas (1)' }));
+        const sheet = openClient('Carlos Lima');
+
+        const situation = within(sheet).getByRole('region', { name: 'Situação' });
+        expect(situation).toHaveTextContent(/Opção 1 · R\$\s350,00 · Pix à vista/);
+        expect(situation).toHaveTextContent(/Instalação: .*\d{2}\/\d{2} às 09:00/);
+        const agreement = within(sheet).getByRole('region', { name: 'Confirmar o combinado' });
+        expect(within(agreement).queryByRole('button', { name: /Agendar instalação/ })).not.toBeInTheDocument();
+        const link = within(agreement).getByRole('link', { name: /Enviar no WhatsApp/ });
+        expect(hrefText(link)).toContain('Confirmando o que combinamos:');
+        expect(hrefText(link)).toContain('• Proposta: Opção 1');
+        expect(hrefText(link)).toContain('(Pix à vista)');
+        expect(hrefText(link)).toContain('Quem vai receber a nossa equipe no local?');
+        fireEvent.click(link);
+        await waitFor(() => expect(recordProposalFollowUp).toHaveBeenCalledWith('p1', 'confirm', 'whatsapp'));
+    });
+
+    it('aprovada sem data: confirma pelo link e agenda pela ficha', async () => {
+        const pdf = { id: 10, clienteId: 1, date: ago(4), totalPreco: 365, totalM2: 5, nomeArquivo: 'p.pdf' };
+        vi.mocked(getSavedPdfById).mockResolvedValue(pdf);
+        const onSchedule = vi.fn();
+        await setup([approvedPortal()], { onSchedule });
+        fireEvent.click(screen.getByRole('tab', { name: 'Encerradas (1)' }));
+        const sheet = openClient('Carlos Lima');
+
+        expect(within(sheet).getByRole('region', { name: 'Situação' })).toHaveTextContent('Instalação ainda não agendada');
+        const agreement = within(sheet).getByRole('region', { name: 'Confirmar o combinado' });
+        expect(hrefText(within(agreement).getByRole('link', { name: /Enviar no WhatsApp/ }))).toContain('• Instalação: a combinar');
+
+        // A última mensagem é a aprovação: a sugestão também é confirmar o combinado.
+        expect(within(within(sheet).getByRole('group', { name: 'Respostas rápidas' })).getAllByRole('button').map(button => button.textContent)).toEqual(['Confirmar o combinado', 'Agradecer']);
+
+        fireEvent.click(within(agreement).getByRole('button', { name: /Responder no link/ }));
+        const box = within(sheet).getByLabelText('Responder no link da proposta') as HTMLTextAreaElement;
+        expect(box.value).toContain('Confirmando o que combinamos:');
+        // O link mostra texto puro: sem o *negrito* do WhatsApp.
+        expect(box.value).toMatch(/• Valor: R\$\s350,00 \(Pix à vista\)/);
+        fireEvent.click(within(sheet).getByRole('button', { name: 'Enviar resposta' }));
+        await waitFor(() => expect(recordProposalFollowUp).toHaveBeenCalledWith('p1', 'confirm', 'other'));
+        expect(sendCompanyProposalMessage).toHaveBeenCalledWith('p1', expect.stringContaining('Confirmando o que combinamos:'));
+
+        fireEvent.click(within(agreement).getByRole('button', { name: /Agendar instalação/ }));
+        await waitFor(() => expect(onSchedule).toHaveBeenCalledWith({ pdf }));
+        expect(screen.queryByRole('dialog', { name: 'Proposta de Carlos Lima' })).not.toBeInTheDocument();
+    });
+
+    it('aprovada com a instalação já feita (ou aprovada há mais de 30 dias): não pede mais a confirmação', async () => {
+        const done = new Date(Date.now() - 2 * DAY);
+        await setup([
+            // Aprovou há 5 dias; a instalação foi 2 dias atrás (ainda sem marcar como concluída).
+            approvedPortal({ messages: [{ ...approvedPortal().messages[0], created_at: ago(5) }] }),
+            other('old', 'Ana Souza', { status: 'approved', messages: [{ id: 8, sender_type: 'client', kind: 'approved', saved_pdf_id: 10, created_at: ago(40) }] }),
+        ], { agendamentos: [{ id: 1, clienteId: 1, clienteNome: 'Carlos Lima', start: done.toISOString(), end: done.toISOString() }] });
+        fireEvent.click(screen.getByRole('tab', { name: 'Encerradas (2)' }));
+
+        let sheet = openClient('Carlos Lima');
+        expect(within(sheet).getByRole('region', { name: 'Situação' })).toHaveTextContent(/Instalação em \d{2}\/\d{2}/);
+        expect(within(sheet).queryByRole('region', { name: 'Confirmar o combinado' })).not.toBeInTheDocument();
+        fireEvent.click(within(sheet).getByRole('button', { name: 'Voltar' }));
+
+        sheet = openClient('Ana Souza');
+        expect(within(sheet).queryByRole('region', { name: 'Confirmar o combinado' })).not.toBeInTheDocument();
+        // A mensagem continua nas respostas prontas.
+        fireEvent.click(within(sheet).getByRole('button', { name: 'Respostas prontas' }));
+        expect(within(screen.getByRole('dialog', { name: 'Respostas prontas' })).getByRole('button', { name: /Confirmar o combinado/ })).toBeInTheDocument();
+    });
+
+    it('aprovada e já confirmada: mostra quando e guarda a mensagem', async () => {
+        await setup([approvedPortal({ followUps: [{ id: 5, kind: 'contact', step: 'confirm', channel: 'whatsapp', created_at: ago(0.1) }] })]);
+        fireEvent.click(screen.getByRole('tab', { name: 'Encerradas (1)' }));
+        const sheet = openClient('Carlos Lima');
+
+        const agreement = within(sheet).getByRole('region', { name: 'Confirmar o combinado' });
+        expect(agreement).toHaveTextContent(/Combinado confirmado em \d{2}\/\d{2}/);
+        expect(within(agreement).queryByRole('link', { name: /Enviar no WhatsApp/ })).not.toBeInTheDocument();
+        fireEvent.click(within(agreement).getByRole('button', { name: /Ver mensagem/ }));
+        expect(within(agreement).getByRole('link', { name: /Enviar no WhatsApp/ })).toBeInTheDocument();
+        expect(within(agreement).queryByRole('button', { name: /Já confirmei/ })).not.toBeInTheDocument();
     });
 
     it('ficha: lembrar depois guarda a data escolhida (às 9h) e a anotação', async () => {

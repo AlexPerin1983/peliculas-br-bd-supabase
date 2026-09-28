@@ -94,7 +94,8 @@ export const LOST_REASONS = [
 export const lostReasonLabel = (reason?: string | null) =>
     LOST_REASONS.find(item => item.id === reason)?.label ?? 'Outro motivo';
 
-const STEP_LABELS: Record<FollowUpStep, string> = {
+// "confirm": depois da aprovação, a empresa confirmou o combinado.
+const STEP_LABELS: Record<FollowUpStep | 'confirm', string> = {
     reply: 'responder o cliente',
     expiring: 'aviso de vencimento',
     hot: 'dúvida ou condição',
@@ -102,8 +103,9 @@ const STEP_LABELS: Record<FollowUpStep, string> = {
     value: 'reforço de valor',
     expired: 'renovar proposta',
     close: 'encerramento',
+    confirm: 'confirmação do combinado',
 };
-export const followUpStepLabel = (step?: string | null) => STEP_LABELS[step as FollowUpStep] ?? 'contato';
+export const followUpStepLabel = (step?: string | null) => STEP_LABELS[step as keyof typeof STEP_LABELS] ?? 'contato';
 
 // Filtros da lista, na ordem de prioridade.
 export const FOLLOW_UP_FILTERS: Array<{ step: FollowUpStep; label: string }> = [

@@ -8,9 +8,13 @@ import { buildFollowUpQueue, groupPortalsByClient, summarizeProposalResults, typ
 import { getFollowUpMessageTemplates, type FollowUpMessageTemplateRow } from '../../services/supabaseDb';
 import { supabase } from '../../services/supabaseClient';
 import AgendaPushReminderControl from './AgendaPushReminderControl';
+import type { Agendamento, SchedulingInfo } from '../../types';
 
 interface ProposalCenterViewProps {
     onOpenHistory: () => void;
+    // Data da instalação na confirmação do combinado e atalho para agendar.
+    agendamentos?: Agendamento[];
+    onSchedule?: (info: SchedulingInfo) => void;
 }
 
 const FALLBACK_REFRESH_INTERVAL_MS = 5 * 60_000;
@@ -97,7 +101,7 @@ const ProposalCenterMobileFooter: React.FC<{
     </div>
 );
 
-const ProposalCenterView: React.FC<ProposalCenterViewProps> = ({ onOpenHistory }) => {
+const ProposalCenterView: React.FC<ProposalCenterViewProps> = ({ onOpenHistory, agendamentos, onSchedule }) => {
     const [portals, setPortals] = useState<CompanyProposalPortal[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -288,6 +292,8 @@ const ProposalCenterView: React.FC<ProposalCenterViewProps> = ({ onOpenHistory }
                     initialPortalId={openPortalId}
                     templates={templates}
                     now={now}
+                    agendamentos={agendamentos}
+                    onSchedule={onSchedule}
                     onClose={closeDetail}
                     onChanged={refresh}
                 />
