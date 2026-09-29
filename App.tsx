@@ -56,6 +56,7 @@ import {
     writeScheduleAutoSave,
 } from './src/lib/voiceSchedule';
 import { getAgendamentoSlotError } from './src/lib/agendamentoRules';
+import { attachCandidates, attachExistingClient, findClientsBySpokenName, pickProposalToLink } from './src/lib/voiceClientMatch';
 import { consumeBackButton } from './src/lib/backButton';
 import { createGeminiModel, GLOBAL_GEMINI_UNAVAILABLE_EVENT } from './services/geminiGateway';
 import {
@@ -476,6 +477,8 @@ const App: React.FC = () => {
     const [isAIQuickProposalModalOpen, setIsAIQuickProposalModalOpen] = useState(false);
     const [isAIScheduleModalOpen, setIsAIScheduleModalOpen] = useState(false);
     const [scheduleAutoSave, setScheduleAutoSave] = useState(readScheduleAutoSave);
+    // Cliente da tela de onde a voz foi aberta (nulo = achar pelo nome falado).
+    const [scheduleVoiceClient, setScheduleVoiceClient] = useState<Client | null>(null);
     const [aiClientData, setAiClientData] = useState<Partial<Client> | undefined>(undefined);
     const [isAIFilmModalOpen, setIsAIFilmModalOpen] = useState(false);
     const [aiFilmData, setAiFilmData] = useState<Partial<Film> | undefined>(undefined);
@@ -2575,6 +2578,14 @@ Regras:
 
     const handleOpenAIScheduleModal = useCallback(() => {
         if (!ensureAiReady()) return;
+        setScheduleVoiceClient(null);
+        setIsAIScheduleModalOpen(true);
+    }, [ensureAiReady]);
+
+    // Da tela do cliente: a voz só precisa do dia e da hora.
+    const handleOpenAIScheduleForClient = useCallback((client: Client) => {
+        if (!ensureAiReady()) return;
+        setScheduleVoiceClient(client);
         setIsAIScheduleModalOpen(true);
     }, [ensureAiReady]);
 
@@ -2606,42 +2617,89 @@ Regras:
         });
     }, [userInfo]);
 
+    // Cliente do áudio: o da tela do cliente, um cadastrado com o nome completo
+    // falado, parecidos para escolher ou, sem nenhum, cliente novo (como antes).
+    const resolveVoiceClient = useCallback(async (draft: VoiceScheduleDraft): Promise<VoiceScheduleDraft> => {
+        const addToList = (found: Client[]) => setClients(current => [
+            ...found.filter(client => !current.some(item => item.id === client.id)),
+            ...current,
+        ]);
+
+        let client = scheduleVoiceClient;
+        if (!client) {
+            const pool = hasLoadedAllClients ? clients : await db.getAllClients();
+            const match = findClientsBySpokenName(draft.quickClient.nome, pool);
+            if (!match.strong) {
+                if (!match.candidates.length) return draft;
+                addToList(match.candidates);
+                return attachCandidates(draft, match.candidates);
+            }
+            client = match.strong;
+            addToList([client]);
+        }
+
+        const [clientPdfs, currentAgendamentos] = await Promise.all([
+            db.getPDFsForClient(client.id!),
+            db.getAllAgendamentos(),
+        ]);
+        return attachExistingClient(draft, client, pickProposalToLink(clientPdfs, currentAgendamentos), {
+            fromClientScreen: !!scheduleVoiceClient,
+        });
+    }, [scheduleVoiceClient, hasLoadedAllClients, clients]);
+
     const saveVoiceDraftDirectly = useCallback(async (draft: VoiceScheduleDraft) => {
-        const client = await handleCreateQuickClient({ nome: draft.quickClient.nome, local: draft.quickClient.local }, draft.quickClient);
+        let clienteId = draft.agendamento.clienteId;
+        let clienteNome = draft.agendamento.clienteNome || draft.quickClient.nome;
+        if (clienteId == null) {
+            const client = await handleCreateQuickClient({ nome: draft.quickClient.nome, local: draft.quickClient.local }, draft.quickClient);
+            clienteId = client.id!;
+            clienteNome = client.nome;
+        }
+        const pdfIds = draft.agendamento.pdfIds || [];
+
         let saved: Agendamento;
         try {
             saved = await db.saveAgendamento({
-                clienteId: client.id!,
-                clienteNome: client.nome,
+                clienteId,
+                clienteNome,
                 start: draft.agendamento.start!,
                 end: draft.agendamento.end!,
                 notes: draft.agendamento.notes,
-                pdfIds: [],
+                pdfId: pdfIds[0],
+                pdfIds,
                 serviceStatus: 'scheduled',
             });
         } catch (error) {
             console.error('Erro ao salvar agendamento por voz:', error);
-            // O cliente já foi cadastrado: a conferência abre com ele, sem repetir o cadastro.
+            // Cliente já definido: a conferência abre com ele, sem repetir o cadastro.
             setIsAIScheduleModalOpen(false);
             handleOpenAgendamentoModal({
-                agendamento: { ...draft.agendamento, clienteId: client.id, clienteNome: client.nome },
+                agendamento: { ...draft.agendamento, clienteId, clienteNome },
                 quickClient: { ...draft.quickClient, reviewHints: ['Não consegui salvar direto. Confira e toque em Agendar.'] },
             });
             return;
         }
 
         setIsAIScheduleModalOpen(false);
-        await loadAgendamentos();
-        showToast(`Agendado: ${describeVoiceSchedule(client.nome, saved.start, saved.end)}`, {
+        // Proposta ligada: marca nela o agendamento, como a conferência faz.
+        if (pdfIds.length) {
+            const clientPdfs = await db.getPDFsForClient(clienteId);
+            await Promise.all(clientPdfs
+                .filter(pdf => typeof pdf.id === 'number' && pdfIds.includes(pdf.id))
+                .map(pdf => db.updatePDF({ ...pdf, agendamentoId: saved.id })));
+        }
+        await Promise.all([loadAgendamentos(), pdfIds.length ? loadAllPdfs() : Promise.resolve()]);
+        const proposalNote = pdfIds.length ? ' · proposta ligada' : '';
+        showToast(`Agendado: ${describeVoiceSchedule(clienteNome, saved.start, saved.end)}${proposalNote}`, {
             tone: 'success',
             duration: 6000,
             actionLabel: 'Ver',
             onAction: () => handleEditAgendamento(saved),
         });
-    }, [handleCreateQuickClient, handleOpenAgendamentoModal, handleEditAgendamento, loadAgendamentos, showToast]);
+    }, [handleCreateQuickClient, handleOpenAgendamentoModal, handleEditAgendamento, loadAgendamentos, loadAllPdfs, showToast]);
 
-    // Agendamento por voz: a IA separa nome, local, dia e hora e o modal de
-    // agendamento abre preenchido, com cliente novo (sem buscar na lista).
+    // Agendamento por voz: a IA separa nome, local, dia e hora; o app acha o
+    // cliente cadastrado (ou cria um simples) e o modal de agendamento abre preenchido.
     // Com "Salvar direto na agenda" ligado, grava sem conferência quando tudo
     // ficou claro e o horário pode ser agendado; senão abre a conferência com o motivo.
     const handleProcessAIScheduleInput = useCallback(async (input: AIInput) => {
@@ -2653,7 +2711,7 @@ Regras:
         try {
             const now = new Date();
             const extraction = await extractScheduleWithGemini(input, { apiKey: userInfo?.aiConfig?.apiKey, now });
-            const draft = buildVoiceScheduleDraft(extraction, now);
+            const draft = await resolveVoiceClient(buildVoiceScheduleDraft(extraction, now));
 
             if (scheduleAutoSave) {
                 const unclear = draft.quickClient.reviewHints || [];
@@ -2668,6 +2726,10 @@ Regras:
                 };
             }
 
+            // A conferência lista as propostas do cliente escolhido.
+            if (!hasLoadedAllPdfs && (draft.agendamento.clienteId != null || draft.quickClient.candidateIds?.length)) {
+                await loadAllPdfs();
+            }
             setIsAIScheduleModalOpen(false);
             handleOpenAgendamentoModal({ agendamento: draft.agendamento, quickClient: draft.quickClient });
         } catch (error) {
@@ -2676,7 +2738,7 @@ Regras:
         } finally {
             setIsProcessingAI(false);
         }
-    }, [userInfo, scheduleAutoSave, getVoiceDraftSlotError, saveVoiceDraftDirectly, handleOpenAgendamentoModal]);
+    }, [userInfo, scheduleAutoSave, resolveVoiceClient, getVoiceDraftSlotError, saveVoiceDraftDirectly, hasLoadedAllPdfs, loadAllPdfs, handleOpenAgendamentoModal]);
 
     const handleProcessAIMeasurementInput = useCallback(async (input: AIInput) => {
         const hasContent = (input.text && input.text.trim()) || (input.images && input.images.length > 0) || !!input.audio;
@@ -3066,6 +3128,7 @@ Use somente o JSON definido e não inclua explicações fora dele.`;
             onRescheduleAgendamento={handleRescheduleAgendamento}
             onCreateNewAgendamento={handleCreateNewAgendamento}
             onCreateAgendamentoByVoice={handleOpenAIScheduleModal}
+            onScheduleClientByVoice={handleOpenAIScheduleForClient}
             onAddFilm={() => handleOpenFilmModal(null)}
             onEditFilm={handleOpenFilmModal}
             onDeleteFilm={handleRequestDeleteFilm}
@@ -3220,6 +3283,7 @@ Use somente o JSON definido e não inclua explicações fora dele.`;
         handleProcessAIScheduleInput,
         scheduleAutoSave,
         handleToggleScheduleAutoSave,
+        scheduleVoiceClient,
         isAIClientModalOpen,
         setIsAIClientModalOpen,
         handleProcessAIClientInput,

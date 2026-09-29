@@ -1,5 +1,5 @@
 import React from 'react';
-import { AIInput } from '../../types';
+import { AIInput, Client } from '../../types';
 import AIComposerModal from './ai/AIComposerModal';
 
 interface AIScheduleModalProps {
@@ -11,17 +11,23 @@ interface AIScheduleModalProps {
     // "Salvar direto na agenda": parar o áudio já processa e salva, sem conferência.
     autoSave: boolean;
     onToggleAutoSave: (enabled: boolean) => void;
+    // Aberto na tela de um cliente: basta falar o dia e a hora.
+    client?: Client | null;
 }
 
 // Abre direto no microfone: a pessoa fala e confere o agendamento antes de salvar
 // (ou, com a chave ligada, a IA já salva ao parar o áudio).
-const AIScheduleModal: React.FC<AIScheduleModalProps> = ({ autoSave, onToggleAutoSave, ...props }) => (
+const AIScheduleModal: React.FC<AIScheduleModalProps> = ({ autoSave, onToggleAutoSave, client, ...props }) => {
+    const ask = client
+        ? `Agendando para ${client.nome}. Fale o dia e a hora.`
+        : 'Fale o nome do cliente, o local, o dia e a hora.';
+    return (
     <AIComposerModal
         {...props}
         title="Agendamento com IA"
         intro={autoSave
-            ? 'Fale o nome do cliente, o local, o dia e a hora. Ao parar, a IA já salva na agenda.'
-            : 'Fale o nome do cliente, o local, o dia e a hora. A IA preenche o agendamento e você confere antes de salvar.'}
+            ? `${ask} Ao parar, a IA já salva na agenda.`
+            : `${ask} A IA preenche o agendamento e você confere antes de salvar.`}
         options={(
             <button
                 type="button"
@@ -45,10 +51,10 @@ const AIScheduleModal: React.FC<AIScheduleModalProps> = ({ autoSave, onToggleAut
                 </span>
             </button>
         )}
-        textPlaceholder="Cliente, local, dia e hora…"
-        textExample="Maria Souza, Rua das Flores 120, Centro, sexta às 9h."
+        textPlaceholder={client ? 'Dia e hora…' : 'Cliente, local, dia e hora…'}
+        textExample={client ? 'Sexta às 9h, umas 3 horas.' : 'Maria Souza, Rua das Flores 120, Centro, sexta às 9h.'}
         filesHint="Print da conversa em que o cliente combinou o dia e o horário."
-        voiceHint="Ex.: “Maria Souza, Rua das Flores 120, sexta às 9 da manhã”."
+        voiceHint={client ? 'Ex.: “sexta às 9, umas 3 horas”.' : 'Ex.: “Maria Souza, Rua das Flores 120, sexta às 9 da manhã”.'}
         submitLabel={autoSave ? 'Salvar na agenda' : 'Preencher agendamento'}
         stages={['Entendendo o pedido…', 'Separando dia e horário…', autoSave ? 'Salvando na agenda…' : 'Montando o agendamento…']}
         processingNote={autoSave
@@ -58,6 +64,7 @@ const AIScheduleModal: React.FC<AIScheduleModalProps> = ({ autoSave, onToggleAut
         autoSubmitVoice={autoSave}
         keyboardAwareFooter
     />
-);
+    );
+};
 
 export default AIScheduleModal;

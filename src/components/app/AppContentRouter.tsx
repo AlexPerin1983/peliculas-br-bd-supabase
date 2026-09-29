@@ -125,6 +125,7 @@ interface AppContentRouterProps {
     onRescheduleAgendamento: (agendamento: Agendamento) => void;
     onCreateNewAgendamento: (date: Date) => void;
     onCreateAgendamentoByVoice?: () => void;
+    onScheduleClientByVoice?: (client: Client) => void;
     onAddFilm: () => void;
     onEditFilm: (film: Film | null) => void;
     onDeleteFilm: (filmName: string) => void;
@@ -227,6 +228,7 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
     onRescheduleAgendamento,
     onCreateNewAgendamento,
     onCreateAgendamentoByVoice,
+    onScheduleClientByVoice,
     onAddFilm,
     onEditFilm,
     onDeleteFilm,
@@ -520,6 +522,7 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
                 onNewProposal={() => onTabChange('client')}
                 onBack={canNavigateBack ? onNavigateBack : () => onTabChange('clients_list')}
                 onSchedule={onSchedulePdf}
+                onScheduleByVoice={hubClient && onScheduleClientByVoice ? () => onScheduleClientByVoice(hubClient) : undefined}
                 onOpenProposals={openProposals}
                 onTogglePin={onTogglePin}
                 googleReviewsLink={userInfo?.socialLinks?.googleReviews}

@@ -465,6 +465,10 @@ export interface QuickClientDraft {
     endereco?: QuickClientAddress;
     // O que a IA não entendeu com certeza (nome, dia, horário).
     reviewHints?: string[];
+    // Cliente cadastrado encontrado pelo nome falado (já escolhido na conferência).
+    matchedClientId?: number;
+    // Clientes parecidos para escolher quando o nome bate com mais de um.
+    candidateIds?: number[];
 }
 
 export type SchedulingInfo = {
