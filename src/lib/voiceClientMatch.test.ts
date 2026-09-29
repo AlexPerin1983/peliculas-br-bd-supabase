@@ -29,6 +29,7 @@ const pdf = (id: number, status: SavedPDF['status'] = 'approved'): SavedPDF => (
 const draft = (overrides: Partial<VoiceScheduleDraft['quickClient']> = {}): VoiceScheduleDraft => ({
     agendamento: { clienteNome: 'Maria Souza', start: '2026-10-02T12:00:00.000Z', end: '2026-10-02T15:00:00.000Z', notes: 'Película G20' },
     quickClient: { nome: 'Maria Souza', local: 'Rua das Flores, 120', ...overrides },
+    extraDays: [],
 });
 
 describe('findClientsBySpokenName', () => {

@@ -56,6 +56,7 @@ import {
     writeScheduleAutoSave,
 } from './src/lib/voiceSchedule';
 import { getAgendamentoSlotError } from './src/lib/agendamentoRules';
+import { buildMultiDayAgendamentos, formatDayLabel, moveToDay } from './src/lib/multiDaySchedule';
 import { attachCandidates, attachExistingClient, findClientsBySpokenName, pickProposalToLink } from './src/lib/voiceClientMatch';
 import { consumeBackButton } from './src/lib/backButton';
 import { createGeminiModel, GLOBAL_GEMINI_UNAVAILABLE_EVENT } from './services/geminiGateway';
@@ -2608,13 +2609,20 @@ Regras:
             db.getActiveTeamSize().catch(() => 0),
             db.getAllAgendamentos(),
         ]);
-        return getAgendamentoSlotError({
-            start: new Date(draft.agendamento.start!),
-            end: new Date(draft.agendamento.end!),
-            workingHours: userInfo?.workingHours,
-            agendamentos: currentAgendamentos,
-            capacity: Math.max(teamSize, userInfo?.employees?.length ?? 0, 1),
-        });
+        const capacity = Math.max(teamSize, userInfo?.employees?.length ?? 0, 1);
+        // Todos os dias do atendimento: o do agendamento e os extras, no mesmo horário.
+        const days: Array<string | null> = [null, ...draft.extraDays];
+        for (const day of days) {
+            const error = getAgendamentoSlotError({
+                start: new Date(day ? moveToDay(draft.agendamento.start!, day) : draft.agendamento.start!),
+                end: new Date(day ? moveToDay(draft.agendamento.end!, day) : draft.agendamento.end!),
+                workingHours: userInfo?.workingHours,
+                agendamentos: currentAgendamentos,
+                capacity,
+            });
+            if (error) return day ? `${formatDayLabel(day)}: ${error}` : error;
+        }
+        return null;
     }, [userInfo]);
 
     // Cliente do áudio: o da tela do cliente, um cadastrado com o nome completo
@@ -2656,19 +2664,20 @@ Regras:
             clienteNome = client.nome;
         }
         const pdfIds = draft.agendamento.pdfIds || [];
+        const [firstDay, ...otherDays] = buildMultiDayAgendamentos({
+            clienteId,
+            clienteNome,
+            start: draft.agendamento.start!,
+            end: draft.agendamento.end!,
+            notes: draft.agendamento.notes,
+            pdfId: pdfIds[0],
+            pdfIds,
+            serviceStatus: 'scheduled',
+        }, draft.extraDays);
 
         let saved: Agendamento;
         try {
-            saved = await db.saveAgendamento({
-                clienteId,
-                clienteNome,
-                start: draft.agendamento.start!,
-                end: draft.agendamento.end!,
-                notes: draft.agendamento.notes,
-                pdfId: pdfIds[0],
-                pdfIds,
-                serviceStatus: 'scheduled',
-            });
+            saved = await db.saveAgendamento(firstDay);
         } catch (error) {
             console.error('Erro ao salvar agendamento por voz:', error);
             // Cliente já definido: a conferência abre com ele, sem repetir o cadastro.
@@ -2676,11 +2685,25 @@ Regras:
             handleOpenAgendamentoModal({
                 agendamento: { ...draft.agendamento, clienteId, clienteNome },
                 quickClient: { ...draft.quickClient, reviewHints: ['Não consegui salvar direto. Confira e toque em Agendar.'] },
+                extraDays: draft.extraDays,
             });
             return;
         }
 
         setIsAIScheduleModalOpen(false);
+        // Dias seguintes: continuação do mesmo atendimento.
+        let savedDays = 1;
+        try {
+            for (const day of otherDays) {
+                await db.saveAgendamento(day);
+                savedDays += 1;
+            }
+        } catch (error) {
+            console.error('Erro ao salvar os outros dias do agendamento por voz:', error);
+            await loadAgendamentos();
+            handleShowInfo(`Salvei ${savedDays} de ${otherDays.length + 1} dias. Confira a agenda e agende o que faltou.`);
+            return;
+        }
         // Proposta ligada: marca nela o agendamento, como a conferência faz.
         if (pdfIds.length) {
             const clientPdfs = await db.getPDFsForClient(clienteId);
@@ -2690,13 +2713,13 @@ Regras:
         }
         await Promise.all([loadAgendamentos(), pdfIds.length ? loadAllPdfs() : Promise.resolve()]);
         const proposalNote = pdfIds.length ? ' · proposta ligada' : '';
-        showToast(`Agendado: ${describeVoiceSchedule(clienteNome, saved.start, saved.end)}${proposalNote}`, {
+        showToast(`Agendado: ${describeVoiceSchedule(clienteNome, saved.start, saved.end, draft.extraDays)}${proposalNote}`, {
             tone: 'success',
             duration: 6000,
             actionLabel: 'Ver',
             onAction: () => handleEditAgendamento(saved),
         });
-    }, [handleCreateQuickClient, handleOpenAgendamentoModal, handleEditAgendamento, loadAgendamentos, loadAllPdfs, showToast]);
+    }, [handleCreateQuickClient, handleOpenAgendamentoModal, handleEditAgendamento, handleShowInfo, loadAgendamentos, loadAllPdfs, showToast]);
 
     // Agendamento por voz: a IA separa nome, local, dia e hora; o app acha o
     // cliente cadastrado (ou cria um simples) e o modal de agendamento abre preenchido.
@@ -2731,7 +2754,7 @@ Regras:
                 await loadAllPdfs();
             }
             setIsAIScheduleModalOpen(false);
-            handleOpenAgendamentoModal({ agendamento: draft.agendamento, quickClient: draft.quickClient });
+            handleOpenAgendamentoModal({ agendamento: draft.agendamento, quickClient: draft.quickClient, extraDays: draft.extraDays });
         } catch (error) {
             console.error('Erro ao montar agendamento com IA:', error);
             throw new Error(getFriendlyScheduleError(error));

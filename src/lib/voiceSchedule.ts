@@ -1,5 +1,6 @@
 import { createGeminiModel, GeminiGatewayError } from '../../services/geminiGateway';
 import { AIInput, Agendamento, Client, QuickClientAddress, QuickClientDraft } from '../../types';
+import { formatDayLabel } from './multiDaySchedule';
 
 // Campos que a IA devolve ao ouvir (ou ler) um pedido de agendamento.
 export interface ScheduleExtraction {
@@ -10,6 +11,8 @@ export interface ScheduleExtraction {
     bairro?: string;
     cidade?: string;
     uf?: string;
+    // Cada dia do serviço (AAAA-MM-DD). "data" é o formato antigo, de um dia só.
+    datas?: string[];
     data?: string;
     horaInicio?: string;
     horaFim?: string;
@@ -19,6 +22,8 @@ export interface ScheduleExtraction {
 export interface VoiceScheduleDraft {
     agendamento: Partial<Agendamento>;
     quickClient: QuickClientDraft;
+    // Outros dias do mesmo atendimento (ex.: "sexta e sábado"), no mesmo horário.
+    extraDays: string[];
 }
 
 const DEFAULT_START_TIME = '09:00';
@@ -77,9 +82,10 @@ Responda APENAS com JSON válido com estes campos (use "" quando não for dito):
 - clienteNome: nome do cliente como foi dito (ex.: "Maria Souza", "Dona Lúcia", "Loja Bella Moda").
 - local: onde será o serviço, completo e bem escrito (rua, número, bairro, cidade, ponto de referência).
 - logradouro, numero, bairro, cidade, uf: partes do local quando der para separar. UF só com a sigla de 2 letras.
-- data: dia no formato AAAA-MM-DD.
+- datas: cada dia do serviço no formato AAAA-MM-DD. Um dia só vira uma lista com um item.
 - horaInicio: início no formato HH:MM (24 horas).
 - horaFim: término HH:MM, só se foi dito ("das 9 às 11") ou se foi dita a duração ("umas 3 horas" = início + 3 horas).
+  O horário vale para todos os dias da lista.
 - observacoes: o que mais ajudar no serviço (tipo de serviço, película, quantidade de vidros), em uma frase curta.
 
 Regras:
@@ -87,7 +93,8 @@ Regras:
 2. Dia da semana sem data ("sexta", "na segunda") é a próxima vez que esse dia aparece depois de hoje.
 3. "Dia 15" sem mês é o próximo dia 15: este mês se ainda não passou; se já passou, o mês seguinte.
 4. Horários: "9h", "nove horas" e "9 da manhã" = 09:00; "2 da tarde" = 14:00; "meio-dia" = 12:00; "9 e meia" = 09:30. Sem manhã, tarde ou noite: de 7 a 11 é manhã e de 1 a 6 é tarde (13:00 a 18:00).
-5. Nunca invente nome, local, data ou horário que não foram ditos.`;
+5. Serviço em vários dias: coloque todos em datas ("sexta e sábado" = dois dias; "de segunda a quarta" = segunda, terça e quarta).
+6. Nunca invente nome, local, data ou horário que não foram ditos.`;
 
 // Mesmo formato de schema usado pelas outras extrações (tipos do Gemini em texto).
 const SCHEDULE_RESPONSE_SCHEMA = {
@@ -100,12 +107,12 @@ const SCHEDULE_RESPONSE_SCHEMA = {
         bairro: { type: 'STRING' },
         cidade: { type: 'STRING' },
         uf: { type: 'STRING' },
-        data: { type: 'STRING' },
+        datas: { type: 'ARRAY', items: { type: 'STRING' } },
         horaInicio: { type: 'STRING' },
         horaFim: { type: 'STRING' },
         observacoes: { type: 'STRING' }
     },
-    required: ['clienteNome', 'local', 'data', 'horaInicio']
+    required: ['clienteNome', 'local', 'datas', 'horaInicio']
 };
 
 // Mensagens nossas, já prontas para mostrar na tela.
@@ -137,7 +144,10 @@ export const parseScheduleExtraction = (rawText: string): ScheduleExtraction => 
         'clienteNome', 'local', 'logradouro', 'numero', 'bairro', 'cidade', 'uf',
         'data', 'horaInicio', 'horaFim', 'observacoes'
     ];
-    return Object.fromEntries(fields.map(field => [field, clean(source[field])])) as ScheduleExtraction;
+    const extraction = Object.fromEntries(fields.map(field => [field, clean(source[field])])) as ScheduleExtraction;
+    const datas = Array.isArray(source.datas) ? source.datas.map(clean).filter(Boolean) : [];
+    extraction.datas = datas.length ? datas : (extraction.data ? [extraction.data] : []);
+    return extraction;
 };
 
 const blobToInlineData = (blob: Blob): Promise<{ mimeType: string; data: string }> => new Promise((resolve, reject) => {
@@ -174,7 +184,7 @@ export const extractScheduleWithGemini = async (
 
     const result = await model.generateContent(parts);
     const extraction = parseScheduleExtraction(result.response.text());
-    if (!extraction.clienteNome && !extraction.data && !extraction.horaInicio) {
+    if (!extraction.clienteNome && !extraction.datas?.length && !extraction.horaInicio) {
         throw new VoiceScheduleError('Não entendi o agendamento. Fale o nome do cliente, o local, o dia e a hora.');
     }
     return extraction;
@@ -201,7 +211,11 @@ const composeLocal = (extraction: ScheduleExtraction) => [
 export const buildVoiceScheduleDraft = (extraction: ScheduleExtraction, now: Date = new Date()): VoiceScheduleDraft => {
     const nome = clean(extraction.clienteNome);
     const local = clean(extraction.local) || composeLocal(extraction);
-    const dateKey = normalizeDateKey(extraction.data);
+    // Dias válidos, sem repetir, em ordem: o primeiro é o do agendamento, os outros são extras.
+    const dayKeys = [...new Set((extraction.datas?.length ? extraction.datas : [extraction.data])
+        .map(value => normalizeDateKey(value))
+        .filter((key): key is string => Boolean(key)))].sort();
+    const dateKey = dayKeys[0] ?? null;
     const startTime = normalizeTime(extraction.horaInicio);
     const endTime = normalizeTime(extraction.horaFim);
 
@@ -232,6 +246,7 @@ export const buildVoiceScheduleDraft = (extraction: ScheduleExtraction, now: Dat
             end: end.toISOString(),
             notes: clean(extraction.observacoes)
         },
+        extraDays: dayKeys.slice(1),
         quickClient: {
             nome,
             local,
@@ -264,12 +279,17 @@ export const writeScheduleAutoSave = (enabled: boolean) => {
 
 // Resumo do aviso depois de salvar direto, com dia e hora primeiro (é o que se
 // confere): "sex., 02/10, 09:00–12:00 · Maria Souza".
-export const describeVoiceSchedule = (nome: string, startIso: string, endIso: string) => {
+// Com vários dias: "sex., 02/10 e sáb., 03/10, 08:00–17:00 · Amaury".
+export const describeVoiceSchedule = (nome: string, startIso: string, endIso: string, extraDays: string[] = []) => {
     const start = new Date(startIso);
     const end = new Date(endIso);
-    const day = start.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
+    const days = [
+        start.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' }),
+        ...extraDays.map(formatDayLabel),
+    ];
+    const dayText = days.length > 1 ? `${days.slice(0, -1).join(', ')} e ${days[days.length - 1]}` : days[0];
     const time = (date: Date) => `${pad(date.getHours())}:${pad(date.getMinutes())}`;
-    return `${day}, ${time(start)}–${time(end)} · ${nome}`;
+    return `${dayText}, ${time(start)}–${time(end)} · ${nome}`;
 };
 
 // Cadastro mínimo do cliente ditado. As partes do endereço separadas pela IA só

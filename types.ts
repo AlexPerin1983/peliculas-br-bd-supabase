@@ -478,6 +478,8 @@ export type SchedulingInfo = {
     agendamento: Partial<Agendamento>;
     pdf?: SavedPDF;
     quickClient?: QuickClientDraft;
+    // Outros dias do mesmo atendimento, no mesmo horário (AAAA-MM-DD).
+    extraDays?: string[];
 };
 
 export interface ExtractedClientData {

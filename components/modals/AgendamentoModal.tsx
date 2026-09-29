@@ -7,11 +7,13 @@ import SearchableSelect from '../ui/SearchableSelect';
 import * as db from '../../services/db';
 import { getAgendamentoSlotError } from '../../src/lib/agendamentoRules';
 import { isClientAddress, pickProposalToLink, withLocalNote } from '../../src/lib/voiceClientMatch';
+import { buildMultiDayAgendamentos, formatDayLabel, moveToDay, nextDayKey, normalizeExtraDays } from '../../src/lib/multiDaySchedule';
 
 interface AgendamentoModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSave: (agendamento: Omit<Agendamento, 'id'> | Agendamento) => Promise<void>;
+    // Vários dias do mesmo atendimento chegam como lista (um agendamento por dia).
+    onSave: (agendamento: Omit<Agendamento, 'id'> | Agendamento | Array<Omit<Agendamento, 'id'>>) => Promise<void>;
     onDelete: (agendamento: Agendamento) => void;
     schedulingInfo: SchedulingInfo;
     clients: Client[];
@@ -84,6 +86,7 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
     const agendamento = schedulingInfo.agendamento;
     const pdf = 'pdf' in schedulingInfo ? schedulingInfo.pdf : undefined;
     const quickClient = 'quickClient' in schedulingInfo ? schedulingInfo.quickClient : undefined;
+    const initialExtraDays = 'extraDays' in schedulingInfo ? schedulingInfo.extraDays : undefined;
 
     const isEditing = !!agendamento?.id;
     const isClientLocked = !!pdf?.clienteId || !!agendamento?.pdfId;
@@ -101,6 +104,8 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
     const [isQuickClient, setIsQuickClient] = useState(false);
     const [quickName, setQuickName] = useState('');
     const [quickLocal, setQuickLocal] = useState('');
+    // Outros dias do mesmo atendimento, no mesmo horário (só em agendamento novo).
+    const [extraDays, setExtraDays] = useState<string[]>([]);
     // Capacidade = nº de colaboradores ATIVOS da organização (dono + convidados).
     // Org-wide e igual em qualquer conta logada (corrige a antiga contagem por
     // "Equipe" manual, que não crescia ao convidar e variava por conta).
@@ -165,6 +170,7 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
             setIsQuickClient(!!quickClient && !initialClientId);
             setQuickName(quickClient?.nome || '');
             setQuickLocal(quickClient?.local || '');
+            setExtraDays(isEditing ? [] : (initialExtraDays || []));
 
             if (isEditing && agendamento?.start && agendamento?.end) {
                 const startDate = new Date(agendamento.start);
@@ -193,7 +199,7 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                 setNotes('');
             }
         }
-    }, [isOpen, agendamento, pdf, isEditing, quickClient]);
+    }, [isOpen, agendamento, pdf, isEditing, quickClient, initialExtraDays]);
 
     // Disponibilidade ao vivo: quantos colaboradores ficam livres no horário escolhido.
     // Usado para avisar antes de salvar (ex.: reagendar/continuar num dia já cheio).
@@ -264,6 +270,22 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
             setValidationError(slotError);
             return;
         }
+
+        // Cada dia extra passa pelas mesmas regras (dia de trabalho, expediente, equipe livre).
+        const daysToAdd = isEditing ? [] : normalizeExtraDays(date, extraDays);
+        for (const day of daysToAdd) {
+            const dayError = getAgendamentoSlotError({
+                start: new Date(moveToDay(startDateTime.toISOString(), day)),
+                end: new Date(moveToDay(endDateTime.toISOString(), day)),
+                workingHours: userInfo?.workingHours,
+                agendamentos,
+                capacity: teamCapacity,
+            });
+            if (dayError) {
+                setValidationError(`${formatDayLabel(day)}: ${dayError}`);
+                return;
+            }
+        }
         const proposalIds = selectedProposalIds.filter((id, index, ids) => ids.indexOf(id) === index);
 
         const buildPayload = (client: Client) => {
@@ -297,7 +319,9 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                 if (!onCreateQuickClient) throw new Error('Não foi possível cadastrar o cliente. Escolha um cliente da lista.');
                 createdClient = await onCreateQuickClient({ nome: quickNameValue, local: quickLocal.trim() }, quickClient);
             }
-            await onSave(buildPayload(createdClient || selectedClient!));
+            const firstDay = buildPayload(createdClient || selectedClient!);
+            const allDays = daysToAdd.length ? buildMultiDayAgendamentos(firstDay, daysToAdd) : null;
+            await onSave(allDays || firstDay);
         } catch (err: any) {
             if (createdClient?.id) {
                 // O cliente já foi cadastrado: a nova tentativa usa ele em vez de repetir o cadastro.
@@ -442,7 +466,7 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                 variant="primary"
                 size="sm"
             >
-                {isEditing ? 'Salvar' : 'Agendar'}
+                {isEditing ? 'Salvar' : (extraDays.length ? `Agendar ${extraDays.length + 1} dias` : 'Agendar')}
             </ActionButton>
         </>
     );
@@ -726,6 +750,39 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                             required
                             className={inputClassName}
                         />
+                        {!isEditing ? (
+                            <div className="mt-2 flex flex-wrap items-center gap-2" aria-label="Outros dias do atendimento">
+                                {extraDays.map((day) => (
+                                    <span key={day} className="inline-flex h-8 items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 pl-3 pr-1 text-xs font-semibold text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-200">
+                                        + {formatDayLabel(day)}
+                                        <button
+                                            type="button"
+                                            onClick={() => setExtraDays((current) => current.filter((item) => item !== day))}
+                                            aria-label={`Tirar ${formatDayLabel(day)}`}
+                                            className="flex h-6 w-6 items-center justify-center rounded-full hover:bg-blue-100 dark:hover:bg-blue-900/60"
+                                        >
+                                            <i className="fas fa-xmark text-[11px]" aria-hidden="true"></i>
+                                        </button>
+                                    </span>
+                                ))}
+                                <button
+                                    type="button"
+                                    onClick={() => setExtraDays((current) => {
+                                        const last = [date, ...current].filter(Boolean).sort().pop();
+                                        return last ? [...current, nextDayKey(last)] : current;
+                                    })}
+                                    className="inline-flex h-8 items-center gap-1.5 rounded-full border border-dashed border-slate-300 px-3 text-xs font-semibold text-slate-600 hover:border-blue-300 hover:text-blue-700 dark:border-slate-600 dark:text-slate-300"
+                                >
+                                    <i className="fas fa-plus text-[10px]" aria-hidden="true"></i>
+                                    Mais um dia
+                                </button>
+                            </div>
+                        ) : null}
+                        {extraDays.length ? (
+                            <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
+                                Mesmo horário em todos os dias. Os dias seguintes entram como continuação do atendimento.
+                            </p>
+                        ) : null}
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
