@@ -161,6 +161,7 @@ interface ModalsContainerProps {
     handleProcessAIScheduleInput: (input: AIInput) => Promise<void>;
     scheduleAutoSave: boolean;
     handleToggleScheduleAutoSave: (enabled: boolean) => void;
+    scheduleVoiceClient: Client | null;
 
     // API Key Modal
     isApiKeyModalOpen: boolean;
@@ -561,6 +562,7 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
                     provider={props.userInfo?.aiConfig?.provider || 'gemini'}
                     autoSave={props.scheduleAutoSave}
                     onToggleAutoSave={props.handleToggleScheduleAutoSave}
+                    client={props.scheduleVoiceClient}
                 />
             )}
 

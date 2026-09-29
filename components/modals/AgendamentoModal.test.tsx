@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import AgendamentoModal from './AgendamentoModal';
-import { Client, QuickClientDraft, UserInfo } from '../../types';
+import { Client, QuickClientDraft, SavedPDF, UserInfo } from '../../types';
 
 vi.mock('../../services/db', () => ({
     getActiveTeamSize: vi.fn().mockResolvedValue(1),
@@ -150,6 +150,73 @@ describe('AgendamentoModal', () => {
             expect(screen.queryByLabelText('Nome do cliente')).not.toBeInTheDocument();
             expect(screen.getByPlaceholderText('Selecione ou digite um nome')).toBeInTheDocument();
             expect(screen.getByLabelText('Observações')).toHaveValue('Película G20 em 3 janelas\nLocal: Rua das Flores, 120, Centro');
+        });
+
+        describe('cliente já cadastrado', () => {
+            const maria: Client = { ...createdClient, id: 7, nome: 'Maria Souza', telefone: '83988881234', bairro: 'Bessa' };
+            const mariaLima: Client = { ...createdClient, id: 8, nome: 'Maria Lima', telefone: '', bairro: 'Manaíra' };
+            const approved = {
+                id: 50, clienteId: 7, date: '2026-09-12', totalPreco: 1250, status: 'approved', proposalOptionName: 'Opção 1',
+            } as unknown as SavedPDF;
+
+            const renderWith = (agendamento: Record<string, unknown>, draft: QuickClientDraft) => {
+                const onSave = vi.fn().mockResolvedValue(undefined);
+                const onCreateQuickClient = vi.fn();
+                render(
+                    <AgendamentoModal
+                        isOpen onClose={vi.fn()} onSave={onSave} onDelete={vi.fn()}
+                        schedulingInfo={{
+                            agendamento: { start: voiceStart.toISOString(), end: voiceEnd.toISOString(), notes: '', ...agendamento },
+                            quickClient: draft,
+                        }}
+                        clients={[maria, mariaLima]} savedPdfs={[approved]} onAddNewClient={vi.fn()}
+                        onCreateQuickClient={onCreateQuickClient} userInfo={userInfo} agendamentos={[]}
+                    />
+                );
+                return { onSave, onCreateQuickClient };
+            };
+
+            it('achado pelo nome: vem escolhido, com a proposta ligada e sem criar cliente', async () => {
+                const { onSave, onCreateQuickClient } = renderWith(
+                    { clienteId: 7, clienteNome: 'Maria Souza', pdfId: 50, pdfIds: [50] },
+                    { nome: 'Maria Souza', local: '', matchedClientId: 7 },
+                );
+
+                expect(screen.getByText('Achei Maria Souza nos seus clientes.')).toBeInTheDocument();
+                expect(screen.getByRole('checkbox', { name: 'Selecionar Opção 1' })).toBeChecked();
+
+                fireEvent.click(screen.getByRole('button', { name: 'Agendar' }));
+                await waitFor(() => expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ clienteId: 7, pdfIds: [50] })));
+                expect(onCreateQuickClient).not.toHaveBeenCalled();
+            });
+
+            it('"Não é?" troca para cliente novo com o nome falado', () => {
+                renderWith(
+                    { clienteId: 7, clienteNome: 'Maria Souza', pdfIds: [50] },
+                    { nome: 'Maria Souza', local: 'Av. Beira Mar', matchedClientId: 7 },
+                );
+
+                fireEvent.click(screen.getByRole('button', { name: 'Não é? Cadastrar como cliente novo' }));
+
+                expect(screen.getByLabelText('Nome do cliente')).toHaveValue('Maria Souza');
+                expect(screen.getByLabelText('Local')).toHaveValue('Av. Beira Mar');
+                expect(screen.queryByText('Achei Maria Souza nos seus clientes.')).not.toBeInTheDocument();
+            });
+
+            it('com parecidos, um toque escolhe o cliente e liga a proposta dele', async () => {
+                const { onSave } = renderWith(
+                    { clienteNome: 'Maria' },
+                    { nome: 'Maria', local: 'Av. Beira Mar', candidateIds: [7, 8] },
+                );
+
+                expect(screen.getByText('Parecidos nos seus clientes')).toBeInTheDocument();
+                fireEvent.click(screen.getByRole('button', { name: 'Agendar para Maria Souza' }));
+
+                expect(screen.getByRole('checkbox', { name: 'Selecionar Opção 1' })).toBeChecked();
+                expect(screen.getByLabelText('Observações')).toHaveValue('Local: Av. Beira Mar');
+                fireEvent.click(screen.getByRole('button', { name: 'Agendar' }));
+                await waitFor(() => expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ clienteId: 7, pdfIds: [50] })));
+            });
         });
 
         it('se o agendamento falhar depois do cadastro, a nova tentativa usa o mesmo cliente', async () => {

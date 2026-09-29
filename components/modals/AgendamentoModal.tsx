@@ -6,6 +6,7 @@ import Input from '../ui/Input';
 import SearchableSelect from '../ui/SearchableSelect';
 import * as db from '../../services/db';
 import { getAgendamentoSlotError } from '../../src/lib/agendamentoRules';
+import { isClientAddress, pickProposalToLink, withLocalNote } from '../../src/lib/voiceClientMatch';
 
 interface AgendamentoModalProps {
     isOpen: boolean;
@@ -317,6 +318,32 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
         setIsQuickClient(false);
     };
 
+    // Parecido tocado na lista: vira o cliente do agendamento, com a proposta que espera agenda.
+    const handlePickCandidate = (client: Client) => {
+        const clientPdfs = savedPdfs.filter(item => item.clienteId === client.id);
+        const proposal = pickProposalToLink(clientPdfs, agendamentos);
+        setSelectedClientId(client.id ?? null);
+        setSelectedProposalIds(proposal?.id != null ? [proposal.id] : []);
+        if (!isClientAddress(quickLocal, client)) setNotes(current => withLocalNote(current, quickLocal));
+        setIsQuickClient(false);
+    };
+
+    // "Não é?": o nome falado vira um cliente novo em vez do cadastrado encontrado.
+    const handleUseNewClient = () => {
+        const localLine = `Local: ${quickLocal.trim()}`;
+        setNotes(current => current.split('\n').filter(line => line.trim() !== localLine).join('\n'));
+        setSelectedClientId(null);
+        setSelectedProposalIds([]);
+        setIsQuickClient(true);
+    };
+
+    const candidateClients = useMemo(() => (quickClient?.candidateIds || [])
+        .map(id => clients.find(client => client.id === id))
+        .filter((client): client is Client => Boolean(client)), [quickClient, clients]);
+    const matchedClient = quickClient?.matchedClientId != null && selectedClientId === quickClient.matchedClientId
+        ? clients.find(client => client.id === quickClient.matchedClientId)
+        : undefined;
+
     const handleDelete = () => {
         if (isSaving) return;
         if (isEditing && agendamento) {
@@ -441,6 +468,36 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
 
                     {isQuickClient ? (
                         <section aria-label="Cliente novo" className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-600 dark:bg-slate-800/70">
+                            {candidateClients.length > 0 ? (
+                                <div className="space-y-1.5">
+                                    <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">Parecidos nos seus clientes</p>
+                                    <ul className="space-y-1.5">
+                                        {candidateClients.map((client) => {
+                                            const subtitle = [client.telefone, client.bairro || client.cidade].filter(Boolean).join(' · ');
+                                            return (
+                                                <li key={client.id}>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handlePickCandidate(client)}
+                                                        aria-label={`Agendar para ${client.nome}`}
+                                                        className="flex w-full items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left transition-colors hover:border-blue-300 dark:border-slate-700 dark:bg-slate-900/60 dark:hover:border-blue-700"
+                                                    >
+                                                        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${colorForName(client.nome)}`}>
+                                                            {clientInitials(client.nome)}
+                                                        </span>
+                                                        <span className="min-w-0 flex-1">
+                                                            <span className="block truncate text-sm font-medium text-slate-800 dark:text-slate-100">{client.nome}</span>
+                                                            <span className="block truncate text-xs text-slate-500 dark:text-slate-400">{subtitle || 'Sem telefone ou bairro'}</span>
+                                                        </span>
+                                                        <i className="fas fa-chevron-right text-xs text-slate-400" aria-hidden="true"></i>
+                                                    </button>
+                                                </li>
+                                            );
+                                        })}
+                                    </ul>
+                                    <p className="pt-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300">Ou cadastre como cliente novo</p>
+                                </div>
+                            ) : null}
                             <Input
                                 id="quickClientName"
                                 label="Nome do cliente"
@@ -472,6 +529,21 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                         </section>
                     ) : (
                     <div>
+                        {matchedClient ? (
+                            <div role="status" className="mb-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-200">
+                                <span className="flex items-center gap-2">
+                                    <i className="fas fa-user-check" aria-hidden="true"></i>
+                                    Achei {matchedClient.nome} nos seus clientes.
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={handleUseNewClient}
+                                    className="text-xs font-semibold text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-300"
+                                >
+                                    Não é? Cadastrar como cliente novo
+                                </button>
+                            </div>
+                        ) : null}
                         <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Cliente</label>
                         <SearchableSelect
                             options={sortedClients}
@@ -487,7 +559,7 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                             valueField="id"
                             placeholder="Selecione ou digite um nome"
                             disabled={isClientLocked}
-                            autoFocus={!isClientLocked}
+                            autoFocus={!isClientLocked && !quickClient}
                             searchFields={['nome', 'telefone', 'cidade']}
                             listHeader="Favoritos e recentes"
                             renderOption={(client) => {

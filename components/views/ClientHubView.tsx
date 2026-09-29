@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, CalendarPlus, MessageCircle, Phone, Plus, UserRound } from 'lucide-react';
+import { ArrowLeft, CalendarPlus, MessageCircle, Mic, Phone, Plus, UserRound } from 'lucide-react';
 import { Agendamento, Client, SavedPDF, SchedulingInfo } from '../../types';
 import { loadCompanyProposalPortals, type CompanyProposalPortal } from '../../src/lib/proposalPortal';
 import {
@@ -40,6 +40,8 @@ interface ClientHubViewProps {
     onNewProposal: () => void;
     onBack: () => void;
     onSchedule?: (info: SchedulingInfo) => void;
+    // Agendar este cliente falando só o dia e a hora.
+    onScheduleByVoice?: () => void;
     // Abre o Propostas (na ficha do link, quando informado).
     onOpenProposals?: (portalId?: string) => void;
     onTogglePin?: (clientId: number) => void;
@@ -82,6 +84,7 @@ const ClientHubView: React.FC<ClientHubViewProps> = ({
     onNewProposal,
     onBack,
     onSchedule,
+    onScheduleByVoice,
     onOpenProposals,
     onTogglePin,
     googleReviewsLink,
@@ -206,6 +209,11 @@ const ClientHubView: React.FC<ClientHubViewProps> = ({
                     </button>
                 </div>
                 <div className="flex items-center gap-2 text-sm font-semibold">
+                    {onScheduleByVoice ? (
+                        <button type="button" onClick={onScheduleByVoice} className="inline-flex h-10 items-center gap-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] px-3 text-[var(--text-body)] transition hover:text-[var(--text-strong)]">
+                            <Mic className="h-4 w-4" aria-hidden="true" /> Por voz
+                        </button>
+                    ) : null}
                     {onSchedule ? (
                         <button type="button" onClick={scheduleNew} className="inline-flex h-10 items-center gap-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] px-3 text-[var(--text-body)] transition hover:text-[var(--text-strong)]">
                             <CalendarPlus className="h-4 w-4" aria-hidden="true" /> Agendar
@@ -252,7 +260,7 @@ const ClientHubView: React.FC<ClientHubViewProps> = ({
                             />
                         ) : null}
                         {section === 'services' ? (
-                            <ClientServicesSection agendamentos={clientAgendamentos} now={now} postSale={postSaleState} onOpen={onEditAgendamento} onSchedule={scheduleNew} onPostSale={openPostSale} />
+                            <ClientServicesSection agendamentos={clientAgendamentos} now={now} postSale={postSaleState} onOpen={onEditAgendamento} onSchedule={scheduleNew} onScheduleByVoice={onScheduleByVoice} onPostSale={openPostSale} />
                         ) : null}
                         {section === 'details' ? (
                             <>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { CalendarDays, CalendarPlus, ChevronRight, Star, Users } from 'lucide-react';
+import { CalendarDays, CalendarPlus, ChevronRight, Mic, Star, Users } from 'lucide-react';
 import type { Agendamento, AgendamentoServiceStatus } from '../../types';
 import { formatServiceDate, relativeDays, type ClientFollowUpKind, type getPostSaleState } from '../../src/lib/clientInsights';
 
@@ -66,8 +66,9 @@ const ClientServicesSection: React.FC<{
     postSale?: PostSaleState | null;
     onOpen: (agendamento: Agendamento) => void;
     onSchedule: () => void;
+    onScheduleByVoice?: () => void;
     onPostSale?: (kind: ClientFollowUpKind) => void;
-}> = ({ agendamentos, now = Date.now(), postSale, onOpen, onSchedule, onPostSale }) => {
+}> = ({ agendamentos, now = Date.now(), postSale, onOpen, onSchedule, onScheduleByVoice, onPostSale }) => {
     const upcoming = agendamentos
         .filter(item => (item.serviceStatus ?? 'scheduled') === 'scheduled' && new Date(item.start).getTime() >= now)
         .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
@@ -77,11 +78,17 @@ const ClientServicesSection: React.FC<{
 
     return (
         <div className="space-y-4 text-sm">
-            <div className="text-sm font-semibold">
+            <div className="flex gap-2 text-sm font-semibold">
                 <button type="button" onClick={onSchedule}
-                    className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-blue-300 bg-blue-50/60 text-blue-700 transition hover:bg-blue-50 dark:border-blue-800 dark:bg-blue-950/20 dark:text-blue-300">
+                    className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-dashed border-blue-300 bg-blue-50/60 text-blue-700 transition hover:bg-blue-50 dark:border-blue-800 dark:bg-blue-950/20 dark:text-blue-300">
                     <CalendarPlus className="h-4 w-4" aria-hidden="true" /> Agendar serviço
                 </button>
+                {onScheduleByVoice ? (
+                    <button type="button" onClick={onScheduleByVoice}
+                        className="flex h-11 items-center justify-center gap-2 rounded-xl border border-dashed border-blue-300 bg-blue-50/60 px-4 text-blue-700 transition hover:bg-blue-50 dark:border-blue-800 dark:bg-blue-950/20 dark:text-blue-300">
+                        <Mic className="h-4 w-4" aria-hidden="true" /> Por voz
+                    </button>
+                ) : null}
             </div>
 
             {postSale && onPostSale ? <PostSaleCard state={postSale} now={now} onPostSale={onPostSale} /> : null}
