@@ -69,6 +69,7 @@ describe('buildScheduleExtractionPrompt', () => {
         expect(prompt).toContain('- segunda-feira, 28/09/2026 = 2026-09-28 (hoje)');
         expect(prompt).toContain('- terça-feira, 29/09/2026 = 2026-09-29 (amanhã)');
         expect(prompt).toContain('- sexta-feira, 02/10/2026 = 2026-10-02');
+        expect(prompt).toContain('"sexta e sábado" = dois dias');
     });
 });
 
@@ -97,6 +98,17 @@ describe('buildVoiceScheduleDraft', () => {
             local: 'Rua das Flores, 120, Centro, João Pessoa - PB',
             endereco: { logradouro: 'Rua das Flores', numero: '120', bairro: 'Centro', cidade: 'João Pessoa', uf: 'PB' },
         });
+    });
+
+    it('com vários dias ("sexta e sábado"), o primeiro vira o agendamento e os outros ficam como extras', () => {
+        const draft = buildVoiceScheduleDraft({
+            clienteNome: 'Amaury', local: 'Bessa', datas: ['2026-10-03', '2026-10-02', '2026-10-03', 'amanhã'],
+            horaInicio: '08:00', horaFim: '17:00',
+        }, now);
+
+        expect(localParts(draft.agendamento.start)).toEqual({ date: '2026-10-02', time: '08:00' });
+        expect(draft.extraDays).toEqual(['2026-10-03']);
+        expect(buildVoiceScheduleDraft({ clienteNome: 'Ana', datas: ['2026-10-02'], horaInicio: '9h' }, now).extraDays).toEqual([]);
     });
 
     it('sem término (ou com término antes do início) usa 2 horas', () => {
@@ -167,8 +179,14 @@ describe('parseScheduleExtraction', () => {
         const extraction = parseScheduleExtraction('```json\n{"clienteNome":" Ana ","data":"2026-10-02","extra":1}\n```');
         expect(extraction.clienteNome).toBe('Ana');
         expect(extraction.data).toBe('2026-10-02');
+        expect(extraction.datas).toEqual(['2026-10-02']);
         expect(extraction.local).toBe('');
         expect(extraction).not.toHaveProperty('extra');
+    });
+
+    it('lê a lista de dias', () => {
+        const extraction = parseScheduleExtraction('{"clienteNome":"Amaury","datas":["2026-10-02"," 2026-10-03 ",""]}');
+        expect(extraction.datas).toEqual(['2026-10-02', '2026-10-03']);
     });
 
     it('recusa resposta sem JSON', () => {
@@ -184,12 +202,12 @@ describe('extractScheduleWithGemini', () => {
 
     it('pede a extração de agendamento com o momento atual e o texto', async () => {
         gatewayMocks.generateContent.mockResolvedValue({
-            response: { text: () => JSON.stringify({ clienteNome: 'Maria', local: 'Rua A', data: '2026-10-02', horaInicio: '09:00' }) },
+            response: { text: () => JSON.stringify({ clienteNome: 'Maria', local: 'Rua A', datas: ['2026-10-02'], horaInicio: '09:00' }) },
         });
 
         const extraction = await extractScheduleWithGemini({ text: 'Maria, Rua A, sexta às 9' }, { apiKey: 'chave', now });
 
-        expect(extraction).toMatchObject({ clienteNome: 'Maria', local: 'Rua A', data: '2026-10-02', horaInicio: '09:00' });
+        expect(extraction).toMatchObject({ clienteNome: 'Maria', local: 'Rua A', datas: ['2026-10-02'], horaInicio: '09:00' });
         expect(gatewayMocks.createGeminiModel).toHaveBeenCalledWith(expect.objectContaining({
             apiKey: 'chave',
             feature: 'schedule_extraction',
@@ -223,6 +241,14 @@ describe('salvar direto na agenda', () => {
             new Date(2026, 9, 2, 12, 0).toISOString(),
         );
         expect(summary).toMatch(/^sex.*02\/10, 09:00–12:00 · Maria Souza$/);
+
+        const twoDays = describeVoiceSchedule(
+            'Amaury',
+            new Date(2026, 9, 2, 8, 0).toISOString(),
+            new Date(2026, 9, 2, 17, 0).toISOString(),
+            ['2026-10-03'],
+        );
+        expect(twoDays).toMatch(/^sex.*02\/10 e sáb.*03\/10, 08:00–17:00 · Amaury$/);
     });
 });
 

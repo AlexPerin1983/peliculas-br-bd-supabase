@@ -179,7 +179,7 @@ interface ModalsContainerProps {
     // Agendamento Modal
     schedulingInfo: SchedulingInfo | null;
     setSchedulingInfo: (value: SchedulingInfo | null) => void;
-    handleSaveAgendamento: (agendamento: Partial<Agendamento>) => Promise<void>;
+    handleSaveAgendamento: (agendamento: Partial<Agendamento> | Array<Partial<Agendamento>>) => Promise<void>;
     handleConfirmAgendamento: (clientId: number) => void;
     handleRequestDeleteAgendamento: (agendamento: Agendamento) => void;
     handleAddNewClientFromAgendamento: (clientName: string) => void;

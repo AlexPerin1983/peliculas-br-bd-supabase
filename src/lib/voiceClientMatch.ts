@@ -108,6 +108,7 @@ export const attachExistingClient = (
         .filter(hint => !(fromClientScreen && hint === 'O nome do cliente não ficou claro.'));
 
     return {
+        ...draft,
         agendamento: {
             ...draft.agendamento,
             clienteId: client.id,

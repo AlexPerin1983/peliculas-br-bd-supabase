@@ -41,39 +41,49 @@ export function useSchedulingFlow({
         setSchedulingInfo(null);
     }, [setSchedulingInfo]);
 
-    const handleSaveAgendamento = useCallback(async (agendamentoData: Omit<Agendamento, 'id'> | Agendamento) => {
+    // Um agendamento, ou vários dias do mesmo atendimento (ex.: sexta e sábado).
+    const handleSaveAgendamento = useCallback(async (agendamentoData: Omit<Agendamento, 'id'> | Agendamento | Array<Omit<Agendamento, 'id'> | Agendamento>) => {
+        const items = Array.isArray(agendamentoData) ? agendamentoData : [agendamentoData];
         try {
-            const savedAgendamento = await db.saveAgendamento(agendamentoData);
+            for (const item of items) {
+                const savedAgendamento = await db.saveAgendamento(item);
 
-            const linkedProposalIds = savedAgendamento.pdfIds?.length
-                ? savedAgendamento.pdfIds
-                : (savedAgendamento.pdfId ? [savedAgendamento.pdfId] : []);
+                const linkedProposalIds = savedAgendamento.pdfIds?.length
+                    ? savedAgendamento.pdfIds
+                    : (savedAgendamento.pdfId ? [savedAgendamento.pdfId] : []);
 
-            const allPdfsFromDb = await db.getAllPDFs();
-            const linkedProposalIdSet = new Set(linkedProposalIds);
-            const pdfsToUpdate = allPdfsFromDb.filter((item) => (
-                (typeof item.id === 'number' && linkedProposalIdSet.has(item.id))
-                || item.agendamentoId === savedAgendamento.id
-            ));
+                const allPdfsFromDb = await db.getAllPDFs();
+                const linkedProposalIdSet = new Set(linkedProposalIds);
+                const pdfsToUpdate = allPdfsFromDb.filter((pdf) => (
+                    (typeof pdf.id === 'number' && linkedProposalIdSet.has(pdf.id))
+                    || pdf.agendamentoId === savedAgendamento.id
+                ));
 
-            await Promise.all(pdfsToUpdate.map((item) => {
-                const shouldLink = typeof item.id === 'number' && linkedProposalIdSet.has(item.id);
-                if (shouldLink) {
-                    return item.agendamentoId === savedAgendamento.id
-                        ? Promise.resolve()
-                        : db.updatePDF({ ...item, agendamentoId: savedAgendamento.id });
-                }
+                await Promise.all(pdfsToUpdate.map((pdf) => {
+                    const shouldLink = typeof pdf.id === 'number' && linkedProposalIdSet.has(pdf.id);
+                    if (shouldLink) {
+                        return pdf.agendamentoId === savedAgendamento.id
+                            ? Promise.resolve()
+                            : db.updatePDF({ ...pdf, agendamentoId: savedAgendamento.id });
+                    }
 
-                const updatedPdf = { ...item };
-                delete updatedPdf.agendamentoId;
-                return db.updatePDF(updatedPdf);
-            }));
+                    const updatedPdf = { ...pdf };
+                    delete updatedPdf.agendamentoId;
+                    return db.updatePDF(updatedPdf);
+                }));
+            }
 
             await Promise.all([loadAgendamentos(), loadAllPdfs()]);
             handleCloseAgendamentoModal();
         } catch (error) {
             console.error('Erro ao salvar agendamento:', error);
-            handleShowInfo('Não foi possível salvar o agendamento. Tente novamente.');
+            if (items.length > 1) {
+                // Alguns dias podem já ter sido salvos: repetir sem olhar duplicaria.
+                await loadAgendamentos().catch(() => undefined);
+                handleShowInfo('Não foi possível salvar todos os dias. Confira a agenda antes de tentar de novo.');
+            } else {
+                handleShowInfo('Não foi possível salvar o agendamento. Tente novamente.');
+            }
             throw error;
         }
     }, [handleCloseAgendamentoModal, handleShowInfo, loadAgendamentos, loadAllPdfs]);

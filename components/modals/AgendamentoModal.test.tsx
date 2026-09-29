@@ -237,4 +237,61 @@ describe('AgendamentoModal', () => {
             expect(onSave).toHaveBeenLastCalledWith(expect.objectContaining({ clienteId: 42 }));
         });
     });
+
+    describe('vários dias', () => {
+        const amaury: Client = { ...createdClient, id: 9, nome: 'Amaury' };
+
+        const renderDays = (extraDays: string[]) => {
+            const onSave = vi.fn().mockResolvedValue(undefined);
+            render(
+                <AgendamentoModal
+                    isOpen onClose={vi.fn()} onSave={onSave} onDelete={vi.fn()}
+                    schedulingInfo={{
+                        agendamento: { clienteId: 9, clienteNome: 'Amaury', start: voiceStart.toISOString(), end: voiceEnd.toISOString(), notes: 'Bessa' },
+                        extraDays,
+                    }}
+                    clients={[amaury]} savedPdfs={[]} onAddNewClient={vi.fn()} userInfo={userInfo} agendamentos={[]}
+                />
+            );
+            return { onSave };
+        };
+
+        it('agenda sexta e segunda de uma vez, com a segunda como continuação', async () => {
+            const { onSave } = renderDays(['2026-10-05']);
+
+            expect(screen.getByText(/\+ seg.*05\/10/)).toBeInTheDocument();
+            fireEvent.click(screen.getByRole('button', { name: 'Agendar 2 dias' }));
+
+            await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+            const [days] = onSave.mock.calls[0];
+            expect(days).toHaveLength(2);
+            expect(days[0]).toMatchObject({ clienteId: 9, start: voiceStart.toISOString(), notes: 'Bessa' });
+            expect(days[1]).toMatchObject({
+                clienteId: 9,
+                start: new Date(2026, 9, 5, 9, 0).toISOString(),
+                end: new Date(2026, 9, 5, 12, 0).toISOString(),
+                notes: 'Continuação do atendimento de 02/10.\n\nBessa',
+                pdfIds: [],
+            });
+        });
+
+        it('avisa qual dia não pode ser agendado', async () => {
+            const { onSave } = renderDays(['2026-10-03']);
+
+            fireEvent.click(screen.getByRole('button', { name: 'Agendar 2 dias' }));
+
+            expect(await screen.findByText(/^sáb.*03\/10: A data selecionada não é um dia de trabalho\.$/)).toBeInTheDocument();
+            expect(onSave).not.toHaveBeenCalled();
+        });
+
+        it('"Mais um dia" acrescenta o dia seguinte e dá para tirar', () => {
+            renderDays([]);
+
+            fireEvent.click(screen.getByRole('button', { name: /Mais um dia/ }));
+            expect(screen.getByRole('button', { name: 'Agendar 2 dias' })).toBeInTheDocument();
+
+            fireEvent.click(screen.getByRole('button', { name: /^Tirar sáb.*03\/10$/ }));
+            expect(screen.getByRole('button', { name: 'Agendar' })).toBeInTheDocument();
+        });
+    });
 });

@@ -102,6 +102,30 @@ describe('useSchedulingFlow', () => {
     expect(setSchedulingInfo).toHaveBeenCalledWith(null);
   });
 
+  it('salva varios dias do mesmo atendimento de uma vez e liga a proposta so no primeiro', async () => {
+    const loadAgendamentos = vi.fn().mockResolvedValue(undefined);
+    const setSchedulingInfo = vi.fn();
+    let nextId = 70;
+    mockedDb.saveAgendamento.mockImplementation(async (item) => ({ ...(item as Agendamento), id: nextId++ }));
+    mockedDb.getAllPDFs.mockResolvedValue([savedPdf]);
+    mockedDb.updatePDF.mockResolvedValue(undefined);
+
+    const { result } = buildHook({ loadAgendamentos, setSchedulingInfo });
+
+    await act(async () => {
+      await result.current.handleSaveAgendamento([
+        { pdfId: 10, pdfIds: [10], clienteId: 1, clienteNome: 'Cliente', start: agendamento.start, end: agendamento.end },
+        { pdfIds: [], clienteId: 1, clienteNome: 'Cliente', start: '2026-03-24T09:00:00.000Z', end: '2026-03-24T10:00:00.000Z', stockSourcePdfIds: [10] },
+      ]);
+    });
+
+    expect(mockedDb.saveAgendamento).toHaveBeenCalledTimes(2);
+    expect(mockedDb.updatePDF).toHaveBeenCalledTimes(1);
+    expect(mockedDb.updatePDF).toHaveBeenCalledWith({ ...savedPdf, agendamentoId: 70 });
+    expect(loadAgendamentos).toHaveBeenCalledTimes(1);
+    expect(setSchedulingInfo).toHaveBeenCalledWith(null);
+  });
+
   it('exclui agendamento e remove vinculo do pdf', async () => {
     const setAgendamentos = vi.fn();
     const setAllSavedPdfs = vi.fn();
