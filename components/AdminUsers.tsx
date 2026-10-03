@@ -1,12 +1,12 @@
 import React from 'react';
-import { ChevronRight, Clock, Crown, Moon, Search, Shield, Zap } from 'lucide-react';
+import { ChevronRight, Clock, Crown, Moon, Search, Settings2, Shield, Zap } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import ActionButton from './ui/ActionButton';
 import ContentState from './ui/ContentState';
 import { AdminUserEngagement } from './AdminUserEngagement';
 import { AdminOverview } from './admin/AdminOverview';
 import { AdminCompanyDrawer } from './admin/AdminCompanyDrawer';
-import { isTestAccount, isUserAdmin, useAdminUsers } from '../src/hooks/useAdminUsers';
+import { isTestAccount, isUserAdmin, moduleName, useAdminUsers } from '../src/hooks/useAdminUsers';
 import { useAdminEngagement } from '../src/hooks/useAdminEngagement';
 import {
     CompanyStatusBadge,
@@ -23,25 +23,27 @@ export const AdminUsers: React.FC = () => {
         profiles,
         loading,
         activatingModule,
+        revokingModule,
         grantingAll,
         busyUser,
         signupTrial,
         savingSignupTrial,
         saveSignupTrial,
         feedback,
+        clearFeedback,
         fetchProfiles,
         activateModuleForUser,
+        revokeModuleForUser,
         grantFullAccessAll,
         setUserBlocked,
         deleteUser,
-        getModuleExpiryDays,
         isModuleActive,
         activeGrants,
     } = useAdminUsers(isAdmin);
 
     const { rows: engagementRows, loading: engLoading, error: engError, fetchEngagement, totals, activeWindowDays } = useAdminEngagement(isAdmin);
 
-    const [accessDays, setAccessDays] = React.useState(30);
+    const [massDays, setMassDays] = React.useState(30);
     const [trialDays, setTrialDays] = React.useState(7);
     const [onlyTests, setOnlyTests] = React.useState(false);
     const [selectedUserId, setSelectedUserId] = React.useState<string | null>(null);
@@ -55,6 +57,12 @@ export const AdminUsers: React.FC = () => {
     const engagementMap = React.useMemo(() => new Map(engagementRows.map(r => [r.user_id, r])), [engagementRows]);
 
     const selectedProfile = selectedUserId ? profiles.find(p => p.id === selectedUserId) ?? null : null;
+
+    // Abre o detalhe sem carregar o aviso da ação feita em outra empresa.
+    const openCompany = React.useCallback((userId: string) => {
+        clearFeedback();
+        setSelectedUserId(userId);
+    }, [clearFeedback]);
 
     const isRecent = React.useCallback((iso: string | null | undefined) => {
         if (!iso) return false;
@@ -136,8 +144,8 @@ export const AdminUsers: React.FC = () => {
     }, [signupTrial.days]);
 
     const handleGrantAll = () => {
-        if (window.confirm(`Liberar o Pacote Completo por ${accessDays} dia(s) para TODAS as organizações? Isso libera todos os módulos para todos os usuários.`)) {
-            grantFullAccessAll(accessDays);
+        if (window.confirm(`Liberar o Pacote Completo por ${massDays} dia(s) para TODAS as empresas? Todo mundo passa a ter todos os módulos nesse período.`)) {
+            grantFullAccessAll(massDays);
         }
     };
 
@@ -157,7 +165,8 @@ export const AdminUsers: React.FC = () => {
                 activeWindowDays={activeWindowDays}
             />
 
-            {feedback && (
+            {/* Aviso da última ação — com o detalhe aberto, ele aparece lá dentro */}
+            {feedback && !selectedProfile && (
                 <div className={`rounded-xl border px-4 py-3 text-sm ${feedback.type === 'error'
                     ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-300'
                     : 'border-green-200 bg-green-50 text-green-700 dark:border-green-900/40 dark:bg-green-950/40 dark:text-green-300'
@@ -166,146 +175,23 @@ export const AdminUsers: React.FC = () => {
                 </div>
             )}
 
-            {/* Acessos & Trial */}
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                {/* Liberar acesso por X dias */}
-                <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-900/40 dark:bg-blue-950/20">
-                    <h3 className="flex items-center gap-2 text-base font-bold text-slate-800 dark:text-slate-100">
-                        <Zap className="h-4 w-4 text-blue-500" /> Liberar acesso por período
-                    </h3>
-                    <p className="mt-1 hidden text-sm text-slate-500 sm:block">
-                        Define a duração em dias. Vale para os botões de ativação por empresa (no detalhe) e para a liberação geral. A revogação é automática no vencimento.
-                    </p>
-                    <div className="mt-3 flex items-end gap-3">
-                        <label className="text-sm">
-                            <span className="mb-1 block text-slate-500">Dias</span>
-                            <input
-                                type="number"
-                                min={1}
-                                value={accessDays}
-                                onChange={(e) => setAccessDays(Math.max(1, Number(e.target.value) || 1))}
-                                className="w-24 rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
-                            />
-                        </label>
-                        <ActionButton
-                            variant="primary"
-                            size="sm"
-                            iconClassName="fas fa-bolt"
-                            loading={grantingAll}
-                            loadingText="Liberando..."
-                            onClick={handleGrantAll}
-                        >
-                            Liberar tudo para todos
-                        </ActionButton>
-                    </div>
-                </div>
-
-                {/* Trial automático para novos cadastros */}
-                <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4 dark:border-violet-900/40 dark:bg-violet-950/20">
-                    <h3 className="flex flex-wrap items-center gap-2 text-base font-bold text-slate-800 dark:text-slate-100">
-                        <Clock className="h-4 w-4 text-violet-500" /> Trial automático para novos cadastros
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${signupTrial.enabled
-                            ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                            : 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
-                            }`}>
-                            {signupTrial.enabled ? `Ligado · ${signupTrial.days}d` : 'Desligado'}
-                        </span>
-                    </h3>
-                    <p className="mt-1 hidden text-sm text-slate-500 sm:block">
-                        Quando ligado, todo novo cadastro ganha o Pacote Completo por X dias automaticamente. No vencimento, volta para o plano grátis.
-                    </p>
-                    <div className="mt-3 flex flex-wrap items-end gap-3">
-                        <label className="text-sm">
-                            <span className="mb-1 block text-slate-500">Dias</span>
-                            <input
-                                type="number"
-                                min={1}
-                                value={trialDays}
-                                onChange={(e) => setTrialDays(Math.max(1, Number(e.target.value) || 1))}
-                                className="w-24 rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
-                            />
-                        </label>
-                        {signupTrial.enabled && signupTrial.days !== trialDays && (
-                            <ActionButton variant="secondary" size="sm" loading={savingSignupTrial} loadingText="Salvando..." onClick={handleSaveTrialDays}>
-                                Salvar dias
-                            </ActionButton>
-                        )}
-                        <ActionButton
-                            variant={signupTrial.enabled ? 'secondary' : 'primary'}
-                            size="sm"
-                            iconClassName={signupTrial.enabled ? 'fas fa-toggle-off' : 'fas fa-toggle-on'}
-                            loading={savingSignupTrial}
-                            loadingText="Salvando..."
-                            onClick={handleToggleTrial}
-                        >
-                            {signupTrial.enabled ? 'Desligar trial' : 'Ligar trial'}
-                        </ActionButton>
-                    </div>
-                </div>
-            </div>
-
-            {/* Acompanhamento de acessos liberados */}
-            {activeGrants.length > 0 && (
-                <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
-                    <div className="flex items-center gap-2 border-b border-slate-200 p-4 dark:border-slate-700">
-                        <Clock className="h-4 w-4 text-slate-500" />
-                        <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">Acessos liberados (por vencimento)</h3>
-                    </div>
-                    <div className="divide-y divide-slate-200 dark:divide-slate-700">
-                        {activeGrants.map(grant => {
-                            const expiringSoon = grant.daysRemaining !== null && grant.daysRemaining <= 7;
-                            return (
-                                <button
-                                    key={grant.id}
-                                    type="button"
-                                    onClick={() => setSelectedUserId(grant.id)}
-                                    className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/40"
-                                >
-                                    <div className="min-w-0">
-                                        <div className="truncate text-sm font-medium text-slate-900 dark:text-white">{grant.email}</div>
-                                        <div className="text-xs text-slate-500">
-                                            {grant.hasFullPackage ? 'Pacote Completo' : `${grant.moduleCount} módulo(s)`}
-                                            {grant.expiresAt && ` • expira em ${new Date(grant.expiresAt).toLocaleDateString('pt-BR')}`}
-                                        </div>
-                                    </div>
-                                    {grant.daysRemaining !== null && (
-                                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${expiringSoon
-                                            ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
-                                            : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                                            }`}>
-                                            {grant.daysRemaining}d restantes
-                                        </span>
-                                    )}
-                                </button>
-                            );
-                        })}
-                    </div>
-                </div>
-            )}
-
-            {/* Ranking de engajamento — clicável */}
-            <AdminUserEngagement
-                rows={engagementRows}
-                loading={engLoading}
-                error={engError}
-                fetchEngagement={fetchEngagement}
-                onSelectCompany={setSelectedUserId}
-            />
-
-            {/* Lista de empresas */}
+            {/* Lista de empresas — toque numa empresa para ver e mudar o acesso */}
             <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
                 <div className="border-b border-slate-200 p-4 dark:border-slate-700 sm:p-6">
                     <div className="flex flex-wrap items-center justify-between gap-3">
-                        <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">
-                            Empresas <span className="text-sm font-normal text-slate-400">({filteredCompanies.length})</span>
-                        </h3>
+                        <div>
+                            <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">
+                                Empresas <span className="text-sm font-normal text-slate-400">({filteredCompanies.length})</span>
+                            </h3>
+                            <p className="text-xs text-slate-500">Toque numa empresa para liberar, estender ou remover acesso.</p>
+                        </div>
                         <div className="flex items-center gap-3">
                             <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
                                 <input type="checkbox" checked={onlyTests} onChange={(e) => setOnlyTests(e.target.checked)} className="h-4 w-4 rounded border-slate-300" />
                                 Só contas de teste
                             </label>
                             <ActionButton variant="secondary" size="sm" iconClassName="fas fa-rotate-right" onClick={fetchProfiles}>
-                                Atualizar Lista
+                                Atualizar
                             </ActionButton>
                         </div>
                     </div>
@@ -377,7 +263,7 @@ export const AdminUsers: React.FC = () => {
                 </div>
 
                 <div className="divide-y divide-slate-200 dark:divide-slate-700">
-                    {loading ? (
+                    {loading && profiles.length === 0 ? (
                         <ContentState compact iconClassName="fas fa-users" title="Carregando usuarios" description="Buscando perfis e acessos." />
                     ) : filteredCompanies.length === 0 ? (
                         <ContentState
@@ -404,7 +290,7 @@ export const AdminUsers: React.FC = () => {
                                 <button
                                     key={profile.id}
                                     type="button"
-                                    onClick={() => setSelectedUserId(profile.id)}
+                                    onClick={() => openCompany(profile.id)}
                                     className="flex w-full items-center justify-between gap-3 p-4 text-left transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/50"
                                 >
                                     <div className="flex min-w-0 items-center gap-4">
@@ -454,18 +340,157 @@ export const AdminUsers: React.FC = () => {
                 )}
             </div>
 
+            {/* Acessos ativos, do vencimento mais próximo para o mais distante */}
+            {activeGrants.length > 0 && (
+                <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                    <div className="flex items-center gap-2 border-b border-slate-200 p-4 dark:border-slate-700">
+                        <Clock className="h-4 w-4 text-slate-500" />
+                        <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">Acessos ativos · próximos a vencer</h3>
+                    </div>
+                    <div className="divide-y divide-slate-200 dark:divide-slate-700">
+                        {activeGrants.map(grant => {
+                            const expiringSoon = grant.daysRemaining !== null && grant.daysRemaining <= 7;
+                            const profile = profiles.find(p => p.id === grant.id);
+                            const status = profile ? deriveCompanyStatus(profile) : null;
+                            return (
+                                <button
+                                    key={grant.id}
+                                    type="button"
+                                    onClick={() => openCompany(grant.id)}
+                                    className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/40"
+                                >
+                                    <div className="min-w-0">
+                                        <div className="flex items-center gap-2">
+                                            <span className="truncate text-sm font-medium text-slate-900 dark:text-white">{profile?.empresa || grant.email}</span>
+                                            {status && <CompanyStatusBadge status={status} />}
+                                        </div>
+                                        <div className="truncate text-xs text-slate-500">
+                                            {grant.hasFullPackage ? 'Pacote Completo' : grant.modules.map(moduleName).join(', ')}
+                                            {grant.expiresAt && ` • até ${new Date(grant.expiresAt).toLocaleDateString('pt-BR')}`}
+                                        </div>
+                                    </div>
+                                    {grant.daysRemaining !== null && (
+                                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${expiringSoon
+                                            ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                                            : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                            }`}>
+                                            {grant.daysRemaining}d restantes
+                                        </span>
+                                    )}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
+            {/* Ranking de engajamento — clicável */}
+            <AdminUserEngagement
+                rows={engagementRows}
+                loading={engLoading}
+                error={engError}
+                fetchEngagement={fetchEngagement}
+                onSelectCompany={openCompany}
+            />
+
+            {/* Regras gerais de acesso (valem para todo mundo) */}
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                <div className="flex items-center gap-2 border-b border-slate-200 p-4 dark:border-slate-700">
+                    <Settings2 className="h-4 w-4 text-slate-500" />
+                    <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">Regras gerais de acesso</h3>
+                </div>
+
+                {/* Trial automático para novos cadastros */}
+                <div className="p-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">Teste grátis para quem se cadastra</span>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${signupTrial.enabled
+                            ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                            : 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
+                            }`}>
+                            {signupTrial.enabled ? `Ligado · ${signupTrial.days} dias` : 'Desligado'}
+                        </span>
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500">
+                        Quando ligado, cada novo cadastro ganha o Pacote Completo por esses dias. Depois volta para o plano grátis sozinho.
+                    </p>
+                    <div className="mt-3 flex flex-wrap items-end gap-3">
+                        <label className="text-sm">
+                            <span className="mb-1 block text-xs text-slate-500">Dias</span>
+                            <input
+                                type="number"
+                                min={1}
+                                value={trialDays}
+                                onChange={(e) => setTrialDays(Math.max(1, Number(e.target.value) || 1))}
+                                className="w-24 rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                            />
+                        </label>
+                        {signupTrial.enabled && signupTrial.days !== trialDays && (
+                            <ActionButton variant="secondary" size="sm" loading={savingSignupTrial} loadingText="Salvando..." onClick={handleSaveTrialDays}>
+                                Salvar dias
+                            </ActionButton>
+                        )}
+                        <ActionButton
+                            variant={signupTrial.enabled ? 'secondary' : 'primary'}
+                            size="sm"
+                            iconClassName={signupTrial.enabled ? 'fas fa-toggle-off' : 'fas fa-toggle-on'}
+                            loading={savingSignupTrial}
+                            loadingText="Salvando..."
+                            onClick={handleToggleTrial}
+                        >
+                            {signupTrial.enabled ? 'Desligar' : 'Ligar'}
+                        </ActionButton>
+                    </div>
+                </div>
+
+                {/* Liberação em massa — fechada por padrão para não clicar sem querer */}
+                <details className="border-t border-slate-200 dark:border-slate-700">
+                    <summary className="flex cursor-pointer items-center gap-2 p-4 text-sm font-semibold text-slate-800 dark:text-slate-100">
+                        <Zap className="h-4 w-4 text-blue-500" /> Liberar o Pacote Completo para todas as empresas
+                    </summary>
+                    <div className="px-4 pb-4">
+                        <p className="text-xs text-slate-500">
+                            Para promoções. Todas as empresas ganham todos os módulos pelo período escolhido; no fim, cada uma volta ao que tinha.
+                        </p>
+                        <div className="mt-3 flex items-end gap-3">
+                            <label className="text-sm">
+                                <span className="mb-1 block text-xs text-slate-500">Dias</span>
+                                <input
+                                    type="number"
+                                    min={1}
+                                    value={massDays}
+                                    onChange={(e) => setMassDays(Math.max(1, Number(e.target.value) || 1))}
+                                    className="w-24 rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                                />
+                            </label>
+                            <ActionButton
+                                variant="secondary"
+                                size="sm"
+                                iconClassName="fas fa-bolt"
+                                loading={grantingAll}
+                                loadingText="Liberando..."
+                                onClick={handleGrantAll}
+                            >
+                                Liberar para todas
+                            </ActionButton>
+                        </div>
+                    </div>
+                </details>
+            </div>
+
             {/* Detalhe da empresa */}
             <AdminCompanyDrawer
                 profile={selectedProfile}
                 engagement={selectedUserId ? engagementMap.get(selectedUserId) : undefined}
-                accessDays={accessDays}
                 activatingModule={activatingModule}
+                revokingModule={revokingModule}
                 busyUser={busyUser}
+                feedback={feedback}
                 onClose={() => setSelectedUserId(null)}
                 activateModuleForUser={activateModuleForUser}
+                revokeModuleForUser={revokeModuleForUser}
                 setUserBlocked={setUserBlocked}
                 deleteUser={deleteUser}
-                getModuleExpiryDays={getModuleExpiryDays}
                 isModuleActive={isModuleActive}
             />
         </div>

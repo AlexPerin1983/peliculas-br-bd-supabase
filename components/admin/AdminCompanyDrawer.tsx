@@ -1,25 +1,28 @@
 import React from 'react';
 import { Drawer } from 'vaul';
-import { Ban, Check, Copy, Crown, MessageCircle, Shield, Trash2, Unlock, X, Zap } from 'lucide-react';
+import { Ban, Copy, Crown, MessageCircle, Shield, Trash2, Unlock, X } from 'lucide-react';
 import ActionButton from '../ui/ActionButton';
-import { AVAILABLE_MODULES, UserWithSubscription, isUserAdmin } from '../../src/hooks/useAdminUsers';
+import { UserWithSubscription, isUserAdmin } from '../../src/hooks/useAdminUsers';
 import { EngagementRow } from '../../src/hooks/useAdminEngagement';
 import { useAdminCompanyDetail } from '../../src/hooks/useAdminCompanyDetail';
 import { useIsMobile } from '../../src/hooks/useIsMobile';
 import { buildWhatsappLink, formatInt, formatMoney, monthLabel, relativeDays } from './adminFormat';
 import { MiniBars } from './charts/MiniBars';
+import { AdminAccessPanel } from './AdminAccessPanel';
+import { CompanyStatusBadge, deriveCompanyStatus } from './companyStatus';
 
 interface AdminCompanyDrawerProps {
     profile: UserWithSubscription | null;
     engagement?: EngagementRow;
-    accessDays: number;
     activatingModule: { userId: string; moduleId: string } | null;
+    revokingModule: { userId: string; moduleId: string } | null;
     busyUser: { userId: string; action: 'block' | 'delete' } | null;
+    feedback: { type: 'error' | 'success'; message: string } | null;
     onClose: () => void;
     activateModuleForUser: (profile: UserWithSubscription, moduleId: string, days: number) => void;
+    revokeModuleForUser: (profile: UserWithSubscription, moduleId: string) => void;
     setUserBlocked: (profile: UserWithSubscription, blocked: boolean) => void;
     deleteUser: (profile: UserWithSubscription) => void;
-    getModuleExpiryDays: (profile: UserWithSubscription, moduleId: string) => number | null;
     isModuleActive: (profile: UserWithSubscription, moduleId: string) => boolean;
 }
 
@@ -33,14 +36,15 @@ const KpiCell: React.FC<{ label: string; value: React.ReactNode; accent?: string
 export const AdminCompanyDrawer: React.FC<AdminCompanyDrawerProps> = ({
     profile,
     engagement,
-    accessDays,
     activatingModule,
+    revokingModule,
     busyUser,
+    feedback,
     onClose,
     activateModuleForUser,
+    revokeModuleForUser,
     setUserBlocked,
     deleteUser,
-    getModuleExpiryDays,
     isModuleActive,
 }) => {
     const open = !!profile;
@@ -119,12 +123,31 @@ export const AdminCompanyDrawer: React.FC<AdminCompanyDrawerProps> = ({
                                     )}
                                 </div>
                                 <div className="mb-4 flex flex-wrap items-center gap-1.5 text-[11px]">
-                                    {isAdmin && <span className="rounded-full bg-purple-100 px-2 py-0.5 font-bold uppercase text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">Admin</span>}
-                                    {hasFullPackage && !isAdmin && <span className="rounded-full bg-amber-100 px-2 py-0.5 font-bold uppercase text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">Completo</span>}
-                                    {profile.blocked && <span className="rounded-full bg-red-100 px-2 py-0.5 font-bold uppercase text-red-700 dark:bg-red-900/30 dark:text-red-400">Bloqueado</span>}
+                                    <CompanyStatusBadge status={deriveCompanyStatus(profile)} />
                                     <span className="text-slate-400">Cadastro em {profile.created_at ? new Date(profile.created_at).toLocaleDateString('pt-BR') : '—'}</span>
                                     <span className="text-slate-400">• {relativeDays(engagement?.ultima_atividade)}</span>
                                 </div>
+
+                                {/* Resultado da última ação (o aviso da página fica atrás do painel) */}
+                                {feedback && (
+                                    <div className={`mb-4 rounded-xl border px-3 py-2 text-sm ${feedback.type === 'error'
+                                        ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-300'
+                                        : 'border-green-200 bg-green-50 text-green-700 dark:border-green-900/40 dark:bg-green-950/40 dark:text-green-300'
+                                        }`}>
+                                        {feedback.message}
+                                    </div>
+                                )}
+
+                                {/* Acesso: o que tem hoje + liberar / estender / remover */}
+                                {!isAdmin && (
+                                    <AdminAccessPanel
+                                        profile={profile}
+                                        activatingModule={activatingModule}
+                                        revokingModule={revokingModule}
+                                        onGrant={(moduleId, days) => activateModuleForUser(profile, moduleId, days)}
+                                        onRevoke={(moduleId) => revokeModuleForUser(profile, moduleId)}
+                                    />
+                                )}
 
                                 {/* KPIs da empresa */}
                                 <div className="mb-4 grid grid-cols-3 gap-2">
@@ -152,46 +175,6 @@ export const AdminCompanyDrawer: React.FC<AdminCompanyDrawerProps> = ({
                                     )}
                                 </div>
 
-                                {/* Módulos / liberar acesso */}
-                                {!isAdmin && (
-                                    <div className="mb-4">
-                                        <h4 className="mb-2 text-xs font-semibold text-slate-700 dark:text-slate-200">Acessos · liberar por {accessDays}d</h4>
-                                        {!hasFullPackage && (
-                                            <ActionButton
-                                                variant="primary"
-                                                size="sm"
-                                                iconClassName="fas fa-bolt"
-                                                className="mb-2 w-full"
-                                                loading={activatingModule?.userId === profile.id && activatingModule?.moduleId === 'pacote_completo'}
-                                                loadingText="Ativando..."
-                                                onClick={() => activateModuleForUser(profile, 'pacote_completo', accessDays)}
-                                            >
-                                                <span className="flex items-center justify-center gap-1"><Zap className="h-4 w-4" /> Ativar Pacote Completo · {accessDays}d</span>
-                                            </ActionButton>
-                                        )}
-                                        <div className="grid grid-cols-2 gap-2">
-                                            {AVAILABLE_MODULES.filter(m => m.id !== 'pacote_completo').map(module => {
-                                                const active = isModuleActive(profile, module.id) || hasFullPackage;
-                                                const expiry = getModuleExpiryDays(profile, module.id);
-                                                const activating = activatingModule?.userId === profile.id && activatingModule?.moduleId === module.id;
-                                                return (
-                                                    <div key={module.id} className={`rounded-lg border p-2 text-center ${active ? 'border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20' : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800'}`}>
-                                                        <div className="flex items-center justify-center gap-1">
-                                                            {active ? <Check className="h-3.5 w-3.5 text-green-500" /> : <X className="h-3.5 w-3.5 text-slate-400" />}
-                                                            <span className={`text-[11px] font-medium ${active ? 'text-green-600 dark:text-green-400' : 'text-slate-600 dark:text-slate-300'}`}>{module.name}</span>
-                                                        </div>
-                                                        {active && expiry !== null && <div className="text-[10px] text-green-500">{expiry}d restantes</div>}
-                                                        {!active && !hasFullPackage && (
-                                                            <ActionButton variant="secondary" size="sm" className="mt-1.5 w-full" loading={activating} loadingText="..." onClick={() => activateModuleForUser(profile, module.id, accessDays)}>
-                                                                Ativar
-                                                            </ActionButton>
-                                                        )}
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-                                )}
                             </div>
 
                             {/* Ações fixas */}
