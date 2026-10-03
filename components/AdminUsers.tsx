@@ -45,7 +45,6 @@ export const AdminUsers: React.FC = () => {
 
     const [massDays, setMassDays] = React.useState(30);
     const [trialDays, setTrialDays] = React.useState(7);
-    const [onlyTests, setOnlyTests] = React.useState(false);
     const [selectedUserId, setSelectedUserId] = React.useState<string | null>(null);
 
     const [search, setSearch] = React.useState('');
@@ -83,17 +82,14 @@ export const AdminUsers: React.FC = () => {
         return map;
     }, [profiles, engagementMap, isRecent]);
 
-    // Base = só busca + "contas de teste" (antes do filtro de status), para as
-    // contagens dos chips refletirem o contexto da busca atual.
+    // Base = só a busca (antes do filtro de status), para as contagens dos
+    // chips refletirem o contexto da busca atual. Contas de teste: chip "Teste".
     const baseList = React.useMemo(() => {
-        let list = onlyTests ? profiles.filter(isTestAccount) : profiles;
         const q = search.trim().toLowerCase();
-        if (q) {
-            list = list.filter(p =>
-                (p.empresa || '').toLowerCase().includes(q) || (p.email || '').toLowerCase().includes(q));
-        }
-        return list;
-    }, [profiles, onlyTests, search]);
+        if (!q) return profiles;
+        return profiles.filter(p =>
+            (p.empresa || '').toLowerCase().includes(q) || (p.email || '').toLowerCase().includes(q));
+    }, [profiles, search]);
 
     // Contagem por filtro (para mostrar nos chips e esconder os vazios).
     const counts = React.useMemo(() => {
@@ -136,7 +132,7 @@ export const AdminUsers: React.FC = () => {
     const visibleCompanies = filteredCompanies.slice(0, visibleCount);
 
     // Reseta a paginação quando os critérios mudam
-    React.useEffect(() => { setVisibleCount(20); }, [search, filterKey, sortKey, onlyTests]);
+    React.useEffect(() => { setVisibleCount(20); }, [search, filterKey, sortKey]);
 
     // Sincroniza o input de dias do trial quando a config carrega do banco
     React.useEffect(() => {
@@ -177,28 +173,28 @@ export const AdminUsers: React.FC = () => {
 
             {/* Lista de empresas — toque numa empresa para ver e mudar o acesso */}
             <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
-                <div className="border-b border-slate-200 p-4 dark:border-slate-700 sm:p-6">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div>
+                <div className="border-b border-slate-200 p-3 dark:border-slate-700 sm:p-6">
+                    <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
                             <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">
                                 Empresas <span className="text-sm font-normal text-slate-400">({filteredCompanies.length})</span>
                             </h3>
                             <p className="text-xs text-slate-500">Toque numa empresa para liberar, estender ou remover acesso.</p>
                         </div>
-                        <div className="flex items-center gap-3">
-                            <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-                                <input type="checkbox" checked={onlyTests} onChange={(e) => setOnlyTests(e.target.checked)} className="h-4 w-4 rounded border-slate-300" />
-                                Só contas de teste
-                            </label>
-                            <ActionButton variant="secondary" size="sm" iconClassName="fas fa-rotate-right" onClick={fetchProfiles}>
-                                Atualizar
-                            </ActionButton>
-                        </div>
+                        <ActionButton
+                            variant="secondary"
+                            size="sm"
+                            iconOnly
+                            iconClassName={`fas fa-rotate-right${loading ? ' fa-spin' : ''}`}
+                            aria-label="Atualizar lista"
+                            title="Atualizar lista"
+                            onClick={fetchProfiles}
+                        />
                     </div>
 
-                    <div className="mt-3 flex flex-col gap-3 lg:flex-row lg:items-center">
+                    <div className="mt-3 flex items-center gap-2 sm:gap-3">
                         {/* Busca */}
-                        <div className="relative flex-1">
+                        <div className="relative min-w-0 flex-1">
                             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                             <input
                                 type="text"
@@ -212,18 +208,21 @@ export const AdminUsers: React.FC = () => {
                         <select
                             value={sortKey}
                             onChange={(e) => setSortKey(e.target.value as typeof sortKey)}
-                            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
+                            aria-label="Ordenar empresas"
+                            className="w-[7.5rem] shrink-0 rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 sm:w-auto sm:px-3"
                         >
-                            <option value="recentes">Mais recentes</option>
-                            <option value="orcamentos">Mais orçamentos</option>
-                            <option value="faturamento">Maior faturamento</option>
-                            <option value="atividade">Última atividade</option>
+                            <option value="recentes">Recentes</option>
+                            <option value="orcamentos">Orçamentos</option>
+                            <option value="faturamento">Faturamento</option>
+                            <option value="atividade">Atividade</option>
                             <option value="az">A–Z</option>
                         </select>
                     </div>
 
-                    {/* Filtros rápidos com contagem (esconde os vazios) */}
-                    <div className="mt-3 flex flex-wrap gap-1.5">
+                    {/* Filtros rápidos com contagem (esconde os vazios). No celular, uma
+                        linha só com rolagem lateral; fonte no contêiner (botões herdam). */}
+                    <div className="-mx-3 mt-3 flex gap-1.5 overflow-x-auto px-3 pb-0.5 text-xs scrollbar-hide sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
+
                         {([
                             ['todas', 'Todas'],
                             ['comAcessoGroup', 'Acesso ativo'],
@@ -248,7 +247,7 @@ export const AdminUsers: React.FC = () => {
                                     key={key}
                                     type="button"
                                     onClick={() => setFilterKey(key)}
-                                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors ${filterKey === key
+                                    className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 font-medium transition-colors ${filterKey === key
                                         ? 'bg-blue-500 text-white'
                                         : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600'
                                         }`}
@@ -269,8 +268,8 @@ export const AdminUsers: React.FC = () => {
                         <ContentState
                             compact
                             iconClassName="fas fa-users-slash"
-                            title={search || filterKey !== 'todas' ? 'Nenhuma empresa encontrada' : onlyTests ? 'Nenhuma conta de teste' : 'Nenhum usuario ainda'}
-                            description={search || filterKey !== 'todas' ? 'Ajuste a busca ou os filtros.' : onlyTests ? 'Não há contas de teste (emails com +, demo ou @example.com).' : 'Os usuarios cadastrados aparecem aqui.'}
+                            title={search || filterKey !== 'todas' ? 'Nenhuma empresa encontrada' : 'Nenhum usuario ainda'}
+                            description={search || filterKey !== 'todas' ? 'Ajuste a busca ou os filtros.' : 'Os usuarios cadastrados aparecem aqui.'}
                         />
                     ) : (
                         visibleCompanies.map(profile => {
@@ -291,10 +290,10 @@ export const AdminUsers: React.FC = () => {
                                     key={profile.id}
                                     type="button"
                                     onClick={() => openCompany(profile.id)}
-                                    className="flex w-full items-center justify-between gap-3 p-4 text-left transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/50"
+                                    className="flex w-full items-center justify-between gap-2 px-3 py-3 text-left transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/50 sm:gap-3 sm:p-4"
                                 >
-                                    <div className="flex min-w-0 items-center gap-4">
-                                        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${avatarBg}`}>
+                                    <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+                                        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full sm:h-10 sm:w-10 ${avatarBg}`}>
                                             {isProfileAdmin ? <Shield className="h-5 w-5 text-white" /> : hasFullPackage ? <Crown className="h-5 w-5 text-white" /> : <span className="text-sm font-bold text-white">{(eng?.empresa || profile.email)?.charAt(0).toUpperCase()}</span>}
                                         </div>
                                         <div className="min-w-0">
@@ -320,7 +319,7 @@ export const AdminUsers: React.FC = () => {
                                             </div>
                                         </div>
                                     </div>
-                                    <ChevronRight className="h-5 w-5 shrink-0 text-slate-300 dark:text-slate-600" />
+                                    <ChevronRight className="h-4 w-4 shrink-0 text-slate-300 dark:text-slate-600 sm:h-5 sm:w-5" />
                                 </button>
                             );
                         })

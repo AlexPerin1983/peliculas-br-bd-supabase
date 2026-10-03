@@ -25,11 +25,12 @@ const shortDate = (iso: string) => new Date(iso).toLocaleDateString('pt-BR', { d
 const accessLine = (access: ModuleAccess): { text: string; tone: string; dot: string } => {
     switch (access.kind) {
         case 'active': {
+            // Curto para caber ao lado dos botões no celular.
             const until = access.expiresAt
-                ? `até ${shortDate(access.expiresAt)}${access.daysLeft !== null ? ` · ${Math.max(access.daysLeft, 0)} dia(s)` : ''}`
-                : 'sem vencimento';
+                ? `Até ${shortDate(access.expiresAt)}${access.daysLeft !== null ? ` (${Math.max(access.daysLeft, 0)}d)` : ''}`
+                : 'Sem vencimento';
             return {
-                text: `Ativo ${until} · ${access.paid ? 'pago' : 'cortesia'}`,
+                text: `${until} · ${access.paid ? 'pago' : 'cortesia'}`,
                 tone: 'text-emerald-700 dark:text-emerald-400',
                 dot: 'bg-emerald-500',
             };
@@ -60,6 +61,8 @@ export const AdminAccessPanel: React.FC<AdminAccessPanelProps> = ({
 }) => {
     const [days, setDays] = React.useState(30);
     const pending = pendingPayments(profile);
+    const moduleIds = AVAILABLE_MODULES.filter(m => m.id !== 'pacote_completo').map(m => m.id);
+    const includedIds = moduleIds.filter(id => getModuleAccess(profile, id).kind === 'included');
     const busyFor = (moduleId: string) =>
         (activatingModule?.userId === profile.id && activatingModule.moduleId === moduleId)
         || (revokingModule?.userId === profile.id && revokingModule.moduleId === moduleId);
@@ -135,41 +138,55 @@ export const AdminAccessPanel: React.FC<AdminAccessPanelProps> = ({
             )}
 
             {/* Período usado pelos botões abaixo */}
-            <div className="mb-3 flex flex-wrap items-center gap-1.5 text-xs">
-                <span className="mr-1 text-slate-500">Liberar por</span>
-                {PERIOD_OPTIONS.map(option => (
-                    <button
-                        key={option}
-                        type="button"
-                        onClick={() => setDays(option)}
-                        className={`rounded-full px-2.5 py-1 font-semibold transition-colors ${days === option
-                            ? 'bg-blue-500 text-white'
-                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
-                            }`}
-                    >
-                        {option} dias
-                    </button>
-                ))}
-                <label className="flex items-center gap-1 text-slate-500">
-                    ou
-                    <input
-                        type="number"
-                        min={1}
-                        value={days}
-                        onChange={(e) => setDays(Math.max(1, Number(e.target.value) || 1))}
-                        aria-label="Outro número de dias"
-                        className="w-12 rounded-lg border border-slate-300 bg-white px-1.5 py-1 text-center text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
-                    />
-                    dias
-                </label>
+            <div className="mb-3 text-xs">
+                <div className="mb-1.5 flex items-center justify-between gap-2">
+                    <span className="text-slate-500">Liberar por quanto tempo?</span>
+                    <label className="flex items-center gap-1 text-slate-500">
+                        outro:
+                        <input
+                            type="number"
+                            inputMode="numeric"
+                            min={1}
+                            value={days}
+                            onChange={(e) => setDays(Math.max(1, Number(e.target.value) || 1))}
+                            aria-label="Outro número de dias"
+                            // 16px evita o zoom automático do iPhone ao tocar no campo.
+                            style={{ fontSize: 16 }}
+                            className="h-7 w-12 rounded-lg border border-slate-300 bg-white px-1 text-center text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                        />
+                        dias
+                    </label>
+                </div>
+                <div className="flex gap-1.5">
+                    {PERIOD_OPTIONS.map(option => (
+                        <button
+                            key={option}
+                            type="button"
+                            onClick={() => setDays(option)}
+                            className={`flex-1 rounded-full py-1.5 font-semibold transition-colors ${days === option
+                                ? 'bg-blue-500 text-white'
+                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
+                                }`}
+                        >
+                            {option} dias
+                        </button>
+                    ))}
+                </div>
             </div>
 
             <ul className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 dark:divide-slate-800 dark:border-slate-700">
                 {renderRow('pacote_completo', true)}
-                {AVAILABLE_MODULES.filter(m => m.id !== 'pacote_completo').map(m => renderRow(m.id))}
+                {/* Com o pacote ativo, os módulos cobertos por ele viram uma linha só. */}
+                {moduleIds.filter(id => !includedIds.includes(id)).map(id => renderRow(id))}
+                {includedIds.length > 0 && (
+                    <li className="flex items-center gap-1.5 px-3 py-2.5 text-xs text-emerald-700 dark:text-emerald-400">
+                        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-300" />
+                        Todos os outros módulos já estão inclusos no Pacote Completo.
+                    </li>
+                )}
             </ul>
             <p className="mt-2 text-[11px] text-slate-400">
-                "Liberar" usa o período escolhido acima; "+dias" soma ao que já falta. No vencimento, o acesso sai sozinho. Acesso pago só sai cancelando a assinatura.
+                "+dias" soma ao que já falta. No vencimento, o acesso sai sozinho. Acesso pago só sai cancelando a assinatura.
             </p>
         </section>
     );

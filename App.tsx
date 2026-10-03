@@ -3400,7 +3400,7 @@ Use somente o JSON definido e não inclua explicações fora dele.`;
             ? 'mx-auto w-full max-w-[1480px]'
             : 'container mx-auto w-full max-w-2xl lg:max-w-5xl';
 
-    const useNativeSurface = ['dashboard', 'client', 'cliente_hub', 'clients_list', 'history', 'proposals', 'estoque', 'films', 'fornecedores', 'agenda', 'saved_places', 'settings', 'qr_code', 'account'].includes(activeTab);
+    const useNativeSurface = ['dashboard', 'client', 'cliente_hub', 'clients_list', 'history', 'proposals', 'estoque', 'films', 'fornecedores', 'agenda', 'saved_places', 'settings', 'qr_code', 'account', 'admin'].includes(activeTab);
 
 
 

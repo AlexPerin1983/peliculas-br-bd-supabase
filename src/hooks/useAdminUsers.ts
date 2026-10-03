@@ -51,7 +51,7 @@ export const AVAILABLE_MODULES = [
     { id: 'locais_global', name: 'Locais Globais PRO', price: 39 },
     { id: 'corte_inteligente', name: 'Corte Inteligente', price: 39 },
     { id: 'ilimitado', name: 'Sem Limites', price: 39 },
-    { id: 'pacote_completo', name: 'Pacote Completo (todos)', price: 149 },
+    { id: 'pacote_completo', name: 'Pacote Completo', price: 149 },
 ];
 
 export const isUserAdmin = (profile: Profile): boolean => {
@@ -406,11 +406,14 @@ export const useAdminUsers = (enabled: boolean) => {
         return profiles
             .filter(p => !isUserAdmin(p) && (p.subscription?.active_modules?.length || 0) > 0)
             .map(p => {
-                const details = p.subscription?.modules_detail || [];
-                const soonest = details
-                    .filter(d => d.expires_at)
-                    .map(d => new Date(d.expires_at).getTime())
-                    .sort((a, b) => a - b)[0];
+                // Por módulo vale a ativação que vence por último ("+dias" empilha).
+                const lastByModule = new Map<string, number>();
+                for (const d of p.subscription?.modules_detail || []) {
+                    if (!d.expires_at) continue;
+                    const t = new Date(d.expires_at).getTime();
+                    lastByModule.set(d.module_id, Math.max(lastByModule.get(d.module_id) ?? 0, t));
+                }
+                const soonest = lastByModule.size ? Math.min(...lastByModule.values()) : undefined;
                 const daysRemaining = soonest
                     ? Math.ceil((soonest - Date.now()) / (1000 * 60 * 60 * 24))
                     : null;

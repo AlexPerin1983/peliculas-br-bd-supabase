@@ -178,14 +178,23 @@ export function pendingPayments(p: UserWithSubscription): string[] {
         .map(m => m.module_id);
 }
 
+/** Vencimento de cada módulo ativo. "+dias" cria outra ativação por cima,
+ *  então vale a que vence por último. */
+export function moduleExpiries(details: Array<{ module_id: string; expires_at: string | null }>): Map<string, number> {
+    const byModule = new Map<string, number>();
+    for (const d of details) {
+        if (!d.expires_at) continue;
+        const t = new Date(d.expires_at).getTime();
+        byModule.set(d.module_id, Math.max(byModule.get(d.module_id) ?? 0, t));
+    }
+    return byModule;
+}
+
 /** Dias até o vencimento mais próximo entre os módulos ativos (ou null). */
 export function daysUntilExpiry(p: UserWithSubscription): number | null {
-    const soonest = (p.subscription?.modules_detail || [])
-        .filter(d => d.expires_at)
-        .map(d => new Date(d.expires_at).getTime())
-        .sort((a, b) => a - b)[0];
-    if (!soonest) return null;
-    return Math.ceil((soonest - Date.now()) / 86_400_000);
+    const expiries = [...moduleExpiries(p.subscription?.modules_detail || []).values()];
+    if (!expiries.length) return null;
+    return Math.ceil((Math.min(...expiries) - Date.now()) / 86_400_000);
 }
 
 export const CompanyStatusBadge: React.FC<{ status: CompanyStatusKey; className?: string }> = ({ status, className = '' }) => {

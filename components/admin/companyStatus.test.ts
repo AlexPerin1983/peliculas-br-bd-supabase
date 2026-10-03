@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { UserWithSubscription } from '../../src/hooks/useAdminUsers';
-import { describeAccess, deriveCompanyStatus, getModuleAccess, pendingPayments } from './companyStatus';
+import { daysUntilExpiry, describeAccess, deriveCompanyStatus, getModuleAccess, pendingPayments } from './companyStatus';
 
 const inDays = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString();
 
@@ -34,6 +34,20 @@ describe('deriveCompanyStatus', () => {
     it('marca "terminou" quem teve acesso e hoje não tem nada', () => {
         const p = company({ active_modules: [], modules_detail: [] }, { ever_had_access: true });
         expect(deriveCompanyStatus(p)).toBe('terminou');
+    });
+});
+
+describe('daysUntilExpiry', () => {
+    it('com "+dias" empilhado, vale a ativação que vence por último', () => {
+        const p = company({
+            active_modules: ['pacote_completo'],
+            modules_detail: [
+                { module_id: 'pacote_completo', status: 'active', expires_at: inDays(90), payment_reference: 'ADMIN-TRIAL' },
+                { module_id: 'pacote_completo', status: 'active', expires_at: inDays(105), payment_reference: 'ADMIN-TRIAL' },
+            ],
+        });
+        expect(daysUntilExpiry(p)).toBe(105);
+        expect(getModuleAccess(p, 'pacote_completo').daysLeft).toBe(105);
     });
 });
 
