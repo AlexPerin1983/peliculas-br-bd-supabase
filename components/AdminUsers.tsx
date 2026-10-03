@@ -1,12 +1,12 @@
 import React from 'react';
-import { ChevronRight, Clock, Crown, Moon, Search, Shield, Zap } from 'lucide-react';
+import { ChevronRight, Clock, Crown, Moon, Search, Settings2, Shield, Zap } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import ActionButton from './ui/ActionButton';
 import ContentState from './ui/ContentState';
 import { AdminUserEngagement } from './AdminUserEngagement';
 import { AdminOverview } from './admin/AdminOverview';
 import { AdminCompanyDrawer } from './admin/AdminCompanyDrawer';
-import { isTestAccount, isUserAdmin, useAdminUsers } from '../src/hooks/useAdminUsers';
+import { isTestAccount, isUserAdmin, moduleName, useAdminUsers } from '../src/hooks/useAdminUsers';
 import { useAdminEngagement } from '../src/hooks/useAdminEngagement';
 import {
     CompanyStatusBadge,
@@ -23,27 +23,28 @@ export const AdminUsers: React.FC = () => {
         profiles,
         loading,
         activatingModule,
+        revokingModule,
         grantingAll,
         busyUser,
         signupTrial,
         savingSignupTrial,
         saveSignupTrial,
         feedback,
+        clearFeedback,
         fetchProfiles,
         activateModuleForUser,
+        revokeModuleForUser,
         grantFullAccessAll,
         setUserBlocked,
         deleteUser,
-        getModuleExpiryDays,
         isModuleActive,
         activeGrants,
     } = useAdminUsers(isAdmin);
 
     const { rows: engagementRows, loading: engLoading, error: engError, fetchEngagement, totals, activeWindowDays } = useAdminEngagement(isAdmin);
 
-    const [accessDays, setAccessDays] = React.useState(30);
+    const [massDays, setMassDays] = React.useState(30);
     const [trialDays, setTrialDays] = React.useState(7);
-    const [onlyTests, setOnlyTests] = React.useState(false);
     const [selectedUserId, setSelectedUserId] = React.useState<string | null>(null);
 
     const [search, setSearch] = React.useState('');
@@ -55,6 +56,12 @@ export const AdminUsers: React.FC = () => {
     const engagementMap = React.useMemo(() => new Map(engagementRows.map(r => [r.user_id, r])), [engagementRows]);
 
     const selectedProfile = selectedUserId ? profiles.find(p => p.id === selectedUserId) ?? null : null;
+
+    // Abre o detalhe sem carregar o aviso da ação feita em outra empresa.
+    const openCompany = React.useCallback((userId: string) => {
+        clearFeedback();
+        setSelectedUserId(userId);
+    }, [clearFeedback]);
 
     const isRecent = React.useCallback((iso: string | null | undefined) => {
         if (!iso) return false;
@@ -75,24 +82,21 @@ export const AdminUsers: React.FC = () => {
         return map;
     }, [profiles, engagementMap, isRecent]);
 
-    // Base = só busca + "contas de teste" (antes do filtro de status), para as
-    // contagens dos chips refletirem o contexto da busca atual.
+    // Base = só a busca (antes do filtro de status), para as contagens dos
+    // chips refletirem o contexto da busca atual. Contas de teste: chip "Teste".
     const baseList = React.useMemo(() => {
-        let list = onlyTests ? profiles.filter(isTestAccount) : profiles;
         const q = search.trim().toLowerCase();
-        if (q) {
-            list = list.filter(p =>
-                (p.empresa || '').toLowerCase().includes(q) || (p.email || '').toLowerCase().includes(q));
-        }
-        return list;
-    }, [profiles, onlyTests, search]);
+        if (!q) return profiles;
+        return profiles.filter(p =>
+            (p.empresa || '').toLowerCase().includes(q) || (p.email || '').toLowerCase().includes(q));
+    }, [profiles, search]);
 
     // Contagem por filtro (para mostrar nos chips e esconder os vazios).
     const counts = React.useMemo(() => {
         const c: Record<CompanyFilterKey, number> = {
             todas: baseList.length,
             comAcessoGroup: 0, assinante: 0, cortesia: 0, comAcesso: 0,
-            terminou: 0, gratis: 0, bloqueado: 0, admin: 0, inativas: 0, teste: 0,
+            terminou: 0, gratis: 0, incompleto: 0, bloqueado: 0, admin: 0, inativas: 0, teste: 0,
         };
         for (const p of baseList) {
             const f = flagsByProfile.get(p.id);
@@ -128,7 +132,7 @@ export const AdminUsers: React.FC = () => {
     const visibleCompanies = filteredCompanies.slice(0, visibleCount);
 
     // Reseta a paginação quando os critérios mudam
-    React.useEffect(() => { setVisibleCount(20); }, [search, filterKey, sortKey, onlyTests]);
+    React.useEffect(() => { setVisibleCount(20); }, [search, filterKey, sortKey]);
 
     // Sincroniza o input de dias do trial quando a config carrega do banco
     React.useEffect(() => {
@@ -136,8 +140,8 @@ export const AdminUsers: React.FC = () => {
     }, [signupTrial.days]);
 
     const handleGrantAll = () => {
-        if (window.confirm(`Liberar o Pacote Completo por ${accessDays} dia(s) para TODAS as organizações? Isso libera todos os módulos para todos os usuários.`)) {
-            grantFullAccessAll(accessDays);
+        if (window.confirm(`Liberar o Pacote Completo por ${massDays} dia(s) para TODAS as empresas? Todo mundo passa a ter todos os módulos nesse período.`)) {
+            grantFullAccessAll(massDays);
         }
     };
 
@@ -157,7 +161,8 @@ export const AdminUsers: React.FC = () => {
                 activeWindowDays={activeWindowDays}
             />
 
-            {feedback && (
+            {/* Aviso da última ação — com o detalhe aberto, ele aparece lá dentro */}
+            {feedback && !selectedProfile && (
                 <div className={`rounded-xl border px-4 py-3 text-sm ${feedback.type === 'error'
                     ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-300'
                     : 'border-green-200 bg-green-50 text-green-700 dark:border-green-900/40 dark:bg-green-950/40 dark:text-green-300'
@@ -166,153 +171,30 @@ export const AdminUsers: React.FC = () => {
                 </div>
             )}
 
-            {/* Acessos & Trial */}
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                {/* Liberar acesso por X dias */}
-                <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-900/40 dark:bg-blue-950/20">
-                    <h3 className="flex items-center gap-2 text-base font-bold text-slate-800 dark:text-slate-100">
-                        <Zap className="h-4 w-4 text-blue-500" /> Liberar acesso por período
-                    </h3>
-                    <p className="mt-1 hidden text-sm text-slate-500 sm:block">
-                        Define a duração em dias. Vale para os botões de ativação por empresa (no detalhe) e para a liberação geral. A revogação é automática no vencimento.
-                    </p>
-                    <div className="mt-3 flex items-end gap-3">
-                        <label className="text-sm">
-                            <span className="mb-1 block text-slate-500">Dias</span>
-                            <input
-                                type="number"
-                                min={1}
-                                value={accessDays}
-                                onChange={(e) => setAccessDays(Math.max(1, Number(e.target.value) || 1))}
-                                className="w-24 rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
-                            />
-                        </label>
-                        <ActionButton
-                            variant="primary"
-                            size="sm"
-                            iconClassName="fas fa-bolt"
-                            loading={grantingAll}
-                            loadingText="Liberando..."
-                            onClick={handleGrantAll}
-                        >
-                            Liberar tudo para todos
-                        </ActionButton>
-                    </div>
-                </div>
-
-                {/* Trial automático para novos cadastros */}
-                <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4 dark:border-violet-900/40 dark:bg-violet-950/20">
-                    <h3 className="flex flex-wrap items-center gap-2 text-base font-bold text-slate-800 dark:text-slate-100">
-                        <Clock className="h-4 w-4 text-violet-500" /> Trial automático para novos cadastros
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${signupTrial.enabled
-                            ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                            : 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
-                            }`}>
-                            {signupTrial.enabled ? `Ligado · ${signupTrial.days}d` : 'Desligado'}
-                        </span>
-                    </h3>
-                    <p className="mt-1 hidden text-sm text-slate-500 sm:block">
-                        Quando ligado, todo novo cadastro ganha o Pacote Completo por X dias automaticamente. No vencimento, volta para o plano grátis.
-                    </p>
-                    <div className="mt-3 flex flex-wrap items-end gap-3">
-                        <label className="text-sm">
-                            <span className="mb-1 block text-slate-500">Dias</span>
-                            <input
-                                type="number"
-                                min={1}
-                                value={trialDays}
-                                onChange={(e) => setTrialDays(Math.max(1, Number(e.target.value) || 1))}
-                                className="w-24 rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
-                            />
-                        </label>
-                        {signupTrial.enabled && signupTrial.days !== trialDays && (
-                            <ActionButton variant="secondary" size="sm" loading={savingSignupTrial} loadingText="Salvando..." onClick={handleSaveTrialDays}>
-                                Salvar dias
-                            </ActionButton>
-                        )}
-                        <ActionButton
-                            variant={signupTrial.enabled ? 'secondary' : 'primary'}
-                            size="sm"
-                            iconClassName={signupTrial.enabled ? 'fas fa-toggle-off' : 'fas fa-toggle-on'}
-                            loading={savingSignupTrial}
-                            loadingText="Salvando..."
-                            onClick={handleToggleTrial}
-                        >
-                            {signupTrial.enabled ? 'Desligar trial' : 'Ligar trial'}
-                        </ActionButton>
-                    </div>
-                </div>
-            </div>
-
-            {/* Acompanhamento de acessos liberados */}
-            {activeGrants.length > 0 && (
-                <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
-                    <div className="flex items-center gap-2 border-b border-slate-200 p-4 dark:border-slate-700">
-                        <Clock className="h-4 w-4 text-slate-500" />
-                        <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">Acessos liberados (por vencimento)</h3>
-                    </div>
-                    <div className="divide-y divide-slate-200 dark:divide-slate-700">
-                        {activeGrants.map(grant => {
-                            const expiringSoon = grant.daysRemaining !== null && grant.daysRemaining <= 7;
-                            return (
-                                <button
-                                    key={grant.id}
-                                    type="button"
-                                    onClick={() => setSelectedUserId(grant.id)}
-                                    className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/40"
-                                >
-                                    <div className="min-w-0">
-                                        <div className="truncate text-sm font-medium text-slate-900 dark:text-white">{grant.email}</div>
-                                        <div className="text-xs text-slate-500">
-                                            {grant.hasFullPackage ? 'Pacote Completo' : `${grant.moduleCount} módulo(s)`}
-                                            {grant.expiresAt && ` • expira em ${new Date(grant.expiresAt).toLocaleDateString('pt-BR')}`}
-                                        </div>
-                                    </div>
-                                    {grant.daysRemaining !== null && (
-                                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${expiringSoon
-                                            ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
-                                            : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                                            }`}>
-                                            {grant.daysRemaining}d restantes
-                                        </span>
-                                    )}
-                                </button>
-                            );
-                        })}
-                    </div>
-                </div>
-            )}
-
-            {/* Ranking de engajamento — clicável */}
-            <AdminUserEngagement
-                rows={engagementRows}
-                loading={engLoading}
-                error={engError}
-                fetchEngagement={fetchEngagement}
-                onSelectCompany={setSelectedUserId}
-            />
-
-            {/* Lista de empresas */}
+            {/* Lista de empresas — toque numa empresa para ver e mudar o acesso */}
             <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
-                <div className="border-b border-slate-200 p-4 dark:border-slate-700 sm:p-6">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                        <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">
-                            Empresas <span className="text-sm font-normal text-slate-400">({filteredCompanies.length})</span>
-                        </h3>
-                        <div className="flex items-center gap-3">
-                            <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-                                <input type="checkbox" checked={onlyTests} onChange={(e) => setOnlyTests(e.target.checked)} className="h-4 w-4 rounded border-slate-300" />
-                                Só contas de teste
-                            </label>
-                            <ActionButton variant="secondary" size="sm" iconClassName="fas fa-rotate-right" onClick={fetchProfiles}>
-                                Atualizar Lista
-                            </ActionButton>
+                <div className="border-b border-slate-200 p-3 dark:border-slate-700 sm:p-6">
+                    <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                            <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">
+                                Empresas <span className="text-sm font-normal text-slate-400">({filteredCompanies.length})</span>
+                            </h3>
+                            <p className="text-xs text-slate-500">Toque numa empresa para liberar, estender ou remover acesso.</p>
                         </div>
+                        <ActionButton
+                            variant="secondary"
+                            size="sm"
+                            iconOnly
+                            iconClassName={`fas fa-rotate-right${loading ? ' fa-spin' : ''}`}
+                            aria-label="Atualizar lista"
+                            title="Atualizar lista"
+                            onClick={fetchProfiles}
+                        />
                     </div>
 
-                    <div className="mt-3 flex flex-col gap-3 lg:flex-row lg:items-center">
+                    <div className="mt-3 flex items-center gap-2 sm:gap-3">
                         {/* Busca */}
-                        <div className="relative flex-1">
+                        <div className="relative min-w-0 flex-1">
                             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                             <input
                                 type="text"
@@ -326,18 +208,21 @@ export const AdminUsers: React.FC = () => {
                         <select
                             value={sortKey}
                             onChange={(e) => setSortKey(e.target.value as typeof sortKey)}
-                            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
+                            aria-label="Ordenar empresas"
+                            className="w-[7.5rem] shrink-0 rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 sm:w-auto sm:px-3"
                         >
-                            <option value="recentes">Mais recentes</option>
-                            <option value="orcamentos">Mais orçamentos</option>
-                            <option value="faturamento">Maior faturamento</option>
-                            <option value="atividade">Última atividade</option>
+                            <option value="recentes">Recentes</option>
+                            <option value="orcamentos">Orçamentos</option>
+                            <option value="faturamento">Faturamento</option>
+                            <option value="atividade">Atividade</option>
                             <option value="az">A–Z</option>
                         </select>
                     </div>
 
-                    {/* Filtros rápidos com contagem (esconde os vazios) */}
-                    <div className="mt-3 flex flex-wrap gap-1.5">
+                    {/* Filtros rápidos com contagem (esconde os vazios). No celular, uma
+                        linha só com rolagem lateral; fonte no contêiner (botões herdam). */}
+                    <div className="-mx-3 mt-3 flex gap-1.5 overflow-x-auto px-3 pb-0.5 text-xs scrollbar-hide sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
+
                         {([
                             ['todas', 'Todas'],
                             ['comAcessoGroup', 'Acesso ativo'],
@@ -346,6 +231,7 @@ export const AdminUsers: React.FC = () => {
                             ['comAcesso', 'Com acesso'],
                             ['terminou', 'Terminou teste'],
                             ['gratis', 'Grátis'],
+                            ['incompleto', 'Cadastro incompleto'],
                             ['inativas', 'Inativas'],
                             ['bloqueado', 'Bloqueadas'],
                             ['teste', 'Teste'],
@@ -362,7 +248,7 @@ export const AdminUsers: React.FC = () => {
                                     key={key}
                                     type="button"
                                     onClick={() => setFilterKey(key)}
-                                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors ${filterKey === key
+                                    className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 font-medium transition-colors ${filterKey === key
                                         ? 'bg-blue-500 text-white'
                                         : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600'
                                         }`}
@@ -377,14 +263,14 @@ export const AdminUsers: React.FC = () => {
                 </div>
 
                 <div className="divide-y divide-slate-200 dark:divide-slate-700">
-                    {loading ? (
+                    {loading && profiles.length === 0 ? (
                         <ContentState compact iconClassName="fas fa-users" title="Carregando usuarios" description="Buscando perfis e acessos." />
                     ) : filteredCompanies.length === 0 ? (
                         <ContentState
                             compact
                             iconClassName="fas fa-users-slash"
-                            title={search || filterKey !== 'todas' ? 'Nenhuma empresa encontrada' : onlyTests ? 'Nenhuma conta de teste' : 'Nenhum usuario ainda'}
-                            description={search || filterKey !== 'todas' ? 'Ajuste a busca ou os filtros.' : onlyTests ? 'Não há contas de teste (emails com +, demo ou @example.com).' : 'Os usuarios cadastrados aparecem aqui.'}
+                            title={search || filterKey !== 'todas' ? 'Nenhuma empresa encontrada' : 'Nenhum usuario ainda'}
+                            description={search || filterKey !== 'todas' ? 'Ajuste a busca ou os filtros.' : 'Os usuarios cadastrados aparecem aqui.'}
                         />
                     ) : (
                         visibleCompanies.map(profile => {
@@ -404,11 +290,11 @@ export const AdminUsers: React.FC = () => {
                                 <button
                                     key={profile.id}
                                     type="button"
-                                    onClick={() => setSelectedUserId(profile.id)}
-                                    className="flex w-full items-center justify-between gap-3 p-4 text-left transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/50"
+                                    onClick={() => openCompany(profile.id)}
+                                    className="flex w-full items-center justify-between gap-2 px-3 py-3 text-left transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/50 sm:gap-3 sm:p-4"
                                 >
-                                    <div className="flex min-w-0 items-center gap-4">
-                                        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${avatarBg}`}>
+                                    <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+                                        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full sm:h-10 sm:w-10 ${avatarBg}`}>
                                             {isProfileAdmin ? <Shield className="h-5 w-5 text-white" /> : hasFullPackage ? <Crown className="h-5 w-5 text-white" /> : <span className="text-sm font-bold text-white">{(eng?.empresa || profile.email)?.charAt(0).toUpperCase()}</span>}
                                         </div>
                                         <div className="min-w-0">
@@ -434,7 +320,7 @@ export const AdminUsers: React.FC = () => {
                                             </div>
                                         </div>
                                     </div>
-                                    <ChevronRight className="h-5 w-5 shrink-0 text-slate-300 dark:text-slate-600" />
+                                    <ChevronRight className="h-4 w-4 shrink-0 text-slate-300 dark:text-slate-600 sm:h-5 sm:w-5" />
                                 </button>
                             );
                         })
@@ -454,18 +340,157 @@ export const AdminUsers: React.FC = () => {
                 )}
             </div>
 
+            {/* Acessos ativos, do vencimento mais próximo para o mais distante */}
+            {activeGrants.length > 0 && (
+                <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                    <div className="flex items-center gap-2 border-b border-slate-200 p-4 dark:border-slate-700">
+                        <Clock className="h-4 w-4 text-slate-500" />
+                        <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">Acessos ativos · próximos a vencer</h3>
+                    </div>
+                    <div className="divide-y divide-slate-200 dark:divide-slate-700">
+                        {activeGrants.map(grant => {
+                            const expiringSoon = grant.daysRemaining !== null && grant.daysRemaining <= 7;
+                            const profile = profiles.find(p => p.id === grant.id);
+                            const status = profile ? deriveCompanyStatus(profile) : null;
+                            return (
+                                <button
+                                    key={grant.id}
+                                    type="button"
+                                    onClick={() => openCompany(grant.id)}
+                                    className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/40"
+                                >
+                                    <div className="min-w-0">
+                                        <div className="flex items-center gap-2">
+                                            <span className="truncate text-sm font-medium text-slate-900 dark:text-white">{profile?.empresa || grant.email}</span>
+                                            {status && <CompanyStatusBadge status={status} />}
+                                        </div>
+                                        <div className="truncate text-xs text-slate-500">
+                                            {grant.hasFullPackage ? 'Pacote Completo' : grant.modules.map(moduleName).join(', ')}
+                                            {grant.expiresAt && ` • até ${new Date(grant.expiresAt).toLocaleDateString('pt-BR')}`}
+                                        </div>
+                                    </div>
+                                    {grant.daysRemaining !== null && (
+                                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${expiringSoon
+                                            ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                                            : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                            }`}>
+                                            {grant.daysRemaining}d restantes
+                                        </span>
+                                    )}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
+            {/* Ranking de engajamento — clicável */}
+            <AdminUserEngagement
+                rows={engagementRows}
+                loading={engLoading}
+                error={engError}
+                fetchEngagement={fetchEngagement}
+                onSelectCompany={openCompany}
+            />
+
+            {/* Regras gerais de acesso (valem para todo mundo) */}
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                <div className="flex items-center gap-2 border-b border-slate-200 p-4 dark:border-slate-700">
+                    <Settings2 className="h-4 w-4 text-slate-500" />
+                    <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">Regras gerais de acesso</h3>
+                </div>
+
+                {/* Trial automático para novos cadastros */}
+                <div className="p-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">Teste grátis para quem se cadastra</span>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${signupTrial.enabled
+                            ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                            : 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
+                            }`}>
+                            {signupTrial.enabled ? `Ligado · ${signupTrial.days} dias` : 'Desligado'}
+                        </span>
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500">
+                        Quando ligado, cada novo cadastro ganha o Pacote Completo por esses dias. Depois volta para o plano grátis sozinho.
+                    </p>
+                    <div className="mt-3 flex flex-wrap items-end gap-3">
+                        <label className="text-sm">
+                            <span className="mb-1 block text-xs text-slate-500">Dias</span>
+                            <input
+                                type="number"
+                                min={1}
+                                value={trialDays}
+                                onChange={(e) => setTrialDays(Math.max(1, Number(e.target.value) || 1))}
+                                className="w-24 rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                            />
+                        </label>
+                        {signupTrial.enabled && signupTrial.days !== trialDays && (
+                            <ActionButton variant="secondary" size="sm" loading={savingSignupTrial} loadingText="Salvando..." onClick={handleSaveTrialDays}>
+                                Salvar dias
+                            </ActionButton>
+                        )}
+                        <ActionButton
+                            variant={signupTrial.enabled ? 'secondary' : 'primary'}
+                            size="sm"
+                            iconClassName={signupTrial.enabled ? 'fas fa-toggle-off' : 'fas fa-toggle-on'}
+                            loading={savingSignupTrial}
+                            loadingText="Salvando..."
+                            onClick={handleToggleTrial}
+                        >
+                            {signupTrial.enabled ? 'Desligar' : 'Ligar'}
+                        </ActionButton>
+                    </div>
+                </div>
+
+                {/* Liberação em massa — fechada por padrão para não clicar sem querer */}
+                <details className="border-t border-slate-200 dark:border-slate-700">
+                    <summary className="flex cursor-pointer items-center gap-2 p-4 text-sm font-semibold text-slate-800 dark:text-slate-100">
+                        <Zap className="h-4 w-4 text-blue-500" /> Liberar o Pacote Completo para todas as empresas
+                    </summary>
+                    <div className="px-4 pb-4">
+                        <p className="text-xs text-slate-500">
+                            Para promoções. Todas as empresas ganham todos os módulos pelo período escolhido; no fim, cada uma volta ao que tinha.
+                        </p>
+                        <div className="mt-3 flex items-end gap-3">
+                            <label className="text-sm">
+                                <span className="mb-1 block text-xs text-slate-500">Dias</span>
+                                <input
+                                    type="number"
+                                    min={1}
+                                    value={massDays}
+                                    onChange={(e) => setMassDays(Math.max(1, Number(e.target.value) || 1))}
+                                    className="w-24 rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                                />
+                            </label>
+                            <ActionButton
+                                variant="secondary"
+                                size="sm"
+                                iconClassName="fas fa-bolt"
+                                loading={grantingAll}
+                                loadingText="Liberando..."
+                                onClick={handleGrantAll}
+                            >
+                                Liberar para todas
+                            </ActionButton>
+                        </div>
+                    </div>
+                </details>
+            </div>
+
             {/* Detalhe da empresa */}
             <AdminCompanyDrawer
                 profile={selectedProfile}
                 engagement={selectedUserId ? engagementMap.get(selectedUserId) : undefined}
-                accessDays={accessDays}
                 activatingModule={activatingModule}
+                revokingModule={revokingModule}
                 busyUser={busyUser}
+                feedback={feedback}
                 onClose={() => setSelectedUserId(null)}
                 activateModuleForUser={activateModuleForUser}
+                revokeModuleForUser={revokeModuleForUser}
                 setUserBlocked={setUserBlocked}
                 deleteUser={deleteUser}
-                getModuleExpiryDays={getModuleExpiryDays}
                 isModuleActive={isModuleActive}
             />
         </div>

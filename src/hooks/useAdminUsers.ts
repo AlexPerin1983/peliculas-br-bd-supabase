@@ -2,6 +2,17 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../services/supabaseClient';
 import { Profile } from '../../types';
 
+/** Situação da última ativação de um módulo (a que vale para o app). */
+export interface ModuleStateRow {
+    module_id: string;
+    status: 'active' | 'expired' | 'pending' | 'cancelled' | string;
+    expires_at: string | null;
+    payment_provider?: string | null;
+    payment_reference?: string | null;
+    /** Há pagamento real valendo por trás (mesmo com "+dias" de cortesia por cima). */
+    paid?: boolean;
+}
+
 export interface UserWithSubscription extends Profile {
     subscription?: {
         id?: string;
@@ -12,6 +23,8 @@ export interface UserWithSubscription extends Profile {
             status: string;
             payment_reference?: string | null;
         }>;
+        /** Ausente enquanto a migration 20261003120000 não é aplicada. */
+        modules_state?: ModuleStateRow[];
     };
     organization?: {
         id: string;
@@ -32,19 +45,35 @@ export const isTestAccount = (profile: Profile): boolean => {
 };
 
 export const AVAILABLE_MODULES = [
+    { id: 'ia_ocr', name: 'Inteligência Artificial', price: 39 },
     { id: 'estoque', name: 'Controle de Estoque', price: 39 },
     { id: 'qr_servicos', name: 'QR Code de Serviços', price: 39 },
     { id: 'colaboradores', name: 'Gestão de Equipe', price: 39 },
-    { id: 'ia_ocr', name: 'Extração com IA', price: 39 },
     { id: 'personalizacao', name: 'Marca Própria', price: 39 },
     { id: 'locais_global', name: 'Locais Globais PRO', price: 39 },
     { id: 'corte_inteligente', name: 'Corte Inteligente', price: 39 },
     { id: 'ilimitado', name: 'Sem Limites', price: 39 },
-    { id: 'pacote_completo', name: 'Pacote Completo (todos)', price: 149 },
+    { id: 'pacote_completo', name: 'Pacote Completo', price: 149 },
 ];
 
 export const isUserAdmin = (profile: Profile): boolean => {
     return profile.role === 'admin';
+};
+
+export const moduleName = (moduleId: string): string =>
+    AVAILABLE_MODULES.find(m => m.id === moduleId)?.name ?? moduleId;
+
+const isFuture = (iso: string | null | undefined) => !iso || new Date(iso).getTime() > Date.now();
+
+// Com a RPC antiga, ativações vencidas ainda vinham como "ativas" (o cron não
+// as marcava). Filtra aqui para o painel não mostrar acesso que já acabou.
+const toActiveAccess = (rawModules: unknown, rawDetail: unknown) => {
+    const detail = (Array.isArray(rawDetail) ? rawDetail : []).filter((d: any) => isFuture(d?.expires_at));
+    const modules = (Array.isArray(rawModules) ? rawModules : []).filter((moduleId: string) => {
+        const rows = (Array.isArray(rawDetail) ? rawDetail : []).filter((d: any) => d?.module_id === moduleId);
+        return rows.length === 0 || rows.some((d: any) => isFuture(d?.expires_at));
+    });
+    return { modules, detail };
 };
 
 export const useAdminUsers = (enabled: boolean) => {
@@ -52,6 +81,7 @@ export const useAdminUsers = (enabled: boolean) => {
     const [loading, setLoading] = useState(true);
     const [expandedUser, setExpandedUser] = useState<string | null>(null);
     const [activatingModule, setActivatingModule] = useState<{ userId: string; moduleId: string } | null>(null);
+    const [revokingModule, setRevokingModule] = useState<{ userId: string; moduleId: string } | null>(null);
     const [grantingAll, setGrantingAll] = useState(false);
     const [busyUser, setBusyUser] = useState<{ userId: string; action: 'block' | 'delete' } | null>(null);
     const [signupTrial, setSignupTrial] = useState<{ enabled: boolean; days: number }>({ enabled: false, days: 0 });
@@ -60,30 +90,36 @@ export const useAdminUsers = (enabled: boolean) => {
 
     const fetchProfiles = useCallback(async () => {
         try {
+            // Não limpa o feedback aqui: as ações recarregam a lista logo depois
+            // de avisar "liberado/removido", e a mensagem sumiria na hora.
             setLoading(true);
-            setFeedback(null);
 
             // 1 chamada agregada (substitui o antigo N+1 por empresa) → baixo egress
             const { data, error } = await supabase.rpc('admin_users_overview');
             if (error) throw error;
 
-            const mapped: UserWithSubscription[] = (data || []).map((row: any) => ({
-                id: row.id,
-                email: row.email,
-                role: row.role,
-                approved: true,
-                created_at: row.created_at,
-                organization_id: row.organization_id || undefined,
-                organization: row.organization_id ? { id: row.organization_id, name: row.empresa || '' } : undefined,
-                blocked: !!row.blocked,
-                subscription: {
-                    active_modules: Array.isArray(row.active_modules) ? row.active_modules : [],
-                    modules_detail: Array.isArray(row.modules_detail) ? row.modules_detail : [],
-                },
-                empresa: row.empresa || null,
-                telefone: row.telefone || null,
-                ever_had_access: row.ever_had_access ?? undefined,
-            }));
+            const mapped: UserWithSubscription[] = (data || []).map((row: any) => {
+                const access = toActiveAccess(row.active_modules, row.modules_detail);
+                return {
+                    id: row.id,
+                    email: row.email,
+                    role: row.role,
+                    approved: true,
+                    created_at: row.created_at,
+                    organization_id: row.organization_id || undefined,
+                    organization: row.organization_id ? { id: row.organization_id, name: row.empresa || '' } : undefined,
+                    blocked: !!row.blocked,
+                    subscription: {
+                        id: row.subscription_id || undefined,
+                        active_modules: access.modules,
+                        modules_detail: access.detail,
+                        modules_state: Array.isArray(row.modules_state) ? row.modules_state : undefined,
+                    },
+                    empresa: row.empresa || null,
+                    telefone: row.telefone || null,
+                    ever_had_access: row.ever_had_access ?? undefined,
+                };
+            });
 
             setProfiles(mapped);
         } catch (error) {
@@ -215,7 +251,7 @@ export const useAdminUsers = (enabled: boolean) => {
 
             setFeedback({
                 type: 'success',
-                message: `Acesso liberado por ${days} dia(s) para ${profile.email}.`,
+                message: `${moduleName(moduleId)} liberado por ${days} dia(s) para ${profile.email}.`,
             });
             await fetchProfiles();
         } catch (error: any) {
@@ -226,6 +262,37 @@ export const useAdminUsers = (enabled: boolean) => {
             });
         } finally {
             setActivatingModule(null);
+        }
+    }, [fetchProfiles]);
+
+    const revokeModuleForUser = useCallback(async (profile: UserWithSubscription, moduleId: string) => {
+        setRevokingModule({ userId: profile.id, moduleId });
+        setFeedback(null);
+
+        try {
+            const subscriptionId = profile.subscription?.id;
+            if (!subscriptionId) throw new Error('assinatura da empresa não encontrada. Atualize a lista e tente de novo.');
+
+            const { error } = await supabase.rpc('admin_revoke_module', {
+                p_subscription_id: subscriptionId,
+                p_module_id: moduleId,
+            });
+
+            if (error) throw error;
+
+            setFeedback({
+                type: 'success',
+                message: `${moduleName(moduleId)} removido de ${profile.email}.`,
+            });
+            await fetchProfiles();
+        } catch (error: any) {
+            console.error('Erro ao remover módulo:', error);
+            setFeedback({
+                type: 'error',
+                message: `Erro ao remover acesso: ${error.message}`,
+            });
+        } finally {
+            setRevokingModule(null);
         }
     }, [fetchProfiles]);
 
@@ -329,6 +396,8 @@ export const useAdminUsers = (enabled: boolean) => {
         return profile.subscription?.active_modules?.includes(moduleId) || false;
     }, []);
 
+    const clearFeedback = useCallback(() => setFeedback(null), []);
+
     const usersWithModules = useMemo(
         () => profiles.filter(p => (p.subscription?.active_modules?.length || 0) > 0).length,
         [profiles]
@@ -339,11 +408,14 @@ export const useAdminUsers = (enabled: boolean) => {
         return profiles
             .filter(p => !isUserAdmin(p) && (p.subscription?.active_modules?.length || 0) > 0)
             .map(p => {
-                const details = p.subscription?.modules_detail || [];
-                const soonest = details
-                    .filter(d => d.expires_at)
-                    .map(d => new Date(d.expires_at).getTime())
-                    .sort((a, b) => a - b)[0];
+                // Por módulo vale a ativação que vence por último ("+dias" empilha).
+                const lastByModule = new Map<string, number>();
+                for (const d of p.subscription?.modules_detail || []) {
+                    if (!d.expires_at) continue;
+                    const t = new Date(d.expires_at).getTime();
+                    lastByModule.set(d.module_id, Math.max(lastByModule.get(d.module_id) ?? 0, t));
+                }
+                const soonest = lastByModule.size ? Math.min(...lastByModule.values()) : undefined;
                 const daysRemaining = soonest
                     ? Math.ceil((soonest - Date.now()) / (1000 * 60 * 60 * 24))
                     : null;
@@ -351,6 +423,7 @@ export const useAdminUsers = (enabled: boolean) => {
                     id: p.id,
                     email: p.email,
                     moduleCount: p.subscription?.active_modules?.length || 0,
+                    modules: p.subscription?.active_modules || [],
                     hasFullPackage: p.subscription?.active_modules?.includes('pacote_completo') || false,
                     expiresAt: soonest ? new Date(soonest).toISOString() : null,
                     daysRemaining,
@@ -369,14 +442,17 @@ export const useAdminUsers = (enabled: boolean) => {
         expandedUser,
         setExpandedUser,
         activatingModule,
+        revokingModule,
         grantingAll,
         busyUser,
         signupTrial,
         savingSignupTrial,
         saveSignupTrial,
         feedback,
+        clearFeedback,
         fetchProfiles,
         activateModuleForUser,
+        revokeModuleForUser,
         grantFullAccessAll,
         setUserBlocked,
         deleteUser,
