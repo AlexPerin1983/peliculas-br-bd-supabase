@@ -2,7 +2,7 @@ import React from 'react';
 import { AlertCircle, Crown } from 'lucide-react';
 import ActionButton from '../ui/ActionButton';
 import { AVAILABLE_MODULES, UserWithSubscription, moduleName } from '../../src/hooks/useAdminUsers';
-import { ModuleAccess, describeAccess, getModuleAccess, pendingPayments } from './companyStatus';
+import { ModuleAccess, deriveCompanyStatus, describeAccess, getModuleAccess, pendingPayments } from './companyStatus';
 
 // ============================================================================
 // Bloco "Acesso" do detalhe da empresa: mostra o que a empresa tem hoje, módulo
@@ -124,6 +124,19 @@ export const AdminAccessPanel: React.FC<AdminAccessPanelProps> = ({
             </li>
         );
     };
+
+    // Liberar aqui criaria a empresa com o nome do e-mail e a pessoa pularia a
+    // tela "dados da empresa". Quem não cria a empresa fica no grátis.
+    if (deriveCompanyStatus(profile) === 'incompleto') {
+        return (
+            <section className="mb-4">
+                <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Acesso</h4>
+                <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2.5 text-sm text-sky-900 dark:border-sky-900/40 dark:bg-sky-950/30 dark:text-sky-200">
+                    {describeAccess(profile)}
+                </div>
+            </section>
+        );
+    }
 
     return (
         <section className="mb-4">

@@ -9,6 +9,8 @@ export interface ModuleStateRow {
     expires_at: string | null;
     payment_provider?: string | null;
     payment_reference?: string | null;
+    /** Há pagamento real valendo por trás (mesmo com "+dias" de cortesia por cima). */
+    paid?: boolean;
 }
 
 export interface UserWithSubscription extends Profile {

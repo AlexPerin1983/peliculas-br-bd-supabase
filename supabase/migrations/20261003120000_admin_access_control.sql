@@ -2,11 +2,12 @@
 -- Admin: controle de acesso por empresa (liberar, estender, remover)
 -- =====================================================
 -- 1. admin_users_overview passa a calcular o acesso na hora, pela mesma regra
---    do app (get_subscription_info: última ativação de cada módulo, ativa e
---    não vencida). Antes ele lia subscriptions.active_modules, que fica velho
---    para quem não abre o app, e listava ativações já vencidas como ativas.
---    Novo campo modules_state: situação de cada módulo (ativo, vencido,
---    pagamento pendente, cancelado) para o painel mostrar o que o usuário vê.
+--    do app (get_subscription_info, ver 20261003130000: última ativação que
+--    chegou a valer, ativa e não vencida). Antes ele lia
+--    subscriptions.active_modules, que fica velho para quem não abre o app, e
+--    listava ativações já vencidas como ativas. Novo campo modules_state:
+--    situação de cada módulo (ativo, vencido, pagamento pendente, cancelado)
+--    e se há pagamento real por trás (paid), mesmo com "+dias" de cortesia.
 -- 2. admin_revoke_module: remove na hora um acesso liberado pelo admin.
 --    Acesso pago (AbacatePay) não é mexido por aqui — a cobrança continuaria.
 
@@ -42,7 +43,24 @@ BEGIN
 
     RETURN QUERY
     WITH latest AS (
-        -- Mesma regra do get_subscription_info: vale a ativação mais recente de cada módulo.
+        -- Última linha de cada módulo (inclui checkout pendente).
+        SELECT DISTINCT ON (ma.subscription_id, ma.module_id)
+            ma.subscription_id,
+            ma.module_id,
+            ma.status,
+            ma.expires_at,
+            ma.payment_provider,
+            ma.payment_reference
+        FROM module_activations ma
+        ORDER BY
+            ma.subscription_id,
+            ma.module_id,
+            COALESCE(ma.updated_at, ma.created_at, ma.activated_at, now()) DESC,
+            COALESCE(ma.expires_at, now()) DESC
+    ),
+    eff AS (
+        -- A que vale para o acesso — mesma regra do get_subscription_info:
+        -- checkout que nunca valeu (pendente/desistido) não conta.
         SELECT DISTINCT ON (ma.subscription_id, ma.module_id)
             ma.subscription_id,
             ma.module_id,
@@ -57,11 +75,41 @@ BEGIN
             ma.payment_provider,
             ma.payment_reference
         FROM module_activations ma
+        WHERE NOT (ma.activated_at IS NULL AND ma.status IN ('pending', 'cancelled'))
         ORDER BY
             ma.subscription_id,
             ma.module_id,
             COALESCE(ma.updated_at, ma.created_at, ma.activated_at, now()) DESC,
             COALESCE(ma.expires_at, now()) DESC
+    ),
+    paid AS (
+        -- Pagamento real ainda valendo por trás (mesmo que o admin tenha dado "+dias" por cima).
+        SELECT DISTINCT ma.subscription_id, ma.module_id
+        FROM module_activations ma
+        WHERE ma.status = 'active'
+          AND (ma.expires_at IS NULL OR ma.expires_at > now())
+          AND COALESCE(ma.payment_provider, '') <> 'manual'
+    ),
+    state AS (
+        SELECT
+            COALESCE(e.subscription_id, l.subscription_id) AS subscription_id,
+            COALESCE(e.module_id, l.module_id) AS module_id,
+            CASE
+                WHEN e.status = 'active' THEN 'active'
+                WHEN l.status = 'pending' THEN 'pending'
+                WHEN e.module_id IS NOT NULL THEN e.status
+                ELSE l.status
+            END AS status,
+            CASE WHEN e.module_id IS NOT NULL THEN e.expires_at ELSE l.expires_at END AS expires_at,
+            COALESCE(e.payment_provider, l.payment_provider) AS payment_provider,
+            COALESCE(e.payment_reference, l.payment_reference) AS payment_reference,
+            (pd.module_id IS NOT NULL) AS paid
+        FROM eff e
+        FULL JOIN latest l
+            ON l.subscription_id = e.subscription_id AND l.module_id = e.module_id
+        LEFT JOIN paid pd
+            ON pd.subscription_id = COALESCE(e.subscription_id, l.subscription_id)
+           AND pd.module_id = COALESCE(e.module_id, l.module_id)
     )
     SELECT
         p.id,
@@ -107,9 +155,10 @@ BEGIN
                 'status',            l.status,
                 'expires_at',        l.expires_at,
                 'payment_provider',  l.payment_provider,
-                'payment_reference', l.payment_reference
+                'payment_reference', l.payment_reference,
+                'paid',              l.paid
             ) ORDER BY l.module_id) AS state
-        FROM latest l
+        FROM state l
         WHERE l.subscription_id = s.id
     ) st ON true
     LEFT JOIN LATERAL (

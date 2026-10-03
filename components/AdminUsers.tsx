@@ -96,7 +96,7 @@ export const AdminUsers: React.FC = () => {
         const c: Record<CompanyFilterKey, number> = {
             todas: baseList.length,
             comAcessoGroup: 0, assinante: 0, cortesia: 0, comAcesso: 0,
-            terminou: 0, gratis: 0, bloqueado: 0, admin: 0, inativas: 0, teste: 0,
+            terminou: 0, gratis: 0, incompleto: 0, bloqueado: 0, admin: 0, inativas: 0, teste: 0,
         };
         for (const p of baseList) {
             const f = flagsByProfile.get(p.id);
@@ -231,6 +231,7 @@ export const AdminUsers: React.FC = () => {
                             ['comAcesso', 'Com acesso'],
                             ['terminou', 'Terminou teste'],
                             ['gratis', 'Grátis'],
+                            ['incompleto', 'Cadastro incompleto'],
                             ['inativas', 'Inativas'],
                             ['bloqueado', 'Bloqueadas'],
                             ['teste', 'Teste'],

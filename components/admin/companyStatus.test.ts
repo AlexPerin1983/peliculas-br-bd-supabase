@@ -9,6 +9,7 @@ const company = (subscription: UserWithSubscription['subscription'], extra: Part
     email: 'empresa@teste.com',
     role: 'user',
     approved: true,
+    organization_id: 'org1',
     subscription,
     ...extra,
 } as UserWithSubscription);
@@ -29,6 +30,22 @@ describe('deriveCompanyStatus', () => {
             modules_state: [{ module_id: 'estoque', status: 'active', expires_at: inDays(90), payment_provider: 'abacatepay' }],
         });
         expect(deriveCompanyStatus(p)).toBe('assinante');
+    });
+
+    it('separa quem criou o login mas não criou a empresa', () => {
+        const p = company({ active_modules: [], modules_detail: [] }, { organization_id: undefined });
+        expect(deriveCompanyStatus(p)).toBe('incompleto');
+        expect(describeAccess(p)).toContain('não terminou a tela "dados da empresa"');
+    });
+
+    it('acesso pago com "+dias" de cortesia por cima continua sendo pago', () => {
+        const p = company({
+            active_modules: ['estoque'],
+            modules_detail: [{ module_id: 'estoque', status: 'active', expires_at: inDays(200), payment_reference: 'ADMIN-TRIAL' }],
+            modules_state: [{ module_id: 'estoque', status: 'active', expires_at: inDays(200), payment_provider: 'manual', paid: true }],
+        });
+        expect(deriveCompanyStatus(p)).toBe('assinante');
+        expect(getModuleAccess(p, 'estoque')).toMatchObject({ kind: 'active', paid: true });
     });
 
     it('marca "terminou" quem teve acesso e hoje não tem nada', () => {

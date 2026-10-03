@@ -23,7 +23,8 @@ export type CompanyStatusKey =
     | 'cortesia'
     | 'comAcesso'
     | 'terminou'
-    | 'gratis';
+    | 'gratis'
+    | 'incompleto';
 
 export interface CompanyStatusMeta {
     label: string;
@@ -69,6 +70,11 @@ export const STATUS_META: Record<CompanyStatusKey, CompanyStatusMeta> = {
         badge: 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300',
         dot: 'bg-slate-400',
     },
+    incompleto: {
+        label: 'Cadastro incompleto',
+        badge: 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300',
+        dot: 'bg-sky-500',
+    },
 };
 
 // Acessos que não vieram de pagamento: liberação do admin (ADMIN-*) e o trial
@@ -78,6 +84,7 @@ const isFreeGrantRef = (ref?: string | null) => !!ref && /^(ADMIN|SIGNUP)/i.test
 /** Este acesso ativo foi pago? (null = sem dado para saber) */
 const isPaidAccess = (p: UserWithSubscription, moduleId: string): boolean | null => {
     const state = p.subscription?.modules_state?.find(m => m.module_id === moduleId);
+    if (typeof state?.paid === 'boolean') return state.paid;
     if (state?.payment_provider) return state.payment_provider !== 'manual';
     const detail = p.subscription?.modules_detail?.find(d => d.module_id === moduleId);
     if (detail?.payment_reference == null) return null;
@@ -88,6 +95,9 @@ const isPaidAccess = (p: UserWithSubscription, moduleId: string): boolean | null
 export function deriveCompanyStatus(p: UserWithSubscription): CompanyStatusKey {
     if (isUserAdmin(p)) return 'admin';
     if (p.blocked) return 'bloqueado';
+    // Sem empresa = criou o login e parou na tela "dados da empresa". A empresa
+    // (e o teste grátis do cadastro) só nasce quando essa tela é concluída.
+    if (!p.organization_id && !p.organization?.id) return 'incompleto';
 
     const active = p.subscription?.active_modules || [];
     if (active.length > 0) {
@@ -167,6 +177,8 @@ export function describeAccess(p: UserWithSubscription): string {
                 ? `Plano grátis — o acesso acabou em ${shortDate(ended)}.`
                 : 'Plano grátis — o acesso de teste acabou.';
         }
+        case 'incompleto':
+            return 'Criou o login, mas não terminou a tela "dados da empresa". Quando terminar, ganha o teste grátis sozinho.';
         default: return 'Plano grátis — nunca teve acesso liberado.';
     }
 }
