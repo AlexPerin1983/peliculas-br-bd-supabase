@@ -123,6 +123,8 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
     const [title, setTitle] = useState('');
     const [color, setColor] = useState('');
     const [isColorOpen, setIsColorOpen] = useState(false);
+    const typeColor = getEventTypeMeta(eventType)?.color;
+    const currentColor = getAgendamentoColor({ eventType, color }) ?? '#94a3b8';
     // Capacidade = nº de colaboradores ATIVOS da organização (dono + convidados).
     // Org-wide e igual em qualquer conta logada (corrige a antiga contagem por
     // "Equipe" manual, que não crescia ao convidar e variava por conta).
@@ -595,7 +597,7 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                                 </button>
                             </div>
                         ) : null}
-                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Cliente</label>
+                        <label className="ui-label mb-1.5 block">Cliente</label>
                         <SearchableSelect
                             options={sortedClients}
                             value={selectedClientId}
@@ -764,10 +766,11 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                         </section>
                     ) : null}
 
-                    <div className="space-y-3">
+                    <div className="space-y-4">
                         <div>
-                            <span className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">Tipo</span>
-                            <div role="radiogroup" aria-label="Tipo do agendamento" className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                            <span className="ui-label mb-1.5 block">Tipo</span>
+                            {/* Mesmo seletor segmentado da tela de IA: uma linha, o ativo em destaque na cor do tipo. */}
+                            <div role="radiogroup" aria-label="Tipo do agendamento" className="grid grid-cols-4 gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800/80">
                                 {EVENT_TYPES.map((type) => {
                                     const isActive = eventType === type.value;
                                     return (
@@ -777,79 +780,77 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                                             role="radio"
                                             aria-checked={isActive}
                                             onClick={() => setEventType(type.value)}
-                                            className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors ${isActive ? '' : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-700/50 dark:text-slate-300 dark:hover:bg-slate-700'}`}
-                                            style={isActive ? {
-                                                borderColor: type.color,
-                                                color: type.color,
-                                                backgroundColor: `color-mix(in srgb, ${type.color} 10%, transparent)`,
-                                            } : undefined}
+                                            className={`flex min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-1 py-2 text-[12px] font-semibold transition-colors ${isActive
+                                                ? 'bg-white shadow-sm dark:bg-slate-700'
+                                                : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'}`}
+                                            style={isActive ? { color: type.color } : undefined}
                                         >
-                                            <i className={`${type.iconClassName} text-xs`} aria-hidden="true"></i>
-                                            {type.label}
+                                            <i className={`${type.iconClassName} text-[13px]`} aria-hidden="true"></i>
+                                            <span className="max-w-full truncate">{type.label}</span>
                                         </button>
                                     );
                                 })}
                             </div>
                         </div>
 
-                        <div className="flex items-end gap-2">
-                            <div className="min-w-0 flex-1">
-                                <Input
+                        <div>
+                            <label htmlFor="eventTitle" className="ui-label mb-1.5 block">
+                                Título <span className="font-medium">(opcional)</span>
+                            </label>
+                            <div className="flex items-stretch gap-2">
+                                <input
                                     id="eventTitle"
-                                    label="Título (opcional)"
                                     value={title}
-                                    onChange={(e) => setTitle((e.target as HTMLInputElement).value)}
+                                    onChange={(e) => setTitle(e.target.value)}
                                     placeholder="Ex.: Película na fachada"
                                     maxLength={120}
-                                    className={inputClassName}
+                                    className={`ui-field block w-full min-w-0 flex-1 px-3 py-2.5 text-sm ${inputClassName}`}
                                 />
-                            </div>
-                            <button
-                                type="button"
-                                onClick={() => setIsColorOpen((open) => !open)}
-                                aria-expanded={isColorOpen}
-                                className="flex h-[42px] shrink-0 items-center gap-2 rounded-lg border border-slate-200 bg-slate-100/70 px-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200"
-                            >
-                                <span
-                                    className="h-4 w-4 rounded-full border border-black/10"
-                                    style={{ backgroundColor: getAgendamentoColor({ eventType, color }) ?? '#94a3b8' }}
-                                    aria-hidden="true"
-                                />
-                                {color ? 'Cor' : 'Cor padrão'}
-                            </button>
-                        </div>
-
-                        {isColorOpen ? (
-                            <div role="radiogroup" aria-label="Cor do agendamento" className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2 dark:border-slate-600 dark:bg-slate-800/70">
                                 <button
                                     type="button"
-                                    role="radio"
-                                    aria-checked={!color}
-                                    onClick={() => { setColor(''); setIsColorOpen(false); }}
-                                    className={`h-8 rounded-full border px-3 text-xs font-semibold transition-colors ${!color ? 'border-slate-500 bg-white text-slate-800 dark:bg-slate-900 dark:text-slate-100' : 'border-slate-200 text-slate-600 hover:bg-white dark:border-slate-600 dark:text-slate-300'}`}
+                                    onClick={() => setIsColorOpen((open) => !open)}
+                                    aria-expanded={isColorOpen}
+                                    aria-label={`Cor do agendamento: ${COLOR_NAMES[currentColor] ?? 'padrão'}`}
+                                    title="Cor do agendamento"
+                                    className={`flex w-[46px] shrink-0 items-center justify-center rounded-[var(--radius-control)] border transition-colors ${isColorOpen
+                                        ? 'border-slate-400 bg-white dark:border-slate-400 dark:bg-slate-800'
+                                        : 'border-slate-200 bg-slate-100/70 hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-700'}`}
                                 >
-                                    Padrão do tipo
+                                    <span className="h-5 w-5 rounded-full ring-2 ring-white dark:ring-slate-800" style={{ backgroundColor: currentColor }} aria-hidden="true" />
                                 </button>
-                                {EVENT_COLOR_PALETTE.map((hex) => (
-                                    <button
-                                        key={hex}
-                                        type="button"
-                                        role="radio"
-                                        aria-checked={color === hex}
-                                        aria-label={COLOR_NAMES[hex] ?? hex}
-                                        title={COLOR_NAMES[hex] ?? hex}
-                                        onClick={() => { setColor(hex); setIsColorOpen(false); }}
-                                        className={`h-8 w-8 rounded-full ring-offset-2 ring-offset-slate-50 transition-transform active:scale-95 dark:ring-offset-slate-800 ${color === hex ? 'ring-2 ring-slate-500 dark:ring-slate-300' : ''}`}
-                                        style={{ backgroundColor: hex }}
-                                    />
-                                ))}
                             </div>
-                        ) : null}
+
+                            {isColorOpen ? (
+                                <div role="radiogroup" aria-label="Cor do agendamento" className="mt-2 flex items-center justify-between gap-1 rounded-xl border border-slate-200 bg-white p-2 shadow-sm dark:border-slate-600 dark:bg-slate-800">
+                                    {EVENT_COLOR_PALETTE.map((hex) => {
+                                        const isTypeColor = hex === typeColor;
+                                        const isSelected = currentColor === hex;
+                                        const name = COLOR_NAMES[hex] ?? hex;
+                                        return (
+                                            <button
+                                                key={hex}
+                                                type="button"
+                                                role="radio"
+                                                aria-checked={isSelected}
+                                                aria-label={isTypeColor ? `${name} (cor do tipo)` : name}
+                                                title={isTypeColor ? `${name} (cor do tipo)` : name}
+                                                // A cor do próprio tipo volta ao padrão: acompanha o tipo se ele mudar.
+                                                onClick={() => { setColor(isTypeColor ? '' : hex); setIsColorOpen(false); }}
+                                                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-transform active:scale-90"
+                                                style={{ backgroundColor: hex }}
+                                            >
+                                                {isSelected ? <i className="fas fa-check text-[11px] text-white" aria-hidden="true"></i> : null}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            ) : null}
+                        </div>
                     </div>
 
                     <div>
                         <div className="mb-1">
-                            <label htmlFor="date" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Data</label>
+                            <label htmlFor="date" className="ui-label block">Data</label>
                         </div>
                         <Input
                             id="date"
@@ -916,7 +917,7 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
 
                     {isEditing && (
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Status do atendimento</label>
+                            <label className="ui-label mb-1.5 block">Status do atendimento</label>
                             <div className="grid grid-cols-2 gap-2">
                                 {SERVICE_STATUS_OPTIONS.map((option) => {
                                     const isActive = serviceStatus === option.value;

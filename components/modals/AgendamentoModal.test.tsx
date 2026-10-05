@@ -316,7 +316,7 @@ describe('AgendamentoModal', () => {
             const { onSave } = renderWith({});
 
             expect(screen.getByRole('radio', { name: /Instalação/ })).toHaveAttribute('aria-checked', 'true');
-            expect(screen.getByRole('button', { name: 'Cor padrão' })).toBeInTheDocument();
+            expect(screen.getByRole('button', { name: 'Cor do agendamento: Azul-piscina' })).toBeInTheDocument();
 
             fireEvent.click(screen.getByRole('button', { name: 'Agendar' }));
             await waitFor(() => expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
@@ -329,13 +329,27 @@ describe('AgendamentoModal', () => {
 
             fireEvent.click(screen.getByRole('radio', { name: /Consulta/ }));
             fireEvent.change(screen.getByLabelText('Título (opcional)'), { target: { value: 'Medir a sala' } });
-            fireEvent.click(screen.getByRole('button', { name: 'Cor padrão' }));
+            // A cor acompanha o tipo enquanto não se escolhe outra.
+            fireEvent.click(screen.getByRole('button', { name: 'Cor do agendamento: Violeta' }));
+            expect(screen.getByRole('radio', { name: 'Violeta (cor do tipo)' })).toHaveAttribute('aria-checked', 'true');
             fireEvent.click(screen.getByRole('radio', { name: 'Rosa' }));
 
-            expect(screen.getByRole('button', { name: 'Cor' })).toBeInTheDocument();
+            expect(screen.getByRole('button', { name: 'Cor do agendamento: Rosa' })).toBeInTheDocument();
             fireEvent.click(screen.getByRole('button', { name: 'Agendar' }));
             await waitFor(() => expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
                 eventType: 'consulta', title: 'Medir a sala', color: '#db2777',
+            })));
+        });
+
+        it('escolher a cor do próprio tipo volta ao padrão', async () => {
+            const { onSave } = renderWith({ color: '#db2777' });
+
+            fireEvent.click(screen.getByRole('button', { name: 'Cor do agendamento: Rosa' }));
+            fireEvent.click(screen.getByRole('radio', { name: 'Azul-piscina (cor do tipo)' }));
+
+            fireEvent.click(screen.getByRole('button', { name: 'Agendar' }));
+            await waitFor(() => expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+                eventType: 'instalacao', color: undefined,
             })));
         });
 

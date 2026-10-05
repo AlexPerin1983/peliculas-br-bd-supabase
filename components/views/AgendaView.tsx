@@ -1306,8 +1306,7 @@ const NextAppointmentCard: React.FC<{
     const hasActions = Boolean(telUrl || whatsappUrl || clientAddress);
 
     return (
-        <article className="relative overflow-hidden rounded-[var(--radius-card)] border border-[var(--brand-primary)]/30 bg-gradient-to-br from-[color-mix(in_srgb,var(--brand-primary)_10%,var(--surface))] to-[var(--surface)] shadow-[var(--shadow-soft)]">
-            <EventColorStripe agendamento={agendamento} />
+        <article className="overflow-hidden rounded-[var(--radius-card)] border border-[var(--brand-primary)]/30 bg-gradient-to-br from-[color-mix(in_srgb,var(--brand-primary)_10%,var(--surface))] to-[var(--surface)] shadow-[var(--shadow-soft)]">
             <button
                 type="button"
                 onClick={() => onOpen(agendamento)}
