@@ -335,6 +335,7 @@ export interface UserInfo {
 
 export type AgendamentoServiceStatus = 'scheduled' | 'completed' | 'partial' | 'cancelled' | 'no_show';
 export type AgendamentoStockStatus = 'pending' | 'confirmed' | 'not_required';
+export type AgendamentoEventType = 'consulta' | 'instalacao' | 'variado' | 'outro';
 
 export interface Agendamento {
     id?: number;
@@ -354,6 +355,10 @@ export interface Agendamento {
     stockStatus?: AgendamentoStockStatus;
     stockConsumedAt?: string;
     stockSourcePdfIds?: number[];
+    // Organização da agenda: tipo, título opcional e cor (sem cor = a do tipo).
+    eventType?: AgendamentoEventType;
+    title?: string;
+    color?: string;
 }
 
 // Medida maior que a bobina: vai com emenda de topo (calculado com a bobina e as escolhas do plano).

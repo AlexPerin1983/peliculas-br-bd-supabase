@@ -294,4 +294,57 @@ describe('AgendamentoModal', () => {
             expect(screen.getByRole('button', { name: 'Agendar' })).toBeInTheDocument();
         });
     });
+
+    describe('tipo, título e cor', () => {
+        const ana: Client = { ...createdClient, id: 11, nome: 'Ana' };
+
+        const renderWith = (agendamento: Record<string, unknown>) => {
+            const onSave = vi.fn().mockResolvedValue(undefined);
+            render(
+                <AgendamentoModal
+                    isOpen onClose={vi.fn()} onSave={onSave} onDelete={vi.fn()}
+                    schedulingInfo={{
+                        agendamento: { clienteId: 11, clienteNome: 'Ana', start: voiceStart.toISOString(), end: voiceEnd.toISOString(), ...agendamento },
+                    }}
+                    clients={[ana]} savedPdfs={[]} onAddNewClient={vi.fn()} userInfo={userInfo} agendamentos={[]}
+                />
+            );
+            return { onSave };
+        };
+
+        it('agendamento novo começa como Instalação, sem título e com a cor do tipo', async () => {
+            const { onSave } = renderWith({});
+
+            expect(screen.getByRole('radio', { name: /Instalação/ })).toHaveAttribute('aria-checked', 'true');
+            expect(screen.getByRole('button', { name: 'Cor padrão' })).toBeInTheDocument();
+
+            fireEvent.click(screen.getByRole('button', { name: 'Agendar' }));
+            await waitFor(() => expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+                eventType: 'instalacao', title: undefined, color: undefined,
+            })));
+        });
+
+        it('troca para Consulta, dá um título e escolhe outra cor', async () => {
+            const { onSave } = renderWith({});
+
+            fireEvent.click(screen.getByRole('radio', { name: /Consulta/ }));
+            fireEvent.change(screen.getByLabelText('Título (opcional)'), { target: { value: 'Medir a sala' } });
+            fireEvent.click(screen.getByRole('button', { name: 'Cor padrão' }));
+            fireEvent.click(screen.getByRole('radio', { name: 'Rosa' }));
+
+            expect(screen.getByRole('button', { name: 'Cor' })).toBeInTheDocument();
+            fireEvent.click(screen.getByRole('button', { name: 'Agendar' }));
+            await waitFor(() => expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+                eventType: 'consulta', title: 'Medir a sala', color: '#db2777',
+            })));
+        });
+
+        it('agendamento antigo sem tipo continua sem tipo ao salvar', async () => {
+            const { onSave } = renderWith({ id: 300, serviceStatus: 'scheduled' });
+
+            expect(screen.getAllByRole('radio').filter((radio) => radio.getAttribute('aria-checked') === 'true')).toHaveLength(0);
+            fireEvent.click(screen.getByRole('button', { name: 'Salvar' }));
+            await waitFor(() => expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ id: 300, eventType: undefined })));
+        });
+    });
 });

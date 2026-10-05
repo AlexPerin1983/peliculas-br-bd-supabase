@@ -2673,6 +2673,7 @@ Regras:
             pdfId: pdfIds[0],
             pdfIds,
             serviceStatus: 'scheduled',
+            eventType: draft.agendamento.eventType,
         }, draft.extraDays);
 
         let saved: Agendamento;

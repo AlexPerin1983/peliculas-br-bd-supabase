@@ -111,6 +111,11 @@ describe('buildVoiceScheduleDraft', () => {
         expect(buildVoiceScheduleDraft({ clienteNome: 'Ana', datas: ['2026-10-02'], horaInicio: '9h' }, now).extraDays).toEqual([]);
     });
 
+    it('usa o tipo dito no áudio e, sem ele, Instalação', () => {
+        expect(buildVoiceScheduleDraft({ clienteNome: 'Ana', datas: ['2026-10-02'], horaInicio: '10:00', tipo: 'consulta' }, now).agendamento.eventType).toBe('consulta');
+        expect(buildVoiceScheduleDraft({ clienteNome: 'Ana', datas: ['2026-10-02'], horaInicio: '10:00', tipo: '' }, now).agendamento.eventType).toBe('instalacao');
+    });
+
     it('sem término (ou com término antes do início) usa 2 horas', () => {
         const withoutEnd = buildVoiceScheduleDraft({ clienteNome: 'Ana', data: '2026-10-02', horaInicio: '14:00' }, now);
         expect(localParts(withoutEnd.agendamento.end).time).toBe('16:00');

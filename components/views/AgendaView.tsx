@@ -12,6 +12,7 @@ import StockCompletionModal from '../modals/StockCompletionModal';
 import { ServiceStockConsumptionInput } from '../../services/estoqueDb';
 import { buildServiceStockPlans } from '../../src/lib/serviceStockConsumption';
 import { useSubscription } from '../../contexts/SubscriptionContext';
+import { getAgendamentoColor, getEventTypeMeta } from '../../src/lib/agendamentoEventTypes';
 import {
     buildReviewFollowUpMessage,
     buildShortReviewMessage,
@@ -134,6 +135,28 @@ const SERVICE_STATUS_DOT: Record<AgendamentoServiceStatus, string> = {
 const getServiceStatusColor = (serviceStatus?: AgendamentoServiceStatus) => (
     SERVICE_STATUS_DOT[serviceStatus || 'scheduled']
 );
+
+// Tipo do agendamento (Consulta, Instalação...) na cor dele.
+const EventTypeChip: React.FC<{ agendamento: Pick<Agendamento, 'eventType' | 'color'> }> = ({ agendamento }) => {
+    const meta = getEventTypeMeta(agendamento.eventType);
+    if (!meta) return null;
+    const color = getAgendamentoColor(agendamento) ?? meta.color;
+    return (
+        <span
+            className="inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-xs font-bold"
+            style={{ color, backgroundColor: `color-mix(in srgb, ${color} 12%, transparent)` }}
+        >
+            <i className={`${meta.iconClassName} text-[10px]`} aria-hidden="true"></i>
+            {meta.label}
+        </span>
+    );
+};
+
+// Faixa fina na cor do agendamento, na borda esquerda do card.
+const EventColorStripe: React.FC<{ agendamento: Pick<Agendamento, 'eventType' | 'color'> }> = ({ agendamento }) => {
+    const color = getAgendamentoColor(agendamento);
+    return color ? <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1" style={{ backgroundColor: color }} /> : null;
+};
 
 const formatFullAddress = (client?: Client): string => {
     if (!client) return '';
@@ -983,7 +1006,8 @@ const AppointmentCard: React.FC<{
     };
 
     return (
-        <article className="overflow-hidden rounded-[var(--radius-card)] border border-[var(--border-subtle)] bg-[var(--surface)] text-left shadow-[var(--shadow-hairline)] transition-all duration-200 hover:shadow-[var(--shadow-soft)]">
+        <article className="relative overflow-hidden rounded-[var(--radius-card)] border border-[var(--border-subtle)] bg-[var(--surface)] text-left shadow-[var(--shadow-hairline)] transition-all duration-200 hover:shadow-[var(--shadow-soft)]">
+            <EventColorStripe agendamento={agendamento} />
             <button
                 type="button"
                 onClick={() => onEdit(agendamento)}
@@ -1003,7 +1027,11 @@ const AppointmentCard: React.FC<{
                                 <p className="truncate text-base font-black leading-tight text-[var(--text-strong)] sm:text-lg">
                                     {agendamento.clienteNome}
                                 </p>
+                                {agendamento.title ? (
+                                    <p className="mt-0.5 truncate text-sm font-semibold text-[var(--text-muted)]">{agendamento.title}</p>
+                                ) : null}
                                 <div className="mt-2 flex flex-wrap items-center gap-2">
+                                    <EventTypeChip agendamento={agendamento} />
                                     {serviceStatus !== 'scheduled' ? <ServiceStatusBadge status={serviceStatus} /> : null}
                                     {isReviewed ? (
                                         <span
@@ -1278,7 +1306,8 @@ const NextAppointmentCard: React.FC<{
     const hasActions = Boolean(telUrl || whatsappUrl || clientAddress);
 
     return (
-        <article className="overflow-hidden rounded-[var(--radius-card)] border border-[var(--brand-primary)]/30 bg-gradient-to-br from-[color-mix(in_srgb,var(--brand-primary)_10%,var(--surface))] to-[var(--surface)] shadow-[var(--shadow-soft)]">
+        <article className="relative overflow-hidden rounded-[var(--radius-card)] border border-[var(--brand-primary)]/30 bg-gradient-to-br from-[color-mix(in_srgb,var(--brand-primary)_10%,var(--surface))] to-[var(--surface)] shadow-[var(--shadow-soft)]">
+            <EventColorStripe agendamento={agendamento} />
             <button
                 type="button"
                 onClick={() => onOpen(agendamento)}
@@ -1300,8 +1329,12 @@ const NextAppointmentCard: React.FC<{
                 <p className="mt-2 truncate text-lg font-black leading-tight text-[var(--text-strong)]">
                     {agendamento.clienteNome}
                 </p>
+                {agendamento.title ? (
+                    <p className="mt-0.5 truncate text-sm font-semibold text-[var(--text-muted)]">{agendamento.title}</p>
+                ) : null}
 
                 <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <EventTypeChip agendamento={agendamento} />
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--surface-muted)] px-2 py-1 text-xs font-bold text-[var(--text-muted)]">
                         <i className="far fa-calendar text-[10px]" aria-hidden="true"></i>
                         {relativeDay}

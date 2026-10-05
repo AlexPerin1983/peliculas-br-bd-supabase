@@ -37,6 +37,11 @@ describe('multiDaySchedule', () => {
         expect(days[1].pdfId).toBeUndefined();
     });
 
+    it('os dias seguintes herdam tipo, título e cor', () => {
+        const days = buildMultiDayAgendamentos({ ...first, eventType: 'instalacao' as const, title: 'Fachada', color: '#db2777' }, ['2026-10-03']);
+        expect(days[1]).toMatchObject({ eventType: 'instalacao', title: 'Fachada', color: '#db2777' });
+    });
+
     it('ignora dia repetido, o próprio dia e datas inválidas, e ordena', () => {
         expect(normalizeExtraDays('2026-10-02', ['2026-10-05', '2026-10-02', 'x', '2026-10-03', '2026-10-05']))
             .toEqual(['2026-10-03', '2026-10-05']);

@@ -78,6 +78,13 @@ describe('AgendaView', () => {
         vi.useRealTimers();
     });
 
+    it('mostra o tipo e o título do agendamento no card', () => {
+        renderAgenda([clientWithAddress], [{ ...appointment, eventType: 'consulta', title: 'Medir a sala' }]);
+
+        expect(screen.getAllByText('Consulta').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('Medir a sala').length).toBeGreaterThan(0);
+    });
+
     it('oferece agendar por voz ao lado do novo agendamento', () => {
         const onCreateAgendamentoByVoice = vi.fn();
         render(

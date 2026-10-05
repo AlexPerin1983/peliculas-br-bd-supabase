@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, FormEvent } from 'react';
-import { Agendamento, AgendamentoServiceStatus, Client, QuickClientDraft, UserInfo, SavedPDF, SchedulingInfo } from '../../types';
+import { Agendamento, AgendamentoEventType, AgendamentoServiceStatus, Client, QuickClientDraft, UserInfo, SavedPDF, SchedulingInfo } from '../../types';
 import Modal from '../ui/Modal';
 import ActionButton from '../ui/ActionButton';
 import Input from '../ui/Input';
@@ -8,6 +8,18 @@ import * as db from '../../services/db';
 import { getAgendamentoSlotError } from '../../src/lib/agendamentoRules';
 import { isClientAddress, pickProposalToLink, withLocalNote } from '../../src/lib/voiceClientMatch';
 import { buildMultiDayAgendamentos, formatDayLabel, moveToDay, nextDayKey, normalizeExtraDays } from '../../src/lib/multiDaySchedule';
+import { DEFAULT_EVENT_TYPE, EVENT_COLOR_PALETTE, EVENT_TYPES, getAgendamentoColor, getEventTypeMeta } from '../../src/lib/agendamentoEventTypes';
+
+const COLOR_NAMES: Record<string, string> = {
+    '#7c3aed': 'Violeta',
+    '#0891b2': 'Azul-piscina',
+    '#ea580c': 'Laranja',
+    '#db2777': 'Rosa',
+    '#0d9488': 'Verde-água',
+    '#4f46e5': 'Anil',
+    '#65a30d': 'Verde',
+    '#64748b': 'Cinza',
+};
 
 interface AgendamentoModalProps {
     isOpen: boolean;
@@ -106,6 +118,11 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
     const [quickLocal, setQuickLocal] = useState('');
     // Outros dias do mesmo atendimento, no mesmo horário (só em agendamento novo).
     const [extraDays, setExtraDays] = useState<string[]>([]);
+    // Organização: tipo, título opcional e cor (vazia = a do tipo).
+    const [eventType, setEventType] = useState<AgendamentoEventType | undefined>(undefined);
+    const [title, setTitle] = useState('');
+    const [color, setColor] = useState('');
+    const [isColorOpen, setIsColorOpen] = useState(false);
     // Capacidade = nº de colaboradores ATIVOS da organização (dono + convidados).
     // Org-wide e igual em qualquer conta logada (corrige a antiga contagem por
     // "Equipe" manual, que não crescia ao convidar e variava por conta).
@@ -171,6 +188,11 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
             setQuickName(quickClient?.nome || '');
             setQuickLocal(quickClient?.local || '');
             setExtraDays(isEditing ? [] : (initialExtraDays || []));
+            // Agendamento antigo sem tipo continua sem tipo; o novo começa como Instalação.
+            setEventType(agendamento?.eventType ?? (isEditing ? undefined : DEFAULT_EVENT_TYPE));
+            setTitle(agendamento?.title || '');
+            setColor(agendamento?.color || '');
+            setIsColorOpen(false);
 
             if (isEditing && agendamento?.start && agendamento?.end) {
                 const startDate = new Date(agendamento.start);
@@ -303,6 +325,9 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                 stockStatus: agendamento?.stockStatus,
                 stockConsumedAt: agendamento?.stockConsumedAt,
                 stockSourcePdfIds: agendamento?.stockSourcePdfIds,
+                eventType,
+                title: title.trim() || undefined,
+                color: color || undefined,
             };
 
             if (isEditing) {
@@ -408,7 +433,9 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
             `DTSTAMP:${formatDateForICS(now)}`,
             `DTSTART:${formatDateForICS(startDate)}`,
             `DTEND:${formatDateForICS(endDate)}`,
-            `SUMMARY:Instalação de Película: ${client.nome}`,
+            `SUMMARY:${agendamento.title?.trim()
+                ? `${agendamento.title.trim()} – ${client.nome}`
+                : `${getEventTypeMeta(agendamento.eventType)?.label ?? 'Instalação de Película'}: ${client.nome}`}`,
             `DESCRIPTION:${description}`,
             `LOCATION:${formatClientAddress(client)}`,
             'END:VEVENT',
@@ -736,6 +763,89 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                             )}
                         </section>
                     ) : null}
+
+                    <div className="space-y-3">
+                        <div>
+                            <span className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">Tipo</span>
+                            <div role="radiogroup" aria-label="Tipo do agendamento" className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                                {EVENT_TYPES.map((type) => {
+                                    const isActive = eventType === type.value;
+                                    return (
+                                        <button
+                                            key={type.value}
+                                            type="button"
+                                            role="radio"
+                                            aria-checked={isActive}
+                                            onClick={() => setEventType(type.value)}
+                                            className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors ${isActive ? '' : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-700/50 dark:text-slate-300 dark:hover:bg-slate-700'}`}
+                                            style={isActive ? {
+                                                borderColor: type.color,
+                                                color: type.color,
+                                                backgroundColor: `color-mix(in srgb, ${type.color} 10%, transparent)`,
+                                            } : undefined}
+                                        >
+                                            <i className={`${type.iconClassName} text-xs`} aria-hidden="true"></i>
+                                            {type.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        <div className="flex items-end gap-2">
+                            <div className="min-w-0 flex-1">
+                                <Input
+                                    id="eventTitle"
+                                    label="Título (opcional)"
+                                    value={title}
+                                    onChange={(e) => setTitle((e.target as HTMLInputElement).value)}
+                                    placeholder="Ex.: Película na fachada"
+                                    maxLength={120}
+                                    className={inputClassName}
+                                />
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setIsColorOpen((open) => !open)}
+                                aria-expanded={isColorOpen}
+                                className="flex h-[42px] shrink-0 items-center gap-2 rounded-lg border border-slate-200 bg-slate-100/70 px-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200"
+                            >
+                                <span
+                                    className="h-4 w-4 rounded-full border border-black/10"
+                                    style={{ backgroundColor: getAgendamentoColor({ eventType, color }) ?? '#94a3b8' }}
+                                    aria-hidden="true"
+                                />
+                                {color ? 'Cor' : 'Cor padrão'}
+                            </button>
+                        </div>
+
+                        {isColorOpen ? (
+                            <div role="radiogroup" aria-label="Cor do agendamento" className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2 dark:border-slate-600 dark:bg-slate-800/70">
+                                <button
+                                    type="button"
+                                    role="radio"
+                                    aria-checked={!color}
+                                    onClick={() => { setColor(''); setIsColorOpen(false); }}
+                                    className={`h-8 rounded-full border px-3 text-xs font-semibold transition-colors ${!color ? 'border-slate-500 bg-white text-slate-800 dark:bg-slate-900 dark:text-slate-100' : 'border-slate-200 text-slate-600 hover:bg-white dark:border-slate-600 dark:text-slate-300'}`}
+                                >
+                                    Padrão do tipo
+                                </button>
+                                {EVENT_COLOR_PALETTE.map((hex) => (
+                                    <button
+                                        key={hex}
+                                        type="button"
+                                        role="radio"
+                                        aria-checked={color === hex}
+                                        aria-label={COLOR_NAMES[hex] ?? hex}
+                                        title={COLOR_NAMES[hex] ?? hex}
+                                        onClick={() => { setColor(hex); setIsColorOpen(false); }}
+                                        className={`h-8 w-8 rounded-full ring-offset-2 ring-offset-slate-50 transition-transform active:scale-95 dark:ring-offset-slate-800 ${color === hex ? 'ring-2 ring-slate-500 dark:ring-slate-300' : ''}`}
+                                        style={{ backgroundColor: hex }}
+                                    />
+                                ))}
+                            </div>
+                        ) : null}
+                    </div>
 
                     <div>
                         <div className="mb-1">

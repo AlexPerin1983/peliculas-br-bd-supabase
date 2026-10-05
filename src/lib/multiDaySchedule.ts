@@ -58,6 +58,9 @@ export const buildMultiDayAgendamentos = <T extends Omit<Agendamento, 'id'>>(fir
             serviceStatus: 'scheduled' as const,
             receiptDescription: first.receiptDescription,
             stockSourcePdfIds: proposalIds.length ? proposalIds : undefined,
+            eventType: first.eventType,
+            title: first.title,
+            color: first.color,
         })),
     ];
 };

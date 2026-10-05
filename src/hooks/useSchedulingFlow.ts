@@ -337,6 +337,9 @@ export function useSchedulingFlow({
                 notes,
                 receiptDescription,
                 stockSourcePdfIds,
+                eventType: agendamento.eventType,
+                title: agendamento.title,
+                color: agendamento.color,
             }
         });
     }, [allSavedPdfs, handleOpenAgendamentoModal, handleUpdateAgendamentoServiceStatus]);

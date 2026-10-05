@@ -1,6 +1,7 @@
 import { createGeminiModel, GeminiGatewayError } from '../../services/geminiGateway';
 import { AIInput, Agendamento, Client, QuickClientAddress, QuickClientDraft } from '../../types';
 import { formatDayLabel } from './multiDaySchedule';
+import { DEFAULT_EVENT_TYPE, normalizeEventType } from './agendamentoEventTypes';
 
 // Campos que a IA devolve ao ouvir (ou ler) um pedido de agendamento.
 export interface ScheduleExtraction {
@@ -17,6 +18,8 @@ export interface ScheduleExtraction {
     horaInicio?: string;
     horaFim?: string;
     observacoes?: string;
+    // consulta | instalacao | variado | outro
+    tipo?: string;
 }
 
 export interface VoiceScheduleDraft {
@@ -86,7 +89,8 @@ Responda APENAS com JSON válido com estes campos (use "" quando não for dito):
 - horaInicio: início no formato HH:MM (24 horas).
 - horaFim: término HH:MM, só se foi dito ("das 9 às 11") ou se foi dita a duração ("umas 3 horas" = início + 3 horas).
   O horário vale para todos os dias da lista.
-- observacoes: o que mais ajudar no serviço (tipo de serviço, película, quantidade de vidros), em uma frase curta.
+- observacoes: o que mais ajudar no serviço (película, quantidade de vidros, ponto de referência), em uma frase curta.
+- tipo: "consulta" (visita, medição, orçamento ou consulta), "instalacao" (instalar ou aplicar película), "variado" ou "outro". Use "" se não der para saber.
 
 Regras:
 1. Use a lista de próximos dias para "hoje", "amanhã", "depois de amanhã" e dias da semana.
@@ -110,7 +114,8 @@ const SCHEDULE_RESPONSE_SCHEMA = {
         datas: { type: 'ARRAY', items: { type: 'STRING' } },
         horaInicio: { type: 'STRING' },
         horaFim: { type: 'STRING' },
-        observacoes: { type: 'STRING' }
+        observacoes: { type: 'STRING' },
+        tipo: { type: 'STRING' }
     },
     required: ['clienteNome', 'local', 'datas', 'horaInicio']
 };
@@ -142,7 +147,7 @@ export const parseScheduleExtraction = (rawText: string): ScheduleExtraction => 
     const source = parsed as Record<string, unknown>;
     const fields: (keyof ScheduleExtraction)[] = [
         'clienteNome', 'local', 'logradouro', 'numero', 'bairro', 'cidade', 'uf',
-        'data', 'horaInicio', 'horaFim', 'observacoes'
+        'data', 'horaInicio', 'horaFim', 'observacoes', 'tipo'
     ];
     const extraction = Object.fromEntries(fields.map(field => [field, clean(source[field])])) as ScheduleExtraction;
     const datas = Array.isArray(source.datas) ? source.datas.map(clean).filter(Boolean) : [];
@@ -244,7 +249,9 @@ export const buildVoiceScheduleDraft = (extraction: ScheduleExtraction, now: Dat
             clienteNome: nome,
             start: start.toISOString(),
             end: end.toISOString(),
-            notes: clean(extraction.observacoes)
+            notes: clean(extraction.observacoes),
+            // Sem tipo dito, vale o padrão da agenda (Instalação).
+            eventType: normalizeEventType(extraction.tipo) ?? DEFAULT_EVENT_TYPE
         },
         extraDays: dayKeys.slice(1),
         quickClient: {
