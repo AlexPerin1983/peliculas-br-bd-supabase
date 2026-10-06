@@ -109,6 +109,31 @@ describe('AgendaView', () => {
         expect(screen.queryByText('Agendado')).not.toBeInTheDocument();
     });
 
+    it('cartão sem repetir: sem duração nem contagem, propostas separadas por "·"', () => {
+        const pdfs = [
+            { id: 10, clienteId: 1, date: appointmentDate, totalPreco: 200, totalM2: 2, nomeArquivo: 'a.pdf', proposalOptionName: 'Residencial' },
+            { id: 11, clienteId: 1, date: appointmentDate, totalPreco: 180, totalM2: 1, nomeArquivo: 'b.pdf', proposalOptionName: 'Comercial' },
+        ] as SavedPDF[];
+        renderAgenda([clientWithAddress], [{ ...appointment, pdfId: 10, pdfIds: [10, 11] }], pdfs);
+
+        expect(screen.getAllByText('Residencial · Comercial').length).toBeGreaterThan(0);
+        expect(screen.queryByText(/2 propostas/)).not.toBeInTheDocument();
+        expect(screen.queryByText('2h')).not.toBeInTheDocument();
+    });
+
+    it('sem as propostas carregadas, mostra quantas estão ligadas', () => {
+        renderAgenda([clientWithAddress], [{ ...appointment, pdfId: 10, pdfIds: [10, 11] }], []);
+        expect(screen.getAllByText('2 propostas').length).toBeGreaterThan(0);
+    });
+
+    it('dia seguinte de um atendimento mostra o selo de continuação no lugar do aviso', () => {
+        renderAgenda([clientWithAddress], [{ ...appointment, notes: 'Continuação do atendimento de 23/05.\n\nLevar escada' }]);
+
+        expect(screen.getAllByText('Continuação · 23/05').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('Levar escada').length).toBeGreaterThan(0);
+        expect(screen.queryByText(/Continuação do atendimento/)).not.toBeInTheDocument();
+    });
+
     it('agendamento antigo, sem tipo, fica só no contorno e entra na legenda', () => {
         renderAgenda();
 

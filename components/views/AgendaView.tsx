@@ -13,6 +13,7 @@ import { ServiceStockConsumptionInput } from '../../services/estoqueDb';
 import { buildServiceStockPlans } from '../../src/lib/serviceStockConsumption';
 import { useSubscription } from '../../contexts/SubscriptionContext';
 import { EVENT_TYPES, getAgendamentoColor, getCalendarDots, getEventTypeMeta } from '../../src/lib/agendamentoEventTypes';
+import { splitContinuationNote } from '../../src/lib/multiDaySchedule';
 import {
     buildReviewFollowUpMessage,
     buildShortReviewMessage,
@@ -146,7 +147,17 @@ const EventColorStripe: React.FC<{ agendamento: Pick<Agendamento, 'eventType' | 
     return color ? <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1" style={{ backgroundColor: color }} /> : null;
 };
 
-const UNTYPED_DOT_CLASSES = 'border-[1.5px] border-slate-400 dark:border-slate-500';
+// Dia seguinte de um atendimento: "Continuação · 02/10" no lugar do aviso nas observações.
+const ContinuationChip: React.FC<{ originDate?: string }> = ({ originDate }) => (
+    originDate ? (
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--surface-muted)] px-2 py-1 text-xs font-bold text-[var(--text-muted)]">
+            <i className="fas fa-hourglass-half text-[10px]" aria-hidden="true"></i>
+            Continuação · {originDate}
+        </span>
+    ) : null
+);
+
+const UNTYPED_DOT_CLASSES ='border-[1.5px] border-slate-400 dark:border-slate-500';
 
 // Pontinhos de um dia no calendário, na cor do tipo; agendamento antigo, sem tipo, fica só no contorno.
 const CalendarDayDots: React.FC<{ agendamentos: Agendamento[] }> = ({ agendamentos }) => {
@@ -240,19 +251,6 @@ const getTelUrl = (phone?: string) => {
 const formatTime = (value: string) => (
     new Date(value).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
 );
-
-const getDurationLabel = (start: string, end: string) => {
-    const startTime = new Date(start).getTime();
-    const endTime = new Date(end).getTime();
-    const minutes = Math.max(0, Math.round((endTime - startTime) / 60000));
-    if (minutes === 0) return '0min';
-    if (minutes < 60) return `${minutes}min`;
-
-    const hours = Math.floor(minutes / 60);
-    const remainingMinutes = minutes % 60;
-
-    return remainingMinutes ? `${hours}h${String(remainingMinutes).padStart(2, '0')}` : `${hours}h`;
-};
 
 const sameMonth = (date: Date, reference: Date) => (
     date.getFullYear() === reference.getFullYear()
@@ -979,7 +977,7 @@ const AppointmentCard: React.FC<{
     const whatsappUrl = getWhatsappUrl(client?.telefone);
     const startTime = formatTime(agendamento.start);
     const endTime = formatTime(agendamento.end);
-    const duration = getDurationLabel(agendamento.start, agendamento.end);
+    const continuation = splitContinuationNote(agendamento.notes);
     const hasActions = Boolean(telUrl || whatsappUrl || clientAddress);
 
     const openPendingStockCompletion = () => {
@@ -1030,60 +1028,48 @@ const AppointmentCard: React.FC<{
                     </div>
 
                     <div className="min-w-0">
-                        <div className="flex min-w-0 items-start gap-2">
-                            <div className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${meta.dotClasses}`} aria-hidden="true"></div>
-                            <div className="min-w-0">
-                                <p className="truncate text-base font-black leading-tight text-[var(--text-strong)] sm:text-lg">
-                                    {agendamento.clienteNome}
-                                </p>
-                                {agendamento.title ? (
-                                    <p className="mt-0.5 truncate text-sm font-semibold text-[var(--text-muted)]">{agendamento.title}</p>
-                                ) : null}
-                                <div className="mt-2 flex flex-wrap items-center gap-2">
-                                    <EventTypeChip agendamento={agendamento} />
-                                    {serviceStatus !== 'scheduled' ? <ServiceStatusBadge status={serviceStatus} /> : null}
-                                    {isReviewed ? (
-                                        <span
-                                            onClick={(event) => { event.stopPropagation(); setIsRequestingReview(true); }}
-                                            title="Ver / editar avaliação"
-                                            className="inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-800 transition-colors hover:bg-emerald-200 dark:bg-emerald-950/35 dark:text-emerald-200 dark:hover:bg-emerald-900/45"
-                                        >
-                                            <i className="fas fa-circle-check text-[10px]" aria-hidden="true"></i>
-                                            Avaliado
-                                            <ReviewStars stars={reviewStars} className="text-[8px]" />
-                                        </span>
-                                    ) : null}
-                                    <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--surface-muted)] px-2 py-1 text-xs font-bold text-[var(--text-muted)]">
-                                        <i className="far fa-clock text-[10px]" aria-hidden="true"></i>
-                                        {duration}
-                                    </span>
-                                    {linkedProposalCount > 0 ? (
-                                        <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2 py-1 text-xs font-bold text-blue-700 dark:bg-blue-950/35 dark:text-blue-300">
-                                            <i className="fas fa-file-invoice text-[10px]" aria-hidden="true"></i>
-                                            {linkedProposalCount} proposta{linkedProposalCount > 1 ? 's' : ''}
-                                        </span>
-                                    ) : null}
-
-                                    {bairro ? (
-                                        <span className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-[var(--surface-muted)] px-2 py-1 text-xs font-bold text-[var(--text-muted)]" title={clientAddress}>
-                                            <i className="fas fa-map-marker-alt text-[10px]" aria-hidden="true"></i>
-                                            <span className="truncate">{bairro}</span>
-                                        </span>
-                                    ) : null}
-                                </div>
-                            </div>
+                        <p className="truncate text-base font-black leading-tight text-[var(--text-strong)] sm:text-lg">
+                            {agendamento.clienteNome}
+                        </p>
+                        {agendamento.title ? (
+                            <p className="mt-0.5 truncate text-sm font-semibold text-[var(--text-muted)]">{agendamento.title}</p>
+                        ) : null}
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <EventTypeChip agendamento={agendamento} />
+                            {serviceStatus !== 'scheduled' ? <ServiceStatusBadge status={serviceStatus} /> : null}
+                            {isReviewed ? (
+                                <span
+                                    onClick={(event) => { event.stopPropagation(); setIsRequestingReview(true); }}
+                                    title="Ver / editar avaliação"
+                                    className="inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-800 transition-colors hover:bg-emerald-200 dark:bg-emerald-950/35 dark:text-emerald-200 dark:hover:bg-emerald-900/45"
+                                >
+                                    <i className="fas fa-circle-check text-[10px]" aria-hidden="true"></i>
+                                    Avaliado
+                                    <ReviewStars stars={reviewStars} className="text-[8px]" />
+                                </span>
+                            ) : null}
+                            <ContinuationChip originDate={continuation.originDate} />
+                            {bairro ? (
+                                <span className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-[var(--surface-muted)] px-2 py-1 text-xs font-bold text-[var(--text-muted)]" title={clientAddress}>
+                                    <i className="fas fa-map-marker-alt text-[10px]" aria-hidden="true"></i>
+                                    <span className="truncate">{bairro}</span>
+                                </span>
+                            ) : null}
                         </div>
-                        {agendamento.proposalNames?.length ? (
+                        {linkedProposalCount > 0 ? (
                             <p className="mt-2 flex items-start gap-1.5 text-xs font-semibold text-blue-700 dark:text-blue-300">
                                 <i className="fas fa-file-invoice mt-0.5 shrink-0 text-[10px]" aria-hidden="true"></i>
-                                <span className="line-clamp-2">{agendamento.proposalNames.join(' ? ')}</span>
+                                <span className="line-clamp-2">
+                                    {agendamento.proposalNames?.length
+                                        ? agendamento.proposalNames.join(' · ')
+                                        : `${linkedProposalCount} proposta${linkedProposalCount > 1 ? 's' : ''}`}
+                                </span>
                             </p>
                         ) : null}
 
-
-                        {agendamento.notes ? (
+                        {continuation.notes ? (
                             <p className="mt-3 line-clamp-2 rounded-[var(--radius-control)] bg-[var(--surface-muted)] px-3 py-2 text-sm leading-5 text-[var(--text-muted)] whitespace-pre-wrap">
-                                {agendamento.notes}
+                                {continuation.notes}
                             </p>
                         ) : null}
                     </div>
@@ -1343,6 +1329,7 @@ const NextAppointmentCard: React.FC<{
 
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                     <EventTypeChip agendamento={agendamento} />
+                    <ContinuationChip originDate={splitContinuationNote(agendamento.notes).originDate} />
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--surface-muted)] px-2 py-1 text-xs font-bold text-[var(--text-muted)]">
                         <i className="far fa-calendar text-[10px]" aria-hidden="true"></i>
                         {relativeDay}

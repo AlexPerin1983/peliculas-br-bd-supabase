@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildMultiDayAgendamentos, formatDayLabel, moveToDay, nextDayKey, normalizeExtraDays, toDayKey } from './multiDaySchedule';
+import { buildContinuationNote, buildMultiDayAgendamentos, formatDayLabel, moveToDay, nextDayKey, normalizeExtraDays, splitContinuationNote, toDayKey } from './multiDaySchedule';
 
 // Sexta, 02/10/2026, das 8h às 17h no horário do aparelho.
 const first = {
@@ -52,5 +52,16 @@ describe('multiDaySchedule', () => {
         expect(nextDayKey('2026-10-31')).toBe('2026-11-01');
         expect(formatDayLabel('2026-10-03')).toMatch(/^sáb.*03\/10$/);
         expect(localTime(moveToDay(first.start, '2026-10-05'))).toBe('2026-10-05 08:00');
+    });
+
+    it('separa o aviso de continuação das observações', () => {
+        const [, secondDay] = buildMultiDayAgendamentos(first, ['2026-10-03']);
+        expect(buildContinuationNote(first.start)).toBe('Continuação do atendimento de 02/10.');
+        expect(splitContinuationNote(secondDay.notes)).toEqual({ originDate: '02/10', notes: 'Película G20' });
+        // Continuação de uma continuação: vale a data mais recente.
+        expect(splitContinuationNote('Continuação do atendimento de 03/10.\n\nContinuação do atendimento de 02/10.'))
+            .toEqual({ originDate: '03/10', notes: '' });
+        expect(splitContinuationNote('Levar escada')).toEqual({ originDate: undefined, notes: 'Levar escada' });
+        expect(splitContinuationNote(undefined)).toEqual({ originDate: undefined, notes: '' });
     });
 });
