@@ -39,3 +39,49 @@ export const normalizeEventColor = (value: unknown): string | undefined => (
 export const getAgendamentoColor = (agendamento: Pick<Agendamento, 'eventType' | 'color'>) => (
     normalizeEventColor(agendamento.color) ?? getEventTypeMeta(agendamento.eventType)?.color
 );
+
+// Pontinho de um agendamento no calendário. Sem cor = agendamento antigo, sem tipo.
+export interface CalendarDot {
+    id?: number;
+    color?: string;
+    muted: boolean;
+    label: string;
+}
+
+export const MAX_CALENDAR_DOTS = 3;
+
+// Um pontinho por agendamento, na cor dele; cancelado e faltou ficam apagados.
+// Quando não cabem todos, cada cor aparece ao menos uma vez (o total já está no
+// número do dia) e os ativos vêm antes dos apagados, sempre na ordem do dia.
+export const getCalendarDots = (
+    agendamentos: Pick<Agendamento, 'id' | 'clienteNome' | 'eventType' | 'color' | 'serviceStatus'>[],
+    max = MAX_CALENDAR_DOTS,
+): CalendarDot[] => {
+    const dots = agendamentos.map((agendamento): CalendarDot => {
+        const typeLabel = getEventTypeMeta(agendamento.eventType)?.label;
+        return {
+            id: agendamento.id,
+            color: getAgendamentoColor(agendamento),
+            muted: agendamento.serviceStatus === 'cancelled' || agendamento.serviceStatus === 'no_show',
+            label: typeLabel ? `${agendamento.clienteNome} · ${typeLabel}` : agendamento.clienteNome,
+        };
+    });
+    if (dots.length <= max) return dots;
+
+    const picked = new Set<number>();
+    const seenColors = new Set<string>();
+    for (const muted of [false, true]) {
+        dots.forEach((dot, index) => {
+            const colorKey = dot.color ?? 'sem-tipo';
+            if (dot.muted !== muted || seenColors.has(colorKey)) return;
+            seenColors.add(colorKey);
+            if (picked.size < max) picked.add(index);
+        });
+    }
+    for (const muted of [false, true]) {
+        dots.forEach((dot, index) => {
+            if (dot.muted === muted && picked.size < max) picked.add(index);
+        });
+    }
+    return dots.filter((_, index) => picked.has(index));
+};

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { act } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import AgendaView from './AgendaView';
@@ -81,8 +81,41 @@ describe('AgendaView', () => {
     it('mostra o tipo e o título do agendamento no card', () => {
         renderAgenda([clientWithAddress], [{ ...appointment, eventType: 'consulta', title: 'Medir a sala' }]);
 
-        expect(screen.getAllByText('Consulta').length).toBeGreaterThan(0);
-        expect(screen.getAllByText('Medir a sala').length).toBeGreaterThan(0);
+        const cards = screen.getAllByRole('article');
+        expect(cards.length).toBeGreaterThan(0);
+        cards.forEach((card) => {
+            expect(within(card).getByText('Consulta')).toBeInTheDocument();
+            expect(within(card).getByText('Medir a sala')).toBeInTheDocument();
+        });
+    });
+
+    it('pinta os pontinhos do calendário com a cor do tipo e apaga cancelado', () => {
+        renderAgenda([clientWithAddress], [
+            { ...appointment, id: 1, clienteNome: 'Ana', eventType: 'consulta' },
+            { ...appointment, id: 2, clienteNome: 'Bruno', eventType: 'instalacao', serviceStatus: 'cancelled' },
+        ]);
+
+        const consulta = screen.getAllByTitle('Ana · Consulta')[0];
+        expect(consulta).toHaveStyle({ backgroundColor: '#7c3aed' });
+        expect(consulta).not.toHaveClass('opacity-35');
+        const cancelado = screen.getAllByTitle('Bruno · Instalação')[0];
+        expect(cancelado).toHaveStyle({ backgroundColor: '#0891b2' });
+        expect(cancelado).toHaveClass('opacity-35');
+
+        // A legenda explica as cores dos tipos; "Sem tipo" só aparece quando há agendamento antigo.
+        expect(screen.getAllByText('Instalação').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('Variado').length).toBeGreaterThan(0);
+        expect(screen.queryByText('Sem tipo')).not.toBeInTheDocument();
+        expect(screen.queryByText('Agendado')).not.toBeInTheDocument();
+    });
+
+    it('agendamento antigo, sem tipo, fica só no contorno e entra na legenda', () => {
+        renderAgenda();
+
+        const semTipo = screen.getAllByTitle('Cliente Mapa')[0];
+        expect(semTipo).toHaveClass('border-slate-400');
+        expect(semTipo.getAttribute('style')).toBeNull();
+        expect(screen.getAllByText('Sem tipo').length).toBeGreaterThan(0);
     });
 
     it('oferece agendar por voz ao lado do novo agendamento', () => {

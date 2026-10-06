@@ -12,7 +12,7 @@ import StockCompletionModal from '../modals/StockCompletionModal';
 import { ServiceStockConsumptionInput } from '../../services/estoqueDb';
 import { buildServiceStockPlans } from '../../src/lib/serviceStockConsumption';
 import { useSubscription } from '../../contexts/SubscriptionContext';
-import { getAgendamentoColor, getEventTypeMeta } from '../../src/lib/agendamentoEventTypes';
+import { EVENT_TYPES, getAgendamentoColor, getCalendarDots, getEventTypeMeta } from '../../src/lib/agendamentoEventTypes';
 import {
     buildReviewFollowUpMessage,
     buildShortReviewMessage,
@@ -124,18 +124,6 @@ const getStatusColor = (status?: SavedPDF['status']) => {
     return (STATUS_META[status || 'pending'] || STATUS_META.pending).dotClasses;
 };
 
-const SERVICE_STATUS_DOT: Record<AgendamentoServiceStatus, string> = {
-    scheduled: 'bg-blue-500',
-    completed: 'bg-emerald-500',
-    partial: 'bg-indigo-500',
-    cancelled: 'bg-rose-500',
-    no_show: 'bg-amber-400',
-};
-
-const getServiceStatusColor = (serviceStatus?: AgendamentoServiceStatus) => (
-    SERVICE_STATUS_DOT[serviceStatus || 'scheduled']
-);
-
 // Tipo do agendamento (Consulta, Instalação...) na cor dele.
 const EventTypeChip: React.FC<{ agendamento: Pick<Agendamento, 'eventType' | 'color'> }> = ({ agendamento }) => {
     const meta = getEventTypeMeta(agendamento.eventType);
@@ -157,6 +145,27 @@ const EventColorStripe: React.FC<{ agendamento: Pick<Agendamento, 'eventType' | 
     const color = getAgendamentoColor(agendamento);
     return color ? <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1" style={{ backgroundColor: color }} /> : null;
 };
+
+const UNTYPED_DOT_CLASSES = 'border-[1.5px] border-slate-400 dark:border-slate-500';
+
+// Pontinhos de um dia no calendário, na cor do tipo; agendamento antigo, sem tipo, fica só no contorno.
+const CalendarDayDots: React.FC<{ agendamentos: Agendamento[] }> = ({ agendamentos }) => {
+    if (agendamentos.length === 0) return null;
+    return (
+        <div className="mt-1.5 flex flex-wrap items-center justify-center gap-1">
+            {getCalendarDots(agendamentos).map((dot, index) => (
+                <span
+                    key={dot.id ?? index}
+                    title={dot.label}
+                    className={`h-2 w-2 rounded-full ${dot.color ? '' : UNTYPED_DOT_CLASSES} ${dot.muted ? 'opacity-35' : ''}`}
+                    style={dot.color ? { backgroundColor: dot.color } : undefined}
+                ></span>
+            ))}
+        </div>
+    );
+};
+
+const hasUntypedAgendamento = (agendamentos: Agendamento[]) => agendamentos.some((agendamento) => !getAgendamentoColor(agendamento));
 
 const formatFullAddress = (client?: Client): string => {
     if (!client) return '';
@@ -1387,6 +1396,13 @@ const NextAppointmentCard: React.FC<{
     );
 };
 
+// Contagem por status com ícone, já que as bolinhas coloridas agora são dos tipos.
+const STATUS_COUNT_ICONS = {
+    completed: 'fas fa-check',
+    scheduled: 'far fa-clock',
+    missed: 'fas fa-ban',
+};
+
 const DayAgendaSummary: React.FC<{
     agendamentos: AgendamentoWithStatus[];
 }> = ({ agendamentos }) => {
@@ -1413,11 +1429,11 @@ const DayAgendaSummary: React.FC<{
             <div className="rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] px-3 py-2 shadow-[var(--shadow-hairline)]">
                 <span className="block text-[10px] font-bold uppercase text-[var(--text-soft)]">Status</span>
                 <span className="mt-1 flex items-center gap-1.5">
-                    <span title="Concluídos" className="inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
+                    <i title="Concluídos" className={`${STATUS_COUNT_ICONS.completed} text-[10px] text-emerald-500`} aria-hidden="true"></i>
                     <span className="text-xs font-black text-[var(--text-strong)]">{completedCount}</span>
-                    <span title="Agendados" className="inline-flex h-2 w-2 rounded-full bg-blue-500"></span>
+                    <i title="Agendados" className={`${STATUS_COUNT_ICONS.scheduled} text-[10px] text-blue-500`} aria-hidden="true"></i>
                     <span className="text-xs font-black text-[var(--text-strong)]">{scheduledCount}</span>
-                    <span title="Cancelados / Faltou" className="inline-flex h-2 w-2 rounded-full bg-rose-500"></span>
+                    <i title="Cancelados / Faltou" className={`${STATUS_COUNT_ICONS.missed} text-[10px] text-rose-500`} aria-hidden="true"></i>
                     <span className="text-xs font-black text-[var(--text-strong)]">{missedCount}</span>
                 </span>
             </div>
@@ -1433,43 +1449,42 @@ const CalendarMonthStats: React.FC<{
 }> = ({ total, completed, scheduled, missed }) => (
     <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] font-bold text-[var(--text-muted)]">
         <span className="inline-flex h-7 items-center rounded-full bg-[var(--surface-muted)] px-2.5">{total} no mês</span>
-        <span className="hidden h-7 items-center gap-1 rounded-full bg-emerald-50 px-2 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-200 sm:inline-flex">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+        <span title="Concluídos" className="hidden h-7 items-center gap-1 rounded-full bg-emerald-50 px-2 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-200 sm:inline-flex">
+            <i className={`${STATUS_COUNT_ICONS.completed} text-[9px]`} aria-hidden="true"></i>
             {completed}
         </span>
-        <span className="hidden h-7 items-center gap-1 rounded-full bg-blue-50 px-2 text-blue-700 dark:bg-blue-950/30 dark:text-blue-200 sm:inline-flex">
-            <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
+        <span title="Agendados" className="hidden h-7 items-center gap-1 rounded-full bg-blue-50 px-2 text-blue-700 dark:bg-blue-950/30 dark:text-blue-200 sm:inline-flex">
+            <i className={`${STATUS_COUNT_ICONS.scheduled} text-[9px]`} aria-hidden="true"></i>
             {scheduled}
         </span>
-        <span className="hidden h-7 items-center gap-1 rounded-full bg-rose-50 px-2 text-rose-700 dark:bg-rose-950/30 dark:text-rose-200 sm:inline-flex">
-            <span className="h-1.5 w-1.5 rounded-full bg-rose-500"></span>
+        <span title="Cancelados / Faltou" className="hidden h-7 items-center gap-1 rounded-full bg-rose-50 px-2 text-rose-700 dark:bg-rose-950/30 dark:text-rose-200 sm:inline-flex">
+            <i className={`${STATUS_COUNT_ICONS.missed} text-[9px]`} aria-hidden="true"></i>
             {missed}
         </span>
     </div>
 );
 
-const CalendarStatusLegend: React.FC = () => (
+// Legenda dos pontinhos: a cor de cada tipo. "Sem tipo" só aparece quando há agendamento antigo à vista.
+const CalendarTypeLegend: React.FC<{ showUntyped: boolean; showHint?: boolean }> = ({ showUntyped, showHint = true }) => (
     <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] font-bold text-[var(--text-muted)]">
-        <span className="inline-flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full bg-blue-500"></span>
-            Agendado
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
-            Concluído
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full bg-amber-400"></span>
-            Faltou
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full bg-rose-500"></span>
-            Cancelado
-        </span>
-        <span className="ml-auto inline-flex items-center gap-1.5 text-[var(--text-soft)]">
-            <i className="fas fa-hand-pointer text-[10px]" aria-hidden="true"></i>
-            Segure um dia para agendar
-        </span>
+        {EVENT_TYPES.map((type) => (
+            <span key={type.value} className="inline-flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: type.color }}></span>
+                {type.label}
+            </span>
+        ))}
+        {showUntyped ? (
+            <span className="inline-flex items-center gap-1.5">
+                <span className={`h-2 w-2 rounded-full ${UNTYPED_DOT_CLASSES}`}></span>
+                Sem tipo
+            </span>
+        ) : null}
+        {showHint ? (
+            <span className="ml-auto inline-flex items-center gap-1.5 text-[var(--text-soft)]">
+                <i className="fas fa-hand-pointer text-[10px]" aria-hidden="true"></i>
+                Segure um dia para agendar
+            </span>
+        ) : null}
     </div>
 );
 
@@ -1667,6 +1682,8 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
         missed: monthAgendamentos.filter((item) => item.serviceStatus === 'cancelled' || item.serviceStatus === 'no_show').length,
     }), [monthAgendamentos]);
 
+    const monthHasUntyped = useMemo(() => hasUntypedAgendamento(monthAgendamentos), [monthAgendamentos]);
+
     const nextAppointment = useMemo(() => {
         const now = new Date().getTime();
         return agendamentosWithStatus.find((agendamento) => new Date(agendamento.end).getTime() >= now) || null;
@@ -1682,9 +1699,11 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
         return Array.from({ length: 7 }, (_, index) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + index));
     }, [selectedDate]);
 
-    const weekTotal = useMemo(() => (
-        weekStripDays.reduce((total, day) => total + (agendamentosByDate.get(day.toDateString())?.length || 0), 0)
+    const weekAgendamentos = useMemo(() => (
+        weekStripDays.flatMap((day) => agendamentosByDate.get(day.toDateString()) || [])
     ), [weekStripDays, agendamentosByDate]);
+
+    const weekHasUntyped = useMemo(() => hasUntypedAgendamento(weekAgendamentos), [weekAgendamentos]);
 
     const weekRangeLabel = useMemo(() => {
         const start = weekStripDays[0];
@@ -1956,16 +1975,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                                             <span className={getDayNumberClasses(day)}>
                                                 {day.getDate()}
                                             </span>
-                                            {dayAgendamentos.length > 0 && (
-                                                <div className="mt-1.5 flex flex-wrap justify-center items-center gap-1">
-                                                    {dayAgendamentos.slice(0, 3).map((agendamento) => (
-                                                        <div key={agendamento.id} className={`w-2 h-2 rounded-full ${getServiceStatusColor(agendamento.serviceStatus)}`} title={agendamento.clienteNome}></div>
-                                                    ))}
-                                                    {dayAgendamentos.length > 3 && (
-                                                        <div className="w-2 h-2 rounded-full bg-slate-300" title={`${dayAgendamentos.length - 3} mais`}></div>
-                                                    )}
-                                                </div>
-                                            )}
+                                            <CalendarDayDots agendamentos={dayAgendamentos} />
                                         </div>
                                     )}
                                 </div>
@@ -1973,7 +1983,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                         })}
                     </div>
 
-                        <CalendarStatusLegend />
+                        <CalendarTypeLegend showUntyped={monthHasUntyped} />
                       </>
                     ) : null}
 
@@ -1992,7 +2002,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                                 </button>
                             </div>
                             <span className="inline-flex h-7 shrink-0 items-center rounded-full bg-[var(--surface-muted)] px-2.5 text-[11px] font-bold text-[var(--text-muted)]">
-                                {weekTotal} na semana
+                                {weekAgendamentos.length} na semana
                             </span>
                         </header>
 
@@ -2025,23 +2035,14 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                                         <span className={getDayNumberClasses(day)}>
                                             {day.getDate()}
                                         </span>
-                                        {dayAgendamentos.length > 0 && (
-                                            <div className="mt-1.5 flex flex-wrap justify-center items-center gap-1">
-                                                {dayAgendamentos.slice(0, 3).map((agendamento) => (
-                                                    <div key={agendamento.id} className={`w-2 h-2 rounded-full ${getServiceStatusColor(agendamento.serviceStatus)}`} title={agendamento.clienteNome}></div>
-                                                ))}
-                                                {dayAgendamentos.length > 3 && (
-                                                    <div className="w-2 h-2 rounded-full bg-slate-300" title={`${dayAgendamentos.length - 3} mais`}></div>
-                                                )}
-                                            </div>
-                                        )}
+                                        <CalendarDayDots agendamentos={dayAgendamentos} />
                                     </div>
                                 </div>
                             );
                         })}
                         </div>
 
-                        <CalendarStatusLegend />
+                        <CalendarTypeLegend showUntyped={weekHasUntyped} />
                       </>
                     ) : null}
                 </section>
@@ -2217,22 +2218,15 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                                             <span className={getDayNumberClasses(day)}>
                                                 {day.getDate()}
                                             </span>
-                                            {dayAgendamentos.length > 0 && (
-                                                <div className="mt-1.5 flex flex-wrap justify-center items-center gap-1">
-                                                    {dayAgendamentos.slice(0, 3).map((agendamento) => (
-                                                        <div key={agendamento.id} className={`w-2 h-2 rounded-full ${getServiceStatusColor(agendamento.serviceStatus)}`} title={agendamento.clienteNome}></div>
-                                                    ))}
-                                                    {dayAgendamentos.length > 3 && (
-                                                        <div className="w-2 h-2 rounded-full bg-slate-300" title={`${dayAgendamentos.length - 3} mais`}></div>
-                                                    )}
-                                                </div>
-                                            )}
+                                            <CalendarDayDots agendamentos={dayAgendamentos} />
                                         </div>
                                     )}
                                 </div>
                             );
                         })}
                     </div>
+
+                    <CalendarTypeLegend showUntyped={monthHasUntyped} showHint={false} />
                 </section>
 
                 <aside className="rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface-raised)] p-4 shadow-[var(--shadow-soft)] lg:sticky lg:top-4">
