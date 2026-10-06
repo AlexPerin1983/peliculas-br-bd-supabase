@@ -1322,6 +1322,8 @@ const AppointmentCard: React.FC<{
     );
 };
 
+// Faixa compacta do próximo atendimento: quanto falta, quem, quando e os atalhos
+// de WhatsApp e rota. O cartão completo continua na lista logo abaixo.
 const NextAppointmentCard: React.FC<{
     agendamento: AgendamentoWithStatus;
     client?: Client;
@@ -1330,85 +1332,62 @@ const NextAppointmentCard: React.FC<{
     const [isChoosingWhatsapp, setIsChoosingWhatsapp] = useState(false);
 
     const clientAddress = formatFullAddress(client);
-    const telUrl = getTelUrl(client?.telefone);
     const whatsappUrl = getWhatsappUrl(client?.telefone);
-    const bairro = client?.bairro;
+    // Até 24 horas antes (ou em andamento), o destaque é quanto falta; antes disso, o dia.
+    const startsSoon = new Date(agendamento.start).getTime() - Date.now() < 24 * 60 * 60 * 1000;
     const countdown = getCountdownLabel(agendamento.start, agendamento.end);
-    const relativeDay = getRelativeDayLabel(agendamento.start);
-    const startTime = formatTime(agendamento.start);
-    const endTime = formatTime(agendamento.end);
-    const hasActions = Boolean(telUrl || whatsappUrl || clientAddress);
+    const highlight = startsSoon && countdown ? countdown : getRelativeDayLabel(agendamento.start);
+    const details = [
+        `${formatTime(agendamento.start)}–${formatTime(agendamento.end)}`,
+        agendamento.title || client?.bairro,
+    ].filter(Boolean).join(' · ');
+    const iconButtonClassName = 'inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-control)] border transition-colors';
 
     return (
-        <article className="overflow-hidden rounded-[var(--radius-card)] border border-[var(--brand-primary)]/30 bg-gradient-to-br from-[color-mix(in_srgb,var(--brand-primary)_10%,var(--surface))] to-[var(--surface)] shadow-[var(--shadow-soft)]">
+        <article className="relative flex items-center gap-2 overflow-hidden rounded-[var(--radius-card)] border border-[var(--brand-primary)]/30 bg-gradient-to-br from-[color-mix(in_srgb,var(--brand-primary)_10%,var(--surface))] to-[var(--surface)] py-3 pl-4 pr-3 shadow-[var(--shadow-soft)]">
+            <EventColorStripe agendamento={agendamento} />
             <button
                 type="button"
                 onClick={() => onOpen(agendamento)}
-                className="w-full p-4 text-left"
+                className="min-w-0 flex-1 text-left"
             >
-                <div className="flex items-center justify-between gap-2">
-                    <span className="inline-flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wide text-[var(--brand-primary)]">
-                        <i className="fas fa-bolt text-[10px]" aria-hidden="true"></i>
-                        Próximo atendimento
+                <span className="flex items-center gap-2 text-[11px] font-black uppercase tracking-wide text-[var(--brand-primary)]">
+                    <i className="fas fa-bolt text-[10px]" aria-hidden="true"></i>
+                    Próximo
+                    <span className="rounded-full bg-[var(--brand-primary)] px-2 py-0.5 normal-case tracking-normal text-white">
+                        {highlight}
                     </span>
-                    {countdown ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-[var(--brand-primary)] px-2.5 py-1 text-[11px] font-black text-white">
-                            <i className="far fa-clock text-[10px]" aria-hidden="true"></i>
-                            {countdown}
-                        </span>
-                    ) : null}
-                </div>
-
-                <p className="mt-2 truncate text-lg font-black leading-tight text-[var(--text-strong)]">
+                </span>
+                <span className="mt-1 block truncate text-base font-black leading-tight text-[var(--text-strong)]">
                     {agendamento.clienteNome}
-                </p>
-                {agendamento.title ? (
-                    <p className="mt-0.5 truncate text-sm font-semibold text-[var(--text-muted)]">{agendamento.title}</p>
-                ) : null}
-
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <EventTypeChip agendamento={agendamento} />
-                    <ContinuationChip originDate={splitContinuationNote(agendamento.notes).originDate} />
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--surface-muted)] px-2 py-1 text-xs font-bold text-[var(--text-muted)]">
-                        <i className="far fa-calendar text-[10px]" aria-hidden="true"></i>
-                        {relativeDay}
-                    </span>
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--surface-muted)] px-2 py-1 text-xs font-bold text-[var(--text-muted)]">
-                        <i className="far fa-clock text-[10px]" aria-hidden="true"></i>
-                        {startTime}-{endTime}
-                    </span>
-                    {bairro ? (
-                        <span className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-[var(--surface-muted)] px-2 py-1 text-xs font-bold text-[var(--text-muted)]" title={clientAddress}>
-                            <i className="fas fa-map-marker-alt text-[10px]" aria-hidden="true"></i>
-                            <span className="truncate">{bairro}</span>
-                        </span>
-                    ) : null}
-                </div>
+                </span>
+                <span className="mt-0.5 block truncate text-xs font-semibold text-[var(--text-muted)]">
+                    {details}
+                </span>
             </button>
 
-            {hasActions ? (
-                <div className="flex gap-2 border-t border-[var(--border-subtle)] bg-[color-mix(in_srgb,var(--surface-muted)_60%,transparent)] p-2">
-                    {telUrl ? (
-                        <AgendaActionLink
-                            href={telUrl}
-                            label="Ligar"
-                            ariaLabel={`Ligar para ${agendamento.clienteNome}`}
-                            iconClassName="fas fa-phone"
-                        />
-                    ) : null}
-                    {whatsappUrl ? (
-                        <AgendaActionButton
-                            onClick={() => setIsChoosingWhatsapp(true)}
-                            label="WhatsApp"
-                            ariaLabel={`Abrir WhatsApp de ${agendamento.clienteNome}`}
-                            iconClassName="fab fa-whatsapp"
-                            tone="blue"
-                        />
-                    ) : null}
-                    {clientAddress ? (
-                        <RouteActionLink address={clientAddress} clientName={agendamento.clienteNome} />
-                    ) : null}
-                </div>
+            {whatsappUrl ? (
+                <button
+                    type="button"
+                    onClick={() => setIsChoosingWhatsapp(true)}
+                    aria-label={`Abrir WhatsApp de ${agendamento.clienteNome}`}
+                    title="WhatsApp"
+                    className={`${iconButtonClassName} ${AGENDA_ACTION_TONE_CLASSES.blue}`}
+                >
+                    <i className="fab fa-whatsapp text-base" aria-hidden="true"></i>
+                </button>
+            ) : null}
+            {clientAddress ? (
+                <a
+                    href={getMapsDirectionsUrl(clientAddress)}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label={`Navegar até endereço de ${agendamento.clienteNome}`}
+                    title="Rota"
+                    className={`${iconButtonClassName} ${AGENDA_ACTION_TONE_CLASSES.green}`}
+                >
+                    <i className="fas fa-location-arrow text-sm" aria-hidden="true"></i>
+                </a>
             ) : null}
 
             {isChoosingWhatsapp ? (

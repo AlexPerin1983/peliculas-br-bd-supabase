@@ -81,7 +81,8 @@ describe('AgendaView', () => {
     it('mostra o tipo e o título do agendamento no card', () => {
         renderAgenda([clientWithAddress], [{ ...appointment, eventType: 'consulta', title: 'Medir a sala' }]);
 
-        const cards = screen.getAllByRole('article');
+        // Os cartões completos (a faixa do próximo atendimento é resumida).
+        const cards = screen.getAllByRole('article').filter((card) => !within(card).queryByText('Próximo'));
         expect(cards.length).toBeGreaterThan(0);
         cards.forEach((card) => {
             expect(within(card).getByText('Consulta')).toBeInTheDocument();
@@ -255,6 +256,19 @@ describe('AgendaView', () => {
         }
     });
 
+    it('próximo atendimento é uma faixa compacta com WhatsApp e rota', () => {
+        vi.setSystemTime(new Date('2026-05-24T09:30:00.000Z'));
+        renderAgenda([clientWithAddress], [{ ...appointment, title: 'Medir a sala' }]);
+
+        const strip = screen.getAllByRole('article').find((card) => within(card).queryByText('Próximo'))!;
+        expect(within(strip).getByText('Em 2h30')).toBeInTheDocument();
+        expect(within(strip).getByText('Cliente Mapa')).toBeInTheDocument();
+        expect(within(strip).getByText(/Medir a sala$/)).toBeInTheDocument();
+        expect(within(strip).getByRole('button', { name: /abrir whatsapp de cliente mapa/i })).toBeInTheDocument();
+        expect(within(strip).getByRole('link', { name: /navegar até endereço de cliente mapa/i })).toBeInTheDocument();
+        expect(within(strip).queryByRole('link', { name: /ligar para/i })).not.toBeInTheDocument();
+    });
+
     it('sem a acao de voz nao mostra o microfone', () => {
         renderAgenda();
         expect(screen.queryByRole('button', { name: 'Agendar por voz' })).not.toBeInTheDocument();
@@ -302,7 +316,7 @@ describe('AgendaView', () => {
     it('ações do cartão numa linha só: Ligar, WhatsApp e Rota', () => {
         renderAgenda();
 
-        const route = screen.getAllByRole('link', { name: /navegar até endereço de cliente mapa/i })[0];
+        const route = screen.getAllByRole('link', { name: /navegar até endereço de cliente mapa/i }).find((link) => link.textContent === 'Rota')!;
         expect(route).toHaveTextContent(/^Rota$/);
         const actions = route.parentElement!;
         expect(actions).toHaveClass('flex');
