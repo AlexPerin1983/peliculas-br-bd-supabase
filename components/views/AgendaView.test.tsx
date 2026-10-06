@@ -242,6 +242,16 @@ describe('AgendaView', () => {
         expect(screen.queryByRole('link', { name: /whatsapp business/i })).not.toBeInTheDocument();
     });
 
+    it('ações do cartão numa linha só: Ligar, WhatsApp e Rota', () => {
+        renderAgenda();
+
+        const route = screen.getAllByRole('link', { name: /navegar até endereço de cliente mapa/i })[0];
+        expect(route).toHaveTextContent(/^Rota$/);
+        const actions = route.parentElement!;
+        expect(actions).toHaveClass('flex');
+        expect(actions.children).toHaveLength(3);
+    });
+
     it('nao mostra link de navegacao sem endereco do cliente', () => {
         renderAgenda([
             {

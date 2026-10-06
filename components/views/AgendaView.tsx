@@ -297,7 +297,7 @@ const AGENDA_ACTION_TONE_CLASSES = {
     blue: 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-800/70 dark:bg-blue-950/25 dark:text-blue-200 dark:hover:bg-blue-900/35',
 } as const;
 
-const AGENDA_ACTION_BASE_CLASSES = 'inline-flex h-9 min-w-0 items-center justify-center gap-2 rounded-[var(--radius-control)] border px-3 text-xs font-bold transition-colors';
+const AGENDA_ACTION_BASE_CLASSES = 'inline-flex h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-[var(--radius-control)] border px-2 text-xs font-bold transition-colors';
 
 const AgendaActionLink: React.FC<{
     href: string;
@@ -316,7 +316,8 @@ const AgendaActionLink: React.FC<{
         className={`${AGENDA_ACTION_BASE_CLASSES} ${AGENDA_ACTION_TONE_CLASSES[tone]} ${className}`}
     >
         <i className={`${iconClassName} text-[11px]`} aria-hidden="true"></i>
-        <span className="truncate">{label}</span>
+        {/* Tamanho e peso no texto: em <button>, o "font: inherit" global passa por cima das classes. */}
+        <span className="truncate text-xs font-bold">{label}</span>
     </a>
 );
 
@@ -338,7 +339,8 @@ const AgendaActionButton: React.FC<{
         className={`${AGENDA_ACTION_BASE_CLASSES} ${AGENDA_ACTION_TONE_CLASSES[tone]} ${className}`}
     >
         <i className={`${iconClassName} text-[11px]`} aria-hidden="true"></i>
-        <span className="truncate">{label}</span>
+        {/* Tamanho e peso no texto: em <button>, o "font: inherit" global passa por cima das classes. */}
+        <span className="truncate text-xs font-bold">{label}</span>
     </button>
 );
 
@@ -783,11 +785,10 @@ const RouteActionLink: React.FC<{
 }> = ({ address, clientName }) => (
     <AgendaActionLink
         href={getMapsDirectionsUrl(address)}
-        label="Navegar até endereço"
+        label="Rota"
         ariaLabel={`Navegar até endereço de ${clientName}`}
         iconClassName="fas fa-location-arrow"
         tone="green"
-        className="col-span-2 sm:col-span-1"
     />
 );
 
@@ -1250,7 +1251,7 @@ const AppointmentCard: React.FC<{
             ) : null}
 
             {hasActions ? (
-                <div className="grid grid-cols-2 gap-2 border-t border-[var(--border-subtle)] bg-[color-mix(in_srgb,var(--surface-muted)_60%,transparent)] p-2 sm:grid-cols-3">
+                <div className="flex gap-2 border-t border-[var(--border-subtle)] bg-[color-mix(in_srgb,var(--surface-muted)_60%,transparent)] p-2">
                     {telUrl ? (
                         <AgendaActionLink
                             href={telUrl}
@@ -1350,7 +1351,7 @@ const NextAppointmentCard: React.FC<{
             </button>
 
             {hasActions ? (
-                <div className="grid grid-cols-2 gap-2 border-t border-[var(--border-subtle)] bg-[color-mix(in_srgb,var(--surface-muted)_60%,transparent)] p-2 sm:grid-cols-3">
+                <div className="flex gap-2 border-t border-[var(--border-subtle)] bg-[color-mix(in_srgb,var(--surface-muted)_60%,transparent)] p-2">
                     {telUrl ? (
                         <AgendaActionLink
                             href={telUrl}
