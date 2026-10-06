@@ -183,6 +183,7 @@ interface ModalsContainerProps {
     handleConfirmAgendamento: (clientId: number) => void;
     handleRequestDeleteAgendamento: (agendamento: Agendamento) => void;
     handleAddNewClientFromAgendamento: (clientName: string) => void;
+    handleSaveClientFromAgendamento: (client: Omit<Client, 'id'> | Client) => Promise<Client>;
     handleCreateQuickClient: (values: { nome: string; local: string }, draft?: QuickClientDraft) => Promise<Client>;
     allSavedPdfs: SavedPDF[];
     agendamentos: Agendamento[];
@@ -365,6 +366,7 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
                     clients={props.clients}
                     savedPdfs={props.allSavedPdfs}
                     onAddNewClient={props.handleAddNewClientFromAgendamento}
+                    onSaveClient={props.handleSaveClientFromAgendamento}
                     onCreateQuickClient={props.handleCreateQuickClient}
                     userInfo={props.userInfo}
                     agendamentos={props.agendamentos}

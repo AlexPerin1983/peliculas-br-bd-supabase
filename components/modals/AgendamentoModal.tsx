@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, FormEvent } from 'react';
+import React, { lazy, Suspense, useState, useEffect, useMemo, FormEvent } from 'react';
 import { Agendamento, AgendamentoEventType, AgendamentoServiceStatus, Client, QuickClientDraft, UserInfo, SavedPDF, SchedulingInfo } from '../../types';
 import Modal from '../ui/Modal';
 import ActionButton from '../ui/ActionButton';
@@ -9,6 +9,8 @@ import { getAgendamentoSlotError } from '../../src/lib/agendamentoRules';
 import { isClientAddress, pickProposalToLink, withLocalNote } from '../../src/lib/voiceClientMatch';
 import { buildMultiDayAgendamentos, formatDayLabel, moveToDay, nextDayKey, normalizeExtraDays } from '../../src/lib/multiDaySchedule';
 import { DEFAULT_EVENT_TYPE, EVENT_COLOR_PALETTE, EVENT_TYPES, getAgendamentoColor, getEventTypeDurationMinutes, getEventTypeMeta } from '../../src/lib/agendamentoEventTypes';
+
+const ClientModal = lazy(() => import('./ClientModal'));
 
 const COLOR_NAMES: Record<string, string> = {
     '#7c3aed': 'Violeta',
@@ -31,6 +33,10 @@ interface AgendamentoModalProps {
     clients: Client[];
     savedPdfs: SavedPDF[];
     onAddNewClient: (clientName: string) => void;
+    // Salva o cliente aberto por cima do agendamento (novo ou editado), sem fechar
+    // o agendamento nem trocar o cliente aberto no orçamento. Sem ela, "Cadastrar
+    // novo" segue o caminho antigo (onAddNewClient) e não há "Editar".
+    onSaveClient?: (client: Omit<Client, 'id'> | Client) => Promise<Client>;
     // Cria o cadastro simples do cliente ditado por voz (só nome e local).
     onCreateQuickClient?: (values: { nome: string; local: string }, draft?: QuickClientDraft) => Promise<Client>;
     userInfo: UserInfo | null;
@@ -105,7 +111,7 @@ const addMinutesToTime = (time: string, minutes: number) => {
 // Término automático: o início mais a duração do tipo (Consulta 1 hora; os outros, 2 horas).
 const getAutoEndTime = (start: string, type?: AgendamentoEventType) => addMinutesToTime(start, getEventTypeDurationMinutes(type));
 
-const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, onSave, onDelete, schedulingInfo, clients, savedPdfs, onAddNewClient, onCreateQuickClient, userInfo, agendamentos }) => {
+const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, onSave, onDelete, schedulingInfo, clients, savedPdfs, onAddNewClient, onSaveClient, onCreateQuickClient, userInfo, agendamentos }) => {
     const agendamento = schedulingInfo.agendamento;
     const pdf = 'pdf' in schedulingInfo ? schedulingInfo.pdf : undefined;
     const quickClient = 'quickClient' in schedulingInfo ? schedulingInfo.quickClient : undefined;
@@ -134,6 +140,8 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
     const [title, setTitle] = useState('');
     const [color, setColor] = useState('');
     const [isColorOpen, setIsColorOpen] = useState(false);
+    // Cadastro do cliente aberto por cima do agendamento (o que já foi preenchido fica).
+    const [clientEditor, setClientEditor] = useState<{ mode: 'add' | 'edit'; initialName?: string } | null>(null);
     const typeColor = getEventTypeMeta(eventType)?.color;
     const currentColor = getAgendamentoColor({ eventType, color }) ?? '#94a3b8';
     // Em agendamento novo, enquanto o término for o automático (não mexido), ele
@@ -420,6 +428,29 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
         ? clients.find(client => client.id === quickClient.matchedClientId)
         : undefined;
 
+    // Cliente escolhido: telefone e endereço à vista (a rota e o WhatsApp usam os dois).
+    const currentClient = selectedClientId != null ? clients.find(client => client.id === selectedClientId) : undefined;
+    const currentClientPhone = currentClient?.telefone?.trim() || '';
+    const currentClientAddress = currentClient ? formatClientAddress(currentClient) : '';
+    const isCurrentClientIncomplete = Boolean(currentClient) && (!currentClientPhone || !currentClientAddress);
+
+    // "Cadastrar novo": por cima do agendamento quando dá; senão, o caminho antigo.
+    const handleAddNewClient = (name: string) => {
+        if (onSaveClient) setClientEditor({ mode: 'add', initialName: name });
+        else onAddNewClient(name);
+    };
+
+    const handleSaveClientFromEditor = async (data: Omit<Client, 'id'> | Client) => {
+        if (!onSaveClient || !clientEditor) return;
+        const isEdit = clientEditor.mode === 'edit' && currentClient?.id != null;
+        const saved = await onSaveClient(isEdit ? { ...data, id: currentClient!.id } : data);
+        if (!isEdit && saved.id != null) {
+            setSelectedClientId(saved.id);
+            setSelectedProposalIds([]);
+        }
+        setClientEditor(null);
+    };
+
     const handleDelete = () => {
         if (isSaving) return;
         if (isEditing && agendamento) {
@@ -666,7 +697,7 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                                     </p>
                                     <ActionButton
                                         type="button"
-                                        onClick={() => onAddNewClient(searchTerm)}
+                                        onClick={() => handleAddNewClient(searchTerm)}
                                         variant="secondary"
                                         size="sm"
                                         className="w-full border-blue-200 text-blue-700 dark:border-blue-800 dark:text-blue-300"
@@ -683,7 +714,7 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                                     </p>
                                     <ActionButton
                                         type="button"
-                                        onClick={() => onAddNewClient(searchTerm)}
+                                        onClick={() => handleAddNewClient(searchTerm)}
                                         variant="secondary"
                                         size="sm"
                                     >
@@ -693,6 +724,33 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                                 </li>
                             )}
                         />
+                        {currentClient ? (
+                            <div className="mt-2 flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-800/60">
+                                <div className="min-w-0 space-y-0.5 text-xs">
+                                    <p className={`flex items-center gap-1.5 ${currentClientPhone ? 'text-slate-600 dark:text-slate-300' : 'font-semibold text-amber-700 dark:text-amber-300'}`}>
+                                        <i className="fas fa-phone w-3 shrink-0 text-[10px]" aria-hidden="true"></i>
+                                        <span className="truncate">{currentClientPhone || 'Sem telefone'}</span>
+                                    </p>
+                                    <p className={`flex items-center gap-1.5 ${currentClientAddress ? 'text-slate-600 dark:text-slate-300' : 'font-semibold text-amber-700 dark:text-amber-300'}`}>
+                                        <i className="fas fa-location-dot w-3 shrink-0 text-[10px]" aria-hidden="true"></i>
+                                        <span className="truncate">{currentClientAddress || 'Sem endereço'}</span>
+                                    </p>
+                                </div>
+                                {onSaveClient ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => setClientEditor({ mode: 'edit' })}
+                                        aria-label={`${isCurrentClientIncomplete ? 'Completar' : 'Editar'} o cadastro de ${currentClient.nome}`}
+                                        className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 transition-colors ${isCurrentClientIncomplete
+                                            ? 'border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 dark:border-amber-800/70 dark:bg-amber-950/30 dark:text-amber-200'
+                                            : 'border-slate-200 bg-white text-blue-700 hover:bg-blue-50 dark:border-slate-600 dark:bg-slate-900 dark:text-blue-300'}`}
+                                    >
+                                        <i className="fas fa-pen text-[10px]" aria-hidden="true"></i>
+                                        <span className="text-xs font-bold">{isCurrentClientIncomplete ? 'Completar' : 'Editar'}</span>
+                                    </button>
+                                ) : null}
+                            </div>
+                        ) : null}
                     </div>
                     )}
 
@@ -990,6 +1048,19 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                     )}
                 </fieldset>
             </form>
+
+            {clientEditor && onSaveClient ? (
+                <Suspense fallback={null}>
+                    <ClientModal
+                        isOpen
+                        mode={clientEditor.mode}
+                        client={clientEditor.mode === 'edit' ? currentClient ?? null : null}
+                        initialName={clientEditor.initialName}
+                        onClose={() => setClientEditor(null)}
+                        onSave={handleSaveClientFromEditor}
+                    />
+                </Suspense>
+            ) : null}
         </Modal>
     );
 };

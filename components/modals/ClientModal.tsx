@@ -13,7 +13,8 @@ interface ClientModalProps {
     client: Client | null;
     initialName?: string;
     aiData?: Partial<Client>;
-    onOpenAIModal: () => void;
+    // Sem ela (ex.: aberto por cima do agendamento), o botão "com IA" não aparece.
+    onOpenAIModal?: () => void;
 }
 
 const applyPhoneMask = (value: string) => {
@@ -280,7 +281,7 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSave, mode
             <h2 className="text-xl font-semibold text-slate-800 dark:text-white">
                 {aiData ? 'Confirmar Dados da IA' : (mode === 'add' ? 'Adicionar Novo Cliente' : 'Editar Cliente')}
             </h2>
-            {!aiData && (
+            {!aiData && onOpenAIModal && (
                 <Tooltip text="Preencher com IA">
                     <button
                         type="button"
