@@ -317,6 +317,24 @@ describe('AgendaView', () => {
         window.localStorage.removeItem('peliculas-br-agenda-view-mode-v1');
     });
 
+    it('com 2 endereços pela frente no dia, oferece a rota do dia no Google Maps', () => {
+        const otherClient: Client = { ...clientWithAddress, id: 2, nome: 'Outro Cliente', logradouro: 'Avenida Cabo Branco', numero: '50', bairro: 'Cabo Branco' };
+        renderAgenda([clientWithAddress, otherClient], [
+            { ...appointment, id: 1, start: '2026-05-24T15:00:00.000Z', end: '2026-05-24T16:00:00.000Z' },
+            { ...appointment, id: 2, clienteId: 2, clienteNome: 'Outro Cliente', start: '2026-05-24T18:00:00.000Z', end: '2026-05-24T19:00:00.000Z' },
+        ]);
+
+        const route = screen.getAllByRole('link', { name: 'Abrir a rota do dia no Google Maps com 2 paradas' })[0];
+        expect(route).toHaveTextContent('Rota do dia');
+        const url = decodeURIComponent(route.getAttribute('href')!);
+        expect(url).toMatch(/^https:\/\/www\.google\.com\/maps\/dir\/\?api=1&destination=Avenida Cabo Branco.*&waypoints=Rua das Peliculas/);
+    });
+
+    it('com um endereço só no dia, não mostra a rota do dia', () => {
+        renderAgenda([clientWithAddress], [{ ...appointment, start: '2026-05-24T15:00:00.000Z', end: '2026-05-24T16:00:00.000Z' }]);
+        expect(screen.queryByRole('link', { name: /rota do dia/i })).not.toBeInTheDocument();
+    });
+
     it('sem a acao de voz nao mostra o microfone', () => {
         renderAgenda();
         expect(screen.queryByRole('button', { name: 'Agendar por voz' })).not.toBeInTheDocument();

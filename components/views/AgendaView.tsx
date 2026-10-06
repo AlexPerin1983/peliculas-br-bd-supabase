@@ -16,6 +16,7 @@ import { EVENT_TYPES, getAgendamentoColor, getCalendarDots, getEventTypeMeta } f
 import { splitContinuationNote } from '../../src/lib/multiDaySchedule';
 import { buildAppointmentConfirmation } from '../../src/lib/appointmentConfirmation';
 import { AgendaTypeFilter, matchesAgendaFilters } from '../../src/lib/agendaFilters';
+import { buildDayRoute, DayRoute } from '../../src/lib/dayRoute';
 import {
     buildReviewFollowUpMessage,
     buildShortReviewMessage,
@@ -1426,7 +1427,9 @@ const AgendaDayGroupHeader: React.FC<{ label: string; count: number; highlighted
 // quando já há concluído ou cancelado, a conta por status.
 const DayAgendaSummary: React.FC<{
     agendamentos: AgendamentoWithStatus[];
-}> = ({ agendamentos }) => {
+    // Rota do dia no Google Maps, quando há pelo menos 2 endereços pela frente.
+    route?: DayRoute | null;
+}> = ({ agendamentos, route }) => {
     if (agendamentos.length === 0) return null;
 
     const lastEnd = agendamentos.reduce((latest, item) => (
@@ -1447,7 +1450,7 @@ const DayAgendaSummary: React.FC<{
             <span>{agendamentos.length} {agendamentos.length === 1 ? 'atendimento' : 'atendimentos'}</span>
             <span aria-hidden="true">·</span>
             <span>{formatTime(agendamentos[0].start)}–{formatTime(lastEnd)}</span>
-            {statusCounts.length ? (
+            {statusCounts.length || route ? (
                 <span className="ml-auto inline-flex items-center gap-2.5">
                     {statusCounts.map((item) => (
                         <span key={item.label} title={item.label} className={`inline-flex items-center gap-1 ${item.className}`}>
@@ -1456,6 +1459,19 @@ const DayAgendaSummary: React.FC<{
                             <span className="sr-only">{item.label}</span>
                         </span>
                     ))}
+                    {route ? (
+                        <a
+                            href={route.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            aria-label={`Abrir a rota do dia no Google Maps com ${route.count} paradas`}
+                            title={route.total > route.count ? `O Maps no celular aceita até ${route.count} paradas por rota` : undefined}
+                            className={`inline-flex h-8 items-center gap-1.5 rounded-full border px-3 transition-colors ${AGENDA_ACTION_TONE_CLASSES.green}`}
+                        >
+                            <i className="fas fa-route text-[11px]" aria-hidden="true"></i>
+                            {route.total > route.count ? `Rota · ${route.count} primeiras` : 'Rota do dia'}
+                        </a>
+                    ) : null}
                 </span>
             ) : null}
         </p>
@@ -1732,6 +1748,11 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
     const selectedDayAgendamentos = useMemo(() => {
         return agendamentosByDate.get(selectedDate.toDateString()) || [];
     }, [agendamentosByDate, selectedDate]);
+
+    const selectedDayRoute = useMemo(() => buildDayRoute(
+        selectedDayAgendamentos,
+        (index) => formatFullAddress(clientsById.get(selectedDayAgendamentos[index].clienteId)),
+    ), [selectedDayAgendamentos, clientsById]);
 
     // Semana (Dom a Sab) que contem o dia selecionado, para a visao "Semana".
     const weekStripDays = useMemo(() => {
@@ -2257,7 +2278,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                         onTouchStart={viewMode === 'day' ? handleGridTouchStart : undefined}
                         onTouchEnd={viewMode === 'day' ? handleDayTouchEnd : undefined}
                     >
-                    <DayAgendaSummary agendamentos={selectedDayAgendamentos} />
+                    <DayAgendaSummary agendamentos={selectedDayAgendamentos} route={selectedDayRoute} />
 
                     {selectedDayAgendamentos.length > 0 ? (
                         <div className="space-y-3">
@@ -2500,7 +2521,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                         </div>
                     </div>
 
-                    <DayAgendaSummary agendamentos={selectedDayAgendamentos} />
+                    <DayAgendaSummary agendamentos={selectedDayAgendamentos} route={selectedDayRoute} />
 
                     {selectedDayAgendamentos.length > 0 ? (
                         <div className="space-y-3">
