@@ -14,6 +14,7 @@ import { buildServiceStockPlans } from '../../src/lib/serviceStockConsumption';
 import { useSubscription } from '../../contexts/SubscriptionContext';
 import { EVENT_TYPES, getAgendamentoColor, getCalendarDots, getEventTypeMeta } from '../../src/lib/agendamentoEventTypes';
 import { splitContinuationNote } from '../../src/lib/multiDaySchedule';
+import { buildAppointmentConfirmation } from '../../src/lib/appointmentConfirmation';
 import {
     buildReviewFollowUpMessage,
     buildShortReviewMessage,
@@ -297,7 +298,7 @@ const AGENDA_ACTION_TONE_CLASSES = {
     blue: 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-800/70 dark:bg-blue-950/25 dark:text-blue-200 dark:hover:bg-blue-900/35',
 } as const;
 
-const AGENDA_ACTION_BASE_CLASSES = 'inline-flex h-9 min-w-0 items-center justify-center gap-2 rounded-[var(--radius-control)] border px-3 text-xs font-bold transition-colors';
+const AGENDA_ACTION_BASE_CLASSES = 'inline-flex h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-[var(--radius-control)] border px-2 text-xs font-bold transition-colors';
 
 const AgendaActionLink: React.FC<{
     href: string;
@@ -316,7 +317,8 @@ const AgendaActionLink: React.FC<{
         className={`${AGENDA_ACTION_BASE_CLASSES} ${AGENDA_ACTION_TONE_CLASSES[tone]} ${className}`}
     >
         <i className={`${iconClassName} text-[11px]`} aria-hidden="true"></i>
-        <span className="truncate">{label}</span>
+        {/* Tamanho e peso no texto: em <button>, o "font: inherit" global passa por cima das classes. */}
+        <span className="truncate text-xs font-bold">{label}</span>
     </a>
 );
 
@@ -338,7 +340,8 @@ const AgendaActionButton: React.FC<{
         className={`${AGENDA_ACTION_BASE_CLASSES} ${AGENDA_ACTION_TONE_CLASSES[tone]} ${className}`}
     >
         <i className={`${iconClassName} text-[11px]`} aria-hidden="true"></i>
-        <span className="truncate">{label}</span>
+        {/* Tamanho e peso no texto: em <button>, o "font: inherit" global passa por cima das classes. */}
+        <span className="truncate text-xs font-bold">{label}</span>
     </button>
 );
 
@@ -346,10 +349,15 @@ const AgendaWhatsAppChooserModal: React.FC<{
     clientName: string;
     phone?: string;
     messageText?: string;
+    // Mensagem que dá para ajustar antes de abrir (ex.: confirmação do atendimento).
+    editableMessage?: boolean;
     onClose: () => void;
-}> = ({ clientName, phone, messageText, onClose }) => {
-    const regularUrl = getRegularWhatsappUrl(phone, messageText);
-    const businessUrl = getBusinessWhatsappUrl(phone, messageText);
+}> = ({ clientName, phone, messageText, editableMessage = false, onClose }) => {
+    const [draftMessage, setDraftMessage] = useState(messageText || '');
+    const isEditing = editableMessage && Boolean(messageText);
+    const finalMessage = isEditing ? draftMessage.trim() : messageText;
+    const regularUrl = getRegularWhatsappUrl(phone, finalMessage);
+    const businessUrl = getBusinessWhatsappUrl(phone, finalMessage);
     // WhatsApp Business só faz sentido no mobile (deep link Android/iOS); no desktop ambos abrem o WhatsApp Web.
     const showBusiness = isLikelyMobileDevice();
 
@@ -377,6 +385,24 @@ const AgendaWhatsAppChooserModal: React.FC<{
                 <p className="text-sm text-slate-500 dark:text-slate-400">
                     Escolha qual app deseja usar para falar com <strong className="text-slate-700 dark:text-slate-200">{clientName}</strong>.
                 </p>
+
+                {isEditing ? (
+                    <div>
+                        <label htmlFor="whatsappConfirmationMessage" className="ui-label mb-1.5 block">
+                            Mensagem de confirmação
+                        </label>
+                        <textarea
+                            id="whatsappConfirmationMessage"
+                            value={draftMessage}
+                            onChange={(event) => setDraftMessage(event.target.value)}
+                            rows={4}
+                            className="ui-field block w-full resize-none px-3 py-2.5 text-sm leading-5"
+                        />
+                        <p className="mt-1.5 text-xs text-slate-400 dark:text-slate-500">
+                            Dá para mudar o texto aqui. Apagando tudo, a conversa abre sem mensagem.
+                        </p>
+                    </div>
+                ) : null}
 
                 <div className={`grid gap-3 ${showBusiness ? 'sm:grid-cols-2' : ''}`}>
                     <a
@@ -783,11 +809,10 @@ const RouteActionLink: React.FC<{
 }> = ({ address, clientName }) => (
     <AgendaActionLink
         href={getMapsDirectionsUrl(address)}
-        label="Navegar até endereço"
+        label="Rota"
         ariaLabel={`Navegar até endereço de ${clientName}`}
         iconClassName="fas fa-location-arrow"
         tone="green"
-        className="col-span-2 sm:col-span-1"
     />
 );
 
@@ -1250,7 +1275,7 @@ const AppointmentCard: React.FC<{
             ) : null}
 
             {hasActions ? (
-                <div className="grid grid-cols-2 gap-2 border-t border-[var(--border-subtle)] bg-[color-mix(in_srgb,var(--surface-muted)_60%,transparent)] p-2 sm:grid-cols-3">
+                <div className="flex gap-2 border-t border-[var(--border-subtle)] bg-[color-mix(in_srgb,var(--surface-muted)_60%,transparent)] p-2">
                     {telUrl ? (
                         <AgendaActionLink
                             href={telUrl}
@@ -1278,6 +1303,8 @@ const AppointmentCard: React.FC<{
                 <AgendaWhatsAppChooserModal
                     clientName={agendamento.clienteNome}
                     phone={client?.telefone}
+                    messageText={buildAppointmentConfirmation(agendamento)}
+                    editableMessage
                     onClose={() => setIsChoosingWhatsapp(false)}
                 />
             ) : null}
@@ -1350,7 +1377,7 @@ const NextAppointmentCard: React.FC<{
             </button>
 
             {hasActions ? (
-                <div className="grid grid-cols-2 gap-2 border-t border-[var(--border-subtle)] bg-[color-mix(in_srgb,var(--surface-muted)_60%,transparent)] p-2 sm:grid-cols-3">
+                <div className="flex gap-2 border-t border-[var(--border-subtle)] bg-[color-mix(in_srgb,var(--surface-muted)_60%,transparent)] p-2">
                     {telUrl ? (
                         <AgendaActionLink
                             href={telUrl}
@@ -1378,6 +1405,8 @@ const NextAppointmentCard: React.FC<{
                 <AgendaWhatsAppChooserModal
                     clientName={agendamento.clienteNome}
                     phone={client?.telefone}
+                    messageText={buildAppointmentConfirmation(agendamento)}
+                    editableMessage
                     onClose={() => setIsChoosingWhatsapp(false)}
                 />
             ) : null}
