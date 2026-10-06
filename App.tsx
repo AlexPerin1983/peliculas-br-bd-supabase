@@ -2605,6 +2605,16 @@ Regras:
         return savedClient;
     }, []);
 
+    // Cliente novo ou editado por cima do agendamento: atualiza a lista no lugar,
+    // sem fechar o agendamento nem trocar o cliente aberto no orçamento.
+    const handleSaveClientFromAgendamento = useCallback(async (client: Omit<Client, 'id'> | Client) => {
+        const savedClient = await db.saveClient(client);
+        setClients(current => (current.some(item => item.id === savedClient.id)
+            ? current.map(item => (item.id === savedClient.id ? savedClient : item))
+            : [savedClient, ...current]));
+        return savedClient;
+    }, []);
+
     // Mesmas regras da conferência (dia de trabalho, expediente e equipe livre),
     // com a agenda atualizada, antes de salvar sem ninguém conferir.
     const getVoiceDraftSlotError = useCallback(async (draft: VoiceScheduleDraft) => {
@@ -3289,6 +3299,7 @@ Use somente o JSON definido e não inclua explicações fora dele.`;
         handleRequestDeleteAgendamento,
         agendamentos,
         handleAddNewClientFromAgendamento,
+        handleSaveClientFromAgendamento,
         handleCreateQuickClient,
         isSaveBeforePdfModalOpen,
         setIsSaveBeforePdfModalOpen,

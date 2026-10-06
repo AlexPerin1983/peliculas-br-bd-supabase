@@ -408,4 +408,75 @@ describe('AgendamentoModal', () => {
             expect(screen.getByLabelText('Término')).toHaveValue('11:00');
         });
     });
+
+    describe('cadastro do cliente por cima do agendamento', () => {
+        const ana: Client = { ...createdClient, id: 11, nome: 'Ana', telefone: '(83) 99999-0000' };
+        const semEndereco: Client = { id: 12, nome: 'Bruno', telefone: '', email: '', cpfCnpj: '' };
+
+        const renderWithClients = (clients: Client[], props: Record<string, unknown> = {}) => {
+            const onSaveClient = vi.fn(async (client: Client) => ({ ...client, id: client.id ?? 77 }));
+            const onAddNewClient = vi.fn();
+            render(
+                <AgendamentoModal
+                    isOpen onClose={vi.fn()} onSave={vi.fn().mockResolvedValue(undefined)} onDelete={vi.fn()}
+                    schedulingInfo={{ agendamento: { clienteId: clients[0]?.id, clienteNome: clients[0]?.nome, start: voiceStart.toISOString(), end: voiceEnd.toISOString() } }}
+                    clients={clients} savedPdfs={[]} onAddNewClient={onAddNewClient} onSaveClient={onSaveClient}
+                    userInfo={userInfo} agendamentos={[]} {...props}
+                />
+            );
+            return { onSaveClient, onAddNewClient };
+        };
+
+        it('mostra telefone e endereço do cliente e edita sem perder o que foi preenchido', async () => {
+            const { onSaveClient } = renderWithClients([ana]);
+            expect(screen.getByText('(83) 99999-0000')).toBeInTheDocument();
+            expect(screen.getByText('Rua das Flores, 120, Centro')).toBeInTheDocument();
+
+            fireEvent.change(screen.getByLabelText('Título (opcional)'), { target: { value: 'Medir a sala' } });
+            fireEvent.click(screen.getByRole('button', { name: 'Editar o cadastro de Ana' }));
+
+            const phone = await screen.findByLabelText('Telefone');
+            expect(screen.getByLabelText('Nome do Cliente')).toHaveValue('Ana');
+            expect(screen.queryByRole('button', { name: /Inteligência Artificial/ })).not.toBeInTheDocument();
+            fireEvent.change(phone, { target: { value: '83988887777' } });
+            fireEvent.click(screen.getByRole('button', { name: /Salvar Cliente/ }));
+
+            await waitFor(() => expect(onSaveClient).toHaveBeenCalledWith(expect.objectContaining({ id: 11, nome: 'Ana', telefone: '(83) 98888-7777' })));
+            await waitFor(() => expect(screen.queryByLabelText('Nome do Cliente')).not.toBeInTheDocument());
+            // O agendamento continua como estava.
+            expect(screen.getByLabelText('Título (opcional)')).toHaveValue('Medir a sala');
+        });
+
+        it('cliente sem telefone ou endereço pede para completar', () => {
+            renderWithClients([semEndereco]);
+            expect(screen.getByText('Sem telefone')).toBeInTheDocument();
+            expect(screen.getByText('Sem endereço')).toBeInTheDocument();
+            expect(screen.getByRole('button', { name: 'Completar o cadastro de Bruno' })).toBeInTheDocument();
+        });
+
+        it('"Cadastrar novo" abre o cadastro por cima, sem fechar o agendamento', async () => {
+            const { onSaveClient, onAddNewClient } = renderWithClients([ana]);
+            fireEvent.change(screen.getByLabelText('Título (opcional)'), { target: { value: 'Orçamento do box' } });
+
+            const search = screen.getByPlaceholderText('Selecione ou digite um nome');
+            fireEvent.click(search);
+            fireEvent.change(search, { target: { value: 'Carla Nova' } });
+            fireEvent.click(await screen.findByRole('button', { name: 'Cadastrar novo “Carla Nova”' }));
+
+            expect(await screen.findByLabelText('Nome do Cliente')).toHaveValue('Carla Nova');
+            fireEvent.click(screen.getByRole('button', { name: /Salvar Cliente/ }));
+
+            await waitFor(() => expect(onSaveClient).toHaveBeenCalledWith(expect.objectContaining({ nome: 'Carla Nova' })));
+            expect(onSaveClient.mock.calls[0][0]).not.toHaveProperty('id');
+            expect(onAddNewClient).not.toHaveBeenCalled();
+            await waitFor(() => expect(screen.queryByLabelText('Nome do Cliente')).not.toBeInTheDocument());
+            expect(screen.getByLabelText('Título (opcional)')).toHaveValue('Orçamento do box');
+        });
+
+        it('sem o salvamento no lugar, não mostra Editar', () => {
+            renderWithClients([ana], { onSaveClient: undefined });
+            expect(screen.getByText('(83) 99999-0000')).toBeInTheDocument();
+            expect(screen.queryByRole('button', { name: /Editar o cadastro/ })).not.toBeInTheDocument();
+        });
+    });
 });
