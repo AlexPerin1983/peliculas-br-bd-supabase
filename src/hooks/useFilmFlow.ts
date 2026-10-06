@@ -1,6 +1,8 @@
 import { Dispatch, SetStateAction, useCallback } from 'react';
 import * as db from '../../services/db';
+import { renameFilmInStock } from '../../services/estoqueDb';
 import { Film, Measurement } from '../../types';
+import { buildFilmDuplicate, prepareFilmForSave } from '../lib/filmCatalog';
 
 interface UseFilmFlowParams {
     films: Film[];
@@ -18,6 +20,8 @@ interface UseFilmFlowParams {
     setFilmToDeleteName: Dispatch<SetStateAction<string | null>>;
     setFilmToApplyToAll: Dispatch<SetStateAction<string | null>>;
     setNewFilmName: Dispatch<SetStateAction<string>>;
+    setAiFilmData: Dispatch<SetStateAction<Partial<Film> | undefined>>;
+    setDuplicatingFilm: Dispatch<SetStateAction<Film | null>>;
     setEditingMeasurement: Dispatch<SetStateAction<Measurement | null>>;
     loadFilms: () => Promise<void>;
     handleMeasurementsChange: (measurements: Measurement[]) => void;
@@ -39,6 +43,8 @@ export function useFilmFlow({
     setFilmToDeleteName,
     setFilmToApplyToAll,
     setNewFilmName,
+    setAiFilmData,
+    setDuplicatingFilm,
     setEditingMeasurement,
     setIsDeletingFilm,
     loadFilms,
@@ -46,9 +52,19 @@ export function useFilmFlow({
     handleShowInfo
 }: UseFilmFlowParams) {
     const handleOpenFilmModal = useCallback((film: Film | null) => {
+        setAiFilmData(undefined);
+        setDuplicatingFilm(null);
         setEditingFilm(film);
         setIsFilmModalOpen(true);
-    }, [setEditingFilm, setIsFilmModalOpen]);
+    }, [setAiFilmData, setDuplicatingFilm, setEditingFilm, setIsFilmModalOpen]);
+
+    const handleDuplicateFilm = useCallback((film: Film) => {
+        setAiFilmData(undefined);
+        setNewFilmName('');
+        setEditingFilm(null);
+        setDuplicatingFilm(buildFilmDuplicate(film, films));
+        setIsFilmModalOpen(true);
+    }, [films, setAiFilmData, setDuplicatingFilm, setEditingFilm, setIsFilmModalOpen, setNewFilmName]);
 
     const handleEditFilmFromSelection = useCallback((film: Film) => {
         setIsFilmSelectionModalOpen(false);
@@ -62,15 +78,30 @@ export function useFilmFlow({
         setIsFilmSelectionModalOpen
     ]);
 
-    const handleSaveFilm = useCallback(async (newFilmData: Film, originalFilm: Film | null) => {
-        if (originalFilm && originalFilm.nome !== newFilmData.nome) {
-            await db.deleteCustomFilm(originalFilm.nome);
+    const handleSaveFilm = useCallback(async (formFilmData: Film, originalFilm: Film | null) => {
+        const newFilmData = prepareFilmForSave(formFilmData, originalFilm);
+        const renamedFrom = originalFilm && originalFilm.nome !== newFilmData.nome ? originalFilm.nome : null;
+
+        if (renamedFrom) {
+            await db.deleteCustomFilm(renamedFrom);
         }
 
         await db.saveCustomFilm(newFilmData);
+
+        if (renamedFrom) {
+            // Melhor esforço: o catálogo já resolve o nome antigo; o estoque só
+            // atualiza com internet e não deve impedir o salvamento.
+            renameFilmInStock(renamedFrom, newFilmData.nome).catch(error => {
+                console.warn('[Películas] Não foi possível renomear a película no estoque:', error);
+            });
+        }
+
         await loadFilms();
         setIsFilmModalOpen(false);
         setEditingFilm(null);
+        setNewFilmName('');
+        setAiFilmData(undefined);
+        setDuplicatingFilm(null);
 
         if (editingMeasurementIdForFilm !== null) {
             const updatedMeasurements = measurements.map(measurement =>
@@ -86,9 +117,12 @@ export function useFilmFlow({
         handleMeasurementsChange,
         loadFilms,
         measurements,
+        setAiFilmData,
+        setDuplicatingFilm,
         setEditingFilm,
         setEditingMeasurementIdForFilm,
-        setIsFilmModalOpen
+        setIsFilmModalOpen,
+        setNewFilmName
     ]);
 
     const handleToggleFilmPin = useCallback(async (filmName: string) => {
@@ -186,6 +220,7 @@ export function useFilmFlow({
 
     return {
         handleOpenFilmModal,
+        handleDuplicateFilm,
         handleEditFilmFromSelection,
         handleSaveFilm,
         handleToggleFilmPin,

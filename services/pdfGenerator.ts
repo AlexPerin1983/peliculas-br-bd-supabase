@@ -12,6 +12,7 @@ import { DEFAULT_TERMO_RESPONSABILIDADE } from '../src/lib/termoResponsabilidade
 import type { PaymentMethod } from '../types';
 import { calculateMeasurementPriceAdjustment, getMeasurementAdjustmentInputs } from '../src/lib/measurementPriceAdjustment';
 import { resolveFilmPrices } from '../src/lib/filmPriceOverrides';
+import { findFilmByName, getVisibleCustomFields } from '../src/lib/filmCatalog';
 import { buildProposalPaymentOptions } from '../src/lib/paymentConditions';
 
 // Define GeneralDiscount locally since it's not exported from types.ts
@@ -59,7 +60,7 @@ const calculateSavedItemAdjustments = (pdf: SavedPDF, allFilms: Film[]) => {
             return totals;
         }
 
-        const film = allFilms.find(item => item.nome === measurement.pelicula);
+        const film = findFilmByName(allFilms, measurement.pelicula);
         const prices = resolveFilmPrices(film, filmPriceOverrides, measurement.pelicula);
         const unitPrice = pricingMode === 'labor_only'
             ? prices.maoDeObra
@@ -335,7 +336,7 @@ export const buildPdfWarrantyEntries = (optionsData: PdfWarrantyOption[], allFil
     const entries: { title: string; lines: string[] }[] = [];
 
     for (const filmName of filmNames) {
-        const film = allFilms.find(f => f.nome === filmName);
+        const film = findFilmByName(allFilms, filmName);
         const variants: { fabricante?: number; maoDeObra: string; optionNames: string[]; hasCompletePricing: boolean }[] = [];
 
         for (const opt of optionsData) {
@@ -1084,14 +1085,15 @@ const renderPdfContent = async (
 
         const filmsWithTechData = hasCompletePricingOption
             ? uniqueFilmNames
-                .map(filmName => allFilms.find(f => f.nome === filmName))
-                .filter((film): film is Film => !!film && (
+                .map(filmName => findFilmByName(allFilms, filmName))
+                // Nome antigo e nome atual da mesma película não repetem a ficha.
+                .filter((film, index, all): film is Film => !!film && all.indexOf(film) === index && (
                     (typeof film.uv === 'number' && film.uv > 0) ||
                     (typeof film.ir === 'number' && film.ir > 0) ||
                     (typeof film.vtl === 'number' && film.vtl > 0) ||
                     (typeof film.tser === 'number' && film.tser > 0) ||
                     (typeof film.espessura === 'number' && film.espessura > 0) ||
-                    (!!film.customFields && Object.keys(film.customFields).length > 0)
+                    getVisibleCustomFields(film).length > 0
                 ))
             : [];
 

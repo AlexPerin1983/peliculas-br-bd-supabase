@@ -319,6 +319,25 @@ export const deleteRetalho = async (id: number): Promise<void> => {
     if (error) throw error;
 };
 
+/**
+ * Película renomeada no catálogo: bobinas e retalhos guardam o nome da
+ * película, então passam a usar o nome novo (senão as sugestões de retalho
+ * deixam de achar o estoque dela).
+ */
+export const renameFilmInStock = async (oldName: string, newName: string): Promise<void> => {
+    const userId = await getCurrentUserId();
+    if (!userId || !oldName || oldName === newName) return;
+
+    // RLS limita a atualização ao estoque da organização.
+    const [bobinas, retalhos] = await Promise.all([
+        supabase.from('bobinas').update({ film_id: newName }).eq('film_id', oldName),
+        supabase.from('retalhos').update({ film_id: newName }).eq('film_id', oldName),
+    ]);
+
+    if (bobinas.error) throw bobinas.error;
+    if (retalhos.error) throw retalhos.error;
+};
+
 const mapRowToRetalho = (row: any): Retalho => {
     const normalizedDimensions = normalizeLegacyRetalhoDimensions(
         row.largura_cm,

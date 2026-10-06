@@ -4,6 +4,7 @@ import { AMBIENTES, TIPOS_APLICACAO } from '../constants';
 import DynamicSelector from './ui/DynamicSelector';
 import Tooltip from './ui/Tooltip';
 import { calculatePricingAreaM2 } from '../src/lib/pricingArea';
+import { findFilmByName } from '../src/lib/filmCatalog';
 import { useMeasurementInputMode } from '../src/hooks/useMeasurementInputMode';
 import { useNumpadDraft } from '../src/hooks/useNumpadDraft';
 import { normalizeMeasurementInput } from '../src/lib/measurementInputMode';
@@ -436,7 +437,7 @@ const MeasurementGroup: React.FC<MeasurementGroupProps> = ({
 
     const m2 = calculatePricingAreaM2(larguraNum, alturaNum, quantidadeNum);
 
-    const selectedFilm = films.find(f => f.nome === measurement.pelicula);
+    const selectedFilm = findFilmByName(films, measurement.pelicula);
 
     const { basePrice, finalPrice, priceLabel } = useMemo(() => {
         let pricePerM2 = 0;

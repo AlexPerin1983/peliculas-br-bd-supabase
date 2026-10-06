@@ -6,13 +6,23 @@ import PageCollectionToolbar from '../ui/PageCollectionToolbar';
 import ViewModeToggle from '../ui/ViewModeToggle';
 import { matchesSearch, normalizeSearchText } from '../../src/lib/textSearch';
 import { formatGarantiaMaoDeObraCurto } from '../../src/lib/filmWarranty';
+import { getVisibleCustomFields, sortFilmsForDisplay } from '../../src/lib/filmCatalog';
 
 interface FilmListViewProps {
     films: Film[];
     onAdd: () => void;
     onEdit: (film: Film) => void;
+    onDuplicate: (film: Film) => void;
+    onTogglePin: (filmName: string) => void;
     onDelete: (filmName: string) => void;
     onOpenGallery: (images: string[], initialIndex: number) => void;
+}
+
+interface FilmItemActionHandlers {
+    onEdit: (film: Film) => void;
+    onDuplicate: (film: Film) => void;
+    onTogglePin: (filmName: string) => void;
+    onDelete: (filmName: string) => void;
 }
 
 type FilmViewMode = 'grid' | 'list';
@@ -27,6 +37,77 @@ const getFilmAccentColor = (film: Film) =>
 
 const getFilmAccentDotClass = (film: Film) =>
     film.pinned ? 'bg-[var(--surface-inverse)]' : 'bg-[var(--brand-primary)]';
+
+const FilmItemActions: React.FC<FilmItemActionHandlers & {
+    film: Film;
+    size: 'card' | 'row';
+}> = ({ film, onEdit, onDuplicate, onTogglePin, onDelete, size }) => {
+    const control = size === 'card'
+        ? 'h-9 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] hover:bg-[var(--surface)] sm:h-10'
+        : 'h-8 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] shadow-sm hover:bg-[var(--surface-muted)]';
+    const iconButton = `${control} inline-flex shrink-0 items-center justify-center transition-all ${size === 'card' ? 'w-9 sm:w-10' : 'w-8'}`;
+    const run = (event: React.MouseEvent, action: () => void) => {
+        event.stopPropagation();
+        action();
+    };
+
+    return (
+        <div className="flex gap-2">
+            <button
+                type="button"
+                onClick={(event) => run(event, () => onEdit(film))}
+                className={`${control} inline-flex items-center gap-1.5 text-[11px] font-medium text-[var(--text-body)] transition-all hover:text-[var(--text-strong)] ${size === 'card' ? 'px-3.5 sm:px-4 sm:text-xs' : 'px-3'}`}
+                title="Editar"
+            >
+                <i className="fas fa-pen text-[9px] sm:text-[10px]" aria-hidden="true"></i>
+                Editar
+            </button>
+            <button
+                type="button"
+                onClick={(event) => run(event, () => onTogglePin(film.nome))}
+                aria-pressed={!!film.pinned}
+                aria-label={film.pinned ? `Desafixar ${film.nome}` : `Fixar ${film.nome} no topo`}
+                title={film.pinned ? 'Desafixar' : 'Fixar no topo'}
+                className={`${iconButton} ${film.pinned ? 'text-[var(--brand-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-strong)]'}`}
+            >
+                <i className={`fas fa-thumbtack text-[10px] sm:text-[11px] ${film.pinned ? '' : 'rotate-45'}`} aria-hidden="true"></i>
+            </button>
+            <button
+                type="button"
+                onClick={(event) => run(event, () => onDuplicate(film))}
+                aria-label={`Duplicar ${film.nome}`}
+                title="Duplicar"
+                className={`${iconButton} text-[var(--text-muted)] hover:text-[var(--text-strong)]`}
+            >
+                <i className="fas fa-copy text-[10px] sm:text-[11px]" aria-hidden="true"></i>
+            </button>
+            <button
+                type="button"
+                onClick={(event) => run(event, () => onDelete(film.nome))}
+                aria-label={`Excluir ${film.nome}`}
+                title="Excluir"
+                className={`${iconButton} text-[var(--text-muted)] hover:bg-[var(--danger)] hover:text-white`}
+            >
+                <i className="fas fa-trash-alt text-[10px] sm:text-[11px]" aria-hidden="true"></i>
+            </button>
+        </div>
+    );
+};
+
+const FilmCustomFieldsGrid: React.FC<{ film: Film; valueClassName: string }> = ({ film, valueClassName }) => (
+    <>
+        {getVisibleCustomFields(film).map(([key, value]) => (
+            <div key={key}>
+                <span className="text-[8px] font-semibold uppercase text-[var(--text-soft)] sm:text-[9px]">
+                    {key}
+                </span>
+                <p className={`mt-1 ${valueClassName}`}>
+                    {value}
+                </p>
+            </div>
+        ))}
+    </>
+);
 
 const TechIndicator: React.FC<{
     label: string;
@@ -74,15 +155,13 @@ const TechIndicator: React.FC<{
     );
 };
 
-const FilmCard: React.FC<{
+const FilmCard: React.FC<FilmItemActionHandlers & {
     film: Film;
-    onEdit: (film: Film) => void;
-    onDelete: (filmName: string) => void;
     isExpanded: boolean;
     onToggleExpand: () => void;
     onOpenGallery: (images: string[], initialIndex: number) => void;
     index: number;
-}> = ({ film, onEdit, onDelete, isExpanded, onToggleExpand, onOpenGallery, index }) => {
+}> = ({ film, onEdit, onDuplicate, onTogglePin, onDelete, isExpanded, onToggleExpand, onOpenGallery, index }) => {
     const handleImageClick = (imageIndex: number, event: React.MouseEvent) => {
         event.stopPropagation();
         if (film.imagens && film.imagens.length > 0) {
@@ -92,6 +171,7 @@ const FilmCard: React.FC<{
 
     const hasTechnicalData = Boolean(film.uv || film.ir || film.vtl || film.espessura || film.tser);
     const hasImages = (film.imagens?.length || 0) > 0;
+    const hasDetails = Boolean(film.espessura) || getVisibleCustomFields(film).length > 0;
 
     const accentColor = getFilmAccentColor(film);
 
@@ -139,7 +219,7 @@ const FilmCard: React.FC<{
                             {formatCurrency(film.preco || 0)}
                         </p>
                         <p className="mt-1 text-[9px] font-semibold uppercase text-[var(--text-soft)] sm:text-[10px]">
-                            por m2
+                            por m²
                         </p>
                         {film.maoDeObra ? (
                             <p className="mt-1 text-[10px] font-medium text-[var(--text-muted)] sm:text-[11px]">
@@ -178,38 +258,21 @@ const FilmCard: React.FC<{
                     </div>
                 ) : null}
 
-                <div className="flex items-center justify-between border-t border-[var(--border-subtle)] pt-3.5 sm:pt-4">
-                    <div className="flex gap-2">
-                        <button
-                            type="button"
-                            onClick={(event) => {
-                                event.stopPropagation();
-                                onEdit(film);
-                            }}
-                            className="inline-flex h-9 items-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] px-3.5 text-[11px] font-medium text-[var(--text-body)] transition-all hover:bg-[var(--surface)] hover:text-[var(--text-strong)] sm:h-10 sm:px-4 sm:text-xs"
-                            title="Editar"
-                        >
-                            <i className="fas fa-pen text-[9px] sm:text-[10px]" aria-hidden="true"></i>
-                            Editar
-                        </button>
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border-subtle)] pt-3.5 sm:pt-4">
+                    <FilmItemActions
+                        film={film}
+                        size="card"
+                        onEdit={onEdit}
+                        onDuplicate={onDuplicate}
+                        onTogglePin={onTogglePin}
+                        onDelete={onDelete}
+                    />
 
-                        <button
-                            type="button"
-                            onClick={(event) => {
-                                event.stopPropagation();
-                                onDelete(film.nome);
-                            }}
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-muted)] transition-all hover:bg-[var(--danger)] hover:text-white sm:h-10 sm:w-10"
-                            title="Excluir"
-                        >
-                            <i className="fas fa-trash-alt text-[10px] sm:text-[11px]" aria-hidden="true"></i>
-                        </button>
-                    </div>
-
-                    {film.espessura || film.customFields ? (
+                    {hasDetails ? (
                         <button
                             type="button"
                             onClick={onToggleExpand}
+                            aria-expanded={isExpanded}
                             className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase text-[var(--text-soft)] transition-colors hover:text-[var(--text-strong)] sm:gap-2 sm:text-[11px]"
                         >
                             {isExpanded ? 'Menos' : 'Detalhes'}
@@ -239,18 +302,7 @@ const FilmCard: React.FC<{
                         </div>
                     ) : null}
 
-                    {film.customFields
-                        ? Object.entries(film.customFields).map(([key, value]) => (
-                              <div key={key}>
-                                  <span className="text-[8px] font-semibold uppercase text-[var(--text-soft)] sm:text-[9px]">
-                                      {key}
-                                  </span>
-                                  <p className="mt-1 font-semibold text-[var(--text-strong)]">
-                                      {value}
-                                  </p>
-                              </div>
-                          ))
-                        : null}
+                    <FilmCustomFieldsGrid film={film} valueClassName="font-semibold text-[var(--text-strong)]" />
                 </div>
             </div>
         </article>
@@ -274,266 +326,13 @@ const FilmMetricChip: React.FC<{
     );
 };
 
-const FilmListRow: React.FC<{
+const FilmListAppleRow: React.FC<FilmItemActionHandlers & {
     film: Film;
-    onEdit: (film: Film) => void;
-    onDelete: (filmName: string) => void;
     isExpanded: boolean;
     onToggleExpand: () => void;
     onOpenGallery: (images: string[], initialIndex: number) => void;
     index: number;
-}> = ({ film, onEdit, onDelete, isExpanded, onToggleExpand, onOpenGallery, index }) => {
-    const firstImage = film.imagens?.[0];
-    const hasImages = Boolean(firstImage);
-    const hasTechnicalData = Boolean(film.vtl || film.uv || film.ir || film.tser);
-    const accentColor = getFilmAccentColor(film);
-    const warrantySummary = [
-        film.garantiaFabricante ? `${film.garantiaFabricante} anos fabricante` : null,
-        film.garantiaMaoDeObra ? `${formatGarantiaMaoDeObraCurto(film.garantiaMaoDeObra, film.garantiaMaoDeObraUnidade)} M.O.` : null,
-    ]
-        .filter(Boolean)
-        .join(' • ');
-
-    return (
-        <article
-            className="group animate-stagger relative bg-transparent transition-all duration-300"
-            style={{ animationDelay: `${index * 0.05}s` }}
-        >
-            <div className={`absolute bottom-4 left-4 top-4 w-[3px] rounded-full bg-gradient-to-b ${accentColor} opacity-90`} />
-
-            <button
-                type="button"
-                onClick={onToggleExpand}
-                aria-expanded={isExpanded}
-                className="w-full px-4 py-3.5 pl-6 text-left transition-colors hover:bg-slate-50/70 dark:hover:bg-slate-700/20 sm:px-5 sm:py-4 sm:pl-7"
-            >
-                <div className="flex items-start gap-3">
-                    {hasImages ? (
-                        <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-[15px] border border-slate-200/70 bg-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] dark:border-slate-700 dark:bg-slate-800">
-                            <img src={firstImage} alt="" className="h-full w-full object-cover" />
-                            {(film.imagens?.length || 0) > 1 ? (
-                                <span className="absolute bottom-1 right-1 rounded-full bg-slate-950/75 px-1.5 py-0.5 text-[9px] font-semibold text-white">
-                                    {film.imagens!.length}
-                                </span>
-                            ) : null}
-                        </div>
-                    ) : (
-                        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[15px] border border-slate-200/70 bg-slate-50 text-slate-400 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-500">
-                            <i className="fas fa-layer-group text-[13px]" aria-hidden="true"></i>
-                        </div>
-                    )}
-
-                    <div className="min-w-0 flex-1">
-                        <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                                <div className="flex items-center gap-1.5">
-                                    <h3 className="truncate text-[1rem] font-medium leading-tight tracking-[-0.02em] text-slate-900 dark:text-slate-50 sm:text-[1.05rem]">
-                                        {film.nome}
-                                    </h3>
-                                    {film.pinned ? (
-                                        <i
-                                            className="fas fa-thumbtack rotate-45 text-[8px] text-amber-500"
-                                            title="Fixado"
-                                            aria-hidden="true"
-                                        />
-                                    ) : null}
-                                </div>
-
-                                <p className="mt-1 truncate text-[11px] font-medium text-slate-500 dark:text-slate-400">
-                                    {warrantySummary || 'Sem garantias cadastradas'}
-                                </p>
-
-                                <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500 dark:text-slate-400">
-                                    {film.vtl ? (
-                                        <span className="inline-flex items-center gap-1">
-                                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                                            VTL {film.vtl}%
-                                        </span>
-                                    ) : null}
-                                    {film.uv ? (
-                                        <span className="inline-flex items-center gap-1">
-                                            <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                                            UV {film.uv}%
-                                        </span>
-                                    ) : null}
-                                    {film.ir ? (
-                                        <span className="inline-flex items-center gap-1">
-                                            <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
-                                            IR {film.ir}%
-                                        </span>
-                                    ) : null}
-                                    {film.tser ? (
-                                        <span className="inline-flex items-center gap-1">
-                                            <span className="h-1.5 w-1.5 rounded-full bg-cyan-500" />
-                                            TSER {film.tser}%
-                                        </span>
-                                    ) : null}
-                                    {film.espessura ? (
-                                        <span className="inline-flex items-center gap-1">
-                                            <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
-                                            {film.espessura} mc
-                                        </span>
-                                    ) : null}
-                                </div>
-                            </div>
-
-                            <div className="shrink-0 text-right">
-                                <p className="text-[1.08rem] font-semibold leading-none tracking-[-0.03em] text-slate-950 dark:text-slate-50 sm:text-[1.18rem]">
-                                    {formatCurrency(film.preco || 0)}
-                                </p>
-                                <p className="mt-1 text-[8px] font-semibold uppercase tracking-[0.15em] text-slate-400 sm:text-[9px]">
-                                    por m2
-                                </p>
-                                {film.maoDeObra ? (
-                                    <p className="mt-1 text-[10px] font-medium text-slate-500 dark:text-slate-400">
-                                        + {formatCurrency(film.maoDeObra)} M.O.
-                                    </p>
-                                ) : null}
-                                <div className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-medium text-slate-400 dark:text-slate-500">
-                                    <span>{isExpanded ? 'Ocultar' : 'Ver'}</span>
-                                    <i
-                                        className={`fas fa-chevron-right text-[9px] transition-transform duration-300 ${isExpanded ? 'rotate-90' : ''}`}
-                                        aria-hidden="true"
-                                    ></i>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </button>
-
-            <div
-                className={`overflow-hidden transition-all duration-300 ${
-                    isExpanded ? 'max-h-[360px] opacity-100' : 'max-h-0 opacity-0'
-                }`}
-            >
-                <div className="border-t border-slate-100/80 bg-slate-50/72 px-4 py-3 dark:border-slate-700/60 dark:bg-slate-900/28 sm:px-5">
-                    <div className="space-y-3">
-                        {hasTechnicalData ? (
-                            <div className="flex flex-wrap gap-1.5">
-                                <FilmMetricChip
-                                    label="VTL"
-                                    value={film.vtl}
-                                    toneClassName="bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-300"
-                                />
-                                <FilmMetricChip
-                                    label="UV"
-                                    value={film.uv}
-                                    toneClassName="bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-300"
-                                />
-                                <FilmMetricChip
-                                    label="IR"
-                                    value={film.ir}
-                                    toneClassName="bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-300"
-                                />
-                                <FilmMetricChip
-                                    label="TSER"
-                                    value={film.tser}
-                                    toneClassName="bg-cyan-50 text-cyan-600 dark:bg-cyan-950/40 dark:text-cyan-300"
-                                />
-                            </div>
-                        ) : null}
-
-                        {hasImages ? (
-                            <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
-                                {film.imagens!.map((image, imageIndex) => (
-                                    <button
-                                        key={`${film.nome}-${imageIndex}`}
-                                        type="button"
-                                        onClick={() => onOpenGallery(film.imagens!, imageIndex)}
-                                        className="h-12 w-12 shrink-0 overflow-hidden rounded-[12px] border border-slate-200/70 bg-slate-100 transition-all hover:border-blue-400 dark:border-slate-700 dark:bg-slate-800"
-                                        aria-label={`Abrir imagem ${imageIndex + 1} de ${film.nome}`}
-                                    >
-                                        <img src={image} alt="" className="h-full w-full object-cover" />
-                                    </button>
-                                ))}
-                            </div>
-                        ) : null}
-
-                        <div className="grid grid-cols-2 gap-3 text-[12px] sm:text-[13px]">
-                            <div>
-                                <span className="text-[8px] font-semibold uppercase tracking-[0.14em] text-slate-400 sm:text-[9px]">
-                                    Preco
-                                </span>
-                                <p className="mt-1 font-medium text-slate-700 dark:text-slate-200">
-                                    {formatCurrency(film.preco || 0)} por m2
-                                </p>
-                            </div>
-                            {film.maoDeObra ? (
-                                <div>
-                                    <span className="text-[8px] font-semibold uppercase tracking-[0.14em] text-slate-400 sm:text-[9px]">
-                                        Mao de obra
-                                    </span>
-                                    <p className="mt-1 font-medium text-slate-700 dark:text-slate-200">
-                                        {formatCurrency(film.maoDeObra)}
-                                    </p>
-                                </div>
-                            ) : null}
-                            {film.espessura ? (
-                                <div>
-                                    <span className="text-[8px] font-semibold uppercase tracking-[0.14em] text-slate-400 sm:text-[9px]">
-                                        Espessura
-                                    </span>
-                                    <p className="mt-1 font-medium text-slate-700 dark:text-slate-200">
-                                        {film.espessura} mc
-                                    </p>
-                                </div>
-                            ) : null}
-                            {film.customFields
-                                ? Object.entries(film.customFields).map(([key, value]) => (
-                                      <div key={key}>
-                                          <span className="text-[8px] font-semibold uppercase tracking-[0.14em] text-slate-400 sm:text-[9px]">
-                                              {key}
-                                          </span>
-                                          <p className="mt-1 font-medium text-slate-700 dark:text-slate-200">
-                                              {value}
-                                          </p>
-                                      </div>
-                                  ))
-                                : null}
-                        </div>
-
-                        <div className="flex items-center justify-between gap-3 border-t border-slate-100/80 pt-3 dark:border-slate-700/60">
-                            <div className="flex gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => onEdit(film)}
-                                    className="inline-flex h-8 items-center gap-1.5 rounded-[10px] bg-white px-3 text-[11px] font-medium text-slate-600 shadow-sm transition-all hover:bg-blue-600 hover:text-white dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-blue-600"
-                                    title="Editar"
-                                >
-                                    <i className="fas fa-pen text-[9px]" aria-hidden="true"></i>
-                                    Editar
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => onDelete(film.nome)}
-                                    className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] bg-white text-slate-500 shadow-sm transition-all hover:bg-red-600 hover:text-white dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-red-600"
-                                    title="Excluir"
-                                >
-                                    <i className="fas fa-trash-alt text-[10px]" aria-hidden="true"></i>
-                                </button>
-                            </div>
-
-                            <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500">
-                                {film.imagens?.length ? `${film.imagens.length} imagens` : 'Sem imagens'}
-                            </span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </article>
-    );
-};
-
-const FilmListAppleRow: React.FC<{
-    film: Film;
-    onEdit: (film: Film) => void;
-    onDelete: (filmName: string) => void;
-    isExpanded: boolean;
-    onToggleExpand: () => void;
-    onOpenGallery: (images: string[], initialIndex: number) => void;
-    index: number;
-}> = ({ film, onEdit, onDelete, isExpanded, onToggleExpand, onOpenGallery, index }) => {
+}> = ({ film, onEdit, onDuplicate, onTogglePin, onDelete, isExpanded, onToggleExpand, onOpenGallery, index }) => {
     const firstImage = film.imagens?.[0];
     const hasImages = Boolean(firstImage);
     const hasTechnicalData = Boolean(film.vtl || film.uv || film.ir || film.tser);
@@ -598,8 +397,8 @@ const FilmListAppleRow: React.FC<{
                         </div>
 
                         <p className="mt-1 text-[11px] font-medium text-[var(--text-muted)]">
-                            <span className="sm:hidden">{warrantySummary || 'Toque para ver detalhes tecnicos'}</span>
-                            <span className="hidden sm:inline">{collapsedSummary || 'Toque para ver detalhes tecnicos'}</span>
+                            <span className="sm:hidden">{warrantySummary || 'Toque para ver detalhes técnicos'}</span>
+                            <span className="hidden sm:inline">{collapsedSummary || 'Toque para ver detalhes técnicos'}</span>
                         </p>
 
                         <div className="mt-2 flex items-center justify-between gap-3 pr-1 sm:hidden">
@@ -614,7 +413,7 @@ const FilmListAppleRow: React.FC<{
                                 ) : null}
                             </div>
                             <p className="text-[8px] font-semibold uppercase text-[var(--text-soft)]">
-                                por m2
+                                por m²
                             </p>
                         </div>
                     </div>
@@ -624,7 +423,7 @@ const FilmListAppleRow: React.FC<{
                             {formatCurrency(film.preco || 0)}
                         </p>
                         <p className="mt-1 text-[8px] font-semibold uppercase text-[var(--text-soft)]">
-                            por m2
+                            por m²
                         </p>
                         {film.maoDeObra ? (
                             <p className="mt-1 text-[10px] font-medium text-[var(--text-muted)]">
@@ -694,7 +493,7 @@ const FilmListAppleRow: React.FC<{
                             {film.maoDeObra ? (
                                 <div>
                                     <span className="text-[8px] font-semibold uppercase text-[var(--text-soft)] sm:text-[9px]">
-                                        Mao de obra
+                                        Mão de obra
                                     </span>
                                     <p className="mt-1 font-medium text-[var(--text-strong)]">
                                         {formatCurrency(film.maoDeObra)}
@@ -711,43 +510,21 @@ const FilmListAppleRow: React.FC<{
                                     </p>
                                 </div>
                             ) : null}
-                            {film.customFields
-                                ? Object.entries(film.customFields).map(([key, value]) => (
-                                      <div key={key}>
-                                          <span className="text-[8px] font-semibold uppercase text-[var(--text-soft)] sm:text-[9px]">
-                                              {key}
-                                          </span>
-                                          <p className="mt-1 font-medium text-[var(--text-strong)]">
-                                              {value}
-                                          </p>
-                                      </div>
-                                  ))
-                                : null}
+                            <FilmCustomFieldsGrid film={film} valueClassName="font-medium text-[var(--text-strong)]" />
                         </div>
 
-                        <div className="flex items-center justify-between gap-3 border-t border-[var(--border-subtle)] pt-3">
-                            <div className="flex gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => onEdit(film)}
-                                    className="inline-flex h-8 items-center gap-1.5 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] px-3 text-[11px] font-medium text-[var(--text-body)] shadow-sm transition-all hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)]"
-                                    title="Editar"
-                                >
-                                    <i className="fas fa-pen text-[9px]" aria-hidden="true"></i>
-                                    Editar
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => onDelete(film.nome)}
-                                    className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-muted)] shadow-sm transition-all hover:bg-[var(--danger)] hover:text-white"
-                                    title="Excluir"
-                                >
-                                    <i className="fas fa-trash-alt text-[10px]" aria-hidden="true"></i>
-                                </button>
-                            </div>
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border-subtle)] pt-3">
+                            <FilmItemActions
+                                film={film}
+                                size="row"
+                                onEdit={onEdit}
+                                onDuplicate={onDuplicate}
+                                onTogglePin={onTogglePin}
+                                onDelete={onDelete}
+                            />
 
                             <span className="text-[10px] font-medium text-[var(--text-soft)]">
-                                {film.imagens?.length ? `${film.imagens.length} imagens` : 'Sem imagens'}
+                                {film.imagens?.length ? `${film.imagens.length} ${film.imagens.length === 1 ? 'imagem' : 'imagens'}` : 'Sem imagens'}
                             </span>
                         </div>
                     </div>
@@ -947,7 +724,7 @@ const FilmListDesktopHeader: React.FC<FilmListDesktopHeaderProps> = ({
     );
 };
 
-const FilmListView: React.FC<FilmListViewProps> = ({ films, onAdd, onEdit, onDelete, onOpenGallery }) => {
+const FilmListView: React.FC<FilmListViewProps> = ({ films, onAdd, onEdit, onDuplicate, onTogglePin, onDelete, onOpenGallery }) => {
     const [expandedFilmName, setExpandedFilmName] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [visibleCount, setVisibleCount] = useState(10);
@@ -964,17 +741,20 @@ const FilmListView: React.FC<FilmListViewProps> = ({ films, onAdd, onEdit, onDel
     const searchInputRef = useRef<HTMLInputElement | null>(null);
     const deferredSearchTerm = useDeferredValue(searchTerm);
 
+    // A ordem que vem do banco muda com edições pendentes/offline; fixa aqui.
+    const sortedFilms = useMemo(() => sortFilmsForDisplay(films), [films]);
+
     const filteredFilms = useMemo(() => {
-        if (!deferredSearchTerm.trim()) return films;
+        if (!deferredSearchTerm.trim()) return sortedFilms;
 
         const lowerTerm = normalizeSearchText(deferredSearchTerm);
 
-        return films.filter((film) =>
+        return sortedFilms.filter((film) =>
             matchesSearch(film.nome, lowerTerm) ||
             (film.preco ? film.preco.toString().includes(lowerTerm) : false) ||
             (film.maoDeObra ? film.maoDeObra.toString().includes(lowerTerm) : false)
         );
-    }, [deferredSearchTerm, films]);
+    }, [deferredSearchTerm, sortedFilms]);
 
     const displayedFilms = useMemo(() => filteredFilms.slice(0, visibleCount), [filteredFilms, visibleCount]);
 
@@ -1074,6 +854,8 @@ const FilmListView: React.FC<FilmListViewProps> = ({ films, onAdd, onEdit, onDel
                                     key={film.nome}
                                     film={film}
                                     onEdit={onEdit}
+                                    onDuplicate={onDuplicate}
+                                    onTogglePin={onTogglePin}
                                     onDelete={onDelete}
                                     isExpanded={expandedFilmName === film.nome}
                                     onToggleExpand={() => handleToggleExpand(film.nome)}
@@ -1089,6 +871,8 @@ const FilmListView: React.FC<FilmListViewProps> = ({ films, onAdd, onEdit, onDel
                                     key={film.nome}
                                     film={film}
                                     onEdit={onEdit}
+                                    onDuplicate={onDuplicate}
+                                    onTogglePin={onTogglePin}
                                     onDelete={onDelete}
                                     isExpanded={expandedFilmName === film.nome}
                                     onToggleExpand={() => handleToggleExpand(film.nome)}

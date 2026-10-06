@@ -60,6 +60,8 @@ interface ModalsContainerProps {
     editingFilm: Film | null;
     newFilmName: string;
     aiFilmData: Partial<Film> | undefined;
+    duplicatingFilm: Film | null;
+    setDuplicatingFilm: (value: Film | null) => void;
     setAiFilmData: (value: Partial<Film> | undefined) => void;
     setIsAIFilmModalOpen: (value: boolean) => void;
     handleOpenAIFilmModal: () => void;
@@ -72,7 +74,7 @@ interface ModalsContainerProps {
     handleAddNewFilm: (filmName: string) => void;
     handleEditFilm: (film: Film) => void;
     handleRequestDeleteFilm: (filmName: string) => void;
-    handleToggleFilmPin: (filmId: number) => void;
+    handleToggleFilmPin: (filmName: string) => void;
 
     // Clear All Modal
     isClearAllModalOpen: boolean;
@@ -283,12 +285,15 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
                         props.setEditingMeasurementIdForFilm(null);
                         props.setNewFilmName('');
                         props.setAiFilmData(undefined);
+                        props.setDuplicatingFilm(null);
                     }}
                     onSave={props.handleSaveFilm}
                     onDelete={props.handleDeleteFilm}
                     film={props.editingFilm}
+                    films={props.films}
                     initialName={props.newFilmName}
                     aiData={props.aiFilmData}
+                    duplicateData={props.duplicatingFilm}
                     onOpenAIModal={props.handleOpenAIFilmModal}
                 />
             )}

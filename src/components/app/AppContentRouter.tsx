@@ -128,6 +128,8 @@ interface AppContentRouterProps {
     onScheduleClientByVoice?: (client: Client) => void;
     onAddFilm: () => void;
     onEditFilm: (film: Film | null) => void;
+    onDuplicateFilm: (film: Film) => void;
+    onToggleFilmPin: (filmName: string) => void;
     onDeleteFilm: (filmName: string) => void;
     onOpenGallery: (images: string[], initialIndex: number) => void;
     onOpenClientModal: (mode: 'add' | 'edit') => void;
@@ -231,6 +233,8 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
     onScheduleClientByVoice,
     onAddFilm,
     onEditFilm,
+    onDuplicateFilm,
+    onToggleFilmPin,
     onDeleteFilm,
     onOpenGallery,
     onOpenClientModal,
@@ -428,6 +432,8 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
                 films={films}
                 onAdd={onAddFilm}
                 onEdit={onEditFilm}
+                onDuplicate={onDuplicateFilm}
+                onTogglePin={onToggleFilmPin}
                 onDelete={onDeleteFilm}
                 onOpenGallery={onOpenGallery}
             />,

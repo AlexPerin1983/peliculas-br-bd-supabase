@@ -24,6 +24,49 @@ function loadImage(src: string): Promise<HTMLImageElement> {
     });
 }
 
+const SAMPLE_MAX_DIMENSION = 1280; // lado maior da foto de amostra da película
+const SAMPLE_JPEG_QUALITY = 0.8;
+/** Fotos de amostra acima disso (dataURL) são recomprimidas ao salvar. */
+export const SAMPLE_IMAGE_RECOMPRESS_THRESHOLD = 600 * 1024;
+
+/**
+ * Foto de amostra da película (arquivo novo ou dataURL já salvo): reduz para
+ * no máximo 1280px e grava em JPEG. Uma foto de celular cai de alguns MB para
+ * algumas centenas de KB, e o catálogo inteiro é baixado a cada abertura.
+ */
+export async function processSampleImage(source: File | string): Promise<string> {
+    if (typeof source !== 'string') {
+        if (!source.type.startsWith('image/')) {
+            throw new Error('Selecione um arquivo de imagem (PNG ou JPG).');
+        }
+        if (source.size > MAX_SOURCE_BYTES) {
+            throw new Error('Imagem muito grande. Escolha uma de até 12 MB.');
+        }
+    }
+
+    const sourceDataUrl = typeof source === 'string' ? source : await readFileAsDataURL(source);
+    const img = await loadImage(sourceDataUrl);
+
+    const scale = Math.min(1, SAMPLE_MAX_DIMENSION / Math.max(img.width, img.height));
+    const width = Math.max(1, Math.round(img.width * scale));
+    const height = Math.max(1, Math.round(img.height * scale));
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+        throw new Error('Não foi possível processar a imagem.');
+    }
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, width, height);
+    ctx.drawImage(img, 0, 0, width, height);
+
+    const output = canvas.toDataURL('image/jpeg', SAMPLE_JPEG_QUALITY);
+    // Nunca troca por uma versão maior (ex.: imagem pequena já otimizada).
+    return typeof source === 'string' && output.length >= source.length ? source : output;
+}
+
 /**
  * Recebe um arquivo de imagem e devolve um dataURL otimizado (lado máximo de
  * 480px, comprimido). Lança Error com mensagem amigável em caso de problema.

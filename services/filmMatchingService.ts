@@ -1,5 +1,6 @@
 import { Film } from '../types';
 import { getFilmMatchingAliases, getFilmMatchingBrand } from '../utils/filmMatchingMetadata';
+import { getFilmPreviousNames } from '../src/lib/filmCatalog';
 
 export interface FilmMatchAlternative {
     filmName: string;
@@ -50,7 +51,8 @@ const scoreFilmMatch = (extractedFilmText: string, film: Film): FilmMatchAlterna
     const extractedTokens = getTokens(extractedFilmText);
     const filmTokens = getTokens(film.nome);
     const brand = getFilmMatchingBrand(film);
-    const aliases = getFilmMatchingAliases(film);
+    // Nomes antigos (película renomeada) continuam reconhecidos pela IA.
+    const aliases = [...getFilmMatchingAliases(film), ...getFilmPreviousNames(film)];
 
     if (!extractedNormalized || !filmNormalized) {
         return {

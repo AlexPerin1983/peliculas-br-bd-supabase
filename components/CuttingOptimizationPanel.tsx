@@ -23,6 +23,7 @@ import {
 import type { SeamDirection, SeamStyle } from '../utils/seamStrips';
 import { describeStripSpot, estimateSeamAlternatives, groupSeamPieces } from '../utils/seamGroups';
 import CuttingSeamNotice from './cutting/CuttingSeamNotice';
+import { findFilmByName } from '../src/lib/filmCatalog';
 
 
 interface CuttingOptimizationPanelProps {
@@ -1125,7 +1126,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
     const activeFilmMaterialCost = useMemo(() => {
         if (!result) return null;
 
-        const film = films.find(f => f.nome === activeFilm);
+        const film = findFilmByName(films, activeFilm);
         if (!film?.precoMetroLinear) return null;
 
         return (result.totalHeight / 100) * film.precoMetroLinear;
@@ -1830,7 +1831,7 @@ const CuttingOptimizationPanel: React.FC<CuttingOptimizationPanelProps> = ({ mea
                                     rollWidth={result?.rollWidth ?? 0}
                                     planTotalCm={result?.totalHeight}
                                     alternativeTotals={result?.seamAlternativeTotals}
-                                    pricePerMeter={films.find(film => film.nome === activeFilm)?.precoMetroLinear || undefined}
+                                    pricePerMeter={findFilmByName(films, activeFilm)?.precoMetroLinear || undefined}
                                     seamStyle={currentSettings.seamStyle}
                                     disabled={isOptimizing}
                                     onSeamStyleChange={setSeamStyle}

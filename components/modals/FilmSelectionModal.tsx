@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Film } from '../../types';
 import { matchesSearch } from '../../src/lib/textSearch';
+import { sortFilmsForDisplay } from '../../src/lib/filmCatalog';
 import { useIsMobile } from '../../src/hooks/useIsMobile';
 
 interface FilmSelectionModalProps {
@@ -278,40 +279,12 @@ const FilmSelectionModal: React.FC<FilmSelectionModalProps> = ({ isOpen, onClose
     }, [isOpen]);
 
     const filteredFilms = useMemo(() => {
-        // Mapear para preservar o índice original (assumindo que a entrada é cronológica/ordem de inserção)
-        // Isso nos permite ordenar por "mais recente" (índice maior) sem ter um campo de data
-        let result = films.map((film, index) => ({ film, index }));
+        const result = debouncedSearchTerm
+            ? films.filter(film => matchesSearch(film.nome, debouncedSearchTerm))
+            : films;
 
-        if (debouncedSearchTerm) {
-            result = result.filter(item =>
-                matchesSearch(item.film.nome, debouncedSearchTerm)
-            );
-        }
-
-        // Ordenar: fixados primeiro (pelo mais recente), depois por índice decrescente (mais recentes adicionados)
-        result.sort((a, b) => {
-            const filmA = a.film;
-            const filmB = b.film;
-
-            if (filmA.pinned && !filmB.pinned) return -1;
-            if (!filmA.pinned && filmB.pinned) return 1;
-
-            if (filmA.pinned && filmB.pinned) {
-                // Ambos fixados: ordenar por pinnedAt decrescente (mais recente no topo)
-                if (filmA.pinnedAt && filmB.pinnedAt) {
-                    return filmB.pinnedAt - filmA.pinnedAt;
-                }
-                // Se não tiver pinnedAt (legado), mantém ordem de índice (mais recente primeiro)
-                if (filmA.pinnedAt && !filmB.pinnedAt) return -1;
-                if (!filmA.pinnedAt && filmB.pinnedAt) return 1;
-                return b.index - a.index;
-            }
-
-            // Não fixados: ordenar por índice decrescente (mais recentes primeiro)
-            return b.index - a.index;
-        });
-
-        return result.map(item => item.film);
+        // Mesma ordem da tela Películas: fixadas no topo, depois de A a Z.
+        return sortFilmsForDisplay(result);
     }, [films, debouncedSearchTerm]);
 
     if (!isOpen || typeof document === 'undefined') return null;
