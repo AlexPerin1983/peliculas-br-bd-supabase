@@ -1519,6 +1519,7 @@ const App: React.FC = () => {
         handleDuplicateFilm,
         handleEditFilmFromSelection,
         handleSaveFilm,
+        handleSaveFilms,
         handleToggleFilmPin,
         handleDeleteFilm,
         handleRequestDeleteFilm,
@@ -3211,6 +3212,7 @@ Use somente o JSON definido e não inclua explicações fora dele.`;
             onEditFilm={handleOpenFilmModal}
             onDuplicateFilm={handleDuplicateFilm}
             onToggleFilmPin={handleToggleFilmPin}
+            onSaveFilms={handleSaveFilms}
             onDeleteFilm={handleRequestDeleteFilm}
             onOpenGallery={handleOpenGallery}
             onOpenClientModal={handleOpenClientModal}

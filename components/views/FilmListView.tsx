@@ -1,4 +1,4 @@
-import React, { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import React, { lazy, Suspense, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { Film } from '../../types';
 import ActionButton from '../ui/ActionButton';
 import ContentState from '../ui/ContentState';
@@ -8,12 +8,16 @@ import { matchesSearch, normalizeSearchText } from '../../src/lib/textSearch';
 import { formatGarantiaMaoDeObraCurto } from '../../src/lib/filmWarranty';
 import { getVisibleCustomFields, sortFilmsForDisplay } from '../../src/lib/filmCatalog';
 
+const FilmPriceAdjustmentModal = lazy(() => import('../modals/FilmPriceAdjustmentModal'));
+
 interface FilmListViewProps {
     films: Film[];
     onAdd: () => void;
     onEdit: (film: Film) => void;
     onDuplicate: (film: Film) => void;
     onTogglePin: (filmName: string) => void;
+    /** Salva várias películas de uma vez (reajuste de preços em lote). */
+    onSaveFilms: (films: Film[]) => Promise<void>;
     onDelete: (filmName: string) => void;
     onOpenGallery: (images: string[], initialIndex: number) => void;
 }
@@ -724,7 +728,8 @@ const FilmListDesktopHeader: React.FC<FilmListDesktopHeaderProps> = ({
     );
 };
 
-const FilmListView: React.FC<FilmListViewProps> = ({ films, onAdd, onEdit, onDuplicate, onTogglePin, onDelete, onOpenGallery }) => {
+const FilmListView: React.FC<FilmListViewProps> = ({ films, onAdd, onEdit, onDuplicate, onTogglePin, onSaveFilms, onDelete, onOpenGallery }) => {
+    const [isPriceAdjustmentOpen, setIsPriceAdjustmentOpen] = useState(false);
     const [expandedFilmName, setExpandedFilmName] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [visibleCount, setVisibleCount] = useState(10);
@@ -839,10 +844,28 @@ const FilmListView: React.FC<FilmListViewProps> = ({ films, onAdd, onEdit, onDup
                                 Limpar busca
                             </button>
                         ) : null}
+                        <button
+                            type="button"
+                            onClick={() => setIsPriceAdjustmentOpen(true)}
+                            className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border-subtle)] bg-[var(--surface)] px-3 py-1.5 text-[11px] font-semibold text-[var(--text-body)] shadow-[var(--shadow-hairline)] transition-colors hover:text-[var(--text-strong)] sm:text-xs"
+                        >
+                            <i className="fas fa-percent text-[10px]" aria-hidden="true"></i>
+                            Reajustar preços
+                        </button>
                     </div>
 
                     <ViewModeToggle value={viewMode} onChange={setViewMode} />
                 </div>
+            ) : null}
+
+            {isPriceAdjustmentOpen ? (
+                <Suspense fallback={null}>
+                    <FilmPriceAdjustmentModal
+                        films={films}
+                        onClose={() => setIsPriceAdjustmentOpen(false)}
+                        onSaveFilms={onSaveFilms}
+                    />
+                </Suspense>
             ) : null}
 
             {displayedFilms.length > 0 ? (
