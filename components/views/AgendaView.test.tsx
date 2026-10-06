@@ -81,7 +81,8 @@ describe('AgendaView', () => {
     it('mostra o tipo e o título do agendamento no card', () => {
         renderAgenda([clientWithAddress], [{ ...appointment, eventType: 'consulta', title: 'Medir a sala' }]);
 
-        const cards = screen.getAllByRole('article');
+        // Os cartões completos (a faixa do próximo atendimento é resumida).
+        const cards = screen.getAllByRole('article').filter((card) => !within(card).queryByText('Próximo'));
         expect(cards.length).toBeGreaterThan(0);
         cards.forEach((card) => {
             expect(within(card).getByText('Consulta')).toBeInTheDocument();
@@ -198,6 +199,124 @@ describe('AgendaView', () => {
         expect(onCreateAgendamentoByVoice).toHaveBeenCalledTimes(1);
     });
 
+    it('Semana lista a semana inteira, com os dias livres e atalho para agendar', () => {
+        window.localStorage.setItem('peliculas-br-agenda-view-mode-v1', 'week');
+        const onCreateNewAgendamento = vi.fn();
+        try {
+            render(
+                <AgendaView
+                    agendamentos={[
+                        { ...appointment, id: 1, clienteNome: 'Ana' },
+                        { ...appointment, id: 2, clienteNome: 'Bruno', start: '2026-05-27T12:00:00.000Z', end: '2026-05-27T14:00:00.000Z' },
+                    ]}
+                    pdfs={[]}
+                    clients={[clientWithAddress]}
+                    onEditAgendamento={vi.fn()}
+                    onUpdateServiceStatus={vi.fn()}
+                    onSaveReceiptDescription={vi.fn().mockResolvedValue(undefined)}
+                    onCompleteAgendamentoWithValue={vi.fn().mockResolvedValue(true)}
+                    onContinueAgendamento={vi.fn()}
+                    onRescheduleAgendamento={vi.fn()}
+                    onCreateNewAgendamento={onCreateNewAgendamento}
+                />
+            );
+
+            expect(screen.getByText('Atendimentos da semana')).toBeInTheDocument();
+            expect(screen.getByText('2 agendamentos')).toBeInTheDocument();
+            // Domingo (hoje) e quarta têm atendimento; os outros 5 dias aparecem livres.
+            expect(screen.getAllByText('Bruno').length).toBeGreaterThan(0);
+            expect(screen.getAllByText('Livre')).toHaveLength(5);
+
+            fireEvent.click(screen.getByRole('button', { name: 'Agendar para amanhã' }));
+            const day = onCreateNewAgendamento.mock.calls[0][0] as Date;
+            expect(day.getDate()).toBe(25);
+        } finally {
+            window.localStorage.removeItem('peliculas-br-agenda-view-mode-v1');
+        }
+    });
+
+    it('acima da data mostra Hoje, Amanhã e, nos outros dias, Agenda', () => {
+        window.localStorage.setItem('peliculas-br-agenda-view-mode-v1', 'day');
+        try {
+            renderAgenda();
+            expect(screen.queryByText('Agenda:')).not.toBeInTheDocument();
+
+            fireEvent.click(screen.getByRole('button', { name: 'Próximo dia' }));
+            expect(screen.getAllByText('Amanhã').length).toBeGreaterThan(0);
+
+            fireEvent.click(screen.getByRole('button', { name: 'Próximo dia' }));
+            expect(screen.getAllByText('Agenda:').length).toBeGreaterThan(0);
+
+            fireEvent.click(screen.getByRole('button', { name: 'Dia anterior' }));
+            fireEvent.click(screen.getByRole('button', { name: 'Dia anterior' }));
+            fireEvent.click(screen.getByRole('button', { name: 'Dia anterior' }));
+            expect(screen.getAllByText('Ontem').length).toBeGreaterThan(0);
+        } finally {
+            window.localStorage.removeItem('peliculas-br-agenda-view-mode-v1');
+        }
+    });
+
+    it('próximo atendimento é uma faixa compacta com WhatsApp e rota', () => {
+        vi.setSystemTime(new Date('2026-05-24T09:30:00.000Z'));
+        renderAgenda([clientWithAddress], [{ ...appointment, title: 'Medir a sala' }]);
+
+        const strip = screen.getAllByRole('article').find((card) => within(card).queryByText('Próximo'))!;
+        expect(within(strip).getByText('Em 2h30')).toBeInTheDocument();
+        expect(within(strip).getByText('Cliente Mapa')).toBeInTheDocument();
+        expect(within(strip).getByText(/Medir a sala$/)).toBeInTheDocument();
+        expect(within(strip).getByRole('button', { name: /abrir whatsapp de cliente mapa/i })).toBeInTheDocument();
+        expect(within(strip).getByRole('link', { name: /navegar até endereço de cliente mapa/i })).toBeInTheDocument();
+        expect(within(strip).queryByRole('link', { name: /ligar para/i })).not.toBeInTheDocument();
+    });
+
+    describe('busca e filtro na Lista', () => {
+        const listAppointments: Agendamento[] = [
+            { ...appointment, id: 1, clienteNome: 'Ana Souza', start: '2026-05-25T12:00:00.000Z', end: '2026-05-25T14:00:00.000Z', eventType: 'instalacao' },
+            { ...appointment, id: 2, clienteNome: 'Bruno Lima', start: '2026-05-20T12:00:00.000Z', end: '2026-05-20T14:00:00.000Z', serviceStatus: 'completed' },
+            { ...appointment, id: 3, clienteNome: 'Carla Dias', start: '2026-05-26T12:00:00.000Z', end: '2026-05-26T14:00:00.000Z', eventType: 'consulta' },
+        ];
+        // Nomes nos cartões da lista (sem a faixa do próximo atendimento).
+        const listedNames = () => screen.getAllByRole('article')
+            .filter((card) => !within(card).queryByText('Próximo'))
+            .map((card) => ['Ana Souza', 'Bruno Lima', 'Carla Dias'].find((name) => within(card).queryByText(name)))
+            .filter(Boolean);
+
+        beforeEach(() => window.localStorage.setItem('peliculas-br-agenda-view-mode-v1', 'list'));
+        afterEach(() => window.localStorage.removeItem('peliculas-br-agenda-view-mode-v1'));
+
+        it('acha pelo nome, inclusive o que já passou, e filtra pelo tipo', () => {
+            renderAgenda([clientWithAddress], listAppointments);
+            expect(listedNames()).toEqual(['Ana Souza', 'Carla Dias']);
+
+            fireEvent.change(screen.getByRole('textbox', { name: 'Buscar na agenda' }), { target: { value: 'bruno' } });
+            expect(screen.getByText('1 encontrado')).toBeInTheDocument();
+            expect(screen.getByText('Já passaram')).toBeInTheDocument();
+            expect(listedNames()).toEqual(['Bruno Lima']);
+
+            fireEvent.click(screen.getByRole('button', { name: 'Limpar busca' }));
+            fireEvent.click(screen.getByRole('radio', { name: 'Consulta' }));
+            expect(listedNames()).toEqual(['Carla Dias']);
+        });
+
+        it('sem resultado, oferece limpar a busca', () => {
+            renderAgenda([clientWithAddress], listAppointments);
+            fireEvent.change(screen.getByRole('textbox', { name: 'Buscar na agenda' }), { target: { value: 'zzz' } });
+
+            expect(screen.getAllByText('Nada encontrado').length).toBeGreaterThan(0);
+            fireEvent.click(screen.getByText('Limpar busca'));
+            expect(listedNames()).toEqual(['Ana Souza', 'Carla Dias']);
+        });
+    });
+
+    it('a lupa abre a Lista com a busca pronta para digitar', () => {
+        renderAgenda();
+        expect(screen.queryByRole('textbox', { name: 'Buscar na agenda' })).not.toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Buscar na agenda' }));
+        expect(screen.getByRole('textbox', { name: 'Buscar na agenda' })).toHaveFocus();
+        window.localStorage.removeItem('peliculas-br-agenda-view-mode-v1');
+    });
+
     it('sem a acao de voz nao mostra o microfone', () => {
         renderAgenda();
         expect(screen.queryByRole('button', { name: 'Agendar por voz' })).not.toBeInTheDocument();
@@ -245,7 +364,7 @@ describe('AgendaView', () => {
     it('ações do cartão numa linha só: Ligar, WhatsApp e Rota', () => {
         renderAgenda();
 
-        const route = screen.getAllByRole('link', { name: /navegar até endereço de cliente mapa/i })[0];
+        const route = screen.getAllByRole('link', { name: /navegar até endereço de cliente mapa/i }).find((link) => link.textContent === 'Rota')!;
         expect(route).toHaveTextContent(/^Rota$/);
         const actions = route.parentElement!;
         expect(actions).toHaveClass('flex');
