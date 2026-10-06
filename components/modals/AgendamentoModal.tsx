@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, FormEvent } from 'react';
-import { Agendamento, AgendamentoServiceStatus, Client, QuickClientDraft, UserInfo, SavedPDF, SchedulingInfo } from '../../types';
+import { Agendamento, AgendamentoEventType, AgendamentoServiceStatus, Client, QuickClientDraft, UserInfo, SavedPDF, SchedulingInfo } from '../../types';
 import Modal from '../ui/Modal';
 import ActionButton from '../ui/ActionButton';
 import Input from '../ui/Input';
@@ -8,6 +8,18 @@ import * as db from '../../services/db';
 import { getAgendamentoSlotError } from '../../src/lib/agendamentoRules';
 import { isClientAddress, pickProposalToLink, withLocalNote } from '../../src/lib/voiceClientMatch';
 import { buildMultiDayAgendamentos, formatDayLabel, moveToDay, nextDayKey, normalizeExtraDays } from '../../src/lib/multiDaySchedule';
+import { DEFAULT_EVENT_TYPE, EVENT_COLOR_PALETTE, EVENT_TYPES, getAgendamentoColor, getEventTypeDurationMinutes, getEventTypeMeta } from '../../src/lib/agendamentoEventTypes';
+
+const COLOR_NAMES: Record<string, string> = {
+    '#7c3aed': 'Violeta',
+    '#0891b2': 'Azul-piscina',
+    '#ea580c': 'Laranja',
+    '#db2777': 'Rosa',
+    '#0d9488': 'Verde-água',
+    '#4f46e5': 'Anil',
+    '#65a30d': 'Verde',
+    '#64748b': 'Cinza',
+};
 
 interface AgendamentoModalProps {
     isOpen: boolean;
@@ -82,6 +94,17 @@ const toDateInputValue = (date: Date) => {
 
 const toTimeInputValue = (date: Date) => date.toTimeString().split(' ')[0].substring(0, 5);
 
+// "09:00" + 60 = "10:00", sem passar da meia-noite.
+const addMinutesToTime = (time: string, minutes: number) => {
+    const match = /^(\d{2}):(\d{2})$/.exec(time);
+    if (!match) return '';
+    const total = Math.min(Number(match[1]) * 60 + Number(match[2]) + minutes, 23 * 60 + 59);
+    return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+};
+
+// Término automático: o início mais a duração do tipo (Consulta 1 hora; os outros, 2 horas).
+const getAutoEndTime = (start: string, type?: AgendamentoEventType) => addMinutesToTime(start, getEventTypeDurationMinutes(type));
+
 const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, onSave, onDelete, schedulingInfo, clients, savedPdfs, onAddNewClient, onCreateQuickClient, userInfo, agendamentos }) => {
     const agendamento = schedulingInfo.agendamento;
     const pdf = 'pdf' in schedulingInfo ? schedulingInfo.pdf : undefined;
@@ -106,6 +129,26 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
     const [quickLocal, setQuickLocal] = useState('');
     // Outros dias do mesmo atendimento, no mesmo horário (só em agendamento novo).
     const [extraDays, setExtraDays] = useState<string[]>([]);
+    // Organização: tipo, título opcional e cor (vazia = a do tipo).
+    const [eventType, setEventType] = useState<AgendamentoEventType | undefined>(undefined);
+    const [title, setTitle] = useState('');
+    const [color, setColor] = useState('');
+    const [isColorOpen, setIsColorOpen] = useState(false);
+    const typeColor = getEventTypeMeta(eventType)?.color;
+    const currentColor = getAgendamentoColor({ eventType, color }) ?? '#94a3b8';
+    // Em agendamento novo, enquanto o término for o automático (não mexido), ele
+    // acompanha o tipo (Consulta 1 hora) e o início.
+    const isAutoEnd = !isEditing && endTime === getAutoEndTime(startTime, eventType);
+
+    const handleSelectEventType = (value: AgendamentoEventType) => {
+        if (isAutoEnd) setEndTime(getAutoEndTime(startTime, value));
+        setEventType(value);
+    };
+
+    const handleStartTimeChange = (value: string) => {
+        if (isAutoEnd && value) setEndTime(getAutoEndTime(value, eventType));
+        setStartTime(value);
+    };
     // Capacidade = nº de colaboradores ATIVOS da organização (dono + convidados).
     // Org-wide e igual em qualquer conta logada (corrige a antiga contagem por
     // "Equipe" manual, que não crescia ao convidar e variava por conta).
@@ -171,6 +214,11 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
             setQuickName(quickClient?.nome || '');
             setQuickLocal(quickClient?.local || '');
             setExtraDays(isEditing ? [] : (initialExtraDays || []));
+            // Agendamento antigo sem tipo continua sem tipo; o novo começa como Instalação.
+            setEventType(agendamento?.eventType ?? (isEditing ? undefined : DEFAULT_EVENT_TYPE));
+            setTitle(agendamento?.title || '');
+            setColor(agendamento?.color || '');
+            setIsColorOpen(false);
 
             if (isEditing && agendamento?.start && agendamento?.end) {
                 const startDate = new Date(agendamento.start);
@@ -183,11 +231,12 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                 const startDate = new Date(agendamento.start);
                 setDate(toDateInputValue(startDate));
                 setStartTime(toTimeInputValue(startDate));
-                // Término sugerido (ex.: "das 9 às 12" ditado por voz); sem ele, 2 horas.
+                // Término sugerido (ex.: "das 9 às 12" ditado por voz); sem ele, a duração do tipo.
                 const suggestedEnd = agendamento.end ? new Date(agendamento.end) : null;
+                const durationMinutes = getEventTypeDurationMinutes(agendamento.eventType ?? DEFAULT_EVENT_TYPE);
                 const endDate = suggestedEnd && suggestedEnd > startDate
                     ? suggestedEnd
-                    : new Date(startDate.getTime() + 2 * 60 * 60 * 1000);
+                    : new Date(startDate.getTime() + durationMinutes * 60 * 1000);
                 setEndTime(toTimeInputValue(endDate));
                 setNotes(agendamento.notes || '');
             } else {
@@ -303,6 +352,9 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                 stockStatus: agendamento?.stockStatus,
                 stockConsumedAt: agendamento?.stockConsumedAt,
                 stockSourcePdfIds: agendamento?.stockSourcePdfIds,
+                eventType,
+                title: title.trim() || undefined,
+                color: color || undefined,
             };
 
             if (isEditing) {
@@ -408,7 +460,9 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
             `DTSTAMP:${formatDateForICS(now)}`,
             `DTSTART:${formatDateForICS(startDate)}`,
             `DTEND:${formatDateForICS(endDate)}`,
-            `SUMMARY:Instalação de Película: ${client.nome}`,
+            `SUMMARY:${agendamento.title?.trim()
+                ? `${agendamento.title.trim()} – ${client.nome}`
+                : `${getEventTypeMeta(agendamento.eventType)?.label ?? 'Instalação de Película'}: ${client.nome}`}`,
             `DESCRIPTION:${description}`,
             `LOCATION:${formatClientAddress(client)}`,
             'END:VEVENT',
@@ -568,7 +622,7 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                                 </button>
                             </div>
                         ) : null}
-                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Cliente</label>
+                        <label className="ui-label mb-1.5 block">Cliente</label>
                         <SearchableSelect
                             options={sortedClients}
                             value={selectedClientId}
@@ -737,9 +791,91 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                         </section>
                     ) : null}
 
+                    <div className="space-y-4">
+                        <div>
+                            <span className="ui-label mb-1.5 block">Tipo</span>
+                            {/* Mesmo seletor segmentado da tela de IA: uma linha, o ativo em destaque na cor do tipo. */}
+                            <div role="radiogroup" aria-label="Tipo do agendamento" className="grid grid-cols-4 gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800/80">
+                                {EVENT_TYPES.map((type) => {
+                                    const isActive = eventType === type.value;
+                                    return (
+                                        <button
+                                            key={type.value}
+                                            type="button"
+                                            role="radio"
+                                            aria-checked={isActive}
+                                            onClick={() => handleSelectEventType(type.value)}
+                                            className={`flex min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-1 py-2 text-[12px] font-semibold transition-colors ${isActive
+                                                ? 'bg-white shadow-sm dark:bg-slate-700'
+                                                : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'}`}
+                                            style={isActive ? { color: type.color } : undefined}
+                                        >
+                                            <i className={`${type.iconClassName} text-[13px]`} aria-hidden="true"></i>
+                                            <span className="max-w-full truncate">{type.label}</span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        <div>
+                            <label htmlFor="eventTitle" className="ui-label mb-1.5 block">
+                                Título <span className="font-medium">(opcional)</span>
+                            </label>
+                            <div className="flex items-stretch gap-2">
+                                <input
+                                    id="eventTitle"
+                                    value={title}
+                                    onChange={(e) => setTitle(e.target.value)}
+                                    placeholder="Ex.: Película na fachada"
+                                    maxLength={120}
+                                    className={`ui-field block w-full min-w-0 flex-1 px-3 py-2.5 text-sm ${inputClassName}`}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setIsColorOpen((open) => !open)}
+                                    aria-expanded={isColorOpen}
+                                    aria-label={`Cor do agendamento: ${COLOR_NAMES[currentColor] ?? 'padrão'}`}
+                                    title="Cor do agendamento"
+                                    className={`flex w-[46px] shrink-0 items-center justify-center rounded-[var(--radius-control)] border transition-colors ${isColorOpen
+                                        ? 'border-slate-400 bg-white dark:border-slate-400 dark:bg-slate-800'
+                                        : 'border-slate-200 bg-slate-100/70 hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-700'}`}
+                                >
+                                    <span className="h-5 w-5 rounded-full ring-2 ring-white dark:ring-slate-800" style={{ backgroundColor: currentColor }} aria-hidden="true" />
+                                </button>
+                            </div>
+
+                            {isColorOpen ? (
+                                <div role="radiogroup" aria-label="Cor do agendamento" className="mt-2 flex items-center justify-between gap-1 rounded-xl border border-slate-200 bg-white p-2 shadow-sm dark:border-slate-600 dark:bg-slate-800">
+                                    {EVENT_COLOR_PALETTE.map((hex) => {
+                                        const isTypeColor = hex === typeColor;
+                                        const isSelected = currentColor === hex;
+                                        const name = COLOR_NAMES[hex] ?? hex;
+                                        return (
+                                            <button
+                                                key={hex}
+                                                type="button"
+                                                role="radio"
+                                                aria-checked={isSelected}
+                                                aria-label={isTypeColor ? `${name} (cor do tipo)` : name}
+                                                title={isTypeColor ? `${name} (cor do tipo)` : name}
+                                                // A cor do próprio tipo volta ao padrão: acompanha o tipo se ele mudar.
+                                                onClick={() => { setColor(isTypeColor ? '' : hex); setIsColorOpen(false); }}
+                                                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-transform active:scale-90"
+                                                style={{ backgroundColor: hex }}
+                                            >
+                                                {isSelected ? <i className="fas fa-check text-[11px] text-white" aria-hidden="true"></i> : null}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            ) : null}
+                        </div>
+                    </div>
+
                     <div>
                         <div className="mb-1">
-                            <label htmlFor="date" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Data</label>
+                            <label htmlFor="date" className="ui-label block">Data</label>
                         </div>
                         <Input
                             id="date"
@@ -786,7 +922,7 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
-                        <Input id="startTime" label="Início" type="time" value={startTime} onChange={(e) => setStartTime((e.target as HTMLInputElement).value)} required className={inputClassName} />
+                        <Input id="startTime" label="Início" type="time" value={startTime} onChange={(e) => handleStartTimeChange((e.target as HTMLInputElement).value)} required className={inputClassName} />
                         <Input id="endTime" label="Término" type="time" value={endTime} onChange={(e) => setEndTime((e.target as HTMLInputElement).value)} required className={inputClassName} />
                     </div>
 
@@ -806,7 +942,7 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
 
                     {isEditing && (
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Status do atendimento</label>
+                            <label className="ui-label mb-1.5 block">Status do atendimento</label>
                             <div className="grid grid-cols-2 gap-2">
                                 {SERVICE_STATUS_OPTIONS.map((option) => {
                                     const isActive = serviceStatus === option.value;

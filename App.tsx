@@ -48,11 +48,14 @@ import { createPastedMeasurementsFromClipboard } from './src/lib/measurementClip
 import {
     buildQuickClientRecord,
     buildVoiceScheduleDraft,
+    canUndoVoiceSchedule,
     describeVoiceSchedule,
     extractScheduleWithGemini,
     getFriendlyScheduleError,
     readScheduleAutoSave,
+    undoVoiceScheduleSave,
     VoiceScheduleDraft,
+    VoiceScheduleUndo,
     writeScheduleAutoSave,
 } from './src/lib/voiceSchedule';
 import { getAgendamentoSlotError } from './src/lib/agendamentoRules';
@@ -2655,13 +2658,32 @@ Regras:
         });
     }, [scheduleVoiceClient, hasLoadedAllClients, clients]);
 
+    // "Desfazer" do agendamento salvo direto pela voz: apaga os dias criados, devolve
+    // a proposta como estava e apaga o cliente se ele foi criado por este áudio.
+    const undoVoiceSchedule = useCallback(async (undo: VoiceScheduleUndo) => {
+        try {
+            await undoVoiceScheduleSave(undo, db);
+            if (undo.createdClientId != null) {
+                setClients(current => current.filter(client => client.id !== undo.createdClientId));
+            }
+            await Promise.all([loadAgendamentos(), undo.pdfsBeforeLink.length ? loadAllPdfs() : Promise.resolve()]);
+            showToast('Agendamento desfeito.', { tone: 'info', duration: 3000 });
+        } catch (error) {
+            console.error('Erro ao desfazer agendamento por voz:', error);
+            await loadAgendamentos().catch(() => undefined);
+            handleShowInfo('Não consegui desfazer tudo. Confira a agenda e apague o que sobrou.');
+        }
+    }, [handleShowInfo, loadAgendamentos, loadAllPdfs, showToast]);
+
     const saveVoiceDraftDirectly = useCallback(async (draft: VoiceScheduleDraft) => {
         let clienteId = draft.agendamento.clienteId;
         let clienteNome = draft.agendamento.clienteNome || draft.quickClient.nome;
+        let createdClientId: number | undefined;
         if (clienteId == null) {
             const client = await handleCreateQuickClient({ nome: draft.quickClient.nome, local: draft.quickClient.local }, draft.quickClient);
             clienteId = client.id!;
             clienteNome = client.nome;
+            createdClientId = client.id;
         }
         const pdfIds = draft.agendamento.pdfIds || [];
         const [firstDay, ...otherDays] = buildMultiDayAgendamentos({
@@ -2673,6 +2695,8 @@ Regras:
             pdfId: pdfIds[0],
             pdfIds,
             serviceStatus: 'scheduled',
+            eventType: draft.agendamento.eventType,
+            title: draft.agendamento.title,
         }, draft.extraDays);
 
         let saved: Agendamento;
@@ -2692,34 +2716,39 @@ Regras:
 
         setIsAIScheduleModalOpen(false);
         // Dias seguintes: continuação do mesmo atendimento.
-        let savedDays = 1;
+        const created: Agendamento[] = [saved];
         try {
             for (const day of otherDays) {
-                await db.saveAgendamento(day);
-                savedDays += 1;
+                created.push(await db.saveAgendamento(day));
             }
         } catch (error) {
             console.error('Erro ao salvar os outros dias do agendamento por voz:', error);
             await loadAgendamentos();
-            handleShowInfo(`Salvei ${savedDays} de ${otherDays.length + 1} dias. Confira a agenda e agende o que faltou.`);
+            handleShowInfo(`Salvei ${created.length} de ${otherDays.length + 1} dias. Confira a agenda e agende o que faltou.`);
             return;
         }
         // Proposta ligada: marca nela o agendamento, como a conferência faz.
+        let pdfsBeforeLink: SavedPDF[] = [];
         if (pdfIds.length) {
             const clientPdfs = await db.getPDFsForClient(clienteId);
-            await Promise.all(clientPdfs
-                .filter(pdf => typeof pdf.id === 'number' && pdfIds.includes(pdf.id))
-                .map(pdf => db.updatePDF({ ...pdf, agendamentoId: saved.id })));
+            pdfsBeforeLink = clientPdfs.filter(pdf => typeof pdf.id === 'number' && pdfIds.includes(pdf.id));
+            await Promise.all(pdfsBeforeLink.map(pdf => db.updatePDF({ ...pdf, agendamentoId: saved.id })));
         }
         await Promise.all([loadAgendamentos(), pdfIds.length ? loadAllPdfs() : Promise.resolve()]);
         const proposalNote = pdfIds.length ? ' · proposta ligada' : '';
-        showToast(`Agendado: ${describeVoiceSchedule(clienteNome, saved.start, saved.end, draft.extraDays)}${proposalNote}`, {
+        // "Desfazer" só com tudo salvo no servidor (id definitivo); salvo só no aparelho, fica o "Ver".
+        const canUndo = canUndoVoiceSchedule(created);
+        showToast(`Agendado: ${describeVoiceSchedule(clienteNome, saved.start, saved.end, draft.extraDays, draft.agendamento.title)}${proposalNote}`, {
             tone: 'success',
-            duration: 6000,
+            duration: canUndo ? 8000 : 6000,
             actionLabel: 'Ver',
             onAction: () => handleEditAgendamento(saved),
+            ...(canUndo ? {
+                secondaryActionLabel: 'Desfazer',
+                onSecondaryAction: () => { void undoVoiceSchedule({ created, pdfsBeforeLink, createdClientId }); },
+            } : {}),
         });
-    }, [handleCreateQuickClient, handleOpenAgendamentoModal, handleEditAgendamento, handleShowInfo, loadAgendamentos, loadAllPdfs, showToast]);
+    }, [handleCreateQuickClient, handleOpenAgendamentoModal, handleEditAgendamento, handleShowInfo, loadAgendamentos, loadAllPdfs, showToast, undoVoiceSchedule]);
 
     // Agendamento por voz: a IA separa nome, local, dia e hora; o app acha o
     // cliente cadastrado (ou cria um simples) e o modal de agendamento abre preenchido.

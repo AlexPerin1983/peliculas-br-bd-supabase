@@ -6,6 +6,9 @@ interface ToastProps {
     onUndo?: () => void;
     onAction?: () => void;
     actionLabel?: string;
+    // Segunda ação (ex.: "Desfazer" ao lado de "Ver"): os botões vão para uma linha embaixo da mensagem.
+    onSecondaryAction?: () => void;
+    secondaryActionLabel?: string;
     onDismiss: () => void;
     duration?: number;
     tone?: 'info' | 'success' | 'warning' | 'error';
@@ -40,6 +43,8 @@ const Toast: React.FC<ToastProps> = ({
     onUndo,
     onAction,
     actionLabel,
+    onSecondaryAction,
+    secondaryActionLabel,
     onDismiss,
     duration = 5000,
     tone = 'error',
@@ -84,6 +89,13 @@ const Toast: React.FC<ToastProps> = ({
         handleDismiss();
     };
 
+    const hasSecondaryAction = Boolean(onSecondaryAction && secondaryActionLabel);
+    const handleSecondaryAction = () => {
+        onSecondaryAction?.();
+        handleDismiss();
+    };
+    const actionButtonClassName = 'px-3 py-2 text-xs font-semibold uppercase tracking-wide text-blue-300 transition-colors hover:text-blue-200';
+
     return (
         <div
             className={`fixed bottom-0 left-0 right-0 z-50 flex justify-center px-4 pb-safe transition-all duration-300 ${isVisible ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'}`}
@@ -110,10 +122,10 @@ const Toast: React.FC<ToastProps> = ({
                     </div>
 
                     <div className="ml-4 flex flex-shrink-0 items-center gap-2">
-                        {activeAction && activeActionLabel && (
+                        {!hasSecondaryAction && activeAction && activeActionLabel && (
                             <button
                                 onClick={handleAction}
-                                className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-blue-300 transition-colors hover:text-blue-200"
+                                className={actionButtonClassName}
                             >
                                 {activeActionLabel}
                             </button>
@@ -127,6 +139,19 @@ const Toast: React.FC<ToastProps> = ({
                         </button>
                     </div>
                 </div>
+
+                {hasSecondaryAction ? (
+                    <div className="-mt-2 flex justify-end gap-1 px-3 pb-2">
+                        <button onClick={handleSecondaryAction} className={actionButtonClassName}>
+                            {secondaryActionLabel}
+                        </button>
+                        {activeAction && activeActionLabel ? (
+                            <button onClick={handleAction} className={actionButtonClassName}>
+                                {activeActionLabel}
+                            </button>
+                        ) : null}
+                    </div>
+                ) : null}
             </div>
         </div>
     );

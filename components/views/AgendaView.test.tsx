@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { act } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import AgendaView from './AgendaView';
@@ -78,6 +78,71 @@ describe('AgendaView', () => {
         vi.useRealTimers();
     });
 
+    it('mostra o tipo e o título do agendamento no card', () => {
+        renderAgenda([clientWithAddress], [{ ...appointment, eventType: 'consulta', title: 'Medir a sala' }]);
+
+        const cards = screen.getAllByRole('article');
+        expect(cards.length).toBeGreaterThan(0);
+        cards.forEach((card) => {
+            expect(within(card).getByText('Consulta')).toBeInTheDocument();
+            expect(within(card).getByText('Medir a sala')).toBeInTheDocument();
+        });
+    });
+
+    it('pinta os pontinhos do calendário com a cor do tipo e apaga cancelado', () => {
+        renderAgenda([clientWithAddress], [
+            { ...appointment, id: 1, clienteNome: 'Ana', eventType: 'consulta' },
+            { ...appointment, id: 2, clienteNome: 'Bruno', eventType: 'instalacao', serviceStatus: 'cancelled' },
+        ]);
+
+        const consulta = screen.getAllByTitle('Ana · Consulta')[0];
+        expect(consulta).toHaveStyle({ backgroundColor: '#7c3aed' });
+        expect(consulta).not.toHaveClass('opacity-35');
+        const cancelado = screen.getAllByTitle('Bruno · Instalação')[0];
+        expect(cancelado).toHaveStyle({ backgroundColor: '#0891b2' });
+        expect(cancelado).toHaveClass('opacity-35');
+
+        // A legenda explica as cores dos tipos; "Sem tipo" só aparece quando há agendamento antigo.
+        expect(screen.getAllByText('Instalação').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('Variado').length).toBeGreaterThan(0);
+        expect(screen.queryByText('Sem tipo')).not.toBeInTheDocument();
+        expect(screen.queryByText('Agendado')).not.toBeInTheDocument();
+    });
+
+    it('cartão sem repetir: sem duração nem contagem, propostas separadas por "·"', () => {
+        const pdfs = [
+            { id: 10, clienteId: 1, date: appointmentDate, totalPreco: 200, totalM2: 2, nomeArquivo: 'a.pdf', proposalOptionName: 'Residencial' },
+            { id: 11, clienteId: 1, date: appointmentDate, totalPreco: 180, totalM2: 1, nomeArquivo: 'b.pdf', proposalOptionName: 'Comercial' },
+        ] as SavedPDF[];
+        renderAgenda([clientWithAddress], [{ ...appointment, pdfId: 10, pdfIds: [10, 11] }], pdfs);
+
+        expect(screen.getAllByText('Residencial · Comercial').length).toBeGreaterThan(0);
+        expect(screen.queryByText(/2 propostas/)).not.toBeInTheDocument();
+        expect(screen.queryByText('2h')).not.toBeInTheDocument();
+    });
+
+    it('sem as propostas carregadas, mostra quantas estão ligadas', () => {
+        renderAgenda([clientWithAddress], [{ ...appointment, pdfId: 10, pdfIds: [10, 11] }], []);
+        expect(screen.getAllByText('2 propostas').length).toBeGreaterThan(0);
+    });
+
+    it('dia seguinte de um atendimento mostra o selo de continuação no lugar do aviso', () => {
+        renderAgenda([clientWithAddress], [{ ...appointment, notes: 'Continuação do atendimento de 23/05.\n\nLevar escada' }]);
+
+        expect(screen.getAllByText('Continuação · 23/05').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('Levar escada').length).toBeGreaterThan(0);
+        expect(screen.queryByText(/Continuação do atendimento/)).not.toBeInTheDocument();
+    });
+
+    it('agendamento antigo, sem tipo, fica só no contorno e entra na legenda', () => {
+        renderAgenda();
+
+        const semTipo = screen.getAllByTitle('Cliente Mapa')[0];
+        expect(semTipo).toHaveClass('border-slate-400');
+        expect(semTipo.getAttribute('style')).toBeNull();
+        expect(screen.getAllByText('Sem tipo').length).toBeGreaterThan(0);
+    });
+
     it('oferece agendar por voz ao lado do novo agendamento', () => {
         const onCreateAgendamentoByVoice = vi.fn();
         render(
@@ -99,6 +164,37 @@ describe('AgendaView', () => {
         const voiceButtons = screen.getAllByRole('button', { name: 'Agendar por voz' });
         expect(voiceButtons.length).toBeGreaterThan(0);
         fireEvent.click(voiceButtons[0]);
+        expect(onCreateAgendamentoByVoice).toHaveBeenCalledTimes(1);
+    });
+
+    it('escreve a data como se escreve e resume o dia numa linha', () => {
+        renderAgenda();
+
+        expect(screen.getAllByText('Domingo, 24 de maio').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('Maio de 2026').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('1 atendimento').length).toBeGreaterThan(0);
+        expect(screen.queryByText('Janela')).not.toBeInTheDocument();
+    });
+
+    it('dia vazio oferece agendar por voz', () => {
+        const onCreateAgendamentoByVoice = vi.fn();
+        render(
+            <AgendaView
+                agendamentos={[]}
+                pdfs={[]}
+                clients={[clientWithAddress]}
+                onEditAgendamento={vi.fn()}
+                onUpdateServiceStatus={vi.fn()}
+                onSaveReceiptDescription={vi.fn().mockResolvedValue(undefined)}
+                onCompleteAgendamentoWithValue={vi.fn().mockResolvedValue(true)}
+                onContinueAgendamento={vi.fn()}
+                onRescheduleAgendamento={vi.fn()}
+                onCreateNewAgendamento={vi.fn()}
+                onCreateAgendamentoByVoice={onCreateAgendamentoByVoice}
+            />
+        );
+
+        fireEvent.click(screen.getAllByText('Agendar por voz')[0]);
         expect(onCreateAgendamentoByVoice).toHaveBeenCalledTimes(1);
     });
 

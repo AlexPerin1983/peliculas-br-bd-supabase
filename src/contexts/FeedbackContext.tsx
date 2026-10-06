@@ -12,6 +12,8 @@ interface ToastConfig {
     duration?: number;
     actionLabel?: string;
     onAction?: () => void;
+    secondaryActionLabel?: string;
+    onSecondaryAction?: () => void;
 }
 
 interface AlertConfig {
@@ -54,6 +56,8 @@ interface ToastOptions {
     duration?: number;
     actionLabel?: string;
     onAction?: () => void;
+    secondaryActionLabel?: string;
+    onSecondaryAction?: () => void;
 }
 
 interface FeedbackContextType {
@@ -87,7 +91,9 @@ export const FeedbackProvider: React.FC<{ children: ReactNode }> = ({ children }
             tone: options?.tone || 'info',
             duration: options?.duration,
             actionLabel: options?.actionLabel,
-            onAction: options?.onAction
+            onAction: options?.onAction,
+            secondaryActionLabel: options?.secondaryActionLabel,
+            onSecondaryAction: options?.onSecondaryAction
         });
     }, []);
 
@@ -189,6 +195,8 @@ export const FeedbackProvider: React.FC<{ children: ReactNode }> = ({ children }
                     duration={toast.duration}
                     actionLabel={toast.actionLabel}
                     onAction={toast.onAction}
+                    secondaryActionLabel={toast.secondaryActionLabel}
+                    onSecondaryAction={toast.onSecondaryAction}
                     onDismiss={() => {
                         setToast(current => current?.id === toast.id ? null : current);
                     }}

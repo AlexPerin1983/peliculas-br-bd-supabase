@@ -36,14 +36,31 @@ export const moveToDay = (iso: string, dayKey: string) => {
     return target.toISOString();
 };
 
+// "Continuação do atendimento de 02/10." abre as observações dos dias seguintes.
+export const buildContinuationNote = (originStart: string) => (
+    `Continuação do atendimento de ${new Date(originStart).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}.`
+);
+
+const CONTINUATION_NOTE = /^Continuação do atendimento de (\d{2}\/\d{2})\.\s*/;
+
+// Separa a data de origem (do aviso mais recente) do resto das observações.
+export const splitContinuationNote = (notes?: string) => {
+    let rest = notes ?? '';
+    let originDate: string | undefined;
+    for (let match = CONTINUATION_NOTE.exec(rest); match; match = CONTINUATION_NOTE.exec(rest)) {
+        originDate ??= match[1];
+        rest = rest.slice(match[0].length);
+    }
+    return { originDate, notes: rest.trim() };
+};
+
 export const buildMultiDayAgendamentos = <T extends Omit<Agendamento, 'id'>>(first: T, extraDays: string[]): Array<Omit<Agendamento, 'id'>> => {
     const mainDay = toDayKey(new Date(first.start));
     const days = normalizeExtraDays(mainDay, extraDays);
     if (!days.length) return [first];
 
     const proposalIds = first.pdfIds?.length ? first.pdfIds : (first.pdfId ? [first.pdfId] : []);
-    const originDate = new Date(first.start).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-    const continuationNote = `Continuação do atendimento de ${originDate}.`;
+    const continuationNote = buildContinuationNote(first.start);
     const notes = first.notes?.trim() ? `${continuationNote}\n\n${first.notes.trim()}` : continuationNote;
 
     return [
@@ -58,6 +75,9 @@ export const buildMultiDayAgendamentos = <T extends Omit<Agendamento, 'id'>>(fir
             serviceStatus: 'scheduled' as const,
             receiptDescription: first.receiptDescription,
             stockSourcePdfIds: proposalIds.length ? proposalIds : undefined,
+            eventType: first.eventType,
+            title: first.title,
+            color: first.color,
         })),
     ];
 };

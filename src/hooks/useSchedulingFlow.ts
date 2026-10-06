@@ -3,6 +3,7 @@ import * as db from '../../services/db';
 import { completeAgendamentoWithStock, ServiceStockConsumptionInput } from '../../services/estoqueDb';
 import { Agendamento, AgendamentoServiceStatus, AgendamentoStockStatus, SavedPDF, SchedulingInfo } from '../../types';
 import { getDefaultReceiptDescription } from '../lib/receipt';
+import { buildContinuationNote } from '../lib/multiDaySchedule';
 
 type SetActiveTab = Dispatch<SetStateAction<'dashboard' | 'client' | 'films' | 'settings' | 'history' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores'>>;
 
@@ -312,8 +313,7 @@ export function useSchedulingFlow({
         continuationStart.setDate(continuationStart.getDate() + 1);
         continuationStart.setHours(9, 0, 0, 0);
 
-        const originDate = new Date(agendamento.start).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-        const continuationNote = `Continuação do atendimento de ${originDate}.`;
+        const continuationNote = buildContinuationNote(agendamento.start);
         const notes = agendamento.notes ? `${continuationNote}\n\n${agendamento.notes}` : continuationNote;
         const linkedProposalIds = agendamento.pdfIds?.length
             ? agendamento.pdfIds
@@ -337,6 +337,9 @@ export function useSchedulingFlow({
                 notes,
                 receiptDescription,
                 stockSourcePdfIds,
+                eventType: agendamento.eventType,
+                title: agendamento.title,
+                color: agendamento.color,
             }
         });
     }, [allSavedPdfs, handleOpenAgendamentoModal, handleUpdateAgendamentoServiceStatus]);

@@ -205,6 +205,54 @@ describe('supabaseDb PDF updates', () => {
     expect(saved.receiptDescription).toBeUndefined();
   });
 
+  it('salva e lê tipo, título e cor do agendamento', async () => {
+    const start = '2026-05-20T09:00:00.000Z';
+    const end = '2026-05-20T11:00:00.000Z';
+    singleMock.mockResolvedValue({
+      data: { id: 56, client_id: 12, client_name: 'Cliente Agenda', start, end, event_type: 'consulta', title: 'Medir a sala', color: '#db2777' },
+      error: null
+    });
+    selectMock.mockReturnValue({ single: singleMock });
+    insertMock.mockReturnValue({ select: selectMock });
+    fromMock.mockReturnValue({ update: updateMock, insert: insertMock });
+
+    const { saveAgendamento } = await import('./supabaseDb');
+    const saved = await saveAgendamento({
+      clienteId: 12, clienteNome: 'Cliente Agenda', start, end,
+      eventType: 'consulta', title: '  Medir a sala  ', color: '#db2777'
+    });
+
+    expect(insertMock).toHaveBeenCalledWith(expect.objectContaining({
+      event_type: 'consulta', title: 'Medir a sala', color: '#db2777'
+    }));
+    expect(saved).toEqual(expect.objectContaining({ eventType: 'consulta', title: 'Medir a sala', color: '#db2777' }));
+  });
+
+  it('sem as colunas de tipo no servidor, o agendamento ainda salva', async () => {
+    const start = '2026-05-20T09:00:00.000Z';
+    const end = '2026-05-20T11:00:00.000Z';
+    singleMock
+      .mockResolvedValueOnce({
+        data: null,
+        error: { code: 'PGRST204', message: "Could not find the 'event_type' column of 'agendamentos' in the schema cache" }
+      })
+      .mockResolvedValueOnce({
+        data: { id: 57, client_id: 12, client_name: 'Cliente Agenda', start, end },
+        error: null
+      });
+    selectMock.mockReturnValue({ single: singleMock });
+    insertMock.mockReturnValue({ select: selectMock });
+    fromMock.mockReturnValue({ update: updateMock, insert: insertMock });
+
+    const { saveAgendamento } = await import('./supabaseDb');
+    const saved = await saveAgendamento({ clienteId: 12, clienteNome: 'Cliente Agenda', start, end, eventType: 'instalacao' });
+
+    expect(insertMock).toHaveBeenCalledTimes(2);
+    expect(insertMock.mock.calls[1][0]).not.toHaveProperty('event_type');
+    expect(insertMock.mock.calls[1][0]).not.toHaveProperty('title');
+    expect(saved.id).toBe(57);
+  });
+
   it('não descarta silenciosamente um snapshot quando falta a coluna remota', async () => {
     const start = '2026-05-20T09:00:00.000Z';
     const end = '2026-05-20T11:00:00.000Z';

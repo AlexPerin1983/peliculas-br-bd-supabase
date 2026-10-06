@@ -1426,7 +1426,10 @@ export const saveAgendamento = async (agendamento: Agendamento | Omit<Agendament
             : {}),
         ...('stockSourcePdfIds' in agendamento
             ? { stock_source_pdf_ids: agendamento.stockSourcePdfIds?.length ? agendamento.stockSourcePdfIds : null }
-            : {})
+            : {}),
+        ...('eventType' in agendamento ? { event_type: agendamento.eventType ?? null } : {}),
+        ...('title' in agendamento ? { title: agendamento.title?.trim() || null } : {}),
+        ...('color' in agendamento ? { color: agendamento.color ?? null } : {})
     };
     const legacyAgendamentoData = {
         user_id: userId,
@@ -1455,6 +1458,11 @@ export const saveAgendamento = async (agendamento: Agendamento | Omit<Agendament
 
     const stripReceiptDescription = <T extends { receipt_description?: unknown }>(payload: T) => {
         const { receipt_description, ...rest } = payload;
+        return rest;
+    };
+
+    const stripEventFields = <T extends { event_type?: unknown; title?: unknown; color?: unknown }>(payload: T) => {
+        const { event_type, title, color, ...rest } = payload;
         return rest;
     };
 
@@ -1493,6 +1501,12 @@ export const saveAgendamento = async (agendamento: Agendamento | Omit<Agendament
         // fallback legado. A fila offline tentará novamente após a migração.
         if (hasRequestedStockData) throw error;
         payload = stripStockFields(payload);
+        ({ data, error } = await runQuery(payload));
+    }
+
+    if (error && isAgendamentoEventColumnError(error)) {
+        // Sem as colunas novas o agendamento ainda salva; só o tipo, o título e a cor ficam de fora.
+        payload = stripEventFields(payload);
         ({ data, error } = await runQuery(payload));
     }
 
@@ -1577,8 +1591,31 @@ const mapRowToAgendamento = (row: any): Agendamento => ({
     stockConsumedAt: row.stock_consumed_at ?? undefined,
     stockSourcePdfIds: Array.isArray(row.stock_source_pdf_ids)
         ? row.stock_source_pdf_ids.map(Number).filter(Number.isFinite)
-        : undefined
+        : undefined,
+    eventType: row.event_type ?? undefined,
+    title: row.title ?? undefined,
+    color: row.color ?? undefined
 });
+
+// Tipo, título e cor do agendamento (migração 20261005120000).
+const isAgendamentoEventColumnError = (error: unknown): boolean => {
+    const details = [
+        (error as { message?: string })?.message,
+        (error as { details?: string })?.details,
+        (error as { hint?: string })?.hint,
+        (error as { code?: string })?.code
+    ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+    return /\b(event_type|title|color)\b/.test(details)
+        && (
+            details.includes('column')
+            || details.includes('schema cache')
+            || details.includes('could not find')
+        );
+};
 
 const isAgendamentoStockColumnError = (error: unknown): boolean => {
     const details = [

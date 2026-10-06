@@ -294,4 +294,118 @@ describe('AgendamentoModal', () => {
             expect(screen.getByRole('button', { name: 'Agendar' })).toBeInTheDocument();
         });
     });
+
+    describe('tipo, título e cor', () => {
+        const ana: Client = { ...createdClient, id: 11, nome: 'Ana' };
+
+        const renderWith = (agendamento: Record<string, unknown>) => {
+            const onSave = vi.fn().mockResolvedValue(undefined);
+            render(
+                <AgendamentoModal
+                    isOpen onClose={vi.fn()} onSave={onSave} onDelete={vi.fn()}
+                    schedulingInfo={{
+                        agendamento: { clienteId: 11, clienteNome: 'Ana', start: voiceStart.toISOString(), end: voiceEnd.toISOString(), ...agendamento },
+                    }}
+                    clients={[ana]} savedPdfs={[]} onAddNewClient={vi.fn()} userInfo={userInfo} agendamentos={[]}
+                />
+            );
+            return { onSave };
+        };
+
+        it('agendamento novo começa como Instalação, sem título e com a cor do tipo', async () => {
+            const { onSave } = renderWith({});
+
+            expect(screen.getByRole('radio', { name: /Instalação/ })).toHaveAttribute('aria-checked', 'true');
+            expect(screen.getByRole('button', { name: 'Cor do agendamento: Azul-piscina' })).toBeInTheDocument();
+
+            fireEvent.click(screen.getByRole('button', { name: 'Agendar' }));
+            await waitFor(() => expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+                eventType: 'instalacao', title: undefined, color: undefined,
+            })));
+        });
+
+        it('troca para Consulta, dá um título e escolhe outra cor', async () => {
+            const { onSave } = renderWith({});
+
+            fireEvent.click(screen.getByRole('radio', { name: /Consulta/ }));
+            fireEvent.change(screen.getByLabelText('Título (opcional)'), { target: { value: 'Medir a sala' } });
+            // A cor acompanha o tipo enquanto não se escolhe outra.
+            fireEvent.click(screen.getByRole('button', { name: 'Cor do agendamento: Violeta' }));
+            expect(screen.getByRole('radio', { name: 'Violeta (cor do tipo)' })).toHaveAttribute('aria-checked', 'true');
+            fireEvent.click(screen.getByRole('radio', { name: 'Rosa' }));
+
+            expect(screen.getByRole('button', { name: 'Cor do agendamento: Rosa' })).toBeInTheDocument();
+            fireEvent.click(screen.getByRole('button', { name: 'Agendar' }));
+            await waitFor(() => expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+                eventType: 'consulta', title: 'Medir a sala', color: '#db2777',
+            })));
+        });
+
+        it('escolher a cor do próprio tipo volta ao padrão', async () => {
+            const { onSave } = renderWith({ color: '#db2777' });
+
+            fireEvent.click(screen.getByRole('button', { name: 'Cor do agendamento: Rosa' }));
+            fireEvent.click(screen.getByRole('radio', { name: 'Azul-piscina (cor do tipo)' }));
+
+            fireEvent.click(screen.getByRole('button', { name: 'Agendar' }));
+            await waitFor(() => expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+                eventType: 'instalacao', color: undefined,
+            })));
+        });
+
+        it('agendamento antigo sem tipo continua sem tipo ao salvar', async () => {
+            const { onSave } = renderWith({ id: 300, serviceStatus: 'scheduled' });
+
+            expect(screen.getAllByRole('radio').filter((radio) => radio.getAttribute('aria-checked') === 'true')).toHaveLength(0);
+            fireEvent.click(screen.getByRole('button', { name: 'Salvar' }));
+            await waitFor(() => expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ id: 300, eventType: undefined })));
+        });
+    });
+
+    describe('duração pelo tipo', () => {
+        const ana: Client = { ...createdClient, id: 11, nome: 'Ana' };
+        const renderNew = (agendamento: Record<string, unknown> = {}) => render(
+            <AgendamentoModal
+                isOpen onClose={vi.fn()} onSave={vi.fn().mockResolvedValue(undefined)} onDelete={vi.fn()}
+                schedulingInfo={{ agendamento: { clienteId: 11, clienteNome: 'Ana', start: voiceStart.toISOString(), ...agendamento } }}
+                clients={[ana]} savedPdfs={[]} onAddNewClient={vi.fn()} userInfo={userInfo} agendamentos={[]}
+            />
+        );
+
+        it('Consulta termina 1 hora depois do início; voltar para Instalação devolve as 2 horas', () => {
+            renderNew();
+            expect(screen.getByLabelText('Término')).toHaveValue('11:00');
+
+            fireEvent.click(screen.getByRole('radio', { name: /Consulta/ }));
+            expect(screen.getByLabelText('Término')).toHaveValue('10:00');
+
+            // Enquanto o término é o automático, ele acompanha o início.
+            fireEvent.change(screen.getByLabelText('Início'), { target: { value: '14:00' } });
+            expect(screen.getByLabelText('Término')).toHaveValue('15:00');
+
+            fireEvent.click(screen.getByRole('radio', { name: /Instalação/ }));
+            expect(screen.getByLabelText('Término')).toHaveValue('16:00');
+        });
+
+        it('término mexido à mão não muda com o tipo nem com o início', () => {
+            renderNew();
+            fireEvent.change(screen.getByLabelText('Término'), { target: { value: '12:30' } });
+
+            fireEvent.click(screen.getByRole('radio', { name: /Consulta/ }));
+            fireEvent.change(screen.getByLabelText('Início'), { target: { value: '10:00' } });
+            expect(screen.getByLabelText('Término')).toHaveValue('12:30');
+        });
+
+        it('término ditado por voz (diferente do automático) fica como veio', () => {
+            renderNew({ end: voiceEnd.toISOString() });
+            fireEvent.click(screen.getByRole('radio', { name: /Consulta/ }));
+            expect(screen.getByLabelText('Término')).toHaveValue('12:00');
+        });
+
+        it('agendamento já salvo não muda o horário ao trocar o tipo', () => {
+            renderNew({ id: 300, end: new Date(2026, 9, 2, 11, 0).toISOString(), eventType: 'instalacao' });
+            fireEvent.click(screen.getByRole('radio', { name: /Consulta/ }));
+            expect(screen.getByLabelText('Término')).toHaveValue('11:00');
+        });
+    });
 });

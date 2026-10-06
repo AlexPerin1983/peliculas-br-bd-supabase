@@ -3,6 +3,7 @@ import {
     buildQuickClientRecord,
     buildScheduleExtractionPrompt,
     buildVoiceScheduleDraft,
+    canUndoVoiceSchedule,
     describeVoiceSchedule,
     extractScheduleWithGemini,
     getFriendlyScheduleError,
@@ -10,10 +11,12 @@ import {
     normalizeTime,
     parseScheduleExtraction,
     readScheduleAutoSave,
+    undoVoiceScheduleSave,
     VoiceScheduleError,
     writeScheduleAutoSave,
 } from './voiceSchedule';
 import { GeminiGatewayError } from '../../services/geminiGateway';
+import { SavedPDF } from '../../types';
 
 const gatewayMocks = vi.hoisted(() => ({
     createGeminiModel: vi.fn(),
@@ -111,6 +114,32 @@ describe('buildVoiceScheduleDraft', () => {
         expect(buildVoiceScheduleDraft({ clienteNome: 'Ana', datas: ['2026-10-02'], horaInicio: '9h' }, now).extraDays).toEqual([]);
     });
 
+    it('usa o tipo dito no áudio e, sem ele, Instalação', () => {
+        expect(buildVoiceScheduleDraft({ clienteNome: 'Ana', datas: ['2026-10-02'], horaInicio: '10:00', tipo: 'consulta' }, now).agendamento.eventType).toBe('consulta');
+        expect(buildVoiceScheduleDraft({ clienteNome: 'Ana', datas: ['2026-10-02'], horaInicio: '10:00', tipo: '' }, now).agendamento.eventType).toBe('instalacao');
+    });
+
+    it('o que será feito vira o título, sem repetir nas observações', () => {
+        const draft = buildVoiceScheduleDraft({
+            clienteNome: 'Maria', local: 'Bessa', datas: ['2026-10-02'], horaInicio: '10:00', tipo: 'consulta',
+            titulo: ' Medir a fachada ', observacoes: 'medir a fachada',
+        }, now);
+        expect(draft.agendamento.title).toBe('Medir a fachada');
+        expect(draft.agendamento.notes).toBe('');
+
+        const semTitulo = buildVoiceScheduleDraft({ clienteNome: 'Ana', datas: ['2026-10-02'], horaInicio: '10:00', observacoes: 'Levar escada' }, now);
+        expect(semTitulo.agendamento).not.toHaveProperty('title');
+        expect(semTitulo.agendamento.notes).toBe('Levar escada');
+        expect(buildVoiceScheduleDraft({ clienteNome: 'Ana', datas: ['2026-10-02'], horaInicio: '10:00', titulo: 'x'.repeat(200) }, now).agendamento.title).toHaveLength(120);
+    });
+
+    it('consulta sem término dura 1 hora', () => {
+        const draft = buildVoiceScheduleDraft({ clienteNome: 'Maria', datas: ['2026-10-02'], horaInicio: '10:00', tipo: 'consulta' }, now);
+        expect(localParts(draft.agendamento.end).time).toBe('11:00');
+        const comFim = buildVoiceScheduleDraft({ clienteNome: 'Maria', datas: ['2026-10-02'], horaInicio: '10:00', horaFim: '12:00', tipo: 'consulta' }, now);
+        expect(localParts(comFim.agendamento.end).time).toBe('12:00');
+    });
+
     it('sem término (ou com término antes do início) usa 2 horas', () => {
         const withoutEnd = buildVoiceScheduleDraft({ clienteNome: 'Ana', data: '2026-10-02', horaInicio: '14:00' }, now);
         expect(localParts(withoutEnd.agendamento.end).time).toBe('16:00');
@@ -184,6 +213,10 @@ describe('parseScheduleExtraction', () => {
         expect(extraction).not.toHaveProperty('extra');
     });
 
+    it('lê o título', () => {
+        expect(parseScheduleExtraction('{"clienteNome":"Maria","titulo":" Medir a fachada "}').titulo).toBe('Medir a fachada');
+    });
+
     it('lê a lista de dias', () => {
         const extraction = parseScheduleExtraction('{"clienteNome":"Amaury","datas":["2026-10-02"," 2026-10-03 ",""]}');
         expect(extraction.datas).toEqual(['2026-10-02', '2026-10-03']);
@@ -212,7 +245,11 @@ describe('extractScheduleWithGemini', () => {
             apiKey: 'chave',
             feature: 'schedule_extraction',
         }));
+        // O título vem junto: o que será feito, em poucas palavras.
+        const { generationConfig } = gatewayMocks.createGeminiModel.mock.calls[0][0];
+        expect(generationConfig.responseSchema.properties).toHaveProperty('titulo');
         const parts = gatewayMocks.generateContent.mock.calls[0][0];
+        expect(parts[0]).toContain('- titulo:');
         expect(parts[0]).toContain('Agora: segunda-feira, 28/09/2026, 14:35.');
         expect(parts[1]).toBe('Maria, Rua A, sexta às 9');
     });
@@ -249,6 +286,51 @@ describe('salvar direto na agenda', () => {
             ['2026-10-03'],
         );
         expect(twoDays).toMatch(/^sex.*02\/10 e sáb.*03\/10, 08:00–17:00 · Amaury$/);
+
+        const withTitle = describeVoiceSchedule(
+            'Maria',
+            new Date(2026, 9, 2, 10, 0).toISOString(),
+            new Date(2026, 9, 2, 11, 0).toISOString(),
+            [],
+            'Medir a fachada',
+        );
+        expect(withTitle).toMatch(/^sex.*02\/10, 10:00–11:00 · Maria · Medir a fachada$/);
+    });
+});
+
+describe('desfazer o que a voz salvou direto', () => {
+    const day = (id: number) => ({ id, clienteId: 7, clienteNome: 'Amaury', start: '2026-10-02T11:00:00.000Z', end: '2026-10-02T20:00:00.000Z' });
+    const store = () => {
+        const calls: string[] = [];
+        return {
+            calls,
+            deleteAgendamento: vi.fn(async (id: number) => { calls.push(`agendamento ${id}`); }),
+            updatePDF: vi.fn(async (pdf: { id?: number }) => { calls.push(`proposta ${pdf.id}`); }),
+            deleteClient: vi.fn(async (id: number) => { calls.push(`cliente ${id}`); }),
+        };
+    };
+
+    it('só oferece desfazer com tudo salvo no servidor', () => {
+        expect(canUndoVoiceSchedule([day(501), day(502)])).toBe(true);
+        expect(canUndoVoiceSchedule([day(501), day(-1712)])).toBe(false);
+        expect(canUndoVoiceSchedule([])).toBe(false);
+    });
+
+    it('apaga os dias, devolve a proposta como estava e por último o cliente criado pelo áudio', async () => {
+        const fake = store();
+        const proposta = { id: 50, clienteId: 7, date: '', totalPreco: 0, totalM2: 0, nomeArquivo: 'a.pdf' } as SavedPDF;
+        await undoVoiceScheduleSave({ created: [day(501), day(502)], pdfsBeforeLink: [proposta], createdClientId: 7 }, fake);
+
+        expect(fake.calls).toEqual(['agendamento 501', 'agendamento 502', 'proposta 50', 'cliente 7']);
+        expect(fake.updatePDF).toHaveBeenCalledWith(proposta);
+    });
+
+    it('cliente que já existia não é apagado', async () => {
+        const fake = store();
+        await undoVoiceScheduleSave({ created: [day(501)], pdfsBeforeLink: [] }, fake);
+
+        expect(fake.calls).toEqual(['agendamento 501']);
+        expect(fake.deleteClient).not.toHaveBeenCalled();
     });
 });
 
