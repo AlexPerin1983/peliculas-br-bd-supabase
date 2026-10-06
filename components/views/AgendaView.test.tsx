@@ -269,6 +269,54 @@ describe('AgendaView', () => {
         expect(within(strip).queryByRole('link', { name: /ligar para/i })).not.toBeInTheDocument();
     });
 
+    describe('busca e filtro na Lista', () => {
+        const listAppointments: Agendamento[] = [
+            { ...appointment, id: 1, clienteNome: 'Ana Souza', start: '2026-05-25T12:00:00.000Z', end: '2026-05-25T14:00:00.000Z', eventType: 'instalacao' },
+            { ...appointment, id: 2, clienteNome: 'Bruno Lima', start: '2026-05-20T12:00:00.000Z', end: '2026-05-20T14:00:00.000Z', serviceStatus: 'completed' },
+            { ...appointment, id: 3, clienteNome: 'Carla Dias', start: '2026-05-26T12:00:00.000Z', end: '2026-05-26T14:00:00.000Z', eventType: 'consulta' },
+        ];
+        // Nomes nos cartões da lista (sem a faixa do próximo atendimento).
+        const listedNames = () => screen.getAllByRole('article')
+            .filter((card) => !within(card).queryByText('Próximo'))
+            .map((card) => ['Ana Souza', 'Bruno Lima', 'Carla Dias'].find((name) => within(card).queryByText(name)))
+            .filter(Boolean);
+
+        beforeEach(() => window.localStorage.setItem('peliculas-br-agenda-view-mode-v1', 'list'));
+        afterEach(() => window.localStorage.removeItem('peliculas-br-agenda-view-mode-v1'));
+
+        it('acha pelo nome, inclusive o que já passou, e filtra pelo tipo', () => {
+            renderAgenda([clientWithAddress], listAppointments);
+            expect(listedNames()).toEqual(['Ana Souza', 'Carla Dias']);
+
+            fireEvent.change(screen.getByRole('textbox', { name: 'Buscar na agenda' }), { target: { value: 'bruno' } });
+            expect(screen.getByText('1 encontrado')).toBeInTheDocument();
+            expect(screen.getByText('Já passaram')).toBeInTheDocument();
+            expect(listedNames()).toEqual(['Bruno Lima']);
+
+            fireEvent.click(screen.getByRole('button', { name: 'Limpar busca' }));
+            fireEvent.click(screen.getByRole('radio', { name: 'Consulta' }));
+            expect(listedNames()).toEqual(['Carla Dias']);
+        });
+
+        it('sem resultado, oferece limpar a busca', () => {
+            renderAgenda([clientWithAddress], listAppointments);
+            fireEvent.change(screen.getByRole('textbox', { name: 'Buscar na agenda' }), { target: { value: 'zzz' } });
+
+            expect(screen.getAllByText('Nada encontrado').length).toBeGreaterThan(0);
+            fireEvent.click(screen.getByText('Limpar busca'));
+            expect(listedNames()).toEqual(['Ana Souza', 'Carla Dias']);
+        });
+    });
+
+    it('a lupa abre a Lista com a busca pronta para digitar', () => {
+        renderAgenda();
+        expect(screen.queryByRole('textbox', { name: 'Buscar na agenda' })).not.toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Buscar na agenda' }));
+        expect(screen.getByRole('textbox', { name: 'Buscar na agenda' })).toHaveFocus();
+        window.localStorage.removeItem('peliculas-br-agenda-view-mode-v1');
+    });
+
     it('sem a acao de voz nao mostra o microfone', () => {
         renderAgenda();
         expect(screen.queryByRole('button', { name: 'Agendar por voz' })).not.toBeInTheDocument();
