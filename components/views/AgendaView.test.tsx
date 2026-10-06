@@ -198,6 +198,42 @@ describe('AgendaView', () => {
         expect(onCreateAgendamentoByVoice).toHaveBeenCalledTimes(1);
     });
 
+    it('Semana lista a semana inteira, com os dias livres e atalho para agendar', () => {
+        window.localStorage.setItem('peliculas-br-agenda-view-mode-v1', 'week');
+        const onCreateNewAgendamento = vi.fn();
+        try {
+            render(
+                <AgendaView
+                    agendamentos={[
+                        { ...appointment, id: 1, clienteNome: 'Ana' },
+                        { ...appointment, id: 2, clienteNome: 'Bruno', start: '2026-05-27T12:00:00.000Z', end: '2026-05-27T14:00:00.000Z' },
+                    ]}
+                    pdfs={[]}
+                    clients={[clientWithAddress]}
+                    onEditAgendamento={vi.fn()}
+                    onUpdateServiceStatus={vi.fn()}
+                    onSaveReceiptDescription={vi.fn().mockResolvedValue(undefined)}
+                    onCompleteAgendamentoWithValue={vi.fn().mockResolvedValue(true)}
+                    onContinueAgendamento={vi.fn()}
+                    onRescheduleAgendamento={vi.fn()}
+                    onCreateNewAgendamento={onCreateNewAgendamento}
+                />
+            );
+
+            expect(screen.getByText('Atendimentos da semana')).toBeInTheDocument();
+            expect(screen.getByText('2 agendamentos')).toBeInTheDocument();
+            // Domingo (hoje) e quarta têm atendimento; os outros 5 dias aparecem livres.
+            expect(screen.getAllByText('Bruno').length).toBeGreaterThan(0);
+            expect(screen.getAllByText('Livre')).toHaveLength(5);
+
+            fireEvent.click(screen.getByRole('button', { name: 'Agendar para amanhã' }));
+            const day = onCreateNewAgendamento.mock.calls[0][0] as Date;
+            expect(day.getDate()).toBe(25);
+        } finally {
+            window.localStorage.removeItem('peliculas-br-agenda-view-mode-v1');
+        }
+    });
+
     it('sem a acao de voz nao mostra o microfone', () => {
         renderAgenda();
         expect(screen.queryByRole('button', { name: 'Agendar por voz' })).not.toBeInTheDocument();

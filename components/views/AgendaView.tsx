@@ -1421,6 +1421,17 @@ const STATUS_COUNT_ICONS = {
     missed: 'fas fa-ban',
 };
 
+// Separador de dia nas listas (Lista e Semana): "AMANHÃ ——— 2".
+const AgendaDayGroupHeader: React.FC<{ label: string; count: number; highlighted?: boolean }> = ({ label, count, highlighted = false }) => (
+    <div className="flex items-center gap-2">
+        <span className={`text-xs font-black uppercase tracking-wide ${highlighted ? 'text-[var(--brand-primary)]' : 'text-[var(--text-muted)]'}`}>
+            {label}
+        </span>
+        <span className="h-px flex-1 bg-[var(--border-subtle)]"></span>
+        {count > 0 ? <span className="text-xs font-bold text-[var(--text-soft)]">{count}</span> : null}
+    </div>
+);
+
 // Resumo do dia numa linha: quantos atendimentos, de que horas a que horas e,
 // quando já há concluído ou cancelado, a conta por status.
 const DayAgendaSummary: React.FC<{
@@ -1742,6 +1753,8 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
 
     const touchStartRef = useRef<{ x: number; y: number } | null>(null);
     const justSwipedRef = useRef(false);
+    // Grupo de cada dia na lista da Semana, para rolar até ele ao tocar no dia.
+    const weekDayGroupRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
     const handleGridTouchStart = (event: React.TouchEvent) => {
         justSwipedRef.current = false;
@@ -1788,6 +1801,15 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
             return;
         }
         selectDate(day);
+    };
+
+    // Na Semana, tocar num dia também rola a lista até ele.
+    const handleWeekDayClick = (day: Date) => {
+        const wasSwipe = justSwipedRef.current;
+        handleDayClick(day);
+        if (!wasSwipe) {
+            weekDayGroupRefs.current[day.toDateString()]?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+        }
     };
 
     const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1912,6 +1934,28 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
         upcomingGroups.reduce((total, [, items]) => total + items.length, 0)
     ), [upcomingGroups]);
 
+    const renderAppointmentCard = (agendamento: AgendamentoWithStatus) => (
+        <AppointmentCard
+            key={agendamento.id}
+            agendamento={agendamento}
+            client={clientsById.get(agendamento.clienteId)}
+            linkedPdf={agendamento.pdfId ? pdfById.get(agendamento.pdfId) : undefined}
+            linkedPdfs={agendamento.linkedPdfs}
+            stockSourcePdfs={agendamento.stockSourcePdfs}
+            canUseStock={canUseEstoque}
+            onEdit={onEditAgendamento}
+            onUpdateServiceStatus={onUpdateServiceStatus}
+            onSaveReceiptDescription={onSaveReceiptDescription}
+            onCompleteWithValue={onCompleteAgendamentoWithValue}
+            onContinueAgendamento={onContinueAgendamento}
+            onReschedule={onRescheduleAgendamento}
+            googleReviewsLink={googleReviewsLink}
+            userInfo={userInfo}
+            reviewStars={agendamento.id != null ? (reviewRatings[agendamento.id] || 0) : 0}
+            onUpdateReviewRating={handleUpdateReviewRating}
+        />
+    );
+
     return (
         <div className="space-y-5">
             <div className="space-y-5 lg:hidden">
@@ -2034,7 +2078,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                             return (
                                 <div
                                     key={day.toISOString()}
-                                    onClick={() => handleDayClick(day)}
+                                    onClick={() => handleWeekDayClick(day)}
                                     onTouchStart={() => handleCellTouchStart(day)}
                                     onTouchMove={clearLongPress}
                                     onTouchEnd={clearLongPress}
@@ -2061,7 +2105,70 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                     ) : null}
                 </section>
 
-                {viewMode !== 'list' ? (
+                {viewMode === 'week' ? (
+                <section>
+                    <div className="mb-4 flex items-end justify-between gap-4 border-b border-slate-200 pb-3 dark:border-slate-700">
+                        <div className="min-w-0">
+                            <span className="text-sm font-semibold text-slate-500">Atendimentos da semana</span>
+                            <h3 className="text-lg font-bold leading-tight text-slate-800 dark:text-slate-200">
+                                {weekAgendamentos.length > 0
+                                    ? `${weekAgendamentos.length} agendamento${weekAgendamentos.length > 1 ? 's' : ''}`
+                                    : 'Semana livre'}
+                            </h3>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                            <VoiceScheduleButton onClick={onCreateAgendamentoByVoice} />
+                            <ActionButton
+                                onClick={() => onCreateNewAgendamento(selectedDate)}
+                                variant="primary"
+                                size="md"
+                                iconOnly
+                                iconClassName="fas fa-plus"
+                                aria-label="Criar novo agendamento para o dia selecionado"
+                                className="shadow-lg shadow-blue-900/20"
+                            />
+                        </div>
+                    </div>
+
+                    {/* Todos os dias da semana, em ordem; dia sem nada aparece como "Livre", com atalho para agendar (dia que já passou, sem atalho). */}
+                    <div className="space-y-5">
+                        {weekStripDays.map((day) => {
+                            const dayKey = day.toDateString();
+                            const items = agendamentosByDate.get(dayKey) || [];
+                            const label = getRelativeDayLabel(day.toISOString());
+                            const today = new Date();
+                            const isPastDay = day.getTime() < new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+                            return (
+                                <div
+                                    key={dayKey}
+                                    ref={(element) => { weekDayGroupRefs.current[dayKey] = element; }}
+                                    className="scroll-mt-24 space-y-3"
+                                >
+                                    <AgendaDayGroupHeader label={label} count={items.length} highlighted={isSelected(day)} />
+                                    {items.length > 0 ? items.map(renderAppointmentCard) : isPastDay ? (
+                                        <p className="rounded-[var(--radius-control)] border border-dashed border-[var(--border-subtle)] px-3 py-2.5 text-sm font-semibold text-[var(--text-soft)]">
+                                            Livre
+                                        </p>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            onClick={() => onCreateNewAgendamento(day)}
+                                            aria-label={`Agendar para ${label.toLowerCase()}`}
+                                            className="flex w-full items-center justify-between rounded-[var(--radius-control)] border border-dashed border-[var(--border-subtle)] px-3 py-2.5 text-left transition-colors hover:bg-[var(--surface-muted)]"
+                                        >
+                                            <span className="text-sm font-semibold text-[var(--text-soft)]">Livre</span>
+                                            <span className="inline-flex items-center gap-1.5 text-xs font-bold text-[var(--brand-primary)]">
+                                                <i className="fas fa-plus text-[10px]" aria-hidden="true"></i>
+                                                Agendar
+                                            </span>
+                                        </button>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </section>
+                ) : viewMode !== 'list' ? (
                 <section>
                     <div className="mb-4 flex items-end justify-between gap-4 border-b border-slate-200 pb-3 dark:border-slate-700">
                         <div className="flex min-w-0 items-center gap-1">
@@ -2155,13 +2262,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                         <div className="space-y-5">
                             {upcomingGroups.map(([dateKey, items]) => (
                                 <div key={dateKey} className="space-y-3">
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-xs font-black uppercase tracking-wide text-[var(--text-muted)]">
-                                            {getRelativeDayLabel(items[0].start)}
-                                        </span>
-                                        <span className="h-px flex-1 bg-[var(--border-subtle)]"></span>
-                                        <span className="text-xs font-bold text-[var(--text-soft)]">{items.length}</span>
-                                    </div>
+                                    <AgendaDayGroupHeader label={getRelativeDayLabel(items[0].start)} count={items.length} />
                                     {items.map((agendamento) => {
                                         const client = clientsById.get(agendamento.clienteId);
                                         return <AppointmentCard key={agendamento.id} agendamento={agendamento} client={client} linkedPdf={agendamento.pdfId ? pdfById.get(agendamento.pdfId) : undefined} linkedPdfs={agendamento.linkedPdfs} stockSourcePdfs={agendamento.stockSourcePdfs} canUseStock={canUseEstoque} onEdit={onEditAgendamento} onUpdateServiceStatus={onUpdateServiceStatus} onSaveReceiptDescription={onSaveReceiptDescription} onCompleteWithValue={onCompleteAgendamentoWithValue} onContinueAgendamento={onContinueAgendamento} onReschedule={onRescheduleAgendamento} googleReviewsLink={googleReviewsLink} userInfo={userInfo} reviewStars={agendamento.id != null ? (reviewRatings[agendamento.id] || 0) : 0} onUpdateReviewRating={handleUpdateReviewRating} />;
