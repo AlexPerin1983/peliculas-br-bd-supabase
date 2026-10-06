@@ -15,6 +15,7 @@ import { selectAllOnFocus } from '../../src/lib/selectOnFocus';
 import { GARANTIA_UNIDADES, GarantiaUnidade } from '../../src/lib/filmWarranty';
 import { normalizeFilmForPersistence, validateFilmForPersistence } from '../../src/lib/filmPersistence';
 import { isFilmNameTaken } from '../../src/lib/filmCatalog';
+import { getAiFilmPriceNote } from '../../src/lib/aiFilmExtraction';
 import { processSampleImage, SAMPLE_IMAGE_RECOMPRESS_THRESHOLD } from '../../services/imageProcessing';
 
 interface FilmModalProps {
@@ -277,6 +278,9 @@ const FilmModal: React.FC<FilmModalProps> = ({
 
     const currentImages = formData.imagens || [];
     const canAddMore = currentImages.length < MAX_IMAGES;
+    const isAiReview = !film && !duplicateData && !!aiData;
+    // Some assim que o preço de venda é preenchido.
+    const aiPriceNote = isAiReview ? getAiFilmPriceNote(formData) : null;
 
     const modalTitle = (
         <div className="flex justify-between items-center w-full">
@@ -302,6 +306,20 @@ const FilmModal: React.FC<FilmModalProps> = ({
     return (
         <Modal isOpen={isOpen} onClose={isSaving ? () => {} : onClose} title={modalTitle} footer={footer} disableClose={isSaving} fullScreenOnMobile>
             <form id="filmForm" onSubmit={handleSubmit} className="space-y-4">
+                {isAiReview && (
+                    <div role="status" className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-100">
+                        <p className="font-semibold">
+                            <i className="fas fa-robot mr-1.5" aria-hidden="true"></i>
+                            Preenchido pela IA
+                        </p>
+                        <p className="mt-0.5">Confira os valores antes de salvar.</p>
+                        {aiPriceNote && (
+                            <p className="mt-2 rounded-md bg-amber-100 px-2.5 py-2 font-medium text-amber-900 dark:bg-amber-900/40 dark:text-amber-100">
+                                {aiPriceNote}
+                            </p>
+                        )}
+                    </div>
+                )}
                 <fieldset disabled={isSaving} className="space-y-4">
                     <div className="p-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg space-y-4">
                         <div>
