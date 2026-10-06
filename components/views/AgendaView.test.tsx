@@ -234,6 +234,27 @@ describe('AgendaView', () => {
         }
     });
 
+    it('acima da data mostra Hoje, Amanhã e, nos outros dias, Agenda', () => {
+        window.localStorage.setItem('peliculas-br-agenda-view-mode-v1', 'day');
+        try {
+            renderAgenda();
+            expect(screen.queryByText('Agenda:')).not.toBeInTheDocument();
+
+            fireEvent.click(screen.getByRole('button', { name: 'Próximo dia' }));
+            expect(screen.getAllByText('Amanhã').length).toBeGreaterThan(0);
+
+            fireEvent.click(screen.getByRole('button', { name: 'Próximo dia' }));
+            expect(screen.getAllByText('Agenda:').length).toBeGreaterThan(0);
+
+            fireEvent.click(screen.getByRole('button', { name: 'Dia anterior' }));
+            fireEvent.click(screen.getByRole('button', { name: 'Dia anterior' }));
+            fireEvent.click(screen.getByRole('button', { name: 'Dia anterior' }));
+            expect(screen.getAllByText('Ontem').length).toBeGreaterThan(0);
+        } finally {
+            window.localStorage.removeItem('peliculas-br-agenda-view-mode-v1');
+        }
+    });
+
     it('sem a acao de voz nao mostra o microfone', () => {
         renderAgenda();
         expect(screen.queryByRole('button', { name: 'Agendar por voz' })).not.toBeInTheDocument();

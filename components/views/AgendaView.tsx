@@ -253,6 +253,16 @@ const formatTime = (value: string) => (
     new Date(value).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
 );
 
+// Acima da data do dia: "Hoje" (em destaque), "Amanhã" ou "Ontem"; nos outros dias, "Agenda:".
+const DayHeadingLabel: React.FC<{ date: Date; className: string }> = ({ date, className }) => {
+    const today = new Date();
+    const days = Math.round((new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
+        - new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime()) / 86_400_000);
+    if (days === 0) return <span className="text-sm font-bold text-[var(--brand-primary)]">Hoje</span>;
+    const label = days === 1 ? 'Amanhã' : days === -1 ? 'Ontem' : 'Agenda:';
+    return <span className={`text-sm font-semibold ${className}`}>{label}</span>;
+};
+
 const capitalizeFirst = (value: string) => value.charAt(0).toUpperCase() + value.slice(1);
 
 const sameMonth = (date: Date, reference: Date) => (
@@ -2178,7 +2188,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                                 </button>
                             ) : null}
                             <div className="min-w-0">
-                                <span className="text-sm font-semibold text-slate-500">Agenda:</span>
+                                <DayHeadingLabel date={selectedDate} className="text-slate-500" />
                                 <h3 className="truncate text-lg font-bold leading-tight text-slate-800 dark:text-slate-200">
                                     {selectedDateString}
                                 </h3>
@@ -2353,7 +2363,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                 <aside className="rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface-raised)] p-4 shadow-[var(--shadow-soft)] lg:sticky lg:top-4">
                     <div className="flex justify-between items-center pb-3 mb-4 border-b border-[var(--border-subtle)]">
                         <div>
-                            <span className="text-sm font-semibold text-[var(--text-muted)]">Agenda:</span>
+                            <DayHeadingLabel date={selectedDate} className="text-[var(--text-muted)]" />
                             <h3 className="text-lg font-bold text-[var(--text-strong)] leading-tight">
                                 {selectedDateString}
                             </h3>
