@@ -361,4 +361,51 @@ describe('AgendamentoModal', () => {
             await waitFor(() => expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ id: 300, eventType: undefined })));
         });
     });
+
+    describe('duração pelo tipo', () => {
+        const ana: Client = { ...createdClient, id: 11, nome: 'Ana' };
+        const renderNew = (agendamento: Record<string, unknown> = {}) => render(
+            <AgendamentoModal
+                isOpen onClose={vi.fn()} onSave={vi.fn().mockResolvedValue(undefined)} onDelete={vi.fn()}
+                schedulingInfo={{ agendamento: { clienteId: 11, clienteNome: 'Ana', start: voiceStart.toISOString(), ...agendamento } }}
+                clients={[ana]} savedPdfs={[]} onAddNewClient={vi.fn()} userInfo={userInfo} agendamentos={[]}
+            />
+        );
+
+        it('Consulta termina 1 hora depois do início; voltar para Instalação devolve as 2 horas', () => {
+            renderNew();
+            expect(screen.getByLabelText('Término')).toHaveValue('11:00');
+
+            fireEvent.click(screen.getByRole('radio', { name: /Consulta/ }));
+            expect(screen.getByLabelText('Término')).toHaveValue('10:00');
+
+            // Enquanto o término é o automático, ele acompanha o início.
+            fireEvent.change(screen.getByLabelText('Início'), { target: { value: '14:00' } });
+            expect(screen.getByLabelText('Término')).toHaveValue('15:00');
+
+            fireEvent.click(screen.getByRole('radio', { name: /Instalação/ }));
+            expect(screen.getByLabelText('Término')).toHaveValue('16:00');
+        });
+
+        it('término mexido à mão não muda com o tipo nem com o início', () => {
+            renderNew();
+            fireEvent.change(screen.getByLabelText('Término'), { target: { value: '12:30' } });
+
+            fireEvent.click(screen.getByRole('radio', { name: /Consulta/ }));
+            fireEvent.change(screen.getByLabelText('Início'), { target: { value: '10:00' } });
+            expect(screen.getByLabelText('Término')).toHaveValue('12:30');
+        });
+
+        it('término ditado por voz (diferente do automático) fica como veio', () => {
+            renderNew({ end: voiceEnd.toISOString() });
+            fireEvent.click(screen.getByRole('radio', { name: /Consulta/ }));
+            expect(screen.getByLabelText('Término')).toHaveValue('12:00');
+        });
+
+        it('agendamento já salvo não muda o horário ao trocar o tipo', () => {
+            renderNew({ id: 300, end: new Date(2026, 9, 2, 11, 0).toISOString(), eventType: 'instalacao' });
+            fireEvent.click(screen.getByRole('radio', { name: /Consulta/ }));
+            expect(screen.getByLabelText('Término')).toHaveValue('11:00');
+        });
+    });
 });

@@ -167,6 +167,37 @@ describe('AgendaView', () => {
         expect(onCreateAgendamentoByVoice).toHaveBeenCalledTimes(1);
     });
 
+    it('escreve a data como se escreve e resume o dia numa linha', () => {
+        renderAgenda();
+
+        expect(screen.getAllByText('Domingo, 24 de maio').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('Maio de 2026').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('1 atendimento').length).toBeGreaterThan(0);
+        expect(screen.queryByText('Janela')).not.toBeInTheDocument();
+    });
+
+    it('dia vazio oferece agendar por voz', () => {
+        const onCreateAgendamentoByVoice = vi.fn();
+        render(
+            <AgendaView
+                agendamentos={[]}
+                pdfs={[]}
+                clients={[clientWithAddress]}
+                onEditAgendamento={vi.fn()}
+                onUpdateServiceStatus={vi.fn()}
+                onSaveReceiptDescription={vi.fn().mockResolvedValue(undefined)}
+                onCompleteAgendamentoWithValue={vi.fn().mockResolvedValue(true)}
+                onContinueAgendamento={vi.fn()}
+                onRescheduleAgendamento={vi.fn()}
+                onCreateNewAgendamento={vi.fn()}
+                onCreateAgendamentoByVoice={onCreateAgendamentoByVoice}
+            />
+        );
+
+        fireEvent.click(screen.getAllByText('Agendar por voz')[0]);
+        expect(onCreateAgendamentoByVoice).toHaveBeenCalledTimes(1);
+    });
+
     it('sem a acao de voz nao mostra o microfone', () => {
         renderAgenda();
         expect(screen.queryByRole('button', { name: 'Agendar por voz' })).not.toBeInTheDocument();

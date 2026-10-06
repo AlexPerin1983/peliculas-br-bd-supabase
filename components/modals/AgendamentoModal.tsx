@@ -8,7 +8,7 @@ import * as db from '../../services/db';
 import { getAgendamentoSlotError } from '../../src/lib/agendamentoRules';
 import { isClientAddress, pickProposalToLink, withLocalNote } from '../../src/lib/voiceClientMatch';
 import { buildMultiDayAgendamentos, formatDayLabel, moveToDay, nextDayKey, normalizeExtraDays } from '../../src/lib/multiDaySchedule';
-import { DEFAULT_EVENT_TYPE, EVENT_COLOR_PALETTE, EVENT_TYPES, getAgendamentoColor, getEventTypeMeta } from '../../src/lib/agendamentoEventTypes';
+import { DEFAULT_EVENT_TYPE, EVENT_COLOR_PALETTE, EVENT_TYPES, getAgendamentoColor, getEventTypeDurationMinutes, getEventTypeMeta } from '../../src/lib/agendamentoEventTypes';
 
 const COLOR_NAMES: Record<string, string> = {
     '#7c3aed': 'Violeta',
@@ -94,6 +94,17 @@ const toDateInputValue = (date: Date) => {
 
 const toTimeInputValue = (date: Date) => date.toTimeString().split(' ')[0].substring(0, 5);
 
+// "09:00" + 60 = "10:00", sem passar da meia-noite.
+const addMinutesToTime = (time: string, minutes: number) => {
+    const match = /^(\d{2}):(\d{2})$/.exec(time);
+    if (!match) return '';
+    const total = Math.min(Number(match[1]) * 60 + Number(match[2]) + minutes, 23 * 60 + 59);
+    return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+};
+
+// Término automático: o início mais a duração do tipo (Consulta 1 hora; os outros, 2 horas).
+const getAutoEndTime = (start: string, type?: AgendamentoEventType) => addMinutesToTime(start, getEventTypeDurationMinutes(type));
+
 const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, onSave, onDelete, schedulingInfo, clients, savedPdfs, onAddNewClient, onCreateQuickClient, userInfo, agendamentos }) => {
     const agendamento = schedulingInfo.agendamento;
     const pdf = 'pdf' in schedulingInfo ? schedulingInfo.pdf : undefined;
@@ -125,6 +136,19 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
     const [isColorOpen, setIsColorOpen] = useState(false);
     const typeColor = getEventTypeMeta(eventType)?.color;
     const currentColor = getAgendamentoColor({ eventType, color }) ?? '#94a3b8';
+    // Em agendamento novo, enquanto o término for o automático (não mexido), ele
+    // acompanha o tipo (Consulta 1 hora) e o início.
+    const isAutoEnd = !isEditing && endTime === getAutoEndTime(startTime, eventType);
+
+    const handleSelectEventType = (value: AgendamentoEventType) => {
+        if (isAutoEnd) setEndTime(getAutoEndTime(startTime, value));
+        setEventType(value);
+    };
+
+    const handleStartTimeChange = (value: string) => {
+        if (isAutoEnd && value) setEndTime(getAutoEndTime(value, eventType));
+        setStartTime(value);
+    };
     // Capacidade = nº de colaboradores ATIVOS da organização (dono + convidados).
     // Org-wide e igual em qualquer conta logada (corrige a antiga contagem por
     // "Equipe" manual, que não crescia ao convidar e variava por conta).
@@ -207,11 +231,12 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                 const startDate = new Date(agendamento.start);
                 setDate(toDateInputValue(startDate));
                 setStartTime(toTimeInputValue(startDate));
-                // Término sugerido (ex.: "das 9 às 12" ditado por voz); sem ele, 2 horas.
+                // Término sugerido (ex.: "das 9 às 12" ditado por voz); sem ele, a duração do tipo.
                 const suggestedEnd = agendamento.end ? new Date(agendamento.end) : null;
+                const durationMinutes = getEventTypeDurationMinutes(agendamento.eventType ?? DEFAULT_EVENT_TYPE);
                 const endDate = suggestedEnd && suggestedEnd > startDate
                     ? suggestedEnd
-                    : new Date(startDate.getTime() + 2 * 60 * 60 * 1000);
+                    : new Date(startDate.getTime() + durationMinutes * 60 * 1000);
                 setEndTime(toTimeInputValue(endDate));
                 setNotes(agendamento.notes || '');
             } else {
@@ -779,7 +804,7 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                                             type="button"
                                             role="radio"
                                             aria-checked={isActive}
-                                            onClick={() => setEventType(type.value)}
+                                            onClick={() => handleSelectEventType(type.value)}
                                             className={`flex min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-1 py-2 text-[12px] font-semibold transition-colors ${isActive
                                                 ? 'bg-white shadow-sm dark:bg-slate-700'
                                                 : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'}`}
@@ -897,7 +922,7 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
-                        <Input id="startTime" label="Início" type="time" value={startTime} onChange={(e) => setStartTime((e.target as HTMLInputElement).value)} required className={inputClassName} />
+                        <Input id="startTime" label="Início" type="time" value={startTime} onChange={(e) => handleStartTimeChange((e.target as HTMLInputElement).value)} required className={inputClassName} />
                         <Input id="endTime" label="Término" type="time" value={endTime} onChange={(e) => setEndTime((e.target as HTMLInputElement).value)} required className={inputClassName} />
                     </div>
 

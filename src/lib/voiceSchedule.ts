@@ -1,7 +1,7 @@
 import { createGeminiModel, GeminiGatewayError } from '../../services/geminiGateway';
-import { AIInput, Agendamento, Client, QuickClientAddress, QuickClientDraft } from '../../types';
+import { AIInput, Agendamento, Client, QuickClientAddress, QuickClientDraft, SavedPDF } from '../../types';
 import { formatDayLabel } from './multiDaySchedule';
-import { DEFAULT_EVENT_TYPE, normalizeEventType } from './agendamentoEventTypes';
+import { DEFAULT_EVENT_TYPE, getEventTypeDurationMinutes, normalizeEventType } from './agendamentoEventTypes';
 
 // Campos que a IA devolve ao ouvir (ou ler) um pedido de agendamento.
 export interface ScheduleExtraction {
@@ -17,6 +17,8 @@ export interface ScheduleExtraction {
     data?: string;
     horaInicio?: string;
     horaFim?: string;
+    // O que será feito, em poucas palavras (vira o título do agendamento).
+    titulo?: string;
     observacoes?: string;
     // consulta | instalacao | variado | outro
     tipo?: string;
@@ -30,7 +32,8 @@ export interface VoiceScheduleDraft {
 }
 
 const DEFAULT_START_TIME = '09:00';
-const DEFAULT_DURATION_MS = 2 * 60 * 60 * 1000;
+// Mesmo limite do título no banco.
+const MAX_TITLE_LENGTH = 120;
 const CALENDAR_DAYS_IN_PROMPT = 21;
 const WEEKDAYS = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
 
@@ -89,7 +92,8 @@ Responda APENAS com JSON válido com estes campos (use "" quando não for dito):
 - horaInicio: início no formato HH:MM (24 horas).
 - horaFim: término HH:MM, só se foi dito ("das 9 às 11") ou se foi dita a duração ("umas 3 horas" = início + 3 horas).
   O horário vale para todos os dias da lista.
-- observacoes: o que mais ajudar no serviço (película, quantidade de vidros, ponto de referência), em uma frase curta.
+- titulo: o que será feito, em 2 a 5 palavras, começando com maiúscula, sem nome do cliente, local, dia ou hora (ex.: "Medir a fachada", "Película no carro", "Orçamento do box"). Use "" se não foi dito o que será feito.
+- observacoes: outros detalhes que ajudem no serviço (película, quantidade de vidros, ponto de referência), em uma frase curta. Não repita o título.
 - tipo: "consulta" (visita, medição, orçamento ou consulta), "instalacao" (instalar ou aplicar película), "variado" ou "outro". Use "" se não der para saber.
 
 Regras:
@@ -114,6 +118,7 @@ const SCHEDULE_RESPONSE_SCHEMA = {
         datas: { type: 'ARRAY', items: { type: 'STRING' } },
         horaInicio: { type: 'STRING' },
         horaFim: { type: 'STRING' },
+        titulo: { type: 'STRING' },
         observacoes: { type: 'STRING' },
         tipo: { type: 'STRING' }
     },
@@ -147,7 +152,7 @@ export const parseScheduleExtraction = (rawText: string): ScheduleExtraction => 
     const source = parsed as Record<string, unknown>;
     const fields: (keyof ScheduleExtraction)[] = [
         'clienteNome', 'local', 'logradouro', 'numero', 'bairro', 'cidade', 'uf',
-        'data', 'horaInicio', 'horaFim', 'observacoes', 'tipo'
+        'data', 'horaInicio', 'horaFim', 'titulo', 'observacoes', 'tipo'
     ];
     const extraction = Object.fromEntries(fields.map(field => [field, clean(source[field])])) as ScheduleExtraction;
     const datas = Array.isArray(source.datas) ? source.datas.map(clean).filter(Boolean) : [];
@@ -224,10 +229,18 @@ export const buildVoiceScheduleDraft = (extraction: ScheduleExtraction, now: Dat
     const startTime = normalizeTime(extraction.horaInicio);
     const endTime = normalizeTime(extraction.horaFim);
 
+    // Sem tipo dito, vale o padrão da agenda (Instalação).
+    const eventType = normalizeEventType(extraction.tipo) ?? DEFAULT_EVENT_TYPE;
+    const title = clean(extraction.titulo).slice(0, MAX_TITLE_LENGTH);
+    const observacoes = clean(extraction.observacoes);
+
     const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
     const start = atTime(dateKey || toLocalDateKey(tomorrow), startTime || DEFAULT_START_TIME);
     const suggestedEnd = endTime ? atTime(toLocalDateKey(start), endTime) : null;
-    const end = suggestedEnd && suggestedEnd > start ? suggestedEnd : new Date(start.getTime() + DEFAULT_DURATION_MS);
+    // Sem término dito, a duração do tipo (Consulta 1 hora; os outros, 2 horas).
+    const end = suggestedEnd && suggestedEnd > start
+        ? suggestedEnd
+        : new Date(start.getTime() + getEventTypeDurationMinutes(eventType) * 60 * 1000);
 
     const reviewHints: string[] = [];
     if (!nome) reviewHints.push('O nome do cliente não ficou claro.');
@@ -249,9 +262,10 @@ export const buildVoiceScheduleDraft = (extraction: ScheduleExtraction, now: Dat
             clienteNome: nome,
             start: start.toISOString(),
             end: end.toISOString(),
-            notes: clean(extraction.observacoes),
-            // Sem tipo dito, vale o padrão da agenda (Instalação).
-            eventType: normalizeEventType(extraction.tipo) ?? DEFAULT_EVENT_TYPE
+            // A observação que só repete o título fica de fora.
+            notes: observacoes.toLowerCase() === title.toLowerCase() ? '' : observacoes,
+            eventType,
+            ...(title ? { title } : {})
         },
         extraDays: dayKeys.slice(1),
         quickClient: {
@@ -287,7 +301,8 @@ export const writeScheduleAutoSave = (enabled: boolean) => {
 // Resumo do aviso depois de salvar direto, com dia e hora primeiro (é o que se
 // confere): "sex., 02/10, 09:00–12:00 · Maria Souza".
 // Com vários dias: "sex., 02/10 e sáb., 03/10, 08:00–17:00 · Amaury".
-export const describeVoiceSchedule = (nome: string, startIso: string, endIso: string, extraDays: string[] = []) => {
+// Com título: "sex., 02/10, 10:00–11:00 · Maria · Medir a fachada".
+export const describeVoiceSchedule = (nome: string, startIso: string, endIso: string, extraDays: string[] = [], title?: string) => {
     const start = new Date(startIso);
     const end = new Date(endIso);
     const days = [
@@ -296,7 +311,38 @@ export const describeVoiceSchedule = (nome: string, startIso: string, endIso: st
     ];
     const dayText = days.length > 1 ? `${days.slice(0, -1).join(', ')} e ${days[days.length - 1]}` : days[0];
     const time = (date: Date) => `${pad(date.getHours())}:${pad(date.getMinutes())}`;
-    return `${dayText}, ${time(start)}–${time(end)} · ${nome}`;
+    return `${dayText}, ${time(start)}–${time(end)} · ${nome}${title ? ` · ${title}` : ''}`;
+};
+
+// O que o "Desfazer" precisa para voltar atrás num agendamento salvo direto pela voz.
+export interface VoiceScheduleUndo {
+    created: Agendamento[];
+    // Propostas como estavam antes de ganhar o agendamento.
+    pdfsBeforeLink: SavedPDF[];
+    // Cliente criado por este áudio (um cliente que já existia nunca é apagado).
+    createdClientId?: number;
+}
+
+// Só dá para desfazer o que já está no servidor (id definitivo); salvo só no aparelho, não.
+export const canUndoVoiceSchedule = (created: Agendamento[]) => (
+    created.length > 0 && created.every(item => typeof item.id === 'number' && item.id > 0)
+);
+
+// Apaga os dias criados, devolve as propostas como estavam e, por último, o
+// cliente criado pelo áudio (depois dos agendamentos que apontam para ele).
+export const undoVoiceScheduleSave = async (
+    { created, pdfsBeforeLink, createdClientId }: VoiceScheduleUndo,
+    store: {
+        deleteAgendamento: (id: number) => Promise<void>;
+        updatePDF: (pdf: SavedPDF) => Promise<void>;
+        deleteClient: (id: number) => Promise<void>;
+    },
+) => {
+    for (const item of created) {
+        if (item.id != null) await store.deleteAgendamento(item.id);
+    }
+    await Promise.all(pdfsBeforeLink.map(pdf => store.updatePDF(pdf)));
+    if (createdClientId != null) await store.deleteClient(createdClientId);
 };
 
 // Cadastro mínimo do cliente ditado. As partes do endereço separadas pela IA só

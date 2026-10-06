@@ -8,10 +8,12 @@ export interface EventTypeMeta {
     label: string;
     iconClassName: string;
     color: string;
+    // Duração sugerida quando o término não é dito; sem ela, vale a padrão.
+    defaultDurationMinutes?: number;
 }
 
 export const EVENT_TYPES: EventTypeMeta[] = [
-    { value: 'consulta', label: 'Consulta', iconClassName: 'fas fa-comments', color: '#7c3aed' },
+    { value: 'consulta', label: 'Consulta', iconClassName: 'fas fa-comments', color: '#7c3aed', defaultDurationMinutes: 60 },
     { value: 'instalacao', label: 'Instalação', iconClassName: 'fas fa-screwdriver-wrench', color: '#0891b2' },
     { value: 'variado', label: 'Variado', iconClassName: 'fas fa-shapes', color: '#ea580c' },
     { value: 'outro', label: 'Outro', iconClassName: 'fas fa-ellipsis', color: '#64748b' },
@@ -24,6 +26,13 @@ export const DEFAULT_EVENT_TYPE: AgendamentoEventType = 'instalacao';
 export const EVENT_COLOR_PALETTE = ['#7c3aed', '#0891b2', '#ea580c', '#db2777', '#0d9488', '#4f46e5', '#65a30d', '#64748b'];
 
 export const getEventTypeMeta = (value?: string | null) => EVENT_TYPES.find(type => type.value === value);
+
+// Duração padrão de um agendamento: Consulta 1 hora; os outros tipos, 2 horas.
+export const DEFAULT_DURATION_MINUTES = 120;
+
+export const getEventTypeDurationMinutes = (value?: string | null) => (
+    getEventTypeMeta(value)?.defaultDurationMinutes ?? DEFAULT_DURATION_MINUTES
+);
 
 export const normalizeEventType = (value: unknown): AgendamentoEventType | undefined => {
     const text = typeof value === 'string' ? value.trim().toLowerCase() : '';

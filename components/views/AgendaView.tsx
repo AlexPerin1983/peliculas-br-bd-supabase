@@ -252,6 +252,8 @@ const formatTime = (value: string) => (
     new Date(value).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
 );
 
+const capitalizeFirst = (value: string) => value.charAt(0).toUpperCase() + value.slice(1);
+
 const sameMonth = (date: Date, reference: Date) => (
     date.getFullYear() === reference.getFullYear()
     && date.getMonth() === reference.getMonth()
@@ -1390,41 +1392,43 @@ const STATUS_COUNT_ICONS = {
     missed: 'fas fa-ban',
 };
 
+// Resumo do dia numa linha: quantos atendimentos, de que horas a que horas e,
+// quando já há concluído ou cancelado, a conta por status.
 const DayAgendaSummary: React.FC<{
     agendamentos: AgendamentoWithStatus[];
 }> = ({ agendamentos }) => {
     if (agendamentos.length === 0) return null;
 
-    const first = agendamentos[0];
-    const last = agendamentos[agendamentos.length - 1];
+    const lastEnd = agendamentos.reduce((latest, item) => (
+        new Date(item.end).getTime() > new Date(latest).getTime() ? item.end : latest
+    ), agendamentos[0].end);
     const completedCount = agendamentos.filter((item) => item.serviceStatus === 'completed').length;
     const scheduledCount = agendamentos.filter((item) => (item.serviceStatus || 'scheduled') === 'scheduled').length;
     const missedCount = agendamentos.filter((item) => item.serviceStatus === 'cancelled' || item.serviceStatus === 'no_show').length;
+    // Tudo ainda agendado: a conta por status não diria nada a mais.
+    const statusCounts = completedCount > 0 || missedCount > 0 ? [
+        { count: completedCount, label: 'Concluídos', iconClassName: STATUS_COUNT_ICONS.completed, className: 'text-emerald-600 dark:text-emerald-400' },
+        { count: scheduledCount, label: 'Agendados', iconClassName: STATUS_COUNT_ICONS.scheduled, className: 'text-blue-600 dark:text-blue-400' },
+        { count: missedCount, label: 'Cancelados / Faltou', iconClassName: STATUS_COUNT_ICONS.missed, className: 'text-rose-600 dark:text-rose-400' },
+    ].filter((item) => item.count > 0) : [];
 
     return (
-        <div className="mb-3 grid grid-cols-3 gap-2">
-            <div className="rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] px-3 py-2 shadow-[var(--shadow-hairline)]">
-                <span className="block text-[10px] font-bold uppercase text-[var(--text-soft)]">Agenda</span>
-                <span className="mt-0.5 block text-sm font-black text-[var(--text-strong)]">{agendamentos.length}</span>
-            </div>
-            <div className="rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] px-3 py-2 shadow-[var(--shadow-hairline)]">
-                <span className="block text-[10px] font-bold uppercase text-[var(--text-soft)]">Janela</span>
-                <span className="mt-0.5 block truncate text-sm font-black text-[var(--text-strong)]">
-                    {formatTime(first.start)}-{formatTime(last.end)}
+        <p className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-bold text-[var(--text-muted)]">
+            <span>{agendamentos.length} {agendamentos.length === 1 ? 'atendimento' : 'atendimentos'}</span>
+            <span aria-hidden="true">·</span>
+            <span>{formatTime(agendamentos[0].start)}–{formatTime(lastEnd)}</span>
+            {statusCounts.length ? (
+                <span className="ml-auto inline-flex items-center gap-2.5">
+                    {statusCounts.map((item) => (
+                        <span key={item.label} title={item.label} className={`inline-flex items-center gap-1 ${item.className}`}>
+                            <i className={`${item.iconClassName} text-[10px]`} aria-hidden="true"></i>
+                            {item.count}
+                            <span className="sr-only">{item.label}</span>
+                        </span>
+                    ))}
                 </span>
-            </div>
-            <div className="rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] px-3 py-2 shadow-[var(--shadow-hairline)]">
-                <span className="block text-[10px] font-bold uppercase text-[var(--text-soft)]">Status</span>
-                <span className="mt-1 flex items-center gap-1.5">
-                    <i title="Concluídos" className={`${STATUS_COUNT_ICONS.completed} text-[10px] text-emerald-500`} aria-hidden="true"></i>
-                    <span className="text-xs font-black text-[var(--text-strong)]">{completedCount}</span>
-                    <i title="Agendados" className={`${STATUS_COUNT_ICONS.scheduled} text-[10px] text-blue-500`} aria-hidden="true"></i>
-                    <span className="text-xs font-black text-[var(--text-strong)]">{scheduledCount}</span>
-                    <i title="Cancelados / Faltou" className={`${STATUS_COUNT_ICONS.missed} text-[10px] text-rose-500`} aria-hidden="true"></i>
-                    <span className="text-xs font-black text-[var(--text-strong)]">{missedCount}</span>
-                </span>
-            </div>
-        </div>
+            ) : null}
+        </p>
     );
 };
 
@@ -1834,18 +1838,12 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
         return classes.join(' ');
     };
 
-    const selectedDateString = useMemo(() => {
-        const dateString = selectedDate.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
-        const capitalize = (value: string) => value.charAt(0).toUpperCase() + value.slice(1);
-        const parts = dateString.split(', ');
-        const weekday = parts[0].split('-').map(capitalize).join('-');
-        const dayAndMonthParts = parts[1].split(' de ');
-        const day = dayAndMonthParts[0];
-        const month = capitalize(dayAndMonthParts[1]);
-        return `${weekday}, ${day} De ${month}`;
-    }, [selectedDate]);
+    // "Segunda-feira, 5 de outubro": só a primeira letra maiúscula, como se escreve.
+    const selectedDateString = useMemo(() => (
+        capitalizeFirst(selectedDate.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' }))
+    ), [selectedDate]);
 
-    const currentMonthLabel = currentDate.toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+    const currentMonthLabel = capitalizeFirst(currentDate.toLocaleString('pt-BR', { month: 'long', year: 'numeric' }));
 
     const [viewMode, setViewMode] = useState<AgendaViewMode>(() => readStoredAgendaViewMode());
     const [showAlertsPanel, setShowAlertsPanel] = useState(false);
@@ -1922,7 +1920,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                                 <button onClick={() => changeMonth(-1)} className="h-9 w-9 shrink-0 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400">
                                     <i className="fas fa-chevron-left"></i>
                                 </button>
-                                <h2 className="truncate text-lg font-bold text-slate-800 dark:text-slate-200 capitalize">
+                                <h2 className="truncate text-lg font-bold text-slate-800 dark:text-slate-200">
                                     {currentMonthLabel}
                                 </h2>
                                 <button onClick={() => changeMonth(1)} className="h-9 w-9 shrink-0 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400">
@@ -1981,7 +1979,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                                 <button onClick={() => changeWeek(-1)} aria-label="Semana anterior" className="h-9 w-9 shrink-0 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400">
                                     <i className="fas fa-chevron-left"></i>
                                 </button>
-                                <h2 className="truncate text-lg font-bold text-slate-800 dark:text-slate-200 capitalize">
+                                <h2 className="truncate text-lg font-bold text-slate-800 dark:text-slate-200">
                                     {weekRangeLabel}
                                 </h2>
                                 <button onClick={() => changeWeek(1)} aria-label="Próxima semana" className="h-9 w-9 shrink-0 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400">
@@ -2093,6 +2091,9 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                                 actionLabel="Novo agendamento"
                                 actionIconClassName="fas fa-plus"
                                 onAction={() => onCreateNewAgendamento(selectedDate)}
+                                secondaryActionLabel={onCreateAgendamentoByVoice ? 'Agendar por voz' : undefined}
+                                secondaryActionIconClassName="fas fa-microphone"
+                                onSecondaryAction={onCreateAgendamentoByVoice}
                             />
                         </div>
                     )}
@@ -2149,6 +2150,9 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                                 actionLabel="Novo agendamento"
                                 actionIconClassName="fas fa-plus"
                                 onAction={() => onCreateNewAgendamento(new Date())}
+                                secondaryActionLabel={onCreateAgendamentoByVoice ? 'Agendar por voz' : undefined}
+                                secondaryActionIconClassName="fas fa-microphone"
+                                onSecondaryAction={onCreateAgendamentoByVoice}
                             />
                         </div>
                     )}
@@ -2162,7 +2166,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                         <button onClick={() => changeMonth(-1)} className="h-10 w-10 flex items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] hover:bg-[var(--surface-muted)] text-[var(--text-muted)] hover:text-[var(--text-strong)]">
                             <i className="fas fa-chevron-left"></i>
                         </button>
-                        <h2 className="text-xl font-bold text-[var(--text-strong)] capitalize">
+                        <h2 className="text-xl font-bold text-[var(--text-strong)]">
                             {currentMonthLabel}
                         </h2>
                         <button onClick={() => changeMonth(1)} className="h-10 w-10 flex items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] hover:bg-[var(--surface-muted)] text-[var(--text-muted)] hover:text-[var(--text-strong)]">
@@ -2256,6 +2260,9 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                                 actionLabel="Novo agendamento"
                                 actionIconClassName="fas fa-plus"
                                 onAction={() => onCreateNewAgendamento(selectedDate)}
+                                secondaryActionLabel={onCreateAgendamentoByVoice ? 'Agendar por voz' : undefined}
+                                secondaryActionIconClassName="fas fa-microphone"
+                                onSecondaryAction={onCreateAgendamentoByVoice}
                             />
                         </div>
                     )}
