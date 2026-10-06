@@ -252,6 +252,25 @@ describe('AgendaView', () => {
         expect(actions.children).toHaveLength(3);
     });
 
+    it('WhatsApp do cartão já vem com a confirmação do atendimento, editável', () => {
+        renderAgenda([clientWithAddress], [{
+            ...appointment, eventType: 'instalacao', start: '2026-05-25T12:00:00.000Z', end: '2026-05-25T14:00:00.000Z',
+        }]);
+
+        fireEvent.click(screen.getAllByRole('button', { name: /abrir whatsapp de cliente mapa/i })[0]);
+
+        const message = screen.getByLabelText('Mensagem de confirmação') as HTMLTextAreaElement;
+        expect(message.value).toMatch(/^Olá, Cliente! Confirmando a instalação amanhã, segunda \(25\/05\), às \d{2}:00\. Qualquer dúvida, é só chamar\.$/);
+        expect(screen.getByRole('link', { name: /^whatsapp$/i }).getAttribute('href')).toContain('?text=Ol%C3%A1%2C%20Cliente!%20Confirmando');
+
+        fireEvent.change(message, { target: { value: 'Oi! Tudo certo para amanhã?' } });
+        expect(screen.getByRole('link', { name: /^whatsapp$/i })).toHaveAttribute('href', `https://wa.me/5583999990000?text=${encodeURIComponent('Oi! Tudo certo para amanhã?')}`);
+
+        // Apagando tudo, abre a conversa sem mensagem.
+        fireEvent.change(message, { target: { value: '' } });
+        expect(screen.getByRole('link', { name: /^whatsapp$/i })).toHaveAttribute('href', 'https://wa.me/5583999990000');
+    });
+
     it('nao mostra link de navegacao sem endereco do cliente', () => {
         renderAgenda([
             {

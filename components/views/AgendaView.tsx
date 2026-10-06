@@ -14,6 +14,7 @@ import { buildServiceStockPlans } from '../../src/lib/serviceStockConsumption';
 import { useSubscription } from '../../contexts/SubscriptionContext';
 import { EVENT_TYPES, getAgendamentoColor, getCalendarDots, getEventTypeMeta } from '../../src/lib/agendamentoEventTypes';
 import { splitContinuationNote } from '../../src/lib/multiDaySchedule';
+import { buildAppointmentConfirmation } from '../../src/lib/appointmentConfirmation';
 import {
     buildReviewFollowUpMessage,
     buildShortReviewMessage,
@@ -348,10 +349,15 @@ const AgendaWhatsAppChooserModal: React.FC<{
     clientName: string;
     phone?: string;
     messageText?: string;
+    // Mensagem que dá para ajustar antes de abrir (ex.: confirmação do atendimento).
+    editableMessage?: boolean;
     onClose: () => void;
-}> = ({ clientName, phone, messageText, onClose }) => {
-    const regularUrl = getRegularWhatsappUrl(phone, messageText);
-    const businessUrl = getBusinessWhatsappUrl(phone, messageText);
+}> = ({ clientName, phone, messageText, editableMessage = false, onClose }) => {
+    const [draftMessage, setDraftMessage] = useState(messageText || '');
+    const isEditing = editableMessage && Boolean(messageText);
+    const finalMessage = isEditing ? draftMessage.trim() : messageText;
+    const regularUrl = getRegularWhatsappUrl(phone, finalMessage);
+    const businessUrl = getBusinessWhatsappUrl(phone, finalMessage);
     // WhatsApp Business só faz sentido no mobile (deep link Android/iOS); no desktop ambos abrem o WhatsApp Web.
     const showBusiness = isLikelyMobileDevice();
 
@@ -379,6 +385,24 @@ const AgendaWhatsAppChooserModal: React.FC<{
                 <p className="text-sm text-slate-500 dark:text-slate-400">
                     Escolha qual app deseja usar para falar com <strong className="text-slate-700 dark:text-slate-200">{clientName}</strong>.
                 </p>
+
+                {isEditing ? (
+                    <div>
+                        <label htmlFor="whatsappConfirmationMessage" className="ui-label mb-1.5 block">
+                            Mensagem de confirmação
+                        </label>
+                        <textarea
+                            id="whatsappConfirmationMessage"
+                            value={draftMessage}
+                            onChange={(event) => setDraftMessage(event.target.value)}
+                            rows={4}
+                            className="ui-field block w-full resize-none px-3 py-2.5 text-sm leading-5"
+                        />
+                        <p className="mt-1.5 text-xs text-slate-400 dark:text-slate-500">
+                            Dá para mudar o texto aqui. Apagando tudo, a conversa abre sem mensagem.
+                        </p>
+                    </div>
+                ) : null}
 
                 <div className={`grid gap-3 ${showBusiness ? 'sm:grid-cols-2' : ''}`}>
                     <a
@@ -1279,6 +1303,8 @@ const AppointmentCard: React.FC<{
                 <AgendaWhatsAppChooserModal
                     clientName={agendamento.clienteNome}
                     phone={client?.telefone}
+                    messageText={buildAppointmentConfirmation(agendamento)}
+                    editableMessage
                     onClose={() => setIsChoosingWhatsapp(false)}
                 />
             ) : null}
@@ -1379,6 +1405,8 @@ const NextAppointmentCard: React.FC<{
                 <AgendaWhatsAppChooserModal
                     clientName={agendamento.clienteNome}
                     phone={client?.telefone}
+                    messageText={buildAppointmentConfirmation(agendamento)}
+                    editableMessage
                     onClose={() => setIsChoosingWhatsapp(false)}
                 />
             ) : null}
