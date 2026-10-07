@@ -125,6 +125,14 @@ export function useFilmFlow({
         setNewFilmName
     ]);
 
+    // Reajuste em lote (e o "Desfazer" dele): mesmos nomes, só preços mudam.
+    const handleSaveFilms = useCallback(async (filmsToSave: Film[]) => {
+        for (const film of filmsToSave) {
+            await db.saveCustomFilm(film);
+        }
+        await loadFilms();
+    }, [loadFilms]);
+
     const handleToggleFilmPin = useCallback(async (filmName: string) => {
         const film = films.find(item => item.nome === filmName);
         if (!film) return;
@@ -223,6 +231,7 @@ export function useFilmFlow({
         handleDuplicateFilm,
         handleEditFilmFromSelection,
         handleSaveFilm,
+        handleSaveFilms,
         handleToggleFilmPin,
         handleDeleteFilm,
         handleRequestDeleteFilm,

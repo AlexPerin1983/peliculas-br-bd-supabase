@@ -18,6 +18,7 @@ const baseProps = () => ({
     onEdit: vi.fn(),
     onDuplicate: vi.fn(),
     onTogglePin: vi.fn(),
+    onSaveFilms: vi.fn().mockResolvedValue(undefined),
     onDelete: vi.fn(),
     onOpenGallery: vi.fn(),
 });
