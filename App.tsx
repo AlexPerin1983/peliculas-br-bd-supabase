@@ -74,10 +74,14 @@ import {
     countOtherFilms,
     FILM_EXTRACTION_PROMPT,
     FILM_EXTRACTION_SCHEMA,
+    FILM_TABLE_EXTRACTION_PROMPT,
+    FILM_TABLE_EXTRACTION_SCHEMA,
     getFriendlyFilmExtractionError,
     getOtherFilmsMessage,
     normalizeFilmExtraction,
-    parseFilmExtractionResponse
+    normalizeFilmTableExtraction,
+    parseFilmExtractionResponse,
+    parseFilmTableExtractionResponse
 } from './src/lib/aiFilmExtraction';
 import {
     DEFAULT_MENU_ORDER,
@@ -496,6 +500,8 @@ const App: React.FC = () => {
     const [isAIFilmModalOpen, setIsAIFilmModalOpen] = useState(false);
     const [aiFilmData, setAiFilmData] = useState<Partial<Film> | undefined>(undefined);
     const [duplicatingFilm, setDuplicatingFilm] = useState<Film | null>(null);
+    const [isAIFilmTableModalOpen, setIsAIFilmTableModalOpen] = useState(false);
+    const [filmImportCandidates, setFilmImportCandidates] = useState<Partial<Film>[] | null>(null);
     const [isProcessingAI, setIsProcessingAI] = useState(false);
     const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
     const [apiKeyModalProvider, setApiKeyModalProvider] = useState<'gemini' | 'openai'>('gemini');
@@ -1520,6 +1526,7 @@ const App: React.FC = () => {
         handleEditFilmFromSelection,
         handleSaveFilm,
         handleSaveFilms,
+        handleDeleteFilms,
         handleToggleFilmPin,
         handleDeleteFilm,
         handleRequestDeleteFilm,
@@ -1906,6 +1913,55 @@ Regras:
         }
     }, [userInfo, showError]);
 
+    // Pedido + texto + arquivos + áudio, na ordem que a IA de películas espera.
+    const buildFilmAIParts = async (prompt: string, input: AIInput) => {
+        const parts: any[] = [prompt];
+        if (input.text && input.text.trim()) {
+            parts.push(input.text);
+        }
+        for (const file of input.images || []) {
+            const { mimeType, data } = await blobToBase64(file);
+            parts.push({ inlineData: { mimeType, data } });
+        }
+        if (input.audio) {
+            const { mimeType, data } = await blobToBase64(input.audio);
+            parts.push({ inlineData: { mimeType, data } });
+        }
+        return parts;
+    };
+
+    const handleProcessAIFilmTableInput = useCallback(async (input: AIInput) => {
+        const hasContent = (input.text && input.text.trim()) || (input.images && input.images.length > 0) || !!input.audio;
+        if (!hasContent) {
+            showError("Adicione a tabela (texto, arquivo ou áudio) para listar as películas.");
+            return;
+        }
+
+        setIsProcessingAI(true);
+        try {
+            const model = createGeminiModel({
+                apiKey: userInfo?.aiConfig?.apiKey,
+                feature: 'film_extraction',
+                generationConfig: {
+                    responseMimeType: 'application/json',
+                    responseSchema: FILM_TABLE_EXTRACTION_SCHEMA,
+                    // Uma tabela inteira é bem maior que uma película; o proxy limita a 4096.
+                    maxOutputTokens: 4096
+                }
+            });
+            const result = await model.generateContent(await buildFilmAIParts(FILM_TABLE_EXTRACTION_PROMPT, input));
+            const candidates = normalizeFilmTableExtraction(parseFilmTableExtractionResponse(result.response.text()));
+
+            setIsAIFilmTableModalOpen(false);
+            setFilmImportCandidates(candidates);
+        } catch (error) {
+            console.error("Erro ao ler tabela de películas com IA:", error);
+            showError(getFriendlyFilmExtractionError(error));
+        } finally {
+            setIsProcessingAI(false);
+        }
+    }, [userInfo, showError]);
+
     const handleProcessAIFilmInput = useCallback(async (input: AIInput) => {
 
         const hasContent = (input.text && input.text.trim()) || (input.images && input.images.length > 0) || !!input.audio;
@@ -1926,23 +1982,7 @@ Regras:
                 }
             });
 
-            const parts: any[] = [FILM_EXTRACTION_PROMPT];
-
-            if (input.text && input.text.trim()) {
-                parts.push(input.text);
-            }
-            if (input.images && input.images.length > 0) {
-                for (const file of input.images) {
-                    const { mimeType, data } = await blobToBase64(file);
-                    parts.push({ inlineData: { mimeType, data } });
-                }
-            }
-            if (input.audio) {
-                const { mimeType, data } = await blobToBase64(input.audio);
-                parts.push({ inlineData: { mimeType, data } });
-            }
-
-            const result = await model.generateContent(parts);
+            const result = await model.generateContent(await buildFilmAIParts(FILM_EXTRACTION_PROMPT, input));
             const extraction = parseFilmExtractionResponse(result.response.text());
             const filmData = normalizeFilmExtraction(extraction);
 
@@ -2587,6 +2627,11 @@ Regras:
         setIsAIFilmModalOpen(true);
     }, [ensureAiReady]);
 
+    const handleOpenAIFilmTableModal = useCallback(() => {
+        if (!ensureAiReady()) return;
+        setIsAIFilmTableModalOpen(true);
+    }, [ensureAiReady]);
+
     const handleQuickFabEstoqueAI = useCallback((tab: 'bobinas' | 'retalhos') => {
         if (!ensureAiReady()) return;
         setInitialEstoqueAction({ action: 'ai', tab });
@@ -3213,6 +3258,7 @@ Use somente o JSON definido e não inclua explicações fora dele.`;
             onDuplicateFilm={handleDuplicateFilm}
             onToggleFilmPin={handleToggleFilmPin}
             onSaveFilms={handleSaveFilms}
+            onImportFilmTable={handleOpenAIFilmTableModal}
             onDeleteFilm={handleRequestDeleteFilm}
             onOpenGallery={handleOpenGallery}
             onOpenClientModal={handleOpenClientModal}
@@ -3375,6 +3421,13 @@ Use somente o JSON definido e não inclua explicações fora dele.`;
         isAIFilmModalOpen,
 
         handleProcessAIFilmInput,
+        isAIFilmTableModalOpen,
+        setIsAIFilmTableModalOpen,
+        handleProcessAIFilmTableInput,
+        filmImportCandidates,
+        setFilmImportCandidates,
+        handleSaveFilms,
+        handleDeleteFilms,
         isAIMeasurementModalOpen,
         setIsAIMeasurementModalOpen,
         handleProcessAIMeasurementInput,

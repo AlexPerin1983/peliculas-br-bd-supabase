@@ -10,11 +10,8 @@ import type { GarantiaUnidade } from './filmWarranty';
  * preço: material de fornecedor traz CUSTO (metro linear ou bobina), e isso
  * não pode cair no preço de venda por m², que vai para a proposta do cliente.
  */
-export const FILM_EXTRACTION_PROMPT = `Você ajuda instaladores de película para vidros (automotiva, residencial/comercial, segurança e decorativa/jateada) a cadastrar uma película. Leia o material enviado (texto, foto da caixa ou da etiqueta, ficha técnica em PDF ou áudio) e preencha os campos.
-
-Regras:
-- Extraia só o que está no material. Não invente nem deduza valores (por exemplo, não tire o VTL do nome "G5").
-- Se o material tiver várias películas, preencha só a primeira e informe em "outrasPeliculas" quantas outras existem.
+// Regras de cada campo, iguais para uma película e para a tabela inteira.
+const FILM_FIELD_RULES = `- Extraia só o que está no material. Não invente nem deduza valores (por exemplo, não tire o VTL do nome "G5").
 - nome: nome comercial da película, sem a marca quando ela vier separada. marca: fabricante (ex.: 3M, SunTek, Llumar, Insulfilm).
 - codigosAlternativos: outros nomes ou códigos da mesma película que aparecem no material (ex.: código do fabricante). Não crie apelidos.
 - Percentuais são números de 0 a 100, sem o símbolo %.
@@ -33,40 +30,72 @@ Regras:
 - outrasEspecificacoes: outros dados técnicos úteis que não têm campo próprio (ex.: Refletância, Cor, Largura da bobina, Rejeição de brilho), com nome e valor como aparecem.
 - Deixe de fora qualquer campo que não estiver no material.`;
 
+export const FILM_EXTRACTION_PROMPT = `Você ajuda instaladores de película para vidros (automotiva, residencial/comercial, segurança e decorativa/jateada) a cadastrar uma película. Leia o material enviado (texto, foto da caixa ou da etiqueta, ficha técnica em PDF ou áudio) e preencha os campos.
+
+Regras:
+- Se o material tiver várias películas, preencha só a primeira e informe em "outrasPeliculas" quantas outras existem.
+${FILM_FIELD_RULES}`;
+
+/**
+ * Importar a tabela do fornecedor: a mesma leitura, mas de todas as
+ * películas do material de uma vez (vira uma lista para o instalador revisar).
+ */
+export const FILM_TABLE_EXTRACTION_PROMPT = `Você ajuda instaladores de película para vidros (automotiva, residencial/comercial, segurança e decorativa/jateada) a montar o catálogo. Leia a tabela de preços, o catálogo ou a lista enviada (foto, PDF, texto ou áudio) e liste em "peliculas" TODAS as películas, na ordem em que aparecem.
+
+Regras:
+- Uma entrada por película. Se a mesma película aparece em larguras de bobina diferentes, registre uma vez só, com o custo da bobina de 1,52 m (ou da maior largura) e a largura em outrasEspecificacoes.
+- Ignore linhas que não são película (frete, acessórios, ferramentas, totais).
+${FILM_FIELD_RULES}`;
+
+const FILM_FIELDS_SCHEMA = {
+    nome: { type: 'STRING' },
+    marca: { type: 'STRING' },
+    codigosAlternativos: { type: 'ARRAY', items: { type: 'STRING' } },
+    precoVendaM2: { type: 'NUMBER' },
+    maoDeObraM2: { type: 'NUMBER' },
+    custoMetroLinear: { type: 'NUMBER' },
+    custoBobina: { type: 'NUMBER' },
+    comprimentoBobinaM: { type: 'NUMBER' },
+    garantiaFabricanteAnos: { type: 'NUMBER' },
+    garantiaMaoDeObra: { type: 'NUMBER' },
+    garantiaMaoDeObraUnidade: { type: 'STRING' },
+    uv: { type: 'NUMBER' },
+    ir: { type: 'NUMBER' },
+    vtl: { type: 'NUMBER' },
+    tser: { type: 'NUMBER' },
+    espessura: { type: 'NUMBER' },
+    espessuraUnidade: { type: 'STRING' },
+    outrasEspecificacoes: {
+        type: 'ARRAY',
+        items: {
+            type: 'OBJECT',
+            properties: {
+                nome: { type: 'STRING' },
+                valor: { type: 'STRING' },
+            },
+            required: ['nome', 'valor'],
+        },
+    },
+} as const;
+
 /** Formato da resposta (Gemini responseSchema). Os tipos são os nomes do enum Type do SDK. */
 export const FILM_EXTRACTION_SCHEMA = {
     type: 'OBJECT',
     properties: {
-        nome: { type: 'STRING' },
-        marca: { type: 'STRING' },
-        codigosAlternativos: { type: 'ARRAY', items: { type: 'STRING' } },
-        precoVendaM2: { type: 'NUMBER' },
-        maoDeObraM2: { type: 'NUMBER' },
-        custoMetroLinear: { type: 'NUMBER' },
-        custoBobina: { type: 'NUMBER' },
-        comprimentoBobinaM: { type: 'NUMBER' },
-        garantiaFabricanteAnos: { type: 'NUMBER' },
-        garantiaMaoDeObra: { type: 'NUMBER' },
-        garantiaMaoDeObraUnidade: { type: 'STRING' },
-        uv: { type: 'NUMBER' },
-        ir: { type: 'NUMBER' },
-        vtl: { type: 'NUMBER' },
-        tser: { type: 'NUMBER' },
-        espessura: { type: 'NUMBER' },
-        espessuraUnidade: { type: 'STRING' },
-        outrasEspecificacoes: {
-            type: 'ARRAY',
-            items: {
-                type: 'OBJECT',
-                properties: {
-                    nome: { type: 'STRING' },
-                    valor: { type: 'STRING' },
-                },
-                required: ['nome', 'valor'],
-            },
-        },
+        ...FILM_FIELDS_SCHEMA,
         outrasPeliculas: { type: 'NUMBER' },
     },
+} as const;
+
+export const FILM_TABLE_EXTRACTION_SCHEMA = {
+    type: 'OBJECT',
+    properties: {
+        peliculas: {
+            type: 'ARRAY',
+            items: { type: 'OBJECT', properties: FILM_FIELDS_SCHEMA, required: ['nome'] },
+        },
+    },
+    required: ['peliculas'],
 } as const;
 
 export interface RawAIFilmExtraction {
@@ -215,6 +244,50 @@ export const normalizeFilmExtraction = (raw: RawAIFilmExtraction): Partial<Film>
     return film;
 };
 
+/** Resposta da tabela: { peliculas: [...] } (ou só a lista). */
+export const parseFilmTableExtractionResponse = (rawText: string): RawAIFilmExtraction[] => {
+    if (!rawText?.trim()) throw new FilmExtractionError('EMPTY_RESPONSE');
+
+    const json = findBalancedJson(rawText);
+    if (!json) throw new FilmExtractionError('INVALID_FORMAT');
+
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(json);
+    } catch {
+        throw new FilmExtractionError('INVALID_FORMAT');
+    }
+
+    const list = Array.isArray(parsed) ? parsed : (parsed as { peliculas?: unknown })?.peliculas;
+    if (!Array.isArray(list)) throw new FilmExtractionError('INVALID_FORMAT');
+    return list.filter((item): item is RawAIFilmExtraction => !!item && typeof item === 'object');
+};
+
+/**
+ * Películas da tabela prontas para revisar: só as que têm nome, sem repetir
+ * nome (vale a primeira, como na tabela).
+ */
+export const normalizeFilmTableExtraction = (items: RawAIFilmExtraction[]): Partial<Film>[] => {
+    const seen = new Set<string>();
+    const films: Partial<Film>[] = [];
+
+    for (const item of items) {
+        let film: Partial<Film>;
+        try {
+            film = normalizeFilmExtraction(item);
+        } catch {
+            continue;
+        }
+        const key = film.nome?.toLocaleLowerCase('pt-BR');
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        films.push(film);
+    }
+
+    if (films.length === 0) throw new FilmExtractionError('NO_DATA');
+    return films;
+};
+
 export const countOtherFilms = (raw: RawAIFilmExtraction): number => {
     const value = toPositiveNumber(raw.outrasPeliculas);
     return value ? Math.round(value) : 0;
@@ -249,7 +322,10 @@ export const getFriendlyFilmExtractionError = (error: unknown): string => {
     if (/NO_DATA|EMPTY_RESPONSE/i.test(code)) {
         return 'Não encontrei dados de película no material. Envie a ficha técnica, uma foto nítida da caixa ou descreva a película.';
     }
-    if (/INVALID_FORMAT|OUTPUT_TRUNCATED|MAX_TOKENS/i.test(code)) {
+    if (/OUTPUT_TRUNCATED|MAX_TOKENS/i.test(code)) {
+        return 'O material é grande demais para uma leitura só. Envie uma página (ou uma parte da tabela) por vez.';
+    }
+    if (/INVALID_FORMAT/i.test(code)) {
         return 'Não consegui organizar os dados da película. Tente de novo ou envie só a página da ficha com as especificações.';
     }
     if (/USER_RATE_LIMIT|muitas tentativas|429/i.test(code)) {

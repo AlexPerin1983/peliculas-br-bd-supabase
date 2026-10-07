@@ -19,6 +19,7 @@ const baseProps = () => ({
     onDuplicate: vi.fn(),
     onTogglePin: vi.fn(),
     onSaveFilms: vi.fn().mockResolvedValue(undefined),
+    onImportTable: vi.fn(),
     onDelete: vi.fn(),
     onOpenGallery: vi.fn(),
 });
@@ -70,5 +71,19 @@ describe('FilmListView', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Duplicar G5' }));
         expect(props.onDuplicate).toHaveBeenCalledWith(expect.objectContaining({ nome: 'G5' }));
         expect(screen.queryByText(/__match/i)).not.toBeInTheDocument();
+    });
+
+    it('oferece importar a tabela do fornecedor, inclusive com o catálogo vazio', () => {
+        const props = baseProps();
+        const { unmount } = render(<FilmListView {...props} />);
+        fireEvent.click(screen.getByRole('button', { name: 'Importar tabela' }));
+        expect(props.onImportTable).toHaveBeenCalledTimes(1);
+        unmount();
+
+        const emptyProps = { ...baseProps(), films: [] };
+        render(<FilmListView {...emptyProps} />);
+        expect(screen.getByText('Cadastre sua primeira película')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: /Importar tabela/ }));
+        expect(emptyProps.onImportTable).toHaveBeenCalledTimes(1);
     });
 });
