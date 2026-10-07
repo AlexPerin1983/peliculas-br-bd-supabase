@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
     countOtherFilms,
+    FILM_EXTRACTION_SCHEMA,
+    FILM_TABLE_EXTRACTION_SCHEMA,
     FilmExtractionError,
     getAiFilmPriceNote,
     getFriendlyFilmExtractionError,
@@ -154,5 +156,26 @@ describe('IA de cadastro de película', () => {
         expect(getFriendlyFilmExtractionError({ code: 'USER_RATE_LIMIT' })).toContain('Aguarde um minuto');
         expect(getFriendlyFilmExtractionError(new Error('Failed to fetch'))).toContain('internet');
         expect(getFriendlyFilmExtractionError(new Error('qualquer coisa'))).toContain('Tente novamente');
+    });
+
+    it('obriga a IA a responder todos os campos, com null quando não há o dado', () => {
+        const single = FILM_EXTRACTION_SCHEMA as any;
+        expect(single.required).toEqual(Object.keys(single.properties));
+        expect(single.properties.precoVendaM2.nullable).toBe(true);
+
+        const item = (FILM_TABLE_EXTRACTION_SCHEMA as any).properties.peliculas.items;
+        expect(item.required).toContain('custoBobina');
+        expect(item.properties.custoBobina.nullable).toBe(true);
+    });
+
+    it('resposta com null nos campos sem dado vira só o que veio preenchido', () => {
+        const film = normalizeFilmExtraction({
+            nome: 'Black Out', marca: null, codigosAlternativos: null, precoVendaM2: null, maoDeObraM2: null,
+            custoMetroLinear: null, custoBobina: 980, comprimentoBobinaM: 30, garantiaFabricanteAnos: null,
+            garantiaMaoDeObra: null, garantiaMaoDeObraUnidade: null, uv: null, ir: null, vtl: null, tser: null,
+            espessura: null, espessuraUnidade: null, outrasEspecificacoes: null, outrasPeliculas: null,
+        });
+
+        expect(film).toEqual({ nome: 'Black Out', precoMetroLinear: 32.67, customFields: {} });
     });
 });

@@ -11,7 +11,8 @@ import type { GarantiaUnidade } from './filmWarranty';
  * não pode cair no preço de venda por m², que vai para a proposta do cliente.
  */
 // Regras de cada campo, iguais para uma película e para a tabela inteira.
-const FILM_FIELD_RULES = `- Extraia só o que está no material. Não invente nem deduza valores (por exemplo, não tire o VTL do nome "G5").
+const FILM_FIELD_RULES = `- Extraia só o que está no material. Não deduza valores: códigos como "G5", "G20" ou "Nano 70" no nome NÃO são VTL nem outro percentual.
+- Não deixe passar nenhum preço: todo valor em R$ ligado à película vai para o campo de preço certo (abaixo).
 - nome: nome comercial da película, sem a marca quando ela vier separada. marca: fabricante (ex.: 3M, SunTek, Llumar, Insulfilm).
 - codigosAlternativos: outros nomes ou códigos da mesma película que aparecem no material (ex.: código do fabricante). Não crie apelidos.
 - Percentuais são números de 0 a 100, sem o símbolo %.
@@ -28,13 +29,25 @@ const FILM_FIELD_RULES = `- Extraia só o que está no material. Não invente ne
   - maoDeObraM2: valor de mão de obra/instalação/aplicação por m².
 - garantiaFabricanteAnos: garantia do fabricante em anos. garantiaMaoDeObra + garantiaMaoDeObraUnidade ("dias", "meses" ou "anos"): garantia da instalação.
 - outrasEspecificacoes: outros dados técnicos úteis que não têm campo próprio (ex.: Refletância, Cor, Largura da bobina, Rejeição de brilho), com nome e valor como aparecem.
-- Deixe de fora qualquer campo que não estiver no material.`;
+- Campo que não aparece no material fica de fora.`;
+
+// Exemplos de material → resposta. O modelo leve segue melhor um exemplo do
+// que as regras sozinhas (sem eles ele pulava preços e deduzia VTL do nome).
+const FILM_EXAMPLES = `Exemplo 1 (o instalador descreve a película dele):
+Material: "Nano Cerâmica 70 da SunTek. Vendo a R$ 230 o m², instalação R$ 50 o m². 7 anos de garantia de fábrica e 6 meses na instalação. Rejeita 88% do infravermelho."
+Resposta: {"nome":"Nano Cerâmica 70","marca":"SunTek","precoVendaM2":230,"maoDeObraM2":50,"garantiaFabricanteAnos":7,"garantiaMaoDeObra":6,"garantiaMaoDeObraUnidade":"meses","ir":88}
+
+Exemplo 2 (ficha ou tabela de fornecedor):
+Material: "Llumar ATR 15 — bobina 1,52 x 30 m — R$ 1.980,00. VLT 15%, UV 99%."
+Resposta: {"nome":"ATR 15","marca":"Llumar","custoBobina":1980,"comprimentoBobinaM":30,"vtl":15,"uv":99,"outrasEspecificacoes":[{"nome":"Largura da bobina","valor":"1,52 m"}]}`;
 
 export const FILM_EXTRACTION_PROMPT = `Você ajuda instaladores de película para vidros (automotiva, residencial/comercial, segurança e decorativa/jateada) a cadastrar uma película. Leia o material enviado (texto, foto da caixa ou da etiqueta, ficha técnica em PDF ou áudio) e preencha os campos.
 
 Regras:
 - Se o material tiver várias películas, preencha só a primeira e informe em "outrasPeliculas" quantas outras existem.
-${FILM_FIELD_RULES}`;
+${FILM_FIELD_RULES}
+
+${FILM_EXAMPLES}`;
 
 /**
  * Importar a tabela do fornecedor: a mesma leitura, mas de todas as
@@ -45,7 +58,17 @@ export const FILM_TABLE_EXTRACTION_PROMPT = `Você ajuda instaladores de pelícu
 Regras:
 - Uma entrada por película. Se a mesma película aparece em larguras de bobina diferentes, registre uma vez só, com o custo da bobina de 1,52 m (ou da maior largura) e a largura em outrasEspecificacoes.
 - Ignore linhas que não são película (frete, acessórios, ferramentas, totais).
-${FILM_FIELD_RULES}`;
+- Cada película aparece uma vez só na resposta; não repita entradas.
+${FILM_FIELD_RULES}
+
+Exemplo:
+Material:
+"Película | Largura | Comprimento | Preço
+Llumar ATR 15 | 1,52 m | 30 m | R$ 1.980,00
+Llumar ATR 15 | 0,76 m | 30 m | R$ 1.050,00
+Kit de aplicação | - | - | R$ 35,00
+Llumar Nano 70 | 1,52 m | 30 m | R$ 3.200,00"
+Resposta: {"peliculas":[{"nome":"ATR 15","marca":"Llumar","custoBobina":1980,"comprimentoBobinaM":30,"outrasEspecificacoes":[{"nome":"Largura da bobina","valor":"1,52 m"}]},{"nome":"Nano 70","marca":"Llumar","custoBobina":3200,"comprimentoBobinaM":30,"outrasEspecificacoes":[{"nome":"Largura da bobina","valor":"1,52 m"}]}]}`;
 
 const FILM_FIELDS_SCHEMA = {
     nome: { type: 'STRING' },
@@ -78,25 +101,36 @@ const FILM_FIELDS_SCHEMA = {
     },
 } as const;
 
-/** Formato da resposta (Gemini responseSchema). Os tipos são os nomes do enum Type do SDK. */
-export const FILM_EXTRACTION_SCHEMA = {
+/**
+ * Todos os campos obrigatórios, mas anuláveis: o modelo leve, com campos
+ * opcionais, pulava preços, UV e garantias (testado com a IA real). Obrigado a
+ * responder campo por campo, ele preenche o que está no material e deixa null
+ * no resto.
+ */
+export const requireEveryField = <T extends Record<string, object>>(properties: T) => ({
     type: 'OBJECT',
-    properties: {
-        ...FILM_FIELDS_SCHEMA,
-        outrasPeliculas: { type: 'NUMBER' },
-    },
-} as const;
+    properties: Object.fromEntries(
+        Object.entries(properties).map(([key, value]) => [key, { ...value, nullable: true }])
+    ),
+    required: Object.keys(properties),
+});
+
+/** Formato da resposta (Gemini responseSchema). Os tipos são os nomes do enum Type do SDK. */
+export const FILM_EXTRACTION_SCHEMA = requireEveryField({
+    ...FILM_FIELDS_SCHEMA,
+    outrasPeliculas: { type: 'NUMBER' },
+});
 
 export const FILM_TABLE_EXTRACTION_SCHEMA = {
     type: 'OBJECT',
     properties: {
         peliculas: {
             type: 'ARRAY',
-            items: { type: 'OBJECT', properties: FILM_FIELDS_SCHEMA, required: ['nome'] },
+            items: requireEveryField(FILM_FIELDS_SCHEMA),
         },
     },
     required: ['peliculas'],
-} as const;
+};
 
 export interface RawAIFilmExtraction {
     nome?: unknown;
