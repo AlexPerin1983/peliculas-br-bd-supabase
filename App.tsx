@@ -2755,7 +2755,7 @@ Regras:
                     responseSchema: OPTION_VARIATION_SCHEMA
                 }
             });
-            const prompt = buildOptionVariationPrompt(currentFilms, films.map(film => film.nome));
+            const prompt = buildOptionVariationPrompt(currentFilms, films);
             const result = await model.generateContent(await buildFilmAIParts(prompt, input));
             const plan = resolveOptionVariation(parseOptionVariationResponse(result.response.text()), currentFilms, films);
             setIsAIVariationModalOpen(false);

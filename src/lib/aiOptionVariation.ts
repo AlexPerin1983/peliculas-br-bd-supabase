@@ -1,5 +1,6 @@
 import type { Film } from '../../types';
 import { matchFilmFromExtractedText } from '../../services/filmMatchingService';
+import { getFilmMatchingAliases, getFilmMatchingBrand } from '../../utils/filmMatchingMetadata';
 import { findBalancedJson } from './aiMeasurementExtraction';
 import { findFilmByName } from './filmCatalog';
 
@@ -13,20 +14,35 @@ import { findFilmByName } from './filmCatalog';
 /** Só aceita a película do catálogo quando o nome bate com segurança. */
 const MIN_CATALOG_CONFIDENCE = 0.9;
 
-export const buildOptionVariationPrompt = (currentFilms: string[], catalogFilms: string[]) => `Você ajuda um instalador de película para vidros a montar uma nova opção de orçamento a partir da opção atual.
+/**
+ * Nome + marca + apelidos cadastrados ("para IA"), para a IA entender
+ * "a fumê", "a da 3M" ou "o jateado" quando o nome não diz isso.
+ */
+const describeFilm = (name: string, catalog: Film[]) => {
+    const film = findFilmByName(catalog, name);
+    if (!film) return name;
+    const extras = [
+        getFilmMatchingBrand(film) ? `marca ${getFilmMatchingBrand(film)}` : '',
+        getFilmMatchingAliases(film).length ? `também chamada: ${getFilmMatchingAliases(film).join(', ')}` : '',
+    ].filter(Boolean);
+    return extras.length ? `${film.nome} (${extras.join('; ')})` : film.nome;
+};
+
+export const buildOptionVariationPrompt = (currentFilms: string[], catalog: Film[]) => `Você ajuda um instalador de película para vidros a montar uma nova opção de orçamento a partir da opção atual.
 
 Películas da opção atual:
-${currentFilms.map(name => `- ${name}`).join('\n')}
+${currentFilms.map(name => `- ${describeFilm(name, catalog)}`).join('\n')}
 
 Películas do catálogo do instalador:
-${catalogFilms.map(name => `- ${name}`).join('\n')}
+${catalog.map(film => `- ${describeFilm(film.nome, catalog)}`).join('\n')}
 
 O pedido do instalador vem a seguir (texto ou áudio). Responda em "trocas" quais películas da opção atual mudam e por qual película do catálogo.
 
 Regras:
-- Use exatamente os nomes das listas acima, inclusive em peliculaAtual.
+- Use exatamente os nomes das películas (sem a marca e os apelidos entre parênteses), inclusive em peliculaAtual.
 - Película que o instalador manda manter, ou que ele não cita, fica igual: não coloque em "trocas".
-- "A outra", "as outras" ou "o resto" são as películas da opção atual que ele não mandou manter.
+- "A outra", "as outras", "as demais" ou "o resto" são as películas da opção atual que ele não mandou manter.
+- A troca vale para a película inteira, em todas as medidas onde ela está. Exemplo: opção com "Carbono Prime" e "Jateada" e o pedido "troque a Carbono Prime por Window Premium, mas onde está jateada mantenha" vira uma troca só: Carbono Prime → Window Premium.
 - Se ele pedir uma película que não está no catálogo, escreva em novaPelicula o nome como ele falou.
 - nomeOpcao: nome curto para a nova opção só se ele pedir um nome; senão deixe vazio.
 - Se não der para entender o que trocar, deixe "trocas" vazio e explique em "observacao".`;

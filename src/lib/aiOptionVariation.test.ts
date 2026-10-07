@@ -88,8 +88,38 @@ describe('duplicar com IA', () => {
         expect(() => parseOptionVariationResponse('')).toThrow('EMPTY_RESPONSE');
         expect(() => parseOptionVariationResponse('[1]')).toThrow('INVALID_FORMAT');
 
-        const prompt = buildOptionVariationPrompt(current, ['Window Premium']);
+        const prompt = buildOptionVariationPrompt(current, catalog);
         expect(prompt).toContain('- Suntek Fumê 20');
         expect(prompt).toContain('- Window Premium');
+    });
+
+    it('manda a marca e os apelidos de cada película para a IA entender "a fumê" ou "a da 3M"', () => {
+        const withMetadata: Film[] = [
+            { nome: 'Carbono Prime', preco: 100, customFields: { __match_brand: 'SunTek', __match_aliases: 'carbono, fumê' } },
+            { nome: 'Jateada', preco: 100 },
+            { nome: 'Window Premium', preco: 100, customFields: { __match_brand: '3M' } },
+        ];
+
+        const prompt = buildOptionVariationPrompt(['Carbono Prime', 'Jateada'], withMetadata);
+
+        expect(prompt).toContain('- Carbono Prime (marca SunTek; também chamada: carbono, fumê)');
+        expect(prompt).toContain('- Window Premium (marca 3M)');
+        expect(prompt).toContain('- Jateada\n');
+    });
+
+    it('"troque a Carbono Prime por Window Premium, mas onde está Jateada mantenha jateado"', () => {
+        const films: Film[] = ['Carbono Prime', 'Jateada', 'Window Premium'].map(nome => ({ nome, preco: 100 }));
+        // A IA devolve só a troca da Carbono Prime; a Jateada fica de fora (mantém).
+        const plan = resolveOptionVariation(
+            { trocas: [{ peliculaAtual: 'Carbono Prime', novaPelicula: 'Window Premium' }] },
+            ['Carbono Prime', 'Jateada'],
+            films
+        );
+
+        expect(plan.rows).toEqual([
+            { current: 'Carbono Prime', target: 'Window Premium' },
+            { current: 'Jateada', target: null },
+        ]);
+        expect(suggestVariationName(plan)).toBe('Window Premium');
     });
 });
