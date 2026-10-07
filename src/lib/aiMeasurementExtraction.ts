@@ -48,7 +48,7 @@ export interface NormalizedMeasurementExtraction {
     needsReview: boolean;
 }
 
-const findBalancedJson = (rawText: string): string | null => {
+export const findBalancedJson = (rawText: string): string | null => {
     const text = rawText
         .trim()
         .replace(/^```json\s*/i, '')

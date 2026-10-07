@@ -71,6 +71,15 @@ import {
     type AIMeasurementExtractionPayload
 } from './src/lib/aiMeasurementExtraction';
 import {
+    countOtherFilms,
+    FILM_EXTRACTION_PROMPT,
+    FILM_EXTRACTION_SCHEMA,
+    getFriendlyFilmExtractionError,
+    getOtherFilmsMessage,
+    normalizeFilmExtraction,
+    parseFilmExtractionResponse
+} from './src/lib/aiFilmExtraction';
+import {
     DEFAULT_MENU_ORDER,
     loadMenuOrder,
     resetMenuOrder,
@@ -1907,11 +1916,16 @@ Regras:
         setIsProcessingAI(true);
 
         try {
-            const model = createGeminiModel({ apiKey: userInfo?.aiConfig?.apiKey, feature: 'film_extraction' });
+            const model = createGeminiModel({
+                apiKey: userInfo?.aiConfig?.apiKey,
+                feature: 'film_extraction',
+                generationConfig: {
+                    responseMimeType: 'application/json',
+                    responseSchema: FILM_EXTRACTION_SCHEMA
+                }
+            });
 
-            const prompt = `Você é um assistente especialista em extração de dados de películas automotivas (insulfilm). Sua tarefa é extrair o máximo de informações técnicas de películas a partir da entrada fornecida (texto, imagem, PDF de ficha técnica ou áudio). Retorne APENAS um objeto JSON válido, sem markdown. Campos: nome, preco (apenas números), uv (%), ir (%), vtl (%), tser (%), espessura (micras), garantiaFabricante (anos), precoMetroLinear. Se algum campo não for encontrado, N?O inclua no JSON.`;
-
-            const parts: any[] = [prompt];
+            const parts: any[] = [FILM_EXTRACTION_PROMPT];
 
             if (input.text && input.text.trim()) {
                 parts.push(input.text);
@@ -1928,25 +1942,23 @@ Regras:
             }
 
             const result = await model.generateContent(parts);
-            const responseText = result.response.text();
-            const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+            const extraction = parseFilmExtractionResponse(result.response.text());
+            const filmData = normalizeFilmExtraction(extraction);
 
-            if (jsonMatch) {
-                const filmData = JSON.parse(jsonMatch[0]);
-                setAiFilmData(filmData);
-                setIsAIFilmModalOpen(false);
-                setNewFilmName(filmData.nome || '');
-                setIsFilmModalOpen(true);
-            } else {
-                showError("Não foi possível extrair dados da película. Tente reformular a entrada.");
-            }
+            setAiFilmData(filmData);
+            setIsAIFilmModalOpen(false);
+            setNewFilmName(filmData.nome || '');
+            setIsFilmModalOpen(true);
+
+            const otherFilmsMessage = getOtherFilmsMessage(countOtherFilms(extraction));
+            if (otherFilmsMessage) showToast(otherFilmsMessage, { tone: 'info', duration: 5000 });
         } catch (error) {
             console.error("Erro ao processar dados da película com IA:", error);
-            showError(`Ocorreu um erro com a IA: ${error instanceof Error ? error.message : String(error)}`);
+            showError(getFriendlyFilmExtractionError(error));
         } finally {
             setIsProcessingAI(false);
         }
-    }, [userInfo, showError]);
+    }, [userInfo, showError, showToast]);
 
     const processWithGemini = async (input: { type: 'text' | 'image' | 'audio'; data: string | File[] | Blob }) => {
         try {
