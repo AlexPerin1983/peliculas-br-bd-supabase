@@ -18,6 +18,8 @@ interface FilmListViewProps {
     onTogglePin: (filmName: string) => void;
     /** Salva várias películas de uma vez (reajuste de preços em lote). */
     onSaveFilms: (films: Film[]) => Promise<void>;
+    /** Abre a leitura da tabela do fornecedor com IA. */
+    onImportTable: () => void;
     onDelete: (filmName: string) => void;
     onOpenGallery: (images: string[], initialIndex: number) => void;
 }
@@ -728,7 +730,7 @@ const FilmListDesktopHeader: React.FC<FilmListDesktopHeaderProps> = ({
     );
 };
 
-const FilmListView: React.FC<FilmListViewProps> = ({ films, onAdd, onEdit, onDuplicate, onTogglePin, onSaveFilms, onDelete, onOpenGallery }) => {
+const FilmListView: React.FC<FilmListViewProps> = ({ films, onAdd, onEdit, onDuplicate, onTogglePin, onSaveFilms, onImportTable, onDelete, onOpenGallery }) => {
     const [isPriceAdjustmentOpen, setIsPriceAdjustmentOpen] = useState(false);
     const [expandedFilmName, setExpandedFilmName] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
@@ -852,6 +854,14 @@ const FilmListView: React.FC<FilmListViewProps> = ({ films, onAdd, onEdit, onDup
                             <i className="fas fa-percent text-[10px]" aria-hidden="true"></i>
                             Reajustar preços
                         </button>
+                        <button
+                            type="button"
+                            onClick={onImportTable}
+                            className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border-subtle)] bg-[var(--surface)] px-3 py-1.5 text-[11px] font-semibold text-[var(--text-body)] shadow-[var(--shadow-hairline)] transition-colors hover:text-[var(--text-strong)] sm:text-xs"
+                        >
+                            <i className="fas fa-file-import text-[10px]" aria-hidden="true"></i>
+                            Importar tabela
+                        </button>
                     </div>
 
                     <ViewModeToggle value={viewMode} onChange={setViewMode} />
@@ -930,9 +940,12 @@ const FilmListView: React.FC<FilmListViewProps> = ({ films, onAdd, onEdit, onDup
                 <ContentState
                     iconClassName="fas fa-layer-group"
                     title="Cadastre sua primeira película"
-                    description="Adicione as películas com que você trabalha."
+                    description="Adicione as películas com que você trabalha ou importe a tabela do fornecedor com IA."
                     actionLabel="Adicionar película"
                     onAction={onAdd}
+                    secondaryActionLabel="Importar tabela"
+                    onSecondaryAction={onImportTable}
+                    secondaryActionIconClassName="fas fa-file-import"
                 />
             )}
         </div>

@@ -6,7 +6,9 @@ import {
     getFriendlyFilmExtractionError,
     getOtherFilmsMessage,
     normalizeFilmExtraction,
+    normalizeFilmTableExtraction,
     parseFilmExtractionResponse,
+    parseFilmTableExtractionResponse,
 } from './aiFilmExtraction';
 import { getFilmMatchingAliases, getFilmMatchingBrand } from '../../utils/filmMatchingMetadata';
 import type { Film } from '../../types';
@@ -114,6 +116,37 @@ describe('IA de cadastro de película', () => {
         expect(getOtherFilmsMessage(countOtherFilms({}))).toBeNull();
         expect(getOtherFilmsMessage(1)).toBe('O material tem mais 1 película. Preenchi só a primeira.');
         expect(getOtherFilmsMessage(4)).toContain('mais 4 películas');
+    });
+
+    describe('tabela do fornecedor', () => {
+        it('aceita { peliculas: [...] } ou só a lista, e recusa o resto', () => {
+            expect(parseFilmTableExtractionResponse('{"peliculas":[{"nome":"G5"}]}')).toEqual([{ nome: 'G5' }]);
+            expect(parseFilmTableExtractionResponse('[{"nome":"G5"}, 3]')).toEqual([{ nome: 'G5' }]);
+            expect(() => parseFilmTableExtractionResponse('{"nome":"G5"}')).toThrow('INVALID_FORMAT');
+            expect(() => parseFilmTableExtractionResponse('')).toThrow('EMPTY_RESPONSE');
+        });
+
+        it('lista as películas com nome, sem repetir, com custo calculado', () => {
+            const films = normalizeFilmTableExtraction([
+                { nome: 'G5', marca: '3M', custoBobina: 1500, comprimentoBobinaM: 30 },
+                { nome: 'g5', custoBobina: 900, comprimentoBobinaM: 30 },
+                { marca: 'Sem nome', custoMetroLinear: 40 },
+                { nome: 'Nano 70', vtl: 70, custoMetroLinear: 80 },
+            ]);
+
+            expect(films.map(film => film.nome)).toEqual(['G5', 'Nano 70']);
+            expect(films[0].precoMetroLinear).toBe(50);
+            expect(films[0].preco).toBeUndefined();
+            expect(films[1]).toMatchObject({ vtl: 70, precoMetroLinear: 80 });
+        });
+
+        it('sem nenhuma película com nome, avisa que não encontrou dados', () => {
+            expect(() => normalizeFilmTableExtraction([{ marca: '3M' }, {}])).toThrow('NO_DATA');
+        });
+
+        it('tabela grande demais pede para enviar por partes', () => {
+            expect(getFriendlyFilmExtractionError({ code: 'OUTPUT_TRUNCATED' })).toContain('uma página');
+        });
     });
 
     it('troca erros técnicos por mensagens para o instalador', () => {

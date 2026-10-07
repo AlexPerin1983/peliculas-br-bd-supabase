@@ -12,6 +12,8 @@ const GeneralDiscountModal = lazy(() => import('./modals/GeneralDiscountModal'))
 const AIMeasurementModal = lazy(() => import('./modals/AIMeasurementModal'));
 const AIClientModal = lazy(() => import('./modals/AIClientModal'));
 const AIFilmModal = lazy(() => import('./modals/AIFilmModal'));
+const AIFilmTableModal = lazy(() => import('./modals/AIFilmTableModal'));
+const FilmImportReviewModal = lazy(() => import('./modals/FilmImportReviewModal'));
 const AIQuickProposalModal = lazy(() => import('./modals/AIQuickProposalModal'));
 const AIScheduleModal = lazy(() => import('./modals/AIScheduleModal'));
 const ApiKeyModal = lazy(() => import('./modals/ApiKeyModal'));
@@ -156,6 +158,13 @@ interface ModalsContainerProps {
     // AI Film Modal
     isAIFilmModalOpen: boolean;
     handleProcessAIFilmInput: (input: any) => void;
+    isAIFilmTableModalOpen: boolean;
+    setIsAIFilmTableModalOpen: (value: boolean) => void;
+    handleProcessAIFilmTableInput: (input: any) => Promise<void>;
+    filmImportCandidates: Partial<Film>[] | null;
+    setFilmImportCandidates: (value: Partial<Film>[] | null) => void;
+    handleSaveFilms: (films: Film[]) => Promise<void>;
+    handleDeleteFilms: (filmNames: string[]) => Promise<void>;
 
     // AI Schedule Modal (agendamento por voz)
     isAIScheduleModalOpen: boolean;
@@ -592,6 +601,26 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
                     onProcess={props.handleProcessAIFilmInput}
                     isProcessing={props.isProcessingAI}
                     provider={props.userInfo?.aiConfig?.provider || 'gemini'}
+                />
+            )}
+
+            {/* Importar tabela do fornecedor: leitura com IA e revisão */}
+            {props.isAIFilmTableModalOpen && (
+                <AIFilmTableModal
+                    isOpen={props.isAIFilmTableModalOpen}
+                    onClose={() => props.setIsAIFilmTableModalOpen(false)}
+                    onProcess={props.handleProcessAIFilmTableInput}
+                    isProcessing={props.isProcessingAI}
+                    provider={props.userInfo?.aiConfig?.provider || 'gemini'}
+                />
+            )}
+            {props.filmImportCandidates && (
+                <FilmImportReviewModal
+                    candidates={props.filmImportCandidates}
+                    films={props.films}
+                    onClose={() => props.setFilmImportCandidates(null)}
+                    onSaveFilms={props.handleSaveFilms}
+                    onDeleteFilms={props.handleDeleteFilms}
                 />
             )}
 

@@ -133,6 +133,14 @@ export function useFilmFlow({
         await loadFilms();
     }, [loadFilms]);
 
+    // "Desfazer" da importação da tabela: remove só as películas recém-criadas.
+    const handleDeleteFilms = useCallback(async (filmNames: string[]) => {
+        for (const filmName of filmNames) {
+            await db.deleteCustomFilm(filmName);
+        }
+        await loadFilms();
+    }, [loadFilms]);
+
     const handleToggleFilmPin = useCallback(async (filmName: string) => {
         const film = films.find(item => item.nome === filmName);
         if (!film) return;
@@ -232,6 +240,7 @@ export function useFilmFlow({
         handleEditFilmFromSelection,
         handleSaveFilm,
         handleSaveFilms,
+        handleDeleteFilms,
         handleToggleFilmPin,
         handleDeleteFilm,
         handleRequestDeleteFilm,

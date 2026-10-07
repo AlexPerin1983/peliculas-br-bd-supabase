@@ -131,6 +131,7 @@ interface AppContentRouterProps {
     onDuplicateFilm: (film: Film) => void;
     onToggleFilmPin: (filmName: string) => void;
     onSaveFilms: (films: Film[]) => Promise<void>;
+    onImportFilmTable: () => void;
     onDeleteFilm: (filmName: string) => void;
     onOpenGallery: (images: string[], initialIndex: number) => void;
     onOpenClientModal: (mode: 'add' | 'edit') => void;
@@ -237,6 +238,7 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
     onDuplicateFilm,
     onToggleFilmPin,
     onSaveFilms,
+    onImportFilmTable,
     onDeleteFilm,
     onOpenGallery,
     onOpenClientModal,
@@ -437,6 +439,7 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
                 onDuplicate={onDuplicateFilm}
                 onTogglePin={onToggleFilmPin}
                 onSaveFilms={onSaveFilms}
+                onImportTable={onImportFilmTable}
                 onDelete={onDeleteFilm}
                 onOpenGallery={onOpenGallery}
             />,
