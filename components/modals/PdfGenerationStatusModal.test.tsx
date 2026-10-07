@@ -168,4 +168,19 @@ describe('PdfGenerationStatusModal', () => {
         fireEvent.click(screen.getByRole('checkbox', { name: /Suntek/ }));
         expect(screen.getByRole('button', { name: 'Marque ao menos uma opção' })).toBeDisabled();
     });
+
+    it('oferece duplicar com IA quando a IA está disponível', () => {
+        const onDuplicateWithAI = vi.fn();
+        render(
+            <PdfGenerationStatusModal
+                {...baseProps()}
+                proposalForLink={{ client, pdf: proposal(42, 'Suntek', 2649.6, '2026-10-07T10:00:00Z') }}
+                onDuplicateWithFilm={vi.fn()}
+                onDuplicateWithAI={onDuplicateWithAI}
+            />
+        );
+
+        fireEvent.click(screen.getByRole('button', { name: /Duplicar com IA/ }));
+        expect(onDuplicateWithAI).toHaveBeenCalledTimes(1);
+    });
 });
