@@ -7,6 +7,7 @@ import LocationSearchInput from '../ui/LocationSearchInput';
 import { locationService } from '../../services/locationService';
 import { useAuth } from '../../contexts/AuthContext';
 import { calculatePricingAreaM2 } from '../../src/lib/pricingArea';
+import { findFilmByName } from '../../src/lib/filmCatalog';
 import { selectAllOnFocus } from '../../src/lib/selectOnFocus';
 import { formatGarantiaMaoDeObraCurto } from '../../src/lib/filmWarranty';
 import {
@@ -194,7 +195,7 @@ const EditMeasurementModal: React.FC<EditMeasurementModalProps> = ({
     const alturaNum = parseFloat(String(localMeasurement.altura || '0').replace(',', '.'));
     const quantidadeNum = Number(localMeasurement.quantidade) || 0;
     const m2 = calculatePricingAreaM2(larguraNum, alturaNum, quantidadeNum);
-    const selectedFilm = films.find(f => f.nome === localMeasurement.pelicula);
+    const selectedFilm = findFilmByName(films, localMeasurement.pelicula);
 
     const pricePerM2 = useMemo(() => {
         if (selectedFilm) {

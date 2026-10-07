@@ -5,6 +5,7 @@ import { summarizeProposalExpenses } from '../lib/proposalExpenses';
 import { calculatePricingAreaM2, roundAreaForPricing } from '../lib/pricingArea';
 import { calculateProposalAdjustmentAmounts } from '../lib/proposalAdjustments';
 import { getCatalogFilmPrices, resolveFilmPrices } from '../lib/filmPriceOverrides';
+import { findFilmByName } from '../lib/filmCatalog';
 import {
     buildFilmCuttingMeasurementSignature,
     CUTTING_PLAN_VERSION,
@@ -49,7 +50,7 @@ export function useProposalTotals({
             const quantidade = parseInt(String(measurement.quantidade), 10) || 0;
             const rawM2 = largura * altura * quantidade;
             const m2 = calculatePricingAreaM2(largura, altura, quantidade);
-            const film = films.find(item => item.nome === measurement.pelicula);
+            const film = findFilmByName(films, measurement.pelicula);
             const prices = resolveFilmPrices(film, filmPriceOverrides, measurement.pelicula);
             const catalogPrices = getCatalogFilmPrices(film);
             const filmPricingMode = getFilmPricingMode(measurement.pelicula);
@@ -173,7 +174,7 @@ export function useProposalTotals({
         const seamsByMeasurement: { [measurementId: string]: MeasurementSeamSummary } = {};
 
         Object.entries(groupedByFilm).forEach(([filmName, filmMeasurements]) => {
-            const film = films.find(item => item.nome === filmName);
+            const film = findFilmByName(films, filmName);
             const prices = resolveFilmPrices(film, filmPriceOverrides, filmName);
             const cuttingSettings = normalizeFilmCuttingSettings(
                 generalDiscount.filmCuttingSettings?.[filmName]

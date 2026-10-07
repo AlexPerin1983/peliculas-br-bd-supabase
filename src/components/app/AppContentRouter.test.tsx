@@ -78,6 +78,8 @@ describe('AppContentRouter', () => {
     onCreateNewAgendamento: vi.fn(),
     onAddFilm: vi.fn(),
     onEditFilm: vi.fn(),
+    onDuplicateFilm: vi.fn(),
+    onToggleFilmPin: vi.fn(),
     onDeleteFilm: vi.fn(),
     onOpenGallery: vi.fn(),
     onOpenClientModal: vi.fn(),

@@ -17,10 +17,10 @@ export const stripMatchingMetadataFromCustomFields = (
 ): { [key: string]: string } => {
     if (!customFields) return {};
 
+    // Remove todo metadado interno ("__"), não só marca/aliases: o formulário
+    // não pode exibir nem editar, por exemplo, os nomes antigos da película.
     return Object.fromEntries(
-        Object.entries(customFields).filter(([key]) =>
-            key !== FILM_MATCH_BRAND_KEY && key !== FILM_MATCH_ALIASES_KEY
-        )
+        Object.entries(customFields).filter(([key]) => !key.startsWith('__'))
     );
 };
 

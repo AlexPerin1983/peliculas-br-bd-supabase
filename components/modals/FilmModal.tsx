@@ -1,4 +1,4 @@
-import React, { useState, useEffect, FormEvent } from 'react';
+import React, { useState, useEffect, useRef, FormEvent } from 'react';
 import { Film } from '../../types';
 import Modal from '../ui/Modal';
 import ActionButton from '../ui/ActionButton';
@@ -14,6 +14,8 @@ import {
 import { selectAllOnFocus } from '../../src/lib/selectOnFocus';
 import { GARANTIA_UNIDADES, GarantiaUnidade } from '../../src/lib/filmWarranty';
 import { normalizeFilmForPersistence, validateFilmForPersistence } from '../../src/lib/filmPersistence';
+import { findFilmNameConflict } from '../../src/lib/filmCatalog';
+import { processSampleImage, SAMPLE_IMAGE_RECOMPRESS_THRESHOLD } from '../../services/imageProcessing';
 
 interface FilmModalProps {
     isOpen: boolean;
@@ -21,8 +23,12 @@ interface FilmModalProps {
     onSave: (newFilmData: Film, originalFilm: Film | null) => Promise<void>;
     onDelete: (filmName: string) => void;
     film: Film | null;
+    /** Catálogo atual, para não salvar por cima de outra película com o mesmo nome. */
+    films?: Film[];
     initialName?: string;
     aiData?: Partial<Film>;
+    /** Cópia de uma película existente, aberta como película nova. */
+    duplicateData?: Film | null;
     onOpenAIModal: () => void;
 }
 
@@ -34,8 +40,10 @@ const FilmModal: React.FC<FilmModalProps> = ({
     onSave,
     onDelete,
     film,
+    films = [],
     initialName,
     aiData,
+    duplicateData,
     onOpenAIModal
 }) => {
     const [formData, setFormData] = useState<Film>({
@@ -60,61 +68,42 @@ const FilmModal: React.FC<FilmModalProps> = ({
     const [matchingAliases, setMatchingAliases] = useState('');
     const [infoModalConfig, setInfoModalConfig] = useState<{ isOpen: boolean; message: string }>({ isOpen: false, message: '' });
     const [isSaving, setIsSaving] = useState(false);
+    const [isProcessingImages, setIsProcessingImages] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [nameError, setNameError] = useState<string | null>(null);
+    const nameInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         if (!isOpen) return;
 
         setIsSaving(false);
         setError(null);
+        setNameError(null);
 
-        if (film) {
-            const baseCustomFields = stripMatchingMetadataFromCustomFields(film.customFields);
+        // Edição, cópia (Duplicar) ou dados extraídos pela IA preenchem o formulário.
+        const source: Partial<Film> | undefined = film ?? duplicateData ?? aiData;
+        if (source) {
+            const sourceFilm = source as Film;
+            const baseCustomFields = stripMatchingMetadataFromCustomFields(source.customFields);
             setFormData({
-                nome: film.nome || '',
-                preco: film.preco || 0,
-                precoMetroLinear: film.precoMetroLinear || 0,
-                precoVendaMetroLinear: film.precoVendaMetroLinear || 0,
-                maoDeObra: film.maoDeObra || 0,
-                garantiaFabricante: film.garantiaFabricante || 0,
-                garantiaMaoDeObra: film.garantiaMaoDeObra || 30,
-                garantiaMaoDeObraUnidade: film.garantiaMaoDeObraUnidade || 'dias',
-                uv: film.uv || 0,
-                ir: film.ir || 0,
-                vtl: film.vtl || 0,
-                espessura: film.espessura || 0,
-                tser: film.tser || 0,
-                imagens: film.imagens || [],
+                nome: source.nome || initialName || '',
+                preco: Number(source.preco) || 0,
+                precoMetroLinear: Number(source.precoMetroLinear) || 0,
+                precoVendaMetroLinear: Number(source.precoVendaMetroLinear) || 0,
+                maoDeObra: Number(source.maoDeObra) || 0,
+                garantiaFabricante: Number(source.garantiaFabricante) || 0,
+                garantiaMaoDeObra: Number(source.garantiaMaoDeObra) || 30,
+                garantiaMaoDeObraUnidade: source.garantiaMaoDeObraUnidade || 'dias',
+                uv: Number(source.uv) || 0,
+                ir: Number(source.ir) || 0,
+                vtl: Number(source.vtl) || 0,
+                espessura: Number(source.espessura) || 0,
+                tser: Number(source.tser) || 0,
+                imagens: source.imagens || [],
                 customFields: baseCustomFields,
             });
-            setMatchingBrand(getFilmMatchingBrand(film));
-            setMatchingAliases(getFilmMatchingAliases(film).join(', '));
-            setCustomFields(Object.entries(baseCustomFields).map(([key, value]) => ({ key, value })));
-            return;
-        }
-
-        if (aiData) {
-            const aiFilm = aiData as Film;
-            const baseCustomFields = stripMatchingMetadataFromCustomFields(aiData.customFields);
-            setFormData({
-                nome: aiData.nome || initialName || '',
-                preco: Number(aiData.preco) || 0,
-                precoMetroLinear: Number(aiData.precoMetroLinear) || 0,
-                precoVendaMetroLinear: Number(aiData.precoVendaMetroLinear) || 0,
-                maoDeObra: Number(aiData.maoDeObra) || 0,
-                garantiaFabricante: Number(aiData.garantiaFabricante) || 0,
-                garantiaMaoDeObra: Number(aiData.garantiaMaoDeObra) || 30,
-                garantiaMaoDeObraUnidade: (aiData as Film).garantiaMaoDeObraUnidade || 'dias',
-                uv: Number(aiData.uv) || 0,
-                ir: Number(aiData.ir) || 0,
-                vtl: Number(aiData.vtl) || 0,
-                espessura: Number(aiData.espessura) || 0,
-                tser: Number(aiData.tser) || 0,
-                imagens: aiData.imagens || [],
-                customFields: baseCustomFields,
-            });
-            setMatchingBrand(getFilmMatchingBrand(aiFilm));
-            setMatchingAliases(getFilmMatchingAliases(aiFilm).join(', '));
+            setMatchingBrand(getFilmMatchingBrand(sourceFilm));
+            setMatchingAliases(getFilmMatchingAliases(sourceFilm).join(', '));
             setCustomFields(Object.entries(baseCustomFields).map(([key, value]) => ({ key, value })));
             return;
         }
@@ -139,7 +128,7 @@ const FilmModal: React.FC<FilmModalProps> = ({
         setMatchingBrand('');
         setMatchingAliases('');
         setCustomFields([]);
-    }, [film, isOpen, initialName, aiData]);
+    }, [film, isOpen, initialName, aiData, duplicateData]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { id, value } = e.target;
@@ -158,39 +147,34 @@ const FilmModal: React.FC<FilmModalProps> = ({
         selectAllOnFocus(e);
     };
 
-    const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
         if (!files) return;
 
         const currentImagesCount = formData.imagens?.length || 0;
         const filesToProcess = Array.from(files).slice(0, MAX_IMAGES - currentImagesCount);
+        e.target.value = '';
 
         if (filesToProcess.length === 0 && currentImagesCount >= MAX_IMAGES) {
             setInfoModalConfig({ isOpen: true, message: `Você já atingiu o limite de ${MAX_IMAGES} imagens.` });
             return;
         }
 
-        const newImages: string[] = [];
-        let filesProcessed = 0;
-
-        filesToProcess.forEach((file: File) => {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                const base64String = reader.result as string;
-                newImages.push(base64String);
-                filesProcessed++;
-
-                if (filesProcessed === filesToProcess.length) {
-                    setFormData(prev => ({
-                        ...prev,
-                        imagens: [...(prev.imagens || []), ...newImages]
-                    }));
-                }
-            };
-            reader.readAsDataURL(file);
-        });
-
-        e.target.value = '';
+        setIsProcessingImages(true);
+        try {
+            const newImages = await Promise.all(filesToProcess.map((file: File) => processSampleImage(file)));
+            setFormData(prev => ({
+                ...prev,
+                imagens: [...(prev.imagens || []), ...newImages].slice(0, MAX_IMAGES)
+            }));
+        } catch (err) {
+            setInfoModalConfig({
+                isOpen: true,
+                message: err instanceof Error ? err.message : 'Não foi possível adicionar a imagem.'
+            });
+        } finally {
+            setIsProcessingImages(false);
+        }
     };
 
     const handleRemoveImage = (indexToRemove: number) => {
@@ -216,7 +200,21 @@ const FilmModal: React.FC<FilmModalProps> = ({
 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
-        if (isSaving) return;
+        if (isSaving || isProcessingImages) return;
+
+        // Nome de outra película (atual ou antigo) sobrescreveria a outra ou
+        // tomaria as medidas antigas dela (o nome é a chave).
+        const nameConflict = findFilmNameConflict(formData.nome, films, film?.nome);
+        if (nameConflict) {
+            const typedName = formData.nome.trim();
+            // Aviso junto do campo: o rodapé do formulário fica fora da tela no
+            // celular. Só rola até ele; focar limparia o campo (selectAllOnFocus).
+            setNameError(nameConflict.nome.trim().toLocaleLowerCase('pt-BR') === typedName.toLocaleLowerCase('pt-BR')
+                ? `Já existe uma película chamada "${typedName}". Use outro nome.`
+                : `"${typedName}" é o nome antigo da película "${nameConflict.nome}" e ainda aparece em orçamentos dela. Use outro nome.`);
+            nameInputRef.current?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+            return;
+        }
 
         const customFieldsObject = customFields.reduce((acc, field) => {
             if (field.key.trim()) {
@@ -241,6 +239,12 @@ const FilmModal: React.FC<FilmModalProps> = ({
                 setIsSaving(false);
                 return;
             }
+            // Fotos antigas, salvas antes da compressão, encolhem na próxima edição.
+            candidate.imagens = await Promise.all((candidate.imagens || []).map(image =>
+                image.length > SAMPLE_IMAGE_RECOMPRESS_THRESHOLD
+                    ? processSampleImage(image).catch(() => image)
+                    : image
+            ));
             await onSave(normalizeFilmForPersistence(candidate), film);
         } catch (err: any) {
             setError(err.message || 'Erro ao salvar película. Tente novamente.');
@@ -265,13 +269,13 @@ const FilmModal: React.FC<FilmModalProps> = ({
             <ActionButton
                 type="submit"
                 form="filmForm"
-                disabled={isSaving}
+                disabled={isSaving || isProcessingImages}
                 loading={isSaving}
                 loadingText="Salvando..."
                 variant="primary"
                 size="sm"
             >
-                {film ? 'Salvar Alteracoes' : 'Adicionar Pelicula'}
+                {film ? 'Salvar alterações' : 'Adicionar película'}
             </ActionButton>
         </>
     );
@@ -282,15 +286,15 @@ const FilmModal: React.FC<FilmModalProps> = ({
     const modalTitle = (
         <div className="flex justify-between items-center w-full">
             <h2 className="text-xl font-semibold text-slate-800 dark:text-white">
-                {film ? 'Editar Pelicula' : (aiData ? 'Confirmar Dados da IA' : 'Nova Pelicula')}
+                {film ? 'Editar película' : duplicateData ? 'Duplicar película' : aiData ? 'Confirmar dados da IA' : 'Nova película'}
             </h2>
-            {!film && !aiData && (
+            {!film && !aiData && !duplicateData && (
                 <Tooltip text="Preencher com IA">
                     <button
                         type="button"
                         onClick={(e) => { e.preventDefault(); onOpenAIModal(); }}
                         className="px-3 py-1.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors flex items-center gap-2 text-sm"
-                        aria-label="Preencher formulario com Inteligencia Artificial"
+                        aria-label="Preencher formulário com Inteligência Artificial"
                     >
                         <i className="fas fa-robot"></i>
                         <span className="hidden sm:inline">com IA</span>
@@ -305,16 +309,29 @@ const FilmModal: React.FC<FilmModalProps> = ({
             <form id="filmForm" onSubmit={handleSubmit} className="space-y-4">
                 <fieldset disabled={isSaving} className="space-y-4">
                     <div className="p-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg space-y-4">
-                        <Input
-                            id="nome"
-                            label="Nome da Pelicula"
-                            type="text"
-                            value={formData.nome}
-                            onChange={handleChange}
-                            onFocus={handleFocus}
-                            required
-                            placeholder="Ex: G5 Profissional"
-                        />
+                        <div>
+                            <Input
+                                ref={nameInputRef}
+                                id="nome"
+                                label="Nome da película"
+                                type="text"
+                                value={formData.nome}
+                                onChange={(e) => {
+                                    setNameError(null);
+                                    handleChange(e);
+                                }}
+                                onFocus={handleFocus}
+                                required
+                                placeholder="Ex: G5 Profissional"
+                                aria-invalid={nameError ? true : undefined}
+                                aria-describedby={nameError ? 'nome-erro' : undefined}
+                            />
+                            {nameError && (
+                                <p id="nome-erro" role="alert" className="mt-1.5 text-sm font-medium text-red-600 dark:text-red-400">
+                                    {nameError}
+                                </p>
+                            )}
+                        </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <Input
@@ -418,26 +435,26 @@ const FilmModal: React.FC<FilmModalProps> = ({
                     </div>
 
                     <div className="p-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg">
-                        <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Especificacoes Tecnicas</h4>
+                        <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Especificações técnicas</h4>
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                            <Input id="uv" label="Protecao UV (%)" type="number" value={formData.uv} onChange={handleChange} onFocus={handleFocus} min="0" max="100" step="0.1" />
-                            <Input id="ir" label="Rejeicao IR (%)" type="number" value={formData.ir} onChange={handleChange} onFocus={handleFocus} min="0" max="100" step="0.1" />
-                            <Input id="vtl" label="VLT (%)" type="number" value={formData.vtl} onChange={handleChange} onFocus={handleFocus} min="0" max="100" step="0.1" />
-                            <Input id="espessura" label="Espessura (micras)" type="number" value={formData.espessura} onChange={handleChange} onFocus={handleFocus} min="0" />
-                            <Input id="tser" label="TSER (%)" type="number" value={formData.tser} onChange={handleChange} onFocus={handleFocus} min="0" max="100" step="0.1" />
+                            <Input id="uv" label="Proteção UV (%)" type="number" value={formData.uv} onChange={handleChange} onFocus={handleFocus} min="0" max="100" step="any" />
+                            <Input id="ir" label="Rejeição IR (%)" type="number" value={formData.ir} onChange={handleChange} onFocus={handleFocus} min="0" max="100" step="any" />
+                            <Input id="vtl" label="VTL (%)" type="number" value={formData.vtl} onChange={handleChange} onFocus={handleFocus} min="0" max="100" step="any" />
+                            <Input id="espessura" label="Espessura (micras)" type="number" value={formData.espessura} onChange={handleChange} onFocus={handleFocus} min="0" step="any" />
+                            <Input id="tser" label="TSER (%)" type="number" value={formData.tser} onChange={handleChange} onFocus={handleFocus} min="0" max="100" step="any" />
                             <div className="hidden sm:block"></div>
                         </div>
 
                         <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-700">
                             <div className="flex items-center justify-between mb-3">
-                                <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Campos Personalizados</h4>
+                                <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Campos personalizados</h4>
                                 <button
                                     type="button"
                                     onClick={addCustomField}
                                     className="flex items-center gap-2 text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
                                 >
                                     <i className="fas fa-plus" />
-                                    Adicionar Campo
+                                    Adicionar campo
                                 </button>
                             </div>
                             {customFields.length > 0 && (
@@ -446,7 +463,7 @@ const FilmModal: React.FC<FilmModalProps> = ({
                                         <div key={index} className="grid grid-cols-[1fr_1fr_auto] gap-3 items-end">
                                             <Input
                                                 id={`custom-key-${index}`}
-                                                label={index === 0 ? 'Nome do Campo' : ''}
+                                                label={index === 0 ? 'Nome do campo' : ''}
                                                 placeholder="Ex: Garantia"
                                                 value={field.key}
                                                 onChange={(e) => handleCustomFieldChange(index, 'key', e.target.value)}
@@ -478,7 +495,7 @@ const FilmModal: React.FC<FilmModalProps> = ({
 
                     <div className="pt-4 mt-4 border-t border-slate-200 dark:border-slate-700">
                         <h3 className="text-base font-semibold leading-6 text-slate-800 dark:text-slate-200 mb-2">
-                            Imagens de Amostra ({currentImages.length}/{MAX_IMAGES})
+                            Imagens de amostra ({currentImages.length}/{MAX_IMAGES})
                         </h3>
                         <div className="grid grid-cols-3 gap-3">
                             {currentImages.map((image, index) => (
@@ -501,16 +518,20 @@ const FilmModal: React.FC<FilmModalProps> = ({
                                         type="file"
                                         accept="image/*"
                                         onChange={handleImageChange}
+                                        disabled={isProcessingImages}
                                         className="sr-only"
                                         multiple
                                     />
                                     <label
                                         htmlFor="film-image-upload"
+                                        aria-busy={isProcessingImages}
                                         className="w-full h-full flex flex-col items-center justify-center rounded-lg border-2 border-dashed transition-colors cursor-pointer border-slate-300 dark:border-slate-600 hover:border-slate-400 dark:hover:border-slate-500 bg-slate-50 dark:bg-slate-800"
                                     >
-                                        <i className="fas fa-camera text-xl text-slate-400 dark:text-slate-500"></i>
+                                        <i className={`fas ${isProcessingImages ? 'fa-spinner fa-spin' : 'fa-camera'} text-xl text-slate-400 dark:text-slate-500`}></i>
                                         <span className="text-xs text-slate-600 dark:text-slate-400 mt-1 text-center px-1">
-                                            Adicionar ({MAX_IMAGES - currentImages.length} restantes)
+                                            {isProcessingImages
+                                                ? 'Otimizando foto…'
+                                                : `Adicionar (${MAX_IMAGES - currentImages.length} restantes)`}
                                         </span>
                                     </label>
                                 </div>

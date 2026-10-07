@@ -486,6 +486,7 @@ const App: React.FC = () => {
     const [aiClientData, setAiClientData] = useState<Partial<Client> | undefined>(undefined);
     const [isAIFilmModalOpen, setIsAIFilmModalOpen] = useState(false);
     const [aiFilmData, setAiFilmData] = useState<Partial<Film> | undefined>(undefined);
+    const [duplicatingFilm, setDuplicatingFilm] = useState<Film | null>(null);
     const [isProcessingAI, setIsProcessingAI] = useState(false);
     const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
     const [apiKeyModalProvider, setApiKeyModalProvider] = useState<'gemini' | 'openai'>('gemini');
@@ -1506,6 +1507,7 @@ const App: React.FC = () => {
 
     const {
         handleOpenFilmModal,
+        handleDuplicateFilm,
         handleEditFilmFromSelection,
         handleSaveFilm,
         handleToggleFilmPin,
@@ -1531,6 +1533,8 @@ const App: React.FC = () => {
         setFilmToDeleteName,
         setFilmToApplyToAll,
         setNewFilmName,
+        setAiFilmData,
+        setDuplicatingFilm,
         setEditingMeasurement,
         loadFilms,
         handleMeasurementsChange,
@@ -3193,6 +3197,8 @@ Use somente o JSON definido e não inclua explicações fora dele.`;
             onScheduleClientByVoice={handleOpenAIScheduleForClient}
             onAddFilm={() => handleOpenFilmModal(null)}
             onEditFilm={handleOpenFilmModal}
+            onDuplicateFilm={handleDuplicateFilm}
+            onToggleFilmPin={handleToggleFilmPin}
             onDeleteFilm={handleRequestDeleteFilm}
             onOpenGallery={handleOpenGallery}
             onOpenClientModal={handleOpenClientModal}
@@ -3275,11 +3281,13 @@ Use somente o JSON definido e não inclua explicações fora dele.`;
         setEditingMeasurementIdForFilm,
         setNewFilmName,
         setAiFilmData,
+        setDuplicatingFilm,
         handleSaveFilm,
         handleDeleteFilm,
         editingFilm,
         newFilmName,
         aiFilmData,
+        duplicatingFilm,
         setIsAIFilmModalOpen,
         handleOpenAIFilmModal,
         isFilmSelectionModalOpen,

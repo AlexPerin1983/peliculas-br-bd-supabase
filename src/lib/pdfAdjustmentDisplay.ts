@@ -1,6 +1,7 @@
 import type { Film, FilmPriceOverrides, FilmPricingModes, Measurement, ProposalAdjustmentOperation, ProposalPricingMode, Totals } from '../../types';
 import { calculatePricingAreaM2 } from './pricingArea';
 import { resolveFilmPrices } from './filmPriceOverrides';
+import { findFilmByName } from './filmCatalog';
 import {
     calculateMeasurementPriceAdjustment,
     getMeasurementAdjustmentInputs,
@@ -111,7 +112,7 @@ export const buildPdfAdjustmentDisplay = ({
         const altura = parseDecimal(measurement.altura);
         const quantidade = parseInt(String(measurement.quantidade), 10) || 0;
         const m2 = calculatePricingAreaM2(largura, altura, quantidade);
-        const film = films.find(item => item.nome === measurement.pelicula);
+        const film = findFilmByName(films, measurement.pelicula);
         const linear = isLinearFilm(measurement.pelicula);
         // No modo metro linear o preço por linha é distribuído da venda da película (abaixo).
         const basePrice = linear ? 0 : getPricePerM2(film, measurement.pelicula, pricingMode, filmPriceOverrides) * m2;
