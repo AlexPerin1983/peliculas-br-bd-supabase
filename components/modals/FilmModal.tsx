@@ -14,7 +14,7 @@ import {
 import { selectAllOnFocus } from '../../src/lib/selectOnFocus';
 import { GARANTIA_UNIDADES, GarantiaUnidade } from '../../src/lib/filmWarranty';
 import { normalizeFilmForPersistence, validateFilmForPersistence } from '../../src/lib/filmPersistence';
-import { isFilmNameTaken } from '../../src/lib/filmCatalog';
+import { findFilmNameConflict } from '../../src/lib/filmCatalog';
 import { processSampleImage, SAMPLE_IMAGE_RECOMPRESS_THRESHOLD } from '../../services/imageProcessing';
 
 interface FilmModalProps {
@@ -202,11 +202,16 @@ const FilmModal: React.FC<FilmModalProps> = ({
         e.preventDefault();
         if (isSaving || isProcessingImages) return;
 
-        // Salvar com o nome de outra película a sobrescreveria (o nome é a chave).
-        if (isFilmNameTaken(formData.nome, films, film?.nome)) {
+        // Nome de outra película (atual ou antigo) sobrescreveria a outra ou
+        // tomaria as medidas antigas dela (o nome é a chave).
+        const nameConflict = findFilmNameConflict(formData.nome, films, film?.nome);
+        if (nameConflict) {
+            const typedName = formData.nome.trim();
             // Aviso junto do campo: o rodapé do formulário fica fora da tela no
             // celular. Só rola até ele; focar limparia o campo (selectAllOnFocus).
-            setNameError(`Já existe uma película chamada "${formData.nome.trim()}". Use outro nome.`);
+            setNameError(nameConflict.nome.trim().toLocaleLowerCase('pt-BR') === typedName.toLocaleLowerCase('pt-BR')
+                ? `Já existe uma película chamada "${typedName}". Use outro nome.`
+                : `"${typedName}" é o nome antigo da película "${nameConflict.nome}" e ainda aparece em orçamentos dela. Use outro nome.`);
             nameInputRef.current?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
             return;
         }

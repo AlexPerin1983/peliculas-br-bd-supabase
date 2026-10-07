@@ -62,14 +62,28 @@ export const prepareFilmForSave = (film: Film, originalFilm: Film | null): Film 
 
 const normalizeFilmName = (name: string) => name.trim().toLocaleLowerCase('pt-BR');
 
-/** Nome já usado por OUTRA película (salvar com ele sobrescreveria a outra). */
-export const isFilmNameTaken = (name: string, films: Film[], currentName?: string | null): boolean => {
+/**
+ * Outra película que já usa o nome, atual ou antigo. Nome atual: salvar
+ * sobrescreveria a outra. Nome antigo: medidas e propostas gravadas com ele
+ * passariam a achar a película nova. A própria película pode voltar a um
+ * nome antigo dela.
+ */
+export const findFilmNameConflict = (name: string, films: Film[], currentName?: string | null): Film | undefined => {
     const normalized = normalizeFilmName(name);
-    if (!normalized) return false;
-    if (currentName && normalizeFilmName(currentName) === normalized) return false;
+    if (!normalized) return undefined;
+    const current = currentName ? normalizeFilmName(currentName) : null;
+    if (current === normalized) return undefined;
 
-    return films.some(film => normalizeFilmName(film.nome) === normalized);
+    return films.find(film => {
+        const filmName = normalizeFilmName(film.nome);
+        if (filmName === current) return false;
+        return filmName === normalized
+            || getFilmPreviousNames(film).some(previous => normalizeFilmName(previous) === normalized);
+    });
 };
+
+export const isFilmNameTaken = (name: string, films: Film[], currentName?: string | null): boolean =>
+    !!findFilmNameConflict(name, films, currentName);
 
 export const getDuplicateFilmName = (name: string, films: Film[]): string => {
     const base = `${name.trim()} (cópia)`;
