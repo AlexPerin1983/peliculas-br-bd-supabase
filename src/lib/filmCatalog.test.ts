@@ -3,6 +3,7 @@ import type { Film } from '../../types';
 import {
     buildFilmDuplicate,
     findFilmByName,
+    findFilmNameConflict,
     FILM_PREVIOUS_NAMES_KEY,
     getFilmPreviousNames,
     getVisibleCustomFields,
@@ -78,6 +79,17 @@ describe('catálogo de películas', () => {
         expect(isFilmNameTaken(' g20 ', films)).toBe(true);
         expect(isFilmNameTaken('G35', films)).toBe(false);
         expect(isFilmNameTaken('g5', films, 'G5')).toBe(false);
+    });
+
+    it('reserva o nome antigo para a película renomeada, que pode voltar a ele', () => {
+        const renamed = prepareFilmForSave(film({ nome: 'G5 Nano' }), film({ nome: 'G5' }));
+        const films = [renamed, film({ nome: 'G20' })];
+
+        // Outra película (nova, duplicada ou importada) não pode tomar "G5".
+        expect(findFilmNameConflict(' g5 ', films)?.nome).toBe('G5 Nano');
+        expect(isFilmNameTaken('G5', films, 'G20')).toBe(true);
+        // A própria G5 Nano pode voltar a se chamar G5.
+        expect(isFilmNameTaken('G5', films, 'G5 Nano')).toBe(false);
     });
 
     it('duplica como película nova, com nome livre e sem fixar', () => {
