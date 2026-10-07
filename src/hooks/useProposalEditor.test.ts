@@ -175,12 +175,16 @@ describe('useProposalEditor', () => {
 
     await act(async () => {});
 
+    let newOptionId: number | undefined;
     act(() => {
-      result.current.duplicateActiveOption('Blackout');
+      newOptionId = result.current.duplicateActiveOption('Blackout', 'Blackout');
     });
 
     expect(result.current.proposalOptions).toHaveLength(2);
     const duplicated = result.current.activeOption!;
+    // Devolve a nova opção (a ativa) com o nome pedido.
+    expect(newOptionId).toBe(duplicated.id);
+    expect(duplicated.name).toBe('Blackout');
     expect(duplicated.measurements).toHaveLength(2);
     expect(duplicated.measurements.every(m => m.pelicula === 'Blackout')).toBe(true);
     // A opcao de origem permanece intacta.

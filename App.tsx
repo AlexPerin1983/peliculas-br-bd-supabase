@@ -83,6 +83,7 @@ import {
     parseFilmExtractionResponse,
     parseFilmTableExtractionResponse
 } from './src/lib/aiFilmExtraction';
+import { getUniqueOptionName } from './src/lib/proposalOptionNames';
 import {
     DEFAULT_MENU_ORDER,
     loadMenuOrder,
@@ -477,6 +478,11 @@ const App: React.FC = () => {
     const [isApplyFilmToAllModalOpen, setIsApplyFilmToAllModalOpen] = useState(false);
     // Seletor de pelicula aberto a partir do modal "Duplicar Opcao" (quando nao ha favoritas).
     const [isDuplicateFilmSelectorOpen, setIsDuplicateFilmSelectorOpen] = useState(false);
+    // Duplicar a partir do "Orçamento gerado": a nova opção já sai em PDF e o
+    // modal oferece mandar as opções juntas (as de origem + a nova).
+    const duplicateFromPdfRef = useRef<'awaiting-film' | null>(null);
+    const [pendingPdfOptionId, setPendingPdfOptionId] = useState<number | null>(null);
+    const [duplicateSourcePdfIds, setDuplicateSourcePdfIds] = useState<number[]>([]);
     const [newFilmName, setNewFilmName] = useState<string>('');
     const [filmToApplyToAll, setFilmToApplyToAll] = useState<string | null>(null);
     const [editingMeasurementIdForFilm, setEditingMeasurementIdForFilm] = useState<number | null>(null);
@@ -1217,9 +1223,27 @@ const App: React.FC = () => {
     }, []);
 
     const handleSelectFilmForDuplicate = useCallback((filmName: string) => {
-        duplicateActiveOption(filmName);
+        if (duplicateFromPdfRef.current === 'awaiting-film') {
+            // Veio do "Orçamento gerado": a opção leva o nome da película e o PDF sai em seguida.
+            duplicateFromPdfRef.current = null;
+            const optionName = getUniqueOptionName(filmName, proposalOptions.map(option => option.name));
+            const newOptionId = duplicateActiveOption(filmName, optionName);
+            if (newOptionId !== undefined) setPendingPdfOptionId(newOptionId);
+        } else {
+            duplicateActiveOption(filmName);
+        }
         setIsDuplicateFilmSelectorOpen(false);
-    }, [duplicateActiveOption]);
+    }, [duplicateActiveOption, proposalOptions]);
+
+    const handleCloseDuplicateFilmSelector = useCallback(() => {
+        setIsDuplicateFilmSelectorOpen(false);
+        // Desistiu de escolher a película: volta para o "Orçamento gerado".
+        if (duplicateFromPdfRef.current === 'awaiting-film') {
+            duplicateFromPdfRef.current = null;
+            setDuplicateSourcePdfIds([]);
+            setPdfGenerationStatus('success');
+        }
+    }, []);
 
     const handleRequestDeleteProposalOption = useCallback((optionId: number) => {
         setProposalOptionToDeleteId(optionId);
@@ -1517,8 +1541,53 @@ const App: React.FC = () => {
     });
 
     const handleGeneratePdf = useCallback(async () => {
+        setDuplicateSourcePdfIds([]);
         await handleGeneratePdfWithSaveCheck(isDirty);
     }, [handleGeneratePdfWithSaveCheck, isDirty]);
+
+    // "Duplicar com outra película" no Orçamento gerado: guarda as opções que
+    // já estavam prontas, fecha o modal e abre o seletor de película.
+    const canDuplicateGeneratedPdf = !!latestGeneratedProposal
+        && latestGeneratedProposal.client.id === selectedClientId
+        && latestGeneratedProposal.pdf.proposalOptionId === activeOption?.id;
+
+    const handleDuplicateFromGeneratedPdf = useCallback(() => {
+        const latestPdfId = latestGeneratedProposal?.pdf.id;
+        if (latestPdfId == null) return;
+        setDuplicateSourcePdfIds(current => current.includes(latestPdfId) ? current : [...current, latestPdfId]);
+        duplicateFromPdfRef.current = 'awaiting-film';
+        setPdfGenerationStatus('idle');
+        setIsDuplicateFilmSelectorOpen(true);
+    }, [latestGeneratedProposal]);
+
+    // A nova opção já é a ativa (medidas e totais dela nesta renderização):
+    // salva e gera o PDF dela.
+    useEffect(() => {
+        if (pendingPdfOptionId === null || activeOption?.id !== pendingPdfOptionId) return;
+        setPendingPdfOptionId(null);
+        void handleConfirmSaveBeforePdf();
+    }, [pendingPdfOptionId, activeOption?.id, handleConfirmSaveBeforePdf]);
+
+    const handleClosePdfStatusModal = useCallback(() => {
+        setPdfGenerationStatus('idle');
+        setDuplicateSourcePdfIds([]);
+    }, []);
+
+    // Propostas do cliente para mandar juntas depois de duplicar (mais recentes primeiro).
+    const generatedClientProposals = useMemo(() => {
+        const clientId = latestGeneratedProposal?.client.id;
+        if (clientId == null || duplicateSourcePdfIds.length === 0) return [];
+        return allSavedPdfs
+            .filter(pdf => pdf.clienteId === clientId && pdf.id != null)
+            .sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime())
+            .slice(0, 6);
+    }, [allSavedPdfs, duplicateSourcePdfIds.length, latestGeneratedProposal]);
+
+    const generatedPreselectedPdfIds = useMemo(() => {
+        const latestPdfId = latestGeneratedProposal?.pdf.id;
+        if (latestPdfId == null || duplicateSourcePdfIds.length === 0 || duplicateSourcePdfIds.includes(latestPdfId)) return [];
+        return [...duplicateSourcePdfIds, latestPdfId];
+    }, [duplicateSourcePdfIds, latestGeneratedProposal]);
 
     const {
         handleOpenFilmModal,
@@ -1558,11 +1627,7 @@ const App: React.FC = () => {
         handleShowInfo
     });
 
-    const handleClosePdfStatusModal = useCallback(() => {
-        setPdfGenerationStatus('idle');
-    }, []);
-
-    const blobToBase64 = (blob: Blob): Promise<{ mimeType: string, data: string }> => {
+    const blobToBase64 =(blob: Blob): Promise<{ mimeType: string, data: string }> => {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onloadend = () => {
@@ -3405,6 +3470,9 @@ Use somente o JSON definido e não inclua explicações fora dele.`;
         canShareGeneratedPdf,
         canPreviewGeneratedPdf,
         latestGeneratedProposal,
+        handleDuplicateFromGeneratedPdf: canDuplicateGeneratedPdf ? handleDuplicateFromGeneratedPdf : undefined,
+        generatedClientProposals,
+        generatedPreselectedPdfIds,
         isProcessingAI,
         isAIQuickProposalModalOpen,
         setIsAIQuickProposalModalOpen,
@@ -3448,6 +3516,7 @@ Use somente o JSON definido e não inclua explicações fora dele.`;
         handleOpenDuplicateFilmSelector,
         isDuplicateFilmSelectorOpen,
         setIsDuplicateFilmSelectorOpen,
+        handleCloseDuplicateFilmSelector,
         handleSelectFilmForDuplicate,
         measurementToDeleteId,
         setMeasurementToDeleteId,

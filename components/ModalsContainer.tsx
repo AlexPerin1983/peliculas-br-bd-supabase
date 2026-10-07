@@ -120,6 +120,9 @@ interface ModalsContainerProps {
     canShareGeneratedPdf: boolean;
     canPreviewGeneratedPdf: boolean;
     latestGeneratedProposal: { client: Client; pdf: SavedPDF } | null;
+    handleDuplicateFromGeneratedPdf?: () => void;
+    generatedClientProposals: SavedPDF[];
+    generatedPreselectedPdfIds: number[];
 
     // Edit Measurement Modal
     editingMeasurement: UIMeasurement | null;
@@ -220,6 +223,7 @@ interface ModalsContainerProps {
     handleOpenDuplicateFilmSelector: () => void;
     isDuplicateFilmSelectorOpen: boolean;
     setIsDuplicateFilmSelectorOpen: (value: boolean) => void;
+    handleCloseDuplicateFilmSelector: () => void;
     handleSelectFilmForDuplicate: (filmName: string) => void;
     activeOption: ProposalOption | null;
 
@@ -420,7 +424,7 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
             {props.isDuplicateFilmSelectorOpen && (
                 <FilmSelectionModal
                     isOpen={props.isDuplicateFilmSelectorOpen}
-                    onClose={() => props.setIsDuplicateFilmSelectorOpen(false)}
+                    onClose={props.handleCloseDuplicateFilmSelector}
                     films={props.films}
                     onSelect={(filmName) => props.handleSelectFilmForDuplicate(filmName)}
                     onAddNewFilm={props.handleAddNewFilm}
@@ -519,6 +523,9 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
                     canShare={props.canShareGeneratedPdf}
                     canPreview={props.canPreviewGeneratedPdf}
                     proposalForLink={props.latestGeneratedProposal}
+                    onDuplicateWithFilm={props.handleDuplicateFromGeneratedPdf}
+                    clientProposals={props.generatedClientProposals}
+                    preselectedPdfIds={props.generatedPreselectedPdfIds}
                 />
             )}
 
