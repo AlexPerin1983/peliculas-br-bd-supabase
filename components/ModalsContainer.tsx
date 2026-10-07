@@ -13,6 +13,9 @@ const AIMeasurementModal = lazy(() => import('./modals/AIMeasurementModal'));
 const AIClientModal = lazy(() => import('./modals/AIClientModal'));
 const AIFilmModal = lazy(() => import('./modals/AIFilmModal'));
 const AIFilmTableModal = lazy(() => import('./modals/AIFilmTableModal'));
+const AIOptionVariationModal = lazy(() => import('./modals/AIOptionVariationModal'));
+const OptionVariationReviewModal = lazy(() => import('./modals/OptionVariationReviewModal'));
+import type { OptionVariationPlan, OptionVariationRow } from '../src/lib/aiOptionVariation';
 const FilmImportReviewModal = lazy(() => import('./modals/FilmImportReviewModal'));
 const AIQuickProposalModal = lazy(() => import('./modals/AIQuickProposalModal'));
 const AIScheduleModal = lazy(() => import('./modals/AIScheduleModal'));
@@ -123,6 +126,12 @@ interface ModalsContainerProps {
     handleDuplicateFromGeneratedPdf?: () => void;
     generatedClientProposals: SavedPDF[];
     generatedPreselectedPdfIds: number[];
+    handleOpenAIVariationFromGeneratedPdf?: () => void;
+    isAIVariationModalOpen: boolean;
+    handleCancelAIVariation: () => void;
+    handleProcessAIVariationInput: (input: AIInput) => Promise<void>;
+    optionVariationPlan: OptionVariationPlan | null;
+    handleConfirmAIVariation: (rows: OptionVariationRow[], optionName: string) => void;
 
     // Edit Measurement Modal
     editingMeasurement: UIMeasurement | null;
@@ -524,8 +533,28 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
                     canPreview={props.canPreviewGeneratedPdf}
                     proposalForLink={props.latestGeneratedProposal}
                     onDuplicateWithFilm={props.handleDuplicateFromGeneratedPdf}
+                    onDuplicateWithAI={props.handleOpenAIVariationFromGeneratedPdf}
                     clientProposals={props.generatedClientProposals}
                     preselectedPdfIds={props.generatedPreselectedPdfIds}
+                />
+            )}
+
+            {/* Duplicar com IA: pedido e conferência das trocas */}
+            {props.isAIVariationModalOpen && (
+                <AIOptionVariationModal
+                    isOpen={props.isAIVariationModalOpen}
+                    onClose={props.handleCancelAIVariation}
+                    onProcess={props.handleProcessAIVariationInput}
+                    isProcessing={props.isProcessingAI}
+                    provider={props.userInfo?.aiConfig?.provider || 'gemini'}
+                />
+            )}
+            {props.optionVariationPlan && (
+                <OptionVariationReviewModal
+                    plan={props.optionVariationPlan}
+                    films={props.films}
+                    onCancel={props.handleCancelAIVariation}
+                    onConfirm={props.handleConfirmAIVariation}
                 />
             )}
 

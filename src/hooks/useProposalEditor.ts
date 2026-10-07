@@ -296,21 +296,33 @@ export function useProposalEditor({
 
     // filmName opcional: ao duplicar, ja aplica a mesma pelicula em todos os grupos
     // (acelera criar variacoes de orcamento trocando so o material).
-    /** Devolve o id da nova opção (que passa a ser a ativa). */
-    const duplicateActiveOption = useCallback((filmName?: string, optionName?: string): number | undefined => {
+    /**
+     * Devolve o id da nova opção (que passa a ser a ativa). filmName troca a
+     * película de todos os grupos; filmReplacements troca só as películas
+     * citadas ({ atual: nova }), como no "Duplicar com IA".
+     */
+    const duplicateActiveOption = useCallback((
+        filmName?: string,
+        optionName?: string,
+        filmReplacements?: Record<string, string>
+    ): number | undefined => {
         if (!activeOption) {
             return undefined;
         }
 
+        const newFilmFor = (current: string) => filmName || filmReplacements?.[current];
         const newOption: ProposalOption = {
             id: Date.now(),
             name: optionName || `Opcao ${proposalOptions.length + 1}`,
-            measurements: activeOption.measurements.map((measurement, index) => ({
-                ...measurement,
-                id: Date.now() + index,
-                isNew: false,
-                ...(filmName ? { pelicula: filmName, aiFilmSuggestion: undefined } : {})
-            })),
+            measurements: activeOption.measurements.map((measurement, index) => {
+                const newFilm = newFilmFor(measurement.pelicula);
+                return {
+                    ...measurement,
+                    id: Date.now() + index,
+                    isNew: false,
+                    ...(newFilm ? { pelicula: newFilm, aiFilmSuggestion: undefined } : {})
+                };
+            }),
             generalDiscount: {
                 ...activeOption.generalDiscount,
                 expenses: normalizeProposalExpenses(activeOption.generalDiscount.expenses)

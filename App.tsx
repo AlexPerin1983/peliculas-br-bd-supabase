@@ -85,6 +85,16 @@ import {
 } from './src/lib/aiFilmExtraction';
 import { getUniqueOptionName } from './src/lib/proposalOptionNames';
 import {
+    buildOptionVariationPrompt,
+    getFriendlyOptionVariationError,
+    OPTION_VARIATION_SCHEMA,
+    parseOptionVariationResponse,
+    resolveOptionVariation,
+    toFilmReplacements,
+    type OptionVariationPlan,
+    type OptionVariationRow
+} from './src/lib/aiOptionVariation';
+import {
     DEFAULT_MENU_ORDER,
     loadMenuOrder,
     resetMenuOrder,
@@ -480,7 +490,9 @@ const App: React.FC = () => {
     const [isDuplicateFilmSelectorOpen, setIsDuplicateFilmSelectorOpen] = useState(false);
     // Duplicar a partir do "Orçamento gerado": a nova opção já sai em PDF e o
     // modal oferece mandar as opções juntas (as de origem + a nova).
-    const duplicateFromPdfRef = useRef<'awaiting-film' | null>(null);
+    const duplicateFromPdfRef = useRef<'awaiting-film' | 'awaiting-ai' | null>(null);
+    const [isAIVariationModalOpen, setIsAIVariationModalOpen] = useState(false);
+    const [optionVariationPlan, setOptionVariationPlan] = useState<OptionVariationPlan | null>(null);
     const [pendingPdfOptionId, setPendingPdfOptionId] = useState<number | null>(null);
     const [duplicateSourcePdfIds, setDuplicateSourcePdfIds] = useState<number[]>([]);
     const [newFilmName, setNewFilmName] = useState<string>('');
@@ -2697,6 +2709,78 @@ Regras:
         setIsAIFilmTableModalOpen(true);
     }, [ensureAiReady]);
 
+    // "Duplicar com IA" no Orçamento gerado: pedido por voz/texto → trocas
+    // conferidas pelo instalador → nova opção com PDF (mesmo fluxo do duplicar).
+    const handleOpenAIVariationFromGeneratedPdf = useCallback(() => {
+        const latestPdfId = latestGeneratedProposal?.pdf.id;
+        if (latestPdfId == null || !ensureAiReady()) return;
+        setDuplicateSourcePdfIds(current => current.includes(latestPdfId) ? current : [...current, latestPdfId]);
+        duplicateFromPdfRef.current = 'awaiting-ai';
+        setPdfGenerationStatus('idle');
+        setIsAIVariationModalOpen(true);
+    }, [ensureAiReady, latestGeneratedProposal]);
+
+    const handleCancelAIVariation = useCallback(() => {
+        setIsAIVariationModalOpen(false);
+        setOptionVariationPlan(null);
+        // Desistiu: volta para o "Orçamento gerado".
+        if (duplicateFromPdfRef.current === 'awaiting-ai') {
+            duplicateFromPdfRef.current = null;
+            setDuplicateSourcePdfIds([]);
+            setPdfGenerationStatus('success');
+        }
+    }, []);
+
+    const handleProcessAIVariationInput = useCallback(async (input: AIInput) => {
+        const hasContent = (input.text && input.text.trim()) || (input.images && input.images.length > 0) || !!input.audio;
+        if (!hasContent) {
+            showError('Diga ou escreva o que muda na nova opção.');
+            return;
+        }
+        const currentFilms = (activeOption?.measurements || [])
+            .map(measurement => measurement.pelicula)
+            .filter((name, index, all): name is string => !!name && all.indexOf(name) === index);
+        if (currentFilms.length === 0) {
+            showError('A opção atual não tem película para trocar.');
+            return;
+        }
+
+        setIsProcessingAI(true);
+        try {
+            const model = createGeminiModel({
+                apiKey: userInfo?.aiConfig?.apiKey,
+                feature: 'film_extraction',
+                generationConfig: {
+                    responseMimeType: 'application/json',
+                    responseSchema: OPTION_VARIATION_SCHEMA
+                }
+            });
+            const prompt = buildOptionVariationPrompt(currentFilms, films.map(film => film.nome));
+            const result = await model.generateContent(await buildFilmAIParts(prompt, input));
+            const plan = resolveOptionVariation(parseOptionVariationResponse(result.response.text()), currentFilms, films);
+            setIsAIVariationModalOpen(false);
+            setOptionVariationPlan(plan);
+        } catch (error) {
+            console.error('Erro ao montar nova opção com IA:', error);
+            showError(getFriendlyOptionVariationError(error));
+        } finally {
+            setIsProcessingAI(false);
+        }
+    }, [activeOption, films, userInfo, showError]);
+
+    const handleConfirmAIVariation = useCallback((rows: OptionVariationRow[], optionName: string) => {
+        const replacements = toFilmReplacements(rows);
+        if (Object.keys(replacements).length === 0) return;
+        duplicateFromPdfRef.current = null;
+        setOptionVariationPlan(null);
+        const name = getUniqueOptionName(
+            optionName || Object.values(replacements).join(' + '),
+            proposalOptions.map(option => option.name)
+        );
+        const newOptionId = duplicateActiveOption(undefined, name, replacements);
+        if (newOptionId !== undefined) setPendingPdfOptionId(newOptionId);
+    }, [duplicateActiveOption, proposalOptions]);
+
     const handleQuickFabEstoqueAI = useCallback((tab: 'bobinas' | 'retalhos') => {
         if (!ensureAiReady()) return;
         setInitialEstoqueAction({ action: 'ai', tab });
@@ -3471,6 +3555,12 @@ Use somente o JSON definido e não inclua explicações fora dele.`;
         canPreviewGeneratedPdf,
         latestGeneratedProposal,
         handleDuplicateFromGeneratedPdf: canDuplicateGeneratedPdf ? handleDuplicateFromGeneratedPdf : undefined,
+        handleOpenAIVariationFromGeneratedPdf: canDuplicateGeneratedPdf ? handleOpenAIVariationFromGeneratedPdf : undefined,
+        isAIVariationModalOpen,
+        handleCancelAIVariation,
+        handleProcessAIVariationInput,
+        optionVariationPlan,
+        handleConfirmAIVariation,
         generatedClientProposals,
         generatedPreselectedPdfIds,
         isProcessingAI,

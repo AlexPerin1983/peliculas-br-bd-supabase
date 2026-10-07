@@ -13,6 +13,8 @@ interface PdfGenerationStatusModalProps {
     proposalForLink?: { client: Client; pdf: SavedPDF } | null;
     /** Duplica a opção trocando a película e gera o PDF da nova opção. */
     onDuplicateWithFilm?: () => void;
+    /** Duplica com as trocas pedidas à IA (por voz ou texto). */
+    onDuplicateWithAI?: () => void;
     /**
      * Propostas do cliente para enviar juntas num link só (a recém-gerada
      * incluída). Aparece depois de duplicar, com as marcadas em preselectedPdfIds.
@@ -39,6 +41,7 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
     canPreview,
     proposalForLink,
     onDuplicateWithFilm,
+    onDuplicateWithAI,
     clientProposals = [],
     preselectedPdfIds = [],
 }) => {
@@ -211,7 +214,11 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
                 {onDuplicateWithFilm ? (
                     <section className="mt-5 border-t border-slate-200 pt-4 dark:border-slate-700" aria-labelledby="pdf-status-duplicate-title">
                         <h3 id="pdf-status-duplicate-title" className="text-sm font-semibold text-slate-700 dark:text-slate-200">Mandar outra opção ao cliente</h3>
-                        <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Escolha a película e o PDF da nova opção sai pronto.</p>
+                        <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                            {onDuplicateWithAI
+                                ? 'Escolha a película ou peça à IA; o PDF da nova opção sai pronto.'
+                                : 'Escolha a película e o PDF da nova opção sai pronto.'}
+                        </p>
                         <button
                             type="button"
                             onClick={onDuplicateWithFilm}
@@ -220,6 +227,19 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
                             <i className="fas fa-copy w-4 text-center text-slate-500 dark:text-slate-400" aria-hidden="true"></i>
                             Duplicar com outra película
                         </button>
+                        {onDuplicateWithAI ? (
+                            <button
+                                type="button"
+                                onClick={onDuplicateWithAI}
+                                className="mt-2 inline-flex w-full items-center gap-3 rounded-lg border border-slate-300 bg-white px-3 py-3 text-left text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                            >
+                                <i className="fas fa-wand-magic-sparkles w-4 text-center text-violet-500 dark:text-violet-400" aria-hidden="true"></i>
+                                <span className="min-w-0">
+                                    <span className="block">Duplicar com IA</span>
+                                    <span className="block text-xs font-normal text-slate-500 dark:text-slate-400">"Mantém o jateado e troca a outra pela Window Premium"</span>
+                                </span>
+                            </button>
+                        ) : null}
                     </section>
                 ) : null}
 

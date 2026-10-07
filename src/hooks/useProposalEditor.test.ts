@@ -192,6 +192,33 @@ describe('useProposalEditor', () => {
     expect(base.measurements.every(m => m.pelicula === 'Window Blue')).toBe(true);
   });
 
+  it('duplica trocando so as peliculas pedidas (Duplicar com IA)', async () => {
+    mockedDb.getProposalOptions.mockResolvedValue([
+      {
+        id: 30,
+        name: 'Base',
+        measurements: [
+          { id: 1, largura: '1', altura: '1', quantidade: 1, pelicula: 'Jateado Branco' },
+          { id: 2, largura: '2', altura: '1', quantidade: 1, pelicula: 'Suntek Fume 20' },
+          { id: 3, largura: '2', altura: '2', quantidade: 1, pelicula: 'Suntek Fume 20' }
+        ],
+        generalDiscount: { value: '', type: 'percentage' }
+      }
+    ]);
+
+    const { result } = buildHook();
+
+    await act(async () => {});
+
+    act(() => {
+      result.current.duplicateActiveOption(undefined, 'Window Premium', { 'Suntek Fume 20': 'Window Premium' });
+    });
+
+    const duplicated = result.current.activeOption!;
+    expect(duplicated.name).toBe('Window Premium');
+    expect(duplicated.measurements.map(m => m.pelicula)).toEqual(['Jateado Branco', 'Window Premium', 'Window Premium']);
+  });
+
   it('salva automaticamente apos alteracoes pendentes', async () => {
     vi.useFakeTimers();
     mockedDb.getProposalOptions.mockResolvedValue([]);
