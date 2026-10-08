@@ -1,7 +1,8 @@
-import { Dispatch, SetStateAction, useCallback, useState } from 'react';
+import { Dispatch, SetStateAction, useCallback, useEffect, useRef, useState } from 'react';
 import * as db from '../../services/db';
 import { Client, Film, ProposalDiscount, ProposalOption, ProposalPaymentConfig, SavedPDF, Totals, UIMeasurement, UserInfo } from '../../types';
 import { resolveProposalValidityDays } from '../lib/proposalValidity';
+import { buildPdfContentSignature } from '../lib/generatedProposals';
 
 type PdfGenerationStatus = 'idle' | 'generating' | 'success';
 type DiscountType = ProposalDiscount;
@@ -85,6 +86,32 @@ export function usePdfActions({
         client?: Client;
     } | null>(null);
     const [isSavingBeforePdf, setIsSavingBeforePdf] = useState(false);
+
+    // O que vai no PDF agora, comparado com o que foi no último PDF gerado.
+    const getCurrentPdfSignature = useCallback(() => buildPdfContentSignature({
+        client: selectedClient,
+        option: activeOption,
+        measurements,
+        films,
+        generalDiscount,
+        totals,
+        paymentConfig: proposalPaymentConfig,
+        userInfo,
+        issueDay: new Date().toDateString(),
+    }), [selectedClient, activeOption, measurements, films, generalDiscount, totals, proposalPaymentConfig, userInfo]);
+    const generatedPdfSignatureRef = useRef<string | null>(null);
+    useEffect(() => {
+        // Tirada no render seguinte à geração, com o orçamento já salvo.
+        generatedPdfSignatureRef.current = latestGeneratedPdf ? getCurrentPdfSignature() : null;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [latestGeneratedPdf]);
+
+    /** Nada mudou no orçamento desde o último PDF: dá para reabrir aquele PDF. */
+    const isLatestPdfUpToDate = useCallback(() => (
+        !!latestGeneratedPdf?.savedPdf
+        && generatedPdfSignatureRef.current !== null
+        && generatedPdfSignatureRef.current === getCurrentPdfSignature()
+    ), [latestGeneratedPdf, getCurrentPdfSignature]);
     const downloadBlob = useCallback((blobOrBase64: Blob | string, filename: string) => {
         let blob: Blob;
 
@@ -445,6 +472,7 @@ export function usePdfActions({
         handlePreviewGeneratedPdf,
         handlePreviewProposal,
         handleShareProposals,
+        isLatestPdfUpToDate,
         canShareGeneratedPdf: latestGeneratedPdf !== null,
         canPreviewGeneratedPdf: latestGeneratedPdf !== null,
         latestGeneratedProposal: latestGeneratedPdf?.savedPdf && latestGeneratedPdf.client

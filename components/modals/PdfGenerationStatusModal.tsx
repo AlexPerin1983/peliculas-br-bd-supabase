@@ -74,9 +74,20 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
     const [confirmingDeleteKey, setConfirmingDeleteKey] = useState<string | null>(null);
     const [deletingKey, setDeletingKey] = useState<string | null>(null);
 
-    // Depois de duplicar: lista as propostas do cliente para mandar juntas.
-    const showsProposalPicker = !!proposalForLink && preselectedPdfKeys.length > 1;
     const latestKey = proposalForLink ? getProposalKey(proposalForLink.pdf) : null;
+    // Cliente com 2 ou mais opções: lista para conferir e mandar juntas. Depois
+    // de aparecer, continua até o próximo PDF (excluir uma não muda a tela).
+    const [keepsPicker, setKeepsPicker] = useState(false);
+    const hasSeveralOptions = clientProposals.length > 1;
+    useEffect(() => {
+        setKeepsPicker(hasSeveralOptions);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [latestKey]);
+    useEffect(() => {
+        if (hasSeveralOptions) setKeepsPicker(true);
+    }, [hasSeveralOptions]);
+    const showsProposalPicker = !!proposalForLink && (hasSeveralOptions || keepsPicker);
+    const cameFromDuplicate = preselectedPdfKeys.length > 1;
     const latestStillListed = clientProposals.some(pdf => getProposalKey(pdf) === latestKey);
     const selectedPdfs = useMemo(
         () => clientProposals.filter(pdf => selectedKeys.includes(getProposalKey(pdf))),
@@ -197,7 +208,7 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
                     </div>
                     <div className="min-w-0">
                         <h2 id="pdf-status-title" className="text-lg font-semibold leading-tight text-slate-800 dark:text-slate-100">
-                            {showsProposalPicker ? 'Nova opção gerada' : 'Orçamento gerado'}
+                            {cameFromDuplicate ? 'Nova opção gerada' : 'Orçamento gerado'}
                         </h2>
                         <p className="mt-0.5 truncate text-sm text-slate-500 dark:text-slate-400">
                             {!proposalForLink
