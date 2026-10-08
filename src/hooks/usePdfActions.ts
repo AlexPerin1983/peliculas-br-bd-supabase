@@ -6,6 +6,7 @@ import {
     buildPdfContentSignature,
     getProposalKey,
     hashPdfSignature,
+    isSameOptionName,
     recallPdfSignature,
     rememberPdfSignature,
 } from '../lib/generatedProposals';
@@ -258,13 +259,14 @@ export function usePdfActions({
         const latest = candidates
             .filter(pdf => (
                 pdf.clienteId === selectedClientId
-                && pdf.proposalOptionId === activeOption.id
+                // A cópia do servidor não traz o id da opção: vale também pelo nome.
+                && (pdf.proposalOptionId === activeOption.id || isSameOptionName(pdf.proposalOptionName, activeOption.name))
                 && new Date(pdf.date).toDateString() === today
             ))
             .sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime())[0];
         if (!latest) return null;
         return recallPdfSignature(getProposalKey(latest)) === hashPdfSignature(getCurrentPdfSignature()) ? latest : null;
-    }, [selectedClientId, activeOption?.id, getCurrentPdfSignature]);
+    }, [selectedClientId, activeOption?.id, activeOption?.name, getCurrentPdfSignature]);
 
     /** Reabre o "Orçamento gerado" com um PDF já salvo (o arquivo vem do aparelho). */
     const reopenSavedPdf = useCallback(async (pdf: SavedPDF): Promise<boolean> => {

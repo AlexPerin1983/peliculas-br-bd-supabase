@@ -994,12 +994,22 @@ export const deletePDF = async (id: number): Promise<void> => {
         await deleteAgendamento(pdf.agendamento_id);
     }
 
-    const { error } = await supabase
+    const { data: deletedRows, error } = await supabase
         .from('saved_pdfs')
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .select('id');
 
     if (error) throw error;
+
+    // Sem linha excluída: ou já não existia, ou o servidor não deixou (a regra de
+    // acesso não acusa erro). Se ainda existe, avisa em vez de sumir só da tela.
+    if (!deletedRows || deletedRows.length === 0) {
+        const { data: stillThere, error: recheckError } = await supabase.from('saved_pdfs').select('id').eq('id', id).maybeSingle();
+        // Sem confirmar, não dá como excluído (o aparelho manteria só a cópia local).
+        if (recheckError) throw recheckError;
+        if (stillThere) throw new Error('O servidor não permitiu excluir este orçamento.');
+    }
 
     // Remove o arquivo do Storage após apagar a linha
     if (pdf?.pdf_path) {

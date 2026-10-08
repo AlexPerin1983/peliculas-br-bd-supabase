@@ -84,7 +84,7 @@ import {
     parseFilmTableExtractionResponse
 } from './src/lib/aiFilmExtraction';
 import { getUniqueOptionName } from './src/lib/proposalOptionNames';
-import { getOptionVersions, getProposalKey, listClientProposals } from './src/lib/generatedProposals';
+import { buildOptionIdResolver, getOptionVersions, getProposalKey, listClientProposals } from './src/lib/generatedProposals';
 import { loadClientPortalLinks, type ClientPortalLink } from './src/lib/proposalPortal';
 import {
     buildOptionVariationPrompt,
@@ -1662,11 +1662,19 @@ const App: React.FC = () => {
         [generatedClientPortalLinks]
     );
 
+    // A cópia do servidor não traz o id da opção: as opções atuais do cliente
+    // dizem qual é pelo nome (só quando o nome é de uma opção só).
+    const generatedOptionIdResolver = useMemo(() => (
+        latestGeneratedClientId != null && latestGeneratedClientId === selectedClientId
+            ? buildOptionIdResolver(proposalOptions)
+            : undefined
+    ), [latestGeneratedClientId, selectedClientId, proposalOptions]);
+
     // Uma linha por opção do cliente; com 2 ou mais, o modal mostra a lista.
     const generatedClientProposals = useMemo(() => {
         if (latestGeneratedClientId == null) return [];
-        return listClientProposals([...allSavedPdfs, ...generatedClientPdfs], latestGeneratedClientId);
-    }, [allSavedPdfs, generatedClientPdfs, latestGeneratedClientId]);
+        return listClientProposals([...allSavedPdfs, ...generatedClientPdfs], latestGeneratedClientId, 6, generatedOptionIdResolver);
+    }, [allSavedPdfs, generatedClientPdfs, latestGeneratedClientId, generatedOptionIdResolver]);
 
     // Versões antigas aprovadas ou agendadas ficam quando a lixeira tira a opção.
     const isApprovedOrScheduled = useCallback((pdf: SavedPDF) => (
@@ -1686,9 +1694,9 @@ const App: React.FC = () => {
     const generatedProposalVersions = useMemo(() => {
         const pool = [...allSavedPdfs, ...historyPdfs, ...generatedClientPdfs];
         return Object.fromEntries(generatedClientProposals.map(pdf => {
-            const { all, kept } = getOptionVersions(pool, pdf, isProposalKept);
-            const approved = getOptionVersions(pool, pdf, isApprovedOrScheduled).targetLocked;
-            const linked = getOptionVersions(pool, pdf, isInClientLink).targetLocked;
+            const { all, kept } = getOptionVersions(pool, pdf, isProposalKept, generatedOptionIdResolver);
+            const approved = getOptionVersions(pool, pdf, isApprovedOrScheduled, generatedOptionIdResolver).targetLocked;
+            const linked = getOptionVersions(pool, pdf, isInClientLink, generatedOptionIdResolver).targetLocked;
             return [getProposalKey(pdf), {
                 total: all.length,
                 kept: kept.length,
@@ -1697,7 +1705,7 @@ const App: React.FC = () => {
                 linked,
             }];
         }));
-    }, [allSavedPdfs, historyPdfs, generatedClientPdfs, generatedClientProposals, isProposalKept, isApprovedOrScheduled, isInClientLink]);
+    }, [allSavedPdfs, historyPdfs, generatedClientPdfs, generatedClientProposals, isProposalKept, isApprovedOrScheduled, isInClientLink, generatedOptionIdResolver]);
     const canDeleteGeneratedProposals = hasLoadedAllPdfs
         || (latestGeneratedClientId != null && generatedClientPdfsReadyFor === latestGeneratedClientId);
 
@@ -2511,7 +2519,7 @@ Regras:
     // em `done`. Se falhar, as listas são recarregadas e a do cliente também.
     const handleDeleteGeneratedProposal = useCallback(async (pdf: SavedPDF) => {
         if (pdf.id == null) return { deleted: 0, kept: 0, done: Promise.resolve() };
-        const { toDelete, kept } = getOptionVersions([...allSavedPdfs, ...historyPdfs, ...generatedClientPdfs], pdf, isProposalKept);
+        const { toDelete, kept } = getOptionVersions([...allSavedPdfs, ...historyPdfs, ...generatedClientPdfs], pdf, isProposalKept, generatedOptionIdResolver);
         const keys = new Set(toDelete.map(getProposalKey));
         const keepOthers = (previous: SavedPDF[]) => previous.filter(item => !keys.has(getProposalKey(item)));
         setAllSavedPdfs(keepOthers);
@@ -2524,7 +2532,7 @@ Regras:
                 throw error;
             });
         return { deleted: toDelete.length, kept: kept.length, done };
-    }, [allSavedPdfs, historyPdfs, generatedClientPdfs, handleDeletePdfs, isProposalKept, loadGeneratedClientPdfs]);
+    }, [allSavedPdfs, historyPdfs, generatedClientPdfs, handleDeletePdfs, isProposalKept, loadGeneratedClientPdfs, generatedOptionIdResolver]);
 
     const handleConfirmDeleteMeasurementWithFeedback = useCallback(async () => {
         setIsDeletingMeasurement(true);
