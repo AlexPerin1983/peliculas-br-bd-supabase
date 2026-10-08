@@ -414,7 +414,20 @@ describe('usePdfActions', () => {
       const savedPdf = await generateOnce();
       const { result } = buildHook();
       expect(result.current.findReusablePdf([{ ...savedPdf, date: '2026-01-01T10:00:00.000Z' }])).toBeNull();
-      expect(result.current.findReusablePdf([{ ...savedPdf, proposalOptionId: 99 }])).toBeNull();
+      expect(result.current.findReusablePdf([{ ...savedPdf, proposalOptionId: 99, proposalOptionName: 'Outra opção' }])).toBeNull();
+    });
+
+    it('acha também a cópia do servidor (sem a opção e com a data em outro formato)', async () => {
+      const savedPdf = await generateOnce();
+      const serverCopy = {
+        ...savedPdf,
+        id: 2176,
+        proposalOptionId: undefined,
+        date: savedPdf.date.replace('Z', '+00:00'),
+        pdfBlob: undefined
+      };
+      const { result } = buildHook();
+      expect(result.current.findReusablePdf([serverCopy])).toBe(serverCopy);
     });
 
     it('reabre o modal com o PDF salvo, sem gerar outro', async () => {

@@ -2,18 +2,43 @@ import type { Client, Film, ProposalOption, SavedPDF, UIMeasurement, UserInfo } 
 import { findFilmByName } from './filmCatalog';
 
 /**
- * Identificação de uma proposta gerada que não muda com a sincronização: o PDF
- * nasce com um id provisório (negativo) e, quando sobe para o servidor, ganha o
- * id definitivo. Cliente + opção + data de geração continuam os mesmos.
+ * Identificação de uma proposta gerada, igual em todas as cópias dela: o PDF
+ * nasce com um id provisório e ganha o definitivo no servidor, e a cópia do
+ * servidor vem sem a opção (a sincronização não a guarda) e com a data em outro
+ * formato ("+00:00" em vez de "Z"). Cliente + instante da geração não mudam.
  */
-export const getProposalKey = (pdf: Pick<SavedPDF, 'clienteId' | 'proposalOptionId' | 'proposalOptionName' | 'date'>): string =>
-    `${pdf.clienteId}|${pdf.proposalOptionId ?? pdf.proposalOptionName ?? ''}|${pdf.date}`;
+export const getProposalKey = (pdf: Pick<SavedPDF, 'clienteId' | 'date'>): string => {
+    const time = Date.parse(pdf.date);
+    return `${pdf.clienteId}|${Number.isFinite(time) ? time : pdf.date}`;
+};
 
 const hasPersistedId = (pdf: SavedPDF) => typeof pdf.id === 'number' && pdf.id > 0;
 
-const getOptionKey = (pdf: SavedPDF) => pdf.proposalOptionId != null
-    ? `id:${pdf.proposalOptionId}`
-    : pdf.proposalOptionName ? `nome:${pdf.proposalOptionName}` : `pdf:${getProposalKey(pdf)}`;
+const normalizeOptionName = (name?: string | null) => name?.trim().toLocaleLowerCase('pt-BR') || '';
+
+/** Mesma opção pelo nome impresso no PDF (a cópia do servidor não traz o id da opção). */
+export const isSameOptionName = (left?: string | null, right?: string | null): boolean => {
+    const normalized = normalizeOptionName(left);
+    return !!normalized && normalized === normalizeOptionName(right);
+};
+
+// Versões da mesma opção: pelo nome, o mesmo nas cópias do aparelho e do servidor.
+const getOptionKey = (pdf: SavedPDF) => {
+    const name = normalizeOptionName(pdf.proposalOptionName);
+    return name ? `nome:${name}` : `pdf:${getProposalKey(pdf)}`;
+};
+
+// Duas cópias da mesma proposta: fica a definitiva, com o que só a outra tem
+// (o PDF já em memória e o id da opção, que a cópia do servidor não traz).
+const mergeProposalCopies = (left: SavedPDF, right: SavedPDF): SavedPDF => {
+    const preferred = !hasPersistedId(left) && hasPersistedId(right) ? right : left;
+    const other = preferred === left ? right : left;
+    return {
+        ...preferred,
+        pdfBlob: preferred.pdfBlob ?? other.pdfBlob,
+        proposalOptionId: preferred.proposalOptionId ?? other.proposalOptionId,
+    };
+};
 
 /**
  * Propostas do cliente para escolher no "Orçamento gerado": uma por opção (o
@@ -26,13 +51,10 @@ export const listClientProposals = (pdfs: SavedPDF[], clientId: number, limit = 
         if (pdf.clienteId !== clientId || pdf.id == null) continue;
         const optionKey = getOptionKey(pdf);
         const current = byOption.get(optionKey);
-        if (!current || new Date(pdf.date).getTime() > new Date(current.date).getTime()) {
+        if (current && getProposalKey(pdf) === getProposalKey(current)) {
+            byOption.set(optionKey, mergeProposalCopies(current, pdf));
+        } else if (!current || new Date(pdf.date).getTime() > new Date(current.date).getTime()) {
             byOption.set(optionKey, pdf);
-        } else if (getProposalKey(pdf) === getProposalKey(current)) {
-            const preferred = !hasPersistedId(current) && hasPersistedId(pdf) ? pdf : current;
-            const other = preferred === pdf ? current : pdf;
-            // Mantém o PDF já gerado em memória (abre e compartilha sem baixar de novo).
-            byOption.set(optionKey, !preferred.pdfBlob && other.pdfBlob ? { ...preferred, pdfBlob: other.pdfBlob } : preferred);
         }
     }
     return [...byOption.values()]
@@ -60,7 +82,7 @@ export const getOptionVersions = (
         const key = getProposalKey(pdf);
         if (isKept(pdf)) keptKeys.add(key);
         const current = byKey.get(key);
-        if (!current || (!hasPersistedId(current) && hasPersistedId(pdf))) byKey.set(key, pdf);
+        byKey.set(key, current ? mergeProposalCopies(current, pdf) : pdf);
     }
     if (!byKey.has(targetKey)) byKey.set(targetKey, target);
 

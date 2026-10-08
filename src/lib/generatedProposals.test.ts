@@ -16,9 +16,28 @@ const pdf = (overrides: Partial<SavedPDF>): SavedPDF => ({
 });
 
 describe('propostas geradas do cliente', () => {
-    it('a identificação não muda quando o id provisório vira definitivo', () => {
+    it('a identificação é a mesma em todas as cópias do PDF', () => {
+        // Id provisório e definitivo.
         expect(getProposalKey(pdf({ id: -1791 }))).toBe(getProposalKey(pdf({ id: 42 })));
-        expect(getProposalKey(pdf({ proposalOptionId: 101 }))).not.toBe(getProposalKey(pdf({})));
+        // Cópia do servidor: sem a opção e com a data em outro formato.
+        expect(getProposalKey(pdf({ proposalOptionId: undefined, date: '2026-10-07T10:00:00+00:00' })))
+            .toBe(getProposalKey(pdf({})));
+        // Outro instante de geração = outro PDF.
+        expect(getProposalKey(pdf({ date: '2026-10-07T10:00:01.000Z' }))).not.toBe(getProposalKey(pdf({})));
+    });
+
+    it('não mostra a cópia do aparelho e a do servidor como duas opções', () => {
+        const blob = new Blob(['%PDF']);
+        const local = pdf({ id: -1791490888553, proposalOptionId: 1791482210342, proposalOptionName: 'Box Luana', date: '2026-10-08T20:21:28.553Z', pdfBlob: blob });
+        const server = pdf({ id: 2176, proposalOptionId: undefined, proposalOptionName: 'Box Luana', date: '2026-10-08T20:21:28.553+00:00' });
+        const olderServer = pdf({ id: 2173, proposalOptionId: undefined, proposalOptionName: 'Box Luana', date: '2026-10-08T19:17:11.326+00:00' });
+
+        const list = listClientProposals([local, server, olderServer], 7);
+
+        expect(list).toHaveLength(1);
+        expect(list[0].id).toBe(2176);
+        expect(list[0].pdfBlob).toBe(blob);
+        expect(list[0].proposalOptionId).toBe(1791482210342);
     });
 
     it('não repete a mesma proposta, fica com a definitiva e mantém o PDF em memória', () => {
@@ -48,6 +67,7 @@ describe('propostas geradas do cliente', () => {
         const many = Array.from({ length: 8 }, (_, index) => pdf({
             id: index + 1,
             proposalOptionId: index,
+            proposalOptionName: `Opção ${index}`,
             date: `2026-10-0${index + 1}T10:00:00.000Z`,
         }));
         expect(listClientProposals(many, 7).map(item => item.id)).toEqual([8, 7, 6, 5, 4, 3]);
@@ -119,7 +139,7 @@ describe('versões da mesma opção (lixeira da lista)', () => {
             atual,
             pdf({ id: -12, date: '2026-10-07T10:00:00.000Z' }),
             pdf({ id: 41, date: '2026-10-07T10:00:00.000Z' }),
-            pdf({ id: 43, proposalOptionId: 101, date: '2026-10-08T09:00:00.000Z' }),
+            pdf({ id: 43, proposalOptionId: 101, proposalOptionName: 'Window Blue', date: '2026-10-08T09:00:00.000Z' }),
             pdf({ id: 50, clienteId: 8 }),
         ], atual, aprovadoOuAgendado);
 
