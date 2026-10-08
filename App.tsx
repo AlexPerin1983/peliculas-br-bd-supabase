@@ -1608,12 +1608,15 @@ const App: React.FC = () => {
     const [generatedClientPdfs, setGeneratedClientPdfs] = useState<SavedPDF[]>([]);
     // Uma exclusão invalida as buscas em andamento (não trazem de volta o excluído).
     const generatedClientPdfsVersionRef = useRef(0);
+    // Cliente cujo histórico já chegou: antes disso a lixeira não sabe todas as versões.
+    const [generatedClientPdfsReadyFor, setGeneratedClientPdfsReadyFor] = useState<number | null>(null);
     const latestGeneratedClientId = latestGeneratedProposal?.client.id;
     const loadGeneratedClientPdfs = useCallback(async (clientId: number) => {
         const version = generatedClientPdfsVersionRef.current;
         try {
             const pdfs = await db.getPDFsForClient(clientId);
             if (version === generatedClientPdfsVersionRef.current) setGeneratedClientPdfs(pdfs);
+            setGeneratedClientPdfsReadyFor(clientId);
         } catch (error) {
             console.error('Erro ao buscar as propostas do cliente:', error);
         }
@@ -1646,10 +1649,12 @@ const App: React.FC = () => {
     const generatedProposalVersions = useMemo(() => {
         const pool = [...allSavedPdfs, ...historyPdfs, ...generatedClientPdfs];
         return Object.fromEntries(generatedClientProposals.map(pdf => {
-            const { all, kept } = getOptionVersions(pool, pdf, isProposalKept);
-            return [getProposalKey(pdf), { total: all.length, kept: kept.length }];
+            const { all, kept, targetLocked } = getOptionVersions(pool, pdf, isProposalKept);
+            return [getProposalKey(pdf), { total: all.length, kept: kept.length, locked: targetLocked }];
         }));
     }, [allSavedPdfs, historyPdfs, generatedClientPdfs, generatedClientProposals, isProposalKept]);
+    const canDeleteGeneratedProposals = hasLoadedAllPdfs
+        || (latestGeneratedClientId != null && generatedClientPdfsReadyFor === latestGeneratedClientId);
 
     // Marcadas: a recém-gerada e, se veio de duplicar, as opções de origem.
     const generatedPreselectedPdfKeys = useMemo(() => {
@@ -3647,6 +3652,7 @@ Use somente o JSON definido e não inclua explicações fora dele.`;
         generatedClientProposals,
         generatedPreselectedPdfKeys,
         generatedProposalVersions,
+        canDeleteGeneratedProposals,
         handlePreviewProposal,
         handleShareProposals,
         handleDeleteGeneratedProposal,

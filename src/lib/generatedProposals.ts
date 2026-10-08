@@ -50,7 +50,7 @@ export const getOptionVersions = (
     pdfs: SavedPDF[],
     target: SavedPDF,
     isKept: (pdf: SavedPDF) => boolean
-): { all: SavedPDF[]; toDelete: SavedPDF[]; kept: SavedPDF[] } => {
+): { all: SavedPDF[]; toDelete: SavedPDF[]; kept: SavedPDF[]; targetLocked: boolean } => {
     const optionKey = getOptionKey(target);
     const targetKey = getProposalKey(target);
     const byKey = new Map<string, SavedPDF>();
@@ -66,7 +66,8 @@ export const getOptionVersions = (
 
     const all = [...byKey.values()];
     const kept = all.filter(pdf => getProposalKey(pdf) !== targetKey && keptKeys.has(getProposalKey(pdf)));
-    return { all, toDelete: all.filter(pdf => !kept.includes(pdf)), kept };
+    // A tocada sai sempre, mas, se ela mesma está aprovada ou agendada, a tela avisa.
+    return { all, toDelete: all.filter(pdf => !kept.includes(pdf)), kept, targetLocked: keptKeys.has(targetKey) };
 };
 
 interface PdfContentInput {

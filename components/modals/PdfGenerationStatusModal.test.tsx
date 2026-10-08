@@ -380,6 +380,42 @@ describe('PdfGenerationStatusModal', () => {
         expect(await screen.findByText(/Não foi possível excluir tudo/)).toBeInTheDocument();
     });
 
+    it('avisa quando o PDF tocado está aprovado ou agendado', () => {
+        const original = proposal(42, 'Suntek', 2649.6, '2026-10-07T10:00:00Z');
+        const nova = proposal(43, 'Window Premium', 3120, '2026-10-07T10:05:00Z');
+        render(
+            <PdfGenerationStatusModal
+                {...baseProps()}
+                proposalForLink={{ client, pdf: nova }}
+                clientProposals={[nova, original]}
+                preselectedPdfKeys={[getProposalKey(original), getProposalKey(nova)]}
+                onDeleteProposal={vi.fn()}
+                proposalVersions={{ [getProposalKey(original)]: { total: 1, kept: 0, locked: true } }}
+            />
+        );
+
+        fireEvent.click(screen.getByRole('button', { name: 'Excluir Suntek' }));
+        expect(screen.getByText('Este está aprovado ou agendado; o agendamento também sai.')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Excluir mesmo assim' })).toBeInTheDocument();
+    });
+
+    it('lixeira espera o histórico do cliente carregar', () => {
+        const original = proposal(42, 'Suntek', 2649.6, '2026-10-07T10:00:00Z');
+        const nova = proposal(43, 'Window Premium', 3120, '2026-10-07T10:05:00Z');
+        render(
+            <PdfGenerationStatusModal
+                {...baseProps()}
+                proposalForLink={{ client, pdf: nova }}
+                clientProposals={[nova, original]}
+                preselectedPdfKeys={[getProposalKey(original), getProposalKey(nova)]}
+                onDeleteProposal={vi.fn()}
+                canDeleteProposals={false}
+            />
+        );
+
+        expect(screen.getByRole('button', { name: 'Excluir Suntek' })).toBeDisabled();
+    });
+
     it('marca e desmarca todas quando há várias opções', () => {
         const original = proposal(42, 'Suntek', 2649.6, '2026-10-07T10:00:00Z');
         const nova = proposal(43, 'Window Premium', 3120, '2026-10-07T10:05:00Z');
