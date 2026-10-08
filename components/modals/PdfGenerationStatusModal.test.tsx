@@ -197,12 +197,12 @@ describe('PdfGenerationStatusModal', () => {
         expect(screen.getByRole('button', { name: 'Enviar as 2 pelo WhatsApp' })).toBeEnabled();
     });
 
-    it('na lista, Ver PDF e Compartilhar usam as opções marcadas', async () => {
+    it('na lista, o olho abre uma opção por vez e Compartilhar manda as marcadas', async () => {
         const original = proposal(42, 'Suntek', 2649.6, '2026-10-07T10:00:00Z');
         const nova = proposal(43, 'Window Premium', 3120, '2026-10-07T10:05:00Z');
         const onPreview = vi.fn();
         const onShare = vi.fn();
-        const onPreviewProposals = vi.fn().mockResolvedValue(true);
+        const onPreviewProposal = vi.fn().mockResolvedValue(true);
         const onShareProposals = vi.fn().mockResolvedValue('shared');
         render(
             <PdfGenerationStatusModal
@@ -212,24 +212,46 @@ describe('PdfGenerationStatusModal', () => {
                 proposalForLink={{ client, pdf: nova }}
                 clientProposals={[nova, original]}
                 preselectedPdfKeys={[getProposalKey(original), getProposalKey(nova)]}
-                onPreviewProposals={onPreviewProposals}
+                onPreviewProposal={onPreviewProposal}
                 onShareProposals={onShareProposals}
             />
         );
 
-        fireEvent.click(screen.getByRole('button', { name: 'Visualizar as 2 opções em um PDF' }));
-        await waitFor(() => expect(onPreviewProposals).toHaveBeenCalledWith([nova, original]));
-        expect(await screen.findByText('PDF com as 2 opções aberto para conferência.')).toBeInTheDocument();
+        // Sem "Ver PDF" que junte as opções: cada linha tem o seu.
+        expect(screen.queryByRole('button', { name: 'Visualizar PDF' })).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Ver PDF de Suntek' }));
+        await waitFor(() => expect(onPreviewProposal).toHaveBeenCalledWith(original));
+        expect(onPreviewProposal).toHaveBeenCalledTimes(1);
+        expect(await screen.findByText('PDF de "Suntek" aberto para conferência.')).toBeInTheDocument();
 
-        fireEvent.click(screen.getByRole('checkbox', { name: /Suntek/ }));
-        fireEvent.click(screen.getByRole('button', { name: 'Compartilhar PDF' }));
-        await waitFor(() => expect(onShareProposals).toHaveBeenCalledWith([nova]));
+        fireEvent.click(screen.getByRole('button', { name: 'Compartilhar os 2 PDFs' }));
+        await waitFor(() => expect(onShareProposals).toHaveBeenCalledWith([nova, original]));
+        expect(await screen.findByText('2 PDFs compartilhados, um por opção.')).toBeInTheDocument();
         expect(onPreview).not.toHaveBeenCalled();
         expect(onShare).not.toHaveBeenCalled();
 
+        fireEvent.click(screen.getByRole('checkbox', { name: /Suntek/ }));
         fireEvent.click(screen.getByRole('checkbox', { name: /Window Premium/ }));
-        await waitFor(() => expect(screen.getByRole('button', { name: 'Visualizar PDF' })).toBeDisabled());
         expect(screen.getByRole('button', { name: 'Compartilhar PDF' })).toBeDisabled();
+        // O olho continua valendo para conferir, mesmo sem nada marcado.
+        expect(screen.getByRole('button', { name: 'Ver PDF de Window Premium' })).toBeEnabled();
+    });
+
+    it('no computador, avisa que os PDFs saem um a um e pode pedir permissão', async () => {
+        const original = proposal(42, 'Suntek', 2649.6, '2026-10-07T10:00:00Z');
+        const nova = proposal(43, 'Window Premium', 3120, '2026-10-07T10:05:00Z');
+        render(
+            <PdfGenerationStatusModal
+                {...baseProps()}
+                proposalForLink={{ client, pdf: nova }}
+                clientProposals={[nova, original]}
+                preselectedPdfKeys={[getProposalKey(original), getProposalKey(nova)]}
+                onShareProposals={vi.fn().mockResolvedValue('downloaded')}
+            />
+        );
+
+        fireEvent.click(screen.getByRole('button', { name: 'Compartilhar os 2 PDFs' }));
+        expect(await screen.findByText(/permita baixar vários arquivos/)).toBeInTheDocument();
     });
 
     it('exclui uma opção da lista depois de confirmar', async () => {

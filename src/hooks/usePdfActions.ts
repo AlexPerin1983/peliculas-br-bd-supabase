@@ -24,6 +24,22 @@ interface UsePdfActionsParams {
     handleSaveChanges: () => Promise<void>;
 }
 
+/**
+ * O PDF guardado no aparelho vem em base64 (texto), não como arquivo:
+ * converte para Blob. Vazio ou em formato inesperado conta como sem PDF.
+ */
+export const toPdfBlob = (value: unknown): Blob | null => {
+    if (value instanceof Blob) return value.size > 0 ? value : null;
+    if (typeof value !== 'string' || value.length === 0) return null;
+    try {
+        const base64 = value.startsWith('data:') ? value.slice(value.indexOf(',') + 1) : value;
+        const bytes = Uint8Array.from(atob(base64), char => char.charCodeAt(0));
+        return bytes.length > 0 ? new Blob([bytes], { type: 'application/pdf' }) : null;
+    } catch {
+        return null;
+    }
+};
+
 export const sanitizeForFilename = (name: string): string => {
     if (!name) return name;
 
@@ -147,10 +163,10 @@ export function usePdfActions({
 
     /** PDF de uma proposta salva: em memória, no Storage ou gerado de novo pelos dados salvos. */
     const resolvePdfBlob = useCallback(async (pdf: SavedPDF): Promise<Blob | null> => {
-        let blob = pdf.pdfBlob;
+        let blob = toPdfBlob(pdf.pdfBlob);
         if (!blob && pdf.id) {
             try {
-                blob = await db.getPDFBlob(pdf.id) || undefined;
+                blob = toPdfBlob(await db.getPDFBlob(pdf.id));
             } catch (error) {
                 console.error('[PDF] Erro ao buscar blob do PDF:', error);
             }
@@ -163,7 +179,7 @@ export function usePdfActions({
             if (client) {
                 try {
                     const { regeneratePDFFromSaved } = await import('../../services/pdfGenerator');
-                    blob = await regeneratePDFFromSaved(client, userInfo, pdf, films);
+                    blob = toPdfBlob(await regeneratePDFFromSaved(client, userInfo, pdf, films));
                 } catch (error) {
                     console.error('[PDF] Erro ao regenerar PDF arquivado:', error);
                 }
@@ -183,73 +199,62 @@ export function usePdfActions({
         handleShowInfo('Não foi possível baixar o PDF.');
     }, [downloadBlob, handleShowInfo, resolvePdfBlob]);
 
-    /**
-     * PDF das propostas marcadas no "Orçamento gerado": uma só abre o PDF dela;
-     * várias viram um PDF único com as opções (o mesmo do Histórico).
-     */
-    const buildProposalsPdf = useCallback(async (pdfs: SavedPDF[]): Promise<{ blob: Blob; filename: string; clientName: string } | null> => {
-        if (pdfs.length === 0) return null;
-        const client = findPdfClient(pdfs[0].clienteId);
-        const clientName = client?.nome || pdfs[0].clientName || 'Cliente';
-
-        if (pdfs.length === 1) {
-            const blob = await resolvePdfBlob(pdfs[0]);
-            return blob ? { blob, filename: pdfs[0].nomeArquivo || 'orcamento.pdf', clientName } : null;
-        }
-        if (!client || !userInfo) return null;
-
-        const { generateCombinedPDF } = await import('../../services/pdfGenerator');
-        const blob = await generateCombinedPDF(client, userInfo, pdfs, films);
-        const filename = `orcamento_${pdfs.length}_opcoes_${sanitizeForFilename(client.nome).replace(/\s+/g, '_').toLowerCase()}.pdf`;
-        return { blob, filename, clientName };
-    }, [findPdfClient, resolvePdfBlob, userInfo, films]);
-
-    const handlePreviewProposals = useCallback(async (pdfs: SavedPDF[]): Promise<boolean> => {
+    /** Abre o PDF de uma proposta salva, uma de cada vez. */
+    const handlePreviewProposal = useCallback(async (pdf: SavedPDF): Promise<boolean> => {
         // A janela abre já no toque (depois de esperar o PDF, o navegador bloquearia).
         const popup = window.open('', '_blank');
         try {
-            const built = await buildProposalsPdf(pdfs);
-            if (!built) {
+            const blob = await resolvePdfBlob(pdf);
+            if (!blob) {
                 popup?.close();
                 return false;
             }
-            const url = URL.createObjectURL(built.blob);
+            const url = URL.createObjectURL(blob);
             if (popup) {
                 popup.location.href = url;
             } else {
-                downloadBlob(built.blob, built.filename);
+                downloadBlob(blob, pdf.nomeArquivo || 'orcamento.pdf');
             }
             window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
             return true;
         } catch (error) {
             popup?.close();
-            console.error('[PDF] Erro ao abrir as propostas:', error);
+            console.error('[PDF] Erro ao abrir a proposta:', error);
             return false;
         }
-    }, [buildProposalsPdf, downloadBlob]);
+    }, [resolvePdfBlob, downloadBlob]);
 
+    /** Compartilha as propostas marcadas, cada uma no seu PDF (sem juntar). */
     const handleShareProposals = useCallback(async (pdfs: SavedPDF[]): Promise<'shared' | 'downloaded' | 'unavailable'> => {
-        const built = await buildProposalsPdf(pdfs);
-        if (!built) return 'unavailable';
+        if (pdfs.length === 0) return 'unavailable';
+        const blobs = await Promise.all(pdfs.map(resolvePdfBlob));
+        if (blobs.some(blob => !blob)) return 'unavailable';
 
-        const file = new File([built.blob], built.filename, { type: 'application/pdf' });
-        if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
+        const files = pdfs.map((pdf, index) => new File(
+            [blobs[index] as Blob],
+            pdf.nomeArquivo || `orcamento_${index + 1}.pdf`,
+            { type: 'application/pdf' }
+        ));
+        const clientName = findPdfClient(pdfs[0].clienteId)?.nome || pdfs[0].clientName || 'Cliente';
+        if (navigator.share && (!navigator.canShare || navigator.canShare({ files }))) {
             try {
                 await navigator.share({
-                    title: `Proposta de serviço - ${built.clientName}`,
-                    text: `Olá, ${built.clientName}. Segue o PDF com os detalhes do serviço.`,
-                    files: [file],
+                    title: `Proposta de serviço - ${clientName}`,
+                    text: files.length > 1
+                        ? `Olá, ${clientName}. Seguem os PDFs com as opções do serviço.`
+                        : `Olá, ${clientName}. Segue o PDF com os detalhes do serviço.`,
+                    files,
                 });
                 return 'shared';
             } catch (error) {
-                // Montar o PDF demorou e o navegador não aceita mais compartilhar: baixa.
+                // Buscar o PDF demorou e o navegador não aceita mais compartilhar: baixa.
                 if ((error as DOMException)?.name !== 'NotAllowedError') throw error;
             }
         }
 
-        downloadBlob(built.blob, built.filename);
+        files.forEach(file => downloadBlob(file, file.name));
         return 'downloaded';
-    }, [buildProposalsPdf, downloadBlob]);
+    }, [resolvePdfBlob, findPdfClient, downloadBlob]);
 
     const executePdfGeneration = useCallback(async () => {
         const activeMeasurements = measurements.filter(measurement =>
@@ -438,7 +443,7 @@ export function usePdfActions({
         handleDownloadPdf,
         handleShareGeneratedPdf,
         handlePreviewGeneratedPdf,
-        handlePreviewProposals,
+        handlePreviewProposal,
         handleShareProposals,
         canShareGeneratedPdf: latestGeneratedPdf !== null,
         canPreviewGeneratedPdf: latestGeneratedPdf !== null,
