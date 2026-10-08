@@ -9,6 +9,9 @@ const {
     isOnlineNowMock,
     syncAllPendingMock,
     findLocalPdfMock,
+    getLocalPdfMock,
+    scanLocalPdfsMock,
+    prioritizeSavedPdfSyncMock,
     listPdfSyncQueueMock,
     getUserMock,
 } = vi.hoisted(() => ({
@@ -18,6 +21,9 @@ const {
     isOnlineNowMock: vi.fn(() => true),
     syncAllPendingMock: vi.fn(),
     findLocalPdfMock: vi.fn(),
+    getLocalPdfMock: vi.fn(),
+    scanLocalPdfsMock: vi.fn(),
+    prioritizeSavedPdfSyncMock: vi.fn(),
     listPdfSyncQueueMock: vi.fn(),
     getUserMock: vi.fn(async () => ({ data: { user: { id: 'user-1' } } })),
 }));
@@ -29,12 +35,18 @@ vi.mock('../../services/supabaseClient', () => ({
 vi.mock('../../services/syncService', () => ({
     isOnlineNow: isOnlineNowMock,
     syncAllPending: syncAllPendingMock,
+    prioritizeSavedPdfSync: prioritizeSavedPdfSyncMock,
 }));
 
 vi.mock('../../services/offlineDb', () => ({
     offlineDb: {
         savedPdfs: {
-            filter: vi.fn(() => ({ first: findLocalPdfMock })),
+            where: vi.fn(() => ({
+                equals: vi.fn(() => ({ first: findLocalPdfMock })),
+                startsWith: vi.fn(() => ({ first: findLocalPdfMock })),
+            })),
+            get: getLocalPdfMock,
+            filter: vi.fn(() => ({ first: scanLocalPdfsMock })),
         },
         syncQueue: {
             where: vi.fn(() => ({
@@ -160,6 +172,27 @@ describe('links amigáveis de proposta', () => {
         expect(rpcMock).toHaveBeenCalledWith('create_proposal_portal', expect.objectContaining({
             p_pdf_ids: [91],
         }));
+    });
+
+    it('o link passa os PDFs dele na frente da fila e não espera a fila inteira', async () => {
+        findLocalPdfMock
+            .mockResolvedValueOnce({ _localId: 'local_123_pdf', id: -123, _syncStatus: 'pending' })
+            .mockResolvedValueOnce({ _localId: 'local_123_pdf', id: -123, _syncStatus: 'pending' })
+            .mockResolvedValueOnce({ _localId: 'local_123_pdf', id: -123, _syncStatus: 'pending' })
+            .mockResolvedValue({ _localId: 'local_123_pdf', id: 91, _remoteId: 91, _syncStatus: 'synced' });
+        getLocalPdfMock.mockResolvedValue({ _localId: 'local_123_pdf', id: 91, _remoteId: 91, _syncStatus: 'synced' });
+        // A fila inteira demora: a sincronização não termina durante o teste.
+        syncAllPendingMock.mockReturnValue(new Promise(() => undefined));
+        rpcMock.mockResolvedValue({
+            data: [{ portal_id: 'portal-5', portal_token: 'token-seguro', expires_at: '2099-12-31T23:59:59.000Z' }],
+            error: null,
+        });
+
+        await createProposalPortal([{ id: -123 } as SavedPDF], '2099-12-31', 'Elaine');
+
+        expect(prioritizeSavedPdfSyncMock).toHaveBeenCalledWith(['local_123_pdf']);
+        expect(scanLocalPdfsMock).not.toHaveBeenCalled();
+        expect(rpcMock).toHaveBeenCalledWith('create_proposal_portal', expect.objectContaining({ p_pdf_ids: [91] }));
     });
 
     it('aguarda uma renomeacao pendente chegar ao servidor antes de criar o portal', async () => {
