@@ -29,8 +29,13 @@ interface PdfGenerationStatusModalProps {
     onPreviewProposal?: (pdf: SavedPDF) => Promise<boolean>;
     /** Compartilha as marcadas, um PDF por opção (sem juntar). */
     onShareProposals?: (pdfs: SavedPDF[]) => Promise<ShareResult>;
-    /** Exclui a proposta do histórico (mesma exclusão da tela Histórico). */
-    onDeleteProposal?: (pdf: SavedPDF) => Promise<void>;
+    /**
+     * Tira a opção da lista: exclui do histórico a versão tocada e as antigas
+     * (menos as antigas aprovadas ou agendadas) e diz quantas saíram e ficaram.
+     */
+    onDeleteProposal?: (pdf: SavedPDF) => Promise<{ deleted: number; kept: number } | void>;
+    /** Quantos PDFs cada linha representa (chave: getProposalKey) e quantos ficam. */
+    proposalVersions?: Record<string, { total: number; kept: number }>;
 }
 
 const formatCurrency = (value: number) =>
@@ -46,6 +51,17 @@ const shareMessageFor = (result: ShareResult, count = 1) => result === 'shared'
             ? 'Este navegador não anexa PDFs diretamente. Os PDFs estão sendo baixados um a um; se ele perguntar, permita baixar vários arquivos.'
             : 'Este navegador não anexa PDFs diretamente. O arquivo foi baixado para você enviar.'
         : 'O PDF ainda não está disponível para compartilhar.';
+
+// Mensagem depois da lixeira: quantos PDFs da opção saíram e quantos ficaram.
+const deletedMessage = (name: string, result: { deleted: number; kept: number } | void) => {
+    if (!result || (result.deleted <= 1 && result.kept === 0)) return `"${name}" foi excluída do histórico.`;
+    if (result.kept === 0) return `"${name}" saiu da lista (${result.deleted} PDFs excluídos).`;
+    const deleted = result.deleted === 1 ? '1 PDF excluído' : `${result.deleted} PDFs excluídos`;
+    const kept = result.kept === 1
+        ? 'a versão aprovada ou agendada ficou'
+        : `${result.kept} versões aprovadas ou agendadas ficaram`;
+    return `"${name}": ${deleted}; ${kept}.`;
+};
 
 const iconButton = 'flex flex-col items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-1 py-2.5 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-45 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700';
 
@@ -65,6 +81,7 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
     onPreviewProposal,
     onShareProposals,
     onDeleteProposal,
+    proposalVersions,
 }) => {
     const [isSharing, setIsSharing] = useState(false);
     const [previewingKey, setPreviewingKey] = useState<string | null>(null);
@@ -158,10 +175,10 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
         setDeletingKey(key);
         setShareMessage('');
         try {
-            await onDeleteProposal(pdf);
+            const result = await onDeleteProposal(pdf);
             setSelectedKeys(current => current.filter(item => item !== key));
             setConfirmingDeleteKey(null);
-            setShareMessage(`"${pdf.proposalOptionName || 'Proposta'}" foi excluída do histórico.`);
+            setShareMessage(deletedMessage(pdf.proposalOptionName || 'Proposta', result));
         } catch {
             setShareMessage('Não foi possível excluir. Tente novamente.');
         } finally {
@@ -247,6 +264,9 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
                                     const isSelected = selectedKeys.includes(key);
                                     const name = pdf.proposalOptionName || 'Proposta';
                                     const isConfirming = confirmingDeleteKey === key;
+                                    const totalVersions = proposalVersions?.[key]?.total ?? 1;
+                                    const keptVersions = proposalVersions?.[key]?.kept ?? 0;
+                                    const deleteCount = Math.max(1, totalVersions - keptVersions);
                                     return (
                                         <li key={key}>
                                             <div className={`flex items-center rounded-lg border transition-colors ${isSelected
@@ -297,7 +317,16 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
                                             </div>
                                             {isConfirming ? (
                                                 <div role="alertdialog" aria-label={`Confirmar exclusão de ${name}`} className="mt-1 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 dark:border-red-900/60 dark:bg-red-950/30">
-                                                    <span className="min-w-0 flex-1 text-xs font-medium text-red-800 dark:text-red-200">Excluir do histórico?</span>
+                                                    <span className="min-w-0 flex-1 text-xs font-medium text-red-800 dark:text-red-200">
+                                                        Excluir do histórico?
+                                                        {totalVersions > 1 ? (
+                                                            <span className="block font-normal text-red-700 dark:text-red-300">
+                                                                {keptVersions > 0
+                                                                    ? `São ${totalVersions} PDFs desta opção; ${keptVersions === 1 ? 'o aprovado ou agendado fica' : `${keptVersions} aprovados ou agendados ficam`}.`
+                                                                    : `São ${totalVersions} PDFs desta opção.`}
+                                                            </span>
+                                                        ) : null}
+                                                    </span>
                                                     <button
                                                         type="button"
                                                         onClick={() => setConfirmingDeleteKey(null)}
@@ -312,7 +341,7 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
                                                         disabled={deletingKey === key}
                                                         className="rounded-md bg-red-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-60"
                                                     >
-                                                        <span className="text-xs font-semibold">{deletingKey === key ? 'Excluindo…' : 'Excluir'}</span>
+                                                        <span className="text-xs font-semibold">{deletingKey === key ? 'Excluindo…' : deleteCount > 1 ? `Excluir os ${deleteCount}` : 'Excluir'}</span>
                                                     </button>
                                                 </div>
                                             ) : null}

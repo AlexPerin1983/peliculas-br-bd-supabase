@@ -40,6 +40,35 @@ export const listClientProposals = (pdfs: SavedPDF[], clientId: number, limit = 
         .slice(0, limit);
 };
 
+/**
+ * Todas as versões (PDFs) da mesma opção do cliente, sem repetir a provisória e a
+ * definitiva. A lixeira da lista tira a opção inteira: sai a versão tocada e as
+ * antigas, menos as antigas que `isKept` protege (aprovadas ou agendadas). Basta
+ * uma cópia da versão protegida (outra lista pode estar desatualizada).
+ */
+export const getOptionVersions = (
+    pdfs: SavedPDF[],
+    target: SavedPDF,
+    isKept: (pdf: SavedPDF) => boolean
+): { all: SavedPDF[]; toDelete: SavedPDF[]; kept: SavedPDF[] } => {
+    const optionKey = getOptionKey(target);
+    const targetKey = getProposalKey(target);
+    const byKey = new Map<string, SavedPDF>();
+    const keptKeys = new Set<string>();
+    for (const pdf of pdfs) {
+        if (pdf.clienteId !== target.clienteId || pdf.id == null || getOptionKey(pdf) !== optionKey) continue;
+        const key = getProposalKey(pdf);
+        if (isKept(pdf)) keptKeys.add(key);
+        const current = byKey.get(key);
+        if (!current || (!hasPersistedId(current) && hasPersistedId(pdf))) byKey.set(key, pdf);
+    }
+    if (!byKey.has(targetKey)) byKey.set(targetKey, target);
+
+    const all = [...byKey.values()];
+    const kept = all.filter(pdf => getProposalKey(pdf) !== targetKey && keptKeys.has(getProposalKey(pdf)));
+    return { all, toDelete: all.filter(pdf => !kept.includes(pdf)), kept };
+};
+
 interface PdfContentInput {
     client: Client | null | undefined;
     option: ProposalOption | null | undefined;

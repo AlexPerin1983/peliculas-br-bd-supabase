@@ -84,7 +84,7 @@ import {
     parseFilmTableExtractionResponse
 } from './src/lib/aiFilmExtraction';
 import { getUniqueOptionName } from './src/lib/proposalOptionNames';
-import { getProposalKey, listClientProposals } from './src/lib/generatedProposals';
+import { getOptionVersions, getProposalKey, listClientProposals } from './src/lib/generatedProposals';
 import {
     buildOptionVariationPrompt,
     getFriendlyOptionVariationError,
@@ -1621,6 +1621,24 @@ const App: React.FC = () => {
         return listClientProposals([...allSavedPdfs, ...generatedClientPdfs], latestGeneratedClientId);
     }, [allSavedPdfs, generatedClientPdfs, latestGeneratedClientId]);
 
+    // Versões antigas aprovadas ou agendadas ficam quando a lixeira tira a opção.
+    const isProposalKept = useCallback((pdf: SavedPDF) => (
+        pdf.status === 'approved'
+        || pdf.agendamentoId != null
+        || (pdf.id != null && agendamentos.some(agendamento => (
+            agendamento.pdfId === pdf.id || (agendamento.pdfIds || []).includes(pdf.id as number)
+        )))
+    ), [agendamentos]);
+
+    // Quantos PDFs cada linha da lista representa (para a confirmação da lixeira).
+    const generatedProposalVersions = useMemo(() => {
+        const pool = [...allSavedPdfs, ...historyPdfs, ...generatedClientPdfs];
+        return Object.fromEntries(generatedClientProposals.map(pdf => {
+            const { all, kept } = getOptionVersions(pool, pdf, isProposalKept);
+            return [getProposalKey(pdf), { total: all.length, kept: kept.length }];
+        }));
+    }, [allSavedPdfs, historyPdfs, generatedClientPdfs, generatedClientProposals, isProposalKept]);
+
     // Marcadas: a recém-gerada e, se veio de duplicar, as opções de origem.
     const generatedPreselectedPdfKeys = useMemo(() => {
         if (!latestGeneratedProposal) return [];
@@ -2421,20 +2439,21 @@ Regras:
     ]);
 
     // Excluir uma proposta da lista do "Orçamento gerado" (mesma exclusão do Histórico).
+    // A lixeira da lista tira a opção inteira: a versão tocada e as antigas,
+    // menos as antigas aprovadas ou agendadas. Depois de sincronizar, a mesma
+    // proposta pode estar com o id provisório e o definitivo: exclui pelo
+    // definitivo (o registro local é o mesmo).
     const handleDeleteGeneratedProposal = useCallback(async (pdf: SavedPDF) => {
-        if (pdf.id == null) return;
-        const key = getProposalKey(pdf);
-        // Depois de sincronizar, a mesma proposta pode estar com o id provisório
-        // e o definitivo: exclui pelo definitivo (o registro local é o mesmo).
-        const persisted = [...allSavedPdfs, ...generatedClientPdfs].find(item => (
-            typeof item.id === 'number' && item.id > 0 && getProposalKey(item) === key
-        ));
-        const keepOthers = (previous: SavedPDF[]) => previous.filter(item => getProposalKey(item) !== key);
+        if (pdf.id == null) return { deleted: 0, kept: 0 };
+        const { toDelete, kept } = getOptionVersions([...allSavedPdfs, ...historyPdfs, ...generatedClientPdfs], pdf, isProposalKept);
+        const keys = new Set(toDelete.map(getProposalKey));
+        const keepOthers = (previous: SavedPDF[]) => previous.filter(item => !keys.has(getProposalKey(item)));
         setAllSavedPdfs(keepOthers);
         setHistoryPdfs(keepOthers);
         setGeneratedClientPdfs(keepOthers);
-        await handleDeletePdfs([persisted?.id ?? pdf.id]);
-    }, [allSavedPdfs, generatedClientPdfs, handleDeletePdfs]);
+        await handleDeletePdfs(toDelete.map(item => item.id).filter((id): id is number => id != null));
+        return { deleted: toDelete.length, kept: kept.length };
+    }, [allSavedPdfs, historyPdfs, generatedClientPdfs, handleDeletePdfs, isProposalKept]);
 
     const handleConfirmDeleteMeasurementWithFeedback = useCallback(async () => {
         setIsDeletingMeasurement(true);
@@ -3606,6 +3625,7 @@ Use somente o JSON definido e não inclua explicações fora dele.`;
         handleConfirmAIVariation,
         generatedClientProposals,
         generatedPreselectedPdfKeys,
+        generatedProposalVersions,
         handlePreviewProposal,
         handleShareProposals,
         handleDeleteGeneratedProposal,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SavedPDF } from '../../types';
-import { buildPdfContentSignature, getProposalKey, listClientProposals } from './generatedProposals';
+import { buildPdfContentSignature, getOptionVersions, getProposalKey, listClientProposals } from './generatedProposals';
 
 const pdf = (overrides: Partial<SavedPDF>): SavedPDF => ({
     id: 1,
@@ -107,5 +107,53 @@ describe('mudou algo desde o último PDF?', () => {
         });
         expect(signature({ films: [renamed(5), ...same.films.slice(1)] }))
             .not.toBe(signature({ films: [renamed(7), ...same.films.slice(1)] }));
+    });
+});
+
+describe('versões da mesma opção (lixeira da lista)', () => {
+    const aprovadoOuAgendado = (item: SavedPDF) => item.status === 'approved' || item.agendamentoId != null;
+
+    it('junta as versões da opção, sem repetir a provisória e a definitiva', () => {
+        const atual = pdf({ id: 44, date: '2026-10-08T10:00:00.000Z' });
+        const versions = getOptionVersions([
+            atual,
+            pdf({ id: -12, date: '2026-10-07T10:00:00.000Z' }),
+            pdf({ id: 41, date: '2026-10-07T10:00:00.000Z' }),
+            pdf({ id: 43, proposalOptionId: 101, date: '2026-10-08T09:00:00.000Z' }),
+            pdf({ id: 50, clienteId: 8 }),
+        ], atual, aprovadoOuAgendado);
+
+        expect(versions.toDelete.map(item => item.id)).toEqual([44, 41]);
+        expect(versions.kept).toEqual([]);
+    });
+
+    it('mantém as antigas aprovadas ou agendadas, mas a tocada sai', () => {
+        const atual = pdf({ id: 44, status: 'approved', date: '2026-10-08T10:00:00.000Z' });
+        const versions = getOptionVersions([
+            atual,
+            pdf({ id: 41, status: 'approved', date: '2026-10-06T10:00:00.000Z' }),
+            pdf({ id: 42, agendamentoId: 9, date: '2026-10-07T09:00:00.000Z' }),
+            pdf({ id: 43, date: '2026-10-07T10:00:00.000Z' }),
+        ], atual, aprovadoOuAgendado);
+
+        expect(versions.all).toHaveLength(4);
+        expect(versions.toDelete.map(item => item.id)).toEqual([44, 43]);
+        expect(versions.kept.map(item => item.id)).toEqual([41, 42]);
+    });
+});
+
+describe('versão protegida em qualquer cópia', () => {
+    it('basta uma cópia aprovada para a versão ficar', () => {
+        const atual = pdf({ id: 44, date: '2026-10-08T10:00:00.000Z' });
+        const antigaDesatualizada = pdf({ id: 41, status: 'pending', date: '2026-10-07T10:00:00.000Z' });
+        const antigaAprovada = { ...antigaDesatualizada, status: 'approved' as const };
+        const versions = getOptionVersions(
+            [atual, antigaDesatualizada, antigaAprovada],
+            atual,
+            item => item.status === 'approved'
+        );
+
+        expect(versions.toDelete.map(item => item.id)).toEqual([44]);
+        expect(versions.kept.map(item => item.id)).toEqual([41]);
     });
 });
