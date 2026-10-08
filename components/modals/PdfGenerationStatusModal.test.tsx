@@ -315,6 +315,48 @@ describe('PdfGenerationStatusModal', () => {
         expect(screen.getByRole('button', { name: 'Enviar 1 opção pelo WhatsApp' })).toBeEnabled();
     });
 
+    it('a lixeira tira a opção inteira e diz quantos PDFs saíram', async () => {
+        const original = proposal(42, 'Suntek', 2649.6, '2026-10-07T10:00:00Z');
+        const nova = proposal(43, 'Window Premium', 3120, '2026-10-07T10:05:00Z');
+        const onDeleteProposal = vi.fn().mockResolvedValue({ deleted: 3, kept: 0 });
+        render(
+            <PdfGenerationStatusModal
+                {...baseProps()}
+                proposalForLink={{ client, pdf: nova }}
+                clientProposals={[nova, original]}
+                preselectedPdfKeys={[getProposalKey(original), getProposalKey(nova)]}
+                onDeleteProposal={onDeleteProposal}
+                proposalVersions={{ [getProposalKey(original)]: { total: 3, kept: 0 } }}
+            />
+        );
+
+        fireEvent.click(screen.getByRole('button', { name: 'Excluir Suntek' }));
+        expect(screen.getByText('São 3 PDFs desta opção.')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Excluir os 3' }));
+        await waitFor(() => expect(onDeleteProposal).toHaveBeenCalledWith(original));
+        expect(await screen.findByText('"Suntek" saiu da lista (3 PDFs excluídos).')).toBeInTheDocument();
+    });
+
+    it('avisa que a versão aprovada ou agendada fica', async () => {
+        const original = proposal(42, 'Suntek', 2649.6, '2026-10-07T10:00:00Z');
+        const nova = proposal(43, 'Window Premium', 3120, '2026-10-07T10:05:00Z');
+        render(
+            <PdfGenerationStatusModal
+                {...baseProps()}
+                proposalForLink={{ client, pdf: nova }}
+                clientProposals={[nova, original]}
+                preselectedPdfKeys={[getProposalKey(original), getProposalKey(nova)]}
+                onDeleteProposal={vi.fn().mockResolvedValue({ deleted: 2, kept: 1 })}
+                proposalVersions={{ [getProposalKey(original)]: { total: 3, kept: 1 } }}
+            />
+        );
+
+        fireEvent.click(screen.getByRole('button', { name: 'Excluir Suntek' }));
+        expect(screen.getByText('São 3 PDFs desta opção; o aprovado ou agendado fica.')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Excluir os 2' }));
+        expect(await screen.findByText('"Suntek": 2 PDFs excluídos; a versão aprovada ou agendada ficou.')).toBeInTheDocument();
+    });
+
     it('marca e desmarca todas quando há várias opções', () => {
         const original = proposal(42, 'Suntek', 2649.6, '2026-10-07T10:00:00Z');
         const nova = proposal(43, 'Window Premium', 3120, '2026-10-07T10:05:00Z');
