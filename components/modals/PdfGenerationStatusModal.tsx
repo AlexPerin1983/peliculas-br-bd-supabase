@@ -32,10 +32,13 @@ interface PdfGenerationStatusModalProps {
     /**
      * Tira a opção da lista: exclui do histórico a versão tocada e as antigas
      * (menos as antigas aprovadas ou agendadas) e diz quantas saíram e ficaram.
+     * A linha sai na hora; `done` termina quando o aparelho e o servidor confirmam.
      */
-    onDeleteProposal?: (pdf: SavedPDF) => Promise<{ deleted: number; kept: number } | void>;
+    onDeleteProposal?: (pdf: SavedPDF) => Promise<{ deleted: number; kept: number; done?: Promise<void> } | void>;
     /** Quantos PDFs cada linha representa (chave: getProposalKey) e quantos ficam. */
-    proposalVersions?: Record<string, { total: number; kept: number }>;
+    proposalVersions?: Record<string, { total: number; kept: number; locked?: boolean }>;
+    /** Falso enquanto o histórico do cliente carrega (a lixeira ainda não sabe todas as versões). */
+    canDeleteProposals?: boolean;
 }
 
 const formatCurrency = (value: number) =>
@@ -82,6 +85,7 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
     onShareProposals,
     onDeleteProposal,
     proposalVersions,
+    canDeleteProposals = true,
 }) => {
     const [isSharing, setIsSharing] = useState(false);
     const [previewingKey, setPreviewingKey] = useState<string | null>(null);
@@ -179,6 +183,9 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
             setSelectedKeys(current => current.filter(item => item !== key));
             setConfirmingDeleteKey(null);
             setShareMessage(deletedMessage(pdf.proposalOptionName || 'Proposta', result));
+            result?.done?.catch(() => {
+                setShareMessage('Não foi possível excluir tudo. A lista foi atualizada; tente de novo.');
+            });
         } catch {
             setShareMessage('Não foi possível excluir. Tente novamente.');
         } finally {
@@ -267,6 +274,7 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
                                     const totalVersions = proposalVersions?.[key]?.total ?? 1;
                                     const keptVersions = proposalVersions?.[key]?.kept ?? 0;
                                     const deleteCount = Math.max(1, totalVersions - keptVersions);
+                                    const isLocked = !!proposalVersions?.[key]?.locked;
                                     return (
                                         <li key={key}>
                                             <div className={`flex items-center rounded-lg border transition-colors ${isSelected
@@ -307,9 +315,11 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
                                                     <button
                                                         type="button"
                                                         onClick={() => setConfirmingDeleteKey(isConfirming ? null : key)}
+                                                        disabled={!canDeleteProposals}
+                                                        title={canDeleteProposals ? undefined : 'Carregando o histórico do cliente…'}
                                                         aria-label={`Excluir ${name}`}
                                                         aria-expanded={isConfirming}
-                                                        className="mr-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40"
+                                                        className="mr-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-wait disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-slate-400 dark:hover:bg-red-950/40"
                                                     >
                                                         <i className="fas fa-trash-can text-sm" aria-hidden="true"></i>
                                                     </button>
@@ -319,6 +329,11 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
                                                 <div role="alertdialog" aria-label={`Confirmar exclusão de ${name}`} className="mt-1 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 dark:border-red-900/60 dark:bg-red-950/30">
                                                     <span className="min-w-0 flex-1 text-xs font-medium text-red-800 dark:text-red-200">
                                                         Excluir do histórico?
+                                                        {isLocked ? (
+                                                            <span className="block font-semibold text-red-800 dark:text-red-200">
+                                                                Este está aprovado ou agendado; o agendamento também sai.
+                                                            </span>
+                                                        ) : null}
                                                         {totalVersions > 1 ? (
                                                             <span className="block font-normal text-red-700 dark:text-red-300">
                                                                 {keptVersions > 0
@@ -341,7 +356,7 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
                                                         disabled={deletingKey === key}
                                                         className="rounded-md bg-red-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-60"
                                                     >
-                                                        <span className="text-xs font-semibold">{deletingKey === key ? 'Excluindo…' : deleteCount > 1 ? `Excluir os ${deleteCount}` : 'Excluir'}</span>
+                                                        <span className="text-xs font-semibold">{deletingKey === key ? 'Excluindo…' : `${deleteCount > 1 ? `Excluir os ${deleteCount}` : 'Excluir'}${isLocked ? ' mesmo assim' : ''}`}</span>
                                                     </button>
                                                 </div>
                                             ) : null}

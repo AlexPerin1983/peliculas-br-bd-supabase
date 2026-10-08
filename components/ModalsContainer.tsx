@@ -128,8 +128,9 @@ interface ModalsContainerProps {
     generatedPreselectedPdfKeys: string[];
     handlePreviewProposal: (pdf: SavedPDF) => Promise<boolean>;
     handleShareProposals: (pdfs: SavedPDF[]) => Promise<'shared' | 'downloaded' | 'unavailable'>;
-    generatedProposalVersions: Record<string, { total: number; kept: number }>;
-    handleDeleteGeneratedProposal: (pdf: SavedPDF) => Promise<{ deleted: number; kept: number }>;
+    generatedProposalVersions: Record<string, { total: number; kept: number; locked: boolean }>;
+    canDeleteGeneratedProposals: boolean;
+    handleDeleteGeneratedProposal: (pdf: SavedPDF) => Promise<{ deleted: number; kept: number; done: Promise<void> }>;
     handleOpenAIVariationFromGeneratedPdf?: () => void;
     isAIVariationModalOpen: boolean;
     handleCancelAIVariation: () => void;
@@ -544,6 +545,7 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
                     onShareProposals={props.handleShareProposals}
                     onDeleteProposal={props.handleDeleteGeneratedProposal}
                     proposalVersions={props.generatedProposalVersions}
+                    canDeleteProposals={props.canDeleteGeneratedProposals}
                 />
             )}
 

@@ -125,6 +125,7 @@ describe('versões da mesma opção (lixeira da lista)', () => {
 
         expect(versions.toDelete.map(item => item.id)).toEqual([44, 41]);
         expect(versions.kept).toEqual([]);
+        expect(versions.targetLocked).toBe(false);
     });
 
     it('mantém as antigas aprovadas ou agendadas, mas a tocada sai', () => {
@@ -139,6 +140,8 @@ describe('versões da mesma opção (lixeira da lista)', () => {
         expect(versions.all).toHaveLength(4);
         expect(versions.toDelete.map(item => item.id)).toEqual([44, 43]);
         expect(versions.kept.map(item => item.id)).toEqual([41, 42]);
+        // A tocada está aprovada: sai, mas a tela avisa.
+        expect(versions.targetLocked).toBe(true);
     });
 });
 
