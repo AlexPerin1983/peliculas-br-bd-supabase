@@ -141,7 +141,12 @@ export function usePdfActions({
         return true;
     }, [latestGeneratedPdf]);
 
-    const handleDownloadPdf = useCallback(async (pdf: SavedPDF, filename: string) => {
+    const findPdfClient = useCallback((clientId: number) => (
+        selectedClient?.id === clientId ? selectedClient : clients.find(item => item.id === clientId)
+    ), [selectedClient, clients]);
+
+    /** PDF de uma proposta salva: em memória, no Storage ou gerado de novo pelos dados salvos. */
+    const resolvePdfBlob = useCallback(async (pdf: SavedPDF): Promise<Blob | null> => {
         let blob = pdf.pdfBlob;
         if (!blob && pdf.id) {
             try {
@@ -154,9 +159,7 @@ export function usePdfActions({
         // Fallback: o arquivo já foi removido do Storage (orçamento vencido e
         // limpo). Regenera o PDF a partir dos dados salvos no banco.
         if (!blob && userInfo) {
-            const client = selectedClient?.id === pdf.clienteId
-                ? selectedClient
-                : clients.find(item => item.id === pdf.clienteId);
+            const client = findPdfClient(pdf.clienteId);
             if (client) {
                 try {
                     const { regeneratePDFFromSaved } = await import('../../services/pdfGenerator');
@@ -167,13 +170,86 @@ export function usePdfActions({
             }
         }
 
+        return blob || null;
+    }, [userInfo, findPdfClient, films]);
+
+    const handleDownloadPdf = useCallback(async (pdf: SavedPDF, filename: string) => {
+        const blob = await resolvePdfBlob(pdf);
         if (blob) {
             downloadBlob(blob, filename);
             return;
         }
 
         handleShowInfo('Não foi possível baixar o PDF.');
-    }, [downloadBlob, handleShowInfo, userInfo, selectedClient, clients, films]);
+    }, [downloadBlob, handleShowInfo, resolvePdfBlob]);
+
+    /**
+     * PDF das propostas marcadas no "Orçamento gerado": uma só abre o PDF dela;
+     * várias viram um PDF único com as opções (o mesmo do Histórico).
+     */
+    const buildProposalsPdf = useCallback(async (pdfs: SavedPDF[]): Promise<{ blob: Blob; filename: string; clientName: string } | null> => {
+        if (pdfs.length === 0) return null;
+        const client = findPdfClient(pdfs[0].clienteId);
+        const clientName = client?.nome || pdfs[0].clientName || 'Cliente';
+
+        if (pdfs.length === 1) {
+            const blob = await resolvePdfBlob(pdfs[0]);
+            return blob ? { blob, filename: pdfs[0].nomeArquivo || 'orcamento.pdf', clientName } : null;
+        }
+        if (!client || !userInfo) return null;
+
+        const { generateCombinedPDF } = await import('../../services/pdfGenerator');
+        const blob = await generateCombinedPDF(client, userInfo, pdfs, films);
+        const filename = `orcamento_${pdfs.length}_opcoes_${sanitizeForFilename(client.nome).replace(/\s+/g, '_').toLowerCase()}.pdf`;
+        return { blob, filename, clientName };
+    }, [findPdfClient, resolvePdfBlob, userInfo, films]);
+
+    const handlePreviewProposals = useCallback(async (pdfs: SavedPDF[]): Promise<boolean> => {
+        // A janela abre já no toque (depois de esperar o PDF, o navegador bloquearia).
+        const popup = window.open('', '_blank');
+        try {
+            const built = await buildProposalsPdf(pdfs);
+            if (!built) {
+                popup?.close();
+                return false;
+            }
+            const url = URL.createObjectURL(built.blob);
+            if (popup) {
+                popup.location.href = url;
+            } else {
+                downloadBlob(built.blob, built.filename);
+            }
+            window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+            return true;
+        } catch (error) {
+            popup?.close();
+            console.error('[PDF] Erro ao abrir as propostas:', error);
+            return false;
+        }
+    }, [buildProposalsPdf, downloadBlob]);
+
+    const handleShareProposals = useCallback(async (pdfs: SavedPDF[]): Promise<'shared' | 'downloaded' | 'unavailable'> => {
+        const built = await buildProposalsPdf(pdfs);
+        if (!built) return 'unavailable';
+
+        const file = new File([built.blob], built.filename, { type: 'application/pdf' });
+        if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
+            try {
+                await navigator.share({
+                    title: `Proposta de serviço - ${built.clientName}`,
+                    text: `Olá, ${built.clientName}. Segue o PDF com os detalhes do serviço.`,
+                    files: [file],
+                });
+                return 'shared';
+            } catch (error) {
+                // Montar o PDF demorou e o navegador não aceita mais compartilhar: baixa.
+                if ((error as DOMException)?.name !== 'NotAllowedError') throw error;
+            }
+        }
+
+        downloadBlob(built.blob, built.filename);
+        return 'downloaded';
+    }, [buildProposalsPdf, downloadBlob]);
 
     const executePdfGeneration = useCallback(async () => {
         const activeMeasurements = measurements.filter(measurement =>
@@ -362,6 +438,8 @@ export function usePdfActions({
         handleDownloadPdf,
         handleShareGeneratedPdf,
         handlePreviewGeneratedPdf,
+        handlePreviewProposals,
+        handleShareProposals,
         canShareGeneratedPdf: latestGeneratedPdf !== null,
         canPreviewGeneratedPdf: latestGeneratedPdf !== null,
         latestGeneratedProposal: latestGeneratedPdf?.savedPdf && latestGeneratedPdf.client
