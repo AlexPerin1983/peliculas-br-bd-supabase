@@ -331,6 +331,35 @@ export interface ExistingProposalPortal {
     updatable: boolean;
 }
 
+/** Links do cliente (resumo leve): quais PDFs já foram enviados por link. */
+export interface ClientPortalLink {
+    portalId: string;
+    status: string;
+    expired: boolean;
+    viewCount: number;
+    pdfIds: number[];
+}
+
+export const loadClientPortalLinks = async (clientId: number): Promise<ClientPortalLink[]> => {
+    const { data, error } = await supabase
+        .from('proposal_portals')
+        .select('id, status, expires_at, view_count, proposal_portal_items(saved_pdf_id)')
+        .eq('client_id', clientId)
+        .neq('status', 'revoked')
+        .order('created_at', { ascending: false })
+        .limit(30);
+    if (error) throw error;
+    return (data || []).map((portal: any) => ({
+        portalId: String(portal.id),
+        status: String(portal.status),
+        expired: portal.status === 'expired' || new Date(portal.expires_at).getTime() <= Date.now(),
+        viewCount: Number(portal.view_count || 0),
+        pdfIds: (portal.proposal_portal_items || [])
+            .map((item: any) => Number(item.saved_pdf_id))
+            .filter((id: number) => Number.isFinite(id)),
+    }));
+};
+
 export const findClientProposalPortals = async (pdfs: SavedPDF[], clientName: string): Promise<ExistingProposalPortal[]> => {
     const pdfIds = pdfs.map(pdf => pdf.id).filter((id): id is number => typeof id === 'number');
     if (pdfIds.length === 0 || !isOnlineNow()) return [];

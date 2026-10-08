@@ -352,9 +352,9 @@ describe('PdfGenerationStatusModal', () => {
         );
 
         fireEvent.click(screen.getByRole('button', { name: 'Excluir Suntek' }));
-        expect(screen.getByText('São 3 PDFs desta opção; o aprovado ou agendado fica.')).toBeInTheDocument();
+        expect(screen.getByText('São 3 PDFs desta opção; o aprovado, agendado ou com link fica.')).toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'Excluir os 2' }));
-        expect(await screen.findByText('"Suntek": 2 PDFs excluídos; a versão aprovada ou agendada ficou.')).toBeInTheDocument();
+        expect(await screen.findByText('"Suntek": 2 PDFs excluídos; a versão aprovada, agendada ou com link ficou.')).toBeInTheDocument();
     });
 
     it('a linha sai na hora e avisa se a exclusão falhar depois', async () => {
@@ -396,6 +396,30 @@ describe('PdfGenerationStatusModal', () => {
 
         fireEvent.click(screen.getByRole('button', { name: 'Excluir Suntek' }));
         expect(screen.getByText('Este está aprovado ou agendado; o agendamento também sai.')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Excluir mesmo assim' })).toBeInTheDocument();
+    });
+
+    it('mostra a etiqueta Link na opção já enviada e avisa antes de excluir', () => {
+        const original = proposal(42, 'Suntek', 2649.6, '2026-10-07T10:00:00Z');
+        const nova = proposal(43, 'Window Premium', 3120, '2026-10-07T10:05:00Z');
+        render(
+            <PdfGenerationStatusModal
+                {...baseProps()}
+                proposalForLink={{ client, pdf: nova }}
+                clientProposals={[nova, original]}
+                preselectedPdfKeys={[getProposalKey(original), getProposalKey(nova)]}
+                onDeleteProposal={vi.fn()}
+                proposalVersions={{
+                    [getProposalKey(original)]: { total: 1, kept: 0, locked: true, lockedBy: 'link', linked: true },
+                    [getProposalKey(nova)]: { total: 1, kept: 0, locked: false, lockedBy: null, linked: false },
+                }}
+            />
+        );
+
+        expect(screen.getByRole('checkbox', { name: /Suntek.*Link/ })).toBeInTheDocument();
+        expect(screen.getByRole('checkbox', { name: /Window Premium/ })).not.toHaveAccessibleName(/Link/);
+        fireEvent.click(screen.getByRole('button', { name: 'Excluir Suntek' }));
+        expect(screen.getByText('Este está num link enviado ao cliente; ele deixa de ver esta opção.')).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Excluir mesmo assim' })).toBeInTheDocument();
     });
 

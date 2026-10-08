@@ -85,6 +85,7 @@ import {
 } from './src/lib/aiFilmExtraction';
 import { getUniqueOptionName } from './src/lib/proposalOptionNames';
 import { getOptionVersions, getProposalKey, listClientProposals } from './src/lib/generatedProposals';
+import { loadClientPortalLinks, type ClientPortalLink } from './src/lib/proposalPortal';
 import {
     buildOptionVariationPrompt,
     getFriendlyOptionVariationError,
@@ -1638,6 +1639,29 @@ const App: React.FC = () => {
         void loadGeneratedClientPdfs(latestGeneratedClientId);
     }, [pdfGenerationStatus, latestGeneratedClientId, hasLoadedAllPdfs, loadGeneratedClientPdfs]);
 
+    // Links do cliente: quais PDFs já foram enviados por link (etiqueta "Link" na
+    // lista e proteção na lixeira). Busca leve, ao abrir o cliente e o modal.
+    const [generatedClientPortalLinks, setGeneratedClientPortalLinks] = useState<ClientPortalLink[]>([]);
+    const loadGeneratedClientPortalLinks = useCallback(async (clientId: number) => {
+        try {
+            setGeneratedClientPortalLinks(await loadClientPortalLinks(clientId));
+        } catch (error) {
+            console.warn('[Orçamento gerado] Links do cliente indisponíveis:', error);
+        }
+    }, []);
+    useEffect(() => {
+        if (selectedClientId == null) return;
+        void loadGeneratedClientPortalLinks(selectedClientId);
+    }, [selectedClientId, loadGeneratedClientPortalLinks]);
+    useEffect(() => {
+        if (pdfGenerationStatus !== 'success' || latestGeneratedClientId == null) return;
+        void loadGeneratedClientPortalLinks(latestGeneratedClientId);
+    }, [pdfGenerationStatus, latestGeneratedClientId, loadGeneratedClientPortalLinks]);
+    const linkedPdfIds = useMemo(
+        () => new Set(generatedClientPortalLinks.flatMap(link => link.pdfIds)),
+        [generatedClientPortalLinks]
+    );
+
     // Uma linha por opção do cliente; com 2 ou mais, o modal mostra a lista.
     const generatedClientProposals = useMemo(() => {
         if (latestGeneratedClientId == null) return [];
@@ -1645,22 +1669,35 @@ const App: React.FC = () => {
     }, [allSavedPdfs, generatedClientPdfs, latestGeneratedClientId]);
 
     // Versões antigas aprovadas ou agendadas ficam quando a lixeira tira a opção.
-    const isProposalKept = useCallback((pdf: SavedPDF) => (
+    const isApprovedOrScheduled = useCallback((pdf: SavedPDF) => (
         pdf.status === 'approved'
         || pdf.agendamentoId != null
         || (pdf.id != null && agendamentos.some(agendamento => (
             agendamento.pdfId === pdf.id || (agendamento.pdfIds || []).includes(pdf.id as number)
         )))
     ), [agendamentos]);
+    // Enviado ao cliente por link: excluir tiraria a opção da página dele.
+    const isInClientLink = useCallback((pdf: SavedPDF) => pdf.id != null && linkedPdfIds.has(pdf.id), [linkedPdfIds]);
+    const isProposalKept = useCallback((pdf: SavedPDF) => (
+        isApprovedOrScheduled(pdf) || isInClientLink(pdf)
+    ), [isApprovedOrScheduled, isInClientLink]);
 
     // Quantos PDFs cada linha da lista representa (para a confirmação da lixeira).
     const generatedProposalVersions = useMemo(() => {
         const pool = [...allSavedPdfs, ...historyPdfs, ...generatedClientPdfs];
         return Object.fromEntries(generatedClientProposals.map(pdf => {
-            const { all, kept, targetLocked } = getOptionVersions(pool, pdf, isProposalKept);
-            return [getProposalKey(pdf), { total: all.length, kept: kept.length, locked: targetLocked }];
+            const { all, kept } = getOptionVersions(pool, pdf, isProposalKept);
+            const approved = getOptionVersions(pool, pdf, isApprovedOrScheduled).targetLocked;
+            const linked = getOptionVersions(pool, pdf, isInClientLink).targetLocked;
+            return [getProposalKey(pdf), {
+                total: all.length,
+                kept: kept.length,
+                locked: approved || linked,
+                lockedBy: approved ? 'approved' as const : linked ? 'link' as const : null,
+                linked,
+            }];
         }));
-    }, [allSavedPdfs, historyPdfs, generatedClientPdfs, generatedClientProposals, isProposalKept]);
+    }, [allSavedPdfs, historyPdfs, generatedClientPdfs, generatedClientProposals, isProposalKept, isApprovedOrScheduled, isInClientLink]);
     const canDeleteGeneratedProposals = hasLoadedAllPdfs
         || (latestGeneratedClientId != null && generatedClientPdfsReadyFor === latestGeneratedClientId);
 
