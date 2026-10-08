@@ -1,6 +1,6 @@
 import { vi } from 'vitest';
 import type { SavedPDF } from '../../types';
-import { createProposalPortal, findClientProposalPortals, loadPublicProposalPortal, markProposalPortalLost, openPublicProposalPdf, recordProposalFollowUp, refreshProposalPortal, reopenProposalPortal, revokeProposalPortal, setProposalOfferDeadline, snoozeProposalFollowUp } from './proposalPortal';
+import { createProposalPortal, findClientProposalPortals, loadClientPortalLinks, loadPublicProposalPortal, markProposalPortalLost, openPublicProposalPdf, recordProposalFollowUp, refreshProposalPortal, reopenProposalPortal, revokeProposalPortal, setProposalOfferDeadline, snoozeProposalFollowUp } from './proposalPortal';
 
 const {
     rpcMock,
@@ -298,6 +298,28 @@ describe('links já enviados ao cliente', () => {
         isOnlineNowMock.mockReturnValue(true);
         findLocalPdfMock.mockResolvedValue(undefined);
         listPdfSyncQueueMock.mockResolvedValue([]);
+    });
+
+    it('resume os links do cliente: quais PDFs já foram enviados', async () => {
+        const limit = vi.fn().mockResolvedValue({
+            data: [
+                { id: 'p1', status: 'active', expires_at: '2099-12-31T23:59:59Z', view_count: 2, proposal_portal_items: [{ saved_pdf_id: 91 }, { saved_pdf_id: '92' }] },
+                { id: 'p2', status: 'active', expires_at: '2020-01-01T00:00:00Z', view_count: 0, proposal_portal_items: [] },
+            ],
+            error: null,
+        });
+        const chain: any = { select: vi.fn(() => chain), eq: vi.fn(() => chain), neq: vi.fn(() => chain), order: vi.fn(() => chain), limit };
+        fromMock.mockReturnValue(chain);
+
+        const links = await loadClientPortalLinks(7);
+
+        expect(fromMock).toHaveBeenCalledWith('proposal_portals');
+        expect(chain.eq).toHaveBeenCalledWith('client_id', 7);
+        expect(chain.neq).toHaveBeenCalledWith('status', 'revoked');
+        expect(links).toEqual([
+            { portalId: 'p1', status: 'active', expired: false, viewCount: 2, pdfIds: [91, 92] },
+            { portalId: 'p2', status: 'active', expired: true, viewCount: 0, pdfIds: [] },
+        ]);
     });
 
     it('acha os links do cliente e marca o que tem as mesmas propostas', async () => {

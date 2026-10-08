@@ -36,7 +36,14 @@ interface PdfGenerationStatusModalProps {
      */
     onDeleteProposal?: (pdf: SavedPDF) => Promise<{ deleted: number; kept: number; done?: Promise<void> } | void>;
     /** Quantos PDFs cada linha representa (chave: getProposalKey) e quantos ficam. */
-    proposalVersions?: Record<string, { total: number; kept: number; locked?: boolean }>;
+    proposalVersions?: Record<string, {
+        total: number;
+        kept: number;
+        locked?: boolean;
+        lockedBy?: 'approved' | 'link' | null;
+        /** Já enviada ao cliente por link (etiqueta "Link"). */
+        linked?: boolean;
+    }>;
     /** Falso enquanto o histórico do cliente carrega (a lixeira ainda não sabe todas as versões). */
     canDeleteProposals?: boolean;
 }
@@ -61,8 +68,8 @@ const deletedMessage = (name: string, result: { deleted: number; kept: number } 
     if (result.kept === 0) return `"${name}" saiu da lista (${result.deleted} PDFs excluídos).`;
     const deleted = result.deleted === 1 ? '1 PDF excluído' : `${result.deleted} PDFs excluídos`;
     const kept = result.kept === 1
-        ? 'a versão aprovada ou agendada ficou'
-        : `${result.kept} versões aprovadas ou agendadas ficaram`;
+        ? 'a versão aprovada, agendada ou com link ficou'
+        : `${result.kept} versões aprovadas, agendadas ou com link ficaram`;
     return `"${name}": ${deleted}; ${kept}.`;
 };
 
@@ -275,6 +282,8 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
                                     const keptVersions = proposalVersions?.[key]?.kept ?? 0;
                                     const deleteCount = Math.max(1, totalVersions - keptVersions);
                                     const isLocked = !!proposalVersions?.[key]?.locked;
+                                    const lockedByLink = proposalVersions?.[key]?.lockedBy === 'link';
+                                    const isLinked = !!proposalVersions?.[key]?.linked;
                                     return (
                                         <li key={key}>
                                             <div className={`flex items-center rounded-lg border transition-colors ${isSelected
@@ -293,6 +302,15 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
                                                             <span className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">{name}</span>
                                                             {key === latestKey ? (
                                                                 <span className="shrink-0 rounded-full bg-emerald-600 px-1.5 py-0.5 text-[10px] font-bold uppercase leading-none text-white">Nova</span>
+                                                            ) : null}
+                                                            {isLinked ? (
+                                                                <span
+                                                                    title="Já enviada ao cliente por link"
+                                                                    className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold uppercase leading-none text-blue-700 dark:bg-blue-900/50 dark:text-blue-300"
+                                                                >
+                                                                    <i className="fas fa-link text-[8px]" aria-hidden="true"></i>
+                                                                    Link
+                                                                </span>
                                                             ) : null}
                                                         </span>
                                                         <span className="block text-xs text-slate-500 dark:text-slate-400">
@@ -331,13 +349,15 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
                                                         Excluir do histórico?
                                                         {isLocked ? (
                                                             <span className="block font-semibold text-red-800 dark:text-red-200">
-                                                                Este está aprovado ou agendado; o agendamento também sai.
+                                                                {lockedByLink
+                                                                    ? 'Este está num link enviado ao cliente; ele deixa de ver esta opção.'
+                                                                    : 'Este está aprovado ou agendado; o agendamento também sai.'}
                                                             </span>
                                                         ) : null}
                                                         {totalVersions > 1 ? (
                                                             <span className="block font-normal text-red-700 dark:text-red-300">
                                                                 {keptVersions > 0
-                                                                    ? `São ${totalVersions} PDFs desta opção; ${keptVersions === 1 ? 'o aprovado ou agendado fica' : `${keptVersions} aprovados ou agendados ficam`}.`
+                                                                    ? `São ${totalVersions} PDFs desta opção; ${keptVersions === 1 ? 'o aprovado, agendado ou com link fica' : `${keptVersions} aprovados, agendados ou com link ficam`}.`
                                                                     : `São ${totalVersions} PDFs desta opção.`}
                                                             </span>
                                                         ) : null}
