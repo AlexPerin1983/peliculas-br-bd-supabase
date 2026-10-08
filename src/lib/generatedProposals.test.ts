@@ -67,6 +67,7 @@ describe('mudou algo desde o último PDF?', () => {
         totals: { finalTotal: 200, operationalExpenses: 0 },
         paymentConfig: { paymentMethods: [] },
         userInfo: { id: 'info', nome: 'Alex', empresa: 'Películas', telefone: '', email: '', endereco: '', cpfCnpj: '', lastSelectedClientId: 7 },
+        issueDay: 'Thu Oct 08 2026',
     });
     const signature = (overrides: Record<string, unknown> = {}) =>
         buildPdfContentSignature({ ...base(), ...overrides } as Parameters<typeof buildPdfContentSignature>[0]);
@@ -94,5 +95,17 @@ describe('mudou algo desde o último PDF?', () => {
         expect(signature({ option: { ...same.option, id: 101 } })).not.toBe(signature());
         expect(signature({ client: { ...same.client, telefone: '83911112222' } })).not.toBe(signature());
         expect(signature({ paymentConfig: { paymentMethods: ['pix'] } })).not.toBe(signature());
+        // Outro dia: o PDF sai com outra data de emissão e outra validade.
+        expect(signature({ issueDay: 'Fri Oct 09 2026' })).not.toBe(signature());
+    });
+
+    it('acha a película renomeada pelo nome antigo, como o PDF', () => {
+        const same = base();
+        const renamed = (garantia: number) => ({
+            nome: 'Suntek Carbon', preco: 100, garantiaFabricante: garantia,
+            customFields: { __previous_names: JSON.stringify(['Suntek']) },
+        });
+        expect(signature({ films: [renamed(5), ...same.films.slice(1)] }))
+            .not.toBe(signature({ films: [renamed(7), ...same.films.slice(1)] }));
     });
 });

@@ -1,4 +1,5 @@
 import type { Client, Film, ProposalOption, SavedPDF, UIMeasurement, UserInfo } from '../../types';
+import { findFilmByName } from './filmCatalog';
 
 /**
  * Identificação de uma proposta gerada que não muda com a sincronização: o PDF
@@ -48,6 +49,8 @@ interface PdfContentInput {
     totals: unknown;
     paymentConfig: unknown;
     userInfo: UserInfo | null | undefined;
+    /** Dia de hoje: o PDF imprime a data de emissão e a validade conta dela. */
+    issueDay: string;
 }
 
 /**
@@ -56,12 +59,16 @@ interface PdfContentInput {
  * Fica de fora o que não aparece no PDF (ids, marcações de tela, datas internas).
  */
 export const buildPdfContentSignature = ({
-    client, option, measurements, films, generalDiscount, totals, paymentConfig, userInfo,
+    client, option, measurements, films, generalDiscount, totals, paymentConfig, userInfo, issueDay,
 }: PdfContentInput): string => {
     const activeMeasurements = measurements
         .filter(measurement => measurement.active)
         .map(({ id, isNew, focusField, ...content }) => content);
-    const usedFilms = new Set(activeMeasurements.map(measurement => measurement.pelicula));
+    // A mesma busca do PDF: acha a película também pelo nome antigo.
+    const usedFilms = [...new Map(activeMeasurements
+        .map(measurement => findFilmByName(films, measurement.pelicula))
+        .filter((film): film is Film => !!film)
+        .map(film => [film.nome, film])).values()];
     const { lastUpdated, pinned, pinnedAt, ...clientContent } = (client || {}) as Client;
     const { lastSelectedClientId, ...companyContent } = (userInfo || {}) as UserInfo;
     // O cálculo de corte é refeito sozinho (ex.: depois de duplicar); o que ele
@@ -72,10 +79,11 @@ export const buildPdfContentSignature = ({
         optionId: option?.id ?? null,
         optionName: option?.name ?? null,
         measurements: activeMeasurements,
-        films: films.filter(film => usedFilms.has(film.nome)),
+        films: usedFilms,
         generalDiscount: discountContent,
         totals,
         paymentConfig,
         company: companyContent,
+        issueDay,
     });
 };

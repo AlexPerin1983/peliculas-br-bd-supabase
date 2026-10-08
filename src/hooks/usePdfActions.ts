@@ -97,6 +97,7 @@ export function usePdfActions({
         totals,
         paymentConfig: proposalPaymentConfig,
         userInfo,
+        issueDay: new Date().toDateString(),
     }), [selectedClient, activeOption, measurements, films, generalDiscount, totals, proposalPaymentConfig, userInfo]);
     const generatedPdfSignatureRef = useRef<string | null>(null);
     useEffect(() => {
