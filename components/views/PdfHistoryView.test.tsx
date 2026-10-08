@@ -146,7 +146,8 @@ describe('PdfHistoryView', () => {
             makePdf({ id: 33, proposalOptionName: 'Opção 1' }),
         ], { onRenamePdfOption });
 
-        fireEvent.click(screen.getByRole('button', { name: 'Renomear Opção 1' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Mais ações de Opção 1' }));
+        fireEvent.click(screen.getByRole('button', { name: /Renomear opção/ }));
 
         expect(screen.getByRole('dialog', { name: 'Renomear opção' })).toBeInTheDocument();
         expect(screen.getByText(/exibido no PDF e na página do orçamento/i)).toBeInTheDocument();
@@ -216,7 +217,7 @@ describe('PdfHistoryView', () => {
             }
         );
 
-        const panelTitle = screen.getByText('Fila de avaliacao');
+        const panelTitle = screen.getByText('Fila de avaliação');
         const panel = panelTitle.closest('section');
 
         expect(panel).not.toBeNull();
@@ -226,7 +227,7 @@ describe('PdfHistoryView', () => {
 
         fireEvent.click(screen.getByRole('button', { name: /pendentes:\s*0/i }));
 
-        expect(screen.queryByText('Fila de avaliacao')).not.toBeInTheDocument();
+        expect(screen.queryByText('Fila de avaliação')).not.toBeInTheDocument();
     });
 
     it('busca a proxima pagina no servidor ao clicar em Carregar mais', () => {
@@ -316,7 +317,7 @@ describe('PdfHistoryView', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Selecionar todas as opções' }));
 
         expect(screen.getByRole('button', { name: 'Criar link' })).toBeInTheDocument();
-        expect(screen.getAllByText('2 selecionados').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('2 selecionadas').length).toBeGreaterThan(0);
 
         fireEvent.click(screen.getByRole('button', { name: 'Excluir' }));
         await act(async () => {
@@ -345,12 +346,12 @@ describe('PdfHistoryView', () => {
             makePdf({ id: 43, proposalOptionName: 'Opção do resumo' }),
         ]);
 
-        fireEvent.click(screen.getByRole('button', { name: /Resumo do periodo/i }));
+        fireEvent.click(screen.getByRole('button', { name: /Resumo do período/i }));
 
-        const summaryDialog = screen.getByRole('dialog', { name: 'Resumo do periodo' });
+        const summaryDialog = screen.getByRole('dialog', { name: 'Resumo do período' });
         expect(summaryDialog).toHaveClass('pt-[env(safe-area-inset-top,0px)]');
         const closeButton = within(summaryDialog).getByRole('button', {
-            name: 'Fechar resumo do periodo',
+            name: 'Fechar resumo do período',
         });
         expect(closeButton).toHaveClass('h-11', 'w-11', 'touch-manipulation');
     });
