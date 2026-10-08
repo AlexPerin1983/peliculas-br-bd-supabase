@@ -22,8 +22,28 @@ export const isSameOptionName = (left?: string | null, right?: string | null): b
     return !!normalized && normalized === normalizeOptionName(right);
 };
 
-// Versões da mesma opção: pelo nome, o mesmo nas cópias do aparelho e do servidor.
-const getOptionKey = (pdf: SavedPDF) => {
+/** Id da opção de um PDF que não o traz (cópia do servidor), quando dá para saber. */
+export type OptionIdResolver = (pdf: SavedPDF) => number | undefined;
+
+/**
+ * Resolve pelo nome só quando exatamente uma opção atual do cliente tem esse
+ * nome; nome repetido ou de opção que já não existe fica sem id (grupo à parte).
+ */
+export const buildOptionIdResolver = (options: Array<Pick<ProposalOption, 'id' | 'name'>>): OptionIdResolver => {
+    const idByName = new Map<string, number | null>();
+    for (const option of options) {
+        const name = normalizeOptionName(option.name);
+        if (!name) continue;
+        idByName.set(name, idByName.has(name) ? null : option.id);
+    }
+    return pdf => idByName.get(normalizeOptionName(pdf.proposalOptionName)) ?? undefined;
+};
+
+// Versões da mesma opção: pelo id da opção; sem ele, pelo id que o nome indica
+// sem ambiguidade; senão, pelo nome (grupo à parte, nunca junto de outra opção).
+const getOptionKey = (pdf: SavedPDF, resolveOptionId?: OptionIdResolver) => {
+    const optionId = pdf.proposalOptionId ?? resolveOptionId?.(pdf);
+    if (optionId != null) return `id:${optionId}`;
     const name = normalizeOptionName(pdf.proposalOptionName);
     return name ? `nome:${name}` : `pdf:${getProposalKey(pdf)}`;
 };
@@ -40,55 +60,63 @@ const mergeProposalCopies = (left: SavedPDF, right: SavedPDF): SavedPDF => {
     };
 };
 
+// Junta as cópias de cada proposta (aparelho, servidor, provisória e definitiva).
+const mergeCopies = (pdfs: SavedPDF[]): SavedPDF[] => {
+    const byKey = new Map<string, SavedPDF>();
+    for (const pdf of pdfs) {
+        const key = getProposalKey(pdf);
+        const current = byKey.get(key);
+        byKey.set(key, current ? mergeProposalCopies(current, pdf) : pdf);
+    }
+    return [...byKey.values()];
+};
+
+const dateOf = (pdf: SavedPDF) => new Date(pdf.date).getTime();
+
 /**
  * Propostas do cliente para escolher no "Orçamento gerado": uma por opção (o
- * PDF mais recente de cada), mais recentes no topo. A mesma proposta com id
- * provisório e definitivo conta uma vez só, com o definitivo.
+ * PDF mais recente de cada), mais recentes no topo. As cópias da mesma proposta
+ * contam uma vez só, com a definitiva.
  */
-export const listClientProposals = (pdfs: SavedPDF[], clientId: number, limit = 6): SavedPDF[] => {
+export const listClientProposals = (
+    pdfs: SavedPDF[],
+    clientId: number,
+    limit = 6,
+    resolveOptionId?: OptionIdResolver
+): SavedPDF[] => {
     const byOption = new Map<string, SavedPDF>();
-    for (const pdf of pdfs) {
-        if (pdf.clienteId !== clientId || pdf.id == null) continue;
-        const optionKey = getOptionKey(pdf);
+    for (const pdf of mergeCopies(pdfs.filter(item => item.clienteId === clientId && item.id != null))) {
+        const optionKey = getOptionKey(pdf, resolveOptionId);
         const current = byOption.get(optionKey);
-        if (current && getProposalKey(pdf) === getProposalKey(current)) {
-            byOption.set(optionKey, mergeProposalCopies(current, pdf));
-        } else if (!current || new Date(pdf.date).getTime() > new Date(current.date).getTime()) {
-            byOption.set(optionKey, pdf);
-        }
+        if (!current || dateOf(pdf) > dateOf(current)) byOption.set(optionKey, pdf);
     }
     return [...byOption.values()]
-        .sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime())
+        .sort((left, right) => dateOf(right) - dateOf(left))
         .slice(0, limit);
 };
 
 /**
- * Todas as versões (PDFs) da mesma opção do cliente, sem repetir a provisória e a
- * definitiva. A lixeira da lista tira a opção inteira: sai a versão tocada e as
- * antigas, menos as antigas que `isKept` protege (aprovadas ou agendadas). Basta
- * uma cópia da versão protegida (outra lista pode estar desatualizada).
+ * Todas as versões (PDFs) da mesma opção do cliente, cada proposta uma vez só.
+ * A lixeira da lista tira a opção inteira: sai a versão tocada e as antigas,
+ * menos as antigas que `isKept` protege. Basta uma cópia da versão estar
+ * protegida (outra lista pode estar desatualizada).
  */
 export const getOptionVersions = (
     pdfs: SavedPDF[],
     target: SavedPDF,
-    isKept: (pdf: SavedPDF) => boolean
+    isKept: (pdf: SavedPDF) => boolean,
+    resolveOptionId?: OptionIdResolver
 ): { all: SavedPDF[]; toDelete: SavedPDF[]; kept: SavedPDF[]; targetLocked: boolean } => {
-    const optionKey = getOptionKey(target);
     const targetKey = getProposalKey(target);
-    const byKey = new Map<string, SavedPDF>();
-    const keptKeys = new Set<string>();
-    for (const pdf of pdfs) {
-        if (pdf.clienteId !== target.clienteId || pdf.id == null || getOptionKey(pdf) !== optionKey) continue;
-        const key = getProposalKey(pdf);
-        if (isKept(pdf)) keptKeys.add(key);
-        const current = byKey.get(key);
-        byKey.set(key, current ? mergeProposalCopies(current, pdf) : pdf);
-    }
-    if (!byKey.has(targetKey)) byKey.set(targetKey, target);
+    const sameClient = pdfs.filter(pdf => pdf.clienteId === target.clienteId && pdf.id != null);
+    const keptKeys = new Set([...sameClient, target].filter(isKept).map(getProposalKey));
+    const copies = mergeCopies([...sameClient, target]);
+    const mergedTarget = copies.find(pdf => getProposalKey(pdf) === targetKey) ?? target;
+    const optionKey = getOptionKey(mergedTarget, resolveOptionId);
 
-    const all = [...byKey.values()];
+    const all = copies.filter(pdf => getOptionKey(pdf, resolveOptionId) === optionKey);
     const kept = all.filter(pdf => getProposalKey(pdf) !== targetKey && keptKeys.has(getProposalKey(pdf)));
-    // A tocada sai sempre, mas, se ela mesma está aprovada ou agendada, a tela avisa.
+    // A tocada sai sempre, mas, se ela mesma está protegida, a tela avisa.
     return { all, toDelete: all.filter(pdf => !kept.includes(pdf)), kept, targetLocked: keptKeys.has(targetKey) };
 };
 

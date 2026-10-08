@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SavedPDF } from '../../types';
-import { buildPdfContentSignature, getOptionVersions, getProposalKey, hashPdfSignature, listClientProposals, recallPdfSignature, rememberPdfSignature } from './generatedProposals';
+import { buildOptionIdResolver, buildPdfContentSignature, getOptionVersions, getProposalKey, hashPdfSignature, listClientProposals, recallPdfSignature, rememberPdfSignature } from './generatedProposals';
 
 const pdf = (overrides: Partial<SavedPDF>): SavedPDF => ({
     id: 1,
@@ -32,7 +32,9 @@ describe('propostas geradas do cliente', () => {
         const server = pdf({ id: 2176, proposalOptionId: undefined, proposalOptionName: 'Box Luana', date: '2026-10-08T20:21:28.553+00:00' });
         const olderServer = pdf({ id: 2173, proposalOptionId: undefined, proposalOptionName: 'Box Luana', date: '2026-10-08T19:17:11.326+00:00' });
 
-        const list = listClientProposals([local, server, olderServer], 7);
+        // As opções atuais do cliente dizem que "Box Luana" é a 1791482210342.
+        const resolver = buildOptionIdResolver([{ id: 1791482210342, name: 'Box Luana' }, { id: 5, name: 'Opcao 2' }]);
+        const list = listClientProposals([local, server, olderServer], 7, 6, resolver);
 
         expect(list).toHaveLength(1);
         expect(list[0].id).toBe(2176);
@@ -61,6 +63,19 @@ describe('propostas geradas do cliente', () => {
         ], 7);
 
         expect(list.map(item => item.id)).toEqual([41, 43]);
+    });
+
+    it('duas opções diferentes com o mesmo nome não viram uma só', () => {
+        const opcaoA = pdf({ id: 41, proposalOptionId: 100, proposalOptionName: 'Opção 1', date: '2026-10-07T10:00:00.000Z' });
+        const opcaoB = pdf({ id: 42, proposalOptionId: 200, proposalOptionName: 'Opção 1', date: '2026-10-07T11:00:00.000Z' });
+        // Versão antiga do servidor, sem o id da opção: o nome é ambíguo.
+        const antigaSemId = pdf({ id: 30, proposalOptionId: undefined, proposalOptionName: 'Opção 1', date: '2026-10-01T10:00:00+00:00' });
+        const resolver = buildOptionIdResolver([{ id: 100, name: 'Opção 1' }, { id: 200, name: 'Opção 1' }]);
+
+        expect(listClientProposals([opcaoA, opcaoB, antigaSemId], 7, 6, resolver).map(item => item.id)).toEqual([42, 41, 30]);
+        // A lixeira de uma não apaga a outra nem a antiga ambígua.
+        const versions = getOptionVersions([opcaoA, opcaoB, antigaSemId], opcaoA, () => false, resolver);
+        expect(versions.toDelete.map(item => item.id)).toEqual([41]);
     });
 
     it('limita às mais recentes', () => {
