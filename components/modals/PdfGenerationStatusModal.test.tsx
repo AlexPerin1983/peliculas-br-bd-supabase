@@ -170,6 +170,40 @@ describe('PdfGenerationStatusModal', () => {
         expect(screen.getByRole('button', { name: 'Marque ao menos uma opção' })).toBeDisabled();
     });
 
+    it('gerando normal com o cliente em 2 opções: lista com só a nova marcada', () => {
+        const antiga = proposal(30, 'Suntek', 2649.6, '2026-10-07T10:00:00Z');
+        const nova = proposal(43, 'Color Stable', 3676.6, '2026-10-08T10:05:00Z');
+        render(
+            <PdfGenerationStatusModal
+                {...baseProps()}
+                proposalForLink={{ client, pdf: nova }}
+                clientProposals={[nova, antiga]}
+                preselectedPdfKeys={[getProposalKey(nova)]}
+            />
+        );
+
+        expect(screen.getByRole('heading', { name: 'Orçamento gerado' })).toBeInTheDocument();
+        expect(screen.getByRole('checkbox', { name: /Color Stable/ })).toBeChecked();
+        expect(screen.getByRole('checkbox', { name: /Suntek/ })).not.toBeChecked();
+        expect(screen.getByRole('button', { name: 'Enviar 1 opção pelo WhatsApp' })).toBeEnabled();
+        expect(screen.queryByRole('button', { name: /criar link e enviar/i })).not.toBeInTheDocument();
+    });
+
+    it('cliente com uma opção só: modal simples', () => {
+        const unica = proposal(43, 'Color Stable', 3676.6, '2026-10-08T10:05:00Z');
+        render(
+            <PdfGenerationStatusModal
+                {...baseProps()}
+                proposalForLink={{ client, pdf: unica }}
+                clientProposals={[unica]}
+                preselectedPdfKeys={[getProposalKey(unica)]}
+            />
+        );
+
+        expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /criar link e enviar/i })).toBeInTheDocument();
+    });
+
     it('mantém as opções marcadas quando o id provisório vira o definitivo', () => {
         const original = proposal(42, 'Suntek', 2649.6, '2026-10-07T10:00:00Z');
         const novaProvisoria = proposal(-1791, 'Window Premium', 3120, '2026-10-07T10:05:00Z');

@@ -10,22 +10,31 @@ export const getProposalKey = (pdf: Pick<SavedPDF, 'clienteId' | 'proposalOption
 
 const hasPersistedId = (pdf: SavedPDF) => typeof pdf.id === 'number' && pdf.id > 0;
 
+const getOptionKey = (pdf: SavedPDF) => pdf.proposalOptionId != null
+    ? `id:${pdf.proposalOptionId}`
+    : pdf.proposalOptionName ? `nome:${pdf.proposalOptionName}` : `pdf:${getProposalKey(pdf)}`;
+
 /**
- * Propostas do cliente para escolher no "Orçamento gerado": sem repetir a mesma
- * proposta (provisória e definitiva), a definitiva primeiro, mais recentes no topo.
+ * Propostas do cliente para escolher no "Orçamento gerado": uma por opção (o
+ * PDF mais recente de cada), mais recentes no topo. A mesma proposta com id
+ * provisório e definitivo conta uma vez só, com o definitivo.
  */
 export const listClientProposals = (pdfs: SavedPDF[], clientId: number, limit = 6): SavedPDF[] => {
-    const byKey = new Map<string, SavedPDF>();
+    const byOption = new Map<string, SavedPDF>();
     for (const pdf of pdfs) {
         if (pdf.clienteId !== clientId || pdf.id == null) continue;
-        const key = getProposalKey(pdf);
-        const current = byKey.get(key);
-        if (!current || (!hasPersistedId(current) && hasPersistedId(pdf))) {
+        const optionKey = getOptionKey(pdf);
+        const current = byOption.get(optionKey);
+        if (!current || new Date(pdf.date).getTime() > new Date(current.date).getTime()) {
+            byOption.set(optionKey, pdf);
+        } else if (getProposalKey(pdf) === getProposalKey(current)) {
+            const preferred = !hasPersistedId(current) && hasPersistedId(pdf) ? pdf : current;
+            const other = preferred === pdf ? current : pdf;
             // Mantém o PDF já gerado em memória (abre e compartilha sem baixar de novo).
-            byKey.set(key, current?.pdfBlob && !pdf.pdfBlob ? { ...pdf, pdfBlob: current.pdfBlob } : pdf);
+            byOption.set(optionKey, !preferred.pdfBlob && other.pdfBlob ? { ...preferred, pdfBlob: other.pdfBlob } : preferred);
         }
     }
-    return [...byKey.values()]
+    return [...byOption.values()]
         .sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime())
         .slice(0, limit);
 };

@@ -1602,17 +1602,30 @@ const App: React.FC = () => {
 
     // Propostas do cliente para mandar juntas depois de duplicar (mais recentes
     // primeiro). Pela identificação estável: o id do PDF muda ao sincronizar.
-    const generatedClientProposals = useMemo(() => {
-        const clientId = latestGeneratedProposal?.client.id;
-        if (clientId == null || duplicateSourcePdfKeys.length === 0) return [];
-        return listClientProposals(allSavedPdfs, clientId);
-    }, [allSavedPdfs, duplicateSourcePdfKeys.length, latestGeneratedProposal]);
+    // Os PDFs do cliente nem sempre estão carregados (ex.: depois de recarregar,
+    // na tela do cliente): busca os dele ao abrir o "Orçamento gerado".
+    const [generatedClientPdfs, setGeneratedClientPdfs] = useState<SavedPDF[]>([]);
+    const latestGeneratedClientId = latestGeneratedProposal?.client.id;
+    useEffect(() => {
+        if (pdfGenerationStatus !== 'success' || latestGeneratedClientId == null || hasLoadedAllPdfs) return;
+        let cancelled = false;
+        db.getPDFsForClient(latestGeneratedClientId)
+            .then(pdfs => { if (!cancelled) setGeneratedClientPdfs(pdfs); })
+            .catch(error => console.error('Erro ao buscar as propostas do cliente:', error));
+        return () => { cancelled = true; };
+    }, [pdfGenerationStatus, latestGeneratedClientId, hasLoadedAllPdfs]);
 
+    // Uma linha por opção do cliente; com 2 ou mais, o modal mostra a lista.
+    const generatedClientProposals = useMemo(() => {
+        if (latestGeneratedClientId == null) return [];
+        return listClientProposals([...allSavedPdfs, ...generatedClientPdfs], latestGeneratedClientId);
+    }, [allSavedPdfs, generatedClientPdfs, latestGeneratedClientId]);
+
+    // Marcadas: a recém-gerada e, se veio de duplicar, as opções de origem.
     const generatedPreselectedPdfKeys = useMemo(() => {
-        if (!latestGeneratedProposal || duplicateSourcePdfKeys.length === 0) return [];
+        if (!latestGeneratedProposal) return [];
         const latestKey = getProposalKey(latestGeneratedProposal.pdf);
-        if (duplicateSourcePdfKeys.includes(latestKey)) return [];
-        return [...duplicateSourcePdfKeys, latestKey];
+        return [...duplicateSourcePdfKeys.filter(key => key !== latestKey), latestKey];
     }, [duplicateSourcePdfKeys, latestGeneratedProposal]);
 
     const {
@@ -2413,14 +2426,15 @@ Regras:
         const key = getProposalKey(pdf);
         // Depois de sincronizar, a mesma proposta pode estar com o id provisório
         // e o definitivo: exclui pelo definitivo (o registro local é o mesmo).
-        const persisted = allSavedPdfs.find(item => (
+        const persisted = [...allSavedPdfs, ...generatedClientPdfs].find(item => (
             typeof item.id === 'number' && item.id > 0 && getProposalKey(item) === key
         ));
         const keepOthers = (previous: SavedPDF[]) => previous.filter(item => getProposalKey(item) !== key);
         setAllSavedPdfs(keepOthers);
         setHistoryPdfs(keepOthers);
+        setGeneratedClientPdfs(keepOthers);
         await handleDeletePdfs([persisted?.id ?? pdf.id]);
-    }, [allSavedPdfs, handleDeletePdfs]);
+    }, [allSavedPdfs, generatedClientPdfs, handleDeletePdfs]);
 
     const handleConfirmDeleteMeasurementWithFeedback = useCallback(async () => {
         setIsDeletingMeasurement(true);

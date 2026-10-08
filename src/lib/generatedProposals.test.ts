@@ -34,6 +34,16 @@ describe('propostas geradas do cliente', () => {
         expect(list[1].pdfBlob).toBe(blob);
     });
 
+    it('mostra uma linha por opção, com o PDF mais recente dela', () => {
+        const list = listClientProposals([
+            pdf({ id: 40, date: '2026-10-01T10:00:00.000Z' }),
+            pdf({ id: 41, date: '2026-10-07T10:00:00.000Z' }),
+            pdf({ id: 43, proposalOptionId: 101, proposalOptionName: 'Window Blue', date: '2026-10-05T10:00:00.000Z' }),
+        ], 7);
+
+        expect(list.map(item => item.id)).toEqual([41, 43]);
+    });
+
     it('limita às mais recentes', () => {
         const many = Array.from({ length: 8 }, (_, index) => pdf({
             id: index + 1,
