@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import PdfGenerationStatusModal from './PdfGenerationStatusModal';
+import { getProposalKey } from '../../src/lib/generatedProposals';
 
 vi.mock('./ProposalShareModal', () => ({
     default: ({ autoCreate, pdfs }: { autoCreate?: boolean; pdfs: Array<{ proposalOptionName?: string }> }) => (
@@ -136,7 +137,7 @@ describe('PdfGenerationStatusModal', () => {
                 {...baseProps()}
                 proposalForLink={{ client, pdf: nova }}
                 clientProposals={[nova, original, antiga]}
-                preselectedPdfIds={[42, 43]}
+                preselectedPdfKeys={[getProposalKey(original), getProposalKey(nova)]}
                 onDuplicateWithFilm={vi.fn()}
             />
         );
@@ -159,13 +160,122 @@ describe('PdfGenerationStatusModal', () => {
                 {...baseProps()}
                 proposalForLink={{ client, pdf: nova }}
                 clientProposals={[nova, original]}
-                preselectedPdfIds={[42, 43]}
+                preselectedPdfKeys={[getProposalKey(original), getProposalKey(nova)]}
             />
         );
 
         fireEvent.click(screen.getByRole('checkbox', { name: /Window Premium/ }));
         expect(screen.getByRole('button', { name: 'Enviar 1 opção pelo WhatsApp' })).toBeEnabled();
         fireEvent.click(screen.getByRole('checkbox', { name: /Suntek/ }));
+        expect(screen.getByRole('button', { name: 'Marque ao menos uma opção' })).toBeDisabled();
+    });
+
+    it('mantém as opções marcadas quando o id provisório vira o definitivo', () => {
+        const original = proposal(42, 'Suntek', 2649.6, '2026-10-07T10:00:00Z');
+        const novaProvisoria = proposal(-1791, 'Window Premium', 3120, '2026-10-07T10:05:00Z');
+        const novaSalva = { ...novaProvisoria, id: 43 };
+        const keys = [getProposalKey(original), getProposalKey(novaProvisoria)];
+        const { rerender } = render(
+            <PdfGenerationStatusModal
+                {...baseProps()}
+                proposalForLink={{ client, pdf: novaProvisoria }}
+                clientProposals={[novaProvisoria, original]}
+                preselectedPdfKeys={keys}
+            />
+        );
+        rerender(
+            <PdfGenerationStatusModal
+                {...baseProps()}
+                proposalForLink={{ client, pdf: novaProvisoria }}
+                clientProposals={[novaSalva, original]}
+                preselectedPdfKeys={[...keys]}
+            />
+        );
+
+        expect(screen.getByRole('checkbox', { name: /Window Premium/ })).toBeChecked();
+        expect(screen.getByRole('checkbox', { name: /Suntek/ })).toBeChecked();
+        expect(screen.getByRole('button', { name: 'Enviar as 2 pelo WhatsApp' })).toBeEnabled();
+    });
+
+    it('na lista, Ver PDF e Compartilhar usam as opções marcadas', async () => {
+        const original = proposal(42, 'Suntek', 2649.6, '2026-10-07T10:00:00Z');
+        const nova = proposal(43, 'Window Premium', 3120, '2026-10-07T10:05:00Z');
+        const onPreview = vi.fn();
+        const onShare = vi.fn();
+        const onPreviewProposals = vi.fn().mockResolvedValue(true);
+        const onShareProposals = vi.fn().mockResolvedValue('shared');
+        render(
+            <PdfGenerationStatusModal
+                {...baseProps()}
+                onPreview={onPreview}
+                onShare={onShare}
+                proposalForLink={{ client, pdf: nova }}
+                clientProposals={[nova, original]}
+                preselectedPdfKeys={[getProposalKey(original), getProposalKey(nova)]}
+                onPreviewProposals={onPreviewProposals}
+                onShareProposals={onShareProposals}
+            />
+        );
+
+        fireEvent.click(screen.getByRole('button', { name: 'Visualizar as 2 opções em um PDF' }));
+        await waitFor(() => expect(onPreviewProposals).toHaveBeenCalledWith([nova, original]));
+        expect(await screen.findByText('PDF com as 2 opções aberto para conferência.')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('checkbox', { name: /Suntek/ }));
+        fireEvent.click(screen.getByRole('button', { name: 'Compartilhar PDF' }));
+        await waitFor(() => expect(onShareProposals).toHaveBeenCalledWith([nova]));
+        expect(onPreview).not.toHaveBeenCalled();
+        expect(onShare).not.toHaveBeenCalled();
+
+        fireEvent.click(screen.getByRole('checkbox', { name: /Window Premium/ }));
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Visualizar PDF' })).toBeDisabled());
+        expect(screen.getByRole('button', { name: 'Compartilhar PDF' })).toBeDisabled();
+    });
+
+    it('exclui uma opção da lista depois de confirmar', async () => {
+        const original = proposal(42, 'Suntek', 2649.6, '2026-10-07T10:00:00Z');
+        const nova = proposal(43, 'Window Premium', 3120, '2026-10-07T10:05:00Z');
+        const onDeleteProposal = vi.fn().mockResolvedValue(undefined);
+        const props = {
+            ...baseProps(),
+            proposalForLink: { client, pdf: nova },
+            preselectedPdfKeys: [getProposalKey(original), getProposalKey(nova)],
+            onDeleteProposal,
+        };
+        const { rerender } = render(<PdfGenerationStatusModal {...props} clientProposals={[nova, original]} />);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Excluir Suntek' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+        expect(onDeleteProposal).not.toHaveBeenCalled();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Excluir Suntek' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Excluir' }));
+        await waitFor(() => expect(onDeleteProposal).toHaveBeenCalledWith(original));
+        expect(await screen.findByText('"Suntek" foi excluída do histórico.')).toBeInTheDocument();
+
+        rerender(<PdfGenerationStatusModal {...props} clientProposals={[nova]} />);
+        expect(screen.queryByRole('checkbox', { name: /Suntek/ })).not.toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Nova opção gerada' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Enviar 1 opção pelo WhatsApp' })).toBeEnabled();
+    });
+
+    it('marca e desmarca todas quando há várias opções', () => {
+        const original = proposal(42, 'Suntek', 2649.6, '2026-10-07T10:00:00Z');
+        const nova = proposal(43, 'Window Premium', 3120, '2026-10-07T10:05:00Z');
+        const antiga = proposal(30, 'Opção antiga', 1000, '2026-09-01T10:00:00Z');
+        render(
+            <PdfGenerationStatusModal
+                {...baseProps()}
+                proposalForLink={{ client, pdf: nova }}
+                clientProposals={[nova, original, antiga]}
+                preselectedPdfKeys={[getProposalKey(original), getProposalKey(nova)]}
+            />
+        );
+
+        expect(screen.getByText('Nova')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Marcar todas' }));
+        expect(screen.getByRole('button', { name: 'Enviar as 3 pelo WhatsApp' })).toBeEnabled();
+        fireEvent.click(screen.getByRole('button', { name: 'Desmarcar todas' }));
         expect(screen.getByRole('button', { name: 'Marque ao menos uma opção' })).toBeDisabled();
     });
 

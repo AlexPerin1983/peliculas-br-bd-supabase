@@ -84,6 +84,7 @@ import {
     parseFilmTableExtractionResponse
 } from './src/lib/aiFilmExtraction';
 import { getUniqueOptionName } from './src/lib/proposalOptionNames';
+import { getProposalKey, listClientProposals } from './src/lib/generatedProposals';
 import {
     buildOptionVariationPrompt,
     getFriendlyOptionVariationError,
@@ -494,7 +495,7 @@ const App: React.FC = () => {
     const [isAIVariationModalOpen, setIsAIVariationModalOpen] = useState(false);
     const [optionVariationPlan, setOptionVariationPlan] = useState<OptionVariationPlan | null>(null);
     const [pendingPdfOptionId, setPendingPdfOptionId] = useState<number | null>(null);
-    const [duplicateSourcePdfIds, setDuplicateSourcePdfIds] = useState<number[]>([]);
+    const [duplicateSourcePdfKeys, setDuplicateSourcePdfKeys] = useState<string[]>([]);
     const [newFilmName, setNewFilmName] = useState<string>('');
     const [filmToApplyToAll, setFilmToApplyToAll] = useState<string | null>(null);
     const [editingMeasurementIdForFilm, setEditingMeasurementIdForFilm] = useState<number | null>(null);
@@ -1252,7 +1253,7 @@ const App: React.FC = () => {
         // Desistiu de escolher a película: volta para o "Orçamento gerado".
         if (duplicateFromPdfRef.current === 'awaiting-film') {
             duplicateFromPdfRef.current = null;
-            setDuplicateSourcePdfIds([]);
+            setDuplicateSourcePdfKeys([]);
             setPdfGenerationStatus('success');
         }
     }, []);
@@ -1527,6 +1528,8 @@ const App: React.FC = () => {
         handleDownloadPdf,
         handleShareGeneratedPdf,
         handlePreviewGeneratedPdf,
+        handlePreviewProposals,
+        handleShareProposals,
         canShareGeneratedPdf,
         canPreviewGeneratedPdf,
         latestGeneratedProposal,
@@ -1553,7 +1556,7 @@ const App: React.FC = () => {
     });
 
     const handleGeneratePdf = useCallback(async () => {
-        setDuplicateSourcePdfIds([]);
+        setDuplicateSourcePdfKeys([]);
         await handleGeneratePdfWithSaveCheck(isDirty);
     }, [handleGeneratePdfWithSaveCheck, isDirty]);
 
@@ -1564,9 +1567,9 @@ const App: React.FC = () => {
         && latestGeneratedProposal.pdf.proposalOptionId === activeOption?.id;
 
     const handleDuplicateFromGeneratedPdf = useCallback(() => {
-        const latestPdfId = latestGeneratedProposal?.pdf.id;
-        if (latestPdfId == null) return;
-        setDuplicateSourcePdfIds(current => current.includes(latestPdfId) ? current : [...current, latestPdfId]);
+        if (!latestGeneratedProposal) return;
+        const latestKey = getProposalKey(latestGeneratedProposal.pdf);
+        setDuplicateSourcePdfKeys(current => current.includes(latestKey) ? current : [...current, latestKey]);
         duplicateFromPdfRef.current = 'awaiting-film';
         setPdfGenerationStatus('idle');
         setIsDuplicateFilmSelectorOpen(true);
@@ -1582,24 +1585,23 @@ const App: React.FC = () => {
 
     const handleClosePdfStatusModal = useCallback(() => {
         setPdfGenerationStatus('idle');
-        setDuplicateSourcePdfIds([]);
+        setDuplicateSourcePdfKeys([]);
     }, []);
 
-    // Propostas do cliente para mandar juntas depois de duplicar (mais recentes primeiro).
+    // Propostas do cliente para mandar juntas depois de duplicar (mais recentes
+    // primeiro). Pela identificação estável: o id do PDF muda ao sincronizar.
     const generatedClientProposals = useMemo(() => {
         const clientId = latestGeneratedProposal?.client.id;
-        if (clientId == null || duplicateSourcePdfIds.length === 0) return [];
-        return allSavedPdfs
-            .filter(pdf => pdf.clienteId === clientId && pdf.id != null)
-            .sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime())
-            .slice(0, 6);
-    }, [allSavedPdfs, duplicateSourcePdfIds.length, latestGeneratedProposal]);
+        if (clientId == null || duplicateSourcePdfKeys.length === 0) return [];
+        return listClientProposals(allSavedPdfs, clientId);
+    }, [allSavedPdfs, duplicateSourcePdfKeys.length, latestGeneratedProposal]);
 
-    const generatedPreselectedPdfIds = useMemo(() => {
-        const latestPdfId = latestGeneratedProposal?.pdf.id;
-        if (latestPdfId == null || duplicateSourcePdfIds.length === 0 || duplicateSourcePdfIds.includes(latestPdfId)) return [];
-        return [...duplicateSourcePdfIds, latestPdfId];
-    }, [duplicateSourcePdfIds, latestGeneratedProposal]);
+    const generatedPreselectedPdfKeys = useMemo(() => {
+        if (!latestGeneratedProposal || duplicateSourcePdfKeys.length === 0) return [];
+        const latestKey = getProposalKey(latestGeneratedProposal.pdf);
+        if (duplicateSourcePdfKeys.includes(latestKey)) return [];
+        return [...duplicateSourcePdfKeys, latestKey];
+    }, [duplicateSourcePdfKeys, latestGeneratedProposal]);
 
     const {
         handleOpenFilmModal,
@@ -2393,6 +2395,21 @@ Regras:
         loadPdfHistoryPage
     ]);
 
+    // Excluir uma proposta da lista do "Orçamento gerado" (mesma exclusão do Histórico).
+    const handleDeleteGeneratedProposal = useCallback(async (pdf: SavedPDF) => {
+        if (pdf.id == null) return;
+        const key = getProposalKey(pdf);
+        // Depois de sincronizar, a mesma proposta pode estar com o id provisório
+        // e o definitivo: exclui pelo definitivo (o registro local é o mesmo).
+        const persisted = allSavedPdfs.find(item => (
+            typeof item.id === 'number' && item.id > 0 && getProposalKey(item) === key
+        ));
+        const keepOthers = (previous: SavedPDF[]) => previous.filter(item => getProposalKey(item) !== key);
+        setAllSavedPdfs(keepOthers);
+        setHistoryPdfs(keepOthers);
+        await handleDeletePdfs([persisted?.id ?? pdf.id]);
+    }, [allSavedPdfs, handleDeletePdfs]);
+
     const handleConfirmDeleteMeasurementWithFeedback = useCallback(async () => {
         setIsDeletingMeasurement(true);
         try {
@@ -2712,9 +2729,9 @@ Regras:
     // "Duplicar com IA" no Orçamento gerado: pedido por voz/texto → trocas
     // conferidas pelo instalador → nova opção com PDF (mesmo fluxo do duplicar).
     const handleOpenAIVariationFromGeneratedPdf = useCallback(() => {
-        const latestPdfId = latestGeneratedProposal?.pdf.id;
-        if (latestPdfId == null || !ensureAiReady()) return;
-        setDuplicateSourcePdfIds(current => current.includes(latestPdfId) ? current : [...current, latestPdfId]);
+        if (!latestGeneratedProposal || !ensureAiReady()) return;
+        const latestKey = getProposalKey(latestGeneratedProposal.pdf);
+        setDuplicateSourcePdfKeys(current => current.includes(latestKey) ? current : [...current, latestKey]);
         duplicateFromPdfRef.current = 'awaiting-ai';
         setPdfGenerationStatus('idle');
         setIsAIVariationModalOpen(true);
@@ -2726,7 +2743,7 @@ Regras:
         // Desistiu: volta para o "Orçamento gerado".
         if (duplicateFromPdfRef.current === 'awaiting-ai') {
             duplicateFromPdfRef.current = null;
-            setDuplicateSourcePdfIds([]);
+            setDuplicateSourcePdfKeys([]);
             setPdfGenerationStatus('success');
         }
     }, []);
@@ -3562,7 +3579,10 @@ Use somente o JSON definido e não inclua explicações fora dele.`;
         optionVariationPlan,
         handleConfirmAIVariation,
         generatedClientProposals,
-        generatedPreselectedPdfIds,
+        generatedPreselectedPdfKeys,
+        handlePreviewProposals,
+        handleShareProposals,
+        handleDeleteGeneratedProposal,
         isProcessingAI,
         isAIQuickProposalModalOpen,
         setIsAIQuickProposalModalOpen,

@@ -1,12 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import type { Client, SavedPDF } from '../../types';
 import ProposalShareModal from './ProposalShareModal';
+import { getProposalKey } from '../../src/lib/generatedProposals';
+
+type ShareResult = 'shared' | 'downloaded' | 'unavailable';
 
 interface PdfGenerationStatusModalProps {
     status: 'generating' | 'success';
     onClose: () => void;
     onGoToHistory: () => void;
-    onShare: () => Promise<'shared' | 'downloaded' | 'unavailable'>;
+    onShare: () => Promise<ShareResult>;
     onPreview: () => boolean;
     canShare: boolean;
     canPreview: boolean;
@@ -17,10 +20,16 @@ interface PdfGenerationStatusModalProps {
     onDuplicateWithAI?: () => void;
     /**
      * Propostas do cliente para enviar juntas num link só (a recém-gerada
-     * incluída). Aparece depois de duplicar, com as marcadas em preselectedPdfIds.
+     * incluída). Aparece depois de duplicar, com as marcadas em preselectedPdfKeys
+     * (identificação estável, ver getProposalKey).
      */
     clientProposals?: SavedPDF[];
-    preselectedPdfIds?: number[];
+    preselectedPdfKeys?: string[];
+    /** Ver PDF e Compartilhar da lista: 1 marcada = o PDF dela; várias = PDF único. */
+    onPreviewProposals?: (pdfs: SavedPDF[]) => Promise<boolean>;
+    onShareProposals?: (pdfs: SavedPDF[]) => Promise<ShareResult>;
+    /** Exclui a proposta do histórico (mesma exclusão da tela Histórico). */
+    onDeleteProposal?: (pdf: SavedPDF) => Promise<void>;
 }
 
 const formatCurrency = (value: number) =>
@@ -29,7 +38,13 @@ const formatCurrency = (value: number) =>
 const describeProposal = (pdf: SavedPDF) =>
     `${pdf.proposalOptionName || 'Proposta'} · ${formatCurrency(pdf.totalPreco)}`;
 
-const iconButton = 'flex flex-col items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-1 py-2.5 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-55 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700';
+const shareMessageFor = (result: ShareResult) => result === 'shared'
+    ? 'PDF compartilhado com sucesso.'
+    : result === 'downloaded'
+        ? 'Este navegador não anexa PDFs diretamente. O arquivo foi baixado para você enviar.'
+        : 'O PDF ainda não está disponível para compartilhar.';
+
+const iconButton = 'flex flex-col items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-1 py-2.5 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-45 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700';
 
 const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
     status,
@@ -43,43 +58,48 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
     onDuplicateWithFilm,
     onDuplicateWithAI,
     clientProposals = [],
-    preselectedPdfIds = [],
+    preselectedPdfKeys = [],
+    onPreviewProposals,
+    onShareProposals,
+    onDeleteProposal,
 }) => {
     const [isSharing, setIsSharing] = useState(false);
+    const [isPreviewing, setIsPreviewing] = useState(false);
     const [shareMessage, setShareMessage] = useState('');
     const [linkPdfs, setLinkPdfs] = useState<SavedPDF[] | null>(null);
-    const [selectedIds, setSelectedIds] = useState<number[]>(preselectedPdfIds);
+    const [selectedKeys, setSelectedKeys] = useState<string[]>(preselectedPdfKeys);
+    const [confirmingDeleteKey, setConfirmingDeleteKey] = useState<string | null>(null);
+    const [deletingKey, setDeletingKey] = useState<string | null>(null);
 
     // Depois de duplicar: lista as propostas do cliente para mandar juntas.
-    const showsProposalPicker = !!proposalForLink && preselectedPdfIds.length > 1 && clientProposals.length > 1;
+    const showsProposalPicker = !!proposalForLink && preselectedPdfKeys.length > 1;
+    const latestKey = proposalForLink ? getProposalKey(proposalForLink.pdf) : null;
+    const latestStillListed = clientProposals.some(pdf => getProposalKey(pdf) === latestKey);
     const selectedPdfs = useMemo(
-        () => clientProposals.filter(pdf => pdf.id != null && selectedIds.includes(pdf.id)),
-        [clientProposals, selectedIds]
+        () => clientProposals.filter(pdf => selectedKeys.includes(getProposalKey(pdf))),
+        [clientProposals, selectedKeys]
     );
+    const selectedCount = selectedPdfs.length;
 
     useEffect(() => {
         if (status === 'generating') {
             setShareMessage('');
             setLinkPdfs(null);
+            setConfirmingDeleteKey(null);
         }
     }, [status]);
 
     // Nova geração (outra duplicação): volta a marcar as opções sugeridas.
-    const preselectedKey = preselectedPdfIds.join(',');
+    const preselectedSignature = preselectedPdfKeys.join('\n');
     useEffect(() => {
-        setSelectedIds(preselectedKey ? preselectedKey.split(',').map(Number) : []);
-    }, [preselectedKey]);
+        setSelectedKeys(preselectedSignature ? preselectedSignature.split('\n') : []);
+    }, [preselectedSignature]);
 
-    const handleShare = async () => {
+    const runShare = async (share: () => Promise<ShareResult>) => {
         setIsSharing(true);
         setShareMessage('');
         try {
-            const result = await onShare();
-            setShareMessage(result === 'shared'
-                ? 'PDF compartilhado com sucesso.'
-                : result === 'downloaded'
-                    ? 'Este navegador não anexa PDFs diretamente. O arquivo foi baixado para você enviar.'
-                    : 'O PDF ainda não está disponível para compartilhar.');
+            setShareMessage(shareMessageFor(await share()));
         } catch (error) {
             if ((error as DOMException)?.name !== 'AbortError') setShareMessage('Não foi possível compartilhar. Tente novamente.');
         } finally {
@@ -93,10 +113,46 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
             : 'O PDF ainda não está disponível para visualizar.');
     };
 
-    const toggleProposal = (pdfId: number) => {
-        setSelectedIds(current => current.includes(pdfId)
-            ? current.filter(id => id !== pdfId)
-            : [...current, pdfId]);
+    const handlePreviewSelected = async () => {
+        if (!onPreviewProposals || selectedCount === 0) return;
+        setIsPreviewing(true);
+        setShareMessage('');
+        try {
+            const opened = await onPreviewProposals(selectedPdfs);
+            setShareMessage(opened
+                ? selectedCount === 1 ? 'PDF aberto para conferência.' : `PDF com as ${selectedCount} opções aberto para conferência.`
+                : 'Não foi possível abrir o PDF. Tente novamente.');
+        } finally {
+            setIsPreviewing(false);
+        }
+    };
+
+    const toggleProposal = (key: string) => {
+        setSelectedKeys(current => current.includes(key)
+            ? current.filter(item => item !== key)
+            : [...current, key]);
+    };
+
+    const allSelected = clientProposals.length > 0 && selectedCount === clientProposals.length;
+    const toggleAll = () => {
+        setSelectedKeys(allSelected ? [] : clientProposals.map(getProposalKey));
+    };
+
+    const handleDelete = async (pdf: SavedPDF) => {
+        if (!onDeleteProposal) return;
+        const key = getProposalKey(pdf);
+        setDeletingKey(key);
+        setShareMessage('');
+        try {
+            await onDeleteProposal(pdf);
+            setSelectedKeys(current => current.filter(item => item !== key));
+            setConfirmingDeleteKey(null);
+            setShareMessage(`"${pdf.proposalOptionName || 'Proposta'}" foi excluída do histórico.`);
+        } catch {
+            setShareMessage('Não foi possível excluir. Tente novamente.');
+        } finally {
+            setDeletingKey(null);
+        }
     };
 
     if (status === 'generating') {
@@ -125,7 +181,10 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
         );
     }
 
-    const sendCount = selectedPdfs.length;
+    // Na lista, Ver PDF e Compartilhar usam as opções marcadas.
+    const usesSelection = showsProposalPicker && !!onPreviewProposals && !!onShareProposals;
+    const previewLabel = usesSelection && selectedCount > 1 ? `Ver as ${selectedCount}` : 'Ver PDF';
+    const shareLabel = usesSelection && selectedCount > 1 ? `Compartilhar ${selectedCount}` : 'Compartilhar';
 
     return (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 animate-fade-in">
@@ -139,48 +198,116 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
                             {showsProposalPicker ? 'Nova opção gerada' : 'Orçamento gerado'}
                         </h2>
                         <p className="mt-0.5 truncate text-sm text-slate-500 dark:text-slate-400">
-                            {proposalForLink ? describeProposal(proposalForLink.pdf) : 'Seu PDF foi salvo.'}
+                            {!proposalForLink
+                                ? 'Seu PDF foi salvo.'
+                                : showsProposalPicker && !latestStillListed
+                                    ? 'Escolha as opções para enviar.'
+                                    : describeProposal(proposalForLink.pdf)}
                         </p>
                     </div>
                 </div>
 
                 {showsProposalPicker ? (
                     <section className="mt-5" aria-labelledby="pdf-status-send-title">
-                        <h3 id="pdf-status-send-title" className="text-sm font-semibold text-slate-700 dark:text-slate-200">Enviar ao cliente</h3>
-                        <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Marque as opções que vão no mesmo link.</p>
-                        <ul className="mt-2 space-y-1.5">
-                            {clientProposals.map(pdf => pdf.id != null && (
-                                <li key={pdf.id}>
-                                    <label className={`flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors ${selectedIds.includes(pdf.id)
-                                        ? 'border-emerald-400 bg-emerald-50 dark:border-emerald-700 dark:bg-emerald-950/30'
-                                        : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900/60'}`}
-                                    >
-                                        <input
-                                            type="checkbox"
-                                            checked={selectedIds.includes(pdf.id)}
-                                            onChange={() => toggleProposal(pdf.id!)}
-                                            className="h-5 w-5 shrink-0 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
-                                        />
-                                        <span className="min-w-0 flex-1">
-                                            <span className="block truncate text-sm font-semibold text-slate-800 dark:text-slate-100">{pdf.proposalOptionName || 'Proposta'}</span>
-                                            <span className="block text-xs text-slate-500 dark:text-slate-400">
-                                                {formatCurrency(pdf.totalPreco)} · {new Date(pdf.date).toLocaleDateString('pt-BR')}
-                                            </span>
-                                        </span>
-                                    </label>
-                                </li>
-                            ))}
-                        </ul>
+                        <div className="flex items-baseline justify-between gap-2">
+                            <h3 id="pdf-status-send-title" className="text-sm font-semibold text-slate-700 dark:text-slate-200">Enviar ao cliente</h3>
+                            {clientProposals.length > 2 ? (
+                                <button type="button" onClick={toggleAll} className="text-xs font-semibold text-emerald-700 hover:underline dark:text-emerald-400">
+                                    <span className="text-xs font-semibold">{allSelected ? 'Desmarcar todas' : 'Marcar todas'}</span>
+                                </button>
+                            ) : null}
+                        </div>
+                        <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                            Marque as opções do link. Ver PDF e Compartilhar usam as marcadas.
+                        </p>
+
+                        {clientProposals.length === 0 ? (
+                            <p className="mt-3 rounded-lg bg-slate-50 px-3 py-3 text-sm text-slate-500 dark:bg-slate-900/60 dark:text-slate-400">
+                                Nenhuma proposta deste cliente na lista.
+                            </p>
+                        ) : (
+                            <ul className="mt-2 space-y-1.5">
+                                {clientProposals.map(pdf => {
+                                    const key = getProposalKey(pdf);
+                                    const isSelected = selectedKeys.includes(key);
+                                    const name = pdf.proposalOptionName || 'Proposta';
+                                    const isConfirming = confirmingDeleteKey === key;
+                                    return (
+                                        <li key={key}>
+                                            <div className={`flex items-center rounded-lg border transition-colors ${isSelected
+                                                ? 'border-emerald-400 bg-emerald-50 dark:border-emerald-700 dark:bg-emerald-950/30'
+                                                : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900/60'}`}
+                                            >
+                                                <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 py-2.5 pl-3">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={isSelected}
+                                                        onChange={() => toggleProposal(key)}
+                                                        className="h-5 w-5 shrink-0 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                                                    />
+                                                    <span className="min-w-0 flex-1">
+                                                        <span className="flex items-center gap-1.5">
+                                                            <span className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">{name}</span>
+                                                            {key === latestKey ? (
+                                                                <span className="shrink-0 rounded-full bg-emerald-600 px-1.5 py-0.5 text-[10px] font-bold uppercase leading-none text-white">Nova</span>
+                                                            ) : null}
+                                                        </span>
+                                                        <span className="block text-xs text-slate-500 dark:text-slate-400">
+                                                            {formatCurrency(pdf.totalPreco)} · {new Date(pdf.date).toLocaleDateString('pt-BR')}
+                                                        </span>
+                                                    </span>
+                                                </label>
+                                                {onDeleteProposal ? (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setConfirmingDeleteKey(isConfirming ? null : key)}
+                                                        aria-label={`Excluir ${name}`}
+                                                        aria-expanded={isConfirming}
+                                                        className="mr-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40"
+                                                    >
+                                                        <i className="fas fa-trash-can text-sm" aria-hidden="true"></i>
+                                                    </button>
+                                                ) : null}
+                                            </div>
+                                            {isConfirming ? (
+                                                <div role="alertdialog" aria-label={`Confirmar exclusão de ${name}`} className="mt-1 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 dark:border-red-900/60 dark:bg-red-950/30">
+                                                    <span className="min-w-0 flex-1 text-xs font-medium text-red-800 dark:text-red-200">Excluir do histórico?</span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setConfirmingDeleteKey(null)}
+                                                        disabled={deletingKey === key}
+                                                        className="rounded-md px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-800"
+                                                    >
+                                                        <span className="text-xs font-semibold">Cancelar</span>
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => { void handleDelete(pdf); }}
+                                                        disabled={deletingKey === key}
+                                                        className="rounded-md bg-red-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+                                                    >
+                                                        <span className="text-xs font-semibold">{deletingKey === key ? 'Excluindo…' : 'Excluir'}</span>
+                                                    </button>
+                                                </div>
+                                            ) : null}
+                                        </li>
+                                    );
+                                })}
+                            </ul>
+                        )}
+
                         <button
                             type="button"
                             onClick={() => setLinkPdfs(selectedPdfs)}
-                            disabled={sendCount === 0}
-                            className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-3 text-base font-semibold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-55"
+                            disabled={selectedCount === 0}
+                            className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-3 text-base font-semibold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500 dark:disabled:bg-slate-700 dark:disabled:text-slate-400"
                         >
                             <i className="fab fa-whatsapp" aria-hidden="true"></i>
-                            {sendCount === 0
-                                ? 'Marque ao menos uma opção'
-                                : sendCount === 1 ? 'Enviar 1 opção pelo WhatsApp' : `Enviar as ${sendCount} pelo WhatsApp`}
+                            <span className="font-semibold">
+                                {selectedCount === 0
+                                    ? 'Marque ao menos uma opção'
+                                    : selectedCount === 1 ? 'Enviar 1 opção pelo WhatsApp' : `Enviar as ${selectedCount} pelo WhatsApp`}
+                            </span>
                         </button>
                     </section>
                 ) : (
@@ -191,22 +318,49 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
                         className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-3 text-base font-semibold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-55"
                     >
                         <i className="fab fa-whatsapp" aria-hidden="true"></i>
-                        Criar link e enviar
+                        <span className="font-semibold">Criar link e enviar</span>
                     </button>
                 )}
 
                 <div className="mt-3 grid grid-cols-3 gap-2">
-                    <button type="button" onClick={handlePreview} disabled={!canPreview} aria-label="Visualizar PDF" className={iconButton}>
-                        <i className="fas fa-eye text-base" aria-hidden="true"></i>
-                        Ver PDF
-                    </button>
-                    <button type="button" onClick={() => { void handleShare(); }} disabled={!canShare || isSharing} aria-label="Compartilhar PDF" className={iconButton}>
-                        <i className={`fas ${isSharing ? 'fa-spinner fa-spin' : 'fa-share-nodes'} text-base`} aria-hidden="true"></i>
-                        {isSharing ? 'Preparando' : 'Compartilhar'}
-                    </button>
+                    {usesSelection ? (
+                        <>
+                            <button
+                                type="button"
+                                onClick={() => { void handlePreviewSelected(); }}
+                                disabled={selectedCount === 0 || isPreviewing}
+                                aria-label={selectedCount > 1 ? `Visualizar as ${selectedCount} opções em um PDF` : 'Visualizar PDF'}
+                                className={iconButton}
+                            >
+                                <i className={`fas ${isPreviewing ? 'fa-spinner fa-spin' : 'fa-eye'} text-base`} aria-hidden="true"></i>
+                                <span className="whitespace-nowrap text-xs font-semibold">{isPreviewing ? 'Preparando' : previewLabel}</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => { void runShare(() => onShareProposals!(selectedPdfs)); }}
+                                disabled={selectedCount === 0 || isSharing}
+                                aria-label={selectedCount > 1 ? `Compartilhar as ${selectedCount} opções em um PDF` : 'Compartilhar PDF'}
+                                className={iconButton}
+                            >
+                                <i className={`fas ${isSharing ? 'fa-spinner fa-spin' : 'fa-share-nodes'} text-base`} aria-hidden="true"></i>
+                                <span className="whitespace-nowrap text-xs font-semibold">{isSharing ? 'Preparando' : shareLabel}</span>
+                            </button>
+                        </>
+                    ) : (
+                        <>
+                            <button type="button" onClick={handlePreview} disabled={!canPreview} aria-label="Visualizar PDF" className={iconButton}>
+                                <i className="fas fa-eye text-base" aria-hidden="true"></i>
+                                <span className="whitespace-nowrap text-xs font-semibold">Ver PDF</span>
+                            </button>
+                            <button type="button" onClick={() => { void runShare(onShare); }} disabled={!canShare || isSharing} aria-label="Compartilhar PDF" className={iconButton}>
+                                <i className={`fas ${isSharing ? 'fa-spinner fa-spin' : 'fa-share-nodes'} text-base`} aria-hidden="true"></i>
+                                <span className="whitespace-nowrap text-xs font-semibold">{isSharing ? 'Preparando' : 'Compartilhar'}</span>
+                            </button>
+                        </>
+                    )}
                     <button type="button" onClick={onGoToHistory} aria-label="Ver Histórico" className={iconButton}>
                         <i className="fas fa-clock-rotate-left text-base" aria-hidden="true"></i>
-                        Histórico
+                        <span className="whitespace-nowrap text-xs font-semibold">Histórico</span>
                     </button>
                 </div>
                 {shareMessage ? <p role="status" className="mt-2 text-center text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">{shareMessage}</p> : null}
@@ -225,7 +379,7 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
                             className="mt-2 inline-flex w-full items-center gap-3 rounded-lg border border-slate-300 bg-white px-3 py-3 text-left text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
                         >
                             <i className="fas fa-copy w-4 text-center text-slate-500 dark:text-slate-400" aria-hidden="true"></i>
-                            Duplicar com outra película
+                            <span className="text-sm font-semibold">Duplicar com outra película</span>
                         </button>
                         {onDuplicateWithAI ? (
                             <button
@@ -235,7 +389,7 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
                             >
                                 <i className="fas fa-wand-magic-sparkles w-4 text-center text-violet-500 dark:text-violet-400" aria-hidden="true"></i>
                                 <span className="min-w-0">
-                                    <span className="block">Duplicar com IA</span>
+                                    <span className="block text-sm font-semibold">Duplicar com IA</span>
                                     <span className="block text-xs font-normal text-slate-500 dark:text-slate-400">"Mantém o jateado e troca a outra pela Window Premium"</span>
                                 </span>
                             </button>
@@ -248,7 +402,7 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
                     onClick={onClose}
                     className="mt-4 w-full rounded-lg px-4 py-2.5 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700"
                 >
-                    Fechar
+                    <span className="text-sm font-semibold">Fechar</span>
                 </button>
             </div>
             <style>{`

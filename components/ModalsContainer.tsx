@@ -125,7 +125,10 @@ interface ModalsContainerProps {
     latestGeneratedProposal: { client: Client; pdf: SavedPDF } | null;
     handleDuplicateFromGeneratedPdf?: () => void;
     generatedClientProposals: SavedPDF[];
-    generatedPreselectedPdfIds: number[];
+    generatedPreselectedPdfKeys: string[];
+    handlePreviewProposals: (pdfs: SavedPDF[]) => Promise<boolean>;
+    handleShareProposals: (pdfs: SavedPDF[]) => Promise<'shared' | 'downloaded' | 'unavailable'>;
+    handleDeleteGeneratedProposal: (pdf: SavedPDF) => Promise<void>;
     handleOpenAIVariationFromGeneratedPdf?: () => void;
     isAIVariationModalOpen: boolean;
     handleCancelAIVariation: () => void;
@@ -535,7 +538,10 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
                     onDuplicateWithFilm={props.handleDuplicateFromGeneratedPdf}
                     onDuplicateWithAI={props.handleOpenAIVariationFromGeneratedPdf}
                     clientProposals={props.generatedClientProposals}
-                    preselectedPdfIds={props.generatedPreselectedPdfIds}
+                    preselectedPdfKeys={props.generatedPreselectedPdfKeys}
+                    onPreviewProposals={props.handlePreviewProposals}
+                    onShareProposals={props.handleShareProposals}
+                    onDeleteProposal={props.handleDeleteGeneratedProposal}
                 />
             )}
 
