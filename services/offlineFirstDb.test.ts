@@ -620,3 +620,56 @@ describe('offlineFirstDb userInfo', () => {
     expect(deletePdfRemoteMock).not.toHaveBeenCalled();
   });
 });
+
+describe('offlineFirstDb getPDFsForClient', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.clearAllMocks();
+  });
+
+  const pdf = (overrides: Record<string, unknown>) => ({
+    clienteId: 7, date: '2026-10-08T10:00:00.000Z', totalPreco: 100, totalM2: 1, nomeArquivo: 'a.pdf', ...overrides
+  });
+
+  it('online busca só os PDFs do cliente e junta os ainda não sincronizados dele', async () => {
+    const getAllPdfsRemote = vi.fn();
+    const getPdfsForClientRemote = vi.fn().mockResolvedValue([pdf({ id: 42, date: '2026-10-07T10:00:00.000Z' })]);
+    const getAllPdfsLocal = vi.fn();
+    const getPdfsForClientLocal = vi.fn().mockResolvedValue([
+      pdf({ _localId: 'local-1', _syncStatus: 'pending', id: undefined }),
+      pdf({ _localId: 'local-2', _syncStatus: 'synced', id: 42, date: '2026-10-07T10:00:00.000Z' }),
+    ]);
+
+    vi.doMock('./offlineDb', () => ({ getAllPdfsLocal, getPdfsForClientLocal }));
+    vi.doMock('./supabaseDb', () => ({ getAllPDFs: getAllPdfsRemote, getPDFsForClient: getPdfsForClientRemote }));
+    vi.doMock('./syncService', () => ({ isOnlineNow: vi.fn().mockReturnValue(true), syncAllPending: vi.fn().mockResolvedValue(undefined) }));
+
+    const { getPDFsForClient } = await import('./offlineFirstDb');
+    const pdfs = await getPDFsForClient(7);
+
+    expect(getPdfsForClientRemote).toHaveBeenCalledWith(7);
+    expect(getPdfsForClientLocal).toHaveBeenCalledWith(7);
+    expect(getAllPdfsRemote).not.toHaveBeenCalled();
+    expect(getAllPdfsLocal).not.toHaveBeenCalled();
+    expect(pdfs).toHaveLength(2);
+    expect(pdfs.map(item => item.date)).toEqual(['2026-10-08T10:00:00.000Z', '2026-10-07T10:00:00.000Z']);
+  });
+
+  it('offline usa só os PDFs do cliente guardados no aparelho', async () => {
+    const getPdfsForClientLocal = vi.fn().mockResolvedValue([
+      pdf({ _localId: 'local-1', _syncStatus: 'synced', id: 42, date: '2026-10-07T10:00:00.000Z' }),
+      pdf({ _localId: 'local-2', _syncStatus: 'pending', id: 43 }),
+    ]);
+    const getPdfsForClientRemote = vi.fn();
+
+    vi.doMock('./offlineDb', () => ({ getPdfsForClientLocal }));
+    vi.doMock('./supabaseDb', () => ({ getPDFsForClient: getPdfsForClientRemote }));
+    vi.doMock('./syncService', () => ({ isOnlineNow: vi.fn().mockReturnValue(false), syncAllPending: vi.fn() }));
+
+    const { getPDFsForClient } = await import('./offlineFirstDb');
+    const pdfs = await getPDFsForClient(7);
+
+    expect(getPdfsForClientRemote).not.toHaveBeenCalled();
+    expect(pdfs.map(item => item.id)).toEqual([43, 42]);
+  });
+});

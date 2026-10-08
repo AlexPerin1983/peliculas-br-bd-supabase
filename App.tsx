@@ -1603,17 +1603,29 @@ const App: React.FC = () => {
     // Propostas do cliente para mandar juntas depois de duplicar (mais recentes
     // primeiro). Pela identificação estável: o id do PDF muda ao sincronizar.
     // Os PDFs do cliente nem sempre estão carregados (ex.: depois de recarregar,
-    // na tela do cliente): busca os dele ao abrir o "Orçamento gerado".
+    // na tela do cliente). Busca só os dele: já ao abrir o cliente (a lista do
+    // "Orçamento gerado" abre pronta) e de novo, em segundo plano, a cada abertura.
     const [generatedClientPdfs, setGeneratedClientPdfs] = useState<SavedPDF[]>([]);
+    // Uma exclusão invalida as buscas em andamento (não trazem de volta o excluído).
+    const generatedClientPdfsVersionRef = useRef(0);
     const latestGeneratedClientId = latestGeneratedProposal?.client.id;
+    const loadGeneratedClientPdfs = useCallback(async (clientId: number) => {
+        const version = generatedClientPdfsVersionRef.current;
+        try {
+            const pdfs = await db.getPDFsForClient(clientId);
+            if (version === generatedClientPdfsVersionRef.current) setGeneratedClientPdfs(pdfs);
+        } catch (error) {
+            console.error('Erro ao buscar as propostas do cliente:', error);
+        }
+    }, []);
+    useEffect(() => {
+        if (selectedClientId == null || hasLoadedAllPdfs) return;
+        void loadGeneratedClientPdfs(selectedClientId);
+    }, [selectedClientId, hasLoadedAllPdfs, loadGeneratedClientPdfs]);
     useEffect(() => {
         if (pdfGenerationStatus !== 'success' || latestGeneratedClientId == null || hasLoadedAllPdfs) return;
-        let cancelled = false;
-        db.getPDFsForClient(latestGeneratedClientId)
-            .then(pdfs => { if (!cancelled) setGeneratedClientPdfs(pdfs); })
-            .catch(error => console.error('Erro ao buscar as propostas do cliente:', error));
-        return () => { cancelled = true; };
-    }, [pdfGenerationStatus, latestGeneratedClientId, hasLoadedAllPdfs]);
+        void loadGeneratedClientPdfs(latestGeneratedClientId);
+    }, [pdfGenerationStatus, latestGeneratedClientId, hasLoadedAllPdfs, loadGeneratedClientPdfs]);
 
     // Uma linha por opção do cliente; com 2 ou mais, o modal mostra a lista.
     const generatedClientProposals = useMemo(() => {
@@ -2404,6 +2416,8 @@ Regras:
         const deletedPdfIds = new Set(uniquePdfIds);
         setAllSavedPdfs((previous: SavedPDF[]) => previous.filter(pdf => !pdf.id || !deletedPdfIds.has(pdf.id)));
         setHistoryPdfs((previous: SavedPDF[]) => previous.filter(pdf => !pdf.id || !deletedPdfIds.has(pdf.id)));
+        generatedClientPdfsVersionRef.current += 1;
+        setGeneratedClientPdfs((previous: SavedPDF[]) => previous.filter(pdf => !pdf.id || !deletedPdfIds.has(pdf.id)));
 
         if (hasLoadedAgendamentos) {
             setAgendamentos((previous: Agendamento[]) => previous.filter(agendamento => (
@@ -2443,17 +2457,24 @@ Regras:
     // menos as antigas aprovadas ou agendadas. Depois de sincronizar, a mesma
     // proposta pode estar com o id provisório e o definitivo: exclui pelo
     // definitivo (o registro local é o mesmo).
+    // A linha sai da lista na hora; a exclusão no aparelho e no servidor segue
+    // em `done`. Se falhar, as listas são recarregadas e a do cliente também.
     const handleDeleteGeneratedProposal = useCallback(async (pdf: SavedPDF) => {
-        if (pdf.id == null) return { deleted: 0, kept: 0 };
+        if (pdf.id == null) return { deleted: 0, kept: 0, done: Promise.resolve() };
         const { toDelete, kept } = getOptionVersions([...allSavedPdfs, ...historyPdfs, ...generatedClientPdfs], pdf, isProposalKept);
         const keys = new Set(toDelete.map(getProposalKey));
         const keepOthers = (previous: SavedPDF[]) => previous.filter(item => !keys.has(getProposalKey(item)));
         setAllSavedPdfs(keepOthers);
         setHistoryPdfs(keepOthers);
+        generatedClientPdfsVersionRef.current += 1;
         setGeneratedClientPdfs(keepOthers);
-        await handleDeletePdfs(toDelete.map(item => item.id).filter((id): id is number => id != null));
-        return { deleted: toDelete.length, kept: kept.length };
-    }, [allSavedPdfs, historyPdfs, generatedClientPdfs, handleDeletePdfs, isProposalKept]);
+        const done = handleDeletePdfs(toDelete.map(item => item.id).filter((id): id is number => id != null))
+            .catch(async error => {
+                await loadGeneratedClientPdfs(pdf.clienteId);
+                throw error;
+            });
+        return { deleted: toDelete.length, kept: kept.length, done };
+    }, [allSavedPdfs, historyPdfs, generatedClientPdfs, handleDeletePdfs, isProposalKept, loadGeneratedClientPdfs]);
 
     const handleConfirmDeleteMeasurementWithFeedback = useCallback(async () => {
         setIsDeletingMeasurement(true);

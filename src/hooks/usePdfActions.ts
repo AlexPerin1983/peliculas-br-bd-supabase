@@ -61,6 +61,15 @@ export const sanitizeForFilename = (name: string): string => {
     return sanitized.replace(/[<>:"/\\|?*]/g, '');
 };
 
+// O gerador de PDF é pesado (baixa e prepara a biblioteca do PDF). Carregado
+// uma vez em segundo plano, o primeiro PDF da sessão não espera por ele.
+let pdfGeneratorPreload: Promise<unknown> | null = null;
+const preloadPdfGenerator = () => {
+    pdfGeneratorPreload ??= import('../../services/pdfGenerator').catch(() => {
+        pdfGeneratorPreload = null;
+    });
+};
+
 export function usePdfActions({
     measurements,
     films,
@@ -86,6 +95,18 @@ export function usePdfActions({
         client?: Client;
     } | null>(null);
     const [isSavingBeforePdf, setIsSavingBeforePdf] = useState(false);
+
+    // Cliente aberto: adianta o gerador de PDF quando o aparelho estiver livre.
+    const selectedClientKey = selectedClient?.id;
+    useEffect(() => {
+        if (selectedClientKey == null || pdfGeneratorPreload) return;
+        if (typeof window.requestIdleCallback === 'function') {
+            const handle = window.requestIdleCallback(preloadPdfGenerator, { timeout: 3000 });
+            return () => window.cancelIdleCallback(handle);
+        }
+        const handle = window.setTimeout(preloadPdfGenerator, 1500);
+        return () => window.clearTimeout(handle);
+    }, [selectedClientKey]);
 
     // O que vai no PDF agora, comparado com o que foi no último PDF gerado.
     const getCurrentPdfSignature = useCallback(() => buildPdfContentSignature({

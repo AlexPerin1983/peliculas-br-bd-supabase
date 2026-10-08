@@ -129,7 +129,7 @@ interface ModalsContainerProps {
     handlePreviewProposal: (pdf: SavedPDF) => Promise<boolean>;
     handleShareProposals: (pdfs: SavedPDF[]) => Promise<'shared' | 'downloaded' | 'unavailable'>;
     generatedProposalVersions: Record<string, { total: number; kept: number }>;
-    handleDeleteGeneratedProposal: (pdf: SavedPDF) => Promise<{ deleted: number; kept: number }>;
+    handleDeleteGeneratedProposal: (pdf: SavedPDF) => Promise<{ deleted: number; kept: number; done: Promise<void> }>;
     handleOpenAIVariationFromGeneratedPdf?: () => void;
     isAIVariationModalOpen: boolean;
     handleCancelAIVariation: () => void;

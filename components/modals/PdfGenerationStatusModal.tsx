@@ -32,8 +32,9 @@ interface PdfGenerationStatusModalProps {
     /**
      * Tira a opção da lista: exclui do histórico a versão tocada e as antigas
      * (menos as antigas aprovadas ou agendadas) e diz quantas saíram e ficaram.
+     * A linha sai na hora; `done` termina quando o aparelho e o servidor confirmam.
      */
-    onDeleteProposal?: (pdf: SavedPDF) => Promise<{ deleted: number; kept: number } | void>;
+    onDeleteProposal?: (pdf: SavedPDF) => Promise<{ deleted: number; kept: number; done?: Promise<void> } | void>;
     /** Quantos PDFs cada linha representa (chave: getProposalKey) e quantos ficam. */
     proposalVersions?: Record<string, { total: number; kept: number }>;
 }
@@ -179,6 +180,9 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
             setSelectedKeys(current => current.filter(item => item !== key));
             setConfirmingDeleteKey(null);
             setShareMessage(deletedMessage(pdf.proposalOptionName || 'Proposta', result));
+            result?.done?.catch(() => {
+                setShareMessage('Não foi possível excluir tudo. A lista foi atualizada; tente de novo.');
+            });
         } catch {
             setShareMessage('Não foi possível excluir. Tente novamente.');
         } finally {

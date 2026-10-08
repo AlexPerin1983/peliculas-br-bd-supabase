@@ -791,8 +791,18 @@ export async function updatePDF(pdf: SavedPDF): Promise<void> {
 }
 
 export async function getPDFsForClient(clientId: number): Promise<SavedPDF[]> {
-    const allPdfs = await getAllPDFs();
-    return allPdfs.filter(pdf => pdf.clienteId === clientId);
+    // Só os do cliente: antes buscava os PDFs da conta inteira (servidor e
+    // aparelho, com os arquivos) para depois filtrar.
+    const localPdfs = await offlineDb.getPdfsForClientLocal(clientId);
+    try {
+        if (isOnlineNow()) {
+            const remotePdfs = await supabaseDb.getPDFsForClient(clientId);
+            return mergeUnsyncedLocalPdfs(remotePdfs, localPdfs);
+        }
+    } catch (error) {
+        console.error('[OfflineFirst] Erro ao buscar os PDFs do cliente:', error);
+    }
+    return sortPdfsByDateDesc(localPdfs.map(stripPdfSyncMetadata));
 }
 
 export async function getPDFBlob(pdfId: number): Promise<Blob | null> {

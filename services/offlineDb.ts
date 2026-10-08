@@ -723,6 +723,11 @@ export async function getAllPdfsLocal(): Promise<LocalSavedPDF[]> {
     return localPdfs;
 }
 
+/** PDFs de um cliente pelo índice, sem ler os PDFs (e arquivos) dos outros clientes. */
+export async function getPdfsForClientLocal(clientId: number): Promise<LocalSavedPDF[]> {
+    return offlineDb.savedPdfs.where('clienteId').equals(clientId).toArray();
+}
+
 // Função para converter pdfBlob sob demanda (lazy loading)
 export function convertPdfBlobIfNeeded(pdf: LocalSavedPDF): Blob {
     // Se já é um Blob, retornar diretamente
