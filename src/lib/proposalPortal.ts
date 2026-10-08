@@ -1,7 +1,7 @@
 import { resolvePortalPricing } from '../../supabase/functions/proposal-portal/followUpPricing';
 import { supabase } from '../../services/supabaseClient';
 import { offlineDb, type LocalSavedPDF, type SyncQueueItem } from '../../services/offlineDb';
-import { isOnlineNow, syncAllPending } from '../../services/syncService';
+import { isOnlineNow, prioritizeSavedPdfSync, syncAllPending } from '../../services/syncService';
 import type { Client, ProposalPaymentChoice, ProposalPaymentSelection, SavedPDF } from '../../types';
 import type { ProposalConditionFields } from './proposalCondition';
 import type { PublicPortalShowcase } from '../../supabase/functions/proposal-portal/portalShowcase';
@@ -142,8 +142,12 @@ export const buildProposalPortalUrl = (accessKey: string, clientName?: string) =
 };
 
 const POSTGRES_INTEGER_MAX = 2_147_483_647;
-const PDF_SYNC_TIMEOUT_MS = 15_000;
-const PDF_SYNC_POLL_MS = 120;
+// Com a fila cheia e internet lenta, os PDFs do link podem levar mais que alguns
+// segundos para subir (mesmo passando na frente da fila).
+const PDF_SYNC_TIMEOUT_MS = 45_000;
+const PDF_SYNC_POLL_MS = 400;
+// A cada tantas voltas, confere também a fila (leitura mais pesada).
+const PDF_SYNC_FULL_CHECK_EVERY = 5;
 
 const isPersistedPdfId = (value: unknown): value is number => (
     typeof value === 'number'
@@ -158,15 +162,21 @@ const getTemporaryPdfId = (localId?: string): number | undefined => {
     return Number.isFinite(timestamp) ? -timestamp : undefined;
 };
 
-const findLocalProposalPdf = (pdfId: number): Promise<LocalSavedPDF | undefined> => (
-    offlineDb.savedPdfs
+// Pelo índice primeiro (o id provisório vem da data no começo do _localId); só
+// lê todos os PDFs do aparelho se não achar assim.
+const findLocalProposalPdf = async (pdfId: number): Promise<LocalSavedPDF | undefined> => {
+    const indexed = pdfId < 0
+        ? await offlineDb.savedPdfs.where('_localId').startsWith(`local_${-pdfId}_`).first()
+        : await offlineDb.savedPdfs.where('id').equals(pdfId).first();
+    if (indexed) return indexed;
+    return offlineDb.savedPdfs
         .filter(item => (
             item.id === pdfId
             || item._remoteId === pdfId
             || getTemporaryPdfId(item._localId) === pdfId
         ))
-        .first()
-);
+        .first();
+};
 
 const resolvePersistedPdfId = (pdfId: number, localPdf?: LocalSavedPDF): number | undefined => {
     if (isPersistedPdfId(localPdf?._remoteId)) return localPdf._remoteId;
@@ -234,15 +244,31 @@ export const resolvePersistedProposalPdfIds = async (pdfIds: number[]): Promise<
     // Uma proposta pode ja ter ID remoto e ainda possuir uma alteracao local
     // pendente (por exemplo, logo apos renomear a opcao). O portal le os dados
     // do servidor, entao aguardamos tambem a fila dessa proposta ser concluida.
-    // Se outra sincronizacao estiver em andamento, syncAllPending agenda uma
-    // nova passagem e o polling abaixo acompanha a retirada do item da fila.
-    await syncAllPending({ force: true });
+    // Estes PDFs passam na frente da fila, e a espera começa já (sem aguardar a
+    // fila inteira); se outra sincronização estiver em andamento, ela os pega.
+    const localPdfs = await Promise.all(pdfIds.map(findLocalProposalPdf));
+    const localIds = localPdfs.map(pdf => pdf?._localId);
+    prioritizeSavedPdfSync(localIds.filter((localId): localId is string => !!localId));
+    void Promise.resolve(syncAllPending({ force: true })).catch(error => {
+        console.error('[proposalPortal] Erro ao sincronizar os PDFs do link:', error);
+    });
     const deadline = Date.now() + PDF_SYNC_TIMEOUT_MS;
 
-    while (Date.now() < deadline) {
-        const state = await readProposalPdfSyncState(pdfIds);
-        if (state.every(item => isPersistedPdfId(item.persistedPdfId) && !item.hasPendingMutation)) {
-            return state.map(item => item.persistedPdfId as number);
+    for (let round = 0; Date.now() < deadline; round += 1) {
+        // Leve: só os registros destes PDFs, pela chave. A conferência completa
+        // (com a fila) vem quando parecem prontos ou a cada algumas voltas.
+        const looksReady = round > 0 && (await Promise.all(localIds.map(localId => (
+            localId ? offlineDb.savedPdfs.get(localId) : Promise.resolve(undefined)
+        )))).every((pdf, index) => (
+            pdf
+                ? pdf._syncStatus === 'synced' && !!resolvePersistedPdfId(pdfIds[index], pdf)
+                : isPersistedPdfId(pdfIds[index])
+        ));
+        if (round === 0 || looksReady || round % PDF_SYNC_FULL_CHECK_EVERY === 0) {
+            const state = await readProposalPdfSyncState(pdfIds);
+            if (state.every(item => isPersistedPdfId(item.persistedPdfId) && !item.hasPendingMutation)) {
+                return state.map(item => item.persistedPdfId as number);
+            }
         }
         await new Promise(resolve => window.setTimeout(resolve, PDF_SYNC_POLL_MS));
     }

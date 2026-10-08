@@ -43,6 +43,32 @@ import {
 let isOnline = navigator.onLine;
 let syncInProgress = false;
 let syncRequestedWhileBusy = false;
+
+// PDFs que alguém está esperando (ex.: para criar o link da proposta): sobem
+// antes do resto da fila, mesmo com uma sincronização já em andamento.
+const prioritySavedPdfLocalIds = new Set<string>();
+
+export function prioritizeSavedPdfSync(localIds: string[]): void {
+    for (const localId of localIds) prioritySavedPdfLocalIds.add(localId);
+}
+
+const isPrioritySavedPdfItem = (item: SyncQueueItem) => (
+    item.table === 'savedPdfs'
+    && typeof item.data?._localId === 'string'
+    && prioritySavedPdfLocalIds.has(item.data._localId)
+);
+
+/**
+ * Próximo item da fila: em ordem de chegada, mas um PDF prioritário passa na
+ * frente. Clientes pendentes antes dele vão primeiro (o PDF precisa do cliente
+ * no servidor).
+ */
+export const pickNextSyncItemIndex = (items: SyncQueueItem[]): number => {
+    const priorityIndex = items.findIndex(isPrioritySavedPdfItem);
+    if (priorityIndex <= 0) return 0;
+    const clientIndex = items.findIndex((item, index) => index < priorityIndex && item.table === 'clients');
+    return clientIndex >= 0 ? clientIndex : priorityIndex;
+};
 let syncRequestedOptions: SyncRunOptions | undefined;
 let syncListeners: ((status: SyncStatus) => void)[] = [];
 const POSTGRES_INTEGER_MAX = 2147483647;
@@ -486,7 +512,28 @@ export async function syncAllPending(options?: SyncRunOptions): Promise<void> {
             sanitizedQueue.push(item);
         }
 
-        for (const item of sanitizedQueue) {
+        const pendingItems = [...sanitizedQueue];
+        const seenItemIds = new Set(sanitizedQueue.map(item => item.id));
+        while (pendingItems.length > 0 || prioritySavedPdfLocalIds.size > 0) {
+            // PDF prioritário que entrou na fila depois desta passagem começar.
+            if (prioritySavedPdfLocalIds.size > 0 && !pendingItems.some(isPrioritySavedPdfItem)) {
+                const latePriority = await offlineDb.syncQueue
+                    .where('table')
+                    .equals('savedPdfs')
+                    .filter(item => isPrioritySavedPdfItem(item) && !seenItemIds.has(item.id))
+                    .toArray();
+                const queuedLocalIds = new Set(latePriority.map(item => item.data?._localId));
+                // Os que não estão na fila já subiram (ou não precisam subir).
+                for (const localId of [...prioritySavedPdfLocalIds]) {
+                    if (!queuedLocalIds.has(localId)) prioritySavedPdfLocalIds.delete(localId);
+                }
+                latePriority.forEach(item => seenItemIds.add(item.id));
+                pendingItems.unshift(...latePriority.sort((left, right) => left.timestamp - right.timestamp));
+            }
+            if (pendingItems.length === 0) break;
+
+            const [item] = pendingItems.splice(pickNextSyncItemIndex(pendingItems), 1);
+            if (isPrioritySavedPdfItem(item)) prioritySavedPdfLocalIds.delete(item.data._localId);
             const hasClassifiedFailure = !!item.errorInfo || !!item.lastError;
             if (item.status === 'error' && hasClassifiedFailure && !options?.retryBlocked
                 && !canAutomaticallyRetrySyncError(getSyncErrorInfo(item), item.retryCount)) {

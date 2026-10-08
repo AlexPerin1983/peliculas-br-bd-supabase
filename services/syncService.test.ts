@@ -494,6 +494,100 @@ describe('syncService', () => {
     expect(deleteMock).toHaveBeenCalledWith(16);
   });
 
+  const pdfQueueItem = (id: number, localId: string, timestamp: number) => ({
+    id,
+    table: 'savedPdfs',
+    action: 'create',
+    data: { _localId: localId, clienteId: 12, clientName: 'Cliente PDF', date: '2026-10-08', totalPreco: 100, totalM2: 2, nomeArquivo: `${localId}.pdf` },
+    timestamp,
+    status: 'pending',
+    retryCount: 0
+  });
+
+  const mockSyncModules = (snapshot: any[], lateQueue: any[] = []) => {
+    const processed: string[] = [];
+    vi.doMock('./offlineDb', () => ({
+      offlineDb: {
+        savedPdfs: {
+          get: vi.fn().mockResolvedValue(undefined),
+          filter: vi.fn(() => ({ first: vi.fn().mockResolvedValue(undefined) }))
+        },
+        clients: {
+          filter: vi.fn(() => ({ first: vi.fn().mockResolvedValue(undefined) }))
+        },
+        syncQueue: {
+          orderBy: vi.fn(() => ({ toArray: vi.fn().mockResolvedValue(snapshot) })),
+          where: vi.fn(() => ({
+            equals: vi.fn(() => ({
+              filter: vi.fn((predicate: (item: any) => boolean) => ({
+                toArray: vi.fn().mockResolvedValue(lateQueue.filter(predicate))
+              }))
+            }))
+          })),
+          delete: vi.fn()
+        }
+      },
+      getFailedSyncItems: vi.fn().mockResolvedValue([]),
+      getFailedSyncCount: vi.fn().mockResolvedValue(0),
+      getPendingSyncCount: vi.fn().mockResolvedValue(0),
+      markSyncItemError: vi.fn(),
+      markSyncItemPending: vi.fn(),
+      markAsSynced: vi.fn(),
+      markProposalOptionsAsSynced: vi.fn()
+    }));
+    vi.doMock('./supabaseDb', () => ({
+      saveClientRemote: vi.fn(async (client: any) => { processed.push(`cliente:${client.nome}`); return { id: 77 }; }),
+      deleteClientRemote: vi.fn(),
+      saveCustomFilmRemote: vi.fn(),
+      deleteCustomFilmRemote: vi.fn(),
+      saveUserInfoRemote: vi.fn(),
+      saveProposalOptionsRemote: vi.fn(),
+      savePDFRemote: vi.fn(async (pdf: any) => { processed.push(`pdf:${pdf.nomeArquivo}`); return { id: 500 + processed.length }; }),
+      saveAgendamentoRemote: vi.fn(),
+      deleteAgendamentoRemote: vi.fn()
+    }));
+    return processed;
+  };
+
+  it('PDF esperado pelo link passa na frente da fila, com o cliente pendente antes dele', async () => {
+    const clientItem = {
+      id: 2,
+      table: 'clients',
+      action: 'create',
+      data: { _localId: 'local_cli', nome: 'Cliente novo', telefone: '', email: '', cpfCnpj: '' },
+      timestamp: 2,
+      status: 'pending',
+      retryCount: 0
+    };
+    const processed = mockSyncModules([pdfQueueItem(1, 'local_a', 1), clientItem, pdfQueueItem(3, 'local_b', 3)]);
+
+    const { prioritizeSavedPdfSync, syncAllPending } = await import('./syncService');
+    prioritizeSavedPdfSync(['local_b']);
+    await syncAllPending();
+
+    expect(processed).toEqual(['cliente:Cliente novo', 'pdf:local_b.pdf', 'pdf:local_a.pdf']);
+  });
+
+  it('PDF esperado que entrou na fila depois da passagem começar também passa na frente', async () => {
+    const lateItem = pdfQueueItem(9, 'local_late', 9);
+    const processed = mockSyncModules([pdfQueueItem(1, 'local_a', 1), pdfQueueItem(2, 'local_c', 2)], [lateItem]);
+
+    const { prioritizeSavedPdfSync, syncAllPending } = await import('./syncService');
+    prioritizeSavedPdfSync(['local_late']);
+    await syncAllPending();
+
+    expect(processed).toEqual(['pdf:local_late.pdf', 'pdf:local_a.pdf', 'pdf:local_c.pdf']);
+  });
+
+  it('sem PDF esperado, a fila segue a ordem de chegada', async () => {
+    const processed = mockSyncModules([pdfQueueItem(1, 'local_a', 1), pdfQueueItem(2, 'local_b', 2)]);
+
+    const { syncAllPending } = await import('./syncService');
+    await syncAllPending();
+
+    expect(processed).toEqual(['pdf:local_a.pdf', 'pdf:local_b.pdf']);
+  });
+
   it('sincroniza update de PDF mesmo quando o item nao traz pdfBlob', async () => {
     const queueItem = {
       id: 7,
