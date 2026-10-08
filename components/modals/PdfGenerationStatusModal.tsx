@@ -43,7 +43,7 @@ const shareMessageFor = (result: ShareResult, count = 1) => result === 'shared'
     ? count > 1 ? `${count} PDFs compartilhados, um por opção.` : 'PDF compartilhado com sucesso.'
     : result === 'downloaded'
         ? count > 1
-            ? 'Este navegador não anexa PDFs diretamente. Os arquivos foram baixados para você enviar.'
+            ? 'Este navegador não anexa PDFs diretamente. Os PDFs estão sendo baixados um a um; se ele perguntar, permita baixar vários arquivos.'
             : 'Este navegador não anexa PDFs diretamente. O arquivo foi baixado para você enviar.'
         : 'O PDF ainda não está disponível para compartilhar.';
 

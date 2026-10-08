@@ -237,6 +237,23 @@ describe('PdfGenerationStatusModal', () => {
         expect(screen.getByRole('button', { name: 'Ver PDF de Window Premium' })).toBeEnabled();
     });
 
+    it('no computador, avisa que os PDFs saem um a um e pode pedir permissão', async () => {
+        const original = proposal(42, 'Suntek', 2649.6, '2026-10-07T10:00:00Z');
+        const nova = proposal(43, 'Window Premium', 3120, '2026-10-07T10:05:00Z');
+        render(
+            <PdfGenerationStatusModal
+                {...baseProps()}
+                proposalForLink={{ client, pdf: nova }}
+                clientProposals={[nova, original]}
+                preselectedPdfKeys={[getProposalKey(original), getProposalKey(nova)]}
+                onShareProposals={vi.fn().mockResolvedValue('downloaded')}
+            />
+        );
+
+        fireEvent.click(screen.getByRole('button', { name: 'Compartilhar os 2 PDFs' }));
+        expect(await screen.findByText(/permita baixar vários arquivos/)).toBeInTheDocument();
+    });
+
     it('exclui uma opção da lista depois de confirmar', async () => {
         const original = proposal(42, 'Suntek', 2649.6, '2026-10-07T10:00:00Z');
         const nova = proposal(43, 'Window Premium', 3120, '2026-10-07T10:05:00Z');
