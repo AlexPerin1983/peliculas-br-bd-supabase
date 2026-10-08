@@ -1,6 +1,6 @@
 import { renderHook } from '@testing-library/react';
 import { act } from 'react';
-import { usePdfActions, sanitizeForFilename } from './usePdfActions';
+import { usePdfActions, sanitizeForFilename, toPdfBlob } from './usePdfActions';
 import * as db from '../../services/db';
 import { Client, Film, ProposalOption, Totals, UIMeasurement, UserInfo } from '../../types';
 
@@ -26,6 +26,25 @@ describe('sanitizeForFilename', () => {
     expect(sanitized).toContain('Teste');
   });
 });
+
+describe('toPdfBlob', () => {
+  it('converte o PDF guardado no aparelho (base64) em arquivo', async () => {
+    const pdfText = '%PDF-1.4 teste';
+    const fromDataUrl = toPdfBlob(`data:application/pdf;base64,${btoa(pdfText)}`);
+    const fromRaw = toPdfBlob(btoa(pdfText));
+    expect(fromDataUrl?.type).toBe('application/pdf');
+    expect(await fromDataUrl?.text()).toBe(pdfText);
+    expect(await fromRaw?.text()).toBe(pdfText);
+  });
+
+  it('vazio ou inválido conta como sem PDF', () => {
+    expect(toPdfBlob(undefined)).toBeNull();
+    expect(toPdfBlob('')).toBeNull();
+    expect(toPdfBlob('não é base64 ✗')).toBeNull();
+    expect(toPdfBlob(new Blob([]))).toBeNull();
+  });
+});
+
 
 describe('usePdfActions', () => {
   const selectedClient: Client = {
@@ -394,6 +413,24 @@ describe('usePdfActions', () => {
       expect(pdfModule.generateCombinedPDF).not.toHaveBeenCalled();
       const files = share.mock.calls[0][0].files as File[];
       expect(files.map(file => file.name)).toEqual(['Suntek.pdf', 'Window Premium.pdf']);
+      Reflect.deleteProperty(navigator, 'share');
+      Reflect.deleteProperty(navigator, 'canShare');
+    });
+
+    it('Compartilhar manda os bytes do PDF guardado no aparelho em base64', async () => {
+      const share = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, 'share', { configurable: true, value: share });
+      Object.defineProperty(navigator, 'canShare', { configurable: true, value: () => true });
+      const pdfText = '%PDF-1.4 do aparelho';
+      const pdf = { ...savedProposal(1, 'Suntek'), pdfBlob: `data:application/pdf;base64,${btoa(pdfText)}` as unknown as Blob };
+      const { result } = buildHook();
+
+      await act(async () => {
+        await result.current.handleShareProposals([pdf]);
+      });
+
+      const file = share.mock.calls[0][0].files[0] as File;
+      expect(await file.text()).toBe(pdfText);
       Reflect.deleteProperty(navigator, 'share');
       Reflect.deleteProperty(navigator, 'canShare');
     });

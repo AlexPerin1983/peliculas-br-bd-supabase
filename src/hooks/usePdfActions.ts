@@ -24,6 +24,22 @@ interface UsePdfActionsParams {
     handleSaveChanges: () => Promise<void>;
 }
 
+/**
+ * O PDF guardado no aparelho vem em base64 (texto), não como arquivo:
+ * converte para Blob. Vazio ou em formato inesperado conta como sem PDF.
+ */
+export const toPdfBlob = (value: unknown): Blob | null => {
+    if (value instanceof Blob) return value.size > 0 ? value : null;
+    if (typeof value !== 'string' || value.length === 0) return null;
+    try {
+        const base64 = value.startsWith('data:') ? value.slice(value.indexOf(',') + 1) : value;
+        const bytes = Uint8Array.from(atob(base64), char => char.charCodeAt(0));
+        return bytes.length > 0 ? new Blob([bytes], { type: 'application/pdf' }) : null;
+    } catch {
+        return null;
+    }
+};
+
 export const sanitizeForFilename = (name: string): string => {
     if (!name) return name;
 
@@ -147,10 +163,10 @@ export function usePdfActions({
 
     /** PDF de uma proposta salva: em memória, no Storage ou gerado de novo pelos dados salvos. */
     const resolvePdfBlob = useCallback(async (pdf: SavedPDF): Promise<Blob | null> => {
-        let blob = pdf.pdfBlob;
+        let blob = toPdfBlob(pdf.pdfBlob);
         if (!blob && pdf.id) {
             try {
-                blob = await db.getPDFBlob(pdf.id) || undefined;
+                blob = toPdfBlob(await db.getPDFBlob(pdf.id));
             } catch (error) {
                 console.error('[PDF] Erro ao buscar blob do PDF:', error);
             }
@@ -163,7 +179,7 @@ export function usePdfActions({
             if (client) {
                 try {
                     const { regeneratePDFFromSaved } = await import('../../services/pdfGenerator');
-                    blob = await regeneratePDFFromSaved(client, userInfo, pdf, films);
+                    blob = toPdfBlob(await regeneratePDFFromSaved(client, userInfo, pdf, films));
                 } catch (error) {
                     console.error('[PDF] Erro ao regenerar PDF arquivado:', error);
                 }
