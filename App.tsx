@@ -1533,6 +1533,7 @@ const App: React.FC = () => {
         canShareGeneratedPdf,
         canPreviewGeneratedPdf,
         latestGeneratedProposal,
+        isLatestPdfUpToDate,
         isSavingBeforePdf,
         handleGeneratePdfWithSaveCheck,
         handleConfirmSaveBeforePdf,
@@ -1556,9 +1557,20 @@ const App: React.FC = () => {
     });
 
     const handleGeneratePdf = useCallback(async () => {
+        // Nada do que vai no PDF mudou desde o último (e ele não foi excluído):
+        // reabre o "Orçamento gerado" como estava, com a lista se veio de
+        // duplicar, em vez de salvar outro PDF igual no Histórico.
+        const latestPdf = latestGeneratedProposal?.pdf;
+        if (latestPdf && isLatestPdfUpToDate()) {
+            const latestKey = getProposalKey(latestPdf);
+            if (allSavedPdfs.some(pdf => getProposalKey(pdf) === latestKey)) {
+                setPdfGenerationStatus('success');
+                return;
+            }
+        }
         setDuplicateSourcePdfKeys([]);
         await handleGeneratePdfWithSaveCheck(isDirty);
-    }, [handleGeneratePdfWithSaveCheck, isDirty]);
+    }, [allSavedPdfs, handleGeneratePdfWithSaveCheck, isDirty, isLatestPdfUpToDate, latestGeneratedProposal]);
 
     // "Duplicar com outra película" no Orçamento gerado: guarda as opções que
     // já estavam prontas, fecha o modal e abre o seletor de película.
@@ -1583,9 +1595,9 @@ const App: React.FC = () => {
         void handleConfirmSaveBeforePdf();
     }, [pendingPdfOptionId, activeOption?.id, handleConfirmSaveBeforePdf]);
 
+    // Fechar não esquece as opções: o botão PDF reabre o modal com a lista.
     const handleClosePdfStatusModal = useCallback(() => {
         setPdfGenerationStatus('idle');
-        setDuplicateSourcePdfKeys([]);
     }, []);
 
     // Propostas do cliente para mandar juntas depois de duplicar (mais recentes

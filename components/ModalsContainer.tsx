@@ -217,7 +217,7 @@ interface ModalsContainerProps {
     // Save Before PDF Modal
     isSaveBeforePdfModalOpen: boolean;
     setIsSaveBeforePdfModalOpen: (value: boolean) => void;
-    handleSaveClientAndGeneratePdf: () => void;
+    handleConfirmSaveBeforePdf: () => Promise<void>;
     isSavingBeforePdf: boolean;
 
     // Apply Film to All Modal
@@ -408,7 +408,7 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
                 <ConfirmationModal
                     isOpen={props.isSaveBeforePdfModalOpen}
                     onClose={() => props.setIsSaveBeforePdfModalOpen(false)}
-                    onConfirm={props.handleSaveClientAndGeneratePdf}
+                    onConfirm={props.handleConfirmSaveBeforePdf}
                     title="Orçamento ainda não salvo"
                     message="Existem alterações recentes neste orçamento. Deseja salvá-las e gerar o PDF agora?"
                     confirmButtonText="Salvar e Gerar PDF"

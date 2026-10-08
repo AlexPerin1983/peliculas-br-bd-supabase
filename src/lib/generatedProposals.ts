@@ -1,4 +1,4 @@
-import type { SavedPDF } from '../../types';
+import type { Client, Film, ProposalOption, SavedPDF, UIMeasurement, UserInfo } from '../../types';
 
 /**
  * Identificação de uma proposta gerada que não muda com a sincronização: o PDF
@@ -28,4 +28,45 @@ export const listClientProposals = (pdfs: SavedPDF[], clientId: number, limit = 
     return [...byKey.values()]
         .sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime())
         .slice(0, limit);
+};
+
+interface PdfContentInput {
+    client: Client | null | undefined;
+    option: ProposalOption | null | undefined;
+    measurements: UIMeasurement[];
+    films: Film[];
+    generalDiscount: unknown;
+    totals: unknown;
+    paymentConfig: unknown;
+    userInfo: UserInfo | null | undefined;
+}
+
+/**
+ * Resumo do que vai no PDF do orçamento. Igual ao do último PDF gerado = nada
+ * mudou, então o botão PDF reabre aquele PDF em vez de salvar outro igual.
+ * Fica de fora o que não aparece no PDF (ids, marcações de tela, datas internas).
+ */
+export const buildPdfContentSignature = ({
+    client, option, measurements, films, generalDiscount, totals, paymentConfig, userInfo,
+}: PdfContentInput): string => {
+    const activeMeasurements = measurements
+        .filter(measurement => measurement.active)
+        .map(({ id, isNew, focusField, ...content }) => content);
+    const usedFilms = new Set(activeMeasurements.map(measurement => measurement.pelicula));
+    const { lastUpdated, pinned, pinnedAt, ...clientContent } = (client || {}) as Client;
+    const { lastSelectedClientId, ...companyContent } = (userInfo || {}) as UserInfo;
+    // O cálculo de corte é refeito sozinho (ex.: depois de duplicar); o que ele
+    // muda no PDF chega pelos totais.
+    const { filmCuttingSettings, ...discountContent } = (generalDiscount || {}) as { filmCuttingSettings?: unknown };
+    return JSON.stringify({
+        client: clientContent,
+        optionId: option?.id ?? null,
+        optionName: option?.name ?? null,
+        measurements: activeMeasurements,
+        films: films.filter(film => usedFilms.has(film.nome)),
+        generalDiscount: discountContent,
+        totals,
+        paymentConfig,
+        company: companyContent,
+    });
 };
