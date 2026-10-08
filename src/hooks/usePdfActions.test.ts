@@ -358,44 +358,42 @@ describe('usePdfActions', () => {
       pdfBlob: new Blob([name], { type: 'application/pdf' })
     });
 
-    it('Ver PDF de várias abre o PDF único das opções na janela aberta no toque', async () => {
-      const combined = new Blob(['combinado'], { type: 'application/pdf' });
+    it('Ver PDF abre só a proposta tocada, na janela aberta no toque', async () => {
       const pdfModule = await import('../../services/pdfGenerator');
-      vi.mocked(pdfModule.generateCombinedPDF).mockResolvedValue(combined);
       const popup = { location: { href: '' }, close: vi.fn() };
       vi.spyOn(window, 'open').mockReturnValue(popup as unknown as Window);
-      const pdfs = [savedProposal(1, 'Suntek'), savedProposal(2, 'Window Premium')];
+      const pdf = savedProposal(1, 'Suntek');
       const { result } = buildHook();
 
       let opened = false;
       await act(async () => {
-        opened = await result.current.handlePreviewProposals(pdfs);
+        opened = await result.current.handlePreviewProposal(pdf);
       });
 
       expect(opened).toBe(true);
       expect(window.open).toHaveBeenCalledWith('', '_blank');
-      expect(pdfModule.generateCombinedPDF).toHaveBeenCalledWith(selectedClient, userInfo, pdfs, films);
-      expect(URL.createObjectURL).toHaveBeenCalledWith(combined);
+      expect(pdfModule.generateCombinedPDF).not.toHaveBeenCalled();
+      expect(URL.createObjectURL).toHaveBeenCalledWith(pdf.pdfBlob);
       expect(popup.location.href).toBe('blob:test');
     });
 
-    it('Compartilhar de uma só manda o PDF dela, sem juntar', async () => {
+    it('Compartilhar várias manda um PDF por opção, sem juntar', async () => {
       const pdfModule = await import('../../services/pdfGenerator');
       const share = vi.fn().mockResolvedValue(undefined);
       Object.defineProperty(navigator, 'share', { configurable: true, value: share });
       Object.defineProperty(navigator, 'canShare', { configurable: true, value: () => true });
-      const pdf = savedProposal(1, 'Suntek');
+      const pdfs = [savedProposal(1, 'Suntek'), savedProposal(2, 'Window Premium')];
       const { result } = buildHook();
 
       let outcome = '';
       await act(async () => {
-        outcome = await result.current.handleShareProposals([pdf]);
+        outcome = await result.current.handleShareProposals(pdfs);
       });
 
       expect(outcome).toBe('shared');
       expect(pdfModule.generateCombinedPDF).not.toHaveBeenCalled();
-      const file = share.mock.calls[0][0].files[0] as File;
-      expect(file.name).toBe('Suntek.pdf');
+      const files = share.mock.calls[0][0].files as File[];
+      expect(files.map(file => file.name)).toEqual(['Suntek.pdf', 'Window Premium.pdf']);
       Reflect.deleteProperty(navigator, 'share');
       Reflect.deleteProperty(navigator, 'canShare');
     });

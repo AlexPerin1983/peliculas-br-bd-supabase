@@ -25,8 +25,9 @@ interface PdfGenerationStatusModalProps {
      */
     clientProposals?: SavedPDF[];
     preselectedPdfKeys?: string[];
-    /** Ver PDF e Compartilhar da lista: 1 marcada = o PDF dela; várias = PDF único. */
-    onPreviewProposals?: (pdfs: SavedPDF[]) => Promise<boolean>;
+    /** O olho de cada linha abre o PDF daquela opção, uma de cada vez. */
+    onPreviewProposal?: (pdf: SavedPDF) => Promise<boolean>;
+    /** Compartilha as marcadas, um PDF por opção (sem juntar). */
     onShareProposals?: (pdfs: SavedPDF[]) => Promise<ShareResult>;
     /** Exclui a proposta do histórico (mesma exclusão da tela Histórico). */
     onDeleteProposal?: (pdf: SavedPDF) => Promise<void>;
@@ -38,10 +39,12 @@ const formatCurrency = (value: number) =>
 const describeProposal = (pdf: SavedPDF) =>
     `${pdf.proposalOptionName || 'Proposta'} · ${formatCurrency(pdf.totalPreco)}`;
 
-const shareMessageFor = (result: ShareResult) => result === 'shared'
-    ? 'PDF compartilhado com sucesso.'
+const shareMessageFor = (result: ShareResult, count = 1) => result === 'shared'
+    ? count > 1 ? `${count} PDFs compartilhados, um por opção.` : 'PDF compartilhado com sucesso.'
     : result === 'downloaded'
-        ? 'Este navegador não anexa PDFs diretamente. O arquivo foi baixado para você enviar.'
+        ? count > 1
+            ? 'Este navegador não anexa PDFs diretamente. Os arquivos foram baixados para você enviar.'
+            : 'Este navegador não anexa PDFs diretamente. O arquivo foi baixado para você enviar.'
         : 'O PDF ainda não está disponível para compartilhar.';
 
 const iconButton = 'flex flex-col items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-1 py-2.5 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-45 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700';
@@ -59,12 +62,12 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
     onDuplicateWithAI,
     clientProposals = [],
     preselectedPdfKeys = [],
-    onPreviewProposals,
+    onPreviewProposal,
     onShareProposals,
     onDeleteProposal,
 }) => {
     const [isSharing, setIsSharing] = useState(false);
-    const [isPreviewing, setIsPreviewing] = useState(false);
+    const [previewingKey, setPreviewingKey] = useState<string | null>(null);
     const [shareMessage, setShareMessage] = useState('');
     const [linkPdfs, setLinkPdfs] = useState<SavedPDF[] | null>(null);
     const [selectedKeys, setSelectedKeys] = useState<string[]>(preselectedPdfKeys);
@@ -95,11 +98,11 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
         setSelectedKeys(preselectedSignature ? preselectedSignature.split('\n') : []);
     }, [preselectedSignature]);
 
-    const runShare = async (share: () => Promise<ShareResult>) => {
+    const runShare = async (share: () => Promise<ShareResult>, count = 1) => {
         setIsSharing(true);
         setShareMessage('');
         try {
-            setShareMessage(shareMessageFor(await share()));
+            setShareMessage(shareMessageFor(await share(), count));
         } catch (error) {
             if ((error as DOMException)?.name !== 'AbortError') setShareMessage('Não foi possível compartilhar. Tente novamente.');
         } finally {
@@ -113,17 +116,17 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
             : 'O PDF ainda não está disponível para visualizar.');
     };
 
-    const handlePreviewSelected = async () => {
-        if (!onPreviewProposals || selectedCount === 0) return;
-        setIsPreviewing(true);
+    const handlePreviewOne = async (pdf: SavedPDF) => {
+        if (!onPreviewProposal) return;
+        setPreviewingKey(getProposalKey(pdf));
         setShareMessage('');
         try {
-            const opened = await onPreviewProposals(selectedPdfs);
+            const opened = await onPreviewProposal(pdf);
             setShareMessage(opened
-                ? selectedCount === 1 ? 'PDF aberto para conferência.' : `PDF com as ${selectedCount} opções aberto para conferência.`
+                ? `PDF de "${pdf.proposalOptionName || 'Proposta'}" aberto para conferência.`
                 : 'Não foi possível abrir o PDF. Tente novamente.');
         } finally {
-            setIsPreviewing(false);
+            setPreviewingKey(null);
         }
     };
 
@@ -181,9 +184,8 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
         );
     }
 
-    // Na lista, Ver PDF e Compartilhar usam as opções marcadas.
-    const usesSelection = showsProposalPicker && !!onPreviewProposals && !!onShareProposals;
-    const previewLabel = usesSelection && selectedCount > 1 ? `Ver as ${selectedCount}` : 'Ver PDF';
+    // Na lista, cada opção tem o seu "ver" e Compartilhar usa as marcadas.
+    const usesSelection = showsProposalPicker && !!onShareProposals;
     const shareLabel = usesSelection && selectedCount > 1 ? `Compartilhar ${selectedCount}` : 'Compartilhar';
 
     return (
@@ -218,7 +220,9 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
                             ) : null}
                         </div>
                         <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                            Marque as opções do link. Ver PDF e Compartilhar usam as marcadas.
+                            {onPreviewProposal
+                                ? 'Marque as opções para enviar. Toque no olho para conferir o PDF de cada uma.'
+                                : 'Marque as opções para enviar ao cliente.'}
                         </p>
 
                         {clientProposals.length === 0 ? (
@@ -257,6 +261,17 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
                                                         </span>
                                                     </span>
                                                 </label>
+                                                {onPreviewProposal ? (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => { void handlePreviewOne(pdf); }}
+                                                        disabled={previewingKey === key}
+                                                        aria-label={`Ver PDF de ${name}`}
+                                                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-100"
+                                                    >
+                                                        <i className={`fas ${previewingKey === key ? 'fa-spinner fa-spin' : 'fa-eye'} text-sm`} aria-hidden="true"></i>
+                                                    </button>
+                                                ) : null}
                                                 {onDeleteProposal ? (
                                                     <button
                                                         type="button"
@@ -322,30 +337,18 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
                     </button>
                 )}
 
-                <div className="mt-3 grid grid-cols-3 gap-2">
+                <div className={`mt-3 grid gap-2 ${usesSelection ? 'grid-cols-2' : 'grid-cols-3'}`}>
                     {usesSelection ? (
-                        <>
-                            <button
-                                type="button"
-                                onClick={() => { void handlePreviewSelected(); }}
-                                disabled={selectedCount === 0 || isPreviewing}
-                                aria-label={selectedCount > 1 ? `Visualizar as ${selectedCount} opções em um PDF` : 'Visualizar PDF'}
-                                className={iconButton}
-                            >
-                                <i className={`fas ${isPreviewing ? 'fa-spinner fa-spin' : 'fa-eye'} text-base`} aria-hidden="true"></i>
-                                <span className="whitespace-nowrap text-xs font-semibold">{isPreviewing ? 'Preparando' : previewLabel}</span>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => { void runShare(() => onShareProposals!(selectedPdfs)); }}
-                                disabled={selectedCount === 0 || isSharing}
-                                aria-label={selectedCount > 1 ? `Compartilhar as ${selectedCount} opções em um PDF` : 'Compartilhar PDF'}
-                                className={iconButton}
-                            >
-                                <i className={`fas ${isSharing ? 'fa-spinner fa-spin' : 'fa-share-nodes'} text-base`} aria-hidden="true"></i>
-                                <span className="whitespace-nowrap text-xs font-semibold">{isSharing ? 'Preparando' : shareLabel}</span>
-                            </button>
-                        </>
+                        <button
+                            type="button"
+                            onClick={() => { void runShare(() => onShareProposals!(selectedPdfs), selectedCount); }}
+                            disabled={selectedCount === 0 || isSharing}
+                            aria-label={selectedCount > 1 ? `Compartilhar os ${selectedCount} PDFs` : 'Compartilhar PDF'}
+                            className={iconButton}
+                        >
+                            <i className={`fas ${isSharing ? 'fa-spinner fa-spin' : 'fa-share-nodes'} text-base`} aria-hidden="true"></i>
+                            <span className="whitespace-nowrap text-xs font-semibold">{isSharing ? 'Preparando' : shareLabel}</span>
+                        </button>
                     ) : (
                         <>
                             <button type="button" onClick={handlePreview} disabled={!canPreview} aria-label="Visualizar PDF" className={iconButton}>
