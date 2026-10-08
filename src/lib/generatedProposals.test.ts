@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SavedPDF } from '../../types';
-import { buildPdfContentSignature, getOptionVersions, getProposalKey, listClientProposals } from './generatedProposals';
+import { buildPdfContentSignature, getOptionVersions, getProposalKey, hashPdfSignature, listClientProposals, recallPdfSignature, rememberPdfSignature } from './generatedProposals';
 
 const pdf = (overrides: Partial<SavedPDF>): SavedPDF => ({
     id: 1,
@@ -158,5 +158,31 @@ describe('versão protegida em qualquer cópia', () => {
 
         expect(versions.toDelete.map(item => item.id)).toEqual([44]);
         expect(versions.kept.map(item => item.id)).toEqual([41]);
+    });
+});
+
+describe('assinatura guardada no aparelho', () => {
+    beforeEach(() => window.localStorage.clear());
+
+    it('o resumo é o mesmo para o mesmo conteúdo e muda quando o conteúdo muda', () => {
+        expect(hashPdfSignature('{"a":1}')).toBe(hashPdfSignature('{"a":1}'));
+        expect(hashPdfSignature('{"a":1}')).not.toBe(hashPdfSignature('{"a":2}'));
+    });
+
+    it('guarda e lê pela proposta, mantendo só as mais recentes', () => {
+        rememberPdfSignature('7|100|a', 'h1');
+        rememberPdfSignature('7|100|a', 'h2');
+        expect(recallPdfSignature('7|100|a')).toBe('h2');
+        expect(recallPdfSignature('7|101|b')).toBeNull();
+
+        for (let index = 0; index < 45; index += 1) rememberPdfSignature(`k${index}`, `h${index}`);
+        expect(recallPdfSignature('7|100|a')).toBeNull();
+        expect(recallPdfSignature('k44')).toBe('h44');
+    });
+
+    it('armazenamento quebrado não atrapalha', () => {
+        window.localStorage.setItem('peliculas-br-pdf-signatures', '{quebrado');
+        expect(recallPdfSignature('x')).toBeNull();
+        expect(() => rememberPdfSignature('x', 'h')).not.toThrow();
     });
 });

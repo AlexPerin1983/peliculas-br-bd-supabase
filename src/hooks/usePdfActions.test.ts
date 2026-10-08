@@ -364,6 +364,81 @@ describe('usePdfActions', () => {
     expect(result.current.isSavingBeforePdf).toBe(false);
   });
 
+  describe('reabrir o PDF depois de fechar e abrir o app', () => {
+    const generateOnce = async () => {
+      const pdfModule = await import('../../services/pdfGenerator');
+      vi.mocked(pdfModule.generatePDF).mockResolvedValue(new Blob(['pdf'], { type: 'application/pdf' }));
+      const savedPdf = {
+        id: -1791,
+        clienteId: 12,
+        proposalOptionId: 5,
+        proposalOptionName: 'Opcao 1',
+        date: new Date().toISOString(),
+        totalPreco: 190,
+        totalM2: 2,
+        nomeArquivo: 'teste.pdf',
+        pdfBlob: new Blob(['pdf salvo'], { type: 'application/pdf' })
+      };
+      mockedDb.savePDF.mockResolvedValue(savedPdf);
+      const first = buildHook();
+      await act(async () => {
+        await first.result.current.handleGeneratePdfWithSaveCheck(false);
+      });
+      first.unmount();
+      return savedPdf;
+    };
+
+    beforeEach(() => {
+      window.localStorage.clear();
+      // Dois hooks no mesmo teste (antes e depois de reabrir o app): cada um
+      // precisa do seu lugar na página.
+      vi.mocked(document.body.appendChild).mockRestore();
+      vi.mocked(document.body.removeChild).mockRestore();
+    });
+
+    it('acha o PDF de hoje desta opção quando nada mudou', async () => {
+      const savedPdf = await generateOnce();
+      // App reaberto: hook novo, sem a memória do último PDF.
+      const { result } = buildHook();
+      expect(result.current.isLatestPdfUpToDate()).toBe(false);
+      expect(result.current.findReusablePdf([savedPdf])).toBe(savedPdf);
+    });
+
+    it('não reaproveita quando o orçamento mudou', async () => {
+      const savedPdf = await generateOnce();
+      const { result } = buildHook({ totals: { ...totals, finalTotal: 250 } });
+      expect(result.current.findReusablePdf([savedPdf])).toBeNull();
+    });
+
+    it('não reaproveita PDF de outro dia nem de outra opção', async () => {
+      const savedPdf = await generateOnce();
+      const { result } = buildHook();
+      expect(result.current.findReusablePdf([{ ...savedPdf, date: '2026-01-01T10:00:00.000Z' }])).toBeNull();
+      expect(result.current.findReusablePdf([{ ...savedPdf, proposalOptionId: 99 }])).toBeNull();
+    });
+
+    it('reabre o modal com o PDF salvo, sem gerar outro', async () => {
+      const savedPdf = await generateOnce();
+      const pdfModule = await import('../../services/pdfGenerator');
+      vi.mocked(pdfModule.generatePDF).mockClear();
+      mockedDb.savePDF.mockClear();
+      const setPdfGenerationStatus = vi.fn();
+      const { result } = buildHook({ setPdfGenerationStatus });
+
+      let reopened = false;
+      await act(async () => {
+        reopened = await result.current.reopenSavedPdf(savedPdf);
+      });
+
+      expect(reopened).toBe(true);
+      expect(setPdfGenerationStatus).toHaveBeenCalledWith('success');
+      expect(result.current.canPreviewGeneratedPdf).toBe(true);
+      expect(result.current.latestGeneratedProposal?.pdf).toBe(savedPdf);
+      expect(pdfModule.generatePDF).not.toHaveBeenCalled();
+      expect(mockedDb.savePDF).not.toHaveBeenCalled();
+    });
+  });
+
   describe('propostas marcadas no Orçamento gerado', () => {
     const savedProposal = (id: number, name: string) => ({
       id,

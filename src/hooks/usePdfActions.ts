@@ -2,7 +2,13 @@ import { Dispatch, SetStateAction, useCallback, useEffect, useRef, useState } fr
 import * as db from '../../services/db';
 import { Client, Film, ProposalDiscount, ProposalOption, ProposalPaymentConfig, SavedPDF, Totals, UIMeasurement, UserInfo } from '../../types';
 import { resolveProposalValidityDays } from '../lib/proposalValidity';
-import { buildPdfContentSignature } from '../lib/generatedProposals';
+import {
+    buildPdfContentSignature,
+    getProposalKey,
+    hashPdfSignature,
+    recallPdfSignature,
+    rememberPdfSignature,
+} from '../lib/generatedProposals';
 
 type PdfGenerationStatus = 'idle' | 'generating' | 'success';
 type DiscountType = ProposalDiscount;
@@ -122,8 +128,13 @@ export function usePdfActions({
     }), [selectedClient, activeOption, measurements, films, generalDiscount, totals, proposalPaymentConfig, userInfo]);
     const generatedPdfSignatureRef = useRef<string | null>(null);
     useEffect(() => {
-        // Tirada no render seguinte à geração, com o orçamento já salvo.
-        generatedPdfSignatureRef.current = latestGeneratedPdf ? getCurrentPdfSignature() : null;
+        // Tirada no render seguinte à geração, com o orçamento já salvo. Fica
+        // guardada no aparelho para valer também depois de reabrir o app.
+        const signature = latestGeneratedPdf ? getCurrentPdfSignature() : null;
+        generatedPdfSignatureRef.current = signature;
+        if (signature && latestGeneratedPdf?.savedPdf) {
+            rememberPdfSignature(getProposalKey(latestGeneratedPdf.savedPdf), hashPdfSignature(signature));
+        }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [latestGeneratedPdf]);
 
@@ -236,6 +247,41 @@ export function usePdfActions({
 
         return blob || null;
     }, [userInfo, findPdfClient, films]);
+
+    /**
+     * Depois de reabrir o app a memória do último PDF some: procura o último PDF
+     * desta opção gerado hoje neste aparelho com o mesmo conteúdo de agora.
+     */
+    const findReusablePdf = useCallback((candidates: SavedPDF[]): SavedPDF | null => {
+        if (selectedClientId == null || activeOption?.id == null) return null;
+        const today = new Date().toDateString();
+        const latest = candidates
+            .filter(pdf => (
+                pdf.clienteId === selectedClientId
+                && pdf.proposalOptionId === activeOption.id
+                && new Date(pdf.date).toDateString() === today
+            ))
+            .sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime())[0];
+        if (!latest) return null;
+        return recallPdfSignature(getProposalKey(latest)) === hashPdfSignature(getCurrentPdfSignature()) ? latest : null;
+    }, [selectedClientId, activeOption?.id, getCurrentPdfSignature]);
+
+    /** Reabre o "Orçamento gerado" com um PDF já salvo (o arquivo vem do aparelho). */
+    const reopenSavedPdf = useCallback(async (pdf: SavedPDF): Promise<boolean> => {
+        const client = findPdfClient(pdf.clienteId);
+        if (!client) return false;
+        const blob = await resolvePdfBlob(pdf);
+        if (!blob) return false;
+        setLatestGeneratedPdf({
+            blob,
+            filename: pdf.nomeArquivo || 'orcamento.pdf',
+            clientName: client.nome,
+            savedPdf: pdf,
+            client,
+        });
+        setPdfGenerationStatus('success');
+        return true;
+    }, [findPdfClient, resolvePdfBlob, setPdfGenerationStatus]);
 
     const handleDownloadPdf = useCallback(async (pdf: SavedPDF, filename: string) => {
         const blob = await resolvePdfBlob(pdf);
@@ -494,6 +540,8 @@ export function usePdfActions({
         handlePreviewProposal,
         handleShareProposals,
         isLatestPdfUpToDate,
+        findReusablePdf,
+        reopenSavedPdf,
         canShareGeneratedPdf: latestGeneratedPdf !== null,
         canPreviewGeneratedPdf: latestGeneratedPdf !== null,
         latestGeneratedProposal: latestGeneratedPdf?.savedPdf && latestGeneratedPdf.client

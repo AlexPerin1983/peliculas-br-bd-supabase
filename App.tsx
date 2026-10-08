@@ -1524,6 +1524,11 @@ const App: React.FC = () => {
         setIsProposalPaymentModalOpen(false);
     }, [clearProposalPaymentOverride]);
 
+    // PDFs do cliente aberto buscados no aparelho/servidor (ver a busca mais abaixo).
+    const [generatedClientPdfs, setGeneratedClientPdfs] = useState<SavedPDF[]>([]);
+    // Uma exclusão invalida as buscas em andamento (não trazem de volta o excluído).
+    const generatedClientPdfsVersionRef = useRef(0);
+
     const {
         handleDownloadPdf,
         handleShareGeneratedPdf,
@@ -1534,6 +1539,8 @@ const App: React.FC = () => {
         canPreviewGeneratedPdf,
         latestGeneratedProposal,
         isLatestPdfUpToDate,
+        findReusablePdf,
+        reopenSavedPdf,
         isSavingBeforePdf,
         handleGeneratePdfWithSaveCheck,
         handleConfirmSaveBeforePdf,
@@ -1568,9 +1575,13 @@ const App: React.FC = () => {
                 return;
             }
         }
+        // Depois de fechar e abrir o app: o último PDF desta opção, de hoje e
+        // com o mesmo conteúdo, reabre (o arquivo vem do aparelho).
+        const reusablePdf = findReusablePdf([...allSavedPdfs, ...generatedClientPdfs]);
+        if (reusablePdf && await reopenSavedPdf(reusablePdf)) return;
         setDuplicateSourcePdfKeys([]);
         await handleGeneratePdfWithSaveCheck(isDirty);
-    }, [allSavedPdfs, handleGeneratePdfWithSaveCheck, isDirty, isLatestPdfUpToDate, latestGeneratedProposal]);
+    }, [allSavedPdfs, findReusablePdf, generatedClientPdfs, handleGeneratePdfWithSaveCheck, isDirty, isLatestPdfUpToDate, latestGeneratedProposal, reopenSavedPdf]);
 
     // "Duplicar com outra película" no Orçamento gerado: guarda as opções que
     // já estavam prontas, fecha o modal e abre o seletor de película.
@@ -1605,9 +1616,6 @@ const App: React.FC = () => {
     // Os PDFs do cliente nem sempre estão carregados (ex.: depois de recarregar,
     // na tela do cliente). Busca só os dele: já ao abrir o cliente (a lista do
     // "Orçamento gerado" abre pronta) e de novo, em segundo plano, a cada abertura.
-    const [generatedClientPdfs, setGeneratedClientPdfs] = useState<SavedPDF[]>([]);
-    // Uma exclusão invalida as buscas em andamento (não trazem de volta o excluído).
-    const generatedClientPdfsVersionRef = useRef(0);
     // Cliente cujo histórico já chegou: antes disso a lixeira não sabe todas as versões.
     const [generatedClientPdfsReadyFor, setGeneratedClientPdfsReadyFor] = useState<number | null>(null);
     const latestGeneratedClientId = latestGeneratedProposal?.client.id;
