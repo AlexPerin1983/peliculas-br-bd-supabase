@@ -112,7 +112,7 @@ describe('PdfHistoryView', () => {
         vi.unstubAllGlobals();
     });
 
-    it('confirma o toque em Aprovado imediatamente enquanto salva', async () => {
+    it('confirma o toque em Aprovar imediatamente enquanto salva', async () => {
         let finishUpdate: (() => void) | undefined;
         const onUpdateStatus = vi.fn(() => new Promise<void>(resolve => {
             finishUpdate = resolve;
@@ -120,7 +120,7 @@ describe('PdfHistoryView', () => {
 
         renderHistory([makePdf({ id: 32, status: 'pending' })], { onUpdateStatus });
 
-        const approveButton = screen.getByRole('button', { name: 'Aprovado' });
+        const approveButton = screen.getByRole('button', { name: 'Aprovar' });
         fireEvent.click(approveButton);
 
         expect(onUpdateStatus).toHaveBeenCalledWith(32, 'approved');
@@ -137,7 +137,8 @@ describe('PdfHistoryView', () => {
             await Promise.resolve();
         });
 
-        expect(screen.getByRole('button', { name: 'Aprovado' })).not.toBeDisabled();
+        // O status real vem da lista (prop); aqui ela não muda, então o botão volta a "Aprovar" liberado.
+        expect(screen.getByRole('button', { name: 'Aprovar' })).not.toBeDisabled();
     });
 
     it('renomeia uma opção do histórico para exibir no PDF e na página do cliente', async () => {
@@ -314,6 +315,9 @@ describe('PdfHistoryView', () => {
         );
 
         fireEvent.click(screen.getByRole('button', { name: /William/i }));
+        const optionsDialog = screen.getByRole('dialog', { name: 'Opções de William' });
+        expect(within(optionsDialog).queryByRole('checkbox')).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: 'Selecionar' }));
         fireEvent.click(screen.getByRole('button', { name: 'Selecionar todas as opções' }));
 
         expect(screen.getByRole('button', { name: 'Criar link' })).toBeInTheDocument();

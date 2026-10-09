@@ -393,6 +393,7 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
                 }}
                 onGenerateCombinedPdf={onGenerateCombinedPdf}
                 onNavigateToOption={onNavigateToOption}
+                onCreateProposal={onCreateProposal}
             />,
             defaultLoadingView
         );
