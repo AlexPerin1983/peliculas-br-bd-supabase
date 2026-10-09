@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import {
+    ArrowDownUp,
     BarChart3,
     CalendarDays,
     Check,
@@ -10,12 +11,14 @@ import {
     CircleDollarSign,
     ClipboardCopy,
     Download,
+    Eye,
     FileText,
     Filter,
     LockKeyhole,
     MessageSquareText,
     MoreVertical,
     Pencil,
+    Plus,
     ReceiptText,
     Search,
     Star,
@@ -57,6 +60,8 @@ interface PdfHistoryViewProps {
     onOpenInAgenda: (agendamento: Agendamento) => void;
     onGenerateCombinedPdf: (pdfs: SavedPDF[]) => void;
     onNavigateToOption: (clientId: number, optionId: number) => void;
+    /** Botão central do menu fixo no celular (mesma ação do "Criar proposta" do início). */
+    onCreateProposal?: () => void;
 }
 
 type HistoryFocusFilter = 'all' | 'pending' | 'approved' | 'revised' | 'expenses' | 'expired';
@@ -293,6 +298,12 @@ const formatMonthTitle = (date: Date) =>
         month: 'short',
         year: 'numeric'
     }).replace('.', '').toUpperCase();
+
+// "Outubro de 2026"
+const formatLongMonthTitle = (date: Date) => {
+    const label = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+    return label.charAt(0).toUpperCase() + label.slice(1);
+};
 
 const getCalendarCells = (monthDate: Date) => {
     const monthStart = startOfMonth(monthDate);
@@ -1468,19 +1479,24 @@ const ReviewRequestsPanel: React.FC<{
     const hiddenMobileCount = Math.max(0, candidates.length - mobileCandidates.length);
 
     return (
-        <section className="overflow-hidden rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface)] shadow-[var(--shadow-hairline)] sm:p-4">
-            <div className="flex items-center justify-between gap-3 border-b border-[var(--border-subtle)] px-3 py-2 sm:px-0 sm:pb-3 sm:pt-0 lg:items-center">
-                <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
-                    <div className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 sm:flex">
-                        <MessageSquareText className="h-4 w-4" aria-hidden="true" />
+        <section className="overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface)] shadow-[var(--shadow-hairline)] sm:rounded-[var(--radius-panel)] sm:p-4">
+            {/* No celular a linha inteira abre/fecha a fila (o botão se estende por cima dela). */}
+            <div className={`relative flex items-center justify-between gap-3 border-[var(--border-subtle)] px-3 py-2.5 sm:border-b sm:px-0 sm:pb-3 sm:pt-0 lg:items-center ${isQueueOpen ? 'border-b' : ''}`}>
+                <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 sm:rounded-[var(--radius-control)]">
+                        <Star className="h-4 w-4 sm:hidden" aria-hidden="true" />
+                        <MessageSquareText className="hidden h-4 w-4 sm:block" aria-hidden="true" />
                     </div>
                     <div className="min-w-0">
-                        <div className="flex min-w-0 items-center gap-2">
-                            <p className="ui-kicker">Avaliações locais</p>
-                        </div>
-                        <h2 className="mt-0.5 truncate text-[15px] font-bold leading-tight text-[var(--text-strong)] sm:text-lg">
+                        <p className="ui-kicker hidden sm:block">Avaliações locais</p>
+                        <h2 className="truncate text-sm font-semibold leading-tight text-[var(--text-strong)] sm:mt-0.5 sm:text-lg sm:font-bold">
                             Fila de avaliação
                         </h2>
+                        <p className="mt-0.5 truncate text-xs text-[var(--text-muted)] sm:hidden">
+                            {pendingCount === 0
+                                ? 'Todos os pedidos já foram feitos'
+                                : `${pendingCount} ${pendingCount === 1 ? 'cliente aprovado' : 'clientes aprovados'} para pedir`}
+                        </p>
                         <p className="mt-1 hidden text-xs leading-relaxed text-[var(--text-muted)] sm:block">
                             Clientes aprovados/concluídos no período, com mensagem pronta usando o link do Google.
                         </p>
@@ -1491,14 +1507,9 @@ const ReviewRequestsPanel: React.FC<{
                     onClick={() => setIsQueueOpen((prev) => !prev)}
                     aria-expanded={isQueueOpen}
                     aria-label={isQueueOpen ? 'Recolher fila de avaliação' : 'Expandir fila de avaliação'}
-                    className="flex shrink-0 items-center gap-1.5 sm:hidden"
+                    className="flex h-8 w-8 shrink-0 items-center justify-center text-[var(--text-muted)] after:absolute after:inset-0 after:content-[''] sm:hidden"
                 >
-                    <span className="inline-flex h-7 items-center rounded-full bg-emerald-500/10 px-2.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-200">
-                        {pendingCount} pend.
-                    </span>
-                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-muted)]">
-                        <ChevronDown className={`h-4 w-4 transition-transform duration-300 ${isQueueOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
-                    </span>
+                    <ChevronDown className={`h-4 w-4 transition-transform duration-300 ${isQueueOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
                 </button>
                 <div className="hidden flex-wrap gap-2 sm:flex">
                     <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[11px] font-bold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200">
@@ -1804,13 +1815,13 @@ const PdfHistoryMobileToolbar: React.FC<{
     onClearSearch,
 }) => {
     return (
-        <section className="space-y-3 sm:hidden">
-            <div className="flex items-center justify-between gap-3">
+        <section className="space-y-4 sm:hidden">
+            <div className="flex items-end justify-between gap-3 px-1 pt-1">
                 <div className="min-w-0">
-                    <h1 className="truncate text-2xl font-bold leading-tight text-[var(--text-strong)]">
+                    <h1 className="truncate text-[26px] font-semibold leading-tight tracking-[-0.02em] text-[var(--text-strong)]">
                         Histórico
                     </h1>
-                    <p className="mt-0.5 truncate text-xs font-semibold text-[var(--text-muted)]">
+                    <p className="mt-1 truncate text-sm text-[var(--text-muted)]">
                         {totalGroups === 0
                             ? 'Nenhum orçamento no período'
                             : `${totalGroups} ${totalGroups === 1 ? 'cliente' : 'clientes'} · ${totalPdfs} ${totalPdfs === 1 ? 'orçamento' : 'orçamentos'}`}
@@ -1822,9 +1833,9 @@ const PdfHistoryMobileToolbar: React.FC<{
                     onClick={onOpenPeriod}
                     aria-label={`Abrir período do histórico: ${periodLabel}`}
                     title={periodLabel}
-                    className="inline-flex h-10 max-w-[55%] shrink-0 items-center gap-2 rounded-full border border-[var(--border-subtle)] bg-[var(--surface)] px-3.5 text-[13px] font-bold text-[var(--text-strong)] shadow-[var(--shadow-hairline)] transition-colors hover:bg-[var(--surface-muted)]"
+                    className="inline-flex h-8 max-w-[55%] shrink-0 items-center gap-1.5 rounded-full border border-[var(--border-subtle)] bg-[var(--surface)] px-3 text-xs font-semibold text-[var(--text-body)] transition-colors hover:bg-[var(--surface-muted)]"
                 >
-                    <CalendarDays className="h-4 w-4 shrink-0 text-[var(--brand-primary)]" aria-hidden="true" />
+                    <CalendarDays className="h-3.5 w-3.5 shrink-0 text-[var(--brand-primary)]" aria-hidden="true" />
                     <span className="truncate">{periodLabel}</span>
                     <ChevronDown className="h-3.5 w-3.5 shrink-0 text-[var(--text-muted)]" aria-hidden="true" />
                 </button>
@@ -1833,7 +1844,7 @@ const PdfHistoryMobileToolbar: React.FC<{
             <label className="relative block">
                 <span className="sr-only">Buscar no histórico</span>
                 <Search
-                    className="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-[var(--text-soft)]"
+                    className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-soft)]"
                     aria-hidden="true"
                 />
                 <input
@@ -1843,13 +1854,14 @@ const PdfHistoryMobileToolbar: React.FC<{
                     onChange={(event) => onSearchChange(event.target.value)}
                     placeholder="Buscar cliente, valor ou data"
                     autoComplete="off"
-                    className="h-11 w-full rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface)] pl-11 pr-11 text-sm font-semibold text-[var(--text-strong)] shadow-[var(--shadow-hairline)] outline-none transition-all placeholder:font-medium placeholder:text-[var(--text-soft)] focus:border-[var(--brand-primary)] focus:ring-4 focus:ring-blue-500/10"
+                    style={{ fontSize: 16 }}
+                    className="h-11 w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] pl-10 pr-10 text-[var(--text-strong)] shadow-[var(--shadow-hairline)] outline-none transition placeholder:text-[var(--text-soft)] focus:border-[var(--brand-primary)] focus:ring-4 focus:ring-blue-500/10"
                 />
                 {searchTerm ? (
                     <button
                         type="button"
                         onClick={onClearSearch}
-                        className="absolute right-2 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-[var(--text-soft)] transition-colors hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)]"
+                        className="absolute right-1.5 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-[var(--text-soft)] transition-colors hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)]"
                         aria-label="Limpar busca"
                     >
                         <X className="h-4 w-4" aria-hidden="true" />
@@ -2363,7 +2375,7 @@ const MobileHistoryPeriodSelector: React.FC<{
         const isInRange = rangeStart !== null && rangeEnd !== null && dayTime > rangeStart && dayTime < rangeEnd;
 
         return [
-            'flex h-11 w-11 items-center justify-center rounded-full text-xl font-semibold transition-colors',
+            'flex h-10 w-10 items-center justify-center rounded-full text-[15px] font-medium transition-colors',
             isFuture
                 ? 'cursor-not-allowed text-[var(--text-soft)] opacity-35'
                 : isEdge
@@ -2385,16 +2397,16 @@ const MobileHistoryPeriodSelector: React.FC<{
         >
             {view === 'list' ? (
                 <>
-                    <div className="flex h-20 shrink-0 items-center gap-4 border-b border-[var(--border-subtle)] bg-[var(--surface)] px-4 shadow-[var(--shadow-hairline)]">
+                    <div className="flex h-14 shrink-0 items-center gap-2 border-b border-[var(--border-subtle)] bg-[var(--surface)] px-2">
                         <button
                             type="button"
                             onClick={onClose}
                             aria-label="Fechar filtro de período"
                             className="flex h-11 w-11 items-center justify-center rounded-full text-[var(--text-strong)] transition-colors hover:bg-[var(--surface-muted)]"
                         >
-                            <X className="h-7 w-7" aria-hidden="true" />
+                            <X className="h-5 w-5" aria-hidden="true" />
                         </button>
-                        <h2 className="text-2xl font-bold">Período</h2>
+                        <h2 className="text-lg font-semibold">Período</h2>
                     </div>
 
                     <div className="min-h-0 flex-1 overflow-y-auto">
@@ -2407,12 +2419,12 @@ const MobileHistoryPeriodSelector: React.FC<{
                                     type="button"
                                     onClick={() => handleSelectPeriod(option.key)}
                                     className={[
-                                        'flex min-h-[64px] w-full items-center justify-between gap-4 border-b border-[var(--border-subtle)] px-5 text-left text-xl font-bold transition-colors',
-                                        isSelected ? 'text-[var(--brand-primary)]' : 'text-[var(--text-strong)] hover:bg-[var(--surface-muted)]'
+                                        'flex min-h-[52px] w-full items-center justify-between gap-4 border-b border-[var(--border-subtle)] px-4 text-left text-[15px] transition-colors',
+                                        isSelected ? 'font-semibold text-[var(--brand-primary)]' : 'text-[var(--text-strong)] hover:bg-[var(--surface-muted)]'
                                     ].join(' ')}
                                 >
                                     <span>{option.label}</span>
-                                    {isSelected && <Check className="h-7 w-7 shrink-0 text-[var(--brand-primary)]" aria-hidden="true" />}
+                                    {isSelected && <Check className="h-5 w-5 shrink-0 text-[var(--brand-primary)]" aria-hidden="true" />}
                                 </button>
                             );
                         })}
@@ -2421,32 +2433,32 @@ const MobileHistoryPeriodSelector: React.FC<{
             ) : (
                 <>
                     <div className="shrink-0 border-b border-[var(--border-subtle)] bg-[var(--surface)] shadow-[var(--shadow-hairline)]">
-                        <div className="flex h-16 items-center justify-between gap-3 px-4">
+                        <div className="flex h-14 items-center justify-between gap-3 px-2">
                             <button
                                 type="button"
                                 onClick={onClose}
                                 aria-label="Fechar filtro de período"
                                 className="flex h-11 w-11 items-center justify-center rounded-full text-[var(--text-strong)] transition-colors hover:bg-[var(--surface-muted)]"
                             >
-                                <X className="h-7 w-7" aria-hidden="true" />
+                                <X className="h-5 w-5" aria-hidden="true" />
                             </button>
                             <button
                                 type="button"
                                 onClick={onApplyCustom}
                                 disabled={!canApplyCustom}
-                                className="h-10 rounded-[8px] px-3 text-lg font-bold text-[var(--brand-primary)] transition-colors hover:bg-[var(--surface-muted)] disabled:cursor-not-allowed disabled:text-[var(--text-soft)]"
+                                className="h-9 rounded-lg px-3 text-[15px] font-semibold text-[var(--brand-primary)] transition-colors hover:bg-[var(--surface-muted)] disabled:cursor-not-allowed disabled:text-[var(--text-soft)]"
                             >
                                 Salvar
                             </button>
                         </div>
-                        <div className="px-5 pb-5">
-                            <p className="text-sm font-bold uppercase tracking-[0.18em] text-[var(--text-muted)]">Personalizado</p>
-                            <div className="mt-3 flex items-center justify-between gap-3">
+                        <div className="px-4 pb-4">
+                            <p className="text-xs font-semibold text-[var(--text-muted)]">Personalizado</p>
+                            <div className="mt-1 flex items-center justify-between gap-3">
                                 <button
                                     type="button"
                                     onClick={handleOpenManualDates}
                                     aria-label="Editar datas manualmente"
-                                    className="min-w-0 text-left text-3xl font-bold leading-tight text-[var(--text-strong)]"
+                                    className="min-w-0 text-left text-xl font-semibold leading-tight text-[var(--text-strong)]"
                                 >
                                     {formatMobileRangeLabel(currentRange)}
                                 </button>
@@ -2456,11 +2468,11 @@ const MobileHistoryPeriodSelector: React.FC<{
                                     aria-label="Editar datas manualmente"
                                     className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)]"
                                 >
-                                    <Pencil className="h-6 w-6" aria-hidden="true" />
+                                    <Pencil className="h-5 w-5" aria-hidden="true" />
                                 </button>
                             </div>
                         </div>
-                        <div className="grid grid-cols-7 border-t border-[var(--border-subtle)] px-3 py-3 text-center text-lg font-bold text-[var(--text-muted)]">
+                        <div className="grid grid-cols-7 border-t border-[var(--border-subtle)] px-3 py-2 text-center text-xs font-semibold text-[var(--text-muted)]">
                             {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((day, index) => (
                                 <span key={`${day}-${index}`}>{day}</span>
                             ))}
@@ -2472,12 +2484,12 @@ const MobileHistoryPeriodSelector: React.FC<{
                             <div
                                 key={month.toISOString()}
                                 ref={isSameMonth(month, currentMonthStart) ? currentMonthRef : undefined}
-                                className="mb-8 last:mb-0 scroll-mt-3"
+                                className="mb-6 last:mb-0 scroll-mt-3"
                             >
-                                <p className="mb-3 px-2 text-xl font-bold text-[var(--text-muted)]">
-                                    {month.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+                                <p className="mb-2 px-2 text-sm font-semibold text-[var(--text-muted)]">
+                                    {formatLongMonthTitle(month)}
                                 </p>
-                                <div className="grid grid-cols-7 justify-items-center gap-y-2">
+                                <div className="grid grid-cols-7 justify-items-center gap-y-1">
                                     {getCalendarCells(month).map(({ date, isCurrentMonth }) => (
                                         <button
                                             key={date.toISOString()}
@@ -2508,12 +2520,12 @@ const MobileHistoryPeriodSelector: React.FC<{
                         <div className="p-5">
                             <div className="flex items-center justify-between gap-3">
                                 <div className="min-w-0">
-                                    <p className="text-sm font-bold uppercase tracking-[0.18em] text-[var(--text-muted)]">Personalizado</p>
-                                    <p className="mt-4 truncate text-3xl font-bold leading-tight text-[var(--text-strong)]">
+                                    <p className="text-xs font-semibold text-[var(--text-muted)]">Personalizado</p>
+                                    <p className="mt-1 truncate text-xl font-semibold leading-tight text-[var(--text-strong)]">
                                         {manualPreviewLabel}
                                     </p>
                                 </div>
-                                <CalendarDays className="h-8 w-8 shrink-0 text-[var(--text-muted)]" aria-hidden="true" />
+                                <CalendarDays className="h-6 w-6 shrink-0 text-[var(--text-muted)]" aria-hidden="true" />
                             </div>
                         </div>
 
@@ -2530,7 +2542,7 @@ const MobileHistoryPeriodSelector: React.FC<{
                                     onChange={event => handleManualDateInputChange(event, setManualStartDate)}
                                     aria-invalid={showManualStartError}
                                     className={[
-                                        'ui-field h-14 w-full px-3 text-lg font-bold',
+                                        'ui-field h-12 w-full px-3 text-base font-semibold',
                                         showManualStartError ? 'border-red-400 text-red-500 ring-2 ring-red-500/20 dark:border-red-400 dark:text-red-200' : ''
                                     ].join(' ')}
                                 />
@@ -2552,7 +2564,7 @@ const MobileHistoryPeriodSelector: React.FC<{
                                     onChange={event => handleManualDateInputChange(event, setManualEndDate)}
                                     aria-invalid={showManualEndError}
                                     className={[
-                                        'ui-field h-14 w-full px-3 text-lg font-bold',
+                                        'ui-field h-12 w-full px-3 text-base font-semibold',
                                         showManualEndError ? 'border-red-400 text-red-500 ring-2 ring-red-500/20 dark:border-red-400 dark:text-red-200' : ''
                                     ].join(' ')}
                                 />
@@ -2568,7 +2580,7 @@ const MobileHistoryPeriodSelector: React.FC<{
                             <button
                                 type="button"
                                 onClick={() => setIsManualOpen(false)}
-                                className="h-10 rounded-[8px] px-3 text-base font-bold text-[var(--brand-primary)] transition-colors hover:bg-[var(--surface-muted)]"
+                                className="h-9 rounded-lg px-3 text-sm font-semibold text-[var(--brand-primary)] transition-colors hover:bg-[var(--surface-muted)]"
                             >
                                 Cancelar
                             </button>
@@ -2576,7 +2588,7 @@ const MobileHistoryPeriodSelector: React.FC<{
                                 type="button"
                                 onClick={handleConfirmManualDates}
                                 disabled={!manualValidation.range}
-                                className="h-10 rounded-[8px] px-3 text-base font-bold text-[var(--brand-primary)] transition-colors hover:bg-[var(--surface-muted)] disabled:cursor-not-allowed disabled:text-[var(--text-soft)]"
+                                className="h-9 rounded-lg px-3 text-sm font-semibold text-[var(--brand-primary)] transition-colors hover:bg-[var(--surface-muted)] disabled:cursor-not-allowed disabled:text-[var(--text-soft)]"
                             >
                                 OK
                             </button>
@@ -2595,17 +2607,18 @@ const HistoryStatusFilters: React.FC<{
     counts: Record<HistoryFocusFilter, number>;
     onChange: (filter: HistoryFocusFilter) => void;
 }> = ({ activeFilter, counts, onChange }) => {
-    const filters: { key: HistoryFocusFilter; label: string; dotClassName: string | null; activeClassName: string }[] = [
-        { key: 'all', label: 'Todos', dotClassName: null, activeClassName: 'border-blue-500/70 bg-blue-500/10 text-blue-700 dark:border-blue-400/60 dark:text-blue-200' },
-        { key: 'pending', label: 'Pendentes', dotClassName: 'bg-slate-400', activeClassName: 'border-slate-400/70 bg-slate-500/10 text-slate-700 dark:border-slate-400/60 dark:text-slate-200' },
-        { key: 'approved', label: 'Aprovados', dotClassName: 'bg-emerald-500', activeClassName: 'border-emerald-500/70 bg-emerald-500/10 text-emerald-700 dark:border-emerald-400/60 dark:text-emerald-200' },
-        { key: 'revised', label: HISTORY_FOCUS_FILTER_LABELS.revised, dotClassName: 'bg-amber-500', activeClassName: 'border-amber-500/70 bg-amber-500/10 text-amber-700 dark:border-amber-400/60 dark:text-amber-200' },
-        { key: 'expired', label: 'Vencidos', dotClassName: 'bg-rose-500', activeClassName: 'border-rose-500/70 bg-rose-500/10 text-rose-700 dark:border-rose-400/60 dark:text-rose-200' },
-        { key: 'expenses', label: 'Com gastos', dotClassName: 'bg-blue-500', activeClassName: 'border-blue-500/70 bg-blue-500/10 text-blue-700 dark:border-blue-400/60 dark:text-blue-200' }
+    const filters: { key: HistoryFocusFilter; label: string }[] = [
+        { key: 'all', label: 'Todos' },
+        { key: 'pending', label: 'Pendentes' },
+        { key: 'approved', label: 'Aprovados' },
+        { key: 'revised', label: HISTORY_FOCUS_FILTER_LABELS.revised },
+        { key: 'expired', label: 'Vencidos' },
+        { key: 'expenses', label: 'Com gastos' }
     ];
 
+    // Mesmo formato dos filtros da tela de Clientes.
     return (
-        <div className="-mx-2 flex min-w-0 items-center gap-1.5 overflow-x-auto px-2 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:flex-wrap sm:gap-2 sm:overflow-visible sm:px-0 sm:pb-0">
+        <div className="-mx-1 flex min-w-0 items-center gap-1.5 overflow-x-auto px-1 pb-0.5 text-xs font-semibold [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:flex-wrap sm:gap-2 sm:overflow-visible sm:px-0 sm:pb-0" role="group" aria-label="Filtrar por status">
             {filters.map(filter => {
                 const isActive = activeFilter === filter.key;
                 // No celular, filtros sem nenhum orçamento só ocupariam espaço.
@@ -2619,18 +2632,15 @@ const HistoryStatusFilters: React.FC<{
                         aria-pressed={isActive}
                         onClick={() => onChange(filter.key)}
                         className={[
-                            'h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-bold transition-colors duration-200 sm:h-10 sm:gap-2 sm:rounded-[var(--radius-control)]',
+                            'h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 transition-colors',
                             isEmptyOnMobile ? 'hidden sm:inline-flex' : 'inline-flex',
                             isActive
-                                ? `${filter.activeClassName} shadow-[var(--shadow-hairline)]`
-                                : 'border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-muted)] hover:border-[var(--border-strong)] hover:text-[var(--text-strong)]'
+                                ? 'border-blue-600 bg-blue-600 text-white'
+                                : 'border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-body)] hover:border-[var(--border-strong)]'
                         ].join(' ')}
                     >
-                        {filter.dotClassName ? (
-                            <span className={`h-1.5 w-1.5 rounded-full ${filter.dotClassName}`} aria-hidden="true" />
-                        ) : null}
-                        <span>{filter.label}</span>
-                        <span className={`inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[9px] font-black ${isActive ? 'bg-white/60 text-current dark:bg-white/10' : 'bg-[var(--surface-muted)] text-slate-400'}`}>
+                        {filter.label}
+                        <span className={`tabular-nums ${isActive ? 'text-white/80' : 'opacity-70'}`}>
                             {counts[filter.key] || 0}
                         </span>
                     </button>
@@ -2640,25 +2650,41 @@ const HistoryStatusFilters: React.FC<{
     );
 };
 
+const HISTORY_SORT_ORDER = Object.keys(HISTORY_SORT_LABELS) as HistorySortKey[];
+
 const HistoryListToolbar: React.FC<{
     count: number;
+    total: number;
     sort: HistorySortKey;
     onSortChange: (sort: HistorySortKey) => void;
-}> = ({ count, sort, onSortChange }) => (
-    <div className="flex items-center justify-between gap-3 px-1 pt-1 sm:items-end sm:px-0 sm:pt-0">
-        <div className="min-w-0">
-            <p className="ui-kicker hidden sm:block">Propostas</p>
-            <p className="truncate text-sm font-bold text-[var(--text-strong)] sm:mt-0.5 sm:text-xs sm:font-semibold sm:text-[var(--text-muted)]">
+}> = ({ count, total, sort, onSortChange }) => (
+    <div className="flex items-center justify-between gap-3 px-1 sm:items-end sm:px-0">
+        {/* Celular: igual à tela de Clientes, um toque troca a ordem */}
+        <button
+            type="button"
+            onClick={() => onSortChange(HISTORY_SORT_ORDER[(HISTORY_SORT_ORDER.indexOf(sort) + 1) % HISTORY_SORT_ORDER.length])}
+            aria-label={`Ordem: ${HISTORY_SORT_LABELS[sort]}. Toque para mudar`}
+            className="inline-flex items-center gap-1.5 text-xs text-[var(--text-muted)] sm:hidden"
+        >
+            <ArrowDownUp className="h-3.5 w-3.5" aria-hidden="true" />
+            Ordem: <span className="font-semibold text-[var(--text-body)]">{HISTORY_SORT_LABELS[sort].toLowerCase()}</span>
+        </button>
+        {count !== total ? (
+            <span className="text-xs text-[var(--text-muted)] sm:hidden">{count} de {total}</span>
+        ) : null}
+        <div className="hidden min-w-0 sm:block">
+            <p className="ui-kicker">Propostas</p>
+            <p className="mt-0.5 truncate text-xs font-semibold text-[var(--text-muted)]">
                 {count} {count === 1 ? 'cliente encontrado' : 'clientes encontrados'}
             </p>
         </div>
-        <label className="relative shrink-0">
+        <label className="relative hidden shrink-0 sm:block">
             <span className="sr-only">Ordenar histórico</span>
             <select
                 value={sort}
                 onChange={(event) => onSortChange(event.target.value as HistorySortKey)}
                 aria-label="Ordenar histórico"
-                className="h-9 max-w-[148px] appearance-none rounded-full border border-transparent bg-transparent pl-3 pr-8 text-xs font-bold text-[var(--text-muted)] outline-none transition-colors hover:bg-[var(--surface-muted)] focus:border-[var(--brand-primary)] focus:ring-4 focus:ring-blue-500/10 sm:h-10 sm:max-w-none sm:rounded-[var(--radius-control)] sm:border-[var(--border-subtle)] sm:bg-[var(--surface)] sm:text-[var(--text-strong)] sm:shadow-[var(--shadow-hairline)]"
+                className="h-10 appearance-none rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] pl-3 pr-8 text-xs font-bold text-[var(--text-strong)] shadow-[var(--shadow-hairline)] outline-none transition-colors focus:border-[var(--brand-primary)] focus:ring-4 focus:ring-blue-500/10"
             >
                 {(Object.keys(HISTORY_SORT_LABELS) as HistorySortKey[]).map(key => (
                     <option key={key} value={key}>{HISTORY_SORT_LABELS[key]}</option>
@@ -2745,53 +2771,54 @@ const MonthlyExpenseSummaryCard: React.FC<{
     const compactStats = [
         {
             label: 'Pipeline',
-            value: formatNumberBR(selectedSummary.totalRevenue),
-            mobileValue: formatCompactCurrencyBR(selectedSummary.totalRevenue)
+            value: formatNumberBR(selectedSummary.totalRevenue)
         },
         {
             label: 'Aprovados',
-            value: String(selectedSummary.approvedCount),
-            mobileValue: String(selectedSummary.approvedCount)
+            value: String(selectedSummary.approvedCount)
         },
         {
             label: 'Resultado',
             value: formatNumberBR(selectedSummary.estimatedProfit),
-            mobileValue: formatCompactCurrencyBR(selectedSummary.estimatedProfit),
+            className: resultTone
+        }
+    ];
+    // Celular: mesmo cartão de números das telas de Estoque e Propostas.
+    const mobileStats = [
+        {
+            label: 'Pipeline',
+            value: formatCompactCurrencyBR(selectedSummary.totalRevenue),
+            detail: `${selectedSummary.opportunityCount} ${selectedSummary.opportunityCount === 1 ? 'oportunidade' : 'oportunidades'}`
+        },
+        {
+            label: 'Aprovados',
+            value: String(selectedSummary.approvedCount),
+            detail: selectedSummary.approvedCount === 1 ? 'orçamento' : 'orçamentos'
+        },
+        {
+            label: 'Resultado',
+            value: formatCompactCurrencyBR(selectedSummary.estimatedProfit),
+            detail: `margem ${formatPercentageBR(selectedSummary.estimatedMarginPercentage)}`,
             className: resultTone
         }
     ];
     const summaryHeader = (
         <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
             <div className="min-w-0">
-                {/* No celular o cartão inteiro é tocável e abre o detalhe; no desktop não é clicável. */}
-                <button
-                    type="button"
-                    onClick={onToggleExpanded}
-                    aria-label="Resumo do período: ver detalhes"
-                    className="block w-full text-left sm:pointer-events-none"
-                >
-                    <span className="flex items-center justify-between gap-2 sm:justify-start">
-                        <span className="flex min-w-0 flex-wrap items-center gap-2">
-                            <span className="ui-kicker">Resumo do período</span>
-                            <span className="hidden items-center rounded-full bg-[var(--surface-muted)] px-2.5 py-1 text-[10px] font-bold text-[var(--text-muted)] sm:inline-flex">
-                                {selectedSummary.opportunityCount} oportunidade{selectedSummary.opportunityCount === 1 ? '' : 's'}
-                            </span>
-                        </span>
-                        <span className="inline-flex shrink-0 items-center gap-0.5 text-xs font-bold text-[var(--brand-primary)] sm:hidden">
-                            Detalhes
-                            <ChevronRight className="h-4 w-4" aria-hidden="true" />
-                        </span>
+                <div className="flex flex-wrap items-center gap-2">
+                    <span className="ui-kicker">Resumo do período</span>
+                    <span className="inline-flex items-center rounded-full bg-[var(--surface-muted)] px-2.5 py-1 text-[10px] font-bold text-[var(--text-muted)]">
+                        {selectedSummary.opportunityCount} oportunidade{selectedSummary.opportunityCount === 1 ? '' : 's'}
                     </span>
-                    <span className="mt-2.5 grid grid-cols-3 gap-2 sm:mt-3 sm:max-w-[560px]">
-                        {compactStats.map(stat => (
-                            <span key={stat.label} className="block min-w-0 rounded-[var(--radius-control)] bg-[var(--surface-muted)] px-2.5 py-2 sm:border sm:border-[var(--border-subtle)] sm:px-3">
-                                <span className="block truncate text-[10px] font-bold uppercase text-[var(--text-soft)]">{stat.label}</span>
-                                <span className={`mt-1 block truncate text-[15px] font-bold tabular-nums text-[var(--text-strong)] sm:hidden ${stat.className || ''}`}>{stat.mobileValue}</span>
-                                <span className={`mt-1 hidden truncate text-base font-bold text-[var(--text-strong)] sm:block ${stat.className || ''}`}>{stat.value}</span>
-                            </span>
-                        ))}
-                    </span>
-                </button>
+                </div>
+                <div className="mt-3 grid max-w-[560px] grid-cols-3 gap-2">
+                    {compactStats.map(stat => (
+                        <div key={stat.label} className="min-w-0 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] px-3 py-2">
+                            <p className="truncate text-[10px] font-bold uppercase text-[var(--text-soft)]">{stat.label}</p>
+                            <p className={`mt-1 truncate text-base font-bold text-[var(--text-strong)] ${stat.className || ''}`}>{stat.value}</p>
+                        </div>
+                    ))}
+                </div>
             </div>
 
             <div className="hidden flex-col gap-2 sm:flex sm:flex-row sm:items-center xl:justify-end">
@@ -2815,19 +2842,19 @@ const MonthlyExpenseSummaryCard: React.FC<{
             <div className="space-y-3">
             <div className="grid min-w-0 grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-5">
                 {statCards.map(({ label, value, hint, icon: Icon, tone }) => (
-                    <div key={label} className="ui-card min-h-[112px] p-3.5 sm:p-4">
+                    <div key={label} className="ui-card p-3 sm:p-4">
                         <div className="flex items-start justify-between gap-3">
-                            <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] ${tone}`}>
+                            <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-control)] ${tone}`}>
                                 <Icon className="h-4 w-4" aria-hidden="true" />
                             </div>
-                            <span className="text-right text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--text-soft)]">
+                            <span className="text-right text-[11px] font-semibold text-[var(--text-muted)]">
                                 {label}
                             </span>
                         </div>
-                        <p className="mt-4 truncate text-xl font-bold tracking-[-0.03em] text-[var(--text-strong)] sm:text-2xl">
+                        <p className="mt-2 truncate text-lg font-semibold tabular-nums tracking-[-0.01em] text-[var(--text-strong)] sm:text-xl">
                             {value}
                         </p>
-                        <p className="mt-1 truncate text-xs font-semibold text-[var(--text-muted)]">
+                        <p className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">
                             {hint}
                         </p>
                     </div>
@@ -2836,11 +2863,11 @@ const MonthlyExpenseSummaryCard: React.FC<{
 
             <div className="ui-card grid overflow-visible lg:grid-cols-[minmax(0,1fr)_390px]">
                 <div className="border-b border-[var(--border-subtle)] p-4 sm:p-5 lg:border-b-0 lg:border-r">
-                    <span className="inline-flex items-center gap-2 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-700 dark:text-emerald-300">
+                    <span className="inline-flex items-center gap-2 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
                         <LockKeyhole className="h-3.5 w-3.5" aria-hidden="true" />
                         Interno
                     </span>
-                    <h3 className="mt-3 text-lg font-bold text-[var(--text-strong)]">
+                    <h3 className="mt-2 text-base font-semibold text-[var(--text-strong)]">
                         Fechamento de gastos
                     </h3>
                     <p className="mt-1 max-w-[34rem] text-sm leading-6 text-[var(--text-muted)]">
@@ -2851,7 +2878,7 @@ const MonthlyExpenseSummaryCard: React.FC<{
                         <button
                             type="button"
                             onClick={onCopySummary}
-                            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-[var(--radius-control)] bg-emerald-600 px-3 text-xs font-bold text-white shadow-[var(--shadow-hairline)] transition-colors duration-200 hover:bg-emerald-500"
+                            className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-[var(--radius-control)] bg-emerald-600 px-3 text-sm font-semibold text-white shadow-[var(--shadow-hairline)] transition-colors duration-200 hover:bg-emerald-500"
                         >
                             <ClipboardCopy className="h-4 w-4" aria-hidden="true" />
                             Copiar resumo
@@ -2949,7 +2976,27 @@ const MonthlyExpenseSummaryCard: React.FC<{
 
     return (
         <section className="space-y-3 overflow-visible">
-            <div className="ui-card overflow-visible p-3 sm:p-4">
+            <button
+                type="button"
+                onClick={onToggleExpanded}
+                aria-label="Resumo do período: ver detalhes"
+                className="block w-full overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface)] text-left sm:hidden"
+            >
+                <span className="grid grid-cols-3 divide-x divide-[var(--border-subtle)]">
+                    {mobileStats.map(stat => (
+                        <span key={stat.label} className="block min-w-0 px-2 py-3 text-center">
+                            <span className="block truncate text-[11px] text-[var(--text-muted)]">{stat.label}</span>
+                            <span className={`mt-0.5 block truncate text-lg font-semibold tabular-nums tracking-[-0.01em] text-[var(--text-strong)] ${stat.className || ''}`}>{stat.value}</span>
+                            <span className="mt-0.5 block truncate text-[11px] text-[var(--text-muted)]">{stat.detail}</span>
+                        </span>
+                    ))}
+                </span>
+                <span className="flex items-center justify-center gap-1 border-t border-[var(--border-subtle)] py-2 text-xs font-semibold text-[var(--brand-primary)]">
+                    Ver resumo do período
+                    <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+                </span>
+            </button>
+            <div className="ui-card hidden overflow-visible p-4 sm:block">
                 {summaryHeader}
             </div>
 
@@ -2964,25 +3011,26 @@ const MonthlyExpenseSummaryCard: React.FC<{
                     role="dialog"
                     aria-modal="true"
                     aria-label="Resumo do período"
-                    className="fixed inset-0 z-[60] flex flex-col bg-[var(--surface)] pt-[env(safe-area-inset-top,0px)] sm:hidden"
+                    className="fixed inset-0 z-[60] flex flex-col bg-[var(--app-bg)] pt-[env(safe-area-inset-top,0px)] sm:hidden"
                 >
-                    <header className="flex items-center gap-3 border-b border-[var(--border-subtle)] px-4 py-3">
+                    {/* Mesmo cabeçalho da tela do cliente */}
+                    <header className="flex items-center gap-2 border-b border-[var(--border-subtle)] bg-[var(--surface)] px-2 py-2">
                         <button
                             type="button"
                             onClick={onToggleExpanded}
                             aria-label="Fechar resumo do período"
-                            className="inline-flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-muted)] transition-colors hover:text-[var(--text-strong)]"
+                            className="flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-full text-slate-600 transition-colors hover:bg-[var(--surface-muted)] dark:text-slate-300"
                         >
-                            <i className="fas fa-arrow-left text-[13px]" aria-hidden="true"></i>
+                            <i className="fas fa-arrow-left text-base" aria-hidden="true"></i>
                         </button>
                         <div className="min-w-0">
-                            <p className="ui-kicker">Resumo do período</p>
-                            <p className="truncate text-sm font-bold text-[var(--text-strong)]">
+                            <p className="truncate text-[15px] font-semibold leading-tight text-[var(--text-strong)]">Resumo do período</p>
+                            <p className="mt-0.5 truncate text-xs text-[var(--text-muted)]">
                                 {selectedSummary.opportunityCount} oportunidade{selectedSummary.opportunityCount === 1 ? '' : 's'}
                             </p>
                         </div>
                     </header>
-                    <div className="flex-1 overflow-y-auto p-4">
+                    <div className="flex-1 overflow-y-auto px-3 pb-6 pt-3">
                         {expandedDetails}
                     </div>
                 </div>,
@@ -2994,12 +3042,6 @@ const MonthlyExpenseSummaryCard: React.FC<{
 
 type HistoryPdfStatus = NonNullable<SavedPDF['status']>;
 
-const PDF_STATUS_OPTIONS: { status: HistoryPdfStatus; label: string; busyLabel: string; activeClassName: string }[] = [
-    { status: 'pending', label: 'Pendente', busyLabel: 'Salvando...', activeClassName: 'bg-[var(--surface)] text-slate-800 shadow-sm dark:bg-slate-700 dark:text-white' },
-    { status: 'revised', label: 'Revisão', busyLabel: 'Marcando...', activeClassName: 'bg-amber-400 text-white shadow-sm' },
-    { status: 'approved', label: 'Aprovado', busyLabel: 'Aprovando...', activeClassName: 'bg-emerald-500 text-white shadow-sm' },
-];
-
 const HistoryMenuItem: React.FC<{
     icon: React.ReactNode;
     label: string;
@@ -3010,7 +3052,7 @@ const HistoryMenuItem: React.FC<{
     <button
         type="button"
         onClick={onClick}
-        className={`flex min-h-[52px] w-full items-center gap-3 rounded-[12px] px-3 py-2 text-left transition-colors ${
+        className={`flex min-h-[52px] w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-colors ${
             tone === 'danger'
                 ? 'text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/30'
                 : 'text-[var(--text-strong)] hover:bg-[var(--surface-muted)]'
@@ -3116,7 +3158,8 @@ const PdfHistoryItem: React.FC<{
     onSetFunnelReference: (pdf: SavedPDF) => void;
     onShare: (client: Client, pdf: SavedPDF, messages?: string[]) => void;
     fitContent?: boolean;
-}> = React.memo(({ pdf, client, agendamento, onDownload, onDelete, onUpdateStatus, onRenamePdfOption, onSchedule, onOpenInAgenda, films, messageTemplates, googleReviewsLink, isSelected, onToggleSelect, onNavigateToOption, isFunnelReference, canChooseFunnelReference, onSetFunnelReference, onShare, fitContent = false }) => {
+    selectable?: boolean;
+}> = React.memo(({ pdf, client, agendamento, onDownload, onDelete, onUpdateStatus, onRenamePdfOption, onSchedule, onOpenInAgenda, films, messageTemplates, googleReviewsLink, isSelected, onToggleSelect, onNavigateToOption, isFunnelReference, canChooseFunnelReference, onSetFunnelReference, onShare, fitContent = false, selectable = true }) => {
     const { showToast } = useFeedback();
     const [copiedMessageKey, setCopiedMessageKey] = useState<string | null>(null);
     const [whatsAppMessage, setWhatsAppMessage] = useState<string | null>(null);
@@ -3241,256 +3284,239 @@ const PdfHistoryItem: React.FC<{
     }, [normalizedPhone, showToast]);
 
     const optionLabel = pdf.proposalOptionName?.trim() || 'Orçamento';
-    const createdAtLabel = new Date(pdf.date).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(',', ' ·');
+    const createdAt = new Date(pdf.date);
+    const createdAtLabel = `${formatShortDayLabel(pdf.date)}, ${createdAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+    // Medidas ficam em metros (ex.: "1,20" x "2,10").
     const filmAreas = useMemo(() => {
         const filmMap = new Map<string, number>();
         (pdf.measurements || []).forEach(m => {
             if (!m.pelicula) return;
-            const m2 = (parseFloat(String(m.largura).replace(',', '.')) * parseFloat(String(m.altura).replace(',', '.'))) * (m.quantidade || 1) / 10000;
+            const m2 = parseFloat(String(m.largura).replace(',', '.')) * parseFloat(String(m.altura).replace(',', '.')) * (m.quantidade || 1);
             filmMap.set(m.pelicula, (filmMap.get(m.pelicula) || 0) + (Number.isFinite(m2) ? m2 : 0));
         });
         return Array.from(filmMap.entries());
     }, [pdf.measurements]);
+    // Película só vale mostrar quando não repete o nome da opção.
+    const filmSummary = filmAreas.length === 1 && normalizeSearchText(filmAreas[0][0]) === normalizeSearchText(optionLabel)
+        ? ''
+        : filmAreas.map(([nome]) => nome).join(', ');
+    const statusBadge = activeStatus === 'approved'
+        ? { label: 'Aprovado', className: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300', dot: 'bg-emerald-500' }
+        : activeStatus === 'revised'
+            ? { label: 'Em revisão', className: 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300', dot: 'bg-amber-500' }
+            : isExpired
+                ? { label: 'Vencido', className: 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300', dot: 'bg-rose-500' }
+                : { label: 'Pendente', className: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300', dot: 'bg-slate-400' };
+    const isApproved = activeStatus === 'approved';
+    const scheduleLabel = agendamento
+        ? new Date(agendamento.start).toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).replace(' de ', ' ').replace('.', '')
+        : '';
     const closeActions = useCallback(() => setIsActionsOpen(false), []);
     const runMenuAction = (action: () => void) => {
         action();
         setIsActionsOpen(false);
     };
+    const actionButtonClassName = 'flex h-11 min-w-0 items-center justify-center gap-1.5 px-2 text-[13px] font-semibold transition-colors disabled:cursor-wait';
 
     return (
-        <div className={`relative rounded-[var(--radius-panel)] border bg-[var(--surface)] p-3.5 transition-shadow sm:p-4 ${isSelected ? 'border-blue-500 shadow-[0_10px_28px_rgba(37,99,235,0.12)] ring-2 ring-blue-500/25' : 'border-[var(--border-subtle)] shadow-[var(--shadow-hairline)]'} ${fitContent ? '' : 'h-full'}`}>
-            {/* Nome da opção + seleção + menu de ações */}
-            <div className="flex items-start gap-3">
-                <input
-                    type="checkbox"
-                    checked={isSelected}
-                    onChange={() => onToggleSelect(pdf.id!)}
-                    onClick={(e) => e.stopPropagation()}
-                    className="mt-0.5 h-5 w-5 flex-shrink-0 cursor-pointer rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                    aria-label={`Selecionar orçamento ${pdf.proposalOptionName || pdf.nomeArquivo}`}
-                    title="Selecionar para criar um link, gerar PDF combinado ou excluir em massa"
-                />
-                <div className="min-w-0 flex-1">
-                    {pdf.proposalOptionId ? (
-                        <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); onNavigateToOption(pdf.clienteId, pdf.proposalOptionId!); }}
-                            className="block w-full truncate text-left text-[15px] font-semibold leading-tight tracking-[-0.01em] text-slate-900 transition-colors hover:text-blue-600 dark:text-slate-100 dark:hover:text-blue-400"
-                            title="Abrir esta opção no orçamento"
-                        >
-                            {optionLabel}
-                        </button>
-                    ) : (
-                        <p className="truncate text-[15px] font-semibold leading-tight tracking-[-0.01em] text-slate-900 dark:text-slate-100">
-                            {optionLabel}
-                        </p>
-                    )}
-                    <p className="mt-0.5 text-xs text-[var(--text-muted)]">
-                        {createdAtLabel}
-                    </p>
-                </div>
-                <button
-                    type="button"
-                    onClick={(event) => {
-                        event.stopPropagation();
-                        setIsActionsOpen(true);
-                    }}
-                    className="-mr-1.5 -mt-1.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-[var(--surface-muted)] hover:text-slate-800 dark:text-slate-400 dark:hover:text-white"
-                    aria-label={`Mais ações de ${optionLabel}`}
-                    title="Renomear, baixar, excluir..."
-                >
-                    <MoreVertical className="h-5 w-5" aria-hidden="true" />
-                </button>
-            </div>
-
-            {/* Valor + metragem + validade */}
-            <div className="mt-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                <p className={`text-xl font-bold tabular-nums tracking-[-0.02em] ${activeStatus === 'approved' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-900 dark:text-slate-50'}`}>
-                    {formatNumberBR(pdf.totalPreco)}
-                </p>
-                <p className="flex flex-wrap items-center gap-x-1.5 text-xs font-medium text-[var(--text-muted)]">
-                    <span>{formatAreaBR(pdf.totalM2)}</span>
-                    {expirationDate && activeStatus !== 'approved' ? (
-                        <>
-                            <span aria-hidden="true">·</span>
-                            {isExpired ? (
-                                <span className="inline-flex items-center gap-1 font-semibold text-rose-600 dark:text-rose-400">
-                                    <i className="fas fa-exclamation-circle text-[10px]" aria-hidden="true" />
-                                    Vencido
-                                </span>
-                            ) : (
-                                <span>Vence {expirationDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}</span>
-                            )}
-                        </>
+        <article className={`relative overflow-hidden rounded-2xl border bg-[var(--surface-raised)] transition-shadow ${isSelected ? 'border-blue-500 ring-2 ring-blue-500/20' : 'border-[var(--border-subtle)] shadow-[var(--shadow-hairline)]'} ${fitContent ? '' : 'h-full'}`}>
+            <div className="p-3.5 sm:p-4">
+                {/* Nome, data, status e menu */}
+                <div className="flex items-start gap-3">
+                    {selectable ? (
+                        <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => onToggleSelect(pdf.id!)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="mt-0.5 h-5 w-5 flex-shrink-0 cursor-pointer rounded-full border-slate-300 text-blue-600 focus:ring-blue-500"
+                            aria-label={`Selecionar orçamento ${pdf.proposalOptionName || pdf.nomeArquivo}`}
+                            title="Selecionar para criar um link, gerar PDF combinado ou excluir em massa"
+                        />
                     ) : null}
-                </p>
-            </div>
-
-            {/* Etiquetas: principal, arquivado, películas */}
-            {(isFunnelReference && canChooseFunnelReference) || pdf.archivedAt || filmAreas.length > 0 ? (
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                    {isFunnelReference && canChooseFunnelReference ? (
-                        <span
-                            className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-700 dark:bg-blue-950/30 dark:text-blue-300"
-                            title="É esta opção que conta no pipeline deste atendimento."
-                        >
-                            <i className="fas fa-bullseye text-[9px]" aria-hidden="true" />
-                            Valor principal
-                        </span>
-                    ) : null}
-                    {pdf.archivedAt ? (
-                        <span
-                            title="O arquivo foi removido para economizar espaço. O PDF é gerado novamente ao baixar."
-                            className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-400"
-                        >
-                            <i className="fas fa-box-archive text-[9px]" aria-hidden="true" />
-                            Arquivado
-                        </span>
-                    ) : null}
-                    {filmAreas.map(([nome, m2]) => (
-                        <span key={nome} className="inline-flex max-w-full items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-[11px] font-medium leading-none text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                            <span className="truncate">{nome}</span>
-                            <span className="shrink-0 text-slate-400">· {formatAreaBR(m2)}</span>
-                        </span>
-                    ))}
-                </div>
-            ) : null}
-
-            {/* Status: um controle só mostra e muda o status (antes eram etiqueta + 2 botões) */}
-            <div role="group" aria-label="Status do orçamento" className="mt-3 grid grid-cols-3 gap-1 rounded-[12px] bg-[var(--surface-muted)] p-1">
-                {PDF_STATUS_OPTIONS.map(option => {
-                    const isActive = activeStatus === option.status;
-                    const isBusy = pendingStatusChange?.status === option.status;
-
-                    return (
-                        <button
-                            key={option.status}
-                            type="button"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                if (!isActive) void handleStatusChange(option.status);
-                            }}
-                            aria-pressed={isActive}
-                            aria-busy={isBusy}
-                            disabled={isUpdatingStatus}
-                            className={`inline-flex h-9 min-w-0 items-center justify-center gap-1.5 rounded-[9px] px-1 text-xs font-bold transition duration-150 active:scale-95 disabled:cursor-wait ${
-                                isActive
-                                    ? option.activeClassName
-                                    : `text-[var(--text-muted)] hover:bg-[var(--surface)] hover:text-[var(--text-strong)] ${isUpdatingStatus ? 'opacity-60' : ''}`
-                            }`}
-                        >
-                            {isBusy ? (
-                                <i className="fas fa-circle-notch animate-spin text-[10px]" aria-hidden="true" />
-                            ) : null}
-                            <span className="truncate">{isBusy ? option.busyLabel : option.label}</span>
-                        </button>
-                    );
-                })}
-            </div>
-            {isUpdatingStatus ? (
-                <span className="sr-only" role="status" aria-live="polite">
-                    Salvando status do orçamento
-                </span>
-            ) : null}
-
-            {/* Agendamento */}
-            {agendamento ? (
-                <div className="mt-2 flex items-center gap-2 rounded-[12px] bg-blue-50 px-3 py-2 text-xs text-blue-800 dark:bg-blue-950/30 dark:text-blue-200">
-                    <CalendarDays className="h-4 w-4 shrink-0" aria-hidden="true" />
-                    <span className="min-w-0 flex-1 truncate font-semibold">
-                        <span className="sr-only">Agendado para </span>
-                        {new Date(agendamento.start).toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).replace(' de ', ' ').replace('.', '')}
+                    <div className="min-w-0 flex-1">
+                        {pdf.proposalOptionId ? (
+                            <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); onNavigateToOption(pdf.clienteId, pdf.proposalOptionId!); }}
+                                className="block max-w-full truncate text-left text-[15px] font-semibold leading-tight text-[var(--text-strong)] transition-colors hover:text-[var(--brand-primary)]"
+                                title="Abrir esta opção no orçamento"
+                            >
+                                {optionLabel}
+                            </button>
+                        ) : (
+                            <p className="truncate text-[15px] font-semibold leading-tight text-[var(--text-strong)]">
+                                {optionLabel}
+                            </p>
+                        )}
+                        <p className="mt-1 text-xs text-[var(--text-muted)]">{createdAtLabel}</p>
+                    </div>
+                    <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold ${statusBadge.className}`}>
+                        <span className={`h-1.5 w-1.5 rounded-full ${statusBadge.dot}`} aria-hidden="true" />
+                        {statusBadge.label}
                     </span>
                     <button
                         type="button"
                         onClick={(event) => {
                             event.stopPropagation();
-                            onSchedule({ pdf, agendamento });
+                            setIsActionsOpen(true);
                         }}
-                        className="shrink-0 rounded-full px-2 py-1 font-bold text-blue-700 transition-colors hover:bg-blue-100 dark:text-blue-300 dark:hover:bg-blue-900/40"
+                        className="-mr-2 -mt-1.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)]"
+                        aria-label={`Mais ações de ${optionLabel}`}
+                        title="Revisão, renomear, baixar, excluir..."
                     >
-                        Alterar
+                        <MoreVertical className="h-[18px] w-[18px]" aria-hidden="true" />
+                    </button>
+                </div>
+
+                {/* Valor e detalhes */}
+                <div className={`mt-3 ${selectable ? 'pl-8' : ''}`}>
+                    <div className="flex items-center justify-between gap-3">
+                        <p className={`text-xl font-semibold tabular-nums tracking-[-0.01em] ${isApproved ? 'text-emerald-600 dark:text-emerald-400' : 'text-[var(--text-strong)]'}`}>
+                            {formatNumberBR(pdf.totalPreco)}
+                        </p>
+                        {isFunnelReference && canChooseFunnelReference ? (
+                            <span
+                                className="inline-flex shrink-0 items-center gap-1 rounded-full border border-blue-200 px-2 py-0.5 text-[11px] font-semibold text-[var(--brand-primary)] dark:border-blue-900/60"
+                                title="É esta opção que conta no pipeline deste atendimento."
+                            >
+                                <Target className="h-3 w-3" aria-hidden="true" />
+                                Valor principal
+                            </span>
+                        ) : null}
+                    </div>
+                    <p className="mt-0.5 truncate text-xs text-[var(--text-muted)]">
+                        <span className="tabular-nums">{formatAreaBR(pdf.totalM2)}</span>
+                        {expirationDate && !isApproved ? (
+                            <>
+                                <span aria-hidden="true"> · </span>
+                                <span className={isExpired ? 'font-semibold text-rose-600 dark:text-rose-400' : ''}>
+                                    {isExpired ? 'Validade vencida' : `Vence ${expirationDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}`}
+                                </span>
+                            </>
+                        ) : null}
+                        {filmSummary ? (
+                            <>
+                                <span aria-hidden="true"> · </span>
+                                <span className="text-[var(--text-body)]">{filmSummary}</span>
+                            </>
+                        ) : null}
+                    </p>
+                </div>
+
+                {pdf.archivedAt || agendamento ? (
+                    <div className={`mt-2.5 space-y-1 text-xs text-[var(--text-muted)] ${selectable ? 'pl-8' : ''}`}>
+                        {pdf.archivedAt ? (
+                            <p title="O arquivo foi removido para economizar espaço. O PDF é gerado novamente ao baixar.">
+                                PDF arquivado · gerado de novo ao baixar
+                            </p>
+                        ) : null}
+                        {agendamento ? (
+                            <p className="flex items-center gap-1.5">
+                                <CalendarDays className="h-3.5 w-3.5 shrink-0 text-[var(--brand-primary)]" aria-hidden="true" />
+                                <span className="min-w-0 truncate">
+                                    Agendado para <span className="font-semibold text-[var(--text-body)]">{scheduleLabel}</span>
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                        onOpenInAgenda(agendamento);
+                                    }}
+                                    aria-label="Abrir agendamento na agenda"
+                                    title="Abrir na agenda"
+                                    className="shrink-0 font-semibold text-[var(--brand-primary)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                                >
+                                    Ver na agenda
+                                </button>
+                            </p>
+                        ) : null}
+                    </div>
+                ) : null}
+            </div>
+
+            {reviewFollowUpMessage ? (
+                <div className="flex items-center gap-3 border-t border-[var(--border-subtle)] px-3.5 py-2.5 sm:px-4">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-300">
+                        <Star className="h-4 w-4" aria-hidden="true" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                        <p className="truncate text-[13px] font-semibold text-[var(--text-strong)]">Pedir avaliação no Google</p>
+                        <p className="truncate text-[11px] text-[var(--text-muted)]">Mensagem pronta para depois da instalação</p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => handleOpenWhatsApp(reviewFollowUpMessage)}
+                        aria-label="Enviar pedido de avaliação pelo WhatsApp"
+                        title="Enviar pelo WhatsApp"
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-emerald-600 transition-colors hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30"
+                    >
+                        <i className="fab fa-whatsapp text-[17px]" aria-hidden="true" />
                     </button>
                     <button
                         type="button"
-                        onClick={(event) => {
-                            event.stopPropagation();
-                            onOpenInAgenda(agendamento);
-                        }}
-                        aria-label="Abrir agendamento na agenda"
-                        title="Abrir na agenda"
-                        className="shrink-0 rounded-full px-2 py-1 font-bold text-blue-700 transition-colors hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:text-blue-300 dark:hover:bg-blue-900/40"
+                        onClick={() => handleCopyMessage(reviewFollowUpMessage, 'review-follow-up')}
+                        aria-label="Copiar pedido de avaliação"
+                        title="Copiar mensagem"
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)]"
                     >
-                        Ver agenda
+                        {copiedMessageKey === 'review-follow-up'
+                            ? <Check className="h-4 w-4 text-emerald-600" aria-hidden="true" />
+                            : <ClipboardCopy className="h-4 w-4" aria-hidden="true" />}
                     </button>
                 </div>
             ) : null}
 
-            {/* Ações principais */}
-            <div className="mt-2 flex gap-2">
-                {!agendamento ? (
-                    <button
-                        type="button"
-                        onClick={(event) => {
-                            event.stopPropagation();
-                            onSchedule({ pdf });
-                        }}
-                        className="inline-flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-[12px] border border-[var(--border-subtle)] bg-[var(--surface)] px-3.5 text-sm font-semibold text-[var(--text-strong)] transition-colors hover:bg-[var(--surface-muted)]"
-                    >
-                        <CalendarDays className="h-4 w-4 text-[var(--text-muted)]" aria-hidden="true" />
-                        Agendar
-                    </button>
-                ) : null}
+            {/* Ações: uma barra fina, como nos apps de gestão */}
+            <div className="grid grid-cols-3 divide-x divide-[var(--border-subtle)] border-t border-[var(--border-subtle)]">
+                <button
+                    type="button"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        void handleStatusChange(isApproved ? 'pending' : 'approved');
+                    }}
+                    aria-pressed={isApproved}
+                    aria-busy={isUpdatingStatus}
+                    disabled={isUpdatingStatus}
+                    title={isApproved ? 'Toque para voltar para pendente' : 'Marcar como aprovado pelo cliente'}
+                    className={`${actionButtonClassName} ${isApproved ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300' : 'text-[var(--text-body)] hover:bg-[var(--surface-muted)]'}`}
+                >
+                    {isUpdatingStatus
+                        ? <i className="fas fa-circle-notch animate-spin text-[11px]" aria-hidden="true" />
+                        : <Check className="h-4 w-4 shrink-0" aria-hidden="true" />}
+                    <span className="truncate">
+                        {isUpdatingStatus
+                            ? pendingStatusChange?.status === 'approved' ? 'Aprovando...' : 'Salvando...'
+                            : isApproved ? 'Aprovado' : 'Aprovar'}
+                    </span>
+                </button>
+                <button
+                    type="button"
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        onSchedule(agendamento ? { pdf, agendamento } : { pdf });
+                    }}
+                    className={`${actionButtonClassName} text-[var(--text-body)] hover:bg-[var(--surface-muted)]`}
+                >
+                    <CalendarDays className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    <span className="truncate">{agendamento ? 'Reagendar' : 'Agendar'}</span>
+                </button>
                 <button
                     type="button"
                     onClick={(event) => {
                         event.stopPropagation();
                         onShare(client, pdf, editableMessages);
                     }}
-                    className="flex h-11 min-w-0 flex-1 items-center justify-center gap-2 rounded-[12px] bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500/20 dark:bg-blue-500 dark:hover:bg-blue-400"
+                    className={`${actionButtonClassName} text-[var(--brand-primary)] hover:bg-blue-50 dark:hover:bg-blue-950/30`}
                 >
-                    <i className="fab fa-whatsapp text-base" aria-hidden="true" />
-                    <span className="truncate">Enviar proposta</span>
+                    <i className="fab fa-whatsapp text-[15px]" aria-hidden="true" />
+                    <span className="truncate">Enviar</span>
                 </button>
             </div>
-
-            {reviewFollowUpMessage ? (
-                <div className="mt-3 rounded-[12px] border border-emerald-200/80 bg-emerald-50/70 p-3 dark:border-emerald-800/60 dark:bg-emerald-950/20">
-                    <div className="flex items-center gap-2">
-                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white text-emerald-600 shadow-sm dark:bg-emerald-950/50 dark:text-emerald-300">
-                            <i className="fas fa-star text-[11px]" aria-hidden="true" />
-                        </span>
-                        <div className="min-w-0">
-                            <p className="text-[13px] font-bold text-emerald-800 dark:text-emerald-200">
-                                Pedir avaliação no Google
-                            </p>
-                            <p className="text-[11px] text-emerald-700/90 dark:text-emerald-200/80">
-                                Envie depois da instalação para pedir fotos e a avaliação.
-                            </p>
-                        </div>
-                    </div>
-                    <p className="mt-2 line-clamp-3 whitespace-pre-line break-words rounded-[10px] bg-white/90 px-3 py-2 text-xs leading-5 text-slate-700 dark:bg-slate-950/30 dark:text-slate-200">
-                        {reviewFollowUpMessage}
-                    </p>
-                    <div className="mt-2 grid grid-cols-2 gap-2">
-                        <button
-                            type="button"
-                            onClick={() => handleOpenWhatsApp(reviewFollowUpMessage)}
-                            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[10px] border border-emerald-200 bg-white text-xs font-bold text-emerald-700 transition-colors hover:bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200"
-                        >
-                            <i className="fab fa-whatsapp text-[13px]" aria-hidden="true" />
-                            WhatsApp
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => handleCopyMessage(reviewFollowUpMessage, 'review-follow-up')}
-                            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[10px] bg-emerald-600 text-xs font-bold text-white transition-colors hover:bg-emerald-500"
-                        >
-                            <i className={`${copiedMessageKey === 'review-follow-up' ? 'fas fa-check' : 'fas fa-copy'} text-[11px]`} aria-hidden="true" />
-                            {copiedMessageKey === 'review-follow-up' ? 'Copiado' : 'Copiar texto'}
-                        </button>
-                    </div>
-                </div>
+            {isUpdatingStatus ? (
+                <span className="sr-only" role="status" aria-live="polite">
+                    Salvando status do orçamento
+                </span>
             ) : null}
 
             <HistoryActionSheet
@@ -3499,6 +3525,14 @@ const PdfHistoryItem: React.FC<{
                 title={optionLabel}
                 subtitle={`${client.nome} · ${formatNumberBR(pdf.totalPreco)}`}
             >
+                    {activeStatus !== 'approved' ? (
+                        <HistoryMenuItem
+                            icon={<Eye className="h-4 w-4" aria-hidden="true" />}
+                            label={activeStatus === 'revised' ? 'Tirar da revisão' : 'Marcar em revisão'}
+                            hint={activeStatus === 'revised' ? 'Volta para pendente' : 'O cliente pediu ajustes nesta opção'}
+                            onClick={() => runMenuAction(() => { void handleStatusChange(activeStatus === 'revised' ? 'pending' : 'revised'); })}
+                        />
+                    ) : null}
                     <HistoryMenuItem
                         icon={<Pencil className="h-4 w-4" aria-hidden="true" />}
                         label="Renomear opção"
@@ -3603,7 +3637,7 @@ const PdfHistoryItem: React.FC<{
                 message={whatsAppMessage}
                 onClose={() => setWhatsAppMessage(null)}
             />
-        </div>
+        </article>
     );
 });
 
@@ -3614,7 +3648,9 @@ const PdfHistoryMobileFooter: React.FC<{
     onFollowUp: () => void;
     followUpPending: number;
     onOpenTemplates: () => void;
-}> = ({ onSearch, onOpenPeriod, onFollowUp, followUpPending, onOpenTemplates }) => {
+    onCreateProposal?: () => void;
+}> = ({ onSearch, onOpenPeriod, onFollowUp, followUpPending, onOpenTemplates, onCreateProposal }) => {
+    // Mesmo botão do menu fixo de Clientes, Estoque e Propostas.
     const FooterButton: React.FC<{
         onClick: () => void;
         label: string;
@@ -3625,13 +3661,13 @@ const PdfHistoryMobileFooter: React.FC<{
             type="button"
             onClick={onClick}
             aria-label={label}
-            className="group relative flex h-14 min-w-0 flex-col items-center justify-center rounded-xl text-[var(--text-muted)] transition-all duration-200 hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)]"
+            className="group relative flex h-14 w-16 flex-col items-center justify-center rounded-xl text-[var(--text-muted)] transition-all duration-200 hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)]"
         >
             <span className="transition-transform duration-300 group-active:scale-90">{icon}</span>
-            <span className="mt-1 max-w-full truncate px-1 text-[10px] font-bold">{label}</span>
+            <span className="mt-1 text-[9px] font-bold uppercase tracking-wider">{label}</span>
             {badge && badge > 0 ? (
-                <span className="absolute right-[calc(50%-1.25rem)] top-1.5 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold leading-none text-white">
-                    {badge}
+                <span className="absolute right-1.5 top-1 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold leading-none text-white">
+                    {badge > 99 ? '99+' : badge}
                 </span>
             ) : null}
         </button>
@@ -3643,19 +3679,37 @@ const PdfHistoryMobileFooter: React.FC<{
             className="fixed left-4 right-4 z-40 sm:hidden"
             style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)' }}
         >
-            <nav aria-label="Menu do histórico" className="rounded-2xl border border-white/20 bg-white/95 px-2 py-1.5 shadow-[0_8px_32px_rgba(0,0,0,0.15)] backdrop-blur-xl dark:border-slate-800/50 dark:bg-slate-900/95 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
-                <div className="grid grid-cols-4 gap-1">
-                    <FooterButton onClick={onSearch} label="Buscar" icon={<Search className="h-5 w-5" aria-hidden="true" />} />
-                    <FooterButton onClick={onOpenPeriod} label="Período" icon={<CalendarDays className="h-5 w-5" aria-hidden="true" />} />
-                    <FooterButton onClick={onFollowUp} label="Avaliações" icon={<Star className="h-5 w-5" aria-hidden="true" />} badge={followUpPending} />
-                    <FooterButton onClick={onOpenTemplates} label="Textos" icon={<MessageSquareText className="h-5 w-5" aria-hidden="true" />} />
+            <nav aria-label="Menu do histórico" className="rounded-2xl border border-white/20 bg-white/95 px-2 py-2 shadow-[0_8px_32px_rgba(0,0,0,0.15)] backdrop-blur-xl dark:border-slate-800/50 dark:bg-slate-900/95 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
+                <div className="relative flex items-center justify-between">
+                    <div className="flex gap-1">
+                        <FooterButton onClick={onSearch} label="Buscar" icon={<Search className="h-5 w-5" aria-hidden="true" />} />
+                        <FooterButton onClick={onOpenPeriod} label="Período" icon={<CalendarDays className="h-5 w-5" aria-hidden="true" />} />
+                    </div>
+
+                    {onCreateProposal ? (
+                        <div className="absolute left-1/2 -top-12 -translate-x-1/2">
+                            <button
+                                type="button"
+                                onClick={onCreateProposal}
+                                aria-label="Novo orçamento"
+                                className="flex h-16 w-16 items-center justify-center rounded-2xl border-4 border-white bg-gradient-to-br from-blue-600 to-blue-700 text-white shadow-[0_8px_20px_rgba(21,94,239,0.4)] transition-all duration-300 hover:-translate-y-1 active:scale-95 dark:border-slate-900"
+                            >
+                                <Plus className="h-7 w-7" aria-hidden="true" />
+                            </button>
+                        </div>
+                    ) : null}
+
+                    <div className="flex gap-1">
+                        <FooterButton onClick={onFollowUp} label="Avaliações" icon={<Star className="h-5 w-5" aria-hidden="true" />} badge={followUpPending} />
+                        <FooterButton onClick={onOpenTemplates} label="Textos" icon={<MessageSquareText className="h-5 w-5" aria-hidden="true" />} />
+                    </div>
                 </div>
             </nav>
         </div>
     );
 };
 
-const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs = false, isLoadingMoreServerPdfs = false, onLoadMoreServerPdfs, onEnsureCompleteServerHistory, clients, agendamentos, films, googleReviewsLink, onDelete, onDeleteMany, onDownload, onUpdateStatus, onRenamePdfOption, onSchedule, onOpenInAgenda, onGenerateCombinedPdf, onNavigateToOption }) => {
+const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs = false, isLoadingMoreServerPdfs = false, onLoadMoreServerPdfs, onEnsureCompleteServerHistory, clients, agendamentos, films, googleReviewsLink, onDelete, onDeleteMany, onDownload, onUpdateStatus, onRenamePdfOption, onSchedule, onOpenInAgenda, onGenerateCombinedPdf, onNavigateToOption, onCreateProposal }) => {
     const { confirm, showToast } = useFeedback();
     const [pendingFocusClientId] = useState<number | null>(() => readInitialHistoryFocusClient());
     const [expandedClientId, setExpandedClientId] = useState<number | null>(pendingFocusClientId);
@@ -4014,8 +4068,22 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
         setOptionsModalClientId(clientId);
     };
 
+    // Tela do cliente no celular: as caixas de seleção só aparecem depois de tocar em "Selecionar".
+    const [isSelectingOptions, setIsSelectingOptions] = useState(false);
+
     const closeOptionsModal = useCallback(() => {
         setOptionsModalClientId(null);
+        setIsSelectingOptions(false);
+    }, []);
+
+    const handleCancelGroupSelection = useCallback((groupPdfs: SavedPDF[]) => {
+        setSelectedPdfIds(previous => {
+            const next = new Set<number>(previous);
+            groupPdfs.forEach(pdf => { if (typeof pdf.id === 'number') next.delete(pdf.id); });
+            saveSelectedCombinedPdfIds(next);
+            return next;
+        });
+        setIsSelectingOptions(false);
     }, []);
 
     useEffect(() => {
@@ -4387,14 +4455,14 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
                         clientGroupRefs.current.delete(client.id!);
                     }
                 }}
-                className={`relative overflow-hidden border-b border-[var(--border-subtle)] transition-all duration-300 last:border-b-0 sm:rounded-[var(--radius-panel)] sm:border sm:bg-[var(--surface)] sm:shadow-[var(--shadow-hairline)] sm:hover:-translate-y-0.5 sm:hover:border-[var(--border-strong)] ${isHighlighted ? 'ring-2 ring-inset ring-blue-500 sm:ring-offset-2 sm:ring-offset-[var(--surface)] sm:!border-[var(--brand-primary)]' : ''} ${hasSelectedInGroup ? 'bg-blue-50/70 dark:bg-blue-950/20 sm:border-[var(--brand-primary)] sm:ring-2 sm:ring-blue-500/15' : 'bg-[var(--surface)] sm:border-[var(--border-subtle)]'}`}>
+                className={`relative overflow-hidden rounded-2xl border shadow-[var(--shadow-hairline)] transition-all duration-300 sm:rounded-[var(--radius-panel)] sm:bg-[var(--surface)] sm:hover:-translate-y-0.5 sm:hover:border-[var(--border-strong)] ${isHighlighted ? 'ring-2 ring-blue-500 sm:ring-offset-2 sm:ring-offset-[var(--surface)] sm:!border-[var(--brand-primary)]' : ''} ${hasSelectedInGroup ? 'border-blue-200 bg-blue-50/70 dark:border-blue-900/60 dark:bg-blue-950/20 sm:border-[var(--brand-primary)] sm:ring-2 sm:ring-blue-500/15' : 'border-[var(--border-subtle)] bg-[var(--surface-raised)]'}`}>
                 <button
                     onClick={() => handleToggleExpand(client.id!)}
                     className="w-full px-3 py-3 text-left transition-colors duration-200 hover:bg-[var(--surface-muted)] active:bg-[var(--surface-muted)] sm:px-4 sm:py-3"
                     aria-expanded={isExpanded}
                 >
                     <div className="flex items-center gap-3 sm:items-start">
-                        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[13px] font-bold sm:hidden ${avatarClassName}`} aria-hidden="true">
+                        <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-sm font-semibold sm:hidden ${avatarClassName}`} aria-hidden="true">
                             {initials}
                         </div>
                         <div className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-[10px] border border-slate-200 bg-slate-50 text-xs font-semibold text-blue-600 dark:border-slate-700 dark:bg-slate-800 dark:text-blue-300 sm:flex">
@@ -4407,7 +4475,7 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
                                 <h3 className="min-w-0 flex-1 truncate text-[15px] font-semibold leading-tight tracking-[-0.01em] text-slate-900 dark:text-slate-50 sm:flex-none sm:text-[1rem]">
                                     {client.nome}
                                 </h3>
-                                <p className={`shrink-0 text-[15px] font-bold leading-tight tabular-nums tracking-[-0.02em] sm:hidden ${status.tone === PDF_STATUS_META.approved ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-950 dark:text-slate-50'}`}>
+                                <p className={`shrink-0 text-sm font-semibold tabular-nums sm:hidden ${status.tone === PDF_STATUS_META.approved ? 'text-emerald-600 dark:text-emerald-400' : 'text-[var(--text-strong)]'}`}>
                                     {formatNumberBR(clientFunnelSummary.funnelRevenue)}
                                 </p>
                             </div>
@@ -4415,21 +4483,21 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
                                 {status.text} / {latestContext}
                             </p>
 
-                            <div className="mt-1 flex min-w-0 items-center gap-1.5 sm:hidden">
-                                <span className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] font-bold ${status.tone.chipClassName}`}>
+                            <div className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-[var(--text-muted)] sm:hidden">
+                                <span className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${status.tone.chipClassName}`}>
                                     {status.tone.label}
                                 </span>
                                 {hasSelectedInGroup ? (
                                     <span
-                                        className="inline-flex shrink-0 items-center gap-1 rounded-full bg-blue-600 px-2 py-0.5 text-[11px] font-bold text-white"
+                                        className="inline-flex shrink-0 items-center gap-1 rounded-full bg-blue-600 px-2 py-0.5 text-[11px] font-semibold text-white"
                                         aria-label={`${selectedInGroupCount} ${selectedInGroupCount === 1 ? 'selecionada' : 'selecionadas'}`}
                                     >
                                         <Check className="h-3 w-3" aria-hidden="true" />
                                         {selectedInGroupCount}
                                     </span>
                                 ) : null}
-                                <span className="min-w-0 flex-1 truncate text-xs font-medium text-[var(--text-muted)]">{mobileContext}</span>
-                                <span className="shrink-0 text-xs font-medium text-[var(--text-soft)]">{latestDate}</span>
+                                <span className="min-w-0 flex-1 truncate">{mobileContext}</span>
+                                <span className="shrink-0 text-[11px]">{latestDate}</span>
                             </div>
                         </div>
 
@@ -4446,7 +4514,6 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
                             Detalhes
                             <i className={`fas fa-chevron-right text-[10px] transition-transform duration-300 ${isExpanded ? 'rotate-90' : ''}`}></i>
                         </div>
-                        <ChevronRight className="h-4 w-4 shrink-0 text-[var(--text-soft)] sm:hidden" aria-hidden="true" />
                     </div>
                 </button>
 
@@ -4804,7 +4871,7 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
                     type="button"
                     onClick={() => setIsCombinedShareOpen(true)}
                     disabled={!canCreateSelectionLink}
-                    className="inline-flex h-10 min-w-0 flex-1 items-center justify-center gap-2 rounded-[12px] bg-[var(--brand-primary)] px-3 text-sm font-semibold text-white transition-colors hover:bg-[var(--brand-primary-strong)] disabled:cursor-not-allowed disabled:opacity-50"
+                    className="inline-flex h-10 min-w-0 flex-1 items-center justify-center gap-2 rounded-xl bg-[var(--brand-primary)] px-3 text-sm font-semibold text-white transition-colors hover:bg-[var(--brand-primary-strong)] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                     <i className="fas fa-link text-xs" aria-hidden="true" />
                     <span className="truncate">Criar link</span>
@@ -4814,7 +4881,7 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
                         type="button"
                         onClick={handleGenerateCombined}
                         aria-label="Gerar PDF combinado"
-                        className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-[12px] border border-[var(--border-subtle)] bg-[var(--surface)] px-3 text-sm font-semibold text-[var(--text-strong)] transition-colors hover:bg-[var(--surface-muted)]"
+                        className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] px-3 text-sm font-semibold text-[var(--text-strong)] transition-colors hover:bg-[var(--surface-muted)]"
                     >
                         <i className="fas fa-file-pdf text-xs text-[var(--text-muted)]" aria-hidden="true" />
                         PDF
@@ -4824,7 +4891,7 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
                     type="button"
                     onClick={handleDeleteSelectedPdfs}
                     disabled={isDeletingSelectedPdfs}
-                    className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-[12px] border border-rose-200 bg-rose-50 px-3 text-sm font-semibold text-rose-600 transition-colors hover:bg-rose-100 disabled:cursor-wait disabled:opacity-60 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-300"
+                    className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3 text-sm font-semibold text-rose-600 transition-colors hover:bg-rose-100 disabled:cursor-wait disabled:opacity-60 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-300"
                 >
                     <i className={`${isDeletingSelectedPdfs ? 'fas fa-circle-notch animate-spin' : 'fas fa-trash-alt'} text-xs`} aria-hidden="true" />
                     {isDeletingSelectedPdfs ? 'Excluindo...' : 'Excluir'}
@@ -4857,7 +4924,7 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
     );
 
     return (
-        <div className="space-y-3 pb-28 sm:space-y-4 sm:pb-0">
+        <div className="space-y-4 pb-28 sm:pb-0">
             <PdfHistoryMobileToolbar
                 totalGroups={groupedHistory.length}
                 totalPdfs={totalPdfCount}
@@ -5069,6 +5136,7 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
             )}
             <HistoryListToolbar
                 count={filteredGroupedHistory.length}
+                total={groupedHistory.length}
                 sort={historySort}
                 onSortChange={(nextSort) => {
                     setHistorySort(nextSort);
@@ -5078,7 +5146,7 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
             <div>
                 {displayedHistory.length > 0 ? (
                     <>
-                        <div className="grid grid-cols-1 items-start gap-0 overflow-hidden rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface)] shadow-[var(--shadow-hairline)] sm:gap-3 sm:overflow-visible sm:rounded-none sm:border-0 sm:bg-transparent sm:shadow-none 2xl:grid-cols-2">
+                        <div className="grid grid-cols-1 items-start gap-2 sm:gap-3 2xl:grid-cols-2">
                             {displayedHistory.map(group => (
                                 <ClientHistoryGroup key={group.client.id} group={group} />
                             ))}
@@ -5216,6 +5284,7 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
                 const selectedInGroupCount = groupPdfs.filter(pdf => selectedPdfIds.has(pdf.id!)).length;
                 const areAllPdfsInGroupSelected = selectedInGroupCount === total;
                 const groupStatus = getHistoryGroupStatus(groupPdfs);
+                const isSelectionMode = isSelectingOptions || selectedInGroupCount > 0;
 
                 return createPortal(
                     <div
@@ -5234,7 +5303,7 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
                                 <i className="fas fa-arrow-left text-base" aria-hidden="true" />
                             </button>
                             <div className="min-w-0 flex-1">
-                                <p className="truncate text-base font-bold leading-tight text-slate-900 dark:text-slate-50">
+                                <p className="truncate text-[15px] font-semibold leading-tight text-[var(--text-strong)]">
                                     {client.nome}
                                 </p>
                                 <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs font-medium text-[var(--text-muted)]">
@@ -5244,20 +5313,39 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
                                     </span>
                                 </p>
                             </div>
-                            {total > 1 ? (
+                            {isSelectionMode ? (
+                                <>
+                                    {total > 1 ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => handleToggleSelectGroup(groupPdfs)}
+                                            aria-label={areAllPdfsInGroupSelected ? 'Desmarcar todas as opções' : 'Selecionar todas as opções'}
+                                            className="inline-flex h-8 shrink-0 items-center rounded-full px-2.5 text-xs font-semibold text-[var(--brand-primary)] transition-colors hover:bg-blue-50 dark:hover:bg-blue-950/30"
+                                        >
+                                            {areAllPdfsInGroupSelected ? 'Nenhuma' : 'Todas'}
+                                        </button>
+                                    ) : null}
+                                    <button
+                                        type="button"
+                                        onClick={() => handleCancelGroupSelection(groupPdfs)}
+                                        className="inline-flex h-8 shrink-0 items-center rounded-full px-2.5 text-xs font-semibold text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)]"
+                                    >
+                                        Cancelar
+                                    </button>
+                                </>
+                            ) : (
                                 <button
                                     type="button"
-                                    onClick={() => handleToggleSelectGroup(groupPdfs)}
-                                    aria-label={areAllPdfsInGroupSelected ? 'Desmarcar todas as opções' : 'Selecionar todas as opções'}
-                                    className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3 text-xs font-bold text-[var(--brand-primary)] transition-colors hover:bg-blue-50 dark:hover:bg-blue-950/30"
+                                    onClick={() => setIsSelectingOptions(true)}
+                                    className="inline-flex h-8 shrink-0 items-center rounded-full px-3 text-xs font-semibold text-[var(--brand-primary)] transition-colors hover:bg-blue-50 dark:hover:bg-blue-950/30"
                                 >
-                                    {areAllPdfsInGroupSelected ? 'Desmarcar' : 'Marcar todas'}
+                                    Selecionar
                                 </button>
-                            ) : null}
+                            )}
                         </div>
 
                         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-6 pt-3">
-                            <div className="space-y-3">
+                            <div className="space-y-2.5">
                                 {groupPdfs.map(pdf => (
                                     <PdfHistoryItem
                                         key={pdf.id}
@@ -5281,6 +5369,7 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
                                         onSetFunnelReference={handleSetFunnelReference}
                                         onShare={handleOpenSingleProposalShare}
                                         fitContent
+                                        selectable={isSelectionMode}
                                     />
                                 ))}
                             </div>
@@ -5312,6 +5401,7 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
                     onFollowUp={handleOpenFollowUp}
                     followUpPending={visiblePendingReviewCampaignCount}
                     onOpenTemplates={() => setIsTemplateModalOpen(true)}
+                    onCreateProposal={onCreateProposal}
                 />
             )}
 
