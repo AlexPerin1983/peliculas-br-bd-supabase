@@ -49,27 +49,57 @@ const renderComposer = (overrides: Partial<AIComposerModalProps> = {}) => {
 const pdf = () => new File(['%PDF-1.4'], 'lista-medidas.pdf', { type: 'application/pdf' });
 
 describe('AIComposerModal', () => {
-    it('com Gemini aceita foto e PDF e oferece voz', () => {
+    it('com Gemini separa Foto e PDF e oferece voz', () => {
         renderComposer();
-        expect(screen.getByRole('tab', { name: 'Foto/PDF' })).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: 'Foto' })).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: 'PDF' })).toBeInTheDocument();
         expect(screen.getByRole('tab', { name: /Voz/ })).toBeInTheDocument();
-        fireEvent.click(screen.getByRole('tab', { name: 'Foto/PDF' }));
-        expect(document.getElementById('ai-composer-files')).toHaveAttribute('accept', 'image/*,application/pdf');
+        // A galeria aceita só imagem: no Android, misturar com PDF abre o gerenciador de arquivos em vez da galeria.
+        expect(document.getElementById('ai-composer-gallery')).toHaveAttribute('accept', 'image/*');
+        expect(document.getElementById('ai-composer-gallery')).not.toHaveAttribute('capture');
+        expect(document.getElementById('ai-composer-pdf')).toHaveAttribute('accept', 'application/pdf');
     });
 
-    it('sem Gemini aceita só foto e esconde voz', () => {
+    it('sem Gemini aceita só foto e esconde PDF e voz', () => {
         renderComposer({ provider: 'openai' });
         expect(screen.queryByRole('tab', { name: /PDF/ })).not.toBeInTheDocument();
         expect(screen.queryByRole('tab', { name: /Voz/ })).not.toBeInTheDocument();
-        fireEvent.click(screen.getByRole('tab', { name: /Foto/ }));
-        expect(document.getElementById('ai-composer-files')).toHaveAttribute('accept', 'image/*');
+        expect(document.getElementById('ai-composer-pdf')).toBeNull();
+        expect(document.getElementById('ai-composer-gallery')).toHaveAttribute('accept', 'image/*');
+    });
+
+    it('um toque na aba Foto já abre a galeria; com foto anexada, só mostra a lista', async () => {
+        renderComposer();
+        const gallery = document.getElementById('ai-composer-gallery')!;
+        const openGallery = vi.fn();
+        gallery.addEventListener('click', openGallery);
+
+        fireEvent.click(screen.getByRole('tab', { name: 'Foto' }));
+        expect(openGallery).toHaveBeenCalledTimes(1);
+
+        fireEvent.change(gallery, { target: { files: [new File(['img'], 'sala.jpg', { type: 'image/jpeg' })] } });
+        expect(await screen.findByText('sala.jpg')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('tab', { name: 'Texto' }));
+        fireEvent.click(screen.getByRole('tab', { name: /^Foto/ }));
+        expect(openGallery).toHaveBeenCalledTimes(1);
+        expect(screen.getByText('sala.jpg')).toBeInTheDocument();
+    });
+
+    it('um toque na aba PDF já abre a escolha do PDF', () => {
+        renderComposer();
+        const pdfInput = document.getElementById('ai-composer-pdf')!;
+        const openPicker = vi.fn();
+        pdfInput.addEventListener('click', openPicker);
+        fireEvent.click(screen.getByRole('tab', { name: 'PDF' }));
+        expect(openPicker).toHaveBeenCalledTimes(1);
     });
 
     it('lista o PDF com botão de remover visível e envia para a IA', async () => {
         const { onProcess } = renderComposer();
-        fireEvent.click(screen.getByRole('tab', { name: 'Foto/PDF' }));
+        fireEvent.click(screen.getByRole('tab', { name: 'PDF' }));
         const file = pdf();
-        fireEvent.change(document.getElementById('ai-composer-files')!, { target: { files: [file] } });
+        fireEvent.change(document.getElementById('ai-composer-pdf')!, { target: { files: [file] } });
 
         expect(await screen.findByText('lista-medidas.pdf')).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Remover lista-medidas.pdf' })).toBeVisible();
@@ -81,8 +111,8 @@ describe('AIComposerModal', () => {
 
     it('recusa arquivos que não são foto nem PDF', async () => {
         renderComposer();
-        fireEvent.click(screen.getByRole('tab', { name: 'Foto/PDF' }));
-        fireEvent.change(document.getElementById('ai-composer-files')!, {
+        fireEvent.click(screen.getByRole('tab', { name: 'PDF' }));
+        fireEvent.change(document.getElementById('ai-composer-pdf')!, {
             target: { files: [new File(['x'], 'planilha.xlsx', { type: 'application/vnd.ms-excel' })] },
         });
         await waitFor(() => expect(showToast).toHaveBeenCalled());
