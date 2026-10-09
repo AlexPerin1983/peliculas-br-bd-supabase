@@ -1,11 +1,13 @@
 import React, { DragEvent, FormEvent, useEffect, useRef, useState } from 'react';
-import { AlertCircle, Camera, FileText, Loader2, Mic, Paperclip, RotateCcw, Sparkles, Square, Trash2, Type, X } from 'lucide-react';
+import { AlertCircle, Camera, FileText, Image as ImageIcon, Loader2, Mic, RotateCcw, Sparkles, Square, Trash2, Type, X } from 'lucide-react';
 import Modal from '../../ui/Modal';
 import { useFeedback } from '../../../src/contexts/FeedbackContext';
 import { AIInput } from '../../../types';
 import { AI_MAX_FILES, AI_MAX_PDF_BYTES, AI_MAX_TOTAL_BYTES, AIFileKind, formatFileSize, getAIFileKind, prepareAIFile } from './aiFiles';
 
-export type AIComposerMode = 'text' | 'files' | 'voice';
+// Foto e PDF ficam em abas separadas: a aba Foto abre a galeria do celular num toque
+// (um campo que aceita foto e PDF juntos faz o Android abrir o gerenciador de arquivos).
+export type AIComposerMode = 'text' | 'photos' | 'pdf' | 'voice';
 type Mode = AIComposerMode;
 
 interface AttachedFile {
@@ -82,6 +84,8 @@ const AIComposerModal: React.FC<AIComposerModalProps> = ({
     autoSubmitVoiceRef.current = autoSubmitVoice;
     const submitAfterStopRef = useRef(false);
     const closedRef = useRef(false);
+    const galleryInputRef = useRef<HTMLInputElement>(null);
+    const pdfInputRef = useRef<HTMLInputElement>(null);
 
     const stopStream = () => recorderRef.current?.stream.getTracks().forEach(track => track.stop());
 
@@ -248,17 +252,78 @@ const AIComposerModal: React.FC<AIComposerModalProps> = ({
         });
     };
 
+    const photoCount = files.filter(item => item.kind === 'image').length;
+    const pdfCount = files.length - photoCount;
     const sources = [
         hasText && 'texto',
-        files.length && `${files.length} ${files.length === 1 ? 'arquivo' : 'arquivos'}`,
+        photoCount && `${photoCount} ${photoCount === 1 ? 'foto' : 'fotos'}`,
+        pdfCount && `${pdfCount} PDF`,
         audioBlob && 'áudio',
     ].filter(Boolean) as string[];
 
+    const photoFiles = files.filter(item => item.kind === 'image');
+    const pdfFiles = files.filter(item => item.kind === 'pdf');
+    const canAddFiles = files.length < AI_MAX_FILES && !isProcessing;
+
     const modes: { id: Mode; label: string; icon: React.ReactNode; filled: boolean }[] = [
         { id: 'text', label: 'Texto', icon: <Type size={16} aria-hidden="true" />, filled: hasText },
-        { id: 'files', label: allowPdf ? 'Foto/PDF' : 'Foto', icon: <Paperclip size={16} aria-hidden="true" />, filled: files.length > 0 },
+        { id: 'photos', label: 'Foto', icon: <ImageIcon size={16} aria-hidden="true" />, filled: photoFiles.length > 0 },
+        ...(allowPdf ? [{ id: 'pdf' as Mode, label: 'PDF', icon: <FileText size={16} aria-hidden="true" />, filled: pdfFiles.length > 0 }] : []),
         ...(allowVoice ? [{ id: 'voice' as Mode, label: 'Voz', icon: <Mic size={16} aria-hidden="true" />, filled: !!audioBlob }] : []),
     ];
+
+    // Um toque: a aba Foto já abre a galeria e a aba PDF já abre a escolha do arquivo
+    // (no mesmo toque, senão o navegador bloqueia). Com algo anexado, só mostra a lista.
+    const handleModeClick = (next: Mode) => {
+        setMode(next);
+        if (!canAddFiles) return;
+        if (next === 'photos' && photoFiles.length === 0) galleryInputRef.current?.click();
+        if (next === 'pdf' && pdfFiles.length === 0) pdfInputRef.current?.click();
+    };
+
+    const renderFileList = (items: AttachedFile[]) => (
+        <ul className="flex flex-col divide-y divide-slate-200 overflow-hidden rounded-xl bg-slate-100 dark:divide-slate-700/70 dark:bg-slate-800/80">
+            {items.map(item => (
+                <li key={item.id} className="flex items-center gap-3 px-3 py-2.5">
+                    {item.kind === 'image' ? (
+                        <img src={item.previewUrl} alt="" className="h-11 w-11 shrink-0 rounded-lg object-cover" />
+                    ) : (
+                        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400">
+                            <FileText className="h-5 w-5" aria-hidden="true" />
+                        </span>
+                    )}
+                    <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium text-slate-800 dark:text-slate-100">{item.file.name}</span>
+                        <span className="block text-xs text-slate-500 dark:text-slate-400">{item.kind === 'pdf' ? 'PDF' : 'Foto'} · {formatFileSize(item.file.size)}</span>
+                    </span>
+                    <button type="button" onClick={() => removeFile(item.id)} disabled={isProcessing} aria-label={`Remover ${item.file.name}`}
+                        className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-slate-200 hover:text-red-600 dark:text-slate-400 dark:hover:bg-slate-700">
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                </li>
+            ))}
+        </ul>
+    );
+
+    const fileTileClassName = `flex h-24 flex-col items-center justify-center gap-1.5 rounded-xl bg-slate-100 text-slate-700 transition-colors hover:bg-slate-200 dark:bg-slate-800/80 dark:text-slate-200 dark:hover:bg-slate-800 ${isProcessing ? 'pointer-events-none opacity-50' : 'cursor-pointer'}`;
+    const fileFooter = (
+        <>
+            {files.length > 0 && (
+                <p className="px-1 text-xs text-slate-500 dark:text-slate-400">{files.length} de {AI_MAX_FILES} arquivos · {formatFileSize(totalBytes)}</p>
+            )}
+            {isPreparing && (
+                <p className="flex items-center gap-2 px-1 text-xs text-slate-500 dark:text-slate-400">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> Preparando arquivo…
+                </p>
+            )}
+        </>
+    );
+    const dropHandlers = {
+        onDragEnter: (event: DragEvent<HTMLElement>) => onDrag(event, true),
+        onDragOver: (event: DragEvent<HTMLElement>) => onDrag(event, true),
+        onDragLeave: (event: DragEvent<HTMLElement>) => onDrag(event, false),
+        onDrop,
+    };
 
     const footer = (
         <div className="w-full">
@@ -283,7 +348,7 @@ const AIComposerModal: React.FC<AIComposerModalProps> = ({
                 <div role="tablist" aria-label="Forma de envio" className="grid gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800/80" style={{ gridTemplateColumns: `repeat(${modes.length}, minmax(0, 1fr))` }}>
                     {modes.map(item => (
                         <button key={item.id} type="button" role="tab" aria-selected={mode === item.id} disabled={isProcessing}
-                            onClick={() => setMode(item.id)}
+                            onClick={() => handleModeClick(item.id)}
                             className={`flex h-10 min-w-0 items-center justify-center gap-1.5 rounded-lg text-[13px] font-semibold transition-colors ${mode === item.id
                                 ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-white'
                                 : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'}`}>
@@ -311,62 +376,56 @@ const AIComposerModal: React.FC<AIComposerModalProps> = ({
                         </div>
                     )}
 
-                    {mode === 'files' && (
-                        <div className="flex flex-col gap-3" onDragEnter={event => onDrag(event, true)} onDragOver={event => onDrag(event, true)}
-                            onDragLeave={event => onDrag(event, false)} onDrop={onDrop}>
+                    {/* Campos de arquivo sempre montados: as abas abrem a galeria/PDF no mesmo toque.
+                        Escondidos com sr-only (não display:none) para o clique funcionar no iPhone. */}
+                    <input ref={galleryInputRef} id="ai-composer-gallery" type="file" accept="image/*" multiple className="sr-only" tabIndex={-1}
+                        disabled={isProcessing} onChange={event => { void addFiles(event.target.files); event.target.value = ''; }} />
+                    <input id="ai-composer-camera" type="file" accept="image/*" capture="environment" className="sr-only" tabIndex={-1}
+                        disabled={isProcessing} onChange={event => { void addFiles(event.target.files); event.target.value = ''; }} />
+                    {allowPdf && (
+                        <input ref={pdfInputRef} id="ai-composer-pdf" type="file" accept="application/pdf" multiple className="sr-only" tabIndex={-1}
+                            disabled={isProcessing} onChange={event => { void addFiles(event.target.files); event.target.value = ''; }} />
+                    )}
+
+                    {mode === 'photos' && (
+                        <div className="flex flex-col gap-3" {...dropHandlers}>
                             {files.length < AI_MAX_FILES && (
                                 <div className={`grid grid-cols-2 gap-2 rounded-xl transition-colors ${isDragging ? 'ring-2 ring-blue-400' : ''}`}>
-                                    <label htmlFor="ai-composer-camera" className={`flex h-24 flex-col items-center justify-center gap-1.5 rounded-xl bg-slate-100 text-slate-700 transition-colors hover:bg-slate-200 dark:bg-slate-800/80 dark:text-slate-200 dark:hover:bg-slate-800 ${isProcessing ? 'pointer-events-none opacity-50' : 'cursor-pointer'}`}>
+                                    <label htmlFor="ai-composer-gallery" className={fileTileClassName}>
+                                        <ImageIcon className="h-5 w-5" aria-hidden="true" />
+                                        <span className="text-[13px] font-semibold">{photoFiles.length ? 'Mais da galeria' : 'Abrir galeria'}</span>
+                                    </label>
+                                    <label htmlFor="ai-composer-camera" className={fileTileClassName}>
                                         <Camera className="h-5 w-5" aria-hidden="true" />
                                         <span className="text-[13px] font-semibold">Tirar foto</span>
                                     </label>
-                                    <label htmlFor="ai-composer-files" className={`flex h-24 flex-col items-center justify-center gap-1.5 rounded-xl bg-slate-100 text-slate-700 transition-colors hover:bg-slate-200 dark:bg-slate-800/80 dark:text-slate-200 dark:hover:bg-slate-800 ${isProcessing ? 'pointer-events-none opacity-50' : 'cursor-pointer'}`}>
-                                        {allowPdf ? <FileText className="h-5 w-5" aria-hidden="true" /> : <Paperclip className="h-5 w-5" aria-hidden="true" />}
-                                        <span className="text-[13px] font-semibold">{allowPdf ? 'Escolher arquivo' : 'Escolher foto'}</span>
-                                    </label>
                                 </div>
                             )}
-                            <input id="ai-composer-camera" type="file" accept="image/*" capture="environment" className="hidden"
-                                disabled={isProcessing} onChange={event => { void addFiles(event.target.files); event.target.value = ''; }} />
-                            <input id="ai-composer-files" type="file" accept={allowPdf ? 'image/*,application/pdf' : 'image/*'} multiple className="hidden"
-                                disabled={isProcessing} onChange={event => { void addFiles(event.target.files); event.target.value = ''; }} />
-
-                            {files.length === 0 ? (
+                            {photoFiles.length === 0 ? (
                                 <p className="px-1 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
-                                    {filesHint} Até {AI_MAX_FILES} arquivos{allowPdf ? `; PDF até ${formatFileSize(AI_MAX_PDF_BYTES)}` : ''}.
+                                    {filesHint} Até {AI_MAX_FILES} arquivos.
                                     <span className="hidden sm:inline"> Você também pode arrastar para cá.</span>
                                 </p>
-                            ) : (
-                                <ul className="flex flex-col divide-y divide-slate-200 overflow-hidden rounded-xl bg-slate-100 dark:divide-slate-700/70 dark:bg-slate-800/80">
-                                    {files.map(item => (
-                                        <li key={item.id} className="flex items-center gap-3 px-3 py-2.5">
-                                            {item.kind === 'image' ? (
-                                                <img src={item.previewUrl} alt="" className="h-11 w-11 shrink-0 rounded-lg object-cover" />
-                                            ) : (
-                                                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400">
-                                                    <FileText className="h-5 w-5" aria-hidden="true" />
-                                                </span>
-                                            )}
-                                            <span className="min-w-0 flex-1">
-                                                <span className="block truncate text-sm font-medium text-slate-800 dark:text-slate-100">{item.file.name}</span>
-                                                <span className="block text-xs text-slate-500 dark:text-slate-400">{item.kind === 'pdf' ? 'PDF' : 'Foto'} · {formatFileSize(item.file.size)}</span>
-                                            </span>
-                                            <button type="button" onClick={() => removeFile(item.id)} disabled={isProcessing} aria-label={`Remover ${item.file.name}`}
-                                                className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-slate-200 hover:text-red-600 dark:text-slate-400 dark:hover:bg-slate-700">
-                                                <Trash2 className="h-4 w-4" aria-hidden="true" />
-                                            </button>
-                                        </li>
-                                    ))}
-                                </ul>
+                            ) : renderFileList(photoFiles)}
+                            {fileFooter}
+                        </div>
+                    )}
+
+                    {mode === 'pdf' && allowPdf && (
+                        <div className="flex flex-col gap-3" {...dropHandlers}>
+                            {files.length < AI_MAX_FILES && (
+                                <label htmlFor="ai-composer-pdf" className={`${fileTileClassName} ${isDragging ? 'ring-2 ring-blue-400' : ''}`}>
+                                    <FileText className="h-5 w-5" aria-hidden="true" />
+                                    <span className="text-[13px] font-semibold">{pdfFiles.length ? 'Escolher outro PDF' : 'Escolher PDF'}</span>
+                                </label>
                             )}
-                            {files.length > 0 && (
-                                <p className="px-1 text-xs text-slate-500 dark:text-slate-400">{files.length} de {AI_MAX_FILES} · {formatFileSize(totalBytes)}</p>
-                            )}
-                            {isPreparing && (
-                                <p className="flex items-center gap-2 px-1 text-xs text-slate-500 dark:text-slate-400">
-                                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> Preparando arquivo…
+                            {pdfFiles.length === 0 ? (
+                                <p className="px-1 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+                                    PDF até {formatFileSize(AI_MAX_PDF_BYTES)}. A IA lê todas as páginas.
+                                    <span className="hidden sm:inline"> Você também pode arrastar para cá.</span>
                                 </p>
-                            )}
+                            ) : renderFileList(pdfFiles)}
+                            {fileFooter}
                         </div>
                     )}
 
