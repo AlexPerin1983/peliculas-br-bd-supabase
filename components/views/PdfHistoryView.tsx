@@ -38,8 +38,7 @@ import { buildReviewFollowUpMessage } from '../../src/lib/reviewMessage';
 import { formatGarantiaMaoDeObra, garantiaEmDias } from '../../src/lib/filmWarranty';
 import { applyFilmWarrantyOverrides } from '../../src/lib/filmWarrantyOverrides';
 import ProposalShareModal from '../modals/ProposalShareModal';
-import { Drawer } from 'vaul';
-import { useIsMobile } from '../../src/hooks/useIsMobile';
+import BottomSheet from '../ui/BottomSheet';
 
 interface PdfHistoryViewProps {
     pdfs: SavedPDF[];
@@ -1855,7 +1854,7 @@ const PdfHistoryMobileToolbar: React.FC<{
                     placeholder="Buscar cliente, valor ou data"
                     autoComplete="off"
                     style={{ fontSize: 16 }}
-                    className="h-11 w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] pl-10 pr-10 text-[var(--text-strong)] shadow-[var(--shadow-hairline)] outline-none transition placeholder:text-[var(--text-soft)] focus:border-[var(--brand-primary)] focus:ring-4 focus:ring-blue-500/10"
+                    className="h-11 w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] pl-10 pr-10 text-[var(--text-strong)] shadow-[var(--shadow-hairline)] outline-none transition placeholder:text-[var(--text-soft)] focus:border-[var(--brand-primary)] focus:ring-4 focus:ring-blue-500/10 [&::-webkit-search-cancel-button]:hidden"
                 />
                 {searchTerm ? (
                     <button
@@ -3068,75 +3067,6 @@ const HistoryMenuItem: React.FC<{
     </button>
 );
 
-const HistoryActionSheet: React.FC<{
-    isOpen: boolean;
-    title: string;
-    subtitle?: string;
-    onClose: () => void;
-    children: React.ReactNode;
-}> = ({ isOpen, title, subtitle, onClose, children }) => {
-    const isMobile = useIsMobile();
-
-    useEffect(() => {
-        if (!isOpen || isMobile) return;
-        const onKeyDown = (event: KeyboardEvent) => {
-            if (event.key === 'Escape') onClose();
-        };
-        window.addEventListener('keydown', onKeyDown);
-        return () => window.removeEventListener('keydown', onKeyDown);
-    }, [isMobile, isOpen, onClose]);
-
-    const header = (
-        <div className="min-w-0 px-2">
-            <p className="truncate text-lg font-bold leading-tight text-[var(--text-strong)]">{title}</p>
-            {subtitle ? <p className="mt-0.5 truncate text-xs font-semibold text-[var(--text-muted)]">{subtitle}</p> : null}
-        </div>
-    );
-
-    if (isMobile) {
-        return (
-            <Drawer.Root open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
-                <Drawer.Portal>
-                    <Drawer.Overlay className="fixed inset-0 z-[10020] bg-slate-950/50" />
-                    <Drawer.Content
-                        aria-describedby={undefined}
-                        className="fixed bottom-0 left-0 right-0 z-[10021] flex max-h-[85dvh] flex-col rounded-t-[20px] border-t border-[var(--border-subtle)] bg-[var(--surface)] outline-none"
-                    >
-                        <div className="overflow-y-auto overscroll-contain px-3 pt-3" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.75rem)' }}>
-                            <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-slate-300 dark:bg-slate-700" />
-                            <Drawer.Title asChild>{header}</Drawer.Title>
-                            <div className="mt-2 space-y-1">{children}</div>
-                        </div>
-                    </Drawer.Content>
-                </Drawer.Portal>
-            </Drawer.Root>
-        );
-    }
-
-    if (!isOpen || typeof document === 'undefined') return null;
-
-    return createPortal(
-        <div className="fixed inset-0 z-[10020] flex items-center justify-center bg-slate-950/50 p-4">
-            <button type="button" className="absolute inset-0 cursor-default" aria-label="Fechar ações" onClick={onClose} />
-            <div role="dialog" aria-modal="true" aria-label={title} className="relative w-full max-w-sm rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface)] p-3 shadow-2xl">
-                <div className="flex items-start justify-between gap-2">
-                    {header}
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        aria-label="Fechar"
-                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)]"
-                    >
-                        <X className="h-4 w-4" aria-hidden="true" />
-                    </button>
-                </div>
-                <div className="mt-2 space-y-1">{children}</div>
-            </div>
-        </div>,
-        document.body
-    );
-};
-
 const PdfHistoryItem: React.FC<{
     pdf: SavedPDF;
     client: Client;
@@ -3519,7 +3449,7 @@ const PdfHistoryItem: React.FC<{
                 </span>
             ) : null}
 
-            <HistoryActionSheet
+            <BottomSheet
                 isOpen={isActionsOpen}
                 onClose={closeActions}
                 title={optionLabel}
@@ -3558,7 +3488,7 @@ const PdfHistoryItem: React.FC<{
                         tone="danger"
                         onClick={() => runMenuAction(() => onDelete(pdf.id!))}
                     />
-            </HistoryActionSheet>
+            </BottomSheet>
             <Modal
                 isOpen={isRenameModalOpen}
                 onClose={handleCloseRenameModal}
