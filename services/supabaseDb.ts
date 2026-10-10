@@ -1,6 +1,7 @@
 // Supabase Database Service
 // Migração do IndexedDB para Supabase
 import { supabase } from './supabaseClient';
+import { PDF_HAS_CLIENT_RESPONSE_MESSAGE } from '../src/lib/pdfDeletion';
 import { Client, Measurement, UserInfo, Film, SavedPDF, Agendamento, ProposalOption, StandaloneExpense } from '../types';
 import { DEFAULT_PROPOSAL_MESSAGE_TEMPLATES, ProposalMessageTemplate } from '../src/lib/proposalMessages';
 import type { ClientFollowUpEvent, ClientFollowUpKind } from '../src/lib/clientInsights';
@@ -1000,7 +1001,11 @@ export const deletePDF = async (id: number): Promise<void> => {
         .eq('id', id)
         .select('id');
 
-    if (error) throw error;
+    if (error) {
+        // A resposta do cliente (negociação, aprovação, recusa) exige o PDF.
+        if (error.code === '23514') throw new Error(PDF_HAS_CLIENT_RESPONSE_MESSAGE);
+        throw error;
+    }
 
     // Sem linha excluída: ou já não existia, ou o servidor não deixou (a regra de
     // acesso não acusa erro). Se ainda existe, avisa em vez de sumir só da tela.
