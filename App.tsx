@@ -62,6 +62,7 @@ import { getAgendamentoSlotError } from './src/lib/agendamentoRules';
 import { buildMultiDayAgendamentos, formatDayLabel, moveToDay } from './src/lib/multiDaySchedule';
 import { attachCandidates, attachExistingClient, findClientsBySpokenName, pickProposalToLink } from './src/lib/voiceClientMatch';
 import { consumeBackButton } from './src/lib/backButton';
+import { isAIQuickFabEnabled } from './src/lib/aiQuickFab';
 import { createGeminiModel, GLOBAL_GEMINI_UNAVAILABLE_EVENT } from './services/geminiGateway';
 import {
     getFriendlyMeasurementExtractionError,
@@ -3957,7 +3958,7 @@ Use somente o JSON definido e não inclua explicações fora dele.`;
                     </main>
 
 
-                      {userInfo?.aiConfig?.quickFab && activeTab !== 'estoque' && (
+                      {isAIQuickFabEnabled(userInfo?.aiConfig, hasModule('ia_ocr')) && activeTab !== 'estoque' && (
                           <AIQuickFab
                               onCreateProposal={handleOpenAIQuickProposalModal}
                               onCreateClient={handleOpenAIClientModal}
