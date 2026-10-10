@@ -157,7 +157,7 @@ const QuickAction: React.FC<{
         <>
             {icon}
             {/* Tamanho no texto (não no botão): uma regra global faz botões herdarem a fonte do pai. */}
-            <span className="max-w-full truncate px-1 text-xs">{label}</span>
+            <span className="max-w-full truncate px-1 text-xs font-semibold">{label}</span>
         </>
     );
 
