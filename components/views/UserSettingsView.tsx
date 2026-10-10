@@ -5,6 +5,7 @@ import Input from '../ui/Input';
 import BrandSelect from '../ui/BrandSelect';
 import { PROPOSAL_VALIDITY_OPTIONS, DEFAULT_PROPOSAL_VALIDITY_DAYS, clampValidityDays } from '../../src/lib/proposalValidity';
 import { DEFAULT_TERMO_RESPONSABILIDADE } from '../../src/lib/termoResponsabilidade';
+import { isAIQuickFabEnabled } from '../../src/lib/aiQuickFab';
 import ColorPicker from '../ui/ColorPicker';
 import SignatureModal from '../modals/SignatureModal';
 import TeamManagement from '../TeamManagement';
@@ -1040,30 +1041,36 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({
                             {formData.aiConfig?.apiKey ? 'Gerenciar minha chave pessoal' : 'Adicionar minha chave pessoal'}
                         </button>
 
-                        <button
-                            type="button"
-                            role="switch"
-                            aria-checked={!!formData.aiConfig?.quickFab}
-                            onClick={() => setFormData(prev => ({
-                                ...prev,
-                                aiConfig: {
-                                    ...(prev.aiConfig || { provider: 'gemini' as const, apiKey: '' }),
-                                    quickFab: !prev.aiConfig?.quickFab
-                                }
-                            }))}
-                            className={`flex w-full items-center justify-between gap-3 rounded-[var(--radius-control)] border p-3 text-left transition-colors ${formData.aiConfig?.quickFab
-                                ? 'border-[var(--brand-primary)] bg-[rgba(21,94,239,0.06)]'
-                                : 'border-[var(--border-subtle)] bg-[var(--surface-muted)]'
-                                }`}
-                        >
-                            <span className="min-w-0">
-                                <span className="block text-sm font-semibold text-[var(--text-strong)]">Botão flutuante de IA no celular</span>
-                                <span className="block text-xs text-[var(--text-muted)]">Mostra ações rápidas para criar proposta, cliente, bobina, retalho e agendamento.</span>
-                            </span>
-                            <span className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${formData.aiConfig?.quickFab ? 'bg-[var(--brand-primary)]' : 'bg-slate-300 dark:bg-slate-600'}`}>
-                                <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${formData.aiConfig?.quickFab ? 'left-[22px]' : 'left-0.5'}`} />
-                            </span>
-                        </button>
+                        {/* Esta seção só aparece com a IA liberada; então "nunca mexeu" = ligado. */}
+                        {(() => {
+                            const quickFabOn = isAIQuickFabEnabled(formData.aiConfig, true);
+                            return (
+                                <button
+                                    type="button"
+                                    role="switch"
+                                    aria-checked={quickFabOn}
+                                    onClick={() => setFormData(prev => ({
+                                        ...prev,
+                                        aiConfig: {
+                                            ...(prev.aiConfig || { provider: 'gemini' as const, apiKey: '' }),
+                                            quickFab: !isAIQuickFabEnabled(prev.aiConfig, true)
+                                        }
+                                    }))}
+                                    className={`flex w-full items-center justify-between gap-3 rounded-[var(--radius-control)] border p-3 text-left transition-colors ${quickFabOn
+                                        ? 'border-[var(--brand-primary)] bg-[rgba(21,94,239,0.06)]'
+                                        : 'border-[var(--border-subtle)] bg-[var(--surface-muted)]'
+                                        }`}
+                                >
+                                    <span className="min-w-0">
+                                        <span className="block text-sm font-semibold text-[var(--text-strong)]">Botão flutuante de IA no celular</span>
+                                        <span className="block text-xs text-[var(--text-muted)]">Mostra ações rápidas para criar proposta, cliente, bobina, retalho e agendamento.</span>
+                                    </span>
+                                    <span className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${quickFabOn ? 'bg-[var(--brand-primary)]' : 'bg-slate-300 dark:bg-slate-600'}`}>
+                                        <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${quickFabOn ? 'left-[22px]' : 'left-0.5'}`} />
+                                    </span>
+                                </button>
+                            );
+                        })()}
                     </div>
                 </SettingsSection>
             </FeatureGate>
