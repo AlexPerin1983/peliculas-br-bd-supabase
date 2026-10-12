@@ -119,6 +119,23 @@ describe('ajustes e ações novas da ponte', () => {
         expect(parseBridgeCommand({ action: 'client_create', name: 'Ana', phone: '83999998888' })).toHaveProperty('invalid');
     });
 
+    it('lê as sugestões da triagem e recusa a lista se alguma vier estragada', () => {
+        const command = parseBridgeCommand({ action: 'triage_upsert', items: [
+            { contact_key: '5583999998888', phone: '5583999998888', name: '  Kleidson ', category: 'novo_cliente', confidence: 1.4, source: 'jev', snippet: 'Coloca blackout?', last_message_at: 1760300000.7 },
+            { contact_key: '145399998888777@lid', category: 'pessoal', status: 'approved', confidence: 'x', supplier_id: 'nada', client_id: -3 },
+        ] });
+        expect(command).toEqual({ action: 'triage_upsert', items: [
+            { contact_key: '5583999998888', phone: '5583999998888', name: 'Kleidson', category: 'novo_cliente', confidence: 1, source: 'jev', snippet: 'Coloca blackout?', last_message_at: 1760300000, status: 'pending', client_id: null, supplier_id: null },
+            { contact_key: '145399998888777@lid', phone: null, name: null, category: 'pessoal', confidence: null, source: null, snippet: null, last_message_at: null, status: 'approved', client_id: null, supplier_id: null },
+        ] });
+        expect(parseBridgeCommand({ action: 'triage_upsert', items: [{ contact_key: '5583999998888', category: 'vip' }] })).toHaveProperty('invalid');
+        expect(parseBridgeCommand({ action: 'triage_upsert', items: [{ contact_key: "1' OR 1=1", category: 'pessoal' }] })).toHaveProperty('invalid');
+        expect(parseBridgeCommand({ action: 'triage_upsert', items: [{ contact_key: '5583999998888', category: 'pessoal', status: 'perdido' }] })).toHaveProperty('invalid');
+        expect(parseBridgeCommand({ action: 'triage_decisions' })).toEqual({ action: 'triage_decisions' });
+        expect(parseBridgeCommand({ action: 'triage_ack', ids: [3, 4] })).toEqual({ action: 'triage_ack', ids: [3, 4] });
+        expect(parseBridgeCommand({ action: 'triage_ack', ids: [3, '4'] })).toHaveProperty('invalid');
+    });
+
     it('lê os pedidos de fornecedor com as mesmas regras do cliente', () => {
         expect(parseBridgeCommand({ action: 'supplier_phones', phones: ['5581999998888', '5581999998888', 'x'] }))
             .toEqual({ action: 'supplier_phones', phones: ['5581999998888'] });

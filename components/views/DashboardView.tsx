@@ -17,6 +17,7 @@ import {
     Gauge,
     Layers3,
     Megaphone,
+    MessageCircle,
     Package,
     Pencil,
     PieChart,
@@ -37,6 +38,9 @@ import { Agendamento, Client, Film, ProposalExpenseCategory, SavedPDF, Standalon
 import { getAllServicosPrestados, ServicoPrestado } from '../../services/servicosService';
 import { deleteStandaloneExpense, getAllStandaloneExpenses, getPDFPage, saveStandaloneExpense } from '../../services/db';
 import StandaloneExpenseModal from '../modals/StandaloneExpenseModal';
+import WhatsAppTriageModal from '../whatsapp/WhatsAppTriageModal';
+import { useWhatsAppTriage } from '../../src/hooks/useWhatsAppTriage';
+import { pendingSummary } from '../../src/lib/whatsappTriage';
 
 type ActiveTab = 'dashboard' | 'client' | 'films' | 'settings' | 'history' | 'proposals' | 'agenda' | 'sales' | 'admin' | 'account' | 'estoque' | 'qr_code' | 'fornecedores';
 type PeriodKey =
@@ -788,6 +792,9 @@ const DashboardView: React.FC<DashboardViewProps> = ({
     const [isLoadingServicos, setIsLoadingServicos] = useState(true);
     const [standaloneExpenses, setStandaloneExpenses] = useState<StandaloneExpense[]>([]);
     const [isStandaloneExpenseModalOpen, setIsStandaloneExpenseModalOpen] = useState(false);
+    // Triagem do WhatsApp conectado: só aparece para empresas com a conexão ligada.
+    const whatsappTriage = useWhatsAppTriage();
+    const [isTriageOpen, setIsTriageOpen] = useState(false);
     const [isSavingStandaloneExpense, setIsSavingStandaloneExpense] = useState(false);
     const [isPreparingExpenseModal, setIsPreparingExpenseModal] = useState(false);
     const [pagedDashboardPdfs, setPagedDashboardPdfs] = useState<SavedPDF[]>([]);
@@ -1403,7 +1410,8 @@ const DashboardView: React.FC<DashboardViewProps> = ({
     const stalledCount = dailyActions.stalledProposals.length;
     const reviewCount = dailyActions.pendingReviews.length;
     const dormantCount = useDeferredClientData ? dormantClientCount : dailyActions.dormantClients.length;
-    const totalActions = todayCount + stalledCount + reviewCount + dormantCount;
+    const triageCount = whatsappTriage.enabled ? whatsappTriage.pending.length : 0;
+    const totalActions = triageCount + todayCount + stalledCount + reviewCount + dormantCount;
     const todayActionSubtitle = dailyActions.todayAppointments
         .slice(0, 2)
         .map(agendamento => {
@@ -1489,6 +1497,15 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                 onApplyCustom={handleApplyMobileCustomPeriod}
             />
 
+            {whatsappTriage.enabled ? (
+                <WhatsAppTriageModal
+                    isOpen={isTriageOpen}
+                    onClose={() => setIsTriageOpen(false)}
+                    pending={whatsappTriage.pending}
+                    recent={whatsappTriage.recent}
+                    onChanged={() => void whatsappTriage.refresh()}
+                />
+            ) : null}
             <StandaloneExpenseModal
                 isOpen={isStandaloneExpenseModalOpen}
                 onClose={() => setIsStandaloneExpenseModalOpen(false)}
@@ -1511,6 +1528,16 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                     ) : null}
                 </div>
                 <div className="space-y-2">
+                    {triageCount > 0 ? (
+                        <ActionRow
+                            tone="emerald"
+                            icon={<MessageCircle className="h-5 w-5" aria-hidden="true" />}
+                            title={triageCount === 1 ? '1 contato do WhatsApp para revisar' : `${triageCount} contatos do WhatsApp para revisar`}
+                            subtitle={pendingSummary(whatsappTriage.pending.map(item => item.category))}
+                            count={triageCount}
+                            onClick={() => setIsTriageOpen(true)}
+                        />
+                    ) : null}
                     {todayCount > 0 ? (
                         <ActionRow
                             tone="blue"

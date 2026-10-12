@@ -16,7 +16,55 @@ export type BridgeCommand =
     | { action: 'settings_get' }
     | { action: 'settings_set'; settings: BridgeSettings }
     | { action: 'client_phones' | 'supplier_phones'; phones: string[] }
-    | { action: 'client_create' | 'supplier_create'; name: string; phone: string };
+    | { action: 'client_create' | 'supplier_create'; name: string; phone: string }
+    | { action: 'triage_upsert'; items: TriageItem[] }
+    | { action: 'triage_decisions' }
+    | { action: 'triage_ack'; ids: number[] };
+
+// Triagem no app: o que a IA do painel separou em cada conversa.
+export const TRIAGE_CATEGORIES = ['novo_cliente', 'agendar', 'orcamento', 'pos_venda', 'fornecedor', 'pessoal', 'nao_cliente'] as const;
+export type TriageCategory = typeof TRIAGE_CATEGORIES[number];
+export type TriageStatus = 'pending' | 'approved' | 'discarded' | 'auto_approved';
+const TRIAGE_STATUSES: TriageStatus[] = ['pending', 'approved', 'discarded', 'auto_approved'];
+export interface TriageItem {
+    contact_key: string;
+    phone: string | null;
+    name: string | null;
+    category: TriageCategory;
+    confidence: number | null;
+    source: string | null;
+    snippet: string | null;
+    last_message_at: number | null;
+    status: TriageStatus;
+    client_id: number | null;
+    supplier_id: string | null;
+}
+const CONTACT_KEY = /^[0-9]{5,20}(@lid)?$/;
+
+// Uma sugestão do painel, limpa; null quando não serve.
+export const parseTriageItem = (value: unknown): TriageItem | null => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    const item = value as Record<string, unknown>;
+    if (typeof item.contact_key !== 'string' || !CONTACT_KEY.test(item.contact_key)) return null;
+    if (!TRIAGE_CATEGORIES.includes(item.category as TriageCategory)) return null;
+    const status = item.status === undefined ? 'pending' : item.status;
+    if (!TRIAGE_STATUSES.includes(status as TriageStatus)) return null;
+    const confidence = typeof item.confidence === 'number' && Number.isFinite(item.confidence) ? Math.min(Math.max(item.confidence, 0), 1) : null;
+    const lastMessageAt = typeof item.last_message_at === 'number' && Number.isFinite(item.last_message_at) && item.last_message_at > 0 ? Math.floor(item.last_message_at) : null;
+    return {
+        contact_key: item.contact_key,
+        phone: typeof item.phone === 'string' && PHONE.test(item.phone) ? item.phone : null,
+        name: optionalText(item.name, 120),
+        category: item.category as TriageCategory,
+        confidence: confidence === null ? null : Math.round(confidence * 1000) / 1000,
+        source: optionalText(item.source, 20),
+        snippet: optionalText(item.snippet, 600),
+        last_message_at: lastMessageAt,
+        status: status as TriageStatus,
+        client_id: positiveId(item.client_id),
+        supplier_id: typeof item.supplier_id === 'string' && UUID.test(item.supplier_id) ? item.supplier_id.toLowerCase() : null,
+    };
+};
 
 // Passos do acompanhamento que viram mensagem automática ("reply" é conversa: a empresa responde).
 export type FollowUpSendStep = 'not_opened' | 'hot' | 'value' | 'expiring' | 'expired' | 'close';
@@ -155,6 +203,20 @@ export const parseBridgeCommand = (payload: unknown): BridgeCommand | BridgeReje
             if (!name) return { invalid: body.action === 'client_create' ? 'Informe o nome do cliente.' : 'Informe o nome do fornecedor.' };
             if (typeof body.phone !== 'string' || !PHONE.test(body.phone)) return { invalid: 'Telefone inválido.' };
             return { action: body.action, name, phone: body.phone };
+        }
+        case 'triage_upsert': {
+            if (!Array.isArray(body.items) || body.items.length > 300) return { invalid: 'Lista de sugestões inválida (até 300).' };
+            const items = body.items.map(parseTriageItem);
+            if (items.some((item) => item === null)) return { invalid: 'Sugestão inválida na lista.' };
+            return { action: 'triage_upsert', items: items as TriageItem[] };
+        }
+        case 'triage_decisions':
+            return { action: 'triage_decisions' };
+        case 'triage_ack': {
+            if (!Array.isArray(body.ids) || body.ids.length > 100) return { invalid: 'Lista inválida.' };
+            const ids = body.ids.map(positiveId);
+            if (ids.some((id) => id === null)) return { invalid: 'Lista inválida.' };
+            return { action: 'triage_ack', ids: ids as number[] };
         }
         default:
             return { invalid: 'Ação desconhecida.' };
