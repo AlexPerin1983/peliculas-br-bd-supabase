@@ -218,6 +218,42 @@ export const recordClientFollowUp = async (
     if (error) throw error;
 };
 
+// WhatsApp conectado: só empresas com a conexão ligada recebem enabled = true.
+// Qualquer falha (sem internet, função ainda não publicada) conta como desligado,
+// e a tela fica como sempre foi.
+export interface WhatsAppConnectionStatus {
+    enabled: boolean;
+    channel?: 'local_panel' | 'cloud_api';
+    lastSeenAt?: string | null;
+}
+
+export const getWhatsAppConnectionStatus = async (): Promise<WhatsAppConnectionStatus> => {
+    try {
+        const { data, error } = await supabase.rpc('whatsapp_connection_status');
+        if (error || !data?.enabled) return { enabled: false };
+        return { enabled: true, channel: data.channel, lastSeenAt: data.last_seen_at ?? null };
+    } catch {
+        return { enabled: false };
+    }
+};
+
+// Coloca o pedido do pós-venda na fila; o canal registra o pedido ao enviar.
+export const enqueueWhatsAppMessage = async (
+    clientId: number,
+    kind: ClientFollowUpKind,
+    message: string,
+    agendamentoId?: number | null,
+): Promise<{ id: number; duplicate: boolean }> => {
+    const { data, error } = await supabase.rpc('enqueue_whatsapp_message', {
+        p_client_id: clientId,
+        p_kind: kind,
+        p_message: message,
+        p_agendamento_id: agendamentoId ?? null,
+    });
+    if (error) throw new Error(error.message || 'Não foi possível colocar na fila.');
+    return { id: Number(data?.id), duplicate: Boolean(data?.duplicate) };
+};
+
 export const deleteClient = async (id: number): Promise<void> => {
     const userId = await getCurrentUserId();
     if (!userId) throw new Error('User not authenticated');

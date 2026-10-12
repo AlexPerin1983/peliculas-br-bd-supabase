@@ -302,6 +302,7 @@ const ClientHubView: React.FC<ClientHubViewProps> = ({
                     client={client}
                     message={postSaleMessage}
                     missingReviewLink={!googleReviewsLink?.trim()}
+                    agendamentoId={postSaleSheet.agendamento.id ?? null}
                     onClose={() => setPostSaleSheet(null)}
                     onSent={markPostSaleSent}
                 />
