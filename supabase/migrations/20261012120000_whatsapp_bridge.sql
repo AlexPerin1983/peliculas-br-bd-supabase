@@ -102,7 +102,9 @@ AS $$
      AND connector.enabled;
 $$;
 
-REVOKE ALL ON FUNCTION public.whatsapp_connection_status() FROM PUBLIC;
+-- O Supabase concede EXECUTE em funções novas a anon e authenticated por padrão:
+-- revogar só de PUBLIC não basta.
+REVOKE ALL ON FUNCTION public.whatsapp_connection_status() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.whatsapp_connection_status() TO authenticated;
 
 -- Coloca um pedido de avaliação ou de indicação na fila da empresa.
@@ -163,7 +165,7 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.enqueue_whatsapp_message(integer, text, text, integer) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.enqueue_whatsapp_message(integer, text, text, integer) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.enqueue_whatsapp_message(integer, text, text, integer) TO authenticated;
 
 -- Funções do canal (chamadas só pela função whatsapp-bridge com a chave
@@ -299,10 +301,11 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.whatsapp_bridge_touch(uuid) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.whatsapp_bridge_pending(uuid, integer) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.whatsapp_bridge_claim(uuid, bigint) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.whatsapp_bridge_report(uuid, bigint, text, text, text) FROM PUBLIC;
+-- Só o servidor (service_role): usuários do app não podem chamar as funções do canal.
+REVOKE ALL ON FUNCTION public.whatsapp_bridge_touch(uuid) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.whatsapp_bridge_pending(uuid, integer) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.whatsapp_bridge_claim(uuid, bigint) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.whatsapp_bridge_report(uuid, bigint, text, text, text) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.whatsapp_bridge_touch(uuid) TO service_role;
 GRANT EXECUTE ON FUNCTION public.whatsapp_bridge_pending(uuid, integer) TO service_role;
 GRANT EXECUTE ON FUNCTION public.whatsapp_bridge_claim(uuid, bigint) TO service_role;
