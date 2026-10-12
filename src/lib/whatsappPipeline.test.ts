@@ -118,4 +118,14 @@ describe('ajustes e ações novas da ponte', () => {
         expect(parseBridgeCommand({ action: 'client_create', name: ' ', phone: '5583999998888' })).toHaveProperty('invalid');
         expect(parseBridgeCommand({ action: 'client_create', name: 'Ana', phone: '83999998888' })).toHaveProperty('invalid');
     });
+
+    it('lê os pedidos de fornecedor com as mesmas regras do cliente', () => {
+        expect(parseBridgeCommand({ action: 'supplier_phones', phones: ['5581999998888', '5581999998888', 'x'] }))
+            .toEqual({ action: 'supplier_phones', phones: ['5581999998888'] });
+        expect(parseBridgeCommand({ action: 'supplier_create', name: ' Somma   Films ', phone: '5581999998888' }))
+            .toEqual({ action: 'supplier_create', name: 'Somma Films', phone: '5581999998888' });
+        expect(parseBridgeCommand({ action: 'supplier_create', name: '', phone: '5581999998888' })).toEqual({ invalid: 'Informe o nome do fornecedor.' });
+        expect(parseBridgeCommand({ action: 'supplier_create', name: 'Somma', phone: '81999998888' })).toHaveProperty('invalid');
+        expect(parseBridgeCommand({ action: 'supplier_phones', phones: 'x' })).toHaveProperty('invalid');
+    });
 });

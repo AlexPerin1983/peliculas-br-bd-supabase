@@ -187,5 +187,14 @@ Deno.serve(async (request) => {
             const { data, error } = await admin.rpc('whatsapp_bridge_create_client', { p_organization_id: org, p_name: command.name, p_phone: command.phone });
             return error ? rpcError(error) : json(data);
         }
+        case 'supplier_phones': {
+            if (!command.phones.length) return json({ suppliers: {} });
+            const { data, error } = await admin.rpc('whatsapp_bridge_supplier_phones', { p_organization_id: org, p_phones: command.phones });
+            return error ? rpcError(error) : json({ suppliers: data ?? {} });
+        }
+        case 'supplier_create': {
+            const { data, error } = await admin.rpc('whatsapp_bridge_create_supplier', { p_organization_id: org, p_name: command.name, p_phone: command.phone });
+            return error ? rpcError(error) : json(data);
+        }
     }
 });
