@@ -15,8 +15,8 @@ export type BridgeCommand =
     | { action: 'follow_up_enqueue'; portalId: string; step: FollowUpSendStep; message: string | null }
     | { action: 'settings_get' }
     | { action: 'settings_set'; settings: BridgeSettings }
-    | { action: 'client_phones'; phones: string[] }
-    | { action: 'client_create'; name: string; phone: string };
+    | { action: 'client_phones' | 'supplier_phones'; phones: string[] }
+    | { action: 'client_create' | 'supplier_create'; name: string; phone: string };
 
 // Passos do acompanhamento que viram mensagem automática ("reply" é conversa: a empresa responde).
 export type FollowUpSendStep = 'not_opened' | 'hot' | 'value' | 'expiring' | 'expired' | 'close';
@@ -142,17 +142,19 @@ export const parseBridgeCommand = (payload: unknown): BridgeCommand | BridgeReje
         case 'settings_set':
             if (!body.settings || typeof body.settings !== 'object' || Array.isArray(body.settings)) return { invalid: 'Ajustes inválidos.' };
             return { action: 'settings_set', settings: normalizeBridgeSettings(body.settings) };
-        case 'client_phones': {
+        case 'client_phones':
+        case 'supplier_phones': {
             if (!Array.isArray(body.phones)) return { invalid: 'Lista de telefones inválida.' };
             const phones = [...new Set(body.phones.filter((phone): phone is string => typeof phone === 'string' && PHONE.test(phone)))];
             if (phones.length > 1000) return { invalid: 'Telefones demais de uma vez (até 1.000).' };
-            return { action: 'client_phones', phones };
+            return { action: body.action, phones };
         }
-        case 'client_create': {
+        case 'client_create':
+        case 'supplier_create': {
             const name = typeof body.name === 'string' ? body.name.replace(/\s+/g, ' ').trim().slice(0, 120) : '';
-            if (!name) return { invalid: 'Informe o nome do cliente.' };
+            if (!name) return { invalid: body.action === 'client_create' ? 'Informe o nome do cliente.' : 'Informe o nome do fornecedor.' };
             if (typeof body.phone !== 'string' || !PHONE.test(body.phone)) return { invalid: 'Telefone inválido.' };
-            return { action: 'client_create', name, phone: body.phone };
+            return { action: body.action, name, phone: body.phone };
         }
         default:
             return { invalid: 'Ação desconhecida.' };
