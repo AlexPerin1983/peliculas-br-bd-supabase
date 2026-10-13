@@ -210,6 +210,11 @@ Deno.serve(async (request) => {
             const { data, error } = await admin.rpc('whatsapp_bridge_triage_ack', { p_organization_id: org, p_ids: command.ids });
             return error ? rpcError(error) : json(data);
         }
+        // Dados da empresa para a IA do painel (catálogo, pagamento, horário...). Sem custos nem chaves.
+        case 'company_profile': {
+            const { data, error } = await admin.rpc('whatsapp_bridge_company_profile', { p_organization_id: org });
+            return error ? rpcError(error) : json({ profile: data ?? {} });
+        }
         // Atualizações do painel local: a versão mais nova publicada e o pacote dela.
         // O painel confere a assinatura (feita por quem publica) antes de instalar.
         case 'update_check': {
