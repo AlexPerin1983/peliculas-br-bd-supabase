@@ -154,4 +154,9 @@ describe('ajustes e ações novas da ponte', () => {
         expect(parseBridgeCommand({ action: 'update_download', version: "1' OR '1'='1" })).toEqual({ invalid: 'Versão inválida.' });
         expect(parseBridgeCommand({ action: 'update_download', version: 'x'.repeat(41) })).toEqual({ invalid: 'Versão inválida.' });
     });
+
+    it('lê o pedido dos dados da empresa', () => {
+        expect(parseBridgeCommand({ action: 'company_profile' })).toEqual({ action: 'company_profile' });
+        expect(parseBridgeCommand({ action: 'company_profile', organizationId: 'outra' })).toEqual({ action: 'company_profile' });
+    });
 });

@@ -21,7 +21,8 @@ export type BridgeCommand =
     | { action: 'triage_decisions' }
     | { action: 'triage_ack'; ids: number[] }
     | { action: 'update_check' }
-    | { action: 'update_download'; version: string };
+    | { action: 'update_download'; version: string }
+    | { action: 'company_profile' };
 
 // Versão do painel local (ex.: 2026.10.13.0915-eee5197), como o pacote de instalação traz.
 export const PANEL_RELEASE_VERSION = /^[0-9A-Za-z._-]{3,40}$/;
@@ -228,6 +229,8 @@ export const parseBridgeCommand = (payload: unknown): BridgeCommand | BridgeReje
         case 'update_download':
             if (typeof body.version !== 'string' || !PANEL_RELEASE_VERSION.test(body.version)) return { invalid: 'Versão inválida.' };
             return { action: 'update_download', version: body.version };
+        case 'company_profile':
+            return { action: 'company_profile' };
         default:
             return { invalid: 'Ação desconhecida.' };
     }
