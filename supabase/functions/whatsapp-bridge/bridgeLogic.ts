@@ -19,7 +19,12 @@ export type BridgeCommand =
     | { action: 'client_create' | 'supplier_create'; name: string; phone: string }
     | { action: 'triage_upsert'; items: TriageItem[] }
     | { action: 'triage_decisions' }
-    | { action: 'triage_ack'; ids: number[] };
+    | { action: 'triage_ack'; ids: number[] }
+    | { action: 'update_check' }
+    | { action: 'update_download'; version: string };
+
+// Versão do painel local (ex.: 2026.10.13.0915-eee5197), como o pacote de instalação traz.
+export const PANEL_RELEASE_VERSION = /^[0-9A-Za-z._-]{3,40}$/;
 
 // Triagem no app: o que a IA do painel separou em cada conversa.
 export const TRIAGE_CATEGORIES = ['novo_cliente', 'agendar', 'orcamento', 'pos_venda', 'fornecedor', 'pessoal', 'nao_cliente'] as const;
@@ -218,6 +223,11 @@ export const parseBridgeCommand = (payload: unknown): BridgeCommand | BridgeReje
             if (ids.some((id) => id === null)) return { invalid: 'Lista inválida.' };
             return { action: 'triage_ack', ids: ids as number[] };
         }
+        case 'update_check':
+            return { action: 'update_check' };
+        case 'update_download':
+            if (typeof body.version !== 'string' || !PANEL_RELEASE_VERSION.test(body.version)) return { invalid: 'Versão inválida.' };
+            return { action: 'update_download', version: body.version };
         default:
             return { invalid: 'Ação desconhecida.' };
     }

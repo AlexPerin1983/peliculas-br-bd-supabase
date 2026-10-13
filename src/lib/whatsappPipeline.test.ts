@@ -145,4 +145,13 @@ describe('ajustes e ações novas da ponte', () => {
         expect(parseBridgeCommand({ action: 'supplier_create', name: 'Somma', phone: '81999998888' })).toHaveProperty('invalid');
         expect(parseBridgeCommand({ action: 'supplier_phones', phones: 'x' })).toHaveProperty('invalid');
     });
+
+    it('lê os pedidos de atualização do painel', () => {
+        expect(parseBridgeCommand({ action: 'update_check' })).toEqual({ action: 'update_check' });
+        expect(parseBridgeCommand({ action: 'update_download', version: '2026.10.13.0915-eee5197' }))
+            .toEqual({ action: 'update_download', version: '2026.10.13.0915-eee5197' });
+        expect(parseBridgeCommand({ action: 'update_download' })).toEqual({ invalid: 'Versão inválida.' });
+        expect(parseBridgeCommand({ action: 'update_download', version: "1' OR '1'='1" })).toEqual({ invalid: 'Versão inválida.' });
+        expect(parseBridgeCommand({ action: 'update_download', version: 'x'.repeat(41) })).toEqual({ invalid: 'Versão inválida.' });
+    });
 });

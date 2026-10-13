@@ -210,5 +210,20 @@ Deno.serve(async (request) => {
             const { data, error } = await admin.rpc('whatsapp_bridge_triage_ack', { p_organization_id: org, p_ids: command.ids });
             return error ? rpcError(error) : json(data);
         }
+        // Atualizações do painel local: a versão mais nova publicada e o pacote dela.
+        // O painel confere a assinatura (feita por quem publica) antes de instalar.
+        case 'update_check': {
+            const { data, error } = await admin.from('whatsapp_panel_releases')
+                .select('version, sha256, signature, size_bytes, notes, created_at')
+                .eq('active', true).order('id', { ascending: false }).limit(1).maybeSingle();
+            return error ? json({ error: 'Serviço indisponível.' }, 500) : json({ release: data ?? null });
+        }
+        case 'update_download': {
+            const { data, error } = await admin.from('whatsapp_panel_releases')
+                .select('version, sha256, signature, package_base64')
+                .eq('version', command.version).eq('active', true).maybeSingle();
+            if (error) return json({ error: 'Serviço indisponível.' }, 500);
+            return data ? json(data) : json({ error: 'Esta versão não está mais disponível. Procure a atualização de novo.' }, 404);
+        }
     }
 });
