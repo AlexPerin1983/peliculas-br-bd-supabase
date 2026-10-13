@@ -72,6 +72,48 @@ describe('quadro do funil no WhatsApp conectado', () => {
         expect(phoneDigits(null)).toBe(null);
     });
 
+    it('serviço na agenda depois da proposta fecha a proposta e não pede lembrete', () => {
+        const agenda = [{ id: 1, client_id: 7, created_at: at(-DAY), start: at(2 * DAY), service_status: 'scheduled', valor_final: null, pdf_id: 3, pdf_ids: null, event_type: null }];
+        const [card] = buildPipeline(rows({ agenda }), NOW, { origin: ORIGIN });
+        expect(card).toMatchObject({ column: 'won', step: null, due: false, message: null, closedBy: 'agenda' });
+        expect(card.title).toBe('Fechou: serviço na agenda 14/10');
+    });
+
+    it('serviço já feito, com valor ou orçamento ligado, também conta; mesmo se estava como perdida', () => {
+        const done = [{ id: 1, client_id: 7, created_at: at(-DAY), start: at(-HOUR), service_status: 'completed', valor_final: 1200, pdf_id: null, pdf_ids: [], event_type: null }];
+        const [card] = buildPipeline(rows({ agenda: done }, { lost_at: at(-HOUR) }), NOW, { origin: ORIGIN });
+        expect(card).toMatchObject({ column: 'won', step: null, closedBy: 'agenda', title: 'Serviço feito pela agenda' });
+        const linked = [{ ...done[0], valor_final: null, pdf_ids: [99] }];
+        expect(buildPipeline(rows({ agenda: linked }), NOW, { origin: ORIGIN })[0].closedBy).toBe('agenda');
+        const installation = [{ ...done[0], valor_final: null, event_type: 'instalacao' }];
+        expect(buildPipeline(rows({ agenda: installation }), NOW, { origin: ORIGIN })[0].closedBy).toBe('agenda');
+    });
+
+    it('visita marcada sem orçamento ligado faz o lembrete esperar e depois ele volta', () => {
+        const visit = [{ id: 2, client_id: 7, created_at: at(-HOUR), start: at(DAY), service_status: 'scheduled', valor_final: null, pdf_id: null, pdf_ids: null, event_type: null }];
+        const [waiting] = buildPipeline(rows({ agenda: visit }), NOW, { origin: ORIGIN });
+        expect(waiting).toMatchObject({ column: 'sent', step: 'not_opened', due: false, visitAt: NOW + DAY });
+        expect(waiting.title).toBe('Visita marcada 13/10');
+        expect(waiting.dueAt).toBeGreaterThanOrEqual(NOW + 2 * DAY);
+        // Três dias depois a visita passou e o cliente não fechou: o lembrete volta.
+        const [back] = buildPipeline(rows({ agenda: visit }), NOW + 3 * DAY, { origin: ORIGIN });
+        expect(back).toMatchObject({ column: 'no_reply', step: 'not_opened', due: true });
+        expect(back.visitAt).toBeUndefined();
+    });
+
+    it('ignora agendamento cancelado, de outro cliente ou de antes da proposta', () => {
+        const base = { id: 3, client_id: 7, created_at: at(-HOUR), start: at(DAY), service_status: 'scheduled', valor_final: 900, pdf_id: 3, pdf_ids: null, event_type: null };
+        const ignored = [{ ...base, service_status: 'cancelled' }, { ...base, client_id: 8 }, { ...base, created_at: at(-10 * DAY) }];
+        const [card] = buildPipeline(rows({ agenda: ignored }), NOW, { origin: ORIGIN });
+        expect(card).toMatchObject({ column: 'no_reply', step: 'not_opened', due: true });
+        expect(card.closedBy).toBeUndefined();
+    });
+
+    it('fechada pela agenda sai do quadro 30 dias depois do serviço', () => {
+        const old = [{ id: 4, client_id: 7, created_at: at(-DAY), start: at(-31 * DAY), service_status: 'completed', valor_final: 500, pdf_id: null, pdf_ids: null, event_type: null }];
+        expect(buildPipeline(rows({ agenda: old }, { created_at: at(-40 * DAY) }), NOW, { origin: ORIGIN })).toEqual([]);
+    });
+
     it('a etapa conferida na hora do envio é a mesma do quadro', () => {
         const data = rows();
         const [card] = buildPipeline(data, NOW, { origin: ORIGIN });

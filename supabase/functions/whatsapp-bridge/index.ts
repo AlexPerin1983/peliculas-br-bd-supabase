@@ -9,7 +9,7 @@ import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supa
 import { BRIDGE_KEY_HEADER, isPlausibleBridgeKey, normalizeBridgeSettings, parseBridgeCommand, sha256Hex } from './bridgeLogic.ts';
 import { getFollowUpItem } from './followUpCore.ts';
 import {
-    PIPELINE_FOLLOW_UP_COLUMNS, PIPELINE_ITEM_COLUMNS, PIPELINE_LOOKBACK_DAYS, PIPELINE_MESSAGE_COLUMNS, PIPELINE_PORTAL_COLUMNS,
+    PIPELINE_AGENDA_COLUMNS, PIPELINE_FOLLOW_UP_COLUMNS, PIPELINE_ITEM_COLUMNS, PIPELINE_LOOKBACK_DAYS, PIPELINE_MESSAGE_COLUMNS, PIPELINE_PORTAL_COLUMNS,
     type PipelineRows, buildPipeline, templatesByStep, toCorePortal,
 } from './pipeline.ts';
 
@@ -54,7 +54,7 @@ const loadPipelineRows = async (admin: Admin, organizationId: string, portalId?:
     }
     const { data: portals, error } = await query.order('created_at', { ascending: false }).limit(1000);
     if (error) throw error;
-    if (!portals?.length) return { portals: [], clients: [], items: [], messages: [], followUps: [], templates: [], queued: [] };
+    if (!portals?.length) return { portals: [], clients: [], items: [], messages: [], followUps: [], templates: [], queued: [], agenda: [] };
 
     const portalIds = portals.map((row: any) => row.id);
     const clientIds = [...new Set(portals.map((row: any) => row.client_id))];
@@ -64,7 +64,7 @@ const loadPipelineRows = async (admin: Admin, organizationId: string, portalId?:
         ? `organization_id.eq.${organizationId},and(organization_id.is.null,user_id.eq.${organization.owner_id})`
         : `organization_id.eq.${organizationId}`;
 
-    const [clients, items, messages, followUps, templates, queued] = await Promise.all([
+    const [clients, items, messages, followUps, templates, queued, agenda] = await Promise.all([
         inChunks(clientIds, chunk => admin.from('clients').select('id, nome, telefone').in('id', chunk)),
         inChunks(portalIds, chunk => admin.from('proposal_portal_items').select(PIPELINE_ITEM_COLUMNS).in('portal_id', chunk)),
         inChunks(portalIds, chunk => admin.from('proposal_portal_messages').select(PIPELINE_MESSAGE_COLUMNS).in('portal_id', chunk).order('created_at')),
@@ -72,8 +72,10 @@ const loadPipelineRows = async (admin: Admin, organizationId: string, portalId?:
         admin.from('proposal_message_templates').select('id, follow_up_step, body').not('follow_up_step', 'is', null).or(templateFilter).then(rowsOrThrow),
         admin.from('whatsapp_outbox').select('id, portal_id, step, status').eq('organization_id', organizationId)
             .eq('kind', 'proposal_follow_up').in('status', ['pending', 'sending']).then(rowsOrThrow),
+        // Agenda dos mesmos clientes: serviço marcado fecha a proposta; visita faz o lembrete esperar.
+        inChunks(clientIds, chunk => admin.from('agendamentos').select(PIPELINE_AGENDA_COLUMNS).in('client_id', chunk)),
     ]);
-    return { portals, clients, items, messages, followUps, templates, queued } as PipelineRows;
+    return { portals, clients, items, messages, followUps, templates, queued, agenda } as PipelineRows;
 };
 
 const loadSettings = async (admin: Admin, connectorId: string) => {
