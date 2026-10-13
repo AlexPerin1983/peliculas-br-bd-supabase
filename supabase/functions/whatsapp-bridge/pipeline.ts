@@ -12,6 +12,7 @@ export const PIPELINE_PORTAL_COLUMNS = 'id, token, client_id, expires_at, status
 export const PIPELINE_ITEM_COLUMNS = 'portal_id, saved_pdf_id, position, condition_original_value, condition_final_value, condition_discount_amount, condition_discount_percent, condition_expires_at, saved_pdfs(proposal_option_name, nome_arquivo, total_preco, follow_up_base_value, follow_up_discount_percent, follow_up_discount_amount, follow_up_revision)';
 export const PIPELINE_MESSAGE_COLUMNS = 'portal_id, sender_type, kind, created_at';
 export const PIPELINE_FOLLOW_UP_COLUMNS = 'portal_id, kind, step, channel, remind_at, created_at';
+export const PIPELINE_AGENDA_COLUMNS = 'id, client_id, created_at, start, start_time, service_status, valor_final, pdf_id, pdf_ids, event_type';
 
 // Aprovadas e vencidas somem do quadro depois de 30 dias (ver boardColumn).
 export const PIPELINE_LOOKBACK_DAYS = 31;
@@ -31,6 +32,8 @@ export interface PipelineRows {
     followUps: any[];
     templates: Array<{ id: number; follow_up_step: string | null; body: string | null }>;
     queued: Array<{ id: number; portal_id: string; step: string | null; status: string }>;
+    // Agenda dos clientes das propostas (opcional: sem ela o quadro funciona como antes).
+    agenda?: any[];
 }
 
 export interface PipelineCard {
@@ -55,7 +58,46 @@ export interface PipelineCard {
     lastContactAt: number | null;
     remindersSent: number;
     queued: { id: number; step: string | null; status: string } | null;
+    // Fechou pela agenda (serviço marcado ou feito depois da proposta).
+    closedBy?: 'agenda';
+    serviceAt?: number;
+    // Visita marcada: o lembrete espera passar a visita.
+    visitAt?: number;
 }
+
+const DAY = 86_400_000;
+const WON_VISIBLE_DAYS = 30;
+const time = (value: unknown) => {
+    const parsed = Date.parse(String(value ?? ''));
+    return Number.isFinite(parsed) ? parsed : 0;
+};
+
+// O que a agenda diz da proposta. Agendamento do cliente feito depois da proposta e não
+// cancelado: com orçamento ligado, valor, ou marcado como instalação, é serviço (fechou);
+// sem nada disso, costuma ser a visita para medir ou levar o catálogo.
+export type AgendaSignal = { kind: 'service'; at: number; completed: boolean } | { kind: 'visit'; at: number } | null;
+export const agendaSignal = (portal: { clientId: number; createdAt?: string }, agenda: any[]): AgendaSignal => {
+    const since = time(portal.createdAt) - DAY;
+    const entries = agenda.filter(entry => Number(entry.client_id) === portal.clientId
+        && time(entry.created_at) >= since
+        && (entry.service_status ?? 'scheduled') !== 'cancelled');
+    if (!entries.length) return null;
+    const when = (entry: any) => time(entry.start) || time(entry.start_time) || time(entry.created_at);
+    const isService = (entry: any) => entry.pdf_id != null
+        || (Array.isArray(entry.pdf_ids) && entry.pdf_ids.length > 0)
+        || entry.event_type === 'instalacao'
+        || Number(entry.valor_final) > 0;
+    const services = entries.filter(isService).sort((a, b) => when(b) - when(a));
+    if (services.length) {
+        return { kind: 'service', at: when(services[0]), completed: services.some(entry => ['completed', 'partial'].includes(entry.service_status)) };
+    }
+    return { kind: 'visit', at: Math.max(...entries.map(when)) };
+};
+
+const dayLabel = (at: number, timeZone?: string) => {
+    try { return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', timeZone: timeZone || 'America/Sao_Paulo' }).format(new Date(at)); }
+    catch { return new Date(at).toLocaleDateString('pt-BR'); }
+};
 
 // Modelo mais recente de cada passo (igual ao app: o último salvo vale).
 export const templatesByStep = (rows: PipelineRows['templates']): FollowUpTemplates => {
@@ -105,8 +147,25 @@ export const buildPipeline = (
     for (const row of rows.portals) {
         if (row.status === 'revoked') continue;
         const portal = toCorePortal(row, rows);
-        const item = getFollowUpItem(portal, now, { origin: options.origin, templates, cadence: options.cadence, timeZone: options.timeZone });
-        const column = boardColumn(portal, item, now);
+        let item = getFollowUpItem(portal, now, { origin: options.origin, templates, cadence: options.cadence, timeZone: options.timeZone });
+        let column = boardColumn(portal, item, now);
+        const signal = portal.status === 'approved' ? null : agendaSignal(portal, rows.agenda || []);
+        let closed: { title: string; hint: string } | null = null;
+        if (signal?.kind === 'service') {
+            // Fechou pela agenda (mesmo que tivesse sido marcada como perdida): vai para
+            // Fechados e não pede lembrete. Some do quadro 30 dias depois do serviço.
+            if (now - signal.at > WON_VISIBLE_DAYS * DAY) continue;
+            item = null; column = 'won';
+            closed = signal.completed
+                ? { title: 'Serviço feito pela agenda', hint: 'Depois do serviço, peça a avaliação.' }
+                : { title: 'Fechou: serviço na agenda ' + dayLabel(signal.at, options.timeZone), hint: 'Já está na agenda. Depois do serviço, peça a avaliação.' };
+        } else if (signal?.kind === 'visit' && item && item.step !== 'reply' && signal.at + DAY > now) {
+            // Visita marcada: o lembrete espera um dia depois da visita. Se o cliente não
+            // fechar, ele volta sozinho para a lista.
+            const dueAt = Math.max(item.dueAt, signal.at + DAY);
+            item = { ...item, dueAt, due: false, title: 'Visita marcada ' + dayLabel(signal.at, options.timeZone), hint: 'O lembrete espera a visita. Se ele não fechar, a proposta volta para a lista.' };
+            column = 'sent';
+        }
         if (!column) continue;
         const queued = rows.queued.find(entry => entry.portal_id === portal.id && ['pending', 'sending'].includes(entry.status));
         const lastContact = lastFollowUpContactAt(portal);
@@ -117,12 +176,14 @@ export const buildPipeline = (
             phone: phoneDigits(portal.clientPhone),
             column,
             step: item?.step ?? null,
-            title: item?.title ?? 'Proposta aprovada',
-            hint: item?.hint ?? 'Combine a instalação e, depois do serviço, peça a avaliação.',
+            title: closed?.title ?? item?.title ?? 'Proposta aprovada',
+            hint: closed?.hint ?? item?.hint ?? 'Combine a instalação e, depois do serviço, peça a avaliação.',
             message: item?.message ?? null,
             dueAt: item?.dueAt ?? null,
             due: item?.due ?? false,
             snoozedUntil: item?.snoozedUntil ?? null,
+            ...(signal?.kind === 'service' ? { closedBy: 'agenda' as const, serviceAt: signal.at } : {}),
+            ...(signal?.kind === 'visit' && column === 'sent' && signal.at + DAY > now ? { visitAt: signal.at } : {}),
             total: portalTotal(portal),
             expiresAt: portal.expiresAt,
             status: portal.status,
