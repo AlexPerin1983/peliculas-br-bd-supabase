@@ -22,7 +22,27 @@ export type BridgeCommand =
     | { action: 'triage_ack'; ids: number[] }
     | { action: 'update_check' }
     | { action: 'update_download'; version: string }
-    | { action: 'company_profile' };
+    | { action: 'company_profile' }
+    // Estagiária IA do painel: cliente, proposta, PDF e link (só as propostas que ela criou).
+    | { action: 'intern_context'; phone: string | null }
+    | { action: 'intern_client_save'; phone: string; name: string; fields: InternClientFields }
+    | { action: 'intern_proposal_save'; clientId: number; savedPdfId: number | null; proposal: InternProposal }
+    | { action: 'intern_proposal_pdf'; savedPdfId: number; pdf: Uint8Array }
+    | { action: 'intern_proposal_delete'; savedPdfId: number };
+
+export const INTERN_CLIENT_FIELDS = ['email', 'cep', 'logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'uf'] as const;
+export type InternClientFields = Partial<Record<typeof INTERN_CLIENT_FIELDS[number], string>>;
+export interface InternMeasurement {
+    id: number; largura: string; altura: string; quantidade: number; ambiente: string; tipoAplicacao: string; pelicula: string; active: boolean;
+    discount: { type: 'percentage' | 'fixed'; value: string };
+}
+export interface InternProposal {
+    total_preco: number; total_m2: number; subtotal: number; general_discount_amount: number;
+    general_discount: Record<string, string | number>; measurements: InternMeasurement[];
+    nome_arquivo: string; proposal_option_name: string; payment_config: Record<string, unknown> | null;
+}
+// PDF de até 6 MB (em base64, um pouco mais).
+export const INTERN_PDF_MAX_BYTES = 6_000_000;
 
 // Versão do painel local (ex.: 2026.10.13.0915-eee5197), como o pacote de instalação traz.
 export const PANEL_RELEASE_VERSION = /^[0-9A-Za-z._-]{3,40}$/;
@@ -156,6 +176,57 @@ const optionalText = (value: unknown, max: number): string | null =>
 // campo error do resultado de envio (report).
 export type BridgeRejection = { invalid: string };
 
+// ---- Estagiária IA: o que o painel manda para cadastrar e montar a proposta ----
+const money = (value: unknown, max = 10_000_000): number | null =>
+    typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= max ? Math.round(value * 100) / 100 : null;
+const DIMENSION = /^\d{1,3}(,\d{1,3})?$/;
+const parseInternMeasurement = (value: unknown): InternMeasurement | null => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    const item = value as Record<string, unknown>;
+    const id = positiveId(item.id);
+    const quantidade = typeof item.quantidade === 'number' && Number.isInteger(item.quantidade) && item.quantidade >= 1 && item.quantidade <= 1000 ? item.quantidade : null;
+    const pelicula = optionalText(item.pelicula, 120);
+    if (!id || !quantidade || !pelicula || typeof item.largura !== 'string' || !DIMENSION.test(item.largura) || typeof item.altura !== 'string' || !DIMENSION.test(item.altura)) return null;
+    const discount = item.discount && typeof item.discount === 'object' ? item.discount as Record<string, unknown> : {};
+    return {
+        id, largura: item.largura, altura: item.altura, quantidade, pelicula,
+        ambiente: optionalText(item.ambiente, 80) || 'Desconhecido', tipoAplicacao: optionalText(item.tipoAplicacao, 80) || 'Desconhecido', active: item.active !== false,
+        discount: { type: discount.type === 'fixed' ? 'fixed' : 'percentage', value: typeof discount.value === 'string' && /^\d{0,7}(,\d{0,4})?$/.test(discount.value) ? discount.value : '0' },
+    };
+};
+const GENERAL_DISCOUNT_KEYS = ['value', 'type', 'operation', 'discountValue', 'discountType', 'increaseValue', 'increaseType', 'pricingMode'];
+export const parseInternProposal = (value: unknown): InternProposal | null => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    const body = value as Record<string, unknown>;
+    if (JSON.stringify(body).length > 200_000) return null;
+    const totals = [money(body.total_preco), money(body.total_m2, 100_000), money(body.subtotal), money(body.general_discount_amount)];
+    if (totals.some((total) => total === null)) return null;
+    if (!Array.isArray(body.measurements) || !body.measurements.length || body.measurements.length > 200) return null;
+    const measurements = body.measurements.map(parseInternMeasurement);
+    if (measurements.some((item) => item === null)) return null;
+    const discountInput = body.general_discount && typeof body.general_discount === 'object' && !Array.isArray(body.general_discount) ? body.general_discount as Record<string, unknown> : {};
+    const general_discount: Record<string, string | number> = {};
+    for (const key of GENERAL_DISCOUNT_KEYS) {
+        const entry = discountInput[key];
+        if (typeof entry === 'string' && entry.length <= 40) general_discount[key] = entry;
+        else if (typeof entry === 'number' && Number.isFinite(entry)) general_discount[key] = entry;
+    }
+    const payment = body.payment_config && typeof body.payment_config === 'object' && !Array.isArray(body.payment_config) ? body.payment_config as Record<string, unknown> : null;
+    return {
+        total_preco: totals[0]!, total_m2: totals[1]!, subtotal: totals[2]!, general_discount_amount: totals[3]!, general_discount,
+        measurements: measurements as InternMeasurement[], nome_arquivo: optionalText(body.nome_arquivo, 200) || 'Orçamento.pdf',
+        proposal_option_name: optionalText(body.proposal_option_name, 80) || 'Opção 1', payment_config: payment,
+    };
+};
+const base64Bytes = (value: unknown): Uint8Array | null => {
+    if (typeof value !== 'string' || value.length > Math.ceil(INTERN_PDF_MAX_BYTES / 3) * 4 || !/^[A-Za-z0-9+/]+={0,2}$/.test(value)) return null;
+    try {
+        const bytes = Uint8Array.from(atob(value), (char) => char.charCodeAt(0));
+        // Começa com %PDF: não aceita outro tipo de arquivo.
+        return bytes.length > 4 && bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46 ? bytes : null;
+    } catch { return null; }
+};
+
 export const parseBridgeCommand = (payload: unknown): BridgeCommand | BridgeRejection => {
     if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return { invalid: 'Pedido inválido.' };
     const body = payload as Record<string, unknown>;
@@ -231,6 +302,38 @@ export const parseBridgeCommand = (payload: unknown): BridgeCommand | BridgeReje
             return { action: 'update_download', version: body.version };
         case 'company_profile':
             return { action: 'company_profile' };
+        case 'intern_context':
+            if (body.phone !== undefined && body.phone !== null && (typeof body.phone !== 'string' || !PHONE.test(body.phone))) return { invalid: 'Telefone inválido.' };
+            return { action: 'intern_context', phone: typeof body.phone === 'string' ? body.phone : null };
+        case 'intern_client_save': {
+            const name = typeof body.name === 'string' ? body.name.replace(/\s+/g, ' ').trim().slice(0, 120) : '';
+            if (!name) return { invalid: 'Informe o nome do cliente.' };
+            if (typeof body.phone !== 'string' || !PHONE.test(body.phone)) return { invalid: 'Telefone inválido.' };
+            const input = body.fields && typeof body.fields === 'object' && !Array.isArray(body.fields) ? body.fields as Record<string, unknown> : {};
+            const fields: InternClientFields = {};
+            for (const key of INTERN_CLIENT_FIELDS) { const text = optionalText(input[key], 160); if (text) fields[key] = text; }
+            return { action: 'intern_client_save', phone: body.phone, name, fields };
+        }
+        case 'intern_proposal_save': {
+            const clientId = positiveId(body.clientId);
+            if (!clientId) return { invalid: 'Cliente inválido.' };
+            const savedPdfId = body.savedPdfId === null || body.savedPdfId === undefined ? null : positiveId(body.savedPdfId);
+            if (body.savedPdfId !== null && body.savedPdfId !== undefined && !savedPdfId) return { invalid: 'Proposta inválida.' };
+            const proposal = parseInternProposal(body.proposal);
+            if (!proposal) return { invalid: 'Dados da proposta inválidos.' };
+            return { action: 'intern_proposal_save', clientId, savedPdfId, proposal };
+        }
+        case 'intern_proposal_pdf': {
+            const savedPdfId = positiveId(body.savedPdfId);
+            const pdf = base64Bytes(body.pdfBase64);
+            if (!savedPdfId) return { invalid: 'Proposta inválida.' };
+            if (!pdf) return { invalid: 'PDF inválido (até 6 MB).' };
+            return { action: 'intern_proposal_pdf', savedPdfId, pdf };
+        }
+        case 'intern_proposal_delete': {
+            const savedPdfId = positiveId(body.savedPdfId);
+            return savedPdfId ? { action: 'intern_proposal_delete', savedPdfId } : { invalid: 'Proposta inválida.' };
+        }
         default:
             return { invalid: 'Ação desconhecida.' };
     }

@@ -47,3 +47,47 @@ describe('ponte do WhatsApp conectado', () => {
         });
     });
 });
+
+describe('estagiária IA: cliente, proposta e PDF pela ponte', () => {
+    const measurement = { id: 1791925247578, largura: '1,20', altura: '1,00', quantidade: 2, ambiente: 'Quarto', tipoAplicacao: 'Desconhecido', pelicula: 'Fumê G20', active: true, discount: { type: 'percentage', value: '0' } };
+    const proposal = {
+        total_preco: 288, total_m2: 2.4, subtotal: 288, general_discount_amount: 0,
+        general_discount: { value: '', type: 'fixed', operation: 'discount', discountValue: '10', discountType: 'percentage', increaseValue: '', increaseType: 'fixed', pricingMode: 'complete', extra: 'fora' },
+        measurements: [measurement], nome_arquivo: 'Orçamento Maria.pdf', proposal_option_name: 'Opção 1', payment_config: { paymentMethods: [] },
+    };
+
+    it('lê o contexto e o cadastro do cliente, guardando só os campos conhecidos', () => {
+        expect(parseBridgeCommand({ action: 'intern_context', phone: '5583988887777' })).toEqual({ action: 'intern_context', phone: '5583988887777' });
+        expect(parseBridgeCommand({ action: 'intern_context' })).toEqual({ action: 'intern_context', phone: null });
+        expect(parseBridgeCommand({ action: 'intern_context', phone: '123' })).toHaveProperty('invalid');
+        expect(parseBridgeCommand({ action: 'intern_client_save', phone: '5583988887777', name: '  Maria   Souza ', fields: { bairro: 'Bessa', cpf_cnpj: '000', senha: 'x' } }))
+            .toEqual({ action: 'intern_client_save', phone: '5583988887777', name: 'Maria Souza', fields: { bairro: 'Bessa' } });
+        expect(parseBridgeCommand({ action: 'intern_client_save', phone: '5583988887777', name: ' ' })).toHaveProperty('invalid');
+    });
+
+    it('aceita a proposta no formato do app e descarta o que não conhece', () => {
+        const command = parseBridgeCommand({ action: 'intern_proposal_save', clientId: 12, proposal });
+        expect(command).toMatchObject({ action: 'intern_proposal_save', clientId: 12, savedPdfId: null });
+        expect((command as { proposal: { general_discount: Record<string, unknown> } }).proposal.general_discount).not.toHaveProperty('extra');
+        expect(parseBridgeCommand({ action: 'intern_proposal_save', clientId: 12, savedPdfId: 99, proposal })).toMatchObject({ savedPdfId: 99 });
+    });
+
+    it('recusa proposta sem medida, com medida estranha ou valor negativo', () => {
+        expect(parseBridgeCommand({ action: 'intern_proposal_save', clientId: 12, proposal: { ...proposal, measurements: [] } })).toHaveProperty('invalid');
+        expect(parseBridgeCommand({ action: 'intern_proposal_save', clientId: 12, proposal: { ...proposal, measurements: [{ ...measurement, largura: '1.20' }] } })).toHaveProperty('invalid');
+        expect(parseBridgeCommand({ action: 'intern_proposal_save', clientId: 12, proposal: { ...proposal, total_preco: -5 } })).toHaveProperty('invalid');
+        expect(parseBridgeCommand({ action: 'intern_proposal_save', clientId: 0, proposal })).toHaveProperty('invalid');
+        expect(parseBridgeCommand({ action: 'intern_proposal_save', clientId: 12, savedPdfId: 'x', proposal })).toHaveProperty('invalid');
+    });
+
+    it('só aceita PDF de verdade no envio do arquivo', () => {
+        const pdf = btoa('%PDF-1.3 teste');
+        const command = parseBridgeCommand({ action: 'intern_proposal_pdf', savedPdfId: 5, pdfBase64: pdf });
+        expect(command).toMatchObject({ action: 'intern_proposal_pdf', savedPdfId: 5 });
+        expect((command as { pdf: Uint8Array }).pdf.length).toBe(14);
+        expect(parseBridgeCommand({ action: 'intern_proposal_pdf', savedPdfId: 5, pdfBase64: btoa('<html>') })).toHaveProperty('invalid');
+        expect(parseBridgeCommand({ action: 'intern_proposal_pdf', savedPdfId: 5, pdfBase64: 'não é base64' })).toHaveProperty('invalid');
+        expect(parseBridgeCommand({ action: 'intern_proposal_delete', savedPdfId: 5 })).toEqual({ action: 'intern_proposal_delete', savedPdfId: 5 });
+        expect(parseBridgeCommand({ action: 'intern_proposal_delete' })).toHaveProperty('invalid');
+    });
+});
