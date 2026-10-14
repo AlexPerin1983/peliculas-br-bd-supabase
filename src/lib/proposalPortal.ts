@@ -338,6 +338,8 @@ export interface ClientPortalLink {
     expired: boolean;
     viewCount: number;
     pdfIds: number[];
+    /** PDFs sobre os quais o cliente respondeu neste link (negociou, aprovou, recusou…). */
+    respondedPdfIds: number[];
 }
 
 export const loadClientPortalLinks = async (clientId: number): Promise<ClientPortalLink[]> => {
@@ -349,7 +351,26 @@ export const loadClientPortalLinks = async (clientId: number): Promise<ClientPor
         .order('created_at', { ascending: false })
         .limit(30);
     if (error) throw error;
-    return (data || []).map((portal: any) => ({
+    const portals = data || [];
+
+    // Respostas do cliente presas a um PDF: o banco não deixa excluir esse PDF
+    // (a conversa depende dele). Se a busca falhar, a exclusão avisa depois.
+    const responded = new Map<string, number[]>();
+    if (portals.length > 0) {
+        const { data: messages } = await supabase
+            .from('proposal_portal_messages')
+            .select('portal_id, saved_pdf_id')
+            .in('portal_id', portals.map((portal: any) => portal.id))
+            .neq('kind', 'message')
+            .not('saved_pdf_id', 'is', null);
+        for (const message of messages || []) {
+            const list = responded.get(String(message.portal_id)) || [];
+            list.push(Number(message.saved_pdf_id));
+            responded.set(String(message.portal_id), list);
+        }
+    }
+
+    return portals.map((portal: any) => ({
         portalId: String(portal.id),
         status: String(portal.status),
         expired: portal.status === 'expired' || new Date(portal.expires_at).getTime() <= Date.now(),
@@ -357,6 +378,7 @@ export const loadClientPortalLinks = async (clientId: number): Promise<ClientPor
         pdfIds: (portal.proposal_portal_items || [])
             .map((item: any) => Number(item.saved_pdf_id))
             .filter((id: number) => Number.isFinite(id)),
+        respondedPdfIds: [...new Set(responded.get(String(portal.id)) || [])],
     }));
 };
 

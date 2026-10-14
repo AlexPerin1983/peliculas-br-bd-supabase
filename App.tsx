@@ -87,6 +87,7 @@ import {
 import { getUniqueOptionName } from './src/lib/proposalOptionNames';
 import { buildOptionIdResolver, getOptionVersions, getProposalKey, listClientProposals } from './src/lib/generatedProposals';
 import { loadClientPortalLinks, type ClientPortalLink } from './src/lib/proposalPortal';
+import { PDF_HAS_CLIENT_RESPONSE_MESSAGE } from './src/lib/pdfDeletion';
 import {
     buildOptionVariationPrompt,
     getFriendlyOptionVariationError,
@@ -1662,6 +1663,11 @@ const App: React.FC = () => {
         () => new Set(generatedClientPortalLinks.flatMap(link => link.pdfIds)),
         [generatedClientPortalLinks]
     );
+    // O cliente respondeu por link sobre estes PDFs: o banco não deixa excluí-los.
+    const respondedPdfIds = useMemo(
+        () => new Set(generatedClientPortalLinks.flatMap(link => link.respondedPdfIds)),
+        [generatedClientPortalLinks]
+    );
 
     // A cópia do servidor não traz o id da opção: as opções atuais do cliente
     // dizem qual é pelo nome (só quando o nome é de uma opção só).
@@ -1687,9 +1693,10 @@ const App: React.FC = () => {
     ), [agendamentos]);
     // Enviado ao cliente por link: excluir tiraria a opção da página dele.
     const isInClientLink = useCallback((pdf: SavedPDF) => pdf.id != null && linkedPdfIds.has(pdf.id), [linkedPdfIds]);
+    const hasClientResponse = useCallback((pdf: SavedPDF) => pdf.id != null && respondedPdfIds.has(pdf.id), [respondedPdfIds]);
     const isProposalKept = useCallback((pdf: SavedPDF) => (
-        isApprovedOrScheduled(pdf) || isInClientLink(pdf)
-    ), [isApprovedOrScheduled, isInClientLink]);
+        isApprovedOrScheduled(pdf) || isInClientLink(pdf) || hasClientResponse(pdf)
+    ), [isApprovedOrScheduled, isInClientLink, hasClientResponse]);
 
     // Quantos PDFs cada linha da lista representa (para a confirmação da lixeira).
     const generatedProposalVersions = useMemo(() => {
@@ -1698,15 +1705,18 @@ const App: React.FC = () => {
             const { all, kept } = getOptionVersions(pool, pdf, isProposalKept, generatedOptionIdResolver);
             const approved = getOptionVersions(pool, pdf, isApprovedOrScheduled, generatedOptionIdResolver).targetLocked;
             const linked = getOptionVersions(pool, pdf, isInClientLink, generatedOptionIdResolver).targetLocked;
+            const responded = getOptionVersions(pool, pdf, hasClientResponse, generatedOptionIdResolver).targetLocked;
             return [getProposalKey(pdf), {
                 total: all.length,
                 kept: kept.length,
-                locked: approved || linked,
-                lockedBy: approved ? 'approved' as const : linked ? 'link' as const : null,
+                locked: approved || linked || responded,
+                lockedBy: responded ? 'responded' as const : approved ? 'approved' as const : linked ? 'link' as const : null,
+                // Com resposta do cliente o banco não deixa excluir: a lixeira só explica.
+                blocked: responded,
                 linked,
             }];
         }));
-    }, [allSavedPdfs, historyPdfs, generatedClientPdfs, generatedClientProposals, isProposalKept, isApprovedOrScheduled, isInClientLink, generatedOptionIdResolver]);
+    }, [allSavedPdfs, historyPdfs, generatedClientPdfs, generatedClientProposals, isProposalKept, isApprovedOrScheduled, isInClientLink, hasClientResponse, generatedOptionIdResolver]);
     const canDeleteGeneratedProposals = hasLoadedAllPdfs
         || (latestGeneratedClientId != null && generatedClientPdfsReadyFor === latestGeneratedClientId);
 
@@ -2497,6 +2507,13 @@ Regras:
             if (hasLoadedAgendamentos) {
                 await loadAgendamentos();
             }
+            // O motivo que a pessoa entende (ex.: o cliente respondeu por link) vem na frente.
+            const clientResponseFailure = failures.some(result => (
+                result.status === 'rejected'
+                && result.reason instanceof Error
+                && result.reason.message === PDF_HAS_CLIENT_RESPONSE_MESSAGE
+            ));
+            if (clientResponseFailure) throw new Error(PDF_HAS_CLIENT_RESPONSE_MESSAGE);
             throw new Error(`Falha ao excluir ${failures.length} de ${uniquePdfIds.length} orçamentos.`);
         }
 
@@ -2555,7 +2572,9 @@ Regras:
             setPdfToDeleteId(null);
         } catch (error) {
             console.error('Erro ao excluir orçamento:', error);
-            handleShowInfo('Não foi possível excluir o orçamento. Tente novamente.');
+            handleShowInfo(error instanceof Error && error.message === PDF_HAS_CLIENT_RESPONSE_MESSAGE
+                ? PDF_HAS_CLIENT_RESPONSE_MESSAGE
+                : 'Não foi possível excluir o orçamento. Tente novamente.');
         } finally {
             setIsDeletingPdf(false);
         }

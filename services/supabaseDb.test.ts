@@ -472,8 +472,8 @@ describe('supabaseDb deletePDF', () => {
   beforeEach(() => vi.clearAllMocks());
 
   // Encadeamento: select(...).eq(...).single() / delete().eq().select() / select().eq().maybeSingle()
-  const mockSavedPdfs = (options: { deletedRows: unknown[]; stillThere: unknown; recheckError?: unknown }) => {
-    const deleteSelect = vi.fn().mockResolvedValue({ data: options.deletedRows, error: null });
+  const mockSavedPdfs = (options: { deletedRows: unknown[]; stillThere: unknown; recheckError?: unknown; deleteError?: unknown }) => {
+    const deleteSelect = vi.fn().mockResolvedValue({ data: options.deletedRows, error: options.deleteError ?? null });
     const deleteChain = { eq: vi.fn(() => ({ select: deleteSelect })) };
     const firstRead = { eq: vi.fn(() => ({ single: vi.fn().mockResolvedValue({ data: { agendamento_id: null, pdf_path: null }, error: null }) })) };
     const recheck = { eq: vi.fn(() => ({ maybeSingle: vi.fn().mockResolvedValue({ data: options.stillThere, error: options.recheckError ?? null }) })) };
@@ -501,6 +501,16 @@ describe('supabaseDb deletePDF', () => {
     mockSavedPdfs({ deletedRows: [], stillThere: null, recheckError: new Error('sem conexão') });
     const { deletePDF } = await import('./supabaseDb');
     await expect(deletePDF(938)).rejects.toThrow('sem conexão');
+  });
+
+  it('PDF com resposta do cliente pelo link: explica em vez de dar erro técnico', async () => {
+    mockSavedPdfs({
+      deletedRows: [],
+      stillThere: { id: 938 },
+      deleteError: { code: '23514', message: 'new row for relation "proposal_portal_messages" violates check constraint' },
+    });
+    const { deletePDF } = await import('./supabaseDb');
+    await expect(deletePDF(938)).rejects.toThrow('O cliente respondeu por link sobre este orçamento');
   });
 
   it('PDF que já não existia não é erro', async () => {

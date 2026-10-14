@@ -128,7 +128,7 @@ interface ModalsContainerProps {
     generatedPreselectedPdfKeys: string[];
     handlePreviewProposal: (pdf: SavedPDF) => Promise<boolean>;
     handleShareProposals: (pdfs: SavedPDF[]) => Promise<'shared' | 'downloaded' | 'unavailable'>;
-    generatedProposalVersions: Record<string, { total: number; kept: number; locked: boolean; lockedBy: 'approved' | 'link' | null; linked: boolean }>;
+    generatedProposalVersions: Record<string, { total: number; kept: number; locked: boolean; lockedBy: 'approved' | 'link' | 'responded' | null; blocked: boolean; linked: boolean }>;
     canDeleteGeneratedProposals: boolean;
     handleDeleteGeneratedProposal: (pdf: SavedPDF) => Promise<{ deleted: number; kept: number; done: Promise<void> }>;
     handleOpenAIVariationFromGeneratedPdf?: () => void;

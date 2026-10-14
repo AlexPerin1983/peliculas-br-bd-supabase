@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import type { Client, SavedPDF } from '../../types';
 import ProposalShareModal from './ProposalShareModal';
 import { getProposalKey } from '../../src/lib/generatedProposals';
+import { PDF_HAS_CLIENT_RESPONSE_MESSAGE } from '../../src/lib/pdfDeletion';
 
 type ShareResult = 'shared' | 'downloaded' | 'unavailable';
 
@@ -40,7 +41,9 @@ interface PdfGenerationStatusModalProps {
         total: number;
         kept: number;
         locked?: boolean;
-        lockedBy?: 'approved' | 'link' | null;
+        lockedBy?: 'approved' | 'link' | 'responded' | null;
+        /** O cliente respondeu por link sobre ela: não dá para excluir. */
+        blocked?: boolean;
         /** Já enviada ao cliente por link (etiqueta "Link"). */
         linked?: boolean;
     }>;
@@ -190,8 +193,10 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
             setSelectedKeys(current => current.filter(item => item !== key));
             setConfirmingDeleteKey(null);
             setShareMessage(deletedMessage(pdf.proposalOptionName || 'Proposta', result));
-            result?.done?.catch(() => {
-                setShareMessage('Não foi possível excluir tudo. A lista foi atualizada; tente de novo.');
+            result?.done?.catch((error: unknown) => {
+                setShareMessage(error instanceof Error && error.message === PDF_HAS_CLIENT_RESPONSE_MESSAGE
+                    ? PDF_HAS_CLIENT_RESPONSE_MESSAGE
+                    : 'Não foi possível excluir tudo. A lista foi atualizada; tente de novo.');
             });
         } catch {
             setShareMessage('Não foi possível excluir. Tente novamente.');
@@ -283,6 +288,7 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
                                     const deleteCount = Math.max(1, totalVersions - keptVersions);
                                     const isLocked = !!proposalVersions?.[key]?.locked;
                                     const lockedByLink = proposalVersions?.[key]?.lockedBy === 'link';
+                                    const isBlocked = !!proposalVersions?.[key]?.blocked;
                                     const isLinked = !!proposalVersions?.[key]?.linked;
                                     return (
                                         <li key={key}>
@@ -343,9 +349,22 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
                                                     </button>
                                                 ) : null}
                                             </div>
-                                            {isConfirming ? (
-                                                <div role="alertdialog" aria-label={`Confirmar exclusão de ${name}`} className="mt-1 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 dark:border-red-900/60 dark:bg-red-950/30">
-                                                    <span className="min-w-0 flex-1 text-xs font-medium text-red-800 dark:text-red-200">
+                                            {isConfirming && isBlocked ? (
+                                                <div role="alertdialog" aria-label={`Não dá para excluir ${name}`} className="mt-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 dark:border-amber-900/60 dark:bg-amber-950/30">
+                                                    <p className="text-xs font-medium leading-5 text-amber-900 dark:text-amber-100">{PDF_HAS_CLIENT_RESPONSE_MESSAGE}</p>
+                                                    <div className="mt-1.5 flex justify-end">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setConfirmingDeleteKey(null)}
+                                                            className="rounded-md bg-white px-3 py-1.5 text-amber-900 shadow-sm hover:bg-amber-100 dark:bg-slate-800 dark:text-amber-100"
+                                                        >
+                                                            <span className="text-xs font-semibold">Entendi</span>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ) : isConfirming ? (
+                                                <div role="alertdialog" aria-label={`Confirmar exclusão de ${name}`} className="mt-1 rounded-lg border border-red-200 bg-red-50 px-3 py-2 dark:border-red-900/60 dark:bg-red-950/30">
+                                                    <p className="text-xs font-medium leading-5 text-red-800 dark:text-red-200">
                                                         Excluir do histórico?
                                                         {isLocked ? (
                                                             <span className="block font-semibold text-red-800 dark:text-red-200">
@@ -361,23 +380,25 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
                                                                     : `São ${totalVersions} PDFs desta opção.`}
                                                             </span>
                                                         ) : null}
-                                                    </span>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setConfirmingDeleteKey(null)}
-                                                        disabled={deletingKey === key}
-                                                        className="rounded-md px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-800"
-                                                    >
-                                                        <span className="text-xs font-semibold">Cancelar</span>
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => { void handleDelete(pdf); }}
-                                                        disabled={deletingKey === key}
-                                                        className="rounded-md bg-red-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-60"
-                                                    >
-                                                        <span className="text-xs font-semibold">{deletingKey === key ? 'Excluindo…' : `${deleteCount > 1 ? `Excluir os ${deleteCount}` : 'Excluir'}${isLocked ? ' mesmo assim' : ''}`}</span>
-                                                    </button>
+                                                    </p>
+                                                    <div className="mt-1.5 flex justify-end gap-2">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setConfirmingDeleteKey(null)}
+                                                            disabled={deletingKey === key}
+                                                            className="rounded-md px-2.5 py-1.5 text-slate-600 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-800"
+                                                        >
+                                                            <span className="text-xs font-semibold">Cancelar</span>
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => { void handleDelete(pdf); }}
+                                                            disabled={deletingKey === key}
+                                                            className="rounded-md bg-red-600 px-2.5 py-1.5 text-white hover:bg-red-700 disabled:opacity-60"
+                                                        >
+                                                            <span className="text-xs font-semibold">{deletingKey === key ? 'Excluindo…' : `${deleteCount > 1 ? `Excluir os ${deleteCount}` : 'Excluir'}${isLocked ? ' mesmo assim' : ''}`}</span>
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             ) : null}
                                         </li>

@@ -423,6 +423,31 @@ describe('PdfGenerationStatusModal', () => {
         expect(screen.getByRole('button', { name: 'Excluir mesmo assim' })).toBeInTheDocument();
     });
 
+    it('proposta com resposta do cliente: a lixeira só explica, sem excluir', () => {
+        const original = proposal(42, 'Suntek', 2649.6, '2026-10-07T10:00:00Z');
+        const nova = proposal(43, 'Window Premium', 3120, '2026-10-07T10:05:00Z');
+        const onDeleteProposal = vi.fn();
+        render(
+            <PdfGenerationStatusModal
+                {...baseProps()}
+                proposalForLink={{ client, pdf: nova }}
+                clientProposals={[nova, original]}
+                preselectedPdfKeys={[getProposalKey(original), getProposalKey(nova)]}
+                onDeleteProposal={onDeleteProposal}
+                proposalVersions={{
+                    [getProposalKey(original)]: { total: 1, kept: 0, locked: true, lockedBy: 'responded', blocked: true, linked: true },
+                }}
+            />
+        );
+
+        fireEvent.click(screen.getByRole('button', { name: 'Excluir Suntek' }));
+        expect(screen.getByText(/O cliente respondeu por link sobre este orçamento/)).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /Excluir mesmo assim|^Excluir$/ })).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Entendi' }));
+        expect(screen.queryByText(/O cliente respondeu por link/)).not.toBeInTheDocument();
+        expect(onDeleteProposal).not.toHaveBeenCalled();
+    });
+
     it('lixeira espera o histórico do cliente carregar', () => {
         const original = proposal(42, 'Suntek', 2649.6, '2026-10-07T10:00:00Z');
         const nova = proposal(43, 'Window Premium', 3120, '2026-10-07T10:05:00Z');

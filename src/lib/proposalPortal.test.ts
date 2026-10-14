@@ -309,16 +309,24 @@ describe('links já enviados ao cliente', () => {
             error: null,
         });
         const chain: any = { select: vi.fn(() => chain), eq: vi.fn(() => chain), neq: vi.fn(() => chain), order: vi.fn(() => chain), limit };
-        fromMock.mockReturnValue(chain);
+        // Respostas do cliente presas a um PDF (negociou, recusou…).
+        const messagesChain: any = {
+            select: vi.fn(() => messagesChain),
+            in: vi.fn(() => messagesChain),
+            neq: vi.fn(() => messagesChain),
+            not: vi.fn().mockResolvedValue({ data: [{ portal_id: 'p1', saved_pdf_id: 92 }, { portal_id: 'p1', saved_pdf_id: 92 }], error: null }),
+        };
+        fromMock.mockImplementation((table: string) => (table === 'proposal_portal_messages' ? messagesChain : chain));
 
         const links = await loadClientPortalLinks(7);
 
         expect(fromMock).toHaveBeenCalledWith('proposal_portals');
         expect(chain.eq).toHaveBeenCalledWith('client_id', 7);
         expect(chain.neq).toHaveBeenCalledWith('status', 'revoked');
+        expect(messagesChain.neq).toHaveBeenCalledWith('kind', 'message');
         expect(links).toEqual([
-            { portalId: 'p1', status: 'active', expired: false, viewCount: 2, pdfIds: [91, 92] },
-            { portalId: 'p2', status: 'active', expired: true, viewCount: 0, pdfIds: [] },
+            { portalId: 'p1', status: 'active', expired: false, viewCount: 2, pdfIds: [91, 92], respondedPdfIds: [92] },
+            { portalId: 'p2', status: 'active', expired: true, viewCount: 0, pdfIds: [], respondedPdfIds: [] },
         ]);
     });
 
