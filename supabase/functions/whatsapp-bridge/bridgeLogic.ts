@@ -40,6 +40,8 @@ export interface InternProposal {
     total_preco: number; total_m2: number; subtotal: number; general_discount_amount: number;
     general_discount: Record<string, string | number>; measurements: InternMeasurement[];
     nome_arquivo: string; proposal_option_name: string; payment_config: Record<string, unknown> | null;
+    /** Opção nova no link que a estagiária já criou para o cliente (várias opções na mesma página). */
+    portal_id: string | null;
 }
 // PDF de até 6 MB (em base64, um pouco mais).
 export const INTERN_PDF_MAX_BYTES = 6_000_000;
@@ -216,6 +218,7 @@ export const parseInternProposal = (value: unknown): InternProposal | null => {
         total_preco: totals[0]!, total_m2: totals[1]!, subtotal: totals[2]!, general_discount_amount: totals[3]!, general_discount,
         measurements: measurements as InternMeasurement[], nome_arquivo: optionalText(body.nome_arquivo, 200) || 'Orçamento.pdf',
         proposal_option_name: optionalText(body.proposal_option_name, 80) || 'Opção 1', payment_config: payment,
+        portal_id: typeof body.portal_id === 'string' && UUID.test(body.portal_id) ? body.portal_id.toLowerCase() : null,
     };
 };
 const base64Bytes = (value: unknown): Uint8Array | null => {

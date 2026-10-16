@@ -72,6 +72,15 @@ describe('estagiária IA: cliente, proposta e PDF pela ponte', () => {
         expect(parseBridgeCommand({ action: 'intern_proposal_save', clientId: 12, savedPdfId: 99, proposal })).toMatchObject({ savedPdfId: 99 });
     });
 
+    it('leva a opção nova para o link que já existe só com um identificador válido', () => {
+        const portal = '3F2504E0-4F89-11D3-9A0C-0305E82C3301';
+        const joined = parseBridgeCommand({ action: 'intern_proposal_save', clientId: 12, proposal: { ...proposal, portal_id: portal } }) as { proposal: { portal_id: string | null } };
+        expect(joined.proposal.portal_id).toBe(portal.toLowerCase());
+        const odd = parseBridgeCommand({ action: 'intern_proposal_save', clientId: 12, proposal: { ...proposal, portal_id: "x'; drop table" } }) as { proposal: { portal_id: string | null } };
+        expect(odd.proposal.portal_id).toBeNull();
+        expect((parseBridgeCommand({ action: 'intern_proposal_save', clientId: 12, proposal }) as { proposal: { portal_id: string | null } }).proposal.portal_id).toBeNull();
+    });
+
     it('recusa proposta sem medida, com medida estranha ou valor negativo', () => {
         expect(parseBridgeCommand({ action: 'intern_proposal_save', clientId: 12, proposal: { ...proposal, measurements: [] } })).toHaveProperty('invalid');
         expect(parseBridgeCommand({ action: 'intern_proposal_save', clientId: 12, proposal: { ...proposal, measurements: [{ ...measurement, largura: '1.20' }] } })).toHaveProperty('invalid');
