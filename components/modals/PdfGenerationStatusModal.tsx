@@ -511,8 +511,9 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
                                                         disabled={isRenaming}
                                                         aria-label={`Novo nome para ${name}`}
                                                         placeholder="Ex.: Janelas da sala"
-                                                        style={{ fontSize: 16 }}
-                                                        className="h-10 min-w-0 flex-1 rounded-md border border-slate-200 bg-slate-50 px-2.5 text-slate-800 outline-none focus:border-blue-500 focus:bg-white dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                                                        // O CSS global (font: inherit e o contorno do :focus-visible) vence as classes; por isso aqui é inline.
+                                                        style={{ fontSize: 16, fontWeight: 500, outline: 'none' }}
+                                                        className="h-10 min-w-0 flex-1 rounded-md border border-slate-300 bg-white px-2.5 text-slate-900 caret-blue-600 placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 disabled:opacity-70 dark:border-slate-600 dark:bg-slate-950 dark:text-white dark:caret-blue-400 dark:placeholder:text-slate-500 dark:focus:border-blue-400 dark:focus:ring-blue-400/25"
                                                     />
                                                     <button
                                                         type="submit"
