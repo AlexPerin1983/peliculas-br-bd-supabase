@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SavedPDF } from '../../types';
-import { buildOptionIdResolver, buildPdfContentSignature, getOptionVersions, getProposalKey, hashPdfSignature, listClientProposals, recallPdfSignature, rememberPdfSignature } from './generatedProposals';
+import { buildOptionIdResolver, buildPdfContentSignature, getOptionVersions, getProposalKey, hashPdfSignature, listClientProposals, recallPdfSignature, rememberPdfSignature, suggestOptionNames } from './generatedProposals';
 
 const pdf = (overrides: Partial<SavedPDF>): SavedPDF => ({
     id: 1,
@@ -219,5 +219,31 @@ describe('assinatura guardada no aparelho', () => {
         window.localStorage.setItem('peliculas-br-pdf-signatures', '{quebrado');
         expect(recallPdfSignature('x')).toBeNull();
         expect(() => rememberPdfSignature('x', 'h')).not.toThrow();
+    });
+});
+
+describe('nomes prontos para renomear', () => {
+    const measurement = (pelicula: string, ambiente: string, active = true) =>
+        ({ id: 1, largura: '1', altura: '1', quantidade: 1, tipoAplicacao: '', pelicula, ambiente, active });
+    const pdf = (measurements: ReturnType<typeof measurement>[], proposalOptionName = 'Opção 1') =>
+        ({ clienteId: 7, date: '2026-10-23T10:00:00.000Z', totalPreco: 1, totalM2: 1, nomeArquivo: 'a.pdf', proposalOptionName, measurements }) as SavedPDF;
+
+    it('sugere as películas e depois os ambientes, sem repetir', () => {
+        const names = suggestOptionNames(pdf([
+            measurement('Pink Silver', 'sala'),
+            measurement('Pink Silver', 'Quarto'),
+            measurement('Jateada', 'Sala'),
+        ]));
+        expect(names).toEqual(['Pink Silver', 'Jateada', 'Sala', 'Quarto']);
+    });
+
+    it('deixa de fora o nome atual, os de outras opções, medidas desligadas e valores vazios', () => {
+        const names = suggestOptionNames(pdf([
+            measurement('Pink Silver', 'Desconhecido'),
+            measurement('Nenhuma', ''),
+            measurement('G20', 'Varanda', false),
+            measurement('Fumê', 'Cozinha'),
+        ], 'pink silver'), ['Cozinha']);
+        expect(names).toEqual(['Fumê']);
     });
 });

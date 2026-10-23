@@ -22,6 +22,29 @@ export const isSameOptionName = (left?: string | null, right?: string | null): b
     return !!normalized && normalized === normalizeOptionName(right);
 };
 
+/**
+ * Nomes prontos para renomear a opção: as películas e os ambientes das medidas
+ * do PDF ("Pink Silver", "Sala"). Fora o nome atual e os de outras opções.
+ */
+export const suggestOptionNames = (pdf: SavedPDF, takenNames: string[] = [], limit = 5): string[] => {
+    const active = (pdf.measurements || []).filter(measurement => measurement.active !== false);
+    const clean = (value?: string) => (value || '').trim().replace(/\s+/g, ' ');
+    const films = active.map(measurement => clean(measurement.pelicula))
+        .filter(name => name && name.toLocaleLowerCase('pt-BR') !== 'nenhuma');
+    const rooms = active.map(measurement => clean(measurement.ambiente))
+        .filter(name => name && name.toLocaleLowerCase('pt-BR') !== 'desconhecido')
+        .map(name => name.charAt(0).toLocaleUpperCase('pt-BR') + name.slice(1));
+    const blocked = [pdf.proposalOptionName, ...takenNames];
+    const names: string[] = [];
+    for (const name of [...films, ...rooms]) {
+        if (names.length >= limit) break;
+        if (name.length > 80 || names.some(other => isSameOptionName(other, name))) continue;
+        if (blocked.some(other => isSameOptionName(other, name))) continue;
+        names.push(name);
+    }
+    return names;
+};
+
 /** Id da opção de um PDF que não o traz (cópia do servidor), quando dá para saber. */
 export type OptionIdResolver = (pdf: SavedPDF) => number | undefined;
 
