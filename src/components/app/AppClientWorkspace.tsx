@@ -28,6 +28,7 @@ import {
     Plus,
     PlusCircle,
     Ruler,
+    Send,
     SlidersHorizontal,
     Sparkles,
     TrendingUp,
@@ -75,6 +76,9 @@ interface AppClientWorkspaceProps {
     onAddMeasurement: () => void;
     onDuplicateMeasurements: () => void;
     onGeneratePdf: () => void;
+    /** Opções do cliente que já têm PDF: o atalho "Enviar ao cliente" abre a lista delas. */
+    generatedProposalsCount?: number;
+    onOpenGeneratedProposals?: () => void;
     onOpenAIModal: () => void;
     onOpenPrices: () => void;
     defaultHideMeasurements?: boolean;
@@ -98,6 +102,8 @@ interface ProposalCommandCenterProps {
     onAddMeasurement: () => void;
     onDuplicateMeasurements: () => void;
     onGeneratePdf: () => void;
+    generatedProposalsCount?: number;
+    onOpenGeneratedProposals?: () => void;
     onOpenAIModal: () => void;
 }
 
@@ -220,6 +226,8 @@ const ProposalCommandCenter: React.FC<ProposalCommandCenterProps> = ({
     onAddMeasurement,
     onDuplicateMeasurements,
     onGeneratePdf,
+    generatedProposalsCount = 0,
+    onOpenGeneratedProposals,
     onOpenAIModal,
     onOpenPrices,
 }) => {
@@ -381,6 +389,16 @@ const ProposalCommandCenter: React.FC<ProposalCommandCenterProps> = ({
                         </>
                     )}
                 </button>
+                {onOpenGeneratedProposals && generatedProposalsCount > 0 ? (
+                    <button
+                        type="button"
+                        onClick={onOpenGeneratedProposals}
+                        className="flex h-11 w-full items-center justify-center gap-2 rounded-[var(--radius-control)] border border-emerald-200 bg-emerald-50 text-sm font-semibold text-emerald-800 shadow-[var(--shadow-hairline)] transition-all hover:bg-emerald-100 active:scale-[0.99] dark:border-emerald-900/60 dark:bg-emerald-900/20 dark:text-emerald-300"
+                    >
+                        <Send className="h-4 w-4" aria-hidden="true" />
+                        <span>Enviar ao cliente ({generatedProposalsCount} {generatedProposalsCount === 1 ? 'gerada' : 'geradas'})</span>
+                    </button>
+                ) : null}
                 <div className="grid grid-cols-2 gap-2">
                     <button
                         onClick={onOpenAIModal}
@@ -443,6 +461,8 @@ export const AppClientWorkspace: React.FC<AppClientWorkspaceProps> = ({
     onAddMeasurement,
     onDuplicateMeasurements,
     onGeneratePdf,
+    generatedProposalsCount,
+    onOpenGeneratedProposals,
     onOpenAIModal,
     defaultHideMeasurements,
     defaultValidityDays
@@ -556,6 +576,8 @@ export const AppClientWorkspace: React.FC<AppClientWorkspaceProps> = ({
                             onAddMeasurement={onAddMeasurement}
                             onDuplicateMeasurements={onDuplicateMeasurements}
                             onGeneratePdf={onGeneratePdf}
+                            generatedProposalsCount={generatedProposalsCount}
+                            onOpenGeneratedProposals={onOpenGeneratedProposals}
                             onOpenAIModal={onOpenAIModal}
                             onOpenPrices={() => setIsDesktopTotalsOpen(true)}
                         />
@@ -604,6 +626,8 @@ export const AppClientWorkspace: React.FC<AppClientWorkspaceProps> = ({
                         onAddMeasurement={onAddMeasurement}
                         onDuplicateMeasurements={onDuplicateMeasurements}
                         onGeneratePdf={onGeneratePdf}
+                        generatedProposalsCount={generatedProposalsCount}
+                        onOpenGeneratedProposals={onOpenGeneratedProposals}
                         isGeneratingPdf={isGeneratingPdf}
                         onOpenAIModal={onOpenAIModal}
                         defaultHideMeasurements={defaultHideMeasurements}
@@ -625,6 +649,8 @@ export const AppClientWorkspace: React.FC<AppClientWorkspaceProps> = ({
                         generalDiscount={generalDiscount}
                         onUpdateGeneralDiscount={onUpdateGeneralDiscount}
                         onGeneratePdf={onGeneratePdf}
+                        generatedProposalsCount={generatedProposalsCount}
+                        onOpenGeneratedProposals={onOpenGeneratedProposals}
                         isGeneratingPdf={isGeneratingPdf}
                         defaultHideMeasurements={defaultHideMeasurements}
                         defaultValidityDays={defaultValidityDays}

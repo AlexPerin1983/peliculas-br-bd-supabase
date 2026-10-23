@@ -85,7 +85,7 @@ import {
     parseFilmTableExtractionResponse
 } from './src/lib/aiFilmExtraction';
 import { getUniqueOptionName } from './src/lib/proposalOptionNames';
-import { buildOptionIdResolver, getOptionVersions, getProposalKey, listClientProposals } from './src/lib/generatedProposals';
+import { buildOptionIdResolver, getOptionVersions, getProposalKey, isSameOptionName, listClientProposals } from './src/lib/generatedProposals';
 import { loadClientPortalLinks, type ClientPortalLink } from './src/lib/proposalPortal';
 import {
     buildOptionVariationPrompt,
@@ -1585,6 +1585,37 @@ const App: React.FC = () => {
         setDuplicateSourcePdfKeys([]);
         await handleGeneratePdfWithSaveCheck(isDirty);
     }, [allSavedPdfs, findReusablePdf, generatedClientPdfs, handleGeneratePdfWithSaveCheck, isDirty, isLatestPdfUpToDate, latestGeneratedProposal, reopenSavedPdf]);
+
+    // Atalho "Enviar ao cliente" (Resumo de Valores e painel do orçamento): abre
+    // o "Orçamento gerado" com as opções que o cliente já tem, sem gerar outro PDF.
+    const selectedClientProposals = useMemo(() => {
+        if (selectedClientId == null) return [];
+        return listClientProposals([...allSavedPdfs, ...generatedClientPdfs], selectedClientId, 6, buildOptionIdResolver(proposalOptions));
+    }, [allSavedPdfs, generatedClientPdfs, selectedClientId, proposalOptions]);
+
+    // Aberto pelo atalho: nada acabou de ser gerado (o modal muda o título).
+    const [isGeneratedListShortcut, setIsGeneratedListShortcut] = useState(false);
+    useEffect(() => {
+        if (pdfGenerationStatus !== 'success') setIsGeneratedListShortcut(false);
+    }, [pdfGenerationStatus]);
+
+    const handleOpenGeneratedProposals = useCallback(async () => {
+        setIsGeneratedListShortcut(true);
+        const latestPdf = latestGeneratedProposal?.client.id === selectedClientId ? latestGeneratedProposal?.pdf : undefined;
+        if (latestPdf && selectedClientProposals.some(pdf => getProposalKey(pdf) === getProposalKey(latestPdf))) {
+            setPdfGenerationStatus('success');
+            return;
+        }
+        // A da opção aberta primeiro: assim "Duplicar com outra película" já vale.
+        const target = selectedClientProposals.find(pdf => activeOption != null && (
+            pdf.proposalOptionId === activeOption.id || isSameOptionName(pdf.proposalOptionName, activeOption.name)
+        )) ?? selectedClientProposals[0];
+        if (!target) return;
+        if (!await reopenSavedPdf(target)) {
+            setIsGeneratedListShortcut(false);
+            handleShowInfo('Não foi possível abrir os orçamentos gerados. Confira a internet e tente de novo.');
+        }
+    }, [activeOption, handleShowInfo, latestGeneratedProposal, reopenSavedPdf, selectedClientId, selectedClientProposals]);
 
     // "Duplicar com outra película" no Orçamento gerado: guarda as opções que
     // já estavam prontas, fecha o modal e abre o seletor de película.
@@ -3780,6 +3811,7 @@ Use somente o JSON definido e não inclua explicações fora dele.`;
         handleRenameGeneratedProposal,
         handleEditGeneratedProposal,
         editableGeneratedProposalKeys,
+        isGeneratedListShortcut,
         isProcessingAI,
         isAIQuickProposalModalOpen,
         setIsAIQuickProposalModalOpen,
@@ -3999,6 +4031,8 @@ Use somente o JSON definido e não inclua explicações fora dele.`;
                                             onAddMeasurement={addMeasurement}
                                             onDuplicateMeasurements={duplicateAllMeasurements}
                                             onGeneratePdf={handleGeneratePdf}
+                                            generatedProposalsCount={selectedClientProposals.length}
+                                            onOpenGeneratedProposals={() => { void handleOpenGeneratedProposals(); }}
                                             onOpenAIModal={() => {
                                                 if (!ensureAiReady()) return;
                                                 setIsAIMeasurementModalOpen(true);

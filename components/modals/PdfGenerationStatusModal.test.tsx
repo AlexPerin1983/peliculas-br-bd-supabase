@@ -598,4 +598,22 @@ describe('PdfGenerationStatusModal', () => {
             expect(screen.getByRole('textbox', { name: 'Novo nome para Opção 1' })).toBeInTheDocument();
         });
     });
+
+    it('aberto pelo atalho mostra "Orçamentos do cliente" sem a etiqueta Nova', () => {
+        const latest = proposal(2, 'Opção 1', 438.75, '2026-10-23T10:00:00.000Z');
+        const older = proposal(1, 'Jateada', 438.75, '2026-10-22T10:00:00.000Z');
+        render(
+            <PdfGenerationStatusModal
+                {...baseProps()}
+                proposalForLink={{ client, pdf: latest }}
+                clientProposals={[latest, older]}
+                preselectedPdfKeys={[getProposalKey(older), getProposalKey(latest)]}
+                openedFromShortcut
+            />
+        );
+
+        expect(screen.getByRole('heading', { name: 'Orçamentos do cliente' })).toBeInTheDocument();
+        expect(screen.getByText('Camila')).toBeInTheDocument();
+        expect(screen.queryByText('Nova')).not.toBeInTheDocument();
+    });
 });

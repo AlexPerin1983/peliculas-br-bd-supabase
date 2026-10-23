@@ -10,6 +10,8 @@ interface MobileFooterProps {
     onAddMeasurement: () => void;
     onDuplicateMeasurements: () => void;
     onGeneratePdf: () => void;
+    generatedProposalsCount?: number;
+    onOpenGeneratedProposals?: () => void;
     isGeneratingPdf: boolean;
     onOpenAIModal: () => void;
     defaultHideMeasurements?: boolean;
@@ -32,6 +34,8 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
     onAddMeasurement,
     onDuplicateMeasurements,
     onGeneratePdf,
+    generatedProposalsCount,
+    onOpenGeneratedProposals,
     isGeneratingPdf,
     onOpenAIModal,
     defaultHideMeasurements,
@@ -135,6 +139,8 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
                 generalDiscount={generalDiscount}
                 onUpdateGeneralDiscount={handleUpdateDiscount}
                 onGeneratePdf={onGeneratePdf}
+                generatedProposalsCount={generatedProposalsCount}
+                onOpenGeneratedProposals={onOpenGeneratedProposals}
                 isGeneratingPdf={isGeneratingPdf}
                 defaultHideMeasurements={defaultHideMeasurements}
                 defaultValidityDays={defaultValidityDays}

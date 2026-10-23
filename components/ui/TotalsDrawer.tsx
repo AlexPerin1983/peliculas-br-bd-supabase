@@ -23,6 +23,9 @@ interface TotalsDrawerProps {
     generalDiscount: ProposalDiscount;
     onUpdateGeneralDiscount: (discount: ProposalDiscount) => void;
     onGeneratePdf: () => void;
+    /** Opções do cliente que já têm PDF: o atalho "Enviar ao cliente" abre a lista delas. */
+    generatedProposalsCount?: number;
+    onOpenGeneratedProposals?: () => void;
     isGeneratingPdf: boolean;
     defaultHideMeasurements?: boolean;
     defaultIncluirTermo?: boolean;
@@ -530,6 +533,8 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
     generalDiscount,
     onUpdateGeneralDiscount,
     onGeneratePdf,
+    generatedProposalsCount = 0,
+    onOpenGeneratedProposals,
     isGeneratingPdf,
     defaultHideMeasurements = false,
     defaultIncluirTermo = true,
@@ -1176,6 +1181,20 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                             {keyboardOffset === 0 && <div
                                 className="fixed inset-x-0 bottom-0 z-20 border-t border-slate-200 bg-white/95 px-3 py-2 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95 sm:static sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none"
                             >
+                                {!adjustmentsOpen && onOpenGeneratedProposals && generatedProposalsCount > 0 ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => { onClose(); onOpenGeneratedProposals(); }}
+                                        className="mx-auto mb-2 flex h-10 w-full max-w-md items-center gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 text-left text-emerald-800 transition-colors hover:bg-emerald-100 active:scale-[0.99] dark:border-emerald-800/70 dark:bg-emerald-900/25 dark:text-emerald-200 dark:hover:bg-emerald-900/40"
+                                    >
+                                        <i className="fas fa-paper-plane text-sm" aria-hidden="true" />
+                                        <span className="min-w-0 flex-1 truncate">
+                                            <span className="text-sm font-bold">Enviar ao cliente</span>
+                                            <span className="text-xs font-medium text-emerald-700/80 dark:text-emerald-300/80"> · {generatedProposalsCount} {generatedProposalsCount === 1 ? 'opção gerada' : 'opções geradas'}</span>
+                                        </span>
+                                        <i className="fas fa-chevron-right text-xs opacity-70" aria-hidden="true" />
+                                    </button>
+                                ) : null}
                                 <div className={`mx-auto grid max-w-md gap-2 sm:block ${adjustmentsOpen ? 'grid-cols-1' : 'grid-cols-[minmax(0,0.95fr)_minmax(0,1.2fr)]'}`}>
                                     {!adjustmentsOpen && <div className="flex h-12 min-w-0 flex-col justify-center rounded-xl bg-slate-900 px-3 text-white shadow-sm dark:bg-slate-950 sm:hidden" aria-live="polite">
                                         <span className="block text-[8px] font-bold uppercase tracking-[0.08em] text-slate-400">Total atualizado</span>
