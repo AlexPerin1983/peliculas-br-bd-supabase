@@ -616,4 +616,36 @@ describe('PdfGenerationStatusModal', () => {
         expect(screen.getByText('Camila')).toBeInTheDocument();
         expect(screen.queryByText('Nova')).not.toBeInTheDocument();
     });
+
+    it('pelo atalho mostra a lista mesmo com uma opção só', () => {
+        const only = proposal(3, 'Pink Silver', 1842.5, '2026-10-23T10:00:00.000Z');
+        render(
+            <PdfGenerationStatusModal
+                {...baseProps()}
+                proposalForLink={{ client, pdf: only }}
+                clientProposals={[only]}
+                preselectedPdfKeys={[getProposalKey(only)]}
+                onShareProposals={vi.fn()}
+                openedFromShortcut
+            />
+        );
+
+        expect(screen.getByRole('checkbox')).toBeChecked();
+        expect(screen.getByRole('button', { name: 'Enviar 1 opção pelo WhatsApp' })).toBeInTheDocument();
+        expect(screen.queryByText('Criar link e enviar')).not.toBeInTheDocument();
+    });
+
+    it('com o link já criado, o botão diz enviar de novo', () => {
+        const only = proposal(3, 'Pink Silver', 1842.5, '2026-10-23T10:00:00.000Z');
+        render(
+            <PdfGenerationStatusModal
+                {...baseProps()}
+                proposalForLink={{ client, pdf: only }}
+                clientProposals={[only]}
+                proposalVersions={{ [getProposalKey(only)]: { total: 1, kept: 1, locked: true, lockedBy: 'link', linked: true } }}
+            />
+        );
+
+        expect(screen.getByRole('button', { name: /Enviar de novo pelo WhatsApp/ })).toBeInTheDocument();
+    });
 });

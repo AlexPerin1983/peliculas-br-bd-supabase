@@ -1619,10 +1619,6 @@ const App: React.FC = () => {
 
     // "Duplicar com outra película" no Orçamento gerado: guarda as opções que
     // já estavam prontas, fecha o modal e abre o seletor de película.
-    const canDuplicateGeneratedPdf = !!latestGeneratedProposal
-        && latestGeneratedProposal.client.id === selectedClientId
-        && latestGeneratedProposal.pdf.proposalOptionId === activeOption?.id;
-
     const handleDuplicateFromGeneratedPdf = useCallback(() => {
         if (!latestGeneratedProposal) return;
         const latestKey = getProposalKey(latestGeneratedProposal.pdf);
@@ -1702,6 +1698,12 @@ const App: React.FC = () => {
             ? buildOptionIdResolver(proposalOptions)
             : undefined
     ), [latestGeneratedClientId, selectedClientId, proposalOptions]);
+
+    // Duplicar parte da opção aberta: o PDF tem que ser dela (pelo nome, na cópia do servidor).
+    const canDuplicateGeneratedPdf = !!latestGeneratedProposal
+        && latestGeneratedProposal.client.id === selectedClientId
+        && activeOption?.id != null
+        && (latestGeneratedProposal.pdf.proposalOptionId ?? generatedOptionIdResolver?.(latestGeneratedProposal.pdf)) === activeOption.id;
 
     // Uma linha por opção do cliente; com 2 ou mais, o modal mostra a lista.
     const generatedClientProposals = useMemo(() => {

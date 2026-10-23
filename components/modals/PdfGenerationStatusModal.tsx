@@ -256,7 +256,9 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
     useEffect(() => {
         if (hasSeveralOptions) setKeepsPicker(true);
     }, [hasSeveralOptions]);
-    const showsProposalPicker = !!proposalForLink && (hasSeveralOptions || keepsPicker);
+    // Pelo atalho "Enviar ao cliente" é sempre a lista, mesmo com uma opção só.
+    const showsProposalPicker = !!proposalForLink && (hasSeveralOptions || keepsPicker || openedFromShortcut);
+    const latestIsLinked = !!latestKey && !!proposalVersions?.[latestKey]?.linked;
     const cameFromDuplicate = preselectedPdfKeys.length > 1;
     const latestStillListed = clientProposals.some(pdf => getProposalKey(pdf) === latestKey);
     const selectedPdfs = useMemo(
@@ -684,7 +686,7 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
                         className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-3 text-base font-semibold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-55"
                     >
                         <i className="fab fa-whatsapp" aria-hidden="true"></i>
-                        <span className="font-semibold">Criar link e enviar</span>
+                        <span className="font-semibold">{latestIsLinked ? 'Enviar de novo pelo WhatsApp' : 'Criar link e enviar'}</span>
                     </button>
                 )}
 
