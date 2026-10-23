@@ -131,6 +131,9 @@ interface ModalsContainerProps {
     generatedProposalVersions: Record<string, { total: number; kept: number; locked: boolean; lockedBy: 'approved' | 'link' | null; linked: boolean }>;
     canDeleteGeneratedProposals: boolean;
     handleDeleteGeneratedProposal: (pdf: SavedPDF) => Promise<{ deleted: number; kept: number; done: Promise<void> }>;
+    handleRenameGeneratedProposal: (pdf: SavedPDF, name: string) => Promise<void>;
+    handleEditGeneratedProposal: (pdf: SavedPDF) => void;
+    editableGeneratedProposalKeys: string[];
     handleOpenAIVariationFromGeneratedPdf?: () => void;
     isAIVariationModalOpen: boolean;
     handleCancelAIVariation: () => void;
@@ -546,6 +549,9 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
                     onDeleteProposal={props.handleDeleteGeneratedProposal}
                     proposalVersions={props.generatedProposalVersions}
                     canDeleteProposals={props.canDeleteGeneratedProposals}
+                    onRenameProposal={props.handleRenameGeneratedProposal}
+                    onEditProposal={props.handleEditGeneratedProposal}
+                    editableProposalKeys={props.editableGeneratedProposalKeys}
                 />
             )}
 

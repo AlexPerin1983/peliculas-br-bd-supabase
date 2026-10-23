@@ -474,4 +474,128 @@ describe('PdfGenerationStatusModal', () => {
         fireEvent.click(screen.getByRole('button', { name: /Duplicar com IA/ }));
         expect(onDuplicateWithAI).toHaveBeenCalledTimes(1);
     });
+
+    describe('deslizar a linha da lista', () => {
+        const twoOptions = () => {
+            const latest = proposal(2, 'Opção 1', 438.75, '2026-10-23T10:00:00.000Z');
+            const older = proposal(1, 'Jateada', 438.75, '2026-10-22T10:00:00.000Z');
+            return { latest, older, list: [latest, older] };
+        };
+        const swipeRight = (element: HTMLElement, distance = 120) => {
+            fireEvent.touchStart(element, { touches: [{ clientX: 20, clientY: 100 }] });
+            fireEvent.touchMove(element, { touches: [{ clientX: 20 + distance / 2, clientY: 101 }] });
+            fireEvent.touchMove(element, { touches: [{ clientX: 20 + distance, clientY: 102 }] });
+            fireEvent.touchEnd(element, { changedTouches: [{ clientX: 20 + distance, clientY: 102 }] });
+        };
+        const rowOf = (name: string) => screen.getByText(name).closest('div[style*="pan-y"]') as HTMLElement;
+
+        it('mostra Renomear e Editar e não marca a opção ao deslizar', () => {
+            const { latest, older, list } = twoOptions();
+            const onEditProposal = vi.fn();
+            render(
+                <PdfGenerationStatusModal
+                    {...baseProps()}
+                    proposalForLink={{ client, pdf: latest }}
+                    clientProposals={list}
+                    preselectedPdfKeys={[getProposalKey(latest)]}
+                    onRenameProposal={vi.fn().mockResolvedValue(undefined)}
+                    onEditProposal={onEditProposal}
+                    editableProposalKeys={[getProposalKey(older)]}
+                />
+            );
+
+            const checkbox = screen.getAllByRole('checkbox')[1];
+            expect(checkbox).not.toBeChecked();
+            swipeRight(rowOf('Jateada'));
+            fireEvent.click(screen.getByText('Jateada'));
+            expect(checkbox).not.toBeChecked();
+
+            swipeRight(rowOf('Jateada'));
+            fireEvent.click(screen.getAllByRole('button', { name: /Editar/ }).find(button => button.getAttribute('tabindex') === '0')!);
+            expect(onEditProposal).toHaveBeenCalledWith(older);
+        });
+
+        it('sem a opção aberta no orçamento, oferece só Renomear', () => {
+            const { latest, list } = twoOptions();
+            render(
+                <PdfGenerationStatusModal
+                    {...baseProps()}
+                    proposalForLink={{ client, pdf: latest }}
+                    clientProposals={list}
+                    onRenameProposal={vi.fn().mockResolvedValue(undefined)}
+                    onEditProposal={vi.fn()}
+                    editableProposalKeys={[]}
+                />
+            );
+
+            swipeRight(rowOf('Jateada'));
+            expect(screen.getAllByRole('button', { name: /Renomear/ }).length).toBeGreaterThan(0);
+            expect(screen.queryByRole('button', { name: /^Editar$/ })).not.toBeInTheDocument();
+        });
+
+        it('renomeia pela linha e avisa onde o nome mudou', async () => {
+            const { latest, list } = twoOptions();
+            const onRenameProposal = vi.fn().mockResolvedValue(undefined);
+            render(
+                <PdfGenerationStatusModal
+                    {...baseProps()}
+                    proposalForLink={{ client, pdf: latest }}
+                    clientProposals={list}
+                    onRenameProposal={onRenameProposal}
+                />
+            );
+
+            swipeRight(rowOf('Opção 1'));
+            fireEvent.click(screen.getAllByRole('button', { name: /Renomear/ }).find(button => button.getAttribute('tabindex') === '0')!);
+            const input = screen.getByRole('textbox', { name: 'Novo nome para Opção 1' });
+            expect(input).toHaveValue('Opção 1');
+
+            fireEvent.change(input, { target: { value: '  Janelas   da sala ' } });
+            fireEvent.click(screen.getByRole('button', { name: 'Salvar' }));
+
+            await waitFor(() => expect(onRenameProposal).toHaveBeenCalledWith(latest, 'Janelas da sala'));
+            expect(await screen.findByText('Agora é "Janelas da sala", no PDF e no orçamento.')).toBeInTheDocument();
+            expect(screen.queryByRole('textbox', { name: /Novo nome/ })).not.toBeInTheDocument();
+        });
+
+        it('não aceita nome vazio nem repetido de outra opção', () => {
+            const { latest, list } = twoOptions();
+            const onRenameProposal = vi.fn().mockResolvedValue(undefined);
+            render(
+                <PdfGenerationStatusModal
+                    {...baseProps()}
+                    proposalForLink={{ client, pdf: latest }}
+                    clientProposals={list}
+                    onRenameProposal={onRenameProposal}
+                />
+            );
+
+            fireEvent.click(screen.getByRole('button', { name: 'Renomear Opção 1' }));
+            const input = screen.getByRole('textbox', { name: 'Novo nome para Opção 1' });
+            fireEvent.change(input, { target: { value: 'jateada' } });
+            fireEvent.click(screen.getByRole('button', { name: 'Salvar' }));
+
+            expect(screen.getByRole('alert')).toHaveTextContent('Já existe uma opção com esse nome.');
+            expect(onRenameProposal).not.toHaveBeenCalled();
+        });
+
+        it('mostra o erro do renomear e mantém o campo aberto', async () => {
+            const { latest, list } = twoOptions();
+            render(
+                <PdfGenerationStatusModal
+                    {...baseProps()}
+                    proposalForLink={{ client, pdf: latest }}
+                    clientProposals={list}
+                    onRenameProposal={vi.fn().mockRejectedValue(new Error('Preencha os dados da empresa antes de atualizar o PDF.'))}
+                />
+            );
+
+            fireEvent.click(screen.getByRole('button', { name: 'Renomear Opção 1' }));
+            fireEvent.change(screen.getByRole('textbox', { name: 'Novo nome para Opção 1' }), { target: { value: 'Sala' } });
+            fireEvent.click(screen.getByRole('button', { name: 'Salvar' }));
+
+            expect(await screen.findByRole('alert')).toHaveTextContent('Preencha os dados da empresa');
+            expect(screen.getByRole('textbox', { name: 'Novo nome para Opção 1' })).toBeInTheDocument();
+        });
+    });
 });
