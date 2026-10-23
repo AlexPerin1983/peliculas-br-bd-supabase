@@ -353,3 +353,34 @@ describe('TotalsDrawer preço personalizado', () => {
         }));
     });
 });
+
+describe('TotalsDrawer atalho Enviar ao cliente', () => {
+    const renderDrawer = (props: { generatedProposalsCount?: number; onOpenGeneratedProposals?: () => void; onClose?: () => void }) => render(<TotalsDrawer
+        isOpen
+        onClose={props.onClose ?? vi.fn()}
+        totals={totals}
+        generalDiscount={baseDiscount}
+        onUpdateGeneralDiscount={vi.fn()}
+        onGeneratePdf={vi.fn()}
+        isGeneratingPdf={false}
+        generatedProposalsCount={props.generatedProposalsCount}
+        onOpenGeneratedProposals={props.onOpenGeneratedProposals}
+    />);
+
+    it('abre as opções já geradas sem gerar outro PDF', () => {
+        const onOpen = vi.fn();
+        const onClose = vi.fn();
+        renderDrawer({ generatedProposalsCount: 2, onOpenGeneratedProposals: onOpen, onClose });
+
+        const shortcut = screen.getByRole('button', { name: /Enviar ao cliente/ });
+        expect(shortcut).toHaveTextContent('2 opções geradas');
+        fireEvent.click(shortcut);
+        expect(onClose).toHaveBeenCalled();
+        expect(onOpen).toHaveBeenCalled();
+    });
+
+    it('não aparece quando o cliente ainda não tem PDF', () => {
+        renderDrawer({ generatedProposalsCount: 0, onOpenGeneratedProposals: vi.fn() });
+        expect(screen.queryByRole('button', { name: /Enviar ao cliente/ })).not.toBeInTheDocument();
+    });
+});

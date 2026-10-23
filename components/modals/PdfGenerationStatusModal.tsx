@@ -52,6 +52,8 @@ interface PdfGenerationStatusModalProps {
     onEditProposal?: (pdf: SavedPDF) => void;
     /** Linhas cuja opção ainda está aberta no orçamento (getProposalKey): só elas têm "Editar". */
     editableProposalKeys?: string[];
+    /** Aberto pelo atalho "Enviar ao cliente": nada foi gerado agora. */
+    openedFromShortcut?: boolean;
 }
 
 const formatCurrency = (value: number) =>
@@ -227,6 +229,7 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
     onRenameProposal,
     onEditProposal,
     editableProposalKeys = [],
+    openedFromShortcut = false,
 }) => {
     const [isSharing, setIsSharing] = useState(false);
     const [previewingKey, setPreviewingKey] = useState<string | null>(null);
@@ -425,14 +428,16 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
             <div role="dialog" aria-modal="true" aria-labelledby="pdf-status-title" className="flex max-h-[calc(100dvh-2rem)] w-full max-w-sm flex-col overflow-y-auto rounded-xl bg-white p-5 shadow-xl dark:bg-slate-800">
                 <div className="flex items-center gap-3">
                     <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
-                        <i className="fas fa-check text-lg text-green-600 dark:text-green-400" aria-hidden="true"></i>
+                        <i className={`fas ${openedFromShortcut ? 'fa-paper-plane text-base' : 'fa-check text-lg'} text-green-600 dark:text-green-400`} aria-hidden="true"></i>
                     </div>
                     <div className="min-w-0">
                         <h2 id="pdf-status-title" className="text-lg font-semibold leading-tight text-slate-800 dark:text-slate-100">
-                            {cameFromDuplicate ? 'Nova opção gerada' : 'Orçamento gerado'}
+                            {openedFromShortcut ? 'Orçamentos do cliente' : cameFromDuplicate ? 'Nova opção gerada' : 'Orçamento gerado'}
                         </h2>
                         <p className="mt-0.5 truncate text-sm text-slate-500 dark:text-slate-400">
-                            {!proposalForLink
+                            {openedFromShortcut && proposalForLink
+                                ? proposalForLink.client.nome
+                                : !proposalForLink
                                 ? 'Seu PDF foi salvo.'
                                 : showsProposalPicker && !latestStillListed
                                     ? 'Escolha as opções para enviar.'
@@ -559,7 +564,7 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
                                                     <span className="min-w-0 flex-1">
                                                         <span className="flex items-center gap-1.5">
                                                             <span className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">{name}</span>
-                                                            {key === latestKey ? (
+                                                            {key === latestKey && !openedFromShortcut ? (
                                                                 <span className="shrink-0 rounded-full bg-emerald-600 px-1.5 py-0.5 text-[10px] font-bold uppercase leading-none text-white">Nova</span>
                                                             ) : null}
                                                             {isLinked ? (

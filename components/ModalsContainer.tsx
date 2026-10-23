@@ -134,6 +134,7 @@ interface ModalsContainerProps {
     handleRenameGeneratedProposal: (pdf: SavedPDF, name: string) => Promise<void>;
     handleEditGeneratedProposal: (pdf: SavedPDF) => void;
     editableGeneratedProposalKeys: string[];
+    isGeneratedListShortcut: boolean;
     handleOpenAIVariationFromGeneratedPdf?: () => void;
     isAIVariationModalOpen: boolean;
     handleCancelAIVariation: () => void;
@@ -552,6 +553,7 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
                     onRenameProposal={props.handleRenameGeneratedProposal}
                     onEditProposal={props.handleEditGeneratedProposal}
                     editableProposalKeys={props.editableGeneratedProposalKeys}
+                    openedFromShortcut={props.isGeneratedListShortcut}
                 />
             )}
 
