@@ -648,4 +648,29 @@ describe('PdfGenerationStatusModal', () => {
 
         expect(screen.getByRole('button', { name: /Enviar de novo pelo WhatsApp/ })).toBeInTheDocument();
     });
+
+    it('nome pronto: um toque preenche o campo com a película', async () => {
+        const only = {
+            ...proposal(3, 'Opcao 1', 1842.5, '2026-10-23T10:00:00.000Z'),
+            measurements: [{ id: 1, largura: '1', altura: '1', quantidade: 1, tipoAplicacao: '', pelicula: 'Pink Silver', ambiente: 'Sala', active: true }],
+        };
+        const onRenameProposal = vi.fn().mockResolvedValue(undefined);
+        render(
+            <PdfGenerationStatusModal
+                {...baseProps()}
+                proposalForLink={{ client, pdf: only }}
+                clientProposals={[only]}
+                preselectedPdfKeys={[getProposalKey(only)]}
+                onRenameProposal={onRenameProposal}
+                openedFromShortcut
+            />
+        );
+
+        fireEvent.click(screen.getByRole('button', { name: 'Renomear Opcao 1' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Pink Silver' }));
+        expect(screen.getByRole('textbox', { name: /Novo nome/ })).toHaveValue('Pink Silver');
+        expect(screen.getByRole('button', { name: 'Sala' })).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Salvar' }));
+        await waitFor(() => expect(onRenameProposal).toHaveBeenCalledWith(only, 'Pink Silver'));
+    });
 });

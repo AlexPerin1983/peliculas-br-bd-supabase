@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { Client, SavedPDF } from '../../types';
 import ProposalShareModal from './ProposalShareModal';
-import { getProposalKey } from '../../src/lib/generatedProposals';
+import { getProposalKey, suggestOptionNames } from '../../src/lib/generatedProposals';
 
 type ShareResult = 'shared' | 'downloaded' | 'unavailable';
 
@@ -502,6 +502,10 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
                                         }] : []),
                                     ];
                                     if (isRenamingRow) {
+                                        const renameSuggestions = suggestOptionNames(
+                                            pdf,
+                                            clientProposals.filter(other => getProposalKey(other) !== key).map(other => other.proposalOptionName || ''),
+                                        );
                                         return (
                                             <li key={key}>
                                                 <form
@@ -539,6 +543,27 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
                                                         <i className="fas fa-xmark text-sm" aria-hidden="true"></i>
                                                     </button>
                                                 </form>
+                                                {renameSuggestions.length > 0 ? (
+                                                    <div className="mt-2 flex flex-wrap gap-1.5 px-0.5" role="group" aria-label="Nomes prontos">
+                                                        {renameSuggestions.map(suggestion => {
+                                                            const isPicked = suggestion === renameDraft.trim();
+                                                            return (
+                                                                <button
+                                                                    key={suggestion}
+                                                                    type="button"
+                                                                    onClick={() => { setRenameDraft(suggestion); setRenameError(''); }}
+                                                                    disabled={isRenaming}
+                                                                    aria-pressed={isPicked}
+                                                                    className={`flex h-8 max-w-full items-center rounded-full border px-3 transition-colors disabled:opacity-60 ${isPicked
+                                                                        ? 'border-blue-600 bg-blue-600 text-white dark:border-blue-500 dark:bg-blue-500'
+                                                                        : 'border-slate-300 bg-white text-slate-700 hover:border-blue-400 hover:text-blue-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-blue-400 dark:hover:text-blue-300'}`}
+                                                                >
+                                                                    <span className="truncate text-xs font-semibold">{suggestion}</span>
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                ) : null}
                                                 <p className={`mt-1 px-1 text-xs ${renameError ? 'font-medium text-red-600 dark:text-red-400' : 'text-slate-500 dark:text-slate-400'}`} role={renameError ? 'alert' : undefined}>
                                                     {renameError || (isRenaming ? 'Refazendo o PDF com o nome novo…' : 'O nome muda no PDF, na aba do orçamento e na página do cliente.')}
                                                 </p>
