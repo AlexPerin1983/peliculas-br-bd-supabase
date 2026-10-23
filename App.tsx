@@ -1543,6 +1543,7 @@ const App: React.FC = () => {
         isLatestPdfUpToDate,
         findReusablePdf,
         reopenSavedPdf,
+        replaceLatestGeneratedPdf,
         isSavingBeforePdf,
         handleGeneratePdfWithSaveCheck,
         handleConfirmSaveBeforePdf,
@@ -2534,6 +2535,72 @@ Regras:
             });
         return { deleted: toDelete.length, kept: kept.length, done };
     }, [allSavedPdfs, historyPdfs, generatedClientPdfs, handleDeletePdfs, isProposalKept, loadGeneratedClientPdfs, generatedOptionIdResolver]);
+
+    // Opção da linha que ainda está aberta no orçamento (dá para editar ou renomear a aba).
+    const getEditableOptionId = useCallback((pdf: SavedPDF): number | null => {
+        if (pdf.clienteId !== selectedClientId) return null;
+        const optionId = pdf.proposalOptionId ?? generatedOptionIdResolver?.(pdf);
+        return optionId != null && proposalOptions.some(option => option.id === optionId) ? optionId : null;
+    }, [generatedOptionIdResolver, proposalOptions, selectedClientId]);
+
+    // Renomear pela lista do "Orçamento gerado" (deslizar a linha): troca o nome
+    // do PDF da linha, que é gerado de novo, e o da aba da opção, para os
+    // próximos PDFs já saírem com ele. As versões antigas sem o id da opção
+    // também mudam de nome (só o nome), senão voltariam à lista como outra opção.
+    const handleRenameGeneratedProposal = useCallback(async (pdf: SavedPDF, name: string) => {
+        const normalizedName = name.trim().replace(/\s+/g, ' ').slice(0, 80);
+        if (!normalizedName) throw new Error('Digite um nome para a opção.');
+        if (!userInfo) throw new Error('Preencha os dados da empresa antes de atualizar o PDF.');
+        const client = latestGeneratedProposal?.client.id === pdf.clienteId
+            ? latestGeneratedProposal.client
+            : clients.find(item => item.id === pdf.clienteId);
+        if (!client) throw new Error('Cliente do orçamento não encontrado.');
+
+        const { all } = getOptionVersions([...allSavedPdfs, ...historyPdfs, ...generatedClientPdfs], pdf, () => false, generatedOptionIdResolver);
+        const targetKey = getProposalKey(pdf);
+        const target = all.find(item => getProposalKey(item) === targetKey) ?? pdf;
+        const optionId = getEditableOptionId(target);
+
+        const renamedTarget: SavedPDF = { ...target, proposalOptionName: normalizedName };
+        const { regeneratePDFFromSaved } = await import('./services/pdfGenerator');
+        const blob = await regeneratePDFFromSaved(client, userInfo, renamedTarget, films);
+        const updatedTarget: SavedPDF = { ...renamedTarget, pdfBlob: blob, archivedAt: null };
+        await db.updatePDF(updatedTarget);
+
+        const renamedOlder = all.filter(item => (
+            getProposalKey(item) !== targetKey
+            && item.proposalOptionId == null
+            && item.proposalOptionName !== normalizedName
+        ));
+        // Sem o arquivo: o aparelho guarda o que já tinha e o servidor só troca o nome.
+        await Promise.all(renamedOlder.map(item => db.updatePDF({ ...item, proposalOptionName: normalizedName, pdfBlob: undefined })));
+
+        const renamedKeys = new Set(renamedOlder.map(getProposalKey));
+        const applyRename = (previous: SavedPDF[]) => previous.map(item => {
+            const key = getProposalKey(item);
+            if (key === targetKey) return { ...item, proposalOptionName: normalizedName, pdfBlob: blob, archivedAt: null };
+            return renamedKeys.has(key) ? { ...item, proposalOptionName: normalizedName } : item;
+        });
+        setAllSavedPdfs(applyRename);
+        setHistoryPdfs(applyRename);
+        generatedClientPdfsVersionRef.current += 1;
+        setGeneratedClientPdfs(applyRename);
+        if (optionId != null) handleRenameProposalOption(optionId, normalizedName);
+        replaceLatestGeneratedPdf(updatedTarget, blob);
+    }, [allSavedPdfs, clients, films, generatedClientPdfs, generatedOptionIdResolver, getEditableOptionId, handleRenameProposalOption, historyPdfs, latestGeneratedProposal, replaceLatestGeneratedPdf, userInfo]);
+
+    // Editar pela lista: fecha o "Orçamento gerado" e abre aquela opção no orçamento.
+    const handleEditGeneratedProposal = useCallback((pdf: SavedPDF) => {
+        const optionId = getEditableOptionId(pdf);
+        if (optionId == null) return;
+        setActiveOptionId(optionId);
+        setPdfGenerationStatus('idle');
+    }, [getEditableOptionId, setActiveOptionId]);
+
+    // Chaves das linhas que dá para editar (a opção ainda existe no orçamento aberto).
+    const editableGeneratedProposalKeys = useMemo(() => (
+        generatedClientProposals.filter(pdf => getEditableOptionId(pdf) != null).map(getProposalKey)
+    ), [generatedClientProposals, getEditableOptionId]);
 
     const handleConfirmDeleteMeasurementWithFeedback = useCallback(async () => {
         setIsDeletingMeasurement(true);
@@ -3710,6 +3777,9 @@ Use somente o JSON definido e não inclua explicações fora dele.`;
         handlePreviewProposal,
         handleShareProposals,
         handleDeleteGeneratedProposal,
+        handleRenameGeneratedProposal,
+        handleEditGeneratedProposal,
+        editableGeneratedProposalKeys,
         isProcessingAI,
         isAIQuickProposalModalOpen,
         setIsAIQuickProposalModalOpen,

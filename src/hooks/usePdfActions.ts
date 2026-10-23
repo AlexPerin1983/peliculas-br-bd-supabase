@@ -268,6 +268,19 @@ export function usePdfActions({
         return recallPdfSignature(getProposalKey(latest)) === hashPdfSignature(getCurrentPdfSignature()) ? latest : null;
     }, [selectedClientId, activeOption?.id, activeOption?.name, getCurrentPdfSignature]);
 
+    /**
+     * O último PDF gerado foi refeito (ex.: renomeado pela lista): o "Orçamento
+     * gerado" passa a mostrar e compartilhar o novo. A assinatura é tirada de
+     * novo no render seguinte, já com o nome novo da aba.
+     */
+    const replaceLatestGeneratedPdf = useCallback((savedPdf: SavedPDF, blob: Blob) => {
+        setLatestGeneratedPdf(current => (
+            current?.savedPdf && getProposalKey(current.savedPdf) === getProposalKey(savedPdf)
+                ? { ...current, blob, savedPdf }
+                : current
+        ));
+    }, []);
+
     /** Reabre o "Orçamento gerado" com um PDF já salvo (o arquivo vem do aparelho). */
     const reopenSavedPdf = useCallback(async (pdf: SavedPDF): Promise<boolean> => {
         const client = findPdfClient(pdf.clienteId);
@@ -544,6 +557,7 @@ export function usePdfActions({
         isLatestPdfUpToDate,
         findReusablePdf,
         reopenSavedPdf,
+        replaceLatestGeneratedPdf,
         canShareGeneratedPdf: latestGeneratedPdf !== null,
         canPreviewGeneratedPdf: latestGeneratedPdf !== null,
         latestGeneratedProposal: latestGeneratedPdf?.savedPdf && latestGeneratedPdf.client

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { Client, SavedPDF } from '../../types';
 import ProposalShareModal from './ProposalShareModal';
 import { getProposalKey } from '../../src/lib/generatedProposals';
@@ -46,6 +46,12 @@ interface PdfGenerationStatusModalProps {
     }>;
     /** Falso enquanto o histórico do cliente carrega (a lixeira ainda não sabe todas as versões). */
     canDeleteProposals?: boolean;
+    /** Troca o nome da opção (PDF refeito e aba do orçamento). Deslizar a linha para a direita. */
+    onRenameProposal?: (pdf: SavedPDF, name: string) => Promise<void>;
+    /** Abre a opção no orçamento para mudar medidas e valores. */
+    onEditProposal?: (pdf: SavedPDF) => void;
+    /** Linhas cuja opção ainda está aberta no orçamento (getProposalKey): só elas têm "Editar". */
+    editableProposalKeys?: string[];
 }
 
 const formatCurrency = (value: number) =>
@@ -75,6 +81,131 @@ const deletedMessage = (name: string, result: { deleted: number; kept: number } 
 
 const iconButton = 'flex flex-col items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-1 py-2.5 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-45 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700';
 
+interface SwipeAction {
+    key: string;
+    label: string;
+    icon: string;
+    className: string;
+    onClick: () => void;
+}
+
+const SWIPE_ACTION_WIDTH = 76;
+const SWIPE_SNAP = 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
+
+/**
+ * Linha que desliza para a direita e mostra ações à esquerda, como as medidas
+ * do orçamento. Só no toque; tocar na linha aberta fecha sem marcar a opção.
+ */
+const SwipeRow: React.FC<{
+    actions: SwipeAction[];
+    isOpen: boolean;
+    onOpenChange: (open: boolean) => void;
+    children: React.ReactNode;
+}> = ({ actions, isOpen, onOpenChange, children }) => {
+    const rowRef = useRef<HTMLDivElement>(null);
+    const gesture = useRef({ x: 0, y: 0, base: 0, axis: null as 'x' | 'y' | null, moved: false });
+    const [isDragging, setIsDragging] = useState(false);
+    const revealWidth = actions.length * SWIPE_ACTION_WIDTH;
+
+    const moveTo = (x: number, animate: boolean) => {
+        const row = rowRef.current;
+        if (!row) return;
+        row.style.transition = animate ? SWIPE_SNAP : 'none';
+        row.style.transform = `translateX(${x}px)`;
+    };
+
+    useEffect(() => {
+        moveTo(isOpen ? revealWidth : 0, true);
+    }, [isOpen, revealWidth]);
+
+    if (actions.length === 0) return <>{children}</>;
+
+    const handleTouchStart = (event: React.TouchEvent) => {
+        const touch = event.touches[0];
+        gesture.current = { x: touch.clientX, y: touch.clientY, base: isOpen ? revealWidth : 0, axis: null, moved: false };
+    };
+
+    const handleTouchMove = (event: React.TouchEvent) => {
+        const touch = event.touches[0];
+        const deltaX = touch.clientX - gesture.current.x;
+        const deltaY = touch.clientY - gesture.current.y;
+        if (gesture.current.axis === null) {
+            if (Math.abs(deltaX) > 6 && Math.abs(deltaX) > Math.abs(deltaY)) {
+                gesture.current.axis = 'x';
+                setIsDragging(true);
+            } else if (Math.abs(deltaY) > 10) {
+                gesture.current.axis = 'y';
+            }
+        }
+        if (gesture.current.axis !== 'x') return;
+        gesture.current.moved = true;
+        let x = gesture.current.base + deltaX;
+        // Resistência nas pontas: não passa para a esquerda nem muito além das ações.
+        if (x < 0) x *= 0.2;
+        if (x > revealWidth) x = revealWidth + (x - revealWidth) * 0.35;
+        moveTo(x, false);
+    };
+
+    const handleTouchEnd = (event: React.TouchEvent) => {
+        if (gesture.current.axis !== 'x') return;
+        const deltaX = (event.changedTouches[0]?.clientX ?? gesture.current.x) - gesture.current.x;
+        const x = gesture.current.base + deltaX;
+        const open = isOpen ? x > revealWidth - 40 : x > 40;
+        if (open && !isOpen && navigator.vibrate) navigator.vibrate(30);
+        moveTo(open ? revealWidth : 0, true);
+        setIsDragging(false);
+        onOpenChange(open);
+    };
+
+    // O toque que terminou um deslize (ou que fecha a linha aberta) não marca a opção.
+    const handleClickCapture = (event: React.MouseEvent) => {
+        if (gesture.current.moved || isOpen) {
+            event.preventDefault();
+            event.stopPropagation();
+            gesture.current.moved = false;
+            if (isOpen) onOpenChange(false);
+        }
+    };
+
+    return (
+        <div className="relative overflow-hidden rounded-lg">
+            <div
+                className={`absolute inset-y-0 left-0 flex overflow-hidden rounded-l-lg transition-opacity ${isOpen || isDragging ? 'opacity-100' : 'opacity-0'}`}
+                style={{ width: revealWidth }}
+                aria-hidden={!isOpen}
+            >
+                {actions.map(action => (
+                    <button
+                        key={action.key}
+                        type="button"
+                        tabIndex={isOpen ? 0 : -1}
+                        onClick={() => {
+                            onOpenChange(false);
+                            action.onClick();
+                        }}
+                        className={`flex h-full flex-col items-center justify-center gap-1 text-white transition-colors ${action.className}`}
+                        style={{ width: SWIPE_ACTION_WIDTH }}
+                    >
+                        <i className={`${action.icon} text-base`} aria-hidden="true"></i>
+                        <span className="text-[10px] font-bold uppercase">{action.label}</span>
+                    </button>
+                ))}
+            </div>
+            <div
+                ref={rowRef}
+                style={{ touchAction: 'pan-y' }}
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+                onClickCapture={handleClickCapture}
+                className="relative rounded-lg bg-white dark:bg-slate-800"
+            >
+                {children}
+            </div>
+        </div>
+    );
+};
+
 const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
     status,
     onClose,
@@ -93,6 +224,9 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
     onDeleteProposal,
     proposalVersions,
     canDeleteProposals = true,
+    onRenameProposal,
+    onEditProposal,
+    editableProposalKeys = [],
 }) => {
     const [isSharing, setIsSharing] = useState(false);
     const [previewingKey, setPreviewingKey] = useState<string | null>(null);
@@ -101,6 +235,11 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
     const [selectedKeys, setSelectedKeys] = useState<string[]>(preselectedPdfKeys);
     const [confirmingDeleteKey, setConfirmingDeleteKey] = useState<string | null>(null);
     const [deletingKey, setDeletingKey] = useState<string | null>(null);
+    const [swipedKey, setSwipedKey] = useState<string | null>(null);
+    const [renamingKey, setRenamingKey] = useState<string | null>(null);
+    const [renameDraft, setRenameDraft] = useState('');
+    const [renameError, setRenameError] = useState('');
+    const [isRenaming, setIsRenaming] = useState(false);
 
     const latestKey = proposalForLink ? getProposalKey(proposalForLink.pdf) : null;
     // Cliente com 2 ou mais opções: lista para conferir e mandar juntas. Depois
@@ -128,6 +267,8 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
             setShareMessage('');
             setLinkPdfs(null);
             setConfirmingDeleteKey(null);
+            setSwipedKey(null);
+            setRenamingKey(null);
         }
     }, [status]);
 
@@ -200,6 +341,55 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
         }
     };
 
+    const startRename = (pdf: SavedPDF) => {
+        setSwipedKey(null);
+        setConfirmingDeleteKey(null);
+        setRenamingKey(getProposalKey(pdf));
+        setRenameDraft(pdf.proposalOptionName || '');
+        setRenameError('');
+    };
+
+    const cancelRename = () => {
+        if (isRenaming) return;
+        setRenamingKey(null);
+        setRenameError('');
+    };
+
+    const submitRename = async (pdf: SavedPDF) => {
+        if (!onRenameProposal || isRenaming) return;
+        const name = renameDraft.trim().replace(/\s+/g, ' ');
+        const key = getProposalKey(pdf);
+        if (!name) {
+            setRenameError('Digite um nome para a opção.');
+            return;
+        }
+        if (name === (pdf.proposalOptionName || '').trim()) {
+            setRenamingKey(null);
+            return;
+        }
+        // Dois nomes iguais confundem a lista e o cliente.
+        const taken = clientProposals.some(other => (
+            getProposalKey(other) !== key
+            && (other.proposalOptionName || '').trim().toLocaleLowerCase('pt-BR') === name.toLocaleLowerCase('pt-BR')
+        ));
+        if (taken) {
+            setRenameError('Já existe uma opção com esse nome.');
+            return;
+        }
+        setIsRenaming(true);
+        setRenameError('');
+        setShareMessage('');
+        try {
+            await onRenameProposal(pdf, name);
+            setRenamingKey(null);
+            setShareMessage(`Agora é "${name}", no PDF e no orçamento.`);
+        } catch (error) {
+            setRenameError((error as Error)?.message || 'Não foi possível renomear. Tente novamente.');
+        } finally {
+            setIsRenaming(false);
+        }
+    };
+
     if (status === 'generating') {
         return (
             <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
@@ -265,6 +455,9 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
                             {onPreviewProposal
                                 ? 'Marque as opções para enviar. Toque no olho para conferir o PDF de cada uma.'
                                 : 'Marque as opções para enviar ao cliente.'}
+                            {onRenameProposal ? (
+                                <span className="sm:hidden"> Deslize uma opção para a direita para renomear{onEditProposal && editableProposalKeys.length > 0 ? ' ou editar' : ''}.</span>
+                            ) : null}
                         </p>
 
                         {clientProposals.length === 0 ? (
@@ -284,8 +477,73 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
                                     const isLocked = !!proposalVersions?.[key]?.locked;
                                     const lockedByLink = proposalVersions?.[key]?.lockedBy === 'link';
                                     const isLinked = !!proposalVersions?.[key]?.linked;
+                                    const isRenamingRow = renamingKey === key;
+                                    const swipeActions: SwipeAction[] = isRenamingRow ? [] : [
+                                        ...(onRenameProposal ? [{
+                                            key: 'rename',
+                                            label: 'Renomear',
+                                            icon: 'fas fa-i-cursor',
+                                            className: 'bg-slate-600 hover:bg-slate-700',
+                                            onClick: () => startRename(pdf),
+                                        }] : []),
+                                        ...(onEditProposal && editableProposalKeys.includes(key) ? [{
+                                            key: 'edit',
+                                            label: 'Editar',
+                                            icon: 'fas fa-pen',
+                                            className: 'bg-blue-600 hover:bg-blue-700',
+                                            onClick: () => onEditProposal(pdf),
+                                        }] : []),
+                                    ];
+                                    if (isRenamingRow) {
+                                        return (
+                                            <li key={key}>
+                                                <form
+                                                    onSubmit={event => { event.preventDefault(); void submitRename(pdf); }}
+                                                    className="flex items-center gap-2 rounded-lg border border-blue-400 bg-white p-1.5 dark:border-blue-500 dark:bg-slate-900"
+                                                >
+                                                    <input
+                                                        type="text"
+                                                        value={renameDraft}
+                                                        onChange={event => { setRenameDraft(event.target.value); if (renameError) setRenameError(''); }}
+                                                        onKeyDown={event => { if (event.key === 'Escape') cancelRename(); }}
+                                                        maxLength={80}
+                                                        autoFocus
+                                                        disabled={isRenaming}
+                                                        aria-label={`Novo nome para ${name}`}
+                                                        placeholder="Ex.: Janelas da sala"
+                                                        style={{ fontSize: 16 }}
+                                                        className="h-10 min-w-0 flex-1 rounded-md border border-slate-200 bg-slate-50 px-2.5 text-slate-800 outline-none focus:border-blue-500 focus:bg-white dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                                                    />
+                                                    <button
+                                                        type="submit"
+                                                        disabled={isRenaming || !renameDraft.trim()}
+                                                        className="flex h-10 shrink-0 items-center rounded-md bg-blue-600 px-3 text-white transition-colors hover:bg-blue-700 disabled:opacity-60"
+                                                    >
+                                                        <span className="text-xs font-semibold">{isRenaming ? 'Salvando…' : 'Salvar'}</span>
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={cancelRename}
+                                                        disabled={isRenaming}
+                                                        aria-label="Cancelar renomear"
+                                                        className="flex h-10 w-9 shrink-0 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700"
+                                                    >
+                                                        <i className="fas fa-xmark text-sm" aria-hidden="true"></i>
+                                                    </button>
+                                                </form>
+                                                <p className={`mt-1 px-1 text-xs ${renameError ? 'font-medium text-red-600 dark:text-red-400' : 'text-slate-500 dark:text-slate-400'}`} role={renameError ? 'alert' : undefined}>
+                                                    {renameError || (isRenaming ? 'Refazendo o PDF com o nome novo…' : 'O nome muda no PDF, na aba do orçamento e na página do cliente.')}
+                                                </p>
+                                            </li>
+                                        );
+                                    }
                                     return (
                                         <li key={key}>
+                                            <SwipeRow
+                                                actions={swipeActions}
+                                                isOpen={swipedKey === key}
+                                                onOpenChange={open => setSwipedKey(current => (open ? key : current === key ? null : current))}
+                                            >
                                             <div className={`flex items-center rounded-lg border transition-colors ${isSelected
                                                 ? 'border-emerald-400 bg-emerald-50 dark:border-emerald-700 dark:bg-emerald-950/30'
                                                 : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900/60'}`}
@@ -329,6 +587,17 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
                                                         <i className={`fas ${previewingKey === key ? 'fa-spinner fa-spin' : 'fa-eye'} text-sm`} aria-hidden="true"></i>
                                                     </button>
                                                 ) : null}
+                                                {onRenameProposal ? (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => startRename(pdf)}
+                                                        aria-label={`Renomear ${name}`}
+                                                        title="Renomear"
+                                                        className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-100 sm:flex"
+                                                    >
+                                                        <i className="fas fa-i-cursor text-sm" aria-hidden="true"></i>
+                                                    </button>
+                                                ) : null}
                                                 {onDeleteProposal ? (
                                                     <button
                                                         type="button"
@@ -343,6 +612,7 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
                                                     </button>
                                                 ) : null}
                                             </div>
+                                            </SwipeRow>
                                             {isConfirming ? (
                                                 <div role="alertdialog" aria-label={`Confirmar exclusão de ${name}`} className="mt-1 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 dark:border-red-900/60 dark:bg-red-950/30">
                                                     <span className="min-w-0 flex-1 text-xs font-medium text-red-800 dark:text-red-200">
