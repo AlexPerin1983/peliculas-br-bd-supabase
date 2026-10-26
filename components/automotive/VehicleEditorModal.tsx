@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { AlertTriangle, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
+import { AlertTriangle, Check, ChevronLeft, ChevronRight, Search, Trash2 } from 'lucide-react';
 import Modal from '../ui/Modal';
 import ActionButton from '../ui/ActionButton';
 import VehicleCategoryIcon from './VehicleCategoryIcon';
@@ -11,6 +11,10 @@ import {
     VEHICLE_CATEGORIES,
     formatMoneyInput,
     getAutomotiveFilmShortName,
+    getDefaultRemovalPrice,
+    getVehicleCategoryInfo,
+    getVehicleRemovalPrice,
+    getVehicleTotal,
     getAutomotiveTablePrice,
     getShadeOptions,
     getVehicleAppliedParts,
@@ -57,6 +61,7 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
     const [error, setError] = useState('');
     // Lista vidro a vidro (% e valor de cada um), aberta só quando o usuário pede.
     const [isListOpen, setIsListOpen] = useState(false);
+    const [removalText, setRemovalText] = useState<string | undefined>(undefined);
 
     useEffect(() => {
         if (!isOpen) return;
@@ -75,6 +80,7 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
         setPartTexts({});
         setError('');
         setIsListOpen(false);
+        setRemovalText(undefined);
         // Só ao abrir: mudar a tabela com o modal aberto não reinicia o rascunho.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen, vehicle]);
@@ -221,11 +227,36 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
         const vidros = Object.fromEntries(
             Object.entries(draft.vidros || {}).filter(([part]) => appliedParts.includes(part as VehicleGlassPart))
         ) as AutomotiveVehicle['vidros'];
+        const texto = draft.observacoes?.texto?.trim();
+        const observacoes = draft.observacoes ? { ...draft.observacoes, texto: texto || undefined } : undefined;
+        const hasNotes = Boolean(observacoes?.removerAntiga || observacoes?.riscoPrevio || observacoes?.texto);
         onSave({
             ...draft,
             modelo: draft.modelo.trim(),
+            observacoes: hasNotes ? observacoes : undefined,
             vidros: vidros && Object.keys(vidros).length > 0 ? vidros : undefined,
         });
+    };
+
+    // Observações rápidas. Marcar a remoção já traz o valor sugerido da tabela.
+    const notes = draft.observacoes || {};
+    const updateNotes = (patch: Partial<NonNullable<AutomotiveVehicle['observacoes']>>) => {
+        const next = { ...notes, ...patch };
+        const hasNotes = next.removerAntiga || next.riscoPrevio || next.texto !== undefined;
+        commit({ ...draft, observacoes: hasNotes ? next : undefined });
+    };
+    const handleToggleRemoval = () => {
+        if (notes.removerAntiga) {
+            updateNotes({ removerAntiga: false });
+            return;
+        }
+        const value = notes.valorRemocao ?? getDefaultRemovalPrice(settings);
+        setRemovalText(formatMoneyInput(value));
+        updateNotes({ removerAntiga: true, valorRemocao: value });
+    };
+    const handleRemovalPriceChange = (value: string) => {
+        setRemovalText(value);
+        updateNotes({ valorRemocao: parseMoneyInput(value) ?? 0 });
     };
 
     // Carro salvo com outra película (nome antigo) continua aparecendo para não perder a escolha.
@@ -237,19 +268,28 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
     const commonShade = sideParts.length > 0 && sideParts.every(part => draft.vidros?.[part] === draft.vidros?.[sideParts[0]])
         ? draft.vidros?.[sideParts[0]]
         : undefined;
+    const categoryLabel = getVehicleCategoryInfo(draft.categoria).label;
+    const suggestedCategory = suggestVehicleCategory(draft.modelo);
+    const removalPrice = getVehicleRemovalPrice(draft);
+    const total = getVehicleTotal(draft);
 
     const applicationOptions: { id: Application; title: string; price: string }[] = [
         { id: 'completo', title: 'Carro completo', price: tableSem !== undefined ? formatCurrencyBR(tableSem) : 'sem preço na tabela' },
-        { id: 'completo_parabrisa', title: 'Completo + para-brisa', price: tableCom !== undefined ? formatCurrencyBR(tableCom) : 'sem preço na tabela' },
-        { id: 'partes', title: 'Só algumas partes', price: isPartsMode ? formatCurrencyBR(draft.preco) : 'valor por vidro' },
+        { id: 'completo_parabrisa', title: '+ Para-brisa', price: tableCom !== undefined ? formatCurrencyBR(tableCom) : 'sem preço na tabela' },
+        { id: 'partes', title: 'Por partes', price: isPartsMode ? formatCurrencyBR(draft.preco) : 'valor por vidro' },
     ];
 
-    const glassSummary = appliedParts.length === 0
-        ? 'Nenhum vidro com película'
-        : `${appliedParts.length} ${appliedParts.length === 1 ? 'vidro' : 'vidros'} com película${commonShade ? ` · ${commonShade === 'faixa' ? 'faixa' : `${commonShade}%`}` : sideParts.length > 0 && sideParts.some(part => draft.vidros?.[part]) ? ' · % por vidro' : ''}`;
-    const lawSummary = lawWarnings.length > 0
-        ? `Abaixo da lei: ${lawWarnings.map(info => info.label).join(', ')}`
-        : 'Toque para ver vidro a vidro';
+    const glassSummary = lawWarnings.length > 0
+        ? `Abaixo da lei: ${lawWarnings.map(info => info.id.toUpperCase()).join(', ')}`
+        : appliedParts.length === 0
+            ? 'Nenhum vidro marcado'
+            : `${appliedParts.length} ${appliedParts.length === 1 ? 'vidro' : 'vidros'} com película`;
+
+    const noteChips: { id: 'remover' | 'risco' | 'texto'; label: string; checked: boolean; onToggle: () => void }[] = [
+        { id: 'remover', label: 'Remover película antiga', checked: Boolean(notes.removerAntiga), onToggle: handleToggleRemoval },
+        { id: 'risco', label: 'Vidro com risco ou trinca', checked: Boolean(notes.riscoPrevio), onToggle: () => updateNotes({ riscoPrevio: !notes.riscoPrevio }) },
+        { id: 'texto', label: 'Observação', checked: notes.texto !== undefined, onToggle: () => updateNotes({ texto: notes.texto === undefined ? '' : undefined }) },
+    ];
 
     const footer = (
         <div className="flex w-full items-center gap-2">
@@ -269,8 +309,8 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
                 </span>
                 <span className="flex items-baseline gap-1">
                     <span className="text-sm font-bold text-[var(--text-muted)]">R$</span>
-                    {isPartsMode ? (
-                        <span className="truncate text-2xl font-black text-[var(--text-strong)]">{formatMoneyInput(draft.preco)}</span>
+                    {isPartsMode || removalPrice > 0 ? (
+                        <span className="truncate text-2xl font-black tracking-tight text-[var(--text-strong)]">{formatMoneyInput(total)}</span>
                     ) : (
                         <input
                             type="text"
@@ -285,11 +325,15 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
                         />
                     )}
                 </span>
-                {!isPartsMode && isPriceTouched && tablePrice !== undefined && draft.preco !== tablePrice && (
+                {removalPrice > 0 ? (
+                    <span className="truncate text-[11px] text-[var(--text-muted)]">
+                        vidros {formatCurrencyBR(draft.preco)} + remoção {formatCurrencyBR(removalPrice)}
+                    </span>
+                ) : !isPartsMode && isPriceTouched && tablePrice !== undefined && draft.preco !== tablePrice ? (
                     <button type="button" onClick={handleUseTablePrice} className="self-start text-[var(--brand-primary)]">
                         <span className="text-[11px] font-semibold">ajustado · usar tabela ({formatCurrencyBR(tablePrice)})</span>
                     </button>
-                )}
+                ) : null}
             </label>
             {isListOpen ? (
                 <ActionButton variant="primary" size="lg" onClick={() => setIsListOpen(false)}>Pronto</ActionButton>
@@ -299,11 +343,18 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
         </div>
     );
 
+    const title = isListOpen ? 'Vidro a vidro' : (
+        <span className="block">
+            <span className="block">{vehicle ? 'Editar carro' : 'Novo carro'}</span>
+            <span className="block text-xs font-normal text-[var(--text-muted)]">{categoryLabel} · {draft.pelicula}</span>
+        </span>
+    );
+
     return (
         <Modal
             isOpen={isOpen}
             onClose={onClose}
-            title={isListOpen ? 'Vidro a vidro' : (vehicle ? 'Editar carro' : 'Novo carro')}
+            title={title}
             footer={footer}
             keyboardAwareFooter
         >
@@ -379,16 +430,24 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
                     )}
                 </div>
             ) : (
-                <div className="space-y-3">
-                    <input
-                        type="text"
-                        value={draft.modelo}
-                        onChange={event => handleModelChange(event.target.value)}
-                        placeholder="Carro (ex.: Jeep Compass 2022)"
-                        aria-label="Carro"
-                        autoComplete="off"
-                        className="ui-field block h-11 w-full px-3 text-[15px] font-semibold"
-                    />
+                <div className="space-y-2.5">
+                    <div className="ui-field flex h-11 items-center gap-2 px-3">
+                        <Search className="h-4 w-4 shrink-0 text-[var(--text-soft)]" aria-hidden="true" />
+                        <input
+                            type="text"
+                            value={draft.modelo}
+                            onChange={event => handleModelChange(event.target.value)}
+                            placeholder="Carro (ex.: Jeep Compass 2022)"
+                            aria-label="Carro"
+                            autoComplete="off"
+                            className="min-w-0 flex-1 bg-transparent text-[15px] font-semibold text-[var(--text-strong)] outline-none"
+                        />
+                        {suggestedCategory && suggestedCategory === draft.categoria && !isCategoryTouched && (
+                            <span className="shrink-0 rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-bold text-blue-700 dark:bg-blue-950/50 dark:text-blue-300">
+                                {getVehicleCategoryInfo(suggestedCategory).shortLabel} sugerido
+                            </span>
+                        )}
+                    </div>
 
                     <div className="grid grid-cols-6 gap-1" role="group" aria-label="Categoria">
                         {VEHICLE_CATEGORIES.map(category => {
@@ -401,18 +460,18 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
                                     aria-label={category.label}
                                     title={category.label}
                                     onClick={() => handleCategoryChange(category.id)}
-                                    className={`flex h-[58px] flex-col items-center justify-center gap-0.5 rounded-[var(--radius-control)] px-0.5 transition-colors active:scale-[0.98] ${isSelected
-                                        ? 'border-2 border-[var(--brand-primary)] bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300'
-                                        : 'border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-strong)]'}`}
+                                    className={`flex h-14 flex-col items-center justify-center gap-0.5 rounded-[var(--radius-control)] px-0.5 transition-colors active:scale-[0.98] ${isSelected
+                                        ? 'border-[1.5px] border-[var(--brand-primary)] bg-blue-50 text-blue-700 shadow-[0_2px_6px_rgba(37,99,235,0.15)] dark:bg-blue-950/40 dark:text-blue-300'
+                                        : 'border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-body)]'}`}
                                 >
-                                    <VehicleCategoryIcon category={category.id} className="h-[22px] w-[46px]" />
+                                    <VehicleCategoryIcon category={category.id} className="h-[21px] w-11" />
                                     <span className="text-[10.5px] font-bold leading-tight">{category.shortLabel}</span>
                                 </button>
                             );
                         })}
                     </div>
 
-                    <div className="grid gap-[3px] rounded-[var(--radius-control)] bg-[var(--surface-muted)] p-[3px]" style={{ gridTemplateColumns: `repeat(${filmOptions.length}, minmax(0, 1fr))` }} role="group" aria-label="Película">
+                    <div className="grid gap-[3px] rounded-[var(--radius-control)] bg-slate-200/70 p-[3px] dark:bg-slate-800" style={{ gridTemplateColumns: `repeat(${filmOptions.length}, minmax(0, 1fr))` }} role="group" aria-label="Película">
                         {filmOptions.map(film => {
                             const isSelected = draft.pelicula === film;
                             return (
@@ -422,27 +481,26 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
                                     aria-pressed={isSelected}
                                     aria-label={film}
                                     onClick={() => handleBaseChange({ pelicula: film })}
-                                    className={`h-9 truncate rounded-[calc(var(--radius-control)-3px)] px-1 text-[13px] font-bold transition-colors ${isSelected
-                                        ? 'bg-[var(--surface-raised)] text-[var(--text-strong)] shadow-[var(--shadow-hairline)]'
+                                    className={`h-[34px] truncate rounded-[calc(var(--radius-control)-3px)] px-1 transition-colors ${isSelected
+                                        ? 'bg-[var(--surface-raised)] text-[var(--text-strong)] shadow-[0_1px_3px_rgba(15,23,42,0.15)]'
                                         : 'text-[var(--text-muted)]'}`}
                                 >
-                                    {getAutomotiveFilmShortName(film)}
+                                    <span className="text-[12.5px] font-bold">{getAutomotiveFilmShortName(film)}</span>
                                 </button>
                             );
                         })}
                     </div>
 
-                    <div className="flex items-start gap-2.5">
-                        <div className="flex shrink-0 flex-col items-center gap-0.5">
+                    <div className="flex items-stretch gap-2.5 rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface)] p-2.5 shadow-[var(--shadow-hairline)]">
+                        <div className="shrink-0">
                             <VehicleTopView
                                 categoria={draft.categoria}
                                 parts={categoryParts}
                                 vidros={draft.vidros}
                                 applied={appliedParts}
                                 onTogglePart={handleTogglePart}
-                                width={150}
+                                width={140}
                             />
-                            <span className="text-[10.5px] text-[var(--text-muted)]">Toque no vidro</span>
                         </div>
 
                         <div className="flex min-w-0 flex-1 flex-col gap-1.5">
@@ -455,10 +513,18 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
                                         type="button"
                                         aria-pressed={isSelected}
                                         onClick={() => handleApplication(option.id)}
-                                        className={`${optionButtonClass(isSelected)} flex min-h-[50px] flex-col items-start justify-center px-2.5 py-1 text-left`}
+                                        className={`flex min-h-12 items-center justify-between gap-1.5 rounded-[var(--radius-control)] px-2.5 py-1 text-left transition-colors ${isSelected
+                                            ? 'border-[1.5px] border-[var(--brand-primary)] bg-blue-50 dark:bg-blue-950/40'
+                                            : 'border border-[var(--border-subtle)] bg-[var(--surface)]'}`}
                                     >
-                                        <span className="text-[13px] font-extrabold leading-tight text-[var(--text-strong)]">{option.title}</span>
-                                        <span className={`text-xs font-semibold ${isSelected ? 'text-blue-700 dark:text-blue-300' : 'text-[var(--text-muted)]'}`}>{option.price}</span>
+                                        <span className="min-w-0">
+                                            <span className="block text-[12.5px] font-extrabold leading-tight text-[var(--text-strong)]">{option.title}</span>
+                                            <span className={`block text-[11.5px] font-semibold ${isSelected ? 'text-blue-700 dark:text-blue-300' : 'text-[var(--text-muted)]'}`}>{option.price}</span>
+                                        </span>
+                                        <span
+                                            aria-hidden="true"
+                                            className={`h-4 w-4 shrink-0 rounded-full bg-white dark:bg-slate-900 ${isSelected ? 'border-[5px] border-[var(--brand-primary)]' : 'border-[1.5px] border-slate-300 dark:border-slate-600'}`}
+                                        />
                                     </button>
                                 );
                             })}
@@ -474,37 +540,83 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
                                             aria-pressed={isSelected}
                                             disabled={sideParts.length === 0}
                                             onClick={() => handleShadeAll(shade)}
-                                            className={`h-[34px] rounded-full border-[1.5px] text-[12.5px] font-extrabold transition-colors disabled:opacity-40 ${isSelected
-                                                ? 'border-[var(--brand-primary)] bg-[var(--brand-primary)] text-white'
-                                                : 'border-blue-200 bg-[var(--surface)] text-blue-700 dark:border-blue-800 dark:text-blue-300'}`}
+                                            className={`h-8 rounded-full border transition-colors disabled:opacity-40 ${isSelected
+                                                ? 'border-slate-900 bg-slate-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900'
+                                                : 'border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-strong)]'}`}
                                         >
-                                            {shade}%
+                                            <span className="text-xs font-extrabold">{shade}%</span>
                                         </button>
                                     );
                                 })}
                                 <button
                                     type="button"
                                     onClick={() => setIsListOpen(true)}
-                                    className="h-[34px] rounded-full border-[1.5px] border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-body)]"
+                                    className="h-8 rounded-full border border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-body)]"
                                 >
-                                    <span className="text-xs font-bold">Ajustar</span>
+                                    <span className="text-[11.5px] font-bold">Ajustar</span>
                                 </button>
                             </div>
+                            <button
+                                type="button"
+                                onClick={() => setIsListOpen(true)}
+                                className={`mt-auto flex items-center gap-1 text-left ${lawWarnings.length > 0 ? 'text-orange-700 dark:text-orange-300' : 'text-[var(--text-muted)]'}`}
+                            >
+                                {lawWarnings.length > 0 && <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
+                                <span className="truncate text-[11px] font-semibold">{glassSummary}</span>
+                                <ChevronRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                            </button>
                         </div>
                     </div>
 
-                    <button
-                        type="button"
-                        onClick={() => setIsListOpen(true)}
-                        className="flex min-h-12 w-full items-center gap-2.5 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] px-3 py-1.5 text-left"
-                    >
-                        <span className="min-w-0 flex-1">
-                            <span className="block truncate text-[12.5px] font-bold text-[var(--text-strong)]">{glassSummary}</span>
-                            <span className={`block truncate text-[11.5px] ${lawWarnings.length > 0 ? 'text-orange-700 dark:text-orange-300' : 'text-[var(--text-muted)]'}`}>{lawSummary}</span>
-                        </span>
-                        {lawWarnings.length > 0 && <AlertTriangle className="h-4 w-4 shrink-0 text-orange-600" aria-hidden="true" />}
-                        <ChevronRight className="h-4 w-4 shrink-0 text-[var(--text-muted)]" aria-hidden="true" />
-                    </button>
+                    <div className="space-y-1.5">
+                        <span className="block text-[10.5px] font-bold uppercase tracking-[0.08em] text-[var(--text-muted)]">Observações</span>
+                        <div className="flex flex-wrap gap-1.5">
+                            {noteChips.map(chip => (
+                                <button
+                                    key={chip.id}
+                                    type="button"
+                                    aria-pressed={chip.checked}
+                                    onClick={chip.onToggle}
+                                    className={`inline-flex h-[34px] items-center gap-1.5 rounded-full pl-2 pr-3 transition-colors ${chip.checked
+                                        ? 'border-[1.5px] border-[var(--brand-primary)] bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300'
+                                        : 'border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-body)]'}`}
+                                >
+                                    <span
+                                        aria-hidden="true"
+                                        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-[5px] ${chip.checked ? 'bg-[var(--brand-primary)] text-white' : 'border-[1.5px] border-slate-300 bg-white dark:border-slate-600 dark:bg-slate-900'}`}
+                                    >
+                                        {chip.checked && <Check className="h-3 w-3" strokeWidth={3} />}
+                                    </span>
+                                    <span className="text-[12.5px] font-bold">{chip.label}</span>
+                                </button>
+                            ))}
+                        </div>
+                        {notes.removerAntiga && (
+                            <label className="flex h-[38px] items-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] px-3">
+                                <span className="flex-1 text-[12.5px] text-[var(--text-muted)]">Remoção (soma no preço)</span>
+                                <span className="text-xs font-bold text-[var(--text-muted)]">+ R$</span>
+                                <input
+                                    type="text"
+                                    inputMode="decimal"
+                                    value={removalText ?? formatMoneyInput(notes.valorRemocao)}
+                                    onChange={event => handleRemovalPriceChange(event.target.value)}
+                                    placeholder="0,00"
+                                    aria-label="Valor da remoção"
+                                    className="w-20 bg-transparent text-right text-sm font-extrabold text-[var(--text-strong)] outline-none"
+                                />
+                            </label>
+                        )}
+                        {notes.texto !== undefined && (
+                            <input
+                                type="text"
+                                value={notes.texto}
+                                onChange={event => updateNotes({ texto: event.target.value })}
+                                placeholder="Ex.: não mexer no adesivo do vidro traseiro"
+                                aria-label="Observação"
+                                className="ui-field block h-[38px] w-full px-3 text-[13px]"
+                            />
+                        )}
+                    </div>
 
                     {error && <p role="alert" className="text-sm font-semibold text-[var(--danger)]">{error}</p>}
                 </div>

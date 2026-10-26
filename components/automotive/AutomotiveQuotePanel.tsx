@@ -8,6 +8,8 @@ import {
     describeVehiclePackage,
     getVehicleCategoryInfo,
     getVehicleLawWarnings,
+    getVehicleTotal,
+    describeVehicleNotes,
     sumAutomotiveVehicles,
 } from '../../src/lib/automotive';
 
@@ -69,10 +71,11 @@ const AutomotiveQuotePanel: React.FC<AutomotiveQuotePanelProps> = ({ vehicles, o
                                         {category.label} · {vehicle.pelicula} · {describeVehiclePackage(vehicle).replace('Completo ', '').toLowerCase()}
                                     </span>
                                     {glass && <span className="block truncate text-xs text-[var(--text-muted)]">{glass}</span>}
+                                    {describeVehicleNotes(vehicle) && <span className="block truncate text-xs text-[var(--text-muted)]">{describeVehicleNotes(vehicle)}</span>}
                                 </span>
                                 <span className="flex shrink-0 items-center gap-1.5">
                                     {hasLawWarning && <AlertTriangle className="h-4 w-4 text-orange-600" aria-label="Algum vidro abaixo do mínimo da lei" />}
-                                    <span className="text-sm font-black text-[var(--text-strong)]">{formatCurrencyBR(vehicle.preco)}</span>
+                                    <span className="text-sm font-black text-[var(--text-strong)]">{formatCurrencyBR(getVehicleTotal(vehicle))}</span>
                                     <ChevronRight className="h-4 w-4 text-[var(--text-muted)]" aria-hidden="true" />
                                 </span>
                             </button>

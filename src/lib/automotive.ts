@@ -283,11 +283,38 @@ export const formatMoneyInput = (value: number | undefined): string => (
         : ''
 );
 
-export const sumAutomotiveVehicles = (vehicles: AutomotiveVehicle[] | undefined): number => roundCurrency(
-    (vehicles || []).reduce((sum, vehicle) => (
-        sum + (Number.isFinite(vehicle.preco) && vehicle.preco > 0 ? vehicle.preco : 0)
-    ), 0)
+// Valor da remoção da película antiga quando marcada (soma no carro).
+export const getVehicleRemovalPrice = (vehicle: Pick<AutomotiveVehicle, 'observacoes'>): number => {
+    const value = vehicle.observacoes?.valorRemocao;
+    return vehicle.observacoes?.removerAntiga && typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0;
+};
+
+// O que se cobra pelo carro: vidros (preco) + remoção da película antiga.
+export const getVehicleTotal = (vehicle: Pick<AutomotiveVehicle, 'preco' | 'observacoes'>): number => roundCurrency(
+    (Number.isFinite(vehicle.preco) && vehicle.preco > 0 ? vehicle.preco : 0) + getVehicleRemovalPrice(vehicle)
 );
+
+export const sumAutomotiveVehicles = (vehicles: AutomotiveVehicle[] | undefined): number => roundCurrency(
+    (vehicles || []).reduce((sum, vehicle) => sum + getVehicleTotal(vehicle), 0)
+);
+
+// Sugestão da tabela para a remoção; sem valor salvo, R$ 80,00.
+export const DEFAULT_REMOVAL_PRICE = 80;
+export const getDefaultRemovalPrice = (settings: AutomotiveSettings | undefined): number => (
+    typeof settings?.valorRemocao === 'number' && settings.valorRemocao >= 0 ? settings.valorRemocao : DEFAULT_REMOVAL_PRICE
+);
+
+// "Remover película antiga (+ R$ 80,00) · Vidro com risco ou trinca antes do serviço · Obs.: ..."
+export const describeVehicleNotes = (vehicle: Pick<AutomotiveVehicle, 'observacoes'>): string => {
+    const notes = vehicle.observacoes;
+    if (!notes) return '';
+    const removal = getVehicleRemovalPrice(vehicle);
+    return [
+        notes.removerAntiga ? `Remover película antiga${removal > 0 ? ` (+ R$ ${formatMoneyInput(removal)})` : ''}` : '',
+        notes.riscoPrevio ? 'Vidro com risco ou trinca antes do serviço' : '',
+        notes.texto?.trim() ? `Obs.: ${notes.texto.trim()}` : '',
+    ].filter(Boolean).join(' · ');
+};
 
 // Modelos comuns no Brasil para já marcar a categoria; o instalador sempre pode trocar.
 const MODEL_CATEGORY_HINTS: [string, VehicleCategory][] = [

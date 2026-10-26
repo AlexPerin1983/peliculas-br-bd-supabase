@@ -143,6 +143,25 @@ const renderShape = (shape: GlassShape, props: React.SVGProps<SVGElement>) => (
         : <rect x={shape.x} y={shape.y} width={shape.w} height={shape.h} rx={shape.rx} {...(props as React.SVGProps<SVGRectElement>)} />
 );
 
+// Carroceria com a frente um pouco mais estreita e as pontas arredondadas (mais cara de carro que um retângulo).
+const bodyPath = ({ x, y, w, h, rx }: Rect): string => [
+    `M${x + rx} ${y}`,
+    `Q${x + w / 2} ${y - 8} ${x + w - rx} ${y}`,
+    `Q${x + w - 6} ${y + 8} ${x + w - 2} ${y + rx + 10}`,
+    `L${x + w} ${y + h - rx}`,
+    `Q${x + w} ${y + h} ${x + w - rx} ${y + h}`,
+    `Q${x + w / 2} ${y + h + 6} ${x + rx} ${y + h}`,
+    `Q${x} ${y + h} ${x} ${y + h - rx}`,
+    `L${x + 2} ${y + rx + 10}`,
+    `Q${x + 6} ${y + 8} ${x + rx} ${y}`,
+    'Z',
+].join(' ');
+
+// Retrovisor em gota, colado na lateral.
+const mirrorPath = (sideX: number, y: number, direction: 1 | -1): string => (
+    `M${sideX} ${y - 6} Q${sideX - 14 * direction} ${y - 8} ${sideX - 14 * direction} ${y} Q${sideX - 12 * direction} ${y + 6} ${sideX} ${y + 4} Z`
+);
+
 // Carro visto de cima com um círculo por vidro: tocar coloca ou tira a película daquele vidro.
 const VehicleTopView: React.FC<VehicleTopViewProps> = ({ categoria, parts, vidros, applied, onTogglePart, width = 216 }) => {
     const scale = width / 240;
@@ -154,15 +173,18 @@ const VehicleTopView: React.FC<VehicleTopViewProps> = ({ categoria, parts, vidro
     return (
         <div className="relative mx-auto" style={{ width, height: Math.round(440 * scale) }}>
             <svg viewBox="0 0 240 440" className="absolute inset-0 h-full w-full" aria-hidden="true">
-                <rect x={body.x + 5} y={body.y + 7} width={body.w} height={body.h} rx={body.rx} className="fill-slate-200 dark:fill-slate-800" />
-                {[body.x - 8, body.x + body.w + 8].map(cx => (
-                    <ellipse key={cx} cx={cx} cy={drawing.mirrorY} rx={9} ry={5} className="fill-white stroke-gray-800 dark:fill-slate-900 dark:stroke-slate-300" strokeWidth={2.5} />
+                <path d={bodyPath(body)} transform="translate(4 7)" className="fill-slate-200 dark:fill-slate-800" />
+                {([[body.x + 2, 1], [body.x + body.w - 2, -1]] as const).map(([sideX, direction]) => (
+                    <path key={sideX} d={mirrorPath(sideX, drawing.mirrorY, direction)} className="fill-white stroke-gray-800 dark:fill-slate-900 dark:stroke-slate-300" strokeWidth={2.5} strokeLinejoin="round" />
                 ))}
-                <rect x={body.x} y={body.y} width={body.w} height={body.h} rx={body.rx} className="fill-white stroke-gray-800 dark:fill-slate-900 dark:stroke-slate-300" strokeWidth={3} />
+                <path d={bodyPath(body)} className="fill-white stroke-gray-800 dark:fill-slate-900 dark:stroke-slate-300" strokeWidth={3} />
+                {!bed && (
+                    <path d={`M${body.x + 34} ${body.y + body.h - 14} Q${body.x + body.w / 2} ${body.y + body.h - 8} ${body.x + body.w - 34} ${body.y + body.h - 14}`} fill="none" className="stroke-slate-300 dark:stroke-slate-600" strokeWidth={2} strokeLinecap="round" />
+                )}
                 {drawing.lines.map(d => (
-                    <path key={d} d={d} fill="none" className="stroke-slate-300 dark:stroke-slate-600" strokeWidth={2} />
+                    <path key={d} d={d} fill="none" className="stroke-slate-300 dark:stroke-slate-600" strokeWidth={2} strokeLinecap="round" />
                 ))}
-                <rect x={cabin.x} y={cabin.y} width={cabin.w} height={cabin.h} rx={cabin.rx} className="fill-gray-100 stroke-gray-400 dark:fill-slate-800 dark:stroke-slate-600" strokeWidth={1.5} />
+                <rect x={cabin.x} y={cabin.y} width={cabin.w} height={cabin.h} rx={cabin.rx} className="fill-slate-100 stroke-slate-300 dark:fill-slate-800 dark:stroke-slate-600" strokeWidth={2} />
                 {bed && (
                     <>
                         <rect x={bed.x} y={bed.y} width={bed.w} height={bed.h} rx={bed.rx} className="fill-gray-50 stroke-gray-500 dark:fill-slate-800 dark:stroke-slate-500" strokeWidth={2} />
@@ -200,9 +222,9 @@ const VehicleTopView: React.FC<VehicleTopViewProps> = ({ categoria, parts, vidro
                         aria-pressed={isApplied}
                         aria-label={`${label}${shade ? `, ${shade === 'sem' ? 'sem película' : shade === 'faixa' ? 'só a faixa' : `${shade}%`}` : ''}`}
                         onClick={() => onTogglePart(part)}
-                        className={`absolute flex flex-col items-center justify-center rounded-full shadow-[0_1px_3px_rgba(15,23,42,0.18)] transition-colors active:scale-95 ${isApplied
-                            ? 'border-2 border-blue-600 bg-blue-600 text-white'
-                            : 'border-[1.5px] border-dashed border-slate-400 bg-white text-slate-500 dark:bg-slate-900 dark:text-slate-400'}`}
+                        className={`absolute flex flex-col items-center justify-center rounded-full transition-colors active:scale-95 ${isApplied
+                            ? 'border-2 border-white bg-blue-600 text-white shadow-[0_2px_6px_rgba(37,99,235,0.35)] dark:border-slate-900'
+                            : 'border-[1.5px] border-slate-300 bg-white text-slate-400 shadow-[0_1px_2px_rgba(15,23,42,0.08)] dark:border-slate-600 dark:bg-slate-900 dark:text-slate-500'}`}
                         style={{
                             width: pinSize,
                             height: pinSize,

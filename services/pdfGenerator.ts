@@ -14,7 +14,7 @@ import { calculateMeasurementPriceAdjustment, getMeasurementAdjustmentInputs } f
 import { resolveFilmPrices } from '../src/lib/filmPriceOverrides';
 import { findFilmByName, getVisibleCustomFields } from '../src/lib/filmCatalog';
 import { buildProposalPaymentOptions } from '../src/lib/paymentConditions';
-import { describeVehicleGlass, describeVehiclePackage, describeVehiclePartPrices, getVehicleCategoryInfo } from '../src/lib/automotive';
+import { describeVehicleGlass, describeVehicleNotes, describeVehiclePackage, describeVehiclePartPrices, getVehicleCategoryInfo, getVehicleTotal } from '../src/lib/automotive';
 
 // Define GeneralDiscount locally since it's not exported from types.ts
 interface GeneralDiscount {
@@ -968,8 +968,8 @@ const renderPdfContent = async (
                         return [
                             index + 1,
                             `${vehicle.modelo || getVehicleCategoryInfo(vehicle.categoria).label}\n${getVehicleCategoryInfo(vehicle.categoria).label}`,
-                            [`${vehicle.pelicula} · ${describeVehiclePackage(vehicle)}`, glass, describeVehiclePartPrices(vehicle)].filter(Boolean).join('\n'),
-                            `R$ ${formatNumberBR(vehicle.preco || 0)}`,
+                            [`${vehicle.pelicula} · ${describeVehiclePackage(vehicle)}`, glass, describeVehiclePartPrices(vehicle), describeVehicleNotes(vehicle)].filter(Boolean).join('\n'),
+                            `R$ ${formatNumberBR(getVehicleTotal(vehicle))}`,
                         ];
                     }),
                     startY: yPos,

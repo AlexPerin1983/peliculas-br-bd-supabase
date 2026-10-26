@@ -212,6 +212,15 @@ export interface AutomotiveVehicle {
     partes?: VehicleGlassPart[];
     // Valor de cada vidro quando é por partes (o preço do carro é a soma).
     precoPartes?: Partial<Record<VehicleGlassPart, number>>;
+    observacoes?: AutomotiveVehicleNotes;
+}
+
+// Observações rápidas do carro. A remoção da película antiga soma no valor cobrado (preco + valorRemocao).
+export interface AutomotiveVehicleNotes {
+    removerAntiga?: boolean;
+    valorRemocao?: number;
+    riscoPrevio?: boolean;
+    texto?: string;
 }
 
 export interface AutomotiveCategoryPrice {
@@ -226,6 +235,8 @@ export interface AutomotiveSettings {
     // Mostra a aba Automotivo no orçamento.
     ativo: boolean;
     precos?: AutomotivePriceTable;
+    // Valor sugerido para remover película antiga (editável em cada carro).
+    valorRemocao?: number;
 }
 
 export interface SavedProposalDiscount {
