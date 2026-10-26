@@ -12,6 +12,7 @@ import {
     normalizeFilmCuttingSettings,
 } from '../lib/proposalCutting';
 import { calculateMeasurementPriceAdjustment } from '../lib/measurementPriceAdjustment';
+import { sumAutomotiveVehicles } from '../lib/automotive';
 
 type DiscountType = ProposalDiscount;
 
@@ -261,6 +262,12 @@ export function useProposalTotals({
             }
         });
 
+        // Carros do automotivo: preço fechado por carro, somado antes do desconto geral.
+        const vehicles = generalDiscount.automotiveVehicles || [];
+        const vehiclesSubtotal = sumAutomotiveVehicles(vehicles);
+        result.subtotal += vehiclesSubtotal;
+        result.priceAfterItemDiscounts += vehiclesSubtotal;
+
         const {
             generalDiscountAmount,
             generalIncreaseAmount,
@@ -295,6 +302,7 @@ export function useProposalTotals({
             pricingMode,
             groupedTotals,
             seamsByMeasurement: Object.keys(seamsByMeasurement).length > 0 ? seamsByMeasurement : undefined,
+            ...(vehicles.length > 0 ? { vehicleCount: vehicles.length, vehiclesSubtotal } : {}),
         };
     }, [measurements, films, generalDiscount]);
 }

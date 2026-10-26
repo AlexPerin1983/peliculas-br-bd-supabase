@@ -188,6 +188,38 @@ export interface ProposalDiscount {
     validityDays?: number;
     // Garantias por película só nesta proposta (undefined = catálogo).
     filmWarrantyOverrides?: FilmWarrantyOverrides;
+    // Carros do orçamento automotivo (preço fechado por carro, fora do cálculo por m²).
+    automotiveVehicles?: AutomotiveVehicle[];
+}
+
+export type VehicleCategory = 'hatch' | 'sedan' | 'suv' | 'picape_simples' | 'picape_dupla' | 'van';
+export type VehicleGlassGroup = 'parabrisa' | 'dianteiras' | 'traseiras' | 'vigias' | 'traseiro';
+// Percentual da película (VLT) ou 'sem' (vidro fica sem película) / 'faixa' (só a faixa do para-brisa).
+export type VehicleGlassShade = 'sem' | 'faixa' | '5' | '20' | '35' | '50' | '70' | '75' | '80';
+
+export interface AutomotiveVehicle {
+    id: number;
+    modelo: string;
+    categoria: VehicleCategory;
+    pelicula: string;
+    comParabrisa: boolean;
+    preco: number;
+    // Ausente = percentual não informado (o carro sai no PDF só com película e preço).
+    vidros?: Partial<Record<VehicleGlassGroup, VehicleGlassShade>>;
+}
+
+export interface AutomotiveCategoryPrice {
+    semParabrisa?: number;
+    comParabrisa?: number;
+}
+
+// Preço sugerido de carro completo, por película e categoria. No orçamento o valor é sempre editável.
+export type AutomotivePriceTable = { [filmName: string]: Partial<Record<VehicleCategory, AutomotiveCategoryPrice>> };
+
+export interface AutomotiveSettings {
+    // Mostra a aba Automotivo no orçamento.
+    ativo: boolean;
+    precos?: AutomotivePriceTable;
 }
 
 export interface SavedProposalDiscount {
@@ -208,6 +240,7 @@ export interface SavedProposalDiscount {
     incluirTermoResponsabilidade?: boolean;
     validityDays?: number;
     filmWarrantyOverrides?: FilmWarrantyOverrides;
+    automotiveVehicles?: AutomotiveVehicle[];
 }
 
 export interface ProposalOption {
@@ -328,6 +361,7 @@ export interface UserInfo {
         youtube?: string;
         googleReviews?: string;
     };
+    automotivo?: AutomotiveSettings;
     organizationId?: string;
     isOwner?: boolean;
     isFallback?: boolean;
@@ -430,6 +464,9 @@ export interface Totals {
     };
     // Medidas (id) que vão com emenda.
     seamsByMeasurement?: { [measurementId: string]: MeasurementSeamSummary };
+    // Orçamento automotivo: quantos carros e quanto somam (já incluído no subtotal).
+    vehicleCount?: number;
+    vehiclesSubtotal?: number;
 }
 
 export interface SavedPDF {

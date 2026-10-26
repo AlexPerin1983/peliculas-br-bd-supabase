@@ -372,7 +372,9 @@ export function usePdfActions({
             parseFloat(String(measurement.altura).replace(',', '.')) > 0
         );
 
-        if (activeMeasurements.length === 0) {
+        const hasVehicles = (generalDiscount.automotiveVehicles?.length ?? 0) > 0;
+
+        if (activeMeasurements.length === 0 && !hasVehicles) {
             handleShowInfo('Não há medidas válidas para gerar um orçamento.');
             return;
         }
@@ -475,13 +477,13 @@ export function usePdfActions({
             return;
         }
 
-        if (measurements.length === 0) {
+        if (measurements.length === 0 && !generalDiscount.automotiveVehicles?.length) {
             handleShowInfo('Adicione ao menos uma medida antes de gerar o PDF.');
             return;
         }
 
         await executePdfGeneration();
-    }, [selectedClient, userInfo, activeOption, measurements.length, handleShowInfo, executePdfGeneration]);
+    }, [selectedClient, userInfo, activeOption, measurements.length, generalDiscount.automotiveVehicles, handleShowInfo, executePdfGeneration]);
 
     const handleGeneratePdfWithSaveCheck = useCallback(async (isDirty: boolean) => {
         if (!selectedClient || !userInfo || !activeOption) {

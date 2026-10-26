@@ -8,6 +8,7 @@ interface ActionsBarProps {
     isGeneratingPdf: boolean;
     onOpenAIModal: () => void;
     layout?: 'grid' | 'stacked';
+    addLabel?: string;
 }
 
 const ActionsBar: React.FC<ActionsBarProps> = ({
@@ -16,7 +17,8 @@ const ActionsBar: React.FC<ActionsBarProps> = ({
     onGeneratePdf,
     isGeneratingPdf,
     onOpenAIModal,
-    layout = 'grid'
+    layout = 'grid',
+    addLabel = 'Adicionar Medida'
 }) => {
     const addMeasurementButton = (
         <button
@@ -24,7 +26,7 @@ const ActionsBar: React.FC<ActionsBarProps> = ({
             className="col-span-2 flex h-12 items-center justify-center gap-2 rounded-[var(--radius-control)] bg-slate-950 font-semibold text-white shadow-[0_12px_24px_rgba(15,23,42,0.16)] transition-all hover:bg-slate-800 active:scale-[0.99] dark:bg-slate-100 dark:text-slate-950 dark:hover:bg-white sm:col-span-1"
         >
             <Plus className="h-4 w-4" aria-hidden="true" />
-            <span>Adicionar Medida</span>
+            <span>{addLabel}</span>
         </button>
     );
 

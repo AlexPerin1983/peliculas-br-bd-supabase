@@ -4041,6 +4041,7 @@ Use somente o JSON definido e não inclua explicações fora dele.`;
                                             }}
                                             defaultHideMeasurements={!!userInfo?.hideMeasurementsInPdf}
                                             defaultValidityDays={userInfo?.proposalValidityDays}
+                                            automotiveSettings={userInfo?.automotivo}
                                         />
                                     </Suspense>
                                 ) : ['history', 'proposals', 'agenda'].includes(activeTab) ? (

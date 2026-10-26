@@ -90,6 +90,9 @@ const normalizeGeneralDiscount = (
         filmWarrantyOverrides: discount && Object.prototype.hasOwnProperty.call(discount, 'filmWarrantyOverrides')
             ? discount.filmWarrantyOverrides
             : fallback?.filmWarrantyOverrides,
+        automotiveVehicles: discount && Object.prototype.hasOwnProperty.call(discount, 'automotiveVehicles')
+            ? discount.automotiveVehicles
+            : fallback?.automotiveVehicles,
     };
 };
 

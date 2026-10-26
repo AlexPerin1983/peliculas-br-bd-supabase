@@ -24,6 +24,7 @@ interface MobileFooterProps {
     options?: { id: number; name: string }[];
     activeOptionId?: number | null;
     onSelectOption?: (optionId: number) => void;
+    addLabel?: string;
 }
 
 const MobileFooter: React.FC<MobileFooterProps> = ({
@@ -47,7 +48,8 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
     hasCustomPaymentConfig,
     options,
     activeOptionId,
-    onSelectOption
+    onSelectOption,
+    addLabel = 'Adicionar Nova Medida'
 }) => {
     const [isTotalsDrawerOpen, setIsTotalsDrawerOpen] = useState(false);
 
@@ -110,7 +112,7 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
                         <div className="absolute left-1/2 -translate-x-1/2 -top-12">
                             <button
                                 onClick={onAddMeasurement}
-                                aria-label="Adicionar Nova Medida"
+                                aria-label={addLabel}
                                 className="w-16 h-16 bg-gradient-to-br from-slate-800 to-slate-950 dark:from-slate-700 dark:to-slate-900 text-white rounded-2xl flex items-center justify-center shadow-[0_8px_20px_rgba(0,0,0,0.3)] hover:shadow-[0_12px_24px_rgba(0,0,0,0.4)] transition-all duration-300 transform hover:-translate-y-1 active:scale-95 border-4 border-white dark:border-slate-900"
                             >
                                 <i className="fas fa-plus text-2xl"></i>

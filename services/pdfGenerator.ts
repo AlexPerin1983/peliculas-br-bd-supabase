@@ -1,4 +1,4 @@
-import type { Client, UserInfo, Measurement, Film, FilmPriceOverrides, FilmWarrantyOverrides, ProposalPaymentConfig, ProposalPricingMode, SavedPDF, Totals } from '../types';
+import type { AutomotiveVehicle, Client, UserInfo, Measurement, Film,FilmPriceOverrides, FilmWarrantyOverrides, ProposalPaymentConfig, ProposalPricingMode, SavedPDF, Totals } from '../types';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { calculatePricingAreaM2 } from '../src/lib/pricingArea';
@@ -14,6 +14,7 @@ import { calculateMeasurementPriceAdjustment, getMeasurementAdjustmentInputs } f
 import { resolveFilmPrices } from '../src/lib/filmPriceOverrides';
 import { findFilmByName, getVisibleCustomFields } from '../src/lib/filmCatalog';
 import { buildProposalPaymentOptions } from '../src/lib/paymentConditions';
+import { describeVehicleGlass, describeVehiclePackage, getVehicleCategoryInfo } from '../src/lib/automotive';
 
 // Define GeneralDiscount locally since it's not exported from types.ts
 interface GeneralDiscount {
@@ -31,6 +32,7 @@ interface GeneralDiscount {
     incluirTermoResponsabilidade?: boolean;
     validityDays?: number;
     filmWarrantyOverrides?: FilmWarrantyOverrides;
+    automotiveVehicles?: AutomotiveVehicle[];
 }
 
 const formatNumberBR = (number: number): string => {
@@ -273,6 +275,7 @@ export const regeneratePDFFromSaved = async (client: Client, userInfo: UserInfo,
         incluirTermoResponsabilidade: pdf.generalDiscount?.incluirTermoResponsabilidade,
         validityDays: pdf.generalDiscount?.validityDays,
         filmWarrantyOverrides: pdf.generalDiscount?.filmWarrantyOverrides,
+        automotiveVehicles: pdf.generalDiscount?.automotiveVehicles,
     };
 
     const totals = calculateTotalsFromSavedPDF(pdf, allFilms);
@@ -309,6 +312,7 @@ export const generateCombinedPDF = async (client: Client, userInfo: UserInfo, sa
             incluirTermoResponsabilidade: pdf.generalDiscount?.incluirTermoResponsabilidade,
             validityDays: pdf.generalDiscount?.validityDays,
             filmWarrantyOverrides: pdf.generalDiscount?.filmWarrantyOverrides,
+            automotiveVehicles: pdf.generalDiscount?.automotiveVehicles,
         } as GeneralDiscount,
         totals: calculateTotalsFromSavedPDF(pdf, allFilms),
         paymentConfig: undefined as ProposalPaymentConfig | undefined,
@@ -946,6 +950,43 @@ const renderPdfContent = async (
                 yPos = (doc as any).lastAutoTable.finalY + 10;
             }
 
+            // 2b. Carros do automotivo (preço fechado por carro)
+            const optionVehicles = optionGeneralDiscount?.automotiveVehicles || [];
+            if (optionVehicles.length > 0) {
+                if (yPos > pageHeight - 60) await addNewPage();
+
+                doc.setTextColor(...colors.secondary);
+                doc.setFont("helvetica", 'bold');
+                doc.setFontSize(12);
+                safeText(`${proposalOptionName} - Automotivo`, margin, yPos);
+                yPos += 8;
+
+                autoTable(doc, {
+                    head: [['Item', 'Carro', 'Película e vidros', 'Preço']],
+                    body: optionVehicles.map((vehicle, index) => {
+                        const glass = describeVehicleGlass(vehicle);
+                        return [
+                            index + 1,
+                            `${vehicle.modelo || getVehicleCategoryInfo(vehicle.categoria).label}\n${getVehicleCategoryInfo(vehicle.categoria).label}`,
+                            [`${vehicle.pelicula} · ${describeVehiclePackage(vehicle)}`, glass].filter(Boolean).join('\n'),
+                            `R$ ${formatNumberBR(vehicle.preco || 0)}`,
+                        ];
+                    }),
+                    startY: yPos,
+                    theme: 'grid',
+                    headStyles: { fillColor: colors.primary, textColor: colors.white },
+                    styles: { fontSize: 8 },
+                    columnStyles: { 0: { cellWidth: 10 }, 1: { cellWidth: 45 }, 3: { cellWidth: 28, halign: 'right' } },
+                    didParseCell: (data) => {
+                        if (data.section === 'head' && data.column.index === 3) {
+                            data.cell.styles.halign = 'right';
+                        }
+                    },
+                });
+
+                yPos = (doc as any).lastAutoTable.finalY + 10;
+            }
+
             // 3. Render Totals for this specific option
             if (yPos > pageHeight - 88) await addNewPage();
 
@@ -1066,12 +1107,20 @@ const renderPdfContent = async (
 
         // --- Garantias e Especificações (Baseado em todas as opções) ---
 
-        const allFilmsUsed = optionsData.flatMap(opt => opt.measurements.map(m => m.pelicula));
+        // Películas dos carros também entram nas garantias e especificações.
+        const optionsWithVehicleFilms = optionsData.map(opt => ({
+            ...opt,
+            measurements: [
+                ...opt.measurements,
+                ...(opt.generalDiscount?.automotiveVehicles || []).map(vehicle => ({ pelicula: vehicle.pelicula })),
+            ],
+        }));
+        const allFilmsUsed = optionsWithVehicleFilms.flatMap(opt => opt.measurements.map(m => m.pelicula));
         const hasCompletePricingOption = optionsData.some(opt => opt.totals.pricingMode !== 'labor_only');
         const uniqueFilmNames = Array.from(new Set(allFilmsUsed));
 
         await addSectionTitle("Garantias");
-        for (const entry of buildPdfWarrantyEntries(optionsData, allFilms)) {
+        for (const entry of buildPdfWarrantyEntries(optionsWithVehicleFilms, allFilms)) {
             if (yPos > pageHeight - 30) await addNewPage();
             doc.setFont("helvetica", 'bold');
             safeText(entry.title, margin, yPos);
