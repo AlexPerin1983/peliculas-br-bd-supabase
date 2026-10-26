@@ -244,7 +244,14 @@ export const getAutomotivePriceTable = (settings: AutomotiveSettings | undefined
     settings?.precos ?? DEFAULT_AUTOMOTIVE_PRICES
 );
 
-export const isAutomotiveEnabled = (settings: AutomotiveSettings | undefined): boolean => Boolean(settings?.ativo);
+// Beta: só estas contas (e-mail do login) veem o automotivo, nas Configurações e no orçamento.
+const AUTOMOTIVE_BETA_EMAILS = ['windowfilm.br@gmail.com'];
+
+export const canUseAutomotiveBeta = (email: string | null | undefined): boolean => (
+    Boolean(email) && AUTOMOTIVE_BETA_EMAILS.includes(email!.trim().toLowerCase())
+);
+
+export const isAutomotiveEnabled =(settings: AutomotiveSettings | undefined): boolean => Boolean(settings?.ativo);
 
 export const getAutomotiveTablePrice = (
     settings: AutomotiveSettings | undefined,

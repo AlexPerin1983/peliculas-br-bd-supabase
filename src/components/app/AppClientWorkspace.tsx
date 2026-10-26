@@ -87,6 +87,8 @@ interface AppClientWorkspaceProps {
     defaultHideMeasurements?: boolean;
     defaultValidityDays?: number;
     automotiveSettings?: AutomotiveSettings;
+    // Beta fechado: sem acesso, a aba Automotivo não aparece nem com carros já salvos.
+    automotiveAllowed?: boolean;
 }
 
 type QuoteKind = 'arquitetonico' | 'automotivo';
@@ -474,7 +476,8 @@ export const AppClientWorkspace: React.FC<AppClientWorkspaceProps> = ({
     onOpenAIModal,
     defaultHideMeasurements,
     defaultValidityDays,
-    automotiveSettings
+    automotiveSettings,
+    automotiveAllowed = false
 }) => {
     const [isDesktopTotalsOpen, setIsDesktopTotalsOpen] = useState(false);
     // Aba escolhida em cada opção; sem escolha, abre no Automotivo quando a opção só tem carros.
@@ -482,7 +485,7 @@ export const AppClientWorkspace: React.FC<AppClientWorkspaceProps> = ({
     const [vehicleEditor, setVehicleEditor] = useState<{ isOpen: boolean; vehicle: AutomotiveVehicle | null }>({ isOpen: false, vehicle: null });
 
     const vehicles = generalDiscount.automotiveVehicles || [];
-    const canUseAutomotive = Boolean(selectedClientId) && (isAutomotiveEnabled(automotiveSettings) || vehicles.length > 0);
+    const canUseAutomotive = automotiveAllowed && Boolean(selectedClientId) && (isAutomotiveEnabled(automotiveSettings) || vehicles.length > 0);
     const defaultQuoteKind: QuoteKind = vehicles.length > 0 && measurements.length === 0 ? 'automotivo' : 'arquitetonico';
     const quoteKind: QuoteKind = canUseAutomotive && activeOptionId
         ? (quoteKindByOption[activeOptionId] ?? defaultQuoteKind)

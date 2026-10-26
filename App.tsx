@@ -45,6 +45,7 @@ import AIQuickFab from './components/AIQuickFab';
 import OnboardingTour from './components/onboarding/OnboardingTour';
 import { seedExampleDataIfNeeded } from './services/seedData';
 import { createPastedMeasurementsFromClipboard } from './src/lib/measurementClipboard';
+import { canUseAutomotiveBeta } from './src/lib/automotive';
 import {
     buildQuickClientRecord,
     buildVoiceScheduleDraft,
@@ -3589,6 +3590,7 @@ Use somente o JSON definido e não inclua explicações fora dele.`;
             userInfo={userInfo}
             organizationId={organizationId || undefined}
             isOwner={isOwner}
+            automotiveAllowed={canUseAutomotiveBeta(authUser?.email)}
             isInstalled={isInstalled}
             allSavedPdfs={allSavedPdfs}
             hasLoadedAllPdfs={hasLoadedAllPdfs}
@@ -4042,6 +4044,7 @@ Use somente o JSON definido e não inclua explicações fora dele.`;
                                             defaultHideMeasurements={!!userInfo?.hideMeasurementsInPdf}
                                             defaultValidityDays={userInfo?.proposalValidityDays}
                                             automotiveSettings={userInfo?.automotivo}
+                                            automotiveAllowed={canUseAutomotiveBeta(authUser?.email)}
                                         />
                                     </Suspense>
                                 ) : ['history', 'proposals', 'agenda'].includes(activeTab) ? (

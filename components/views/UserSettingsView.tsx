@@ -28,6 +28,8 @@ interface UserSettingsViewProps {
     isPwaInstalled: boolean;
     onPromptPwaInstall: () => void;
     onNavigateToCatalog: () => void;
+    // Beta fechado do automotivo: só a conta liberada vê a seção.
+    showAutomotive?: boolean;
 }
 
 const applyPhoneMask = (value: string) => {
@@ -223,7 +225,8 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({
     onOpenApiKeyModal,
     isPwaInstalled,
     onPromptPwaInstall,
-    onNavigateToCatalog
+    onNavigateToCatalog,
+    showAutomotive = false
 }) => {
     const { theme, toggleTheme } = useTheme();
     const { showToast } = useFeedback();
@@ -932,20 +935,23 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({
                 </div>
             </SettingsSection>
 
-            {/* ===== SECAO: AUTOMOTIVO ===== */}
-            <SettingsSection
-                title="Automotivo"
-                subtitle="Orçamento de carros e tabela de preços"
-                icon={<Car className="w-5 h-5" />}
-                saveState={getSectionSaveState('automotive')}
-                onSaveSection={() => handleSaveSection('automotive')}
-                sectionId="automotivo"
-            >
-                <AutomotiveSettingsPanel
-                    value={formData.automotivo}
-                    onChange={automotivo => setFormData(prev => ({ ...prev, automotivo }))}
-                />
-            </SettingsSection>
+            {/* ===== SECAO: AUTOMOTIVO (beta) ===== */}
+            {showAutomotive && (
+                <SettingsSection
+                    title="Automotivo"
+                    subtitle="Orçamento de carros e tabela de preços"
+                    icon={<Car className="w-5 h-5" />}
+                    badge="Beta"
+                    saveState={getSectionSaveState('automotive')}
+                    onSaveSection={() => handleSaveSection('automotive')}
+                    sectionId="automotivo"
+                >
+                    <AutomotiveSettingsPanel
+                        value={formData.automotivo}
+                        onChange={automotivo => setFormData(prev => ({ ...prev, automotivo }))}
+                    />
+                </SettingsSection>
+            )}
 
             {/* ===== SECAO: HORARIO DE FUNCIONAMENTO ===== */}
             <SettingsSection
