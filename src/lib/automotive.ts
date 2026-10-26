@@ -1,7 +1,7 @@
 import type {
+    AutomotivePriceTable,
     AutomotiveSettings,
     AutomotiveVehicle,
-    Film,
     VehicleCategory,
     VehicleGlassGroup,
     VehicleGlassShade,
@@ -88,12 +88,40 @@ export const describeVehiclePackage = (vehicle: Pick<AutomotiveVehicle, 'comPara
     vehicle.comParabrisa ? 'Completo com para-brisa' : 'Completo sem para-brisa'
 );
 
-// Película que já vem marcada (na tabela e no carro novo): a fixada, senão a primeira.
-export const pickDefaultAutomotiveFilm = (films: Pick<Film, 'nome' | 'pinned'>[]): string => (
-    films.find(film => film.pinned)?.nome || films[0]?.nome || ''
+// Linhas de película do automotivo (no lugar do catálogo, que é de vidro de casa e empresa).
+export const AUTOMOTIVE_FILM_TYPES = ['Fumê comum', 'Nano Carbono', 'Nano Cerâmica', 'Cerâmica Premium'];
+
+const tablePrice = (semParabrisa: number, comParabrisa: number) => ({ semParabrisa, comParabrisa });
+
+// Valores de partida para a tabela já vir preenchida; cada empresa ajusta à sua região.
+export const DEFAULT_AUTOMOTIVE_PRICES: AutomotivePriceTable = {
+    'Fumê comum': {
+        hatch: tablePrice(180, 300), sedan: tablePrice(200, 320), suv: tablePrice(250, 380),
+        picape_simples: tablePrice(130, 250), picape_dupla: tablePrice(220, 350), van: tablePrice(300, 450),
+    },
+    'Nano Carbono': {
+        hatch: tablePrice(300, 480), sedan: tablePrice(340, 520), suv: tablePrice(400, 600),
+        picape_simples: tablePrice(220, 400), picape_dupla: tablePrice(380, 560), van: tablePrice(480, 680),
+    },
+    'Nano Cerâmica': {
+        hatch: tablePrice(500, 800), sedan: tablePrice(550, 850), suv: tablePrice(650, 950),
+        picape_simples: tablePrice(380, 680), picape_dupla: tablePrice(600, 900), van: tablePrice(750, 1100),
+    },
+    'Cerâmica Premium': {
+        hatch: tablePrice(800, 1200), sedan: tablePrice(900, 1300), suv: tablePrice(1000, 1450),
+        picape_simples: tablePrice(600, 1000), picape_dupla: tablePrice(950, 1400), van: tablePrice(1200, 1700),
+    },
+};
+
+// Cópia da tabela sugerida, para gravar como ponto de partida da empresa.
+export const cloneDefaultAutomotivePrices = (): AutomotivePriceTable => JSON.parse(JSON.stringify(DEFAULT_AUTOMOTIVE_PRICES));
+
+// Sem tabela salva ainda, vale a sugerida.
+export const getAutomotivePriceTable = (settings: AutomotiveSettings | undefined): AutomotivePriceTable => (
+    settings?.precos ?? DEFAULT_AUTOMOTIVE_PRICES
 );
 
-export const isAutomotiveEnabled =(settings: AutomotiveSettings | undefined): boolean => Boolean(settings?.ativo);
+export const isAutomotiveEnabled = (settings: AutomotiveSettings | undefined): boolean => Boolean(settings?.ativo);
 
 export const getAutomotiveTablePrice = (
     settings: AutomotiveSettings | undefined,
@@ -101,7 +129,7 @@ export const getAutomotiveTablePrice = (
     category: VehicleCategory,
     comParabrisa: boolean,
 ): number | undefined => {
-    const price = settings?.precos?.[filmName]?.[category];
+    const price = getAutomotivePriceTable(settings)[filmName]?.[category];
     const value = comParabrisa ? price?.comParabrisa : price?.semParabrisa;
     return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined;
 };

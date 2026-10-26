@@ -1,11 +1,18 @@
-import React, { useEffect, useState } from 'react';
-import type { AutomotiveCategoryPrice, AutomotiveSettings, Film, VehicleCategory } from '../../types';
+import React, { useState } from 'react';
+import { RotateCcw } from 'lucide-react';
+import type { AutomotiveCategoryPrice, AutomotiveSettings, VehicleCategory } from '../../types';
 import VehicleCategoryIcon from '../automotive/VehicleCategoryIcon';
-import { VEHICLE_CATEGORIES, formatMoneyInput, parseMoneyInput, pickDefaultAutomotiveFilm } from '../../src/lib/automotive';
+import {
+    AUTOMOTIVE_FILM_TYPES,
+    VEHICLE_CATEGORIES,
+    cloneDefaultAutomotivePrices,
+    formatMoneyInput,
+    getAutomotivePriceTable,
+    parseMoneyInput,
+} from '../../src/lib/automotive';
 
 interface AutomotiveSettingsPanelProps {
     value?: AutomotiveSettings;
-    films: Film[];
     onChange: (next: AutomotiveSettings) => void;
 }
 
@@ -18,37 +25,46 @@ const PRICE_FIELDS: { field: PriceField; label: string }[] = [
 
 const cellKey = (film: string, category: VehicleCategory, field: PriceField) => `${film}|${category}|${field}`;
 
-// Chave da aba Automotivo e tabela de preço sugerido por película e categoria.
-const AutomotiveSettingsPanel: React.FC<AutomotiveSettingsPanelProps> = ({ value, films, onChange }) => {
+// Chave da aba Automotivo e tabela de preço sugerido por linha de película e categoria.
+const AutomotiveSettingsPanel: React.FC<AutomotiveSettingsPanelProps> = ({ value, onChange }) => {
     const isActive = Boolean(value?.ativo);
-    const [selectedFilm, setSelectedFilm] = useState(() => pickDefaultAutomotiveFilm(films));
+    const [selectedFilm, setSelectedFilm] = useState(AUTOMOTIVE_FILM_TYPES[0]);
     // Texto digitado de cada célula, para aceitar "450," enquanto o usuário digita.
     const [drafts, setDrafts] = useState<Record<string, string>>({});
 
-    useEffect(() => {
-        if (!films.some(film => film.nome === selectedFilm)) {
-            setSelectedFilm(pickDefaultAutomotiveFilm(films));
-        }
-    }, [films, selectedFilm]);
-
     const settings: AutomotiveSettings = value ?? { ativo: false };
+    const prices = getAutomotivePriceTable(settings);
+
+    // Ao ligar pela primeira vez, a tabela sugerida já fica salva como ponto de partida.
+    const handleToggle = () => {
+        onChange({
+            ...settings,
+            ativo: !isActive,
+            precos: settings.precos ?? cloneDefaultAutomotivePrices(),
+        });
+    };
 
     const handlePriceChange = (category: VehicleCategory, field: PriceField, text: string) => {
         setDrafts(previous => ({ ...previous, [cellKey(selectedFilm, category, field)]: text }));
-        const filmPrices = settings.precos?.[selectedFilm] || {};
+        const filmPrices = prices[selectedFilm] || {};
         const categoryPrice = { ...filmPrices[category], [field]: parseMoneyInput(text) };
         onChange({
             ...settings,
-            precos: {
-                ...settings.precos,
-                [selectedFilm]: { ...filmPrices, [category]: categoryPrice },
-            },
+            precos: { ...prices, [selectedFilm]: { ...filmPrices, [category]: categoryPrice } },
         });
+    };
+
+    const handleRestoreSuggested = () => {
+        const suggested = cloneDefaultAutomotivePrices();
+        setDrafts(previous => Object.fromEntries(
+            Object.entries(previous).filter(([key]) => !key.startsWith(`${selectedFilm}|`))
+        ));
+        onChange({ ...settings, precos: { ...prices, [selectedFilm]: suggested[selectedFilm] } });
     };
 
     const getCellText = (category: VehicleCategory, field: PriceField) => {
         const key = cellKey(selectedFilm, category, field);
-        return key in drafts ? drafts[key] : formatMoneyInput(settings.precos?.[selectedFilm]?.[category]?.[field]);
+        return key in drafts ? drafts[key] : formatMoneyInput(prices[selectedFilm]?.[category]?.[field]);
     };
 
     return (
@@ -57,7 +73,7 @@ const AutomotiveSettingsPanel: React.FC<AutomotiveSettingsPanelProps> = ({ value
                 type="button"
                 role="switch"
                 aria-checked={isActive}
-                onClick={() => onChange({ ...settings, ativo: !isActive })}
+                onClick={handleToggle}
                 className={`flex w-full items-center justify-between gap-3 rounded-[var(--radius-control)] border p-3 text-left transition-colors ${isActive
                     ? 'border-[var(--brand-primary)] bg-[rgba(21,94,239,0.06)]'
                     : 'border-[var(--border-subtle)] bg-[var(--surface-muted)]'
@@ -73,64 +89,66 @@ const AutomotiveSettingsPanel: React.FC<AutomotiveSettingsPanelProps> = ({ value
             </button>
 
             {isActive && (
-                films.length === 0 ? (
-                    <p className="rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-3 text-sm text-[var(--text-muted)]">
-                        Cadastre suas películas para montar a tabela de preços.
-                    </p>
-                ) : (
-                    <div className="space-y-3">
-                        <div>
-                            <p className="text-sm font-semibold text-[var(--text-strong)]">Tabela de preços (carro completo)</p>
-                            <p className="text-xs text-[var(--text-muted)]">Valor sugerido. No orçamento dá para mudar na hora. Campo vazio = você digita no orçamento.</p>
-                        </div>
-                        <div className="flex flex-wrap gap-2" role="group" aria-label="Película">
-                            {films.map(film => (
-                                <button
-                                    key={film.nome}
-                                    type="button"
-                                    aria-pressed={film.nome === selectedFilm}
-                                    onClick={() => setSelectedFilm(film.nome)}
-                                    className={`min-h-9 rounded-full border px-3.5 text-sm font-semibold transition-colors ${film.nome === selectedFilm
-                                        ? 'border-slate-900 bg-slate-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900'
-                                        : 'border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-body)] hover:bg-[var(--surface-muted)]'}`}
-                                >
-                                    {film.nome}
-                                </button>
-                            ))}
-                        </div>
-                        <div className="overflow-hidden rounded-[var(--radius-panel)] border border-[var(--border-subtle)]">
-                            <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)] gap-2 bg-[var(--surface-muted)] px-3 py-2 text-[11px] font-bold uppercase tracking-[0.06em] text-[var(--text-muted)]">
-                                <span>Categoria</span>
-                                {PRICE_FIELDS.map(item => <span key={item.field}>{item.label}</span>)}
-                            </div>
-                            {VEHICLE_CATEGORIES.map(category => (
-                                <div key={category.id} className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)] items-center gap-2 border-t border-[var(--border-subtle)] px-3 py-2">
-                                    <div className="flex min-w-0 items-center gap-2">
-                                        <VehicleCategoryIcon category={category.id} className="hidden h-5 w-10 shrink-0 sm:block" />
-                                        <span className="min-w-0">
-                                            <span className="block truncate text-sm font-bold text-[var(--text-strong)]">{category.label}</span>
-                                            <span className="block truncate text-[11px] text-[var(--text-muted)]">{category.examples}</span>
-                                        </span>
-                                    </div>
-                                    {PRICE_FIELDS.map(item => (
-                                        <label key={item.field} className="flex h-10 items-center gap-1 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] px-2 text-xs text-[var(--text-muted)]">
-                                            <span>R$</span>
-                                            <input
-                                                type="text"
-                                                inputMode="decimal"
-                                                value={getCellText(category.id, item.field)}
-                                                onChange={event => handlePriceChange(category.id, item.field, event.target.value)}
-                                                placeholder="0,00"
-                                                aria-label={`${category.label}, ${item.label.toLowerCase()}`}
-                                                className="min-w-0 flex-1 bg-transparent text-sm font-bold text-[var(--text-strong)] outline-none"
-                                            />
-                                        </label>
-                                    ))}
-                                </div>
-                            ))}
-                        </div>
+                <div className="space-y-3">
+                    <div>
+                        <p className="text-sm font-semibold text-[var(--text-strong)]">Tabela de preços (carro completo)</p>
+                        <p className="text-xs text-[var(--text-muted)]">Já vem com valores sugeridos: ajuste para a sua região. No orçamento dá para mudar na hora.</p>
                     </div>
-                )
+                    <div className="flex flex-wrap gap-2" role="group" aria-label="Película">
+                        {AUTOMOTIVE_FILM_TYPES.map(film => (
+                            <button
+                                key={film}
+                                type="button"
+                                aria-pressed={film === selectedFilm}
+                                onClick={() => setSelectedFilm(film)}
+                                className={`min-h-9 rounded-full border px-3.5 text-sm font-semibold transition-colors ${film === selectedFilm
+                                    ? 'border-slate-900 bg-slate-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900'
+                                    : 'border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-body)] hover:bg-[var(--surface-muted)]'}`}
+                            >
+                                {film}
+                            </button>
+                        ))}
+                    </div>
+                    <div className="overflow-hidden rounded-[var(--radius-panel)] border border-[var(--border-subtle)]">
+                        <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)] gap-2 bg-[var(--surface-muted)] px-3 py-2 text-[11px] font-bold uppercase tracking-[0.06em] text-[var(--text-muted)]">
+                            <span>Categoria</span>
+                            {PRICE_FIELDS.map(item => <span key={item.field}>{item.label}</span>)}
+                        </div>
+                        {VEHICLE_CATEGORIES.map(category => (
+                            <div key={category.id} className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)] items-center gap-2 border-t border-[var(--border-subtle)] px-3 py-2">
+                                <div className="flex min-w-0 items-center gap-2">
+                                    <VehicleCategoryIcon category={category.id} className="hidden h-5 w-10 shrink-0 sm:block" />
+                                    <span className="min-w-0">
+                                        <span className="block truncate text-sm font-bold text-[var(--text-strong)]">{category.label}</span>
+                                        <span className="block truncate text-[11px] text-[var(--text-muted)]">{category.examples}</span>
+                                    </span>
+                                </div>
+                                {PRICE_FIELDS.map(item => (
+                                    <label key={item.field} className="flex h-10 items-center gap-1 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] px-2 text-xs text-[var(--text-muted)]">
+                                        <span>R$</span>
+                                        <input
+                                            type="text"
+                                            inputMode="decimal"
+                                            value={getCellText(category.id, item.field)}
+                                            onChange={event => handlePriceChange(category.id, item.field, event.target.value)}
+                                            placeholder="0,00"
+                                            aria-label={`${category.label}, ${item.label.toLowerCase()}`}
+                                            className="min-w-0 flex-1 bg-transparent text-sm font-bold text-[var(--text-strong)] outline-none"
+                                        />
+                                    </label>
+                                ))}
+                            </div>
+                        ))}
+                    </div>
+                    <button
+                        type="button"
+                        onClick={handleRestoreSuggested}
+                        className="inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-[var(--brand-primary)]"
+                    >
+                        <RotateCcw className="h-4 w-4" aria-hidden="true" />
+                        Voltar aos preços sugeridos de {selectedFilm}
+                    </button>
+                </div>
             )}
         </div>
     );

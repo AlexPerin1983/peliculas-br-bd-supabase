@@ -743,7 +743,6 @@ export const AppClientWorkspace: React.FC<AppClientWorkspaceProps> = ({
                         <VehicleEditorModal
                             isOpen={vehicleEditor.isOpen}
                             vehicle={vehicleEditor.vehicle}
-                            films={films}
                             settings={automotiveSettings}
                             onClose={() => setVehicleEditor({ isOpen: false, vehicle: null })}
                             onSave={handleSaveVehicle}

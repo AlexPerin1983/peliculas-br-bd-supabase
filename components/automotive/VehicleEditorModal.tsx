@@ -2,12 +2,12 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import Modal from '../ui/Modal';
 import ActionButton from '../ui/ActionButton';
-import BrandSelect from '../ui/BrandSelect';
 import Input from '../ui/Input';
 import VehicleCategoryIcon from './VehicleCategoryIcon';
 import VehicleTopView from './VehicleTopView';
-import type { AutomotiveSettings, AutomotiveVehicle, Film, VehicleCategory, VehicleGlassGroup, VehicleGlassShade } from '../../types';
+import type { AutomotiveSettings, AutomotiveVehicle, VehicleCategory, VehicleGlassGroup, VehicleGlassShade } from '../../types';
 import {
+    AUTOMOTIVE_FILM_TYPES,
     VEHICLE_CATEGORIES,
     describeVehicleGlass,
     formatGlassShade,
@@ -18,14 +18,12 @@ import {
     getVehicleGlassGroups,
     getVehicleLawWarnings,
     parseMoneyInput,
-    pickDefaultAutomotiveFilm,
     suggestVehicleCategory,
 } from '../../src/lib/automotive';
 
 interface VehicleEditorModalProps {
     isOpen: boolean;
     vehicle: AutomotiveVehicle | null;
-    films: Film[];
     settings?: AutomotiveSettings;
     onClose: () => void;
     onSave: (vehicle: AutomotiveVehicle) => void;
@@ -38,7 +36,7 @@ const optionButtonClass = (selected: boolean) => `rounded-[var(--radius-control)
     ? 'border-2 border-[var(--brand-primary)] bg-blue-50 text-[var(--text-strong)] dark:bg-blue-950/40'
     : 'border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-body)] hover:bg-[var(--surface-muted)]'}`;
 
-const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle, films, settings, onClose, onSave, onDelete }) => {
+const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle, settings, onClose, onSave, onDelete }) => {
     const [draft, setDraft] = useState<AutomotiveVehicle | null>(null);
     const [priceText, setPriceText] = useState('');
     // Preço digitado à mão deixa de seguir a tabela.
@@ -54,7 +52,7 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
             id: Date.now(),
             modelo: '',
             categoria: 'hatch',
-            pelicula: pickDefaultAutomotiveFilm(films),
+            pelicula: AUTOMOTIVE_FILM_TYPES[0],
             comParabrisa: false,
             preco: 0,
         };
@@ -66,7 +64,7 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
         setStep('dados');
         setSelectedGroup(null);
         setError('');
-        // Só ao abrir: mudanças no catálogo com o modal aberto não reiniciam o rascunho.
+        // Só ao abrir: mudar a tabela com o modal aberto não reinicia o rascunho.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen, vehicle]);
 
@@ -137,10 +135,10 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
         });
     };
 
-    const filmOptions = films.map(film => ({ value: film.nome, label: film.nome }));
-    if (draft.pelicula && !films.some(film => film.nome === draft.pelicula)) {
-        filmOptions.unshift({ value: draft.pelicula, label: draft.pelicula });
-    }
+    // Carro salvo com outra película (nome antigo) continua aparecendo para não perder a escolha.
+    const filmOptions = draft.pelicula && !AUTOMOTIVE_FILM_TYPES.includes(draft.pelicula)
+        ? [draft.pelicula, ...AUTOMOTIVE_FILM_TYPES]
+        : AUTOMOTIVE_FILM_TYPES;
     const glassSummary = describeVehicleGlass(draft);
     const activeGroup = selectedGroup && glassGroups.includes(selectedGroup) ? selectedGroup : glassGroups[0];
 
@@ -273,19 +271,22 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
                         </div>
                     </div>
 
-                    {filmOptions.length > 0 ? (
-                        <BrandSelect
-                            id="vehicleFilm"
-                            label="Película"
-                            options={filmOptions}
-                            value={draft.pelicula}
-                            onChange={value => updateDraft({ pelicula: String(value) })}
-                        />
-                    ) : (
-                        <p className="rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-3 text-sm text-[var(--text-muted)]">
-                            Cadastre uma película em Películas para usar no carro.
-                        </p>
-                    )}
+                    <div>
+                        <span className="ui-label block">Película</span>
+                        <div className="mt-1.5 grid grid-cols-2 gap-2" role="group" aria-label="Película">
+                            {filmOptions.map(film => (
+                                <button
+                                    key={film}
+                                    type="button"
+                                    aria-pressed={draft.pelicula === film}
+                                    onClick={() => updateDraft({ pelicula: film })}
+                                    className={`${optionButtonClass(draft.pelicula === film)} min-h-12 px-2 text-sm`}
+                                >
+                                    {film}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
 
                     <div className="grid grid-cols-2 gap-2">
                         {[false, true].map(comParabrisa => (

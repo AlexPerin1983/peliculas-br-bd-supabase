@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { LucideIcon } from 'lucide-react';
-import { Film, UserInfo } from '../../types';
+import { UserInfo } from '../../types';
 import AutomotiveSettingsPanel from '../settings/AutomotiveSettingsPanel';
 import Input from '../ui/Input';
 import BrandSelect from '../ui/BrandSelect';
@@ -28,7 +28,6 @@ interface UserSettingsViewProps {
     isPwaInstalled: boolean;
     onPromptPwaInstall: () => void;
     onNavigateToCatalog: () => void;
-    films?: Film[];
 }
 
 const applyPhoneMask = (value: string) => {
@@ -224,8 +223,7 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({
     onOpenApiKeyModal,
     isPwaInstalled,
     onPromptPwaInstall,
-    onNavigateToCatalog,
-    films = []
+    onNavigateToCatalog
 }) => {
     const { theme, toggleTheme } = useTheme();
     const { showToast } = useFeedback();
@@ -945,7 +943,6 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({
             >
                 <AutomotiveSettingsPanel
                     value={formData.automotivo}
-                    films={films}
                     onChange={automotivo => setFormData(prev => ({ ...prev, automotivo }))}
                 />
             </SettingsSection>

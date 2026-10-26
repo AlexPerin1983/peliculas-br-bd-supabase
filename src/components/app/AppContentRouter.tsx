@@ -336,7 +336,6 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
                 isPwaInstalled={isInstalled}
                 onPromptPwaInstall={onPromptPwaInstall}
                 onNavigateToCatalog={() => onTabChange('films')}
-                films={films}
             />
         );
     }

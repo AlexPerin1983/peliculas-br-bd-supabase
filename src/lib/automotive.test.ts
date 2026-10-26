@@ -1,5 +1,9 @@
 import type { AutomotiveSettings, AutomotiveVehicle } from '../../types';
 import {
+    AUTOMOTIVE_FILM_TYPES,
+    DEFAULT_AUTOMOTIVE_PRICES,
+    VEHICLE_CATEGORIES,
+    cloneDefaultAutomotivePrices,
     describeVehicleGlass,
     getAutomotiveTablePrice,
     getVehicleGlassGroups,
@@ -59,7 +63,25 @@ describe('getAutomotiveTablePrice', () => {
     it('sem preço cadastrado devolve undefined', () => {
         expect(getAutomotiveTablePrice(settings, 'Nano Cerâmica', 'hatch', false)).toBeUndefined();
         expect(getAutomotiveTablePrice(settings, 'Carbono', 'suv', false)).toBeUndefined();
-        expect(getAutomotiveTablePrice(undefined, 'Nano Cerâmica', 'suv', false)).toBeUndefined();
+    });
+
+    it('sem tabela salva usa a sugerida, que cobre todas as películas e categorias', () => {
+        expect(getAutomotiveTablePrice(undefined, 'Nano Cerâmica', 'suv', false)).toBe(650);
+        expect(getAutomotiveTablePrice({ ativo: true }, 'Fumê comum', 'hatch', true)).toBe(300);
+        AUTOMOTIVE_FILM_TYPES.forEach(film => {
+            VEHICLE_CATEGORIES.forEach(category => {
+                const sem = getAutomotiveTablePrice(undefined, film, category.id, false)!;
+                const com = getAutomotiveTablePrice(undefined, film, category.id, true)!;
+                expect(sem).toBeGreaterThan(0);
+                expect(com).toBeGreaterThan(sem);
+            });
+        });
+    });
+
+    it('a cópia da tabela sugerida não altera a original', () => {
+        const copy = cloneDefaultAutomotivePrices();
+        copy['Nano Carbono']!.suv!.semParabrisa = 1;
+        expect(DEFAULT_AUTOMOTIVE_PRICES['Nano Carbono']!.suv!.semParabrisa).toBe(400);
     });
 });
 
