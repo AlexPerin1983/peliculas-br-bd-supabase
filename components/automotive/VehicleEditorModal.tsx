@@ -5,18 +5,20 @@ import ActionButton from '../ui/ActionButton';
 import Input from '../ui/Input';
 import VehicleCategoryIcon from './VehicleCategoryIcon';
 import VehicleTopView from './VehicleTopView';
-import type { AutomotiveSettings, AutomotiveVehicle, VehicleCategory, VehicleGlassGroup, VehicleGlassShade } from '../../types';
+import type { AutomotiveSettings, AutomotiveVehicle, VehicleCategory, VehicleGlassPart, VehicleGlassShade } from '../../types';
 import {
     AUTOMOTIVE_FILM_TYPES,
+    SIDE_SHADES,
     VEHICLE_CATEGORIES,
+    WINDSHIELD_SHADES,
     describeVehicleGlass,
-    formatGlassShade,
     formatMoneyInput,
     getAutomotiveTablePrice,
     getVehicleCategoryInfo,
-    getVehicleGlassGroupInfo,
-    getVehicleGlassGroups,
+    getVehicleGlassPartInfo,
+    getVehicleGlassParts,
     getVehicleLawWarnings,
+    normalizeVehicleGlass,
     parseMoneyInput,
     suggestVehicleCategory,
 } from '../../src/lib/automotive';
@@ -43,12 +45,12 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
     const [isPriceTouched, setIsPriceTouched] = useState(false);
     const [isCategoryTouched, setIsCategoryTouched] = useState(false);
     const [step, setStep] = useState<'dados' | 'vidros'>('dados');
-    const [selectedGroup, setSelectedGroup] = useState<VehicleGlassGroup | null>(null);
+    const [selectedParts, setSelectedParts] = useState<VehicleGlassPart[]>([]);
     const [error, setError] = useState('');
 
     useEffect(() => {
         if (!isOpen) return;
-        const initial: AutomotiveVehicle = vehicle ?? {
+        const initial: AutomotiveVehicle = vehicle ? { ...vehicle, vidros: normalizeVehicleGlass(vehicle.vidros) } : {
             id: Date.now(),
             modelo: '',
             categoria: 'hatch',
@@ -62,7 +64,7 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
         setIsPriceTouched(Boolean(vehicle));
         setIsCategoryTouched(Boolean(vehicle));
         setStep('dados');
-        setSelectedGroup(null);
+        setSelectedParts([]);
         setError('');
         // Só ao abrir: mudar a tabela com o modal aberto não reinicia o rascunho.
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -70,7 +72,7 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
 
     const tablePrice = draft ? getAutomotiveTablePrice(settings, draft.pelicula, draft.categoria, draft.comParabrisa) : undefined;
     const suggestedCategory = draft ? suggestVehicleCategory(draft.modelo) : undefined;
-    const glassGroups = useMemo(() => (draft ? getVehicleGlassGroups(draft) : []), [draft]);
+    const glassParts = useMemo(() => (draft ? getVehicleGlassParts(draft) : []), [draft]);
     const lawWarnings = draft ? getVehicleLawWarnings(draft) : [];
 
     if (!draft) return null;
@@ -111,8 +113,17 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
         setDraft(previous => previous ? { ...previous, preco: tablePrice } : previous);
     };
 
-    const handleShadeChange = (group: VehicleGlassGroup, shade: VehicleGlassShade) => {
-        setDraft(previous => previous ? { ...previous, vidros: { ...previous.vidros, [group]: shade } } : previous);
+    const handleTogglePart = (part: VehicleGlassPart) => {
+        setSelectedParts(previous => (previous.includes(part) ? previous.filter(item => item !== part) : [...previous, part]));
+    };
+
+    // O % escolhido vale para todos os vidros marcados.
+    const handleApplyShade = (shade: VehicleGlassShade) => {
+        if (activeParts.length === 0) return;
+        setDraft(previous => previous ? {
+            ...previous,
+            vidros: { ...previous.vidros, ...Object.fromEntries(activeParts.map(part => [part, shade])) },
+        } : previous);
     };
 
     const handleSave = () => {
@@ -126,7 +137,7 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
         }
         // Guarda só os vidros que existem nesta categoria e pacote.
         const vidros = Object.fromEntries(
-            Object.entries(draft.vidros || {}).filter(([group]) => glassGroups.includes(group as VehicleGlassGroup))
+            Object.entries(draft.vidros || {}).filter(([part]) => glassParts.includes(part as VehicleGlassPart))
         ) as AutomotiveVehicle['vidros'];
         onSave({
             ...draft,
@@ -140,7 +151,14 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
         ? [draft.pelicula, ...AUTOMOTIVE_FILM_TYPES]
         : AUTOMOTIVE_FILM_TYPES;
     const glassSummary = describeVehicleGlass(draft);
-    const activeGroup = selectedGroup && glassGroups.includes(selectedGroup) ? selectedGroup : glassGroups[0];
+    // Marcados que existem neste carro (trocar a categoria tira os que sumiram do desenho).
+    const activeParts = selectedParts.filter(part => glassParts.includes(part));
+    const shadeOptions = activeParts.length === 1 && activeParts[0] === 'pb' ? WINDSHIELD_SHADES : SIDE_SHADES;
+    const selectionText = activeParts.length === 0
+        ? 'Toque nos vidros para marcar'
+        : activeParts.length === glassParts.length
+            ? 'Todos os vidros marcados'
+            : `Marcados: ${activeParts.map(part => getVehicleGlassPartInfo(part).label).join(', ')}`;
 
     const footer = step === 'vidros' ? (
         <ActionButton variant="primary" size="lg" className="w-full" onClick={() => setStep('dados')}>
@@ -183,46 +201,39 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
                         <ChevronLeft className="h-4 w-4" aria-hidden="true" />
                         Voltar ao carro
                     </button>
-                    <div className="flex items-start gap-3">
-                        <VehicleTopView groups={glassGroups} vidros={draft.vidros} selectedGroup={activeGroup} className="h-64 w-32 shrink-0" />
-                        <div className="flex min-w-0 flex-1 flex-col gap-2">
-                            {glassGroups.map(group => (
-                                <button
-                                    key={group}
-                                    type="button"
-                                    aria-pressed={group === activeGroup}
-                                    onClick={() => setSelectedGroup(group)}
-                                    className={`${optionButtonClass(group === activeGroup)} flex min-h-11 items-center justify-between gap-2 px-3 text-left text-sm`}
-                                >
-                                    <span>{getVehicleGlassGroupInfo(group).label}</span>
-                                    <span className="font-bold">{formatGlassShade(draft.vidros?.[group])}</span>
-                                </button>
-                            ))}
+                    <div className="grid grid-cols-2 gap-2">
+                        <ActionButton variant="secondary" size="md" onClick={() => setSelectedParts(glassParts)}>Marcar todos</ActionButton>
+                        <ActionButton variant="secondary" size="md" onClick={() => setSelectedParts([])}>Desmarcar todos</ActionButton>
+                    </div>
+                    <VehicleTopView
+                        categoria={draft.categoria}
+                        parts={glassParts}
+                        vidros={draft.vidros}
+                        selected={activeParts}
+                        onTogglePart={handleTogglePart}
+                    />
+                    <div className="space-y-2">
+                        <p className="min-h-5 text-sm text-[var(--text-muted)]">{selectionText}</p>
+                        <div className="grid grid-cols-6 gap-1.5">
+                            {shadeOptions.map(shade => {
+                                const isSelected = activeParts.length > 0 && activeParts.every(part => draft.vidros?.[part] === shade);
+                                return (
+                                    <button
+                                        key={shade}
+                                        type="button"
+                                        aria-pressed={isSelected}
+                                        disabled={activeParts.length === 0}
+                                        onClick={() => handleApplyShade(shade)}
+                                        className={`h-11 rounded-full border-2 text-[13px] font-bold transition-colors disabled:opacity-40 ${isSelected
+                                            ? 'border-[var(--brand-primary)] bg-[var(--brand-primary)] text-white'
+                                            : 'border-blue-200 bg-[var(--surface)] text-blue-700 dark:border-blue-800 dark:text-blue-300'}`}
+                                    >
+                                        {shade === 'sem' ? 'sem' : shade === 'faixa' ? 'faixa' : `${shade}%`}
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
-                    {activeGroup && (
-                        <div className="space-y-2">
-                            <p className="ui-label">{getVehicleGlassGroupInfo(activeGroup).label}</p>
-                            <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
-                                {getVehicleGlassGroupInfo(activeGroup).shades.map(shade => {
-                                    const isSelected = draft.vidros?.[activeGroup] === shade;
-                                    return (
-                                        <button
-                                            key={shade}
-                                            type="button"
-                                            aria-pressed={isSelected}
-                                            onClick={() => handleShadeChange(activeGroup, shade)}
-                                            className={`h-12 rounded-full border-2 text-sm font-bold transition-colors ${isSelected
-                                                ? 'border-[var(--brand-primary)] bg-[var(--brand-primary)] text-white'
-                                                : 'border-blue-300 bg-[var(--surface)] text-blue-700 dark:border-blue-800 dark:text-blue-300'}`}
-                                        >
-                                            {shade === 'sem' ? 'sem' : shade === 'faixa' ? 'faixa' : `${shade}%`}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    )}
                     {lawWarnings.length > 0 && (
                         <div className="flex gap-2.5 rounded-[var(--radius-control)] border border-orange-300 bg-orange-50 p-3 text-sm text-orange-900 dark:border-orange-800/70 dark:bg-orange-950/40 dark:text-orange-100">
                             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />

@@ -6,7 +6,8 @@ import {
     cloneDefaultAutomotivePrices,
     describeVehicleGlass,
     getAutomotiveTablePrice,
-    getVehicleGlassGroups,
+    getVehicleGlassParts,
+    normalizeVehicleGlass,
     getVehicleLawWarnings,
     parseMoneyInput,
     suggestVehicleCategory,
@@ -87,27 +88,35 @@ describe('getAutomotiveTablePrice', () => {
 
 describe('vidros do carro', () => {
     it('só inclui o para-brisa no pacote com para-brisa', () => {
-        expect(getVehicleGlassGroups(vehicle())).not.toContain('parabrisa');
-        expect(getVehicleGlassGroups(vehicle({ comParabrisa: true }))).toContain('parabrisa');
-        expect(getVehicleGlassGroups(vehicle({ categoria: 'picape_simples' }))).toEqual(['dianteiras', 'traseiro']);
+        expect(getVehicleGlassParts(vehicle())).not.toContain('pb');
+        expect(getVehicleGlassParts(vehicle({ comParabrisa: true }))).toContain('pb');
+        expect(getVehicleGlassParts(vehicle({ categoria: 'picape_simples' }))).toEqual(['de', 'dd', 'vt']);
+        expect(getVehicleGlassParts(vehicle())).toEqual(['ts', 'de', 'dd', 'te', 'td', 've', 'vd', 'vt']);
     });
 
-    it('descreve só os vidros informados e que existem no pacote', () => {
-        const description = describeVehicleGlass(vehicle({
-            vidros: { parabrisa: 'faixa', dianteiras: '35', traseiro: '20' },
-        }));
-        expect(description).toBe('Dianteiras: 35% · Vidro traseiro: 20%');
-        expect(describeVehicleGlass(vehicle({ comParabrisa: true, vidros: { parabrisa: 'faixa' } }))).toBe('Para-brisa: só a faixa');
+    it('converte carros salvos com vidros por grupo para esquerdo e direito', () => {
+        expect(normalizeVehicleGlass({ dianteiras: '35', traseiro: '20', parabrisa: 'faixa' } as never)).toEqual({
+            de: '35', dd: '35', vt: '20', pb: 'faixa',
+        });
+        expect(normalizeVehicleGlass({ de: '35' })).toEqual({ de: '35' });
+        expect(normalizeVehicleGlass({})).toBeUndefined();
+    });
+
+    it('descreve juntando esquerdo e direito iguais', () => {
+        expect(describeVehicleGlass(vehicle({
+            vidros: { pb: 'faixa', de: '35', dd: '35', te: '20', td: '35', vt: '20' },
+        }))).toBe('Dianteiras: 35% · Traseira esq.: 20% · Traseira dir.: 35% · Vidro traseiro: 20%');
+        expect(describeVehicleGlass(vehicle({ comParabrisa: true, vidros: { pb: 'faixa' } }))).toBe('Para-brisa: só a faixa');
         expect(describeVehicleGlass(vehicle())).toBe('');
     });
 
     it('avisa vidros abaixo do mínimo da lei (70% na frente, 28% atrás)', () => {
         const warnings = getVehicleLawWarnings(vehicle({
             comParabrisa: true,
-            vidros: { parabrisa: 'faixa', dianteiras: '35', traseiras: '20', vigias: '50', traseiro: '5' },
+            vidros: { pb: 'faixa', de: '35', dd: '70', te: '20', ve: '50', vt: '5' },
         }));
-        expect(warnings.map(item => item.id)).toEqual(['dianteiras', 'traseiras', 'traseiro']);
-        expect(getVehicleLawWarnings(vehicle({ vidros: { dianteiras: '70', traseiras: 'sem' } }))).toEqual([]);
+        expect(warnings.map(item => item.id)).toEqual(['de', 'te', 'vt']);
+        expect(getVehicleLawWarnings(vehicle({ vidros: { de: '70', te: 'sem' } }))).toEqual([]);
     });
 });
 

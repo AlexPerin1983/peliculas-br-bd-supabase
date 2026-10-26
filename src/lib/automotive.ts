@@ -3,7 +3,7 @@ import type {
     AutomotiveSettings,
     AutomotiveVehicle,
     VehicleCategory,
-    VehicleGlassGroup,
+    VehicleGlassPart,
     VehicleGlassShade,
 } from '../../types';
 
@@ -11,50 +11,75 @@ export interface VehicleCategoryInfo {
     id: VehicleCategory;
     label: string;
     examples: string;
-    glassGroups: VehicleGlassGroup[];
+    glassParts: VehicleGlassPart[];
     // Silhueta lateral (viewBox 0 0 48 24), rodas desenhadas à parte.
     silhouette: string;
 }
 
 export const VEHICLE_CATEGORIES: VehicleCategoryInfo[] = [
-    { id: 'hatch', label: 'Hatch', examples: 'Onix, HB20, Polo', glassGroups: ['parabrisa', 'dianteiras', 'traseiras', 'traseiro'], silhouette: 'M4 18 L4 13 L12 12 L18 7 L32 7 L38 12 L44 13 L44 18 Z' },
-    { id: 'sedan', label: 'Sedã', examples: 'Onix Plus, Corolla, Virtus', glassGroups: ['parabrisa', 'dianteiras', 'traseiras', 'traseiro'], silhouette: 'M2 18 L2 14 L10 12 L16 7 L30 7 L36 12 L46 13 L46 18 Z' },
-    { id: 'suv', label: 'SUV', examples: 'Compass, Creta, T-Cross', glassGroups: ['parabrisa', 'dianteiras', 'traseiras', 'vigias', 'traseiro'], silhouette: 'M3 18 L3 10 L10 9 L14 5 L38 5 L42 10 L45 11 L45 18 Z' },
-    { id: 'picape_simples', label: 'Picape simples', examples: 'Strada, Saveiro', glassGroups: ['parabrisa', 'dianteiras', 'traseiro'], silhouette: 'M2 18 L2 12 L10 11 L13 6 L22 6 L24 11 L46 11 L46 18 Z' },
-    { id: 'picape_dupla', label: 'Picape dupla', examples: 'Hilux, S10, Toro', glassGroups: ['parabrisa', 'dianteiras', 'traseiras', 'traseiro'], silhouette: 'M2 18 L2 12 L8 11 L12 6 L28 6 L30 11 L46 11 L46 18 Z' },
-    { id: 'van', label: 'Van / utilitário', examples: 'Spin, Fiorino, Sprinter', glassGroups: ['parabrisa', 'dianteiras', 'traseiras', 'vigias', 'traseiro'], silhouette: 'M3 18 L3 6 L8 4 L44 4 L45 18 Z' },
+    { id: 'hatch', label: 'Hatch', examples: 'Onix, HB20, Polo', glassParts: ['pb', 'ts', 'de', 'dd', 'te', 'td', 'vt'], silhouette: 'M4 18 L4 13 L12 12 L18 7 L32 7 L38 12 L44 13 L44 18 Z' },
+    { id: 'sedan', label: 'Sedã', examples: 'Onix Plus, Corolla, Virtus', glassParts: ['pb', 'ts', 'de', 'dd', 'te', 'td', 'vt'], silhouette: 'M2 18 L2 14 L10 12 L16 7 L30 7 L36 12 L46 13 L46 18 Z' },
+    { id: 'suv', label: 'SUV', examples: 'Compass, Creta, T-Cross', glassParts: ['pb', 'ts', 'de', 'dd', 'te', 'td', 've', 'vd', 'vt'], silhouette: 'M3 18 L3 10 L10 9 L14 5 L38 5 L42 10 L45 11 L45 18 Z' },
+    { id: 'picape_simples', label: 'Picape simples', examples: 'Strada, Saveiro', glassParts: ['pb', 'de', 'dd', 'vt'], silhouette: 'M2 18 L2 12 L10 11 L13 6 L22 6 L24 11 L46 11 L46 18 Z' },
+    { id: 'picape_dupla', label: 'Picape dupla', examples: 'Hilux, S10, Toro', glassParts: ['pb', 'ts', 'de', 'dd', 'te', 'td', 'vt'], silhouette: 'M2 18 L2 12 L8 11 L12 6 L28 6 L30 11 L46 11 L46 18 Z' },
+    { id: 'van', label: 'Van / utilitário', examples: 'Spin, Fiorino, Sprinter', glassParts: ['pb', 'de', 'dd', 'te', 'td', 've', 'vd', 'vt'], silhouette: 'M3 18 L3 6 L8 4 L44 4 L45 18 Z' },
 ];
 
 export const getVehicleCategoryInfo = (category: VehicleCategory): VehicleCategoryInfo => (
     VEHICLE_CATEGORIES.find(item => item.id === category) || VEHICLE_CATEGORIES[0]
 );
 
-export interface VehicleGlassGroupInfo {
-    id: VehicleGlassGroup;
+export interface VehicleGlassPartInfo {
+    id: VehicleGlassPart;
     label: string;
     // Transparência mínima (vidro + película) da Resolução Contran 960/2022.
     lawMinimum: number;
-    shades: VehicleGlassShade[];
 }
 
-const SIDE_SHADES: VehicleGlassShade[] = ['sem', '5', '20', '35', '50', '70'];
-
-export const VEHICLE_GLASS_GROUPS: VehicleGlassGroupInfo[] = [
-    { id: 'parabrisa', label: 'Para-brisa', lawMinimum: 70, shades: ['sem', 'faixa', '70', '75', '80'] },
-    { id: 'dianteiras', label: 'Dianteiras', lawMinimum: 70, shades: SIDE_SHADES },
-    { id: 'traseiras', label: 'Traseiras', lawMinimum: 28, shades: SIDE_SHADES },
-    { id: 'vigias', label: 'Vigias', lawMinimum: 28, shades: SIDE_SHADES },
-    { id: 'traseiro', label: 'Vidro traseiro', lawMinimum: 28, shades: SIDE_SHADES },
+export const VEHICLE_GLASS_PARTS: VehicleGlassPartInfo[] = [
+    { id: 'pb', label: 'Para-brisa', lawMinimum: 70 },
+    { id: 'ts', label: 'Teto solar', lawMinimum: 28 },
+    { id: 'de', label: 'Dianteira esq.', lawMinimum: 70 },
+    { id: 'dd', label: 'Dianteira dir.', lawMinimum: 70 },
+    { id: 'te', label: 'Traseira esq.', lawMinimum: 28 },
+    { id: 'td', label: 'Traseira dir.', lawMinimum: 28 },
+    { id: 've', label: 'Vigia esq.', lawMinimum: 28 },
+    { id: 'vd', label: 'Vigia dir.', lawMinimum: 28 },
+    { id: 'vt', label: 'Vidro traseiro', lawMinimum: 28 },
 ];
 
-export const getVehicleGlassGroupInfo = (group: VehicleGlassGroup): VehicleGlassGroupInfo => (
-    VEHICLE_GLASS_GROUPS.find(item => item.id === group) || VEHICLE_GLASS_GROUPS[0]
+export const getVehicleGlassPartInfo = (part: VehicleGlassPart): VehicleGlassPartInfo => (
+    VEHICLE_GLASS_PARTS.find(item => item.id === part) || VEHICLE_GLASS_PARTS[0]
 );
 
+// Bolhas de % no toque: o para-brisa sozinho tem as suas (faixa e películas claras).
+export const WINDSHIELD_SHADES: VehicleGlassShade[] = ['sem', 'faixa', '70', '75', '80'];
+export const SIDE_SHADES: VehicleGlassShade[] = ['sem', '5', '20', '35', '50', '70'];
+
 // Vidros que entram no carro: o para-brisa só quando o pacote é "com para-brisa".
-export const getVehicleGlassGroups = (vehicle: Pick<AutomotiveVehicle, 'categoria' | 'comParabrisa'>): VehicleGlassGroup[] => (
-    getVehicleCategoryInfo(vehicle.categoria).glassGroups.filter(group => group !== 'parabrisa' || vehicle.comParabrisa)
+export const getVehicleGlassParts = (vehicle: Pick<AutomotiveVehicle, 'categoria' | 'comParabrisa'>): VehicleGlassPart[] => (
+    getVehicleCategoryInfo(vehicle.categoria).glassParts.filter(part => part !== 'pb' || vehicle.comParabrisa)
 );
+
+// Carros salvos antes de separar esquerdo e direito guardavam os vidros por grupo.
+const LEGACY_GLASS_GROUPS: Record<string, VehicleGlassPart[]> = {
+    parabrisa: ['pb'],
+    dianteiras: ['de', 'dd'],
+    traseiras: ['te', 'td'],
+    vigias: ['ve', 'vd'],
+    traseiro: ['vt'],
+};
+
+export const normalizeVehicleGlass = (vidros: Record<string, VehicleGlassShade | undefined> | undefined): AutomotiveVehicle['vidros'] => {
+    if (!vidros) return undefined;
+    const result: Partial<Record<VehicleGlassPart, VehicleGlassShade>> = {};
+    Object.entries(vidros).forEach(([key, shade]) => {
+        if (!shade) return;
+        const parts = LEGACY_GLASS_GROUPS[key] ?? (VEHICLE_GLASS_PARTS.some(item => item.id === key) ? [key as VehicleGlassPart] : []);
+        parts.forEach(part => { result[part] = result[part] ?? shade; });
+    });
+    return Object.keys(result).length > 0 ? result : undefined;
+};
 
 export const formatGlassShade = (shade: VehicleGlassShade | undefined): string => {
     if (!shade) return '—';
@@ -63,26 +88,42 @@ export const formatGlassShade = (shade: VehicleGlassShade | undefined): string =
     return `${shade}%`;
 };
 
-export const isShadeBelowLaw = (group: VehicleGlassGroup, shade: VehicleGlassShade | undefined): boolean => {
+export const isShadeBelowLaw = (part: VehicleGlassPart, shade: VehicleGlassShade | undefined): boolean => {
     if (!shade || shade === 'sem' || shade === 'faixa') return false;
-    return Number(shade) < getVehicleGlassGroupInfo(group).lawMinimum;
+    return Number(shade) < getVehicleGlassPartInfo(part).lawMinimum;
 };
 
 // Vidros escolhidos abaixo do mínimo da lei. A película sozinha já abaixo do limite
 // garante que o conjunto com o vidro também fica; acima dele, ainda depende do vidro.
-export const getVehicleLawWarnings = (vehicle: AutomotiveVehicle): VehicleGlassGroupInfo[] => (
-    getVehicleGlassGroups(vehicle)
-        .filter(group => isShadeBelowLaw(group, vehicle.vidros?.[group]))
-        .map(getVehicleGlassGroupInfo)
-);
+export const getVehicleLawWarnings = (vehicle: AutomotiveVehicle): VehicleGlassPartInfo[] => {
+    const vidros = normalizeVehicleGlass(vehicle.vidros);
+    return getVehicleGlassParts(vehicle)
+        .filter(part => isShadeBelowLaw(part, vidros?.[part]))
+        .map(getVehicleGlassPartInfo);
+};
 
-// "Para-brisa: só a faixa · Dianteiras: 35% · Traseiras: 20%" (só os vidros informados).
-export const describeVehicleGlass = (vehicle: AutomotiveVehicle): string => (
-    getVehicleGlassGroups(vehicle)
-        .filter(group => vehicle.vidros?.[group])
-        .map(group => `${getVehicleGlassGroupInfo(group).label}: ${formatGlassShade(vehicle.vidros?.[group])}`)
-        .join(' · ')
-);
+// Esquerdo e direito com o mesmo % saem juntos ("Dianteiras: 35%").
+const GLASS_PAIRS: { left: VehicleGlassPart; right: VehicleGlassPart; label: string }[] = [
+    { left: 'de', right: 'dd', label: 'Dianteiras' },
+    { left: 'te', right: 'td', label: 'Traseiras' },
+    { left: 've', right: 'vd', label: 'Vigias' },
+];
+
+// "Para-brisa: só a faixa · Dianteiras: 35% · Vidro traseiro: 20%" (só os vidros informados).
+export const describeVehicleGlass = (vehicle: AutomotiveVehicle): string => {
+    const vidros = normalizeVehicleGlass(vehicle.vidros) || {};
+    const parts = getVehicleGlassParts(vehicle);
+    const describe = (part: VehicleGlassPart) => (
+        parts.includes(part) && vidros[part] ? [`${getVehicleGlassPartInfo(part).label}: ${formatGlassShade(vidros[part])}`] : []
+    );
+    const pairs = GLASS_PAIRS.flatMap(pair => {
+        const left = parts.includes(pair.left) ? vidros[pair.left] : undefined;
+        const right = parts.includes(pair.right) ? vidros[pair.right] : undefined;
+        if (left && left === right) return [`${pair.label}: ${formatGlassShade(left)}`];
+        return [...describe(pair.left), ...describe(pair.right)];
+    });
+    return [...describe('pb'), ...describe('ts'), ...pairs, ...describe('vt')].join(' · ');
+};
 
 export const describeVehiclePackage = (vehicle: Pick<AutomotiveVehicle, 'comParabrisa'>): string => (
     vehicle.comParabrisa ? 'Completo com para-brisa' : 'Completo sem para-brisa'
