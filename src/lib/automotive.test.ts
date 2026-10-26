@@ -5,6 +5,9 @@ import {
     VEHICLE_CATEGORIES,
     cloneDefaultAutomotivePrices,
     describeVehicleGlass,
+    describeVehicleNotes,
+    getDefaultRemovalPrice,
+    getVehicleTotal,
     getAutomotiveTablePrice,
     describeVehiclePartPrices,
     getPackageParts,
@@ -168,5 +171,28 @@ describe('dinheiro', () => {
     it('soma os carros ignorando preço inválido', () => {
         expect(sumAutomotiveVehicles([vehicle({ preco: 450 }), vehicle({ id: 2, preco: 199.9 }), vehicle({ id: 3, preco: Number.NaN })])).toBe(649.9);
         expect(sumAutomotiveVehicles(undefined)).toBe(0);
+    });
+});
+
+describe('observações do carro', () => {
+    it('a remoção da película antiga soma no valor do carro só quando marcada', () => {
+        expect(getVehicleTotal(vehicle({ preco: 420, observacoes: { removerAntiga: true, valorRemocao: 80 } }))).toBe(500);
+        expect(getVehicleTotal(vehicle({ preco: 420, observacoes: { removerAntiga: false, valorRemocao: 80 } }))).toBe(420);
+        expect(sumAutomotiveVehicles([
+            vehicle({ preco: 420, observacoes: { removerAntiga: true, valorRemocao: 80 } }),
+            vehicle({ id: 2, preco: 206 }),
+        ])).toBe(706);
+    });
+
+    it('valor sugerido da remoção vem das configurações (R$ 80 sem valor salvo)', () => {
+        expect(getDefaultRemovalPrice(undefined)).toBe(80);
+        expect(getDefaultRemovalPrice({ ativo: true, valorRemocao: 120 })).toBe(120);
+    });
+
+    it('descreve as observações para o PDF', () => {
+        expect(describeVehicleNotes(vehicle({
+            observacoes: { removerAntiga: true, valorRemocao: 80, riscoPrevio: true, texto: '  não mexer no adesivo  ' },
+        }))).toBe('Remover película antiga (+ R$ 80,00) · Vidro com risco ou trinca antes do serviço · Obs.: não mexer no adesivo');
+        expect(describeVehicleNotes(vehicle())).toBe('');
     });
 });

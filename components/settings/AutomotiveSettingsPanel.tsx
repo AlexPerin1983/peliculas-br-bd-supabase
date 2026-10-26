@@ -8,6 +8,7 @@ import {
     cloneDefaultAutomotivePrices,
     formatMoneyInput,
     getAutomotivePriceTable,
+    getDefaultRemovalPrice,
     parseMoneyInput,
 } from '../../src/lib/automotive';
 
@@ -31,6 +32,7 @@ const AutomotiveSettingsPanel: React.FC<AutomotiveSettingsPanelProps> = ({ value
     const [selectedFilm, setSelectedFilm] = useState(AUTOMOTIVE_FILM_TYPES[0]);
     // Texto digitado de cada célula, para aceitar "450," enquanto o usuário digita.
     const [drafts, setDrafts] = useState<Record<string, string>>({});
+    const [removalText, setRemovalText] = useState<string | undefined>(undefined);
 
     const settings: AutomotiveSettings = value ?? { ativo: false };
     const prices = getAutomotivePriceTable(settings);
@@ -148,6 +150,26 @@ const AutomotiveSettingsPanel: React.FC<AutomotiveSettingsPanelProps> = ({ value
                         <RotateCcw className="h-4 w-4" aria-hidden="true" />
                         Voltar aos preços sugeridos de {selectedFilm}
                     </button>
+                    <label className="flex items-center gap-3 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] p-3">
+                        <span className="min-w-0 flex-1">
+                            <span className="block text-sm font-semibold text-[var(--text-strong)]">Remover película antiga</span>
+                            <span className="block text-xs text-[var(--text-muted)]">Valor sugerido quando marcar no carro (dá para mudar em cada um).</span>
+                        </span>
+                        <span className="flex h-10 w-28 shrink-0 items-center gap-1 rounded-[var(--radius-control)] border border-[var(--border-subtle)] px-2 text-xs text-[var(--text-muted)]">
+                            <span>R$</span>
+                            <input
+                                type="text"
+                                inputMode="decimal"
+                                value={removalText ?? formatMoneyInput(getDefaultRemovalPrice(settings))}
+                                onChange={event => {
+                                    setRemovalText(event.target.value);
+                                    onChange({ ...settings, valorRemocao: parseMoneyInput(event.target.value) ?? 0 });
+                                }}
+                                aria-label="Valor sugerido para remover película antiga"
+                                className="min-w-0 flex-1 bg-transparent text-right text-sm font-bold text-[var(--text-strong)] outline-none"
+                            />
+                        </span>
+                    </label>
                 </div>
             )}
         </div>
