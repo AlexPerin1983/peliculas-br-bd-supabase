@@ -810,6 +810,15 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                                 )}
                             </div>
 
+                            {(totals.vehicleCount ?? 0) > 0 && (
+                                <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2.5 dark:border-slate-700 dark:bg-slate-800">
+                                    <span className="text-sm font-semibold text-slate-900 dark:text-white">
+                                        Automotivo · {totals.vehicleCount} {totals.vehicleCount === 1 ? 'carro' : 'carros'}
+                                    </span>
+                                    <span className="text-sm font-bold text-slate-900 dark:text-white">{formatNumberBR(totals.vehiclesSubtotal ?? 0)}</span>
+                                </div>
+                            )}
+
                             {totals.groupedTotals && Object.keys(totals.groupedTotals).length > 0 && (
                                 <div className="space-y-2">
                                     <div className="flex items-center justify-between px-1">

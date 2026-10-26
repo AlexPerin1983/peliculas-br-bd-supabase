@@ -6,7 +6,10 @@ import ActionsBar from '../../../components/ActionsBar';
 import MobileFooter from '../../../components/MobileFooter';
 import CuttingOptimizationPanel from '../../../components/CuttingOptimizationPanel';
 import { TotalsDrawer } from '../../../components/ui/TotalsDrawer';
-import { Client, Film, PaymentMethods, ProposalDiscount, ProposalOption, ProposalPaymentConfig, Totals, UIMeasurement } from '../../../types';
+import AutomotiveQuotePanel from '../../../components/automotive/AutomotiveQuotePanel';
+import VehicleEditorModal from '../../../components/automotive/VehicleEditorModal';
+import { AutomotiveSettings, AutomotiveVehicle, Client, Film, PaymentMethods, ProposalDiscount, ProposalOption, ProposalPaymentConfig, Totals, UIMeasurement } from '../../../types';
+import { isAutomotiveEnabled } from '../../lib/automotive';
 import {
     getProposalAdjustmentInputs,
     normalizeAdjustmentInputValue,
@@ -83,7 +86,12 @@ interface AppClientWorkspaceProps {
     onOpenPrices: () => void;
     defaultHideMeasurements?: boolean;
     defaultValidityDays?: number;
+    automotiveSettings?: AutomotiveSettings;
+    // Beta fechado: sem acesso, a aba Automotivo não aparece nem com carros já salvos.
+    automotiveAllowed?: boolean;
 }
+
+type QuoteKind = 'arquitetonico' | 'automotivo';
 
 const formatCurrencyBR = (value: number) => new Intl.NumberFormat('pt-BR', {
     style: 'currency',
@@ -105,6 +113,7 @@ interface ProposalCommandCenterProps {
     generatedProposalsCount?: number;
     onOpenGeneratedProposals?: () => void;
     onOpenAIModal: () => void;
+    addLabel?: string;
 }
 
 interface GeneralDiscountInlineControlProps {
@@ -230,6 +239,7 @@ const ProposalCommandCenter: React.FC<ProposalCommandCenterProps> = ({
     onOpenGeneratedProposals,
     onOpenAIModal,
     onOpenPrices,
+    addLabel = 'Adicionar Medida',
 }) => {
     const activeMeasurements = measurements.filter(measurement => measurement.active !== false);
     const measurementsWithFilm = activeMeasurements.filter(measurement => Boolean(measurement.pelicula && measurement.pelicula !== 'Nenhuma'));
@@ -370,7 +380,7 @@ const ProposalCommandCenter: React.FC<ProposalCommandCenterProps> = ({
                     className="flex h-12 w-full items-center justify-center gap-2 rounded-[var(--radius-control)] bg-slate-950 font-semibold text-white shadow-[0_12px_24px_rgba(15,23,42,0.16)] transition-all hover:bg-slate-800 active:scale-[0.99] dark:bg-slate-100 dark:text-slate-950 dark:hover:bg-white"
                 >
                     <Plus className="h-4 w-4" aria-hidden="true" />
-                    <span>Adicionar Medida</span>
+                    <span>{addLabel}</span>
                 </button>
                 <button
                     onClick={onGeneratePdf}
@@ -465,9 +475,49 @@ export const AppClientWorkspace: React.FC<AppClientWorkspaceProps> = ({
     onOpenGeneratedProposals,
     onOpenAIModal,
     defaultHideMeasurements,
-    defaultValidityDays
+    defaultValidityDays,
+    automotiveSettings,
+    automotiveAllowed = false
 }) => {
     const [isDesktopTotalsOpen, setIsDesktopTotalsOpen] = useState(false);
+    // Aba escolhida em cada opção; sem escolha, abre no Automotivo quando a opção só tem carros.
+    const [quoteKindByOption, setQuoteKindByOption] = useState<Record<number, QuoteKind>>({});
+    const [vehicleEditor, setVehicleEditor] = useState<{ isOpen: boolean; vehicle: AutomotiveVehicle | null }>({ isOpen: false, vehicle: null });
+
+    const vehicles = generalDiscount.automotiveVehicles || [];
+    const canUseAutomotive = automotiveAllowed && Boolean(selectedClientId) && (isAutomotiveEnabled(automotiveSettings) || vehicles.length > 0);
+    const defaultQuoteKind: QuoteKind = vehicles.length > 0 && measurements.length === 0 ? 'automotivo' : 'arquitetonico';
+    const quoteKind: QuoteKind = canUseAutomotive && activeOptionId
+        ? (quoteKindByOption[activeOptionId] ?? defaultQuoteKind)
+        : 'arquitetonico';
+    const isAutomotive = quoteKind === 'automotivo';
+
+    const handleSelectQuoteKind = (kind: QuoteKind) => {
+        if (!activeOptionId) return;
+        setQuoteKindByOption(previous => ({ ...previous, [activeOptionId]: kind }));
+    };
+
+    const saveVehicles = (nextVehicles: AutomotiveVehicle[]) => {
+        onUpdateGeneralDiscount({
+            ...generalDiscount,
+            automotiveVehicles: nextVehicles.length > 0 ? nextVehicles : undefined,
+        });
+    };
+
+    const handleSaveVehicle = (vehicle: AutomotiveVehicle) => {
+        const exists = vehicles.some(item => item.id === vehicle.id);
+        saveVehicles(exists ? vehicles.map(item => (item.id === vehicle.id ? vehicle : item)) : [...vehicles, vehicle]);
+        setVehicleEditor({ isOpen: false, vehicle: null });
+    };
+
+    const handleDeleteVehicle = (vehicleId: number) => {
+        saveVehicles(vehicles.filter(item => item.id !== vehicleId));
+        setVehicleEditor({ isOpen: false, vehicle: null });
+    };
+
+    const openNewVehicle = () => setVehicleEditor({ isOpen: true, vehicle: null });
+    const handleAdd = isAutomotive ? openNewVehicle : onAddMeasurement;
+    const addLabel = isAutomotive ? 'Adicionar carro' : undefined;
 
     if (clientsCount === 0) {
         return (
@@ -519,7 +569,7 @@ export const AppClientWorkspace: React.FC<AppClientWorkspaceProps> = ({
 
                     {proposalOptions.length > 0 && activeOptionId && (
                         <>
-                            <div className={measurements.length > 0 ? 'hidden sm:block' : undefined}>
+                            <div className={measurements.length > 0 && !isAutomotive ? 'hidden sm:block' : undefined}>
                                 <ProposalOptionsCarousel
                                     options={proposalOptions}
                                     activeOptionId={activeOptionId}
@@ -539,9 +589,34 @@ export const AppClientWorkspace: React.FC<AppClientWorkspaceProps> = ({
                     )}
 
                     <div id="contentContainer" className="w-full min-h-[300px] animate-fade-in pb-28 sm:pb-0">
-                        {content}
+                        {canUseAutomotive && (
+                            <div role="tablist" aria-label="Tipo de orçamento" className="mb-4 grid grid-cols-2 gap-1 rounded-[var(--radius-control)] bg-[var(--surface-muted)] p-1">
+                                {([['arquitetonico', 'Residencial / Comercial'], ['automotivo', 'Automotivo']] as const).map(([kind, label]) => (
+                                    <button
+                                        key={kind}
+                                        type="button"
+                                        role="tab"
+                                        aria-selected={quoteKind === kind}
+                                        onClick={() => handleSelectQuoteKind(kind)}
+                                        className={`min-h-11 rounded-[calc(var(--radius-control)-2px)] px-2 text-sm font-bold transition-colors ${quoteKind === kind
+                                            ? 'bg-[var(--surface-raised)] text-[var(--text-strong)] shadow-[var(--shadow-hairline)]'
+                                            : 'text-[var(--text-muted)] hover:text-[var(--text-strong)]'}`}
+                                    >
+                                        {label}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
 
-                        {measurements.length > 0 && selectedClientId && (
+                        {isAutomotive ? (
+                            <AutomotiveQuotePanel
+                                vehicles={vehicles}
+                                onAddVehicle={openNewVehicle}
+                                onEditVehicle={vehicle => setVehicleEditor({ isOpen: true, vehicle })}
+                            />
+                        ) : content}
+
+                        {!isAutomotive && measurements.length > 0 && selectedClientId && (
                             <div className="mt-4 mb-4 sm:mb-0">
                                 <CuttingOptimizationPanel
                                     measurements={measurements}
@@ -573,13 +648,14 @@ export const AppClientWorkspace: React.FC<AppClientWorkspaceProps> = ({
                             generalDiscount={generalDiscount}
                             isGeneratingPdf={isGeneratingPdf}
                             onUpdateGeneralDiscount={onUpdateGeneralDiscount}
-                            onAddMeasurement={onAddMeasurement}
+                            onAddMeasurement={handleAdd}
                             onDuplicateMeasurements={onDuplicateMeasurements}
                             onGeneratePdf={onGeneratePdf}
                             generatedProposalsCount={generatedProposalsCount}
                             onOpenGeneratedProposals={onOpenGeneratedProposals}
                             onOpenAIModal={onOpenAIModal}
                             onOpenPrices={() => setIsDesktopTotalsOpen(true)}
+                            addLabel={addLabel}
                         />
                     </div>
                 )}
@@ -610,11 +686,12 @@ export const AppClientWorkspace: React.FC<AppClientWorkspaceProps> = ({
                             <ChevronRight className="h-5 w-5 shrink-0 text-blue-500" aria-hidden="true" />
                         </button>
                         <ActionsBar
-                            onAddMeasurement={onAddMeasurement}
+                            onAddMeasurement={handleAdd}
                             onDuplicateMeasurements={onDuplicateMeasurements}
                             onGeneratePdf={onGeneratePdf}
                             isGeneratingPdf={isGeneratingPdf}
                             onOpenAIModal={onOpenAIModal}
+                            addLabel={addLabel}
                         />
                     </div>
 
@@ -623,7 +700,8 @@ export const AppClientWorkspace: React.FC<AppClientWorkspaceProps> = ({
                         generalDiscount={generalDiscount}
                         onOpenGeneralDiscountModal={onOpenGeneralDiscountModal}
                         onUpdateGeneralDiscount={onUpdateGeneralDiscount}
-                        onAddMeasurement={onAddMeasurement}
+                        onAddMeasurement={handleAdd}
+                        addLabel={addLabel}
                         onDuplicateMeasurements={onDuplicateMeasurements}
                         onGeneratePdf={onGeneratePdf}
                         generatedProposalsCount={generatedProposalsCount}
@@ -663,6 +741,17 @@ export const AppClientWorkspace: React.FC<AppClientWorkspaceProps> = ({
                         activeOptionId={activeOptionId}
                         onSelectOption={onSelectOption}
                     />
+
+                    {canUseAutomotive && (
+                        <VehicleEditorModal
+                            isOpen={vehicleEditor.isOpen}
+                            vehicle={vehicleEditor.vehicle}
+                            settings={automotiveSettings}
+                            onClose={() => setVehicleEditor({ isOpen: false, vehicle: null })}
+                            onSave={handleSaveVehicle}
+                            onDelete={handleDeleteVehicle}
+                        />
+                    )}
                 </>
             )}
         </>

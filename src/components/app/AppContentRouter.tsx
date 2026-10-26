@@ -67,6 +67,8 @@ interface AppContentRouterProps {
     userInfo: UserInfo | null;
     organizationId?: string;
     isOwner: boolean;
+    // Beta do automotivo liberado para a conta logada.
+    automotiveAllowed?: boolean;
     isInstalled: boolean;
     allSavedPdfs: SavedPDF[];
     hasLoadedAllPdfs: boolean;
@@ -178,6 +180,7 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
     userInfo,
     organizationId,
     isOwner,
+    automotiveAllowed = false,
     isInstalled,
     allSavedPdfs,
     hasLoadedAllPdfs,
@@ -336,6 +339,7 @@ export const AppContentRouter: React.FC<AppContentRouterProps> = ({
                 isPwaInstalled={isInstalled}
                 onPromptPwaInstall={onPromptPwaInstall}
                 onNavigateToCatalog={() => onTabChange('films')}
+                showAutomotive={automotiveAllowed}
             />
         );
     }

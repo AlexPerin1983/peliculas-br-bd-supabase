@@ -127,6 +127,12 @@ export const generateLocalId = (): string => {
     return `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 };
 
+// Opções de proposta voltam do banco local na ordem do id: a posição no id
+// mantém a ordem da lista (senão, ao reabrir, a opção ativa e o carrossel embaralham).
+const generateOrderedLocalId = (timestamp: number, index: number): string => (
+    `local_${timestamp}_${String(index).padStart(4, '0')}_${Math.random().toString(36).substr(2, 9)}`
+);
+
 const SYNC_DEVICE_ID_KEY = 'peliculasbr.sync-device-id.v1';
 let fallbackDeviceId: string | null = null;
 
@@ -590,8 +596,8 @@ export async function saveProposalOptionsLocal(clientId: number, options: Propos
             await offlineDb.proposalOptions.delete(opt._localId!);
         }
 
-        for (const option of options) {
-            const localId = generateLocalId();
+        for (const [index, option] of options.entries()) {
+            const localId = generateOrderedLocalId(now, index);
             const localOption: LocalProposalOption = {
                 ...option,
                 clientId,
@@ -627,11 +633,11 @@ export async function replaceProposalOptionsCache(
             await offlineDb.proposalOptions.delete(opt._localId!);
         }
 
-        for (const option of options) {
+        for (const [index, option] of options.entries()) {
             const localOption: LocalProposalOption = {
                 ...option,
                 clientId,
-                _localId: generateLocalId(),
+                _localId: generateOrderedLocalId(now, index),
                 _syncStatus: syncStatus,
                 _lastModified: now,
                 ...(syncStatus === 'synced' ? { _syncedAt: now } : {})

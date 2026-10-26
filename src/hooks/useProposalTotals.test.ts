@@ -3,6 +3,38 @@ import { useProposalTotals } from './useProposalTotals';
 import { Film, UIMeasurement } from '../../types';
 
 describe('useProposalTotals', () => {
+  it('soma os carros do automotivo antes do desconto geral', () => {
+    const { result } = renderHook(() => useProposalTotals({
+      measurements: [{
+        id: 1, largura: '1', altura: '1', quantidade: 1, ambiente: 'Sala',
+        tipoAplicacao: 'Interna', pelicula: 'Blackout', active: true,
+      }],
+      films: [{ nome: 'Blackout', preco: 100 }],
+      generalDiscount: {
+        value: '10', type: 'percentage', operation: 'discount', pricingMode: 'complete',
+        automotiveVehicles: [
+          { id: 1, modelo: 'Compass', categoria: 'suv', pelicula: 'Blackout', comParabrisa: false, preco: 400 },
+          { id: 2, modelo: 'Onix', categoria: 'hatch', pelicula: 'Blackout', comParabrisa: true, preco: 500 },
+        ],
+      },
+    }));
+    expect(result.current.vehicleCount).toBe(2);
+    expect(result.current.vehiclesSubtotal).toBe(900);
+    expect(result.current.subtotal).toBeCloseTo(1000);
+    expect(result.current.totalM2).toBeCloseTo(1);
+    expect(result.current.finalTotal).toBeCloseTo(900);
+  });
+
+  it('sem carros não muda nada nos totais', () => {
+    const { result } = renderHook(() => useProposalTotals({
+      measurements: [],
+      films: [],
+      generalDiscount: { value: '', type: 'percentage' },
+    }));
+    expect(result.current.vehicleCount).toBeUndefined();
+    expect(result.current.subtotal).toBe(0);
+  });
+
   it('soma acréscimo e desconto do mesmo grupo sem perder nenhum dos dois', () => {
     const { result } = renderHook(() => useProposalTotals({
       measurements: [{

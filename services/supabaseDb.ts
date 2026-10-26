@@ -444,6 +444,7 @@ export const getUserInfo = async (): Promise<UserInfo> => {
         aiConfig: data.ai_config || mockUserInfo.aiConfig,
         lastSelectedClientId: data.last_selected_client_id,
         socialLinks: data.social_links,
+        automotivo: data.automotivo ?? undefined,
         isFallback: false
     };
 
@@ -500,7 +501,9 @@ export const saveUserInfo = async (userInfo: UserInfo): Promise<UserInfo> => {
         employees: userInfo.employees,
         ai_config: userInfo.aiConfig,
         last_selected_client_id: userInfo.lastSelectedClientId,
-        social_links: userInfo.socialLinks
+        social_links: userInfo.socialLinks,
+        // Sem automotivo ligado o campo fica de fora do envio (undefined não vai no JSON).
+        automotivo: userInfo.automotivo
     };
 
     const { error } = await supabase

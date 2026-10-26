@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { UserInfo } from '../../types';
+import AutomotiveSettingsPanel from '../settings/AutomotiveSettingsPanel';
 import Input from '../ui/Input';
 import BrandSelect from '../ui/BrandSelect';
 import { PROPOSAL_VALIDITY_OPTIONS, DEFAULT_PROPOSAL_VALIDITY_DAYS, clampValidityDays } from '../../src/lib/proposalValidity';
@@ -14,7 +15,7 @@ import { getActiveInvite, createOrganizationInvite } from '../../services/invite
 import { processLogoImage } from '../../services/imageProcessing';
 import { useTheme } from '../../src/contexts/ThemeContext';
 import { useFeedback } from '../../src/contexts/FeedbackContext';
-import { CheckCircle2, DollarSign, Facebook, FileSignature, Instagram, Loader2, MessageSquare, Moon, Palette, QrCode, Save, Settings, Share2, Shield, Smartphone, Sun, Users, Clock, Building2, Bot, Youtube, ChevronDown, Sparkles, X, Layers } from 'lucide-react';
+import { Car, CheckCircle2, DollarSign, Facebook, FileSignature, Instagram, Loader2, MessageSquare, Moon, Palette, QrCode, Save, Settings, Share2, Shield, Smartphone, Sun, Users, Clock, Building2, Bot, Youtube, ChevronDown, Sparkles, X, Layers } from 'lucide-react';
 import { FeatureGate } from '../subscription/SubscriptionComponents';
 import PortalShowcaseSettings from '../settings/PortalShowcaseSettings';
 import { PremiumFeatureSection } from '../subscription/PremiumFeatureSection';
@@ -27,6 +28,8 @@ interface UserSettingsViewProps {
     isPwaInstalled: boolean;
     onPromptPwaInstall: () => void;
     onNavigateToCatalog: () => void;
+    // Beta fechado do automotivo: só a conta liberada vê a seção.
+    showAutomotive?: boolean;
 }
 
 const applyPhoneMask = (value: string) => {
@@ -62,7 +65,7 @@ const secondaryButtonClassName = 'inline-flex h-11 items-center justify-center g
 const primaryButtonClassName = 'inline-flex h-12 items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--brand-primary)] px-5 text-sm font-semibold text-white shadow-[0_12px_24px_rgba(21,94,239,0.18)] transition-all duration-200 hover:bg-[var(--brand-primary-strong)] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60';
 
 type SectionSaveState = 'idle' | 'saving' | 'saved' | 'disabled';
-type SettingsSaveSection = 'company' | 'branding' | 'social' | 'proposal' | 'hours' | 'ai';
+type SettingsSaveSection = 'company' | 'branding' | 'social' | 'proposal' | 'automotive' | 'hours' | 'ai';
 
 const DEFAULT_WORKING_DAYS = [0, 1, 2, 3, 4, 5, 6];
 
@@ -71,6 +74,7 @@ const SECTION_SAVE_LABELS: Record<SettingsSaveSection, string> = {
     branding: 'Personalização',
     social: 'Redes sociais',
     proposal: 'Orçamento',
+    automotive: 'Automotivo',
     hours: 'Horário de funcionamento',
     ai: 'Inteligência artificial'
 };
@@ -221,7 +225,8 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({
     onOpenApiKeyModal,
     isPwaInstalled,
     onPromptPwaInstall,
-    onNavigateToCatalog
+    onNavigateToCatalog,
+    showAutomotive = false
 }) => {
     const { theme, toggleTheme } = useTheme();
     const { showToast } = useFeedback();
@@ -929,6 +934,24 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({
                     })()}
                 </div>
             </SettingsSection>
+
+            {/* ===== SECAO: AUTOMOTIVO (beta) ===== */}
+            {showAutomotive && (
+                <SettingsSection
+                    title="Automotivo"
+                    subtitle="Orçamento de carros e tabela de preços"
+                    icon={<Car className="w-5 h-5" />}
+                    badge="Beta"
+                    saveState={getSectionSaveState('automotive')}
+                    onSaveSection={() => handleSaveSection('automotive')}
+                    sectionId="automotivo"
+                >
+                    <AutomotiveSettingsPanel
+                        value={formData.automotivo}
+                        onChange={automotivo => setFormData(prev => ({ ...prev, automotivo }))}
+                    />
+                </SettingsSection>
+            )}
 
             {/* ===== SECAO: HORARIO DE FUNCIONAMENTO ===== */}
             <SettingsSection
