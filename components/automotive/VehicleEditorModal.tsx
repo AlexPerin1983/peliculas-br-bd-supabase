@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { AlertTriangle, Trash2 } from 'lucide-react';
+import { AlertTriangle, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import Modal from '../ui/Modal';
 import ActionButton from '../ui/ActionButton';
-import Input from '../ui/Input';
 import VehicleCategoryIcon from './VehicleCategoryIcon';
 import VehicleTopView from './VehicleTopView';
 import type { AutomotiveSettings, AutomotiveVehicle, VehicleCategory, VehicleGlassPart, VehicleGlassShade } from '../../types';
@@ -11,6 +10,7 @@ import {
     SIDE_SHADES,
     VEHICLE_CATEGORIES,
     formatMoneyInput,
+    getAutomotiveFilmShortName,
     getAutomotiveTablePrice,
     getShadeOptions,
     getVehicleAppliedParts,
@@ -42,10 +42,6 @@ const optionButtonClass = (selected: boolean) => `rounded-[var(--radius-control)
     ? 'border-2 border-[var(--brand-primary)] bg-blue-50 text-[var(--text-strong)] dark:bg-blue-950/40'
     : 'border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-body)] hover:bg-[var(--surface-muted)]'}`;
 
-const StepLabel: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-    <span className="ui-label block">{children}</span>
-);
-
 const getApplication = (vehicle: AutomotiveVehicle): Application => (
     vehicle.aplicacao === 'partes' ? 'partes' : vehicle.comParabrisa ? 'completo_parabrisa' : 'completo'
 );
@@ -59,6 +55,8 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
     // Texto digitado no valor de cada vidro (por partes), para aceitar "62," enquanto digita.
     const [partTexts, setPartTexts] = useState<Partial<Record<VehicleGlassPart, string>>>({});
     const [error, setError] = useState('');
+    // Lista vidro a vidro (% e valor de cada um), aberta só quando o usuário pede.
+    const [isListOpen, setIsListOpen] = useState(false);
 
     useEffect(() => {
         if (!isOpen) return;
@@ -76,6 +74,7 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
         setIsCategoryTouched(Boolean(vehicle));
         setPartTexts({});
         setError('');
+        setIsListOpen(false);
         // Só ao abrir: mudar a tabela com o modal aberto não reinicia o rascunho.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen, vehicle]);
@@ -89,7 +88,6 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
     const tableSem = getAutomotiveTablePrice(settings, draft.pelicula, draft.categoria, false);
     const tableCom = getAutomotiveTablePrice(settings, draft.pelicula, draft.categoria, true);
     const tablePrice = draft.comParabrisa ? tableCom : tableSem;
-    const suggestedCategory = suggestVehicleCategory(draft.modelo);
 
     const commit = (next: AutomotiveVehicle) => {
         setDraft(next);
@@ -236,16 +234,26 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
         : AUTOMOTIVE_FILM_TYPES;
     const sideParts = appliedParts.filter(part => part !== 'pb');
     const isPartsMode = application === 'partes';
+    const commonShade = sideParts.length > 0 && sideParts.every(part => draft.vidros?.[part] === draft.vidros?.[sideParts[0]])
+        ? draft.vidros?.[sideParts[0]]
+        : undefined;
 
-    const applicationOptions: { id: Application; title: string; hint: string; price: string }[] = [
-        { id: 'completo', title: 'Carro completo', hint: 'Todos os vidros, sem para-brisa', price: tableSem !== undefined ? formatCurrencyBR(tableSem) : '' },
-        { id: 'completo_parabrisa', title: 'Completo + para-brisa', hint: 'Todos os vidros e o para-brisa', price: tableCom !== undefined ? formatCurrencyBR(tableCom) : '' },
-        { id: 'partes', title: 'Só algumas partes', hint: 'Ex.: só o para-brisa ou só as laterais', price: isPartsMode ? formatCurrencyBR(draft.preco) : 'por vidro' },
+    const applicationOptions: { id: Application; title: string; price: string }[] = [
+        { id: 'completo', title: 'Carro completo', price: tableSem !== undefined ? formatCurrencyBR(tableSem) : 'sem preço na tabela' },
+        { id: 'completo_parabrisa', title: 'Completo + para-brisa', price: tableCom !== undefined ? formatCurrencyBR(tableCom) : 'sem preço na tabela' },
+        { id: 'partes', title: 'Só algumas partes', price: isPartsMode ? formatCurrencyBR(draft.preco) : 'valor por vidro' },
     ];
+
+    const glassSummary = appliedParts.length === 0
+        ? 'Nenhum vidro com película'
+        : `${appliedParts.length} ${appliedParts.length === 1 ? 'vidro' : 'vidros'} com película${commonShade ? ` · ${commonShade === 'faixa' ? 'faixa' : `${commonShade}%`}` : sideParts.length > 0 && sideParts.some(part => draft.vidros?.[part]) ? ' · % por vidro' : ''}`;
+    const lawSummary = lawWarnings.length > 0
+        ? `Abaixo da lei: ${lawWarnings.map(info => info.label).join(', ')}`
+        : 'Toque para ver vidro a vidro';
 
     const footer = (
         <div className="flex w-full items-center gap-2">
-            {vehicle && onDelete && (
+            {vehicle && onDelete && !isListOpen && (
                 <ActionButton
                     variant="ghost"
                     size="lg"
@@ -255,10 +263,39 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
                     onClick={() => onDelete(vehicle.id)}
                 />
             )}
-            <ActionButton variant="ghost" size="lg" onClick={onClose}>Cancelar</ActionButton>
-            <ActionButton variant="primary" size="lg" className="flex-1" onClick={handleSave}>
-                {vehicle ? `Salvar · ${formatCurrencyBR(draft.preco)}` : `Adicionar · ${formatCurrencyBR(draft.preco)}`}
-            </ActionButton>
+            <label className="flex min-w-0 flex-1 flex-col">
+                <span className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-[var(--text-muted)]">
+                    {isPartsMode ? 'Total (soma dos vidros)' : 'Preço do carro'}
+                </span>
+                <span className="flex items-baseline gap-1">
+                    <span className="text-sm font-bold text-[var(--text-muted)]">R$</span>
+                    {isPartsMode ? (
+                        <span className="truncate text-2xl font-black text-[var(--text-strong)]">{formatMoneyInput(draft.preco)}</span>
+                    ) : (
+                        <input
+                            type="text"
+                            inputMode="decimal"
+                            value={priceText}
+                            onChange={event => handlePriceChange(event.target.value)}
+                            placeholder="0,00"
+                            aria-label="Preço deste carro"
+                            className="w-full min-w-0 bg-transparent text-[var(--text-strong)] outline-none"
+                            // Fixo no elemento: a regra global "input { font: inherit }" vence as classes de fonte.
+                            style={{ fontSize: 24, fontWeight: 900, lineHeight: 1.2 }}
+                        />
+                    )}
+                </span>
+                {!isPartsMode && isPriceTouched && tablePrice !== undefined && draft.preco !== tablePrice && (
+                    <button type="button" onClick={handleUseTablePrice} className="self-start text-[var(--brand-primary)]">
+                        <span className="text-[11px] font-semibold">ajustado · usar tabela ({formatCurrencyBR(tablePrice)})</span>
+                    </button>
+                )}
+            </label>
+            {isListOpen ? (
+                <ActionButton variant="primary" size="lg" onClick={() => setIsListOpen(false)}>Pronto</ActionButton>
+            ) : (
+                <ActionButton variant="primary" size="lg" onClick={handleSave}>{vehicle ? 'Salvar' : 'Adicionar'}</ActionButton>
+            )}
         </div>
     );
 
@@ -266,213 +303,212 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
         <Modal
             isOpen={isOpen}
             onClose={onClose}
-            title={vehicle ? 'Editar carro' : 'Novo carro'}
+            title={isListOpen ? 'Vidro a vidro' : (vehicle ? 'Editar carro' : 'Novo carro')}
             footer={footer}
             keyboardAwareFooter
         >
-            <div className="space-y-6">
+            {isListOpen ? (
                 <div className="space-y-3">
-                    <Input
-                        id="vehicleModel"
-                        label="1. Carro"
+                    <button
+                        type="button"
+                        onClick={() => setIsListOpen(false)}
+                        className="inline-flex min-h-10 items-center gap-1 text-sm font-semibold text-[var(--brand-primary)]"
+                    >
+                        <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                        Voltar ao carro
+                    </button>
+                    {appliedParts.length === 0 ? (
+                        <p className="text-sm text-[var(--text-muted)]">Nenhum vidro com película. Toque nos vidros do desenho para marcar.</p>
+                    ) : (
+                        <div className="overflow-hidden rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface)]">
+                            <div className="grid grid-cols-[minmax(0,1fr)_76px_104px] gap-2 bg-[var(--surface-muted)] px-3 py-2 text-[11px] font-bold uppercase tracking-[0.06em] text-[var(--text-muted)]">
+                                <span>Vidro</span>
+                                <span>%</span>
+                                <span className="text-right">Valor</span>
+                            </div>
+                            {appliedParts.map(part => {
+                                const label = getVehicleGlassPartInfo(part).label;
+                                return (
+                                    <div key={part} className="grid grid-cols-[minmax(0,1fr)_76px_104px] items-center gap-2 border-t border-[var(--border-subtle)] px-3 py-1.5">
+                                        <span className="truncate text-sm font-semibold text-[var(--text-strong)]">{label}</span>
+                                        <select
+                                            value={draft.vidros?.[part] ?? ''}
+                                            onChange={event => handlePartShade(part, event.target.value)}
+                                            aria-label={`% do ${label}`}
+                                            className="ui-field h-9 w-full px-1.5 text-sm font-bold"
+                                        >
+                                            <option value="">—</option>
+                                            {getShadeOptions(part).map(shade => (
+                                                <option key={shade} value={shade}>{shade === 'faixa' ? 'faixa' : `${shade}%`}</option>
+                                            ))}
+                                        </select>
+                                        {isPartsMode ? (
+                                            <label className="flex h-9 items-center gap-1 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] px-2 text-xs text-[var(--text-muted)]">
+                                                <span>R$</span>
+                                                <input
+                                                    type="text"
+                                                    inputMode="decimal"
+                                                    value={partTexts[part] ?? formatMoneyInput(draft.precoPartes?.[part])}
+                                                    onChange={event => handlePartPriceChange(part, event.target.value)}
+                                                    placeholder="0,00"
+                                                    aria-label={`Valor do ${label}`}
+                                                    className="min-w-0 flex-1 bg-transparent text-right text-sm font-bold text-[var(--text-strong)] outline-none"
+                                                />
+                                            </label>
+                                        ) : (
+                                            <span className="text-right text-xs text-[var(--text-muted)]">no pacote</span>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                    <p className="text-xs leading-relaxed text-[var(--text-muted)]">
+                        {isPartsMode
+                            ? 'Valor de cada vidro dividido a partir da sua tabela (carro completo e para-brisa). Dá para mudar qualquer valor.'
+                            : 'No pacote vale o preço da tabela. Toque num vidro do desenho para cobrar por partes.'}
+                    </p>
+                    {lawWarnings.length > 0 && (
+                        <div className="flex gap-2.5 rounded-[var(--radius-control)] border border-orange-300 bg-orange-50 p-3 text-sm text-orange-900 dark:border-orange-800/70 dark:bg-orange-950/40 dark:text-orange-100">
+                            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                            <p>
+                                {lawWarnings.map(info => `${info.label} abaixo de ${info.lawMinimum}%`).join(' · ')}.
+                                {' '}Fica abaixo do mínimo da lei de trânsito (Contran 960/2022). É só um aviso: o orçamento sai normalmente.
+                            </p>
+                        </div>
+                    )}
+                </div>
+            ) : (
+                <div className="space-y-3">
+                    <input
                         type="text"
                         value={draft.modelo}
                         onChange={event => handleModelChange(event.target.value)}
-                        placeholder="Ex.: Jeep Compass 2022"
+                        placeholder="Carro (ex.: Jeep Compass 2022)"
+                        aria-label="Carro"
                         autoComplete="off"
+                        className="ui-field block h-11 w-full px-3 text-[15px] font-semibold"
                     />
-                    <div>
-                        <div className="flex items-baseline justify-between gap-2">
-                            <StepLabel>Categoria</StepLabel>
-                            {suggestedCategory && suggestedCategory === draft.categoria && !isCategoryTouched && (
-                                <span className="text-xs font-semibold text-[var(--brand-primary)]">Sugerida pelo modelo</span>
-                            )}
-                        </div>
-                        <div className="mt-1.5 grid grid-cols-3 gap-2">
-                            {VEHICLE_CATEGORIES.map(category => {
-                                const isSelected = draft.categoria === category.id;
-                                return (
-                                    <button
-                                        key={category.id}
-                                        type="button"
-                                        aria-pressed={isSelected}
-                                        onClick={() => handleCategoryChange(category.id)}
-                                        className={`${optionButtonClass(isSelected)} flex min-h-[76px] flex-col items-center justify-center gap-1 px-1 py-2 text-xs ${isSelected ? 'text-blue-700 dark:text-blue-300' : ''}`}
-                                    >
-                                        <VehicleCategoryIcon category={category.id} />
-                                        <span className="text-center leading-tight">{category.label}</span>
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </div>
-                </div>
 
-                <div>
-                    <StepLabel>2. Película</StepLabel>
-                    <div className="mt-1.5 grid grid-cols-2 gap-2" role="group" aria-label="Película">
-                        {filmOptions.map(film => (
-                            <button
-                                key={film}
-                                type="button"
-                                aria-pressed={draft.pelicula === film}
-                                onClick={() => handleBaseChange({ pelicula: film })}
-                                className={`${optionButtonClass(draft.pelicula === film)} min-h-12 px-2 text-sm`}
-                            >
-                                {film}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-
-                <div>
-                    <StepLabel>3. O que vai aplicar?</StepLabel>
-                    <div className="mt-1.5 space-y-2">
-                        {applicationOptions.map(option => (
-                            <button
-                                key={option.id}
-                                type="button"
-                                aria-pressed={application === option.id}
-                                onClick={() => handleApplication(option.id)}
-                                className={`${optionButtonClass(application === option.id)} flex min-h-[60px] w-full items-center justify-between gap-3 px-3.5 py-2 text-left`}
-                            >
-                                <span className="min-w-0">
-                                    <span className="block text-sm font-bold text-[var(--text-strong)]">{option.title}</span>
-                                    <span className="block text-xs font-normal text-[var(--text-muted)]">{option.hint}</span>
-                                </span>
-                                <span className="shrink-0 text-sm font-black text-[var(--text-strong)]">{option.price}</span>
-                            </button>
-                        ))}
-                    </div>
-                </div>
-
-                <div className="space-y-2">
-                    <p className="text-xs text-[var(--text-muted)]">Azul = vai película. Toque num vidro para tirar ou colocar.</p>
-                    <VehicleTopView
-                        categoria={draft.categoria}
-                        parts={categoryParts}
-                        vidros={draft.vidros}
-                        applied={appliedParts}
-                        onTogglePart={handleTogglePart}
-                    />
-                </div>
-
-                {sideParts.length > 0 && (
-                    <div>
-                        <StepLabel>4. Escurecimento (mesmo % em todos)</StepLabel>
-                        <div className="mt-1.5 grid grid-cols-5 gap-1.5">
-                            {SIDE_SHADES.map(shade => {
-                                const isSelected = sideParts.every(part => draft.vidros?.[part] === shade);
-                                return (
-                                    <button
-                                        key={shade}
-                                        type="button"
-                                        aria-pressed={isSelected}
-                                        onClick={() => handleShadeAll(shade)}
-                                        className={`h-11 rounded-full border-2 text-[13px] font-bold transition-colors ${isSelected
-                                            ? 'border-[var(--brand-primary)] bg-[var(--brand-primary)] text-white'
-                                            : 'border-blue-200 bg-[var(--surface)] text-blue-700 dark:border-blue-800 dark:text-blue-300'}`}
-                                    >
-                                        {shade}%
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </div>
-                )}
-
-                {appliedParts.length > 0 && (
-                    <div className="overflow-hidden rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface)]">
-                        <div className="grid grid-cols-[minmax(0,1fr)_76px_104px] gap-2 bg-[var(--surface-muted)] px-3 py-2 text-[11px] font-bold uppercase tracking-[0.06em] text-[var(--text-muted)]">
-                            <span>Vidro</span>
-                            <span>%</span>
-                            <span className="text-right">Valor</span>
-                        </div>
-                        {appliedParts.map(part => {
-                            const label = getVehicleGlassPartInfo(part).label;
+                    <div className="grid grid-cols-6 gap-1" role="group" aria-label="Categoria">
+                        {VEHICLE_CATEGORIES.map(category => {
+                            const isSelected = draft.categoria === category.id;
                             return (
-                                <div key={part} className="grid grid-cols-[minmax(0,1fr)_76px_104px] items-center gap-2 border-t border-[var(--border-subtle)] px-3 py-1.5">
-                                    <span className="truncate text-sm font-semibold text-[var(--text-strong)]">{label}</span>
-                                    <select
-                                        value={draft.vidros?.[part] ?? ''}
-                                        onChange={event => handlePartShade(part, event.target.value)}
-                                        aria-label={`% do ${label}`}
-                                        className="ui-field h-9 w-full px-1.5 text-sm font-bold"
-                                    >
-                                        <option value="">—</option>
-                                        {getShadeOptions(part).map(shade => (
-                                            <option key={shade} value={shade}>{shade === 'faixa' ? 'faixa' : `${shade}%`}</option>
-                                        ))}
-                                    </select>
-                                    {isPartsMode ? (
-                                        <label className="flex h-9 items-center gap-1 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] px-2 text-xs text-[var(--text-muted)]">
-                                            <span>R$</span>
-                                            <input
-                                                type="text"
-                                                inputMode="decimal"
-                                                value={partTexts[part] ?? formatMoneyInput(draft.precoPartes?.[part])}
-                                                onChange={event => handlePartPriceChange(part, event.target.value)}
-                                                placeholder="0,00"
-                                                aria-label={`Valor do ${label}`}
-                                                className="min-w-0 flex-1 bg-transparent text-right text-sm font-bold text-[var(--text-strong)] outline-none"
-                                            />
-                                        </label>
-                                    ) : (
-                                        <span className="text-right text-xs text-[var(--text-muted)]">no pacote</span>
-                                    )}
-                                </div>
+                                <button
+                                    key={category.id}
+                                    type="button"
+                                    aria-pressed={isSelected}
+                                    aria-label={category.label}
+                                    title={category.label}
+                                    onClick={() => handleCategoryChange(category.id)}
+                                    className={`flex h-[58px] flex-col items-center justify-center gap-0.5 rounded-[var(--radius-control)] px-0.5 transition-colors active:scale-[0.98] ${isSelected
+                                        ? 'border-2 border-[var(--brand-primary)] bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300'
+                                        : 'border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-strong)]'}`}
+                                >
+                                    <VehicleCategoryIcon category={category.id} className="h-[22px] w-[46px]" />
+                                    <span className="text-[10.5px] font-bold leading-tight">{category.shortLabel}</span>
+                                </button>
                             );
                         })}
-                        <p className="border-t border-[var(--border-subtle)] px-3 py-2 text-xs leading-relaxed text-[var(--text-muted)]">
-                            {isPartsMode
-                                ? 'Valor de cada vidro dividido a partir da sua tabela (carro completo e para-brisa). Dá para mudar qualquer valor.'
-                                : 'Preço de pacote da sua tabela. Para cobrar por vidro, escolha "Só algumas partes" ou toque num vidro.'}
-                        </p>
                     </div>
-                )}
 
-                {lawWarnings.length > 0 && (
-                    <div className="flex gap-2.5 rounded-[var(--radius-control)] border border-orange-300 bg-orange-50 p-3 text-sm text-orange-900 dark:border-orange-800/70 dark:bg-orange-950/40 dark:text-orange-100">
-                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-                        <p>
-                            {lawWarnings.map(info => `${info.label} abaixo de ${info.lawMinimum}%`).join(' · ')}.
-                            {' '}Fica abaixo do mínimo da lei de trânsito (Contran 960/2022). É só um aviso: o orçamento sai normalmente.
-                        </p>
-                    </div>
-                )}
-
-                {!isPartsMode && (
-                    <div className="rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface)] p-3.5">
-                        <div className="flex items-center justify-between gap-2 text-sm">
-                            <span className="text-[var(--text-muted)]">Preço do carro</span>
-                            {tablePrice !== undefined && isPriceTouched && draft.preco !== tablePrice ? (
-                                <button type="button" onClick={handleUseTablePrice} className="min-h-9 font-semibold text-[var(--brand-primary)]">
-                                    Usar tabela ({formatCurrencyBR(tablePrice)})
+                    <div className="grid gap-[3px] rounded-[var(--radius-control)] bg-[var(--surface-muted)] p-[3px]" style={{ gridTemplateColumns: `repeat(${filmOptions.length}, minmax(0, 1fr))` }} role="group" aria-label="Película">
+                        {filmOptions.map(film => {
+                            const isSelected = draft.pelicula === film;
+                            return (
+                                <button
+                                    key={film}
+                                    type="button"
+                                    aria-pressed={isSelected}
+                                    aria-label={film}
+                                    onClick={() => handleBaseChange({ pelicula: film })}
+                                    className={`h-9 truncate rounded-[calc(var(--radius-control)-3px)] px-1 text-[13px] font-bold transition-colors ${isSelected
+                                        ? 'bg-[var(--surface-raised)] text-[var(--text-strong)] shadow-[var(--shadow-hairline)]'
+                                        : 'text-[var(--text-muted)]'}`}
+                                >
+                                    {getAutomotiveFilmShortName(film)}
                                 </button>
-                            ) : tablePrice === undefined ? (
-                                <span className="text-xs text-[var(--text-muted)]">sem preço na tabela</span>
-                            ) : null}
-                        </div>
-                        <label className="mt-2 flex h-14 items-center gap-2 rounded-[var(--radius-control)] border-2 border-[var(--text-strong)] px-3.5">
-                            <span className="text-base font-bold text-[var(--text-muted)]">R$</span>
-                            <input
-                                type="text"
-                                inputMode="decimal"
-                                value={priceText}
-                                onChange={event => handlePriceChange(event.target.value)}
-                                placeholder="0,00"
-                                aria-label="Preço deste carro"
-                                className="min-w-0 flex-1 bg-transparent text-2xl font-black text-[var(--text-strong)] outline-none"
-                            />
-                            {isPriceTouched && tablePrice !== undefined && draft.preco !== tablePrice && (
-                                <span className="rounded-full bg-amber-100 px-2 py-1 text-[11px] font-bold text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">ajustado</span>
-                            )}
-                        </label>
+                            );
+                        })}
                     </div>
-                )}
 
-                {error && <p role="alert" className="text-sm font-semibold text-[var(--danger)]">{error}</p>}
-            </div>
+                    <div className="flex items-start gap-2.5">
+                        <div className="flex shrink-0 flex-col items-center gap-0.5">
+                            <VehicleTopView
+                                categoria={draft.categoria}
+                                parts={categoryParts}
+                                vidros={draft.vidros}
+                                applied={appliedParts}
+                                onTogglePart={handleTogglePart}
+                                width={150}
+                            />
+                            <span className="text-[10.5px] text-[var(--text-muted)]">Toque no vidro</span>
+                        </div>
+
+                        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                            <span className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-[var(--text-muted)]">Aplicar</span>
+                            {applicationOptions.map(option => {
+                                const isSelected = application === option.id;
+                                return (
+                                    <button
+                                        key={option.id}
+                                        type="button"
+                                        aria-pressed={isSelected}
+                                        onClick={() => handleApplication(option.id)}
+                                        className={`${optionButtonClass(isSelected)} flex min-h-[50px] flex-col items-start justify-center px-2.5 py-1 text-left`}
+                                    >
+                                        <span className="text-[13px] font-extrabold leading-tight text-[var(--text-strong)]">{option.title}</span>
+                                        <span className={`text-xs font-semibold ${isSelected ? 'text-blue-700 dark:text-blue-300' : 'text-[var(--text-muted)]'}`}>{option.price}</span>
+                                    </button>
+                                );
+                            })}
+
+                            <span className="mt-1 text-[10.5px] font-bold uppercase tracking-[0.08em] text-[var(--text-muted)]">Escurecimento</span>
+                            <div className="grid grid-cols-3 gap-1.5">
+                                {SIDE_SHADES.map(shade => {
+                                    const isSelected = sideParts.length > 0 && commonShade === shade;
+                                    return (
+                                        <button
+                                            key={shade}
+                                            type="button"
+                                            aria-pressed={isSelected}
+                                            disabled={sideParts.length === 0}
+                                            onClick={() => handleShadeAll(shade)}
+                                            className={`h-[34px] rounded-full border-[1.5px] text-[12.5px] font-extrabold transition-colors disabled:opacity-40 ${isSelected
+                                                ? 'border-[var(--brand-primary)] bg-[var(--brand-primary)] text-white'
+                                                : 'border-blue-200 bg-[var(--surface)] text-blue-700 dark:border-blue-800 dark:text-blue-300'}`}
+                                        >
+                                            {shade}%
+                                        </button>
+                                    );
+                                })}
+                                <button
+                                    type="button"
+                                    onClick={() => setIsListOpen(true)}
+                                    className="h-[34px] rounded-full border-[1.5px] border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-body)]"
+                                >
+                                    <span className="text-xs font-bold">Ajustar</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button
+                        type="button"
+                        onClick={() => setIsListOpen(true)}
+                        className="flex min-h-12 w-full items-center gap-2.5 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] px-3 py-1.5 text-left"
+                    >
+                        <span className="min-w-0 flex-1">
+                            <span className="block truncate text-[12.5px] font-bold text-[var(--text-strong)]">{glassSummary}</span>
+                            <span className={`block truncate text-[11.5px] ${lawWarnings.length > 0 ? 'text-orange-700 dark:text-orange-300' : 'text-[var(--text-muted)]'}`}>{lawSummary}</span>
+                        </span>
+                        {lawWarnings.length > 0 && <AlertTriangle className="h-4 w-4 shrink-0 text-orange-600" aria-hidden="true" />}
+                        <ChevronRight className="h-4 w-4 shrink-0 text-[var(--text-muted)]" aria-hidden="true" />
+                    </button>
+
+                    {error && <p role="alert" className="text-sm font-semibold text-[var(--danger)]">{error}</p>}
+                </div>
+            )}
         </Modal>
     );
 };

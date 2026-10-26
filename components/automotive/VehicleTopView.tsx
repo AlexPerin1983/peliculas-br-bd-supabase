@@ -9,6 +9,8 @@ interface VehicleTopViewProps {
     // Vidros que levam película (azul); os outros ficam brancos com contorno tracejado.
     applied: VehicleGlassPart[];
     onTogglePart: (part: VehicleGlassPart) => void;
+    // Largura do desenho em px (a altura acompanha); os círculos diminuem no desenho pequeno.
+    width?: number;
 }
 
 type Rect = { x: number; y: number; w: number; h: number; rx: number };
@@ -134,8 +136,6 @@ const SHADE_FILL: Record<VehicleGlassShade, string> = {
 const UNSET_FILL = '#6b7280';
 const NO_FILM_FILL = '#ffffff';
 
-const SCALE = 0.9;
-const PIN_SIZE = 42;
 
 const renderShape = (shape: GlassShape, props: React.SVGProps<SVGElement>) => (
     'd' in shape
@@ -144,12 +144,15 @@ const renderShape = (shape: GlassShape, props: React.SVGProps<SVGElement>) => (
 );
 
 // Carro visto de cima com um círculo por vidro: tocar coloca ou tira a película daquele vidro.
-const VehicleTopView: React.FC<VehicleTopViewProps> = ({ categoria, parts, vidros, applied, onTogglePart }) => {
+const VehicleTopView: React.FC<VehicleTopViewProps> = ({ categoria, parts, vidros, applied, onTogglePart, width = 216 }) => {
+    const scale = width / 240;
+    const pinSize = width < 180 ? 32 : 42;
+    const isCompact = pinSize < 42;
     const drawing = DRAWINGS[categoria] || DRAWINGS.sedan;
     const { body, cabin, bed } = drawing;
 
     return (
-        <div className="relative mx-auto" style={{ width: 240 * SCALE, height: 440 * SCALE }}>
+        <div className="relative mx-auto" style={{ width, height: Math.round(440 * scale) }}>
             <svg viewBox="0 0 240 440" className="absolute inset-0 h-full w-full" aria-hidden="true">
                 <rect x={body.x + 5} y={body.y + 7} width={body.w} height={body.h} rx={body.rx} className="fill-slate-200 dark:fill-slate-800" />
                 {[body.x - 8, body.x + body.w + 8].map(cx => (
@@ -201,15 +204,15 @@ const VehicleTopView: React.FC<VehicleTopViewProps> = ({ categoria, parts, vidro
                             ? 'border-2 border-blue-600 bg-blue-600 text-white'
                             : 'border-[1.5px] border-dashed border-slate-400 bg-white text-slate-500 dark:bg-slate-900 dark:text-slate-400'}`}
                         style={{
-                            width: PIN_SIZE,
-                            height: PIN_SIZE,
-                            left: Math.round(pin[0] * SCALE - PIN_SIZE / 2),
-                            top: Math.round(pin[1] * SCALE - PIN_SIZE / 2),
+                            width: pinSize,
+                            height: pinSize,
+                            left: Math.round(pin[0] * scale - pinSize / 2),
+                            top: Math.round(pin[1] * scale - pinSize / 2),
                         }}
                     >
-                        <span className="text-[11px] font-extrabold leading-none">{part.toUpperCase()}</span>
+                        <span className={`${isCompact ? "text-[10px]" : "text-[11px]"} font-extrabold leading-none`}>{part.toUpperCase()}</span>
                         {shade && (
-                            <span className="mt-0.5 text-[9px] font-bold leading-none">
+                            <span className={`mt-0.5 ${isCompact ? "text-[8px]" : "text-[9px]"} font-bold leading-none`}>
                                 {shade === 'sem' ? 'sem' : shade === 'faixa' ? 'faixa' : `${shade}%`}
                             </span>
                         )}

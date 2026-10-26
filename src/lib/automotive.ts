@@ -10,6 +10,8 @@ import type {
 export interface VehicleCategoryInfo {
     id: VehicleCategory;
     label: string;
+    // Nome curto para a fileira de ícones do cadastro do carro.
+    shortLabel: string;
     examples: string;
     glassParts: VehicleGlassPart[];
     // Silhueta lateral (viewBox 0 0 48 24), rodas desenhadas à parte.
@@ -17,12 +19,12 @@ export interface VehicleCategoryInfo {
 }
 
 export const VEHICLE_CATEGORIES: VehicleCategoryInfo[] = [
-    { id: 'hatch', label: 'Hatch', examples: 'Onix, HB20, Polo', glassParts: ['pb', 'ts', 'de', 'dd', 'te', 'td', 'vt'], silhouette: 'M4 18 L4 13 L12 12 L18 7 L32 7 L38 12 L44 13 L44 18 Z' },
-    { id: 'sedan', label: 'Sedã', examples: 'Onix Plus, Corolla, Virtus', glassParts: ['pb', 'ts', 'de', 'dd', 'te', 'td', 'vt'], silhouette: 'M2 18 L2 14 L10 12 L16 7 L30 7 L36 12 L46 13 L46 18 Z' },
-    { id: 'suv', label: 'SUV', examples: 'Compass, Creta, T-Cross', glassParts: ['pb', 'ts', 'de', 'dd', 'te', 'td', 've', 'vd', 'vt'], silhouette: 'M3 18 L3 10 L10 9 L14 5 L38 5 L42 10 L45 11 L45 18 Z' },
-    { id: 'picape_simples', label: 'Picape simples', examples: 'Strada, Saveiro', glassParts: ['pb', 'de', 'dd', 'vt'], silhouette: 'M2 18 L2 12 L10 11 L13 6 L22 6 L24 11 L46 11 L46 18 Z' },
-    { id: 'picape_dupla', label: 'Picape dupla', examples: 'Hilux, S10, Toro', glassParts: ['pb', 'ts', 'de', 'dd', 'te', 'td', 'vt'], silhouette: 'M2 18 L2 12 L8 11 L12 6 L28 6 L30 11 L46 11 L46 18 Z' },
-    { id: 'van', label: 'Van / utilitário', examples: 'Spin, Fiorino, Sprinter', glassParts: ['pb', 'de', 'dd', 'te', 'td', 've', 'vd', 'vt'], silhouette: 'M3 18 L3 6 L8 4 L44 4 L45 18 Z' },
+    { id: 'hatch', label: 'Hatch', shortLabel: 'Hatch', examples: 'Onix, HB20, Polo', glassParts: ['pb', 'ts', 'de', 'dd', 'te', 'td', 'vt'], silhouette: 'M4 18 L4 13 L12 12 L18 7 L32 7 L38 12 L44 13 L44 18 Z' },
+    { id: 'sedan', label: 'Sedã', shortLabel: 'Sedã', examples: 'Onix Plus, Corolla, Virtus', glassParts: ['pb', 'ts', 'de', 'dd', 'te', 'td', 'vt'], silhouette: 'M2 18 L2 14 L10 12 L16 7 L30 7 L36 12 L46 13 L46 18 Z' },
+    { id: 'suv', label: 'SUV', shortLabel: 'SUV', examples: 'Compass, Creta, T-Cross', glassParts: ['pb', 'ts', 'de', 'dd', 'te', 'td', 've', 'vd', 'vt'], silhouette: 'M3 18 L3 10 L10 9 L14 5 L38 5 L42 10 L45 11 L45 18 Z' },
+    { id: 'picape_simples', label: 'Picape simples', shortLabel: 'Picape', examples: 'Strada, Saveiro', glassParts: ['pb', 'de', 'dd', 'vt'], silhouette: 'M2 18 L2 12 L10 11 L13 6 L22 6 L24 11 L46 11 L46 18 Z' },
+    { id: 'picape_dupla', label: 'Picape dupla', shortLabel: 'Cab. dupla', examples: 'Hilux, S10, Toro', glassParts: ['pb', 'ts', 'de', 'dd', 'te', 'td', 'vt'], silhouette: 'M2 18 L2 12 L8 11 L12 6 L28 6 L30 11 L46 11 L46 18 Z' },
+    { id: 'van', label: 'Van / utilitário', shortLabel: 'Van', examples: 'Spin, Fiorino, Sprinter', glassParts: ['pb', 'de', 'dd', 'te', 'td', 've', 'vd', 'vt'], silhouette: 'M3 18 L3 6 L8 4 L44 4 L45 18 Z' },
 ];
 
 export const getVehicleCategoryInfo = (category: VehicleCategory): VehicleCategoryInfo => (
@@ -201,6 +203,16 @@ export const describeVehiclePartPrices = (vehicle: AutomotiveVehicle): string =>
 
 // Linhas de película do automotivo (no lugar do catálogo, que é de vidro de casa e empresa).
 export const AUTOMOTIVE_FILM_TYPES = ['Fumê comum', 'Nano Carbono', 'Nano Cerâmica', 'Cerâmica Premium'];
+
+// Nome curto no seletor do cadastro do carro (no PDF sai o nome inteiro).
+const AUTOMOTIVE_FILM_SHORT: Record<string, string> = {
+    'Fumê comum': 'Fumê',
+    'Nano Carbono': 'Carbono',
+    'Nano Cerâmica': 'Cerâmica',
+    'Cerâmica Premium': 'Premium',
+};
+
+export const getAutomotiveFilmShortName = (film: string): string => AUTOMOTIVE_FILM_SHORT[film] ?? film;
 
 const tablePrice = (semParabrisa: number, comParabrisa: number) => ({ semParabrisa, comParabrisa });
 
