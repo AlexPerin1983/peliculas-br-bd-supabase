@@ -52,13 +52,74 @@ export const getVehicleGlassPartInfo = (part: VehicleGlassPart): VehicleGlassPar
     VEHICLE_GLASS_PARTS.find(item => item.id === part) || VEHICLE_GLASS_PARTS[0]
 );
 
-// Bolhas de % no toque: o para-brisa sozinho tem as suas (faixa e películas claras).
-export const WINDSHIELD_SHADES: VehicleGlassShade[] = ['sem', 'faixa', '70', '75', '80'];
-export const SIDE_SHADES: VehicleGlassShade[] = ['sem', '5', '20', '35', '50', '70'];
+// Opções de %: o para-brisa tem as suas (faixa e películas claras).
+export const WINDSHIELD_SHADES: VehicleGlassShade[] = ['faixa', '70', '75', '80'];
+export const SIDE_SHADES: VehicleGlassShade[] = ['5', '20', '35', '50', '70'];
 
-// Vidros que entram no carro: o para-brisa só quando o pacote é "com para-brisa".
-export const getVehicleGlassParts = (vehicle: Pick<AutomotiveVehicle, 'categoria' | 'comParabrisa'>): VehicleGlassPart[] => (
-    getVehicleCategoryInfo(vehicle.categoria).glassParts.filter(part => part !== 'pb' || vehicle.comParabrisa)
+export const getShadeOptions = (part: VehicleGlassPart): VehicleGlassShade[] => (part === 'pb' ? WINDSHIELD_SHADES : SIDE_SHADES);
+
+// Todos os vidros que o desenho da categoria mostra.
+export const getVehicleGlassParts = (vehicle: Pick<AutomotiveVehicle, 'categoria'>): VehicleGlassPart[] => (
+    getVehicleCategoryInfo(vehicle.categoria).glassParts
+);
+
+// Vidros do pacote "carro completo": laterais e traseiro; o para-brisa só no "com para-brisa".
+// Teto solar fica fora do pacote (entra como parte extra).
+export const getPackageParts = (categoria: VehicleCategory, comParabrisa: boolean): VehicleGlassPart[] => (
+    getVehicleCategoryInfo(categoria).glassParts.filter(part => part !== 'ts' && (part !== 'pb' || comParabrisa))
+);
+
+// Vidros que levam película neste carro.
+export const getVehicleAppliedParts = (vehicle: Pick<AutomotiveVehicle, 'categoria' | 'comParabrisa' | 'aplicacao' | 'partes'>): VehicleGlassPart[] => {
+    const categoryParts = getVehicleGlassParts(vehicle);
+    return vehicle.aplicacao === 'partes'
+        ? categoryParts.filter(part => vehicle.partes?.includes(part))
+        : getPackageParts(vehicle.categoria, vehicle.comParabrisa);
+};
+
+const sameParts = (a: VehicleGlassPart[], b: VehicleGlassPart[]) => a.length === b.length && a.every(part => b.includes(part));
+
+// Os vidros marcados batem com um pacote? Então é pacote (preço da tabela), não por partes.
+export const matchPackage = (categoria: VehicleCategory, parts: VehicleGlassPart[]): boolean | undefined => {
+    if (sameParts(parts, getPackageParts(categoria, false))) return false;
+    if (sameParts(parts, getPackageParts(categoria, true))) return true;
+    return undefined;
+};
+
+// Peso de cada vidro ao dividir o "carro completo sem para-brisa" (vigia vale meia lateral).
+const PART_WEIGHTS: Partial<Record<VehicleGlassPart, number>> = { de: 1, dd: 1, te: 1, td: 1, ve: 0.5, vd: 0.5, vt: 1.5, ts: 1 };
+
+// Valor sugerido de cada vidro, tirado da tabela: o para-brisa é a diferença entre
+// "com" e "sem para-brisa"; o "sem" se divide pelos vidros do pacote (a soma bate com ele).
+export const splitAutomotivePrice = (
+    settings: AutomotiveSettings | undefined,
+    filmName: string,
+    categoria: VehicleCategory,
+): Partial<Record<VehicleGlassPart, number>> => {
+    const sem = getAutomotiveTablePrice(settings, filmName, categoria, false);
+    const com = getAutomotiveTablePrice(settings, filmName, categoria, true);
+    const result: Partial<Record<VehicleGlassPart, number>> = {};
+    if (sem === undefined) return result;
+
+    const packageParts = getPackageParts(categoria, false);
+    const unit = sem / packageParts.reduce((sum, part) => sum + (PART_WEIGHTS[part] ?? 1), 0);
+    let assigned = 0;
+    packageParts.forEach((part, index) => {
+        const value = index === packageParts.length - 1
+            ? roundCurrency(sem - assigned)
+            : Math.round(unit * (PART_WEIGHTS[part] ?? 1));
+        result[part] = value;
+        assigned += value;
+    });
+    if (getVehicleCategoryInfo(categoria).glassParts.includes('ts')) {
+        result.ts = Math.round(unit * (PART_WEIGHTS.ts ?? 1));
+    }
+    if (com !== undefined && com > sem) result.pb = roundCurrency(com - sem);
+    return result;
+};
+
+export const sumPartPrices = (parts: VehicleGlassPart[], prices: Partial<Record<VehicleGlassPart, number>> | undefined): number => (
+    roundCurrency(parts.reduce((sum, part) => sum + (prices?.[part] ?? 0), 0))
 );
 
 // Carros salvos antes de separar esquerdo e direito guardavam os vidros por grupo.
@@ -97,7 +158,7 @@ export const isShadeBelowLaw = (part: VehicleGlassPart, shade: VehicleGlassShade
 // garante que o conjunto com o vidro também fica; acima dele, ainda depende do vidro.
 export const getVehicleLawWarnings = (vehicle: AutomotiveVehicle): VehicleGlassPartInfo[] => {
     const vidros = normalizeVehicleGlass(vehicle.vidros);
-    return getVehicleGlassParts(vehicle)
+    return getVehicleAppliedParts(vehicle)
         .filter(part => isShadeBelowLaw(part, vidros?.[part]))
         .map(getVehicleGlassPartInfo);
 };
@@ -112,7 +173,7 @@ const GLASS_PAIRS: { left: VehicleGlassPart; right: VehicleGlassPart; label: str
 // "Para-brisa: só a faixa · Dianteiras: 35% · Vidro traseiro: 20%" (só os vidros informados).
 export const describeVehicleGlass = (vehicle: AutomotiveVehicle): string => {
     const vidros = normalizeVehicleGlass(vehicle.vidros) || {};
-    const parts = getVehicleGlassParts(vehicle);
+    const parts = getVehicleAppliedParts(vehicle);
     const describe = (part: VehicleGlassPart) => (
         parts.includes(part) && vidros[part] ? [`${getVehicleGlassPartInfo(part).label}: ${formatGlassShade(vidros[part])}`] : []
     );
@@ -125,9 +186,18 @@ export const describeVehicleGlass = (vehicle: AutomotiveVehicle): string => {
     return [...describe('pb'), ...describe('ts'), ...pairs, ...describe('vt')].join(' · ');
 };
 
-export const describeVehiclePackage = (vehicle: Pick<AutomotiveVehicle, 'comParabrisa'>): string => (
-    vehicle.comParabrisa ? 'Completo com para-brisa' : 'Completo sem para-brisa'
-);
+export const describeVehiclePackage = (vehicle: Pick<AutomotiveVehicle, 'comParabrisa' | 'aplicacao'>): string => {
+    if (vehicle.aplicacao === 'partes') return 'Por partes';
+    return vehicle.comParabrisa ? 'Completo com para-brisa' : 'Completo sem para-brisa';
+};
+
+// Por partes, o PDF mostra o valor de cada vidro ("Para-brisa R$ 200,00 · Dianteira esq. R$ 62,00").
+export const describeVehiclePartPrices = (vehicle: AutomotiveVehicle): string => {
+    if (vehicle.aplicacao !== 'partes') return '';
+    return getVehicleAppliedParts(vehicle)
+        .map(part => `${getVehicleGlassPartInfo(part).label} R$ ${formatMoneyInput(vehicle.precoPartes?.[part] ?? 0)}`)
+        .join(' · ');
+};
 
 // Linhas de película do automotivo (no lugar do catálogo, que é de vidro de casa e empresa).
 export const AUTOMOTIVE_FILM_TYPES = ['Fumê comum', 'Nano Carbono', 'Nano Cerâmica', 'Cerâmica Premium'];

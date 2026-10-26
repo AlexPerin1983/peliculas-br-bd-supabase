@@ -61,12 +61,12 @@ const AutomotiveQuotePanel: React.FC<AutomotiveQuotePanelProps> = ({ vehicles, o
                                 className="flex w-full items-center gap-3 rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface-raised)] p-3 text-left shadow-[var(--shadow-hairline)] transition-colors hover:bg-[var(--surface-muted)] active:scale-[0.99]"
                             >
                                 <span className="flex h-12 w-16 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-[var(--surface-muted)]">
-                                    <VehicleCategoryIcon category={vehicle.categoria} />
+                                    <VehicleCategoryIcon category={vehicle.categoria} className="h-8 w-[60px] text-[var(--text-strong)]" />
                                 </span>
                                 <span className="min-w-0 flex-1">
                                     <span className="block truncate text-sm font-bold text-[var(--text-strong)]">{vehicle.modelo || category.label}</span>
                                     <span className="block truncate text-xs text-[var(--text-muted)]">
-                                        {category.label} · {vehicle.pelicula} · {describeVehiclePackage(vehicle).replace('Completo ', '')}
+                                        {category.label} · {vehicle.pelicula} · {describeVehiclePackage(vehicle).replace('Completo ', '').toLowerCase()}
                                     </span>
                                     {glass && <span className="block truncate text-xs text-[var(--text-muted)]">{glass}</span>}
                                 </span>

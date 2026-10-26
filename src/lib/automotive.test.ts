@@ -6,7 +6,13 @@ import {
     cloneDefaultAutomotivePrices,
     describeVehicleGlass,
     getAutomotiveTablePrice,
+    describeVehiclePartPrices,
+    getPackageParts,
+    getVehicleAppliedParts,
     getVehicleGlassParts,
+    matchPackage,
+    splitAutomotivePrice,
+    sumPartPrices,
     normalizeVehicleGlass,
     getVehicleLawWarnings,
     parseMoneyInput,
@@ -87,11 +93,34 @@ describe('getAutomotiveTablePrice', () => {
 });
 
 describe('vidros do carro', () => {
-    it('só inclui o para-brisa no pacote com para-brisa', () => {
-        expect(getVehicleGlassParts(vehicle())).not.toContain('pb');
-        expect(getVehicleGlassParts(vehicle({ comParabrisa: true }))).toContain('pb');
-        expect(getVehicleGlassParts(vehicle({ categoria: 'picape_simples' }))).toEqual(['de', 'dd', 'vt']);
-        expect(getVehicleGlassParts(vehicle())).toEqual(['ts', 'de', 'dd', 'te', 'td', 've', 'vd', 'vt']);
+    it('o pacote tem laterais e traseiro; para-brisa só no "com", teto solar fica fora', () => {
+        expect(getPackageParts('suv', false)).toEqual(['de', 'dd', 'te', 'td', 've', 'vd', 'vt']);
+        expect(getPackageParts('suv', true)).toEqual(['pb', 'de', 'dd', 'te', 'td', 've', 'vd', 'vt']);
+        expect(getPackageParts('picape_simples', false)).toEqual(['de', 'dd', 'vt']);
+        expect(getVehicleGlassParts(vehicle())).toEqual(['pb', 'ts', 'de', 'dd', 'te', 'td', 've', 'vd', 'vt']);
+    });
+
+    it('por partes usa só os vidros marcados', () => {
+        expect(getVehicleAppliedParts(vehicle({ aplicacao: 'partes', partes: ['vt', 'pb'] }))).toEqual(['pb', 'vt']);
+        expect(getVehicleAppliedParts(vehicle({ comParabrisa: true }))).toContain('pb');
+    });
+
+    it('reconhece quando os vidros marcados formam um pacote', () => {
+        expect(matchPackage('suv', ['de', 'dd', 'te', 'td', 've', 'vd', 'vt'])).toBe(false);
+        expect(matchPackage('suv', ['vt', 'pb', 'de', 'dd', 'te', 'td', 've', 'vd'])).toBe(true);
+        expect(matchPackage('suv', ['de', 'dd'])).toBeUndefined();
+    });
+
+    it('divide o preço da tabela pelos vidros e a soma bate com o pacote', () => {
+        const prices = splitAutomotivePrice(undefined, 'Nano Carbono', 'suv');
+        expect(prices.pb).toBe(200);
+        expect(sumPartPrices(getPackageParts('suv', false), prices)).toBe(400);
+        expect(sumPartPrices(getPackageParts('suv', true), prices)).toBe(600);
+        expect(prices.vt).toBeGreaterThan(prices.de!);
+        expect(prices.ve).toBeLessThan(prices.de!);
+        expect(prices.ts).toBeGreaterThan(0);
+        expect(splitAutomotivePrice(undefined, 'Nano Carbono', 'picape_simples').ts).toBeUndefined();
+        expect(splitAutomotivePrice({ ativo: true, precos: {} }, 'Nano Carbono', 'suv')).toEqual({});
     });
 
     it('converte carros salvos com vidros por grupo para esquerdo e direito', () => {
@@ -102,12 +131,19 @@ describe('vidros do carro', () => {
         expect(normalizeVehicleGlass({})).toBeUndefined();
     });
 
-    it('descreve juntando esquerdo e direito iguais', () => {
+    it('descreve juntando esquerdo e direito iguais, só dos vidros com película', () => {
         expect(describeVehicleGlass(vehicle({
             vidros: { pb: 'faixa', de: '35', dd: '35', te: '20', td: '35', vt: '20' },
         }))).toBe('Dianteiras: 35% · Traseira esq.: 20% · Traseira dir.: 35% · Vidro traseiro: 20%');
         expect(describeVehicleGlass(vehicle({ comParabrisa: true, vidros: { pb: 'faixa' } }))).toBe('Para-brisa: só a faixa');
+        expect(describeVehicleGlass(vehicle({ aplicacao: 'partes', partes: ['pb'], vidros: { pb: '75', de: '35' } }))).toBe('Para-brisa: 75%');
         expect(describeVehicleGlass(vehicle())).toBe('');
+    });
+
+    it('mostra o valor de cada vidro quando é por partes', () => {
+        expect(describeVehiclePartPrices(vehicle({ aplicacao: 'partes', partes: ['pb', 'de'], precoPartes: { pb: 200, de: 62 } })))
+            .toBe('Para-brisa R$ 200,00 · Dianteira esq. R$ 62,00');
+        expect(describeVehiclePartPrices(vehicle())).toBe('');
     });
 
     it('avisa vidros abaixo do mínimo da lei (70% na frente, 28% atrás)', () => {

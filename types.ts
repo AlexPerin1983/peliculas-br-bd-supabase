@@ -207,6 +207,11 @@ export interface AutomotiveVehicle {
     preco: number;
     // Ausente = percentual não informado (o carro sai no PDF só com película e preço).
     vidros?: Partial<Record<VehicleGlassPart, VehicleGlassShade>>;
+    // Ausente = pacote (carro completo, com ou sem para-brisa). 'partes' = só os vidros em `partes`.
+    aplicacao?: 'partes';
+    partes?: VehicleGlassPart[];
+    // Valor de cada vidro quando é por partes (o preço do carro é a soma).
+    precoPartes?: Partial<Record<VehicleGlassPart, number>>;
 }
 
 export interface AutomotiveCategoryPrice {

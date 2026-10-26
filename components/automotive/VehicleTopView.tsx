@@ -6,7 +6,8 @@ interface VehicleTopViewProps {
     categoria: VehicleCategory;
     parts: VehicleGlassPart[];
     vidros?: Partial<Record<VehicleGlassPart, VehicleGlassShade>>;
-    selected: VehicleGlassPart[];
+    // Vidros que levam película (azul); os outros ficam brancos com contorno tracejado.
+    applied: VehicleGlassPart[];
     onTogglePart: (part: VehicleGlassPart) => void;
 }
 
@@ -130,7 +131,8 @@ const SHADE_FILL: Record<VehicleGlassShade, string> = {
     '75': '#c3c8d0',
     '80': '#ccd1d8',
 };
-const UNSET_FILL = '#d1d5db';
+const UNSET_FILL = '#6b7280';
+const NO_FILM_FILL = '#ffffff';
 
 const SCALE = 0.9;
 const PIN_SIZE = 42;
@@ -141,8 +143,8 @@ const renderShape = (shape: GlassShape, props: React.SVGProps<SVGElement>) => (
         : <rect x={shape.x} y={shape.y} width={shape.w} height={shape.h} rx={shape.rx} {...(props as React.SVGProps<SVGRectElement>)} />
 );
 
-// Carro visto de cima com um círculo por vidro: tocar marca/desmarca aquele vidro.
-const VehicleTopView: React.FC<VehicleTopViewProps> = ({ categoria, parts, vidros, selected, onTogglePart }) => {
+// Carro visto de cima com um círculo por vidro: tocar coloca ou tira a película daquele vidro.
+const VehicleTopView: React.FC<VehicleTopViewProps> = ({ categoria, parts, vidros, applied, onTogglePart }) => {
     const drawing = DRAWINGS[categoria] || DRAWINGS.sedan;
     const { body, cabin, bed } = drawing;
 
@@ -168,10 +170,11 @@ const VehicleTopView: React.FC<VehicleTopViewProps> = ({ categoria, parts, vidro
                     const shape = drawing.glass[part];
                     if (!shape) return null;
                     const shade = vidros?.[part];
+                    const fill = !applied.includes(part) ? NO_FILM_FILL : shade ? SHADE_FILL[shade] : UNSET_FILL;
                     return (
                         <g key={part}>
                             {renderShape(shape, {
-                                fill: shade ? SHADE_FILL[shade] : UNSET_FILL,
+                                fill,
                                 stroke: '#374151',
                                 strokeWidth: 'd' in shape ? 2 : 1.5,
                                 className: 'transition-[fill] duration-300',
@@ -184,21 +187,19 @@ const VehicleTopView: React.FC<VehicleTopViewProps> = ({ categoria, parts, vidro
             {parts.map(part => {
                 const pin = drawing.pins[part];
                 if (!pin) return null;
-                const isSelected = selected.includes(part);
-                const shade = vidros?.[part];
+                const isApplied = applied.includes(part);
+                const shade = isApplied ? vidros?.[part] : undefined;
                 const label = getVehicleGlassPartInfo(part).label;
                 return (
                     <button
                         key={part}
                         type="button"
-                        aria-pressed={isSelected}
+                        aria-pressed={isApplied}
                         aria-label={`${label}${shade ? `, ${shade === 'sem' ? 'sem película' : shade === 'faixa' ? 'só a faixa' : `${shade}%`}` : ''}`}
                         onClick={() => onTogglePart(part)}
-                        className={`absolute flex flex-col items-center justify-center rounded-full shadow-[0_1px_3px_rgba(15,23,42,0.18)] transition-colors active:scale-95 ${isSelected
+                        className={`absolute flex flex-col items-center justify-center rounded-full shadow-[0_1px_3px_rgba(15,23,42,0.18)] transition-colors active:scale-95 ${isApplied
                             ? 'border-2 border-blue-600 bg-blue-600 text-white'
-                            : shade
-                                ? 'border-2 border-blue-600 bg-white text-blue-700 dark:bg-slate-900 dark:text-blue-300'
-                                : 'border-[1.5px] border-slate-400 bg-white text-slate-700 dark:bg-slate-900 dark:text-slate-200'}`}
+                            : 'border-[1.5px] border-dashed border-slate-400 bg-white text-slate-500 dark:bg-slate-900 dark:text-slate-400'}`}
                         style={{
                             width: PIN_SIZE,
                             height: PIN_SIZE,
