@@ -265,6 +265,48 @@
           });
       }
 
+      function repairAppInstallation() {
+        if (navigator.onLine === false) {
+          return Promise.reject(new Error('offline'));
+        }
+
+        // A tela central aparece quando a recuperacao normal ja falhou. Repetir
+        // SKIP_WAITING + reload pode devolver a mesma pagina pelo worker antigo.
+        // Antes de remove-lo, confirma que o HTML novo pode ser obtido.
+        var probeUrl = new URL('/index.html', window.location.href);
+        probeUrl.searchParams.set('_app_refresh', String(Date.now()));
+        var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        return withTimeout(fetch(probeUrl.toString(), {
+          cache: 'no-store',
+          credentials: 'same-origin',
+          signal: controller ? controller.signal : undefined
+        }), null)
+          .then(function (response) {
+            if (!response) {
+              if (controller) controller.abort();
+              throw new Error('update_network_timeout');
+            }
+            if (!response.ok || (response.headers.get('content-type') || '').indexOf('text/html') === -1) {
+              throw new Error('update_page_unavailable');
+            }
+            if (!('serviceWorker' in navigator)) return;
+
+            return withTimeout(navigator.serviceWorker.getRegistration(), null)
+              .then(function (registration) {
+                if (registration === null) throw new Error('update_worker_lookup_timeout');
+                // Somente o registro da raiz deste app. Outros escopos ficam intactos.
+                if (!registration || registration.scope !== new URL('/', window.location.href).href) return;
+
+                return withTimeout(registration.unregister(), null).then(function (removed) {
+                  if (removed === null) throw new Error('update_worker_removal_timeout');
+                });
+              });
+          })
+          // Remove apenas arquivos tecnicos; IndexedDB, login e fila offline permanecem.
+          .then(clearTechnicalCaches)
+          .then(function () { return false; });
+      }
+
       function finishFreshUpdate(activationRequested) {
         if (!activationRequested) {
           replaceWithFreshUrl();
@@ -303,6 +345,7 @@
             '<h1 style="margin:0 0 10px;font-size:22px;line-height:1.25">Vamos atualizar o aplicativo</h1>',
             '<p style="margin:0 0 22px;color:#64748b;font-size:15px;line-height:1.5">Uma nova versão foi publicada. Seus dados e trabalhos offline serão preservados.</p>',
             '<button id="pwa-recovery-button" type="button" style="width:100%;border:0;border-radius:14px;padding:14px 18px;background:#2563eb;color:#fff;font-size:16px;font-weight:600;cursor:pointer">Atualizar aplicativo</button>',
+            '<p id="pwa-recovery-status" role="status" aria-live="polite" style="margin:14px 0 0;color:#64748b;font-size:14px;line-height:1.5"></p>',
             '</div>'
           ].join('');
           document.body.appendChild(screen);
@@ -313,12 +356,16 @@
             button.textContent = 'Atualizando...';
             setLastRecoveryAt(Date.now());
 
-            prepareFreshVersion()
+            document.getElementById('pwa-recovery-status').textContent = '';
+            repairAppInstallation()
               .then(finishFreshUpdate)
               .catch(function (error) {
                 console.error('Nao foi possivel ativar a nova versao:', error);
                 button.disabled = false;
                 button.textContent = 'Tentar novamente';
+                document.getElementById('pwa-recovery-status').textContent = navigator.onLine === false
+                  ? 'Conecte-se à internet e tente novamente. Seus dados continuam salvos.'
+                  : 'Não foi possível atualizar agora. Confira sua conexão e tente novamente.';
               });
           });
         }
