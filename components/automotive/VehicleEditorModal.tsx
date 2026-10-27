@@ -336,9 +336,9 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
                 ) : null}
             </label>
             {isListOpen ? (
-                <ActionButton variant="primary" size="lg" onClick={() => setIsListOpen(false)}>Pronto</ActionButton>
+                <ActionButton variant="primary" size="lg" onClick={() => setIsListOpen(false)}><span className="text-sm font-bold">Pronto</span></ActionButton>
             ) : (
-                <ActionButton variant="primary" size="lg" onClick={handleSave}>{vehicle ? 'Salvar' : 'Adicionar'}</ActionButton>
+                <ActionButton variant="primary" size="lg" onClick={handleSave}><span className="text-sm font-bold">{vehicle ? 'Salvar' : 'Adicionar'}</span></ActionButton>
             )}
         </div>
     );
@@ -430,8 +430,8 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
                     )}
                 </div>
             ) : (
-                <div className="space-y-2.5">
-                    <div className="ui-field flex h-11 items-center gap-2 px-3">
+                <div className="-mx-1 -my-[5px] space-y-2">
+                    <div className="ui-field flex h-10 items-center gap-2 px-3">
                         <Search className="h-4 w-4 shrink-0 text-[var(--text-soft)]" aria-hidden="true" />
                         <input
                             type="text"
@@ -440,7 +440,8 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
                             placeholder="Carro (ex.: Jeep Compass 2022)"
                             aria-label="Carro"
                             autoComplete="off"
-                            className="min-w-0 flex-1 bg-transparent text-[15px] font-semibold text-[var(--text-strong)] outline-none"
+                            className="min-w-0 flex-1 bg-transparent text-[var(--text-strong)] outline-none"
+                            style={{ fontSize: 16, fontWeight: 650 }}
                         />
                         {suggestedCategory && suggestedCategory === draft.categoria && !isCategoryTouched && (
                             <span className="shrink-0 rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-bold text-blue-700 dark:bg-blue-950/50 dark:text-blue-300">
@@ -460,8 +461,8 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
                                     aria-label={category.label}
                                     title={category.label}
                                     onClick={() => handleCategoryChange(category.id)}
-                                    className={`flex h-14 flex-col items-center justify-center gap-0.5 rounded-[var(--radius-control)] px-0.5 transition-colors active:scale-[0.98] ${isSelected
-                                        ? 'border-[1.5px] border-[var(--brand-primary)] bg-blue-50 text-blue-700 shadow-[0_2px_6px_rgba(37,99,235,0.15)] dark:bg-blue-950/40 dark:text-blue-300'
+                                    className={`flex h-12 flex-col items-center justify-center gap-0.5 rounded-[var(--radius-control)] px-0.5 transition-colors active:scale-[0.98] ${isSelected
+                                        ? 'border-[1.5px] border-[var(--brand-primary)] bg-[var(--brand-primary-soft)] text-[var(--brand-primary)]'
                                         : 'border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-body)]'}`}
                                 >
                                     <VehicleCategoryIcon category={category.id} className="h-[21px] w-11" />
@@ -481,7 +482,7 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
                                     aria-pressed={isSelected}
                                     aria-label={film}
                                     onClick={() => handleBaseChange({ pelicula: film })}
-                                    className={`h-[34px] truncate rounded-[calc(var(--radius-control)-3px)] px-1 transition-colors ${isSelected
+                                    className={`h-8 truncate rounded-[calc(var(--radius-control)-3px)] px-1 transition-colors ${isSelected
                                         ? 'bg-[var(--surface-raised)] text-[var(--text-strong)] shadow-[0_1px_3px_rgba(15,23,42,0.15)]'
                                         : 'text-[var(--text-muted)]'}`}
                                 >
@@ -491,19 +492,19 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
                         })}
                     </div>
 
-                    <div className="flex items-stretch gap-2.5 rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface)] p-2.5 shadow-[var(--shadow-hairline)]">
-                        <div className="shrink-0">
+                    <div className="flex items-stretch gap-3 py-2">
+                        <div className="w-[174px] shrink-0 max-[380px]:w-[148px]">
                             <VehicleTopView
                                 categoria={draft.categoria}
                                 parts={categoryParts}
                                 vidros={draft.vidros}
                                 applied={appliedParts}
                                 onTogglePart={handleTogglePart}
-                                width={140}
+                                width={174}
                             />
                         </div>
 
-                        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                        <div className="flex min-w-0 flex-1 flex-col gap-[7px] pt-3">
                             <span className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-[var(--text-muted)]">Aplicar</span>
                             {applicationOptions.map(option => {
                                 const isSelected = application === option.id;
@@ -513,13 +514,13 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
                                         type="button"
                                         aria-pressed={isSelected}
                                         onClick={() => handleApplication(option.id)}
-                                        className={`flex min-h-12 items-center justify-between gap-1.5 rounded-[var(--radius-control)] px-2.5 py-1 text-left transition-colors ${isSelected
+                                        className={`flex min-h-[46px] items-center justify-between gap-1.5 rounded-[var(--radius-control)] px-2 py-1 text-left transition-colors ${isSelected
                                             ? 'border-[1.5px] border-[var(--brand-primary)] bg-blue-50 dark:bg-blue-950/40'
                                             : 'border border-[var(--border-subtle)] bg-[var(--surface)]'}`}
                                     >
                                         <span className="min-w-0">
-                                            <span className="block text-[12.5px] font-extrabold leading-tight text-[var(--text-strong)]">{option.title}</span>
-                                            <span className={`block text-[11.5px] font-semibold ${isSelected ? 'text-blue-700 dark:text-blue-300' : 'text-[var(--text-muted)]'}`}>{option.price}</span>
+                                            <span className="block text-xs font-extrabold leading-tight text-[var(--text-strong)]">{option.title}</span>
+                                            <span className={`block text-[11px] font-semibold ${isSelected ? 'text-blue-700 dark:text-blue-300' : 'text-[var(--text-muted)]'}`}>{option.price}</span>
                                         </span>
                                         <span
                                             aria-hidden="true"
@@ -530,7 +531,7 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
                             })}
 
                             <span className="mt-1 text-[10.5px] font-bold uppercase tracking-[0.08em] text-[var(--text-muted)]">Escurecimento</span>
-                            <div className="grid grid-cols-3 gap-1.5">
+                            <div className="grid grid-cols-3 gap-[5px]">
                                 {SIDE_SHADES.map(shade => {
                                     const isSelected = sideParts.length > 0 && commonShade === shade;
                                     return (
@@ -559,7 +560,7 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
                             <button
                                 type="button"
                                 onClick={() => setIsListOpen(true)}
-                                className={`mt-auto flex items-center gap-1 text-left ${lawWarnings.length > 0 ? 'text-orange-700 dark:text-orange-300' : 'text-[var(--text-muted)]'}`}
+                                className={`mt-auto flex min-h-8 items-center gap-1 text-left ${lawWarnings.length > 0 ? 'text-orange-700 dark:text-orange-300' : 'text-[var(--text-muted)]'}`}
                             >
                                 {lawWarnings.length > 0 && <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
                                 <span className="truncate text-[11px] font-semibold">{glassSummary}</span>
@@ -577,7 +578,7 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
                                     type="button"
                                     aria-pressed={chip.checked}
                                     onClick={chip.onToggle}
-                                    className={`inline-flex h-[34px] items-center gap-1.5 rounded-full pl-2 pr-3 transition-colors ${chip.checked
+                                    className={`inline-flex h-8 items-center gap-1.5 rounded-full pl-2 pr-3 transition-colors ${chip.checked
                                         ? 'border-[1.5px] border-[var(--brand-primary)] bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300'
                                         : 'border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-body)]'}`}
                                 >
@@ -602,7 +603,8 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
                                     onChange={event => handleRemovalPriceChange(event.target.value)}
                                     placeholder="0,00"
                                     aria-label="Valor da remoção"
-                                    className="w-20 bg-transparent text-right text-sm font-extrabold text-[var(--text-strong)] outline-none"
+                                    className="w-20 bg-transparent text-right text-[var(--text-strong)] outline-none"
+                                    style={{ fontSize: 16, fontWeight: 750 }}
                                 />
                             </label>
                         )}
