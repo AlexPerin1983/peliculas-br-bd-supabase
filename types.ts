@@ -192,7 +192,7 @@ export interface ProposalDiscount {
     automotiveVehicles?: AutomotiveVehicle[];
 }
 
-export type VehicleCategory = 'hatch' | 'sedan' | 'suv' | 'picape_simples' | 'picape_dupla' | 'van';
+export type VehicleCategory = 'hatch' | 'sedan' | 'suv' | 'picape_simples' | 'picape_dupla' | 'van' | 'onibus' | 'caminhao' | 'maquina';
 // Cada vidro do carro: para-brisa, teto solar, dianteira/traseira/vigia esquerda e direita, vidro traseiro.
 export type VehicleGlassPart = 'pb' | 'ts' | 'de' | 'dd' | 'te' | 'td' | 've' | 'vd' | 'vt';
 // Percentual da película (VLT) ou 'sem' (vidro fica sem película) / 'faixa' (só a faixa do para-brisa).

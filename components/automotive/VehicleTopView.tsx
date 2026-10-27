@@ -84,10 +84,11 @@ const DRAWINGS: Record<VehicleCategory, Drawing> = {
         bedLines: 'M91 266 L91 398 M120 266 L120 398 M149 266 L149 398',
         glass: {
             pb: { d: 'M64 110 Q120 94 176 110 L166 158 Q120 150 74 158 Z' },
+            ts: { x: 96, y: 166, w: 48, h: 42, rx: 5 },
             de: side(56, 162, 60), dd: side(170, 162, 60),
-            vt: { x: 78, y: 230, w: 84, h: 14, rx: 4 },
+            vt: { x: 78, y: 234, w: 84, h: 14, rx: 4 },
         },
-        pins: { pb: [120, 134], de: [24, 192], dd: [216, 192], vt: [120, 237] },
+        pins: { pb: [120, 134], ts: [120, 187], de: [24, 192], dd: [216, 192], vt: [120, 241] },
     },
     picape_dupla: {
         body: { x: 50, y: 20, w: 140, h: 400, rx: 34 },
@@ -112,12 +113,55 @@ const DRAWINGS: Record<VehicleCategory, Drawing> = {
         cabin: { x: 72, y: 116, w: 96, h: 284, rx: 6 },
         glass: {
             pb: { d: 'M58 64 Q120 50 182 64 L174 110 Q120 104 66 110 Z' },
+            ts: { x: 92, y: 142, w: 56, h: 44, rx: 5 },
             de: side(52, 118, 50), dd: side(174, 118, 50),
             te: side(52, 180, 90), td: side(174, 180, 90),
             ve: side(52, 280, 90), vd: side(174, 280, 90),
             vt: { x: 78, y: 406, w: 84, h: 12, rx: 4 },
         },
-        pins: { pb: [120, 87], de: [24, 143], dd: [216, 143], te: [24, 225], td: [216, 225], ve: [24, 325], vd: [216, 325], vt: [120, 412] },
+        pins: { pb: [120, 87], ts: [120, 164], de: [24, 143], dd: [216, 143], te: [24, 225], td: [216, 225], ve: [24, 325], vd: [216, 325], vt: [120, 412] },
+    },
+    onibus: {
+        body: { x: 44, y: 14, w: 152, h: 412, rx: 17 },
+        mirrorY: 82,
+        lines: [],
+        cabin: { x: 74, y: 108, w: 92, h: 284, rx: 5 },
+        glass: {
+            pb: { d: 'M54 44 Q120 34 186 44 L180 92 Q120 98 60 92 Z' },
+            de: side(50, 106, 48), dd: side(176, 106, 48),
+            te: side(50, 170, 214), td: side(176, 170, 214),
+            vt: { x: 76, y: 400, w: 88, h: 15, rx: 4 },
+        },
+        pins: { pb: [120, 68], de: [24, 130], dd: [216, 130], te: [24, 274], td: [216, 274], vt: [120, 408] },
+    },
+    caminhao: {
+        body: { x: 44, y: 34, w: 152, h: 388, rx: 14 },
+        mirrorY: 122,
+        lines: [],
+        cabin: { x: 72, y: 128, w: 96, h: 94, rx: 8 },
+        bed: { x: 56, y: 258, w: 128, h: 146, rx: 4 },
+        bedLines: 'M72 266 V396 M96 266 V396 M120 266 V396 M144 266 V396 M168 266 V396',
+        glass: {
+            pb: { d: 'M56 82 Q120 72 184 82 L178 122 Q120 130 62 122 Z' },
+            ts: { x: 94, y: 144, w: 52, h: 34, rx: 5 },
+            de: side(50, 134, 66), dd: side(176, 134, 66),
+            vt: { x: 76, y: 232, w: 88, h: 14, rx: 4 },
+        },
+        pins: { pb: [120, 102], ts: [120, 161], de: [24, 167], dd: [216, 167], vt: [120, 239] },
+    },
+    maquina: {
+        body: { x: 58, y: 42, w: 124, h: 338, rx: 20 },
+        mirrorY: 164,
+        lines: [],
+        cabin: { x: 78, y: 204, w: 84, h: 112, rx: 9 },
+        glass: {
+            pb: { d: 'M68 172 Q120 158 172 172 L164 202 Q120 196 76 202 Z' },
+            ts: { x: 96, y: 220, w: 48, h: 38, rx: 5 },
+            de: side(64, 206, 47), dd: side(162, 206, 47),
+            te: side(64, 264, 48), td: side(162, 264, 48),
+            vt: { d: 'M76 324 Q120 332 164 324 L170 350 Q120 362 70 350 Z' },
+        },
+        pins: { pb: [120, 184], ts: [120, 239], de: [24, 229], dd: [216, 229], te: [24, 288], td: [216, 288], vt: [120, 342] },
     },
 };
 
@@ -175,6 +219,14 @@ const VehicleTopView: React.FC<VehicleTopViewProps> = ({ categoria, parts, vidro
             style={{ width, maxWidth: '100%', aspectRatio: '240 / 440' }}
         >
             <svg viewBox="0 0 240 440" className="absolute inset-0 h-full w-full" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                {categoria === 'maquina' && (
+                    <g fill="var(--car-rubber)" stroke="var(--car-trim)" strokeWidth={1}>
+                        <rect x={35} y={94} width={22} height={62} rx={6} />
+                        <rect x={183} y={94} width={22} height={62} rx={6} />
+                        <rect x={27} y={282} width={30} height={91} rx={8} />
+                        <rect x={183} y={282} width={30} height={91} rx={8} />
+                    </g>
+                )}
                 {[body.x - 4, body.x + body.w - 5].map(x => (
                     <g key={x} fill="var(--car-rubber)">
                         <rect x={x} y={body.y + 82} width={9} height={49} rx={3} />
@@ -219,6 +271,13 @@ const VehicleTopView: React.FC<VehicleTopViewProps> = ({ categoria, parts, vidro
                 {([[body.x + 2, 1], [body.x + body.w - 2, -1]] as const).map(([sideX, direction]) => (
                     <path key={sideX} d={mirrorPath(sideX, drawing.mirrorY, direction)} fill="var(--car-paint)" stroke="var(--car-trim)" strokeWidth={1} />
                 ))}
+                {categoria === 'onibus' && (
+                    <g fill="none" stroke="var(--car-trim)" strokeWidth={2}>
+                        {[206, 242, 278, 314, 350].map(y => <path key={y} d={`M50 ${y} H64 M176 ${y} H190`} />)}
+                        <rect x={91} y={186} width={58} height={24} rx={4} />
+                        <rect x={91} y={286} width={58} height={24} rx={4} />
+                    </g>
+                )}
                 {bed && (
                     <>
                         <rect x={bed.x} y={bed.y} width={bed.w} height={bed.h} rx={bed.rx} fill="var(--car-metal)" stroke="var(--car-edge)" strokeWidth={1.1} />
@@ -235,7 +294,7 @@ const VehicleTopView: React.FC<VehicleTopViewProps> = ({ categoria, parts, vidro
                 if (!pin) return null;
                 const isApplied = applied.includes(part);
                 const shade = isApplied ? vidros?.[part] : undefined;
-                const label = getVehicleGlassPartInfo(part).label;
+                const label = getVehicleGlassPartInfo(part, categoria).label;
                 return (
                     <button
                         key={part}
@@ -243,7 +302,7 @@ const VehicleTopView: React.FC<VehicleTopViewProps> = ({ categoria, parts, vidro
                         aria-pressed={isApplied}
                         aria-label={`${label}${shade ? `, ${shade === 'sem' ? 'sem película' : shade === 'faixa' ? 'só a faixa' : `${shade}%`}` : ''}`}
                         onClick={() => onTogglePart(part)}
-                        className={`absolute flex flex-col items-center justify-center rounded-full border transition-colors active:scale-95 ${isCompact ? 'h-9 w-9 max-[380px]:h-8 max-[380px]:w-8' : 'h-[42px] w-[42px]'} ${isApplied
+                        className={`absolute flex flex-col items-center justify-center rounded-full border transition-colors active:scale-95 ${isCompact ? 'h-[35px] w-[35px] max-[380px]:h-8 max-[380px]:w-8' : 'h-[42px] w-[42px]'} ${isApplied
                             ? 'border-[var(--surface)] bg-[#087fff] text-white'
                             : 'border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-muted)]'}`}
                         style={{

@@ -1,3 +1,4 @@
+import { describe, expect, it } from 'vitest';
 import type { AutomotiveSettings, AutomotiveVehicle } from '../../types';
 import {
     AUTOMOTIVE_FILM_TYPES,
@@ -9,6 +10,8 @@ import {
     getDefaultRemovalPrice,
     getVehicleTotal,
     getAutomotiveTablePrice,
+    getAutomotivePriceTable,
+    getVehicleGlassPartInfo,
     describeVehiclePartPrices,
     getPackageParts,
     getVehicleAppliedParts,
@@ -122,7 +125,7 @@ describe('vidros do carro', () => {
         expect(prices.vt).toBeGreaterThan(prices.de!);
         expect(prices.ve).toBeLessThan(prices.de!);
         expect(prices.ts).toBeGreaterThan(0);
-        expect(splitAutomotivePrice(undefined, 'Nano Carbono', 'picape_simples').ts).toBeUndefined();
+        expect(splitAutomotivePrice(undefined, 'Nano Carbono', 'picape_simples').ts).toBeGreaterThan(0);
         expect(splitAutomotivePrice({ ativo: true, precos: {} }, 'Nano Carbono', 'suv')).toEqual({});
     });
 
@@ -194,5 +197,64 @@ describe('observações do carro', () => {
             observacoes: { removerAntiga: true, valorRemocao: 80, riscoPrevio: true, texto: '  não mexer no adesivo  ' },
         }))).toBe('Remover película antiga (+ R$ 80,00) · Vidro com risco ou trinca antes do serviço · Obs.: não mexer no adesivo');
         expect(describeVehicleNotes(vehicle())).toBe('');
+    });
+});
+
+describe('novas categorias e teto solar', () => {
+    it('inclui ônibus, caminhão e máquina com pacotes iniciais editáveis nas quatro películas', () => {
+        expect(VEHICLE_CATEGORIES.map(category => category.id)).toEqual([
+            'hatch', 'sedan', 'suv', 'picape_simples', 'picape_dupla', 'van', 'onibus', 'caminhao', 'maquina',
+        ]);
+        const settings: AutomotiveSettings = {
+            ativo: true,
+            precos: { 'Nano Carbono': { onibus: { semParabrisa: 1750, comParabrisa: 2300 } } },
+        };
+        expect(getAutomotiveTablePrice(settings, 'Nano Carbono', 'onibus', false)).toBe(1750);
+        expect(getAutomotiveTablePrice(settings, 'Nano Carbono', 'onibus', true)).toBe(2300);
+    });
+
+    it('completa somente categorias novas em tabelas antigas e preserva preços e campos limpos', () => {
+        const settings: AutomotiveSettings = {
+            ativo: true,
+            precos: { 'Nano Carbono': { suv: { semParabrisa: 777 }, caminhao: {}, maquina: { semParabrisa: 520 } } },
+        };
+        const original = JSON.stringify(settings);
+        const prices = getAutomotivePriceTable(settings);
+        expect(prices['Nano Carbono']!.suv!.semParabrisa).toBe(777);
+        expect(prices['Nano Carbono']!.suv!.comParabrisa).toBeUndefined();
+        expect(prices['Nano Carbono']!.hatch).toBeUndefined();
+        expect(prices['Nano Carbono']!.onibus).toEqual(DEFAULT_AUTOMOTIVE_PRICES['Nano Carbono']!.onibus);
+        expect(prices['Nano Carbono']!.caminhao).toEqual({});
+        expect(prices['Nano Carbono']!.maquina).toEqual({ semParabrisa: 520 });
+        expect(JSON.stringify(settings)).toBe(original);
+    });
+
+    it('permite teto solar na van e nas duas picapes sem incluí-lo no pacote padrão', () => {
+        (['van', 'picape_simples', 'picape_dupla'] as const).forEach(categoria => {
+            expect(getVehicleGlassParts(vehicle({ categoria }))).toContain('ts');
+            expect(getPackageParts(categoria, false)).not.toContain('ts');
+            expect(getPackageParts(categoria, true)).not.toContain('ts');
+            const prices = splitAutomotivePrice(undefined, 'Nano Carbono', categoria);
+            expect(prices.ts).toBeGreaterThan(0);
+            expect(sumPartPrices(getPackageParts(categoria, false), prices)).toBe(getAutomotiveTablePrice(undefined, 'Nano Carbono', categoria, false));
+            expect(getVehicleAppliedParts(vehicle({ categoria, aplicacao: 'partes', partes: ['de', 'dd', 'vt', 'ts'] }))).toContain('ts');
+        });
+    });
+
+    it('mantém a soma das partes igual ao pacote com e sem para-brisa em todas as categorias', () => {
+        VEHICLE_CATEGORIES.forEach(category => {
+            const prices = splitAutomotivePrice(undefined, 'Nano Carbono', category.id);
+            expect(sumPartPrices(getPackageParts(category.id, false), prices)).toBe(getAutomotiveTablePrice(undefined, 'Nano Carbono', category.id, false));
+            expect(sumPartPrices(getPackageParts(category.id, true), prices)).toBe(getAutomotiveTablePrice(undefined, 'Nano Carbono', category.id, true));
+        });
+    });
+
+    it('descreve o ônibus por áreas laterais, sem apresentar uma contagem fictícia de janelas', () => {
+        expect(getVehicleGlassPartInfo('te', 'onibus').label).toBe('Lateral esq.');
+        expect(getVehicleGlassPartInfo('te', 'suv').label).toBe('Traseira esq.');
+        expect(VEHICLE_CATEGORIES.find(category => category.id === 'onibus')!.glassUnit).toBe('área');
+        expect(describeVehicleGlass(vehicle({ categoria: 'onibus', vidros: { te: '35', td: '35' } }))).toBe('Laterais: 35%');
+        expect(describeVehiclePartPrices(vehicle({ categoria: 'onibus', aplicacao: 'partes', partes: ['te'], precoPartes: { te: 125 } })))
+            .toBe('Lateral esq. R$ 125,00');
     });
 });
