@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type { VehicleCategory } from '../../types';
-import { VEHICLE_CATEGORIES, getVehicleCategoryInfo } from '../../src/lib/automotive';
+import { VEHICLE_CATEGORIES } from '../../src/lib/automotive';
 import VehicleCategoryIcon from './VehicleCategoryIcon';
 
 interface VehicleCategoryPickerProps {
@@ -44,20 +44,11 @@ const VehicleCategoryPicker: React.FC<VehicleCategoryPickerProps> = ({ value, on
     };
 
     return (
-        <div className="space-y-1">
-            <div className="flex min-h-8 items-center justify-between gap-2">
-                <span className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-[var(--text-muted)]">Categoria</span>
-                <div className="flex min-w-0 items-center gap-1">
-                    <span className="mr-1 truncate text-xs font-semibold text-[var(--text-body)]">{getVehicleCategoryInfo(value).label}</span>
-                    <button type="button" aria-label="Categorias anteriores" disabled={edges.start} onClick={() => scroll(-1)} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-body)] disabled:opacity-30">
-                        <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
-                    </button>
-                    <button type="button" aria-label="Mais categorias" disabled={edges.end} onClick={() => scroll(1)} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-body)] disabled:opacity-30">
-                        <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
-                    </button>
-                </div>
-            </div>
-            <div ref={scrollRef} onScroll={updateEdges} role="group" aria-label="Categoria" className="flex snap-x snap-mandatory gap-1.5 overflow-x-auto overscroll-x-contain pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="flex items-center gap-1">
+            <button type="button" aria-label="Categorias anteriores" disabled={edges.start} onClick={() => scroll(-1)} className="flex h-9 w-8 shrink-0 items-center justify-center rounded-md text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-muted)] focus-visible:outline-2 focus-visible:outline-[var(--brand-primary)] disabled:opacity-20">
+                <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+            </button>
+            <div ref={scrollRef} onScroll={updateEdges} role="group" aria-label="Categoria" className="flex min-w-0 flex-1 snap-x snap-mandatory gap-1 overflow-x-auto overscroll-x-contain px-0.5 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {VEHICLE_CATEGORIES.map(category => (
                     <button
                         key={category.id}
@@ -66,15 +57,18 @@ const VehicleCategoryPicker: React.FC<VehicleCategoryPickerProps> = ({ value, on
                         aria-label={category.label}
                         aria-pressed={value === category.id}
                         onClick={() => onChange(category.id)}
-                        className={`flex h-[54px] w-[70px] shrink-0 snap-start flex-col items-center justify-center gap-1 rounded-[var(--radius-control)] border px-1 transition-colors ${value === category.id
-                            ? 'border-[var(--brand-primary)] bg-[var(--brand-primary-soft)] text-[var(--brand-primary)]'
-                            : 'border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-muted)] hover:bg-[var(--surface-muted)]'}`}
+                        className={`flex h-[58px] w-[66px] shrink-0 snap-start flex-col items-center justify-center gap-1 border-b-2 px-1 transition-colors focus-visible:outline-2 focus-visible:outline-[var(--brand-primary)] ${value === category.id
+                            ? 'border-[var(--brand-primary)] text-[var(--brand-primary)]'
+                            : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-strong)]'}`}
                     >
                         <VehicleCategoryIcon category={category.id} className="h-5 w-11" />
-                        <span className="text-[11px] font-bold leading-tight">{category.shortLabel}</span>
+                        <span className="text-[11px] font-medium leading-tight">{category.shortLabel}</span>
                     </button>
                 ))}
             </div>
+            <button type="button" aria-label="Mais categorias" disabled={edges.end} onClick={() => scroll(1)} className="flex h-9 w-8 shrink-0 items-center justify-center rounded-md text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-muted)] focus-visible:outline-2 focus-visible:outline-[var(--brand-primary)] disabled:opacity-20">
+                <ChevronRight className="h-4 w-4" aria-hidden="true" />
+            </button>
         </div>
     );
 };
