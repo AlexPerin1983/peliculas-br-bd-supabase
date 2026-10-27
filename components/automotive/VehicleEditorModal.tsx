@@ -2,13 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { AlertTriangle, Check, ChevronLeft, ChevronRight, Search, Trash2 } from 'lucide-react';
 import Modal from '../ui/Modal';
 import ActionButton from '../ui/ActionButton';
-import VehicleCategoryIcon from './VehicleCategoryIcon';
+import VehicleCategoryPicker from './VehicleCategoryPicker';
 import VehicleTopView from './VehicleTopView';
 import type { AutomotiveSettings, AutomotiveVehicle, VehicleCategory, VehicleGlassPart, VehicleGlassShade } from '../../types';
 import {
     AUTOMOTIVE_FILM_TYPES,
     SIDE_SHADES,
-    VEHICLE_CATEGORIES,
     formatMoneyInput,
     getAutomotiveFilmShortName,
     getDefaultRemovalPrice,
@@ -216,11 +215,11 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
 
     const handleSave = () => {
         if (appliedParts.length === 0) {
-            setError('Marque pelo menos um vidro.');
+            setError(isGroupedGlass ? 'Marque pelo menos uma área.' : 'Marque pelo menos um vidro.');
             return;
         }
         if (!(draft.preco > 0)) {
-            setError('Digite o preço deste carro.');
+            setError(isHeavyVehicle ? 'Digite o preço deste veículo.' : 'Digite o preço deste carro.');
             return;
         }
         // Guarda só o % dos vidros que levam película.
@@ -268,22 +267,25 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
     const commonShade = sideParts.length > 0 && sideParts.every(part => draft.vidros?.[part] === draft.vidros?.[sideParts[0]])
         ? draft.vidros?.[sideParts[0]]
         : undefined;
-    const categoryLabel = getVehicleCategoryInfo(draft.categoria).label;
+    const categoryInfo = getVehicleCategoryInfo(draft.categoria);
+    const categoryLabel = categoryInfo.label;
+    const isGroupedGlass = categoryInfo.glassUnit === 'área';
+    const isHeavyVehicle = ['onibus', 'caminhao', 'maquina'].includes(draft.categoria);
     const suggestedCategory = suggestVehicleCategory(draft.modelo);
     const removalPrice = getVehicleRemovalPrice(draft);
     const total = getVehicleTotal(draft);
 
     const applicationOptions: { id: Application; title: string; price: string }[] = [
-        { id: 'completo', title: 'Carro completo', price: tableSem !== undefined ? formatCurrencyBR(tableSem) : 'sem preço na tabela' },
+        { id: 'completo', title: isHeavyVehicle ? 'Completo' : 'Carro completo', price: tableSem !== undefined ? formatCurrencyBR(tableSem) : 'sem preço na tabela' },
         { id: 'completo_parabrisa', title: '+ Para-brisa', price: tableCom !== undefined ? formatCurrencyBR(tableCom) : 'sem preço na tabela' },
-        { id: 'partes', title: 'Por partes', price: isPartsMode ? formatCurrencyBR(draft.preco) : 'valor por vidro' },
+        { id: 'partes', title: 'Por partes', price: isPartsMode ? formatCurrencyBR(draft.preco) : (isGroupedGlass ? 'valor por área' : 'valor por vidro') },
     ];
 
     const glassSummary = lawWarnings.length > 0
         ? `Abaixo da lei: ${lawWarnings.map(info => info.id.toUpperCase()).join(', ')}`
         : appliedParts.length === 0
-            ? 'Nenhum vidro marcado'
-            : `${appliedParts.length} ${appliedParts.length === 1 ? 'vidro' : 'vidros'} com película`;
+            ? (isGroupedGlass ? 'Nenhuma área marcada' : 'Nenhum vidro marcado')
+            : `${appliedParts.length} ${categoryInfo.glassUnit ? (appliedParts.length === 1 ? 'área' : 'áreas') : (appliedParts.length === 1 ? 'vidro' : 'vidros')} com película`;
 
     const noteChips: { id: 'remover' | 'risco' | 'texto'; label: string; checked: boolean; onToggle: () => void }[] = [
         { id: 'remover', label: 'Remover película antiga', checked: Boolean(notes.removerAntiga), onToggle: handleToggleRemoval },
@@ -305,7 +307,7 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
             )}
             <label className="flex min-w-0 flex-1 flex-col">
                 <span className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-[var(--text-muted)]">
-                    {isPartsMode ? 'Total (soma dos vidros)' : 'Preço do carro'}
+                    {isPartsMode ? (isGroupedGlass ? 'Total (soma das áreas)' : 'Total (soma dos vidros)') : (isHeavyVehicle ? 'Preço do veículo' : 'Preço do carro')}
                 </span>
                 <span className="flex items-baseline gap-1">
                     <span className="text-sm font-bold text-[var(--text-muted)]">R$</span>
@@ -318,7 +320,7 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
                             value={priceText}
                             onChange={event => handlePriceChange(event.target.value)}
                             placeholder="0,00"
-                            aria-label="Preço deste carro"
+                            aria-label={isHeavyVehicle ? 'Preço deste veículo' : 'Preço deste carro'}
                             className="w-full min-w-0 bg-transparent text-[var(--text-strong)] outline-none"
                             // Fixo no elemento: a regra global "input { font: inherit }" vence as classes de fonte.
                             style={{ fontSize: 24, fontWeight: 900, lineHeight: 1.2 }}
@@ -343,9 +345,9 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
         </div>
     );
 
-    const title = isListOpen ? 'Vidro a vidro' : (
+    const title = isListOpen ? (isGroupedGlass ? 'Área a área' : 'Vidro a vidro') : (
         <span className="block">
-            <span className="block">{vehicle ? 'Editar carro' : 'Novo carro'}</span>
+            <span className="block">{isHeavyVehicle ? (vehicle ? 'Editar veículo' : 'Novo veículo') : (vehicle ? 'Editar carro' : 'Novo carro')}</span>
             <span className="block text-xs font-normal text-[var(--text-muted)]">{categoryLabel} · {draft.pelicula}</span>
         </span>
     );
@@ -366,19 +368,19 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
                         className="inline-flex min-h-10 items-center gap-1 text-sm font-semibold text-[var(--brand-primary)]"
                     >
                         <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-                        Voltar ao carro
+                        {isHeavyVehicle ? 'Voltar ao veículo' : 'Voltar ao carro'}
                     </button>
                     {appliedParts.length === 0 ? (
-                        <p className="text-sm text-[var(--text-muted)]">Nenhum vidro com película. Toque nos vidros do desenho para marcar.</p>
+                        <p className="text-sm text-[var(--text-muted)]">{isGroupedGlass ? 'Nenhuma área com película. Toque no desenho para marcar.' : 'Nenhum vidro com película. Toque nos vidros do desenho para marcar.'}</p>
                     ) : (
                         <div className="overflow-hidden rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface)]">
                             <div className="grid grid-cols-[minmax(0,1fr)_76px_104px] gap-2 bg-[var(--surface-muted)] px-3 py-2 text-[11px] font-bold uppercase tracking-[0.06em] text-[var(--text-muted)]">
-                                <span>Vidro</span>
+                                <span>{isGroupedGlass ? 'Área' : 'Vidro'}</span>
                                 <span>%</span>
                                 <span className="text-right">Valor</span>
                             </div>
                             {appliedParts.map(part => {
-                                const label = getVehicleGlassPartInfo(part).label;
+                                const label = getVehicleGlassPartInfo(part, draft.categoria).label;
                                 return (
                                     <div key={part} className="grid grid-cols-[minmax(0,1fr)_76px_104px] items-center gap-2 border-t border-[var(--border-subtle)] px-3 py-1.5">
                                         <span className="truncate text-sm font-semibold text-[var(--text-strong)]">{label}</span>
@@ -416,7 +418,7 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
                     )}
                     <p className="text-xs leading-relaxed text-[var(--text-muted)]">
                         {isPartsMode
-                            ? 'Valor de cada vidro dividido a partir da sua tabela (carro completo e para-brisa). Dá para mudar qualquer valor.'
+                            ? (isGroupedGlass ? 'Valor de cada área dividido a partir da sua tabela (completo e para-brisa). Dá para mudar qualquer valor.' : 'Valor de cada vidro dividido a partir da sua tabela (carro completo e para-brisa). Dá para mudar qualquer valor.')
                             : 'No pacote vale o preço da tabela. Toque num vidro do desenho para cobrar por partes.'}
                     </p>
                     {lawWarnings.length > 0 && (
@@ -437,8 +439,8 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
                             type="text"
                             value={draft.modelo}
                             onChange={event => handleModelChange(event.target.value)}
-                            placeholder="Carro (ex.: Jeep Compass 2022)"
-                            aria-label="Carro"
+                            placeholder={isHeavyVehicle ? 'Veículo (modelo ou identificação)' : 'Carro (ex.: Jeep Compass 2022)'}
+                            aria-label={isHeavyVehicle ? 'Veículo' : 'Carro'}
                             autoComplete="off"
                             className="min-w-0 flex-1 bg-transparent text-[var(--text-strong)] outline-none"
                             style={{ fontSize: 16, fontWeight: 650 }}
@@ -450,27 +452,7 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
                         )}
                     </div>
 
-                    <div className="grid grid-cols-6 gap-1" role="group" aria-label="Categoria">
-                        {VEHICLE_CATEGORIES.map(category => {
-                            const isSelected = draft.categoria === category.id;
-                            return (
-                                <button
-                                    key={category.id}
-                                    type="button"
-                                    aria-pressed={isSelected}
-                                    aria-label={category.label}
-                                    title={category.label}
-                                    onClick={() => handleCategoryChange(category.id)}
-                                    className={`flex h-12 flex-col items-center justify-center gap-0.5 rounded-[var(--radius-control)] px-0.5 transition-colors active:scale-[0.98] ${isSelected
-                                        ? 'border-[1.5px] border-[var(--brand-primary)] bg-[var(--brand-primary-soft)] text-[var(--brand-primary)]'
-                                        : 'border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-body)]'}`}
-                                >
-                                    <VehicleCategoryIcon category={category.id} className="h-[21px] w-11" />
-                                    <span className="text-[10.5px] font-bold leading-tight">{category.shortLabel}</span>
-                                </button>
-                            );
-                        })}
-                    </div>
+                    <VehicleCategoryPicker value={draft.categoria} onChange={handleCategoryChange} />
 
                     <div className="grid gap-[3px] rounded-[var(--radius-control)] bg-slate-200/70 p-[3px] dark:bg-slate-800" style={{ gridTemplateColumns: `repeat(${filmOptions.length}, minmax(0, 1fr))` }} role="group" aria-label="Película">
                         {filmOptions.map(film => {
@@ -493,15 +475,29 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
                     </div>
 
                     <div className="flex items-stretch gap-3 py-2">
-                        <div className="w-[174px] shrink-0 max-[380px]:w-[148px]">
+                        <div className="flex w-[164px] shrink-0 flex-col gap-2 max-[380px]:w-[148px]">
                             <VehicleTopView
                                 categoria={draft.categoria}
                                 parts={categoryParts}
                                 vidros={draft.vidros}
                                 applied={appliedParts}
                                 onTogglePart={handleTogglePart}
-                                width={174}
+                                width={164}
                             />
+                            {categoryParts.includes('ts') && (
+                                <button
+                                    type="button"
+                                    aria-pressed={appliedParts.includes('ts')}
+                                    aria-label="Aplicar película no teto solar"
+                                    onClick={() => handleTogglePart('ts')}
+                                    className={`inline-flex min-h-8 items-center justify-center gap-1.5 rounded-full border px-2 ${appliedParts.includes('ts')
+                                        ? 'border-[var(--brand-primary)] bg-[var(--brand-primary-soft)] text-[var(--brand-primary)]'
+                                        : 'border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-muted)]'}`}
+                                >
+                                    <span aria-hidden="true" className="text-sm leading-none">{appliedParts.includes('ts') ? '−' : '+'}</span>
+                                    <span className="text-[11px] font-semibold">Teto solar</span>
+                                </button>
+                            )}
                         </div>
 
                         <div className="flex min-w-0 flex-1 flex-col gap-[7px] pt-3">

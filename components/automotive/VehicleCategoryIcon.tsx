@@ -38,6 +38,21 @@ const ICONS: Record<VehicleCategory, { body: string; detail: string; rearWheel: 
         detail: 'M10.5 14 H23 V8.2',
         rearWheel: 50,
     },
+    onibus: {
+        body: 'M10 24 H6 Q4 24 4 21 V8 Q4 5 7 5 H56 Q59 5 59 8 V22 Q59 24 56 24 M21 24 H46',
+        detail: 'M8 10 H54 V16 H8 Z M18 10 V16 M29 10 V16 M40 10 V16 M51 10 V16',
+        rearWheel: 50,
+    },
+    caminhao: {
+        body: 'M10 24 H5 V15 L12 7 H25 V23 M21 24 H46 M27 8 H59 V23 H56 M27 24 H45',
+        detail: 'M9 15 H21 V10 H14 Z M29 12 H55 M29 16 H55',
+        rearWheel: 50,
+    },
+    maquina: {
+        body: 'M10 24 H5 V16 H16 V7 H32 V19 H47 L52 9 H57 L54 24 H47 M21 24 H30',
+        detail: 'M20 10 H28 V17 H20 Z M7 19 H13 M36 19 H45',
+        rearWheel: 36,
+    },
 };
 
 const VehicleCategoryIcon: React.FC<VehicleCategoryIconProps> = ({ category, className = 'h-8 w-[70px]' }) => {

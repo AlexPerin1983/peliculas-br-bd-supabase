@@ -93,8 +93,8 @@ const AutomotiveSettingsPanel: React.FC<AutomotiveSettingsPanelProps> = ({ value
             {isActive && (
                 <div className="space-y-3">
                     <div>
-                        <p className="text-sm font-semibold text-[var(--text-strong)]">Tabela de preços (carro completo)</p>
-                        <p className="text-xs text-[var(--text-muted)]">Já vem com valores sugeridos: ajuste para a sua região. No orçamento dá para mudar na hora.</p>
+                        <p className="text-sm font-semibold text-[var(--text-strong)]">Tabela de preços por veículo</p>
+                        <p className="text-xs text-[var(--text-muted)]">Valores iniciais editáveis por categoria. Ajuste à sua realidade; no orçamento também dá para mudar.</p>
                     </div>
                     <div className="flex flex-wrap gap-2" role="group" aria-label="Película">
                         {AUTOMOTIVE_FILM_TYPES.map(film => (
