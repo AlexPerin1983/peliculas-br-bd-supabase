@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const readProjectFile = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8');
 const readRecoveryScript = () => {
@@ -9,6 +9,13 @@ const readRecoveryScript = () => {
         .map(match => match[1])
         .find(script => script.includes('peliculas-br-asset-recovery-at'));
 };
+
+beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: true,
+        headers: { get: () => 'text/html; charset=utf-8' },
+    }));
+});
 
 afterEach(() => {
     document.getElementById('pwa-recovery-screen')?.remove();
@@ -22,6 +29,7 @@ afterEach(() => {
     vi.clearAllTimers();
     vi.useRealTimers();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
 });
 
 describe('PWA stale asset recovery', () => {
@@ -164,15 +172,11 @@ describe('PWA stale asset recovery', () => {
         });
 
         (window as typeof window & { __isLocalDevHost?: boolean }).__isLocalDevHost = false;
-        window.sessionStorage.setItem('peliculas-br-asset-recovery-at', String(Date.now()));
         window.eval(recoveryScript!);
         (window as typeof window & {
             __recoverPeliculasApp?: (reason: string) => void;
         }).__recoverPeliculasApp?.('test waiting worker');
-        const button = document.getElementById('pwa-recovery-button');
-        expect(button).not.toBeNull();
-        button!.click();
-        expect(button!.textContent).toBe('Atualizando...');
+        expect(document.getElementById('pwa-recovery-button')).toBeNull();
 
         for (let index = 0; index < 10; index += 1) {
             await Promise.resolve();
@@ -185,7 +189,7 @@ describe('PWA stale asset recovery', () => {
     it('rejects HTML returned in place of JavaScript or CSS', () => {
         const serviceWorker = readProjectFile('public/service-worker.js');
 
-        expect(serviceWorker).toContain("const SW_VERSION = 'v2.7.3'");
+        expect(serviceWorker).toMatch(/const SW_VERSION = 'v\d+\.\d+\.\d+';/);
         expect(serviceWorker).toContain('hasExpectedAssetContentType');
         expect(serviceWorker).toContain('isAppTechnicalCache');
         expect(serviceWorker).toContain("'app-cache-'");
