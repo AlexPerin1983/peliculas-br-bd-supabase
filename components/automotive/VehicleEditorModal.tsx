@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { AlertTriangle, Check, ChevronLeft, ChevronRight, Search, Trash2 } from 'lucide-react';
+import { AlertTriangle, Check, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import Modal from '../ui/Modal';
 import ActionButton from '../ui/ActionButton';
 import VehicleCategoryPicker from './VehicleCategoryPicker';
@@ -306,13 +306,13 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
                 />
             )}
             <label className="flex min-w-0 flex-1 flex-col">
-                <span className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-[var(--text-muted)]">
+                <span className="text-xs font-medium text-[var(--text-muted)]">
                     {isPartsMode ? (isGroupedGlass ? 'Total (soma das áreas)' : 'Total (soma dos vidros)') : (isHeavyVehicle ? 'Preço do veículo' : 'Preço do carro')}
                 </span>
                 <span className="flex items-baseline gap-1">
-                    <span className="text-sm font-bold text-[var(--text-muted)]">R$</span>
+                    <span className="text-sm text-[var(--text-muted)]">R$</span>
                     {isPartsMode || removalPrice > 0 ? (
-                        <span className="truncate text-2xl font-black tracking-tight text-[var(--text-strong)]">{formatMoneyInput(total)}</span>
+                        <span className="truncate text-2xl font-semibold tracking-tight text-[var(--text-strong)]">{formatMoneyInput(total)}</span>
                     ) : (
                         <input
                             type="text"
@@ -323,7 +323,7 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
                             aria-label={isHeavyVehicle ? 'Preço deste veículo' : 'Preço deste carro'}
                             className="w-full min-w-0 bg-transparent text-[var(--text-strong)] outline-none"
                             // Fixo no elemento: a regra global "input { font: inherit }" vence as classes de fonte.
-                            style={{ fontSize: 24, fontWeight: 900, lineHeight: 1.2 }}
+                            style={{ fontSize: 24, fontWeight: 600, lineHeight: 1.2 }}
                         />
                     )}
                 </span>
@@ -338,16 +338,16 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
                 ) : null}
             </label>
             {isListOpen ? (
-                <ActionButton variant="primary" size="lg" onClick={() => setIsListOpen(false)}><span className="text-sm font-bold">Pronto</span></ActionButton>
+                <ActionButton variant="primary" size="lg" className="shadow-none!" onClick={() => setIsListOpen(false)}><span className="text-sm font-semibold">Pronto</span></ActionButton>
             ) : (
-                <ActionButton variant="primary" size="lg" onClick={handleSave}><span className="text-sm font-bold">{vehicle ? 'Salvar' : 'Adicionar'}</span></ActionButton>
+                <ActionButton variant="primary" size="lg" className="shadow-none!" onClick={handleSave}><span className="text-sm font-semibold">{vehicle ? 'Salvar' : 'Adicionar'}</span></ActionButton>
             )}
         </div>
     );
 
     const title = isListOpen ? (isGroupedGlass ? 'Área a área' : 'Vidro a vidro') : (
         <span className="block">
-            <span className="block">{isHeavyVehicle ? (vehicle ? 'Editar veículo' : 'Novo veículo') : (vehicle ? 'Editar carro' : 'Novo carro')}</span>
+            <span className="block font-semibold">{isHeavyVehicle ? (vehicle ? 'Editar veículo' : 'Novo veículo') : (vehicle ? 'Editar carro' : 'Novo carro')}</span>
             <span className="block text-xs font-normal text-[var(--text-muted)]">{categoryLabel} · {draft.pelicula}</span>
         </span>
     );
@@ -373,8 +373,8 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
                     {appliedParts.length === 0 ? (
                         <p className="text-sm text-[var(--text-muted)]">{isGroupedGlass ? 'Nenhuma área com película. Toque no desenho para marcar.' : 'Nenhum vidro com película. Toque nos vidros do desenho para marcar.'}</p>
                     ) : (
-                        <div className="overflow-hidden rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface)]">
-                            <div className="grid grid-cols-[minmax(0,1fr)_76px_104px] gap-2 bg-[var(--surface-muted)] px-3 py-2 text-[11px] font-bold uppercase tracking-[0.06em] text-[var(--text-muted)]">
+                        <div className="overflow-hidden border-y border-[var(--border-subtle)]">
+                            <div className="grid grid-cols-[minmax(0,1fr)_76px_104px] gap-2 px-1 py-2 text-xs font-medium text-[var(--text-muted)]">
                                 <span>{isGroupedGlass ? 'Área' : 'Vidro'}</span>
                                 <span>%</span>
                                 <span className="text-right">Valor</span>
@@ -382,13 +382,13 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
                             {appliedParts.map(part => {
                                 const label = getVehicleGlassPartInfo(part, draft.categoria).label;
                                 return (
-                                    <div key={part} className="grid grid-cols-[minmax(0,1fr)_76px_104px] items-center gap-2 border-t border-[var(--border-subtle)] px-3 py-1.5">
-                                        <span className="truncate text-sm font-semibold text-[var(--text-strong)]">{label}</span>
+                                    <div key={part} className="grid grid-cols-[minmax(0,1fr)_76px_104px] items-center gap-2 border-t border-[var(--border-subtle)] px-1 py-1.5">
+                                        <span className="truncate text-sm font-medium text-[var(--text-strong)]">{label}</span>
                                         <select
                                             value={draft.vidros?.[part] ?? ''}
                                             onChange={event => handlePartShade(part, event.target.value)}
                                             aria-label={`% do ${label}`}
-                                            className="ui-field h-9 w-full px-1.5 text-sm font-bold"
+                                            className="h-9 w-full rounded-md bg-[var(--surface-muted)] px-1.5 text-[var(--text-strong)]"
                                         >
                                             <option value="">—</option>
                                             {getShadeOptions(part).map(shade => (
@@ -396,7 +396,7 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
                                             ))}
                                         </select>
                                         {isPartsMode ? (
-                                            <label className="flex h-9 items-center gap-1 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] px-2 text-xs text-[var(--text-muted)]">
+                                            <label className="flex h-9 items-center gap-1 rounded-md bg-[var(--surface-muted)] px-2 text-xs text-[var(--text-muted)]">
                                                 <span>R$</span>
                                                 <input
                                                     type="text"
@@ -405,7 +405,7 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
                                                     onChange={event => handlePartPriceChange(part, event.target.value)}
                                                     placeholder="0,00"
                                                     aria-label={`Valor do ${label}`}
-                                                    className="min-w-0 flex-1 bg-transparent text-right text-sm font-bold text-[var(--text-strong)] outline-none"
+                                                    className="min-w-0 flex-1 bg-transparent text-right text-sm font-medium text-[var(--text-strong)] outline-none"
                                                 />
                                             </label>
                                         ) : (
@@ -432,9 +432,8 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
                     )}
                 </div>
             ) : (
-                <div className="-mx-1 -my-[5px] space-y-2">
-                    <div className="ui-field flex h-10 items-center gap-2 px-3">
-                        <Search className="h-4 w-4 shrink-0 text-[var(--text-soft)]" aria-hidden="true" />
+                <div className="-mx-1 -my-[5px] space-y-2.5">
+                    <div className="flex h-11 items-center gap-2 border-b border-[var(--border-subtle)] px-1 focus-within:border-[var(--brand-primary)]">
                         <input
                             type="text"
                             value={draft.modelo}
@@ -443,10 +442,10 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
                             aria-label={isHeavyVehicle ? 'Veículo' : 'Carro'}
                             autoComplete="off"
                             className="min-w-0 flex-1 bg-transparent text-[var(--text-strong)] outline-none"
-                            style={{ fontSize: 16, fontWeight: 650 }}
+                            style={{ fontSize: 16, fontWeight: 500 }}
                         />
                         {suggestedCategory && suggestedCategory === draft.categoria && !isCategoryTouched && (
-                            <span className="shrink-0 rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-bold text-blue-700 dark:bg-blue-950/50 dark:text-blue-300">
+                            <span className="shrink-0 text-[11px] text-[var(--text-muted)]">
                                 {getVehicleCategoryInfo(suggestedCategory).shortLabel} sugerido
                             </span>
                         )}
@@ -454,7 +453,7 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
 
                     <VehicleCategoryPicker value={draft.categoria} onChange={handleCategoryChange} />
 
-                    <div className="grid gap-[3px] rounded-[var(--radius-control)] bg-slate-200/70 p-[3px] dark:bg-slate-800" style={{ gridTemplateColumns: `repeat(${filmOptions.length}, minmax(0, 1fr))` }} role="group" aria-label="Película">
+                    <div className="grid border-b border-[var(--border-subtle)]" style={{ gridTemplateColumns: `repeat(${filmOptions.length}, minmax(0, 1fr))` }} role="group" aria-label="Película">
                         {filmOptions.map(film => {
                             const isSelected = draft.pelicula === film;
                             return (
@@ -464,17 +463,17 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
                                     aria-pressed={isSelected}
                                     aria-label={film}
                                     onClick={() => handleBaseChange({ pelicula: film })}
-                                    className={`h-8 truncate rounded-[calc(var(--radius-control)-3px)] px-1 transition-colors ${isSelected
-                                        ? 'bg-[var(--surface-raised)] text-[var(--text-strong)] shadow-[0_1px_3px_rgba(15,23,42,0.15)]'
-                                        : 'text-[var(--text-muted)]'}`}
+                                    className={`h-10 truncate border-b-2 px-1 transition-colors focus-visible:outline-2 focus-visible:outline-[var(--brand-primary)] ${isSelected
+                                        ? 'border-[var(--text-strong)] text-[var(--text-strong)]'
+                                        : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-strong)]'}`}
                                 >
-                                    <span className="text-[12.5px] font-bold">{getAutomotiveFilmShortName(film)}</span>
+                                    <span className="text-[12.5px] font-medium">{getAutomotiveFilmShortName(film)}</span>
                                 </button>
                             );
                         })}
                     </div>
 
-                    <div className="flex items-stretch gap-3 py-2">
+                    <div className="flex items-stretch gap-4 py-2 max-[380px]:gap-3">
                         <div className="flex w-[164px] shrink-0 flex-col gap-2 max-[380px]:w-[148px]">
                             <VehicleTopView
                                 categoria={draft.categoria}
@@ -490,9 +489,9 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
                                     aria-pressed={appliedParts.includes('ts')}
                                     aria-label="Aplicar película no teto solar"
                                     onClick={() => handleTogglePart('ts')}
-                                    className={`inline-flex min-h-8 items-center justify-center gap-1.5 rounded-full border px-2 ${appliedParts.includes('ts')
-                                        ? 'border-[var(--brand-primary)] bg-[var(--brand-primary-soft)] text-[var(--brand-primary)]'
-                                        : 'border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-muted)]'}`}
+                                    className={`inline-flex min-h-9 items-center justify-center gap-1.5 rounded-md px-2 transition-colors focus-visible:outline-2 focus-visible:outline-[var(--brand-primary)] ${appliedParts.includes('ts')
+                                        ? 'bg-[var(--brand-primary-soft)] text-[var(--brand-primary)]'
+                                        : 'text-[var(--text-muted)] hover:bg-[var(--surface-muted)]'}`}
                                 >
                                     <span aria-hidden="true" className="text-sm leading-none">{appliedParts.includes('ts') ? '−' : '+'}</span>
                                     <span className="text-[11px] font-semibold">Teto solar</span>
@@ -500,8 +499,8 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
                             )}
                         </div>
 
-                        <div className="flex min-w-0 flex-1 flex-col gap-[7px] pt-3">
-                            <span className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-[var(--text-muted)]">Aplicar</span>
+                        <div className="flex min-w-0 flex-1 flex-col gap-1 pt-2">
+                            <span className="text-xs font-medium text-[var(--text-muted)]">Aplicar</span>
                             {applicationOptions.map(option => {
                                 const isSelected = application === option.id;
                                 return (
@@ -510,24 +509,21 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
                                         type="button"
                                         aria-pressed={isSelected}
                                         onClick={() => handleApplication(option.id)}
-                                        className={`flex min-h-[46px] items-center justify-between gap-1.5 rounded-[var(--radius-control)] px-2 py-1 text-left transition-colors ${isSelected
-                                            ? 'border-[1.5px] border-[var(--brand-primary)] bg-blue-50 dark:bg-blue-950/40'
-                                            : 'border border-[var(--border-subtle)] bg-[var(--surface)]'}`}
+                                        className={`flex min-h-[49px] items-center justify-between gap-1.5 border-b border-[var(--border-subtle)] py-1.5 text-left transition-colors focus-visible:outline-2 focus-visible:outline-[var(--brand-primary)] ${isSelected
+                                            ? 'text-[var(--brand-primary)]'
+                                            : 'text-[var(--text-strong)] hover:text-[var(--brand-primary)]'}`}
                                     >
                                         <span className="min-w-0">
-                                            <span className="block text-xs font-extrabold leading-tight text-[var(--text-strong)]">{option.title}</span>
-                                            <span className={`block text-[11px] font-semibold ${isSelected ? 'text-blue-700 dark:text-blue-300' : 'text-[var(--text-muted)]'}`}>{option.price}</span>
+                                            <span className="block text-[12.5px] font-medium leading-tight">{option.title}</span>
+                                            <span className="mt-0.5 block text-[11px] text-[var(--text-muted)]">{option.price}</span>
                                         </span>
-                                        <span
-                                            aria-hidden="true"
-                                            className={`h-4 w-4 shrink-0 rounded-full bg-white dark:bg-slate-900 ${isSelected ? 'border-[5px] border-[var(--brand-primary)]' : 'border-[1.5px] border-slate-300 dark:border-slate-600'}`}
-                                        />
+                                        <Check aria-hidden="true" className={`h-4 w-4 shrink-0 ${isSelected ? 'text-[var(--brand-primary)]' : 'invisible'}`} strokeWidth={2} />
                                     </button>
                                 );
                             })}
 
-                            <span className="mt-1 text-[10.5px] font-bold uppercase tracking-[0.08em] text-[var(--text-muted)]">Escurecimento</span>
-                            <div className="grid grid-cols-3 gap-[5px]">
+                            <span className="mt-4 text-xs font-medium text-[var(--text-muted)]">Escurecimento</span>
+                            <div className="grid grid-cols-3 gap-1 rounded-md bg-[var(--surface-muted)] p-1">
                                 {SIDE_SHADES.map(shade => {
                                     const isSelected = sideParts.length > 0 && commonShade === shade;
                                     return (
@@ -537,61 +533,61 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
                                             aria-pressed={isSelected}
                                             disabled={sideParts.length === 0}
                                             onClick={() => handleShadeAll(shade)}
-                                            className={`h-8 rounded-full border transition-colors disabled:opacity-40 ${isSelected
-                                                ? 'border-slate-900 bg-slate-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900'
-                                                : 'border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-strong)]'}`}
+                                            className={`h-8 rounded transition-colors focus-visible:outline-2 focus-visible:outline-[var(--brand-primary)] disabled:opacity-40 ${isSelected
+                                                ? 'bg-[var(--text-strong)] text-[var(--surface)]'
+                                                : 'text-[var(--text-body)] hover:bg-[var(--surface)]'}`}
                                         >
-                                            <span className="text-xs font-extrabold">{shade}%</span>
+                                            <span className="text-xs font-medium">{shade}%</span>
                                         </button>
                                     );
                                 })}
                                 <button
                                     type="button"
                                     onClick={() => setIsListOpen(true)}
-                                    className="h-8 rounded-full border border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-body)]"
+                                    className="h-8 rounded text-[var(--text-muted)] hover:bg-[var(--surface)] focus-visible:outline-2 focus-visible:outline-[var(--brand-primary)]"
                                 >
-                                    <span className="text-[11.5px] font-bold">Ajustar</span>
+                                    <span className="text-[11.5px] font-medium">Ajustar</span>
                                 </button>
                             </div>
                             <button
                                 type="button"
                                 onClick={() => setIsListOpen(true)}
-                                className={`mt-auto flex min-h-8 items-center gap-1 text-left ${lawWarnings.length > 0 ? 'text-orange-700 dark:text-orange-300' : 'text-[var(--text-muted)]'}`}
+                                className={`mt-2 flex min-h-8 items-center gap-1 text-left focus-visible:outline-2 focus-visible:outline-[var(--brand-primary)] ${lawWarnings.length > 0 ? 'text-orange-700 dark:text-orange-300' : 'text-[var(--text-muted)]'}`}
                             >
                                 {lawWarnings.length > 0 && <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
-                                <span className="truncate text-[11px] font-semibold">{glassSummary}</span>
+                                <span className="truncate text-[11px]">{glassSummary}</span>
                                 <ChevronRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                             </button>
                         </div>
                     </div>
 
-                    <div className="space-y-1.5">
-                        <span className="block text-[10.5px] font-bold uppercase tracking-[0.08em] text-[var(--text-muted)]">Observações</span>
-                        <div className="flex flex-wrap gap-1.5">
+                    <div className="space-y-1 border-t border-[var(--border-subtle)] pt-3">
+                        <span className="block text-xs font-medium text-[var(--text-muted)]">Observações</span>
+                        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-2">
                             {noteChips.map(chip => (
                                 <button
                                     key={chip.id}
                                     type="button"
                                     aria-pressed={chip.checked}
                                     onClick={chip.onToggle}
-                                    className={`inline-flex h-8 items-center gap-1.5 rounded-full pl-2 pr-3 transition-colors ${chip.checked
-                                        ? 'border-[1.5px] border-[var(--brand-primary)] bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300'
-                                        : 'border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-body)]'}`}
+                                    className={`inline-flex min-h-8 items-center gap-2.5 rounded-md px-1 text-left transition-colors focus-visible:outline-2 focus-visible:outline-[var(--brand-primary)] ${chip.id === 'remover' ? 'col-span-2' : ''} ${chip.checked
+                                        ? 'text-[var(--text-strong)]'
+                                        : 'text-[var(--text-body)] hover:bg-[var(--surface-muted)]'}`}
                                 >
                                     <span
                                         aria-hidden="true"
-                                        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-[5px] ${chip.checked ? 'bg-[var(--brand-primary)] text-white' : 'border-[1.5px] border-slate-300 bg-white dark:border-slate-600 dark:bg-slate-900'}`}
+                                        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-[3px] ${chip.checked ? 'bg-[var(--brand-primary)] text-white' : 'border border-[var(--border-strong)]'}`}
                                     >
                                         {chip.checked && <Check className="h-3 w-3" strokeWidth={3} />}
                                     </span>
-                                    <span className="text-[12.5px] font-bold">{chip.label}</span>
+                                    <span className="text-[12.5px] font-medium">{chip.label}</span>
                                 </button>
                             ))}
                         </div>
                         {notes.removerAntiga && (
-                            <label className="flex h-[38px] items-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] px-3">
+                            <label className="flex h-10 items-center gap-2 border-b border-[var(--border-subtle)] px-1 focus-within:border-[var(--brand-primary)]">
                                 <span className="flex-1 text-[12.5px] text-[var(--text-muted)]">Remoção (soma no preço)</span>
-                                <span className="text-xs font-bold text-[var(--text-muted)]">+ R$</span>
+                                <span className="text-xs font-medium text-[var(--text-muted)]">+ R$</span>
                                 <input
                                     type="text"
                                     inputMode="decimal"
@@ -600,7 +596,7 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
                                     placeholder="0,00"
                                     aria-label="Valor da remoção"
                                     className="w-20 bg-transparent text-right text-[var(--text-strong)] outline-none"
-                                    style={{ fontSize: 16, fontWeight: 750 }}
+                                    style={{ fontSize: 16, fontWeight: 500 }}
                                 />
                             </label>
                         )}
@@ -611,7 +607,7 @@ const VehicleEditorModal: React.FC<VehicleEditorModalProps> = ({ isOpen, vehicle
                                 onChange={event => updateNotes({ texto: event.target.value })}
                                 placeholder="Ex.: não mexer no adesivo do vidro traseiro"
                                 aria-label="Observação"
-                                className="ui-field block h-[38px] w-full px-3 text-[13px]"
+                                className="block h-10 w-full border-b border-[var(--border-subtle)] bg-transparent px-1 text-[var(--text-strong)] outline-none focus:border-[var(--brand-primary)]"
                             />
                         )}
                     </div>
