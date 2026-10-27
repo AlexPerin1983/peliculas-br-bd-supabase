@@ -320,6 +320,23 @@
 
       window.__reloadPeliculasApp = replaceWithFreshUrl;
 
+      // Diagnostico: o que disparou a recuperacao aparece em letra pequena na tela,
+      // para o usuario mandar um print quando a tela nao sai (sem dados pessoais).
+      var RECOVERY_SCREEN_BUILD = '2026-10-27-diag';
+      var lastRecoveryReason = '';
+
+      function describeRecoveryReason(reason) {
+        var text = reason && reason.message ? reason.message : String(reason || '');
+        return text.replace(window.location.origin, '').slice(0, 180);
+      }
+
+      function getRecoveryDetailText(extra) {
+        var hasWorker = 'serviceWorker' in navigator && navigator.serviceWorker.controller ? 'com SW' : 'sem SW';
+        return 'Detalhe para o suporte: ' + (lastRecoveryReason || 'sem motivo')
+          + (extra ? ' | ' + extra : '')
+          + ' | tela ' + RECOVERY_SCREEN_BUILD + ' | ' + hasWorker;
+      }
+
       function showRecoveryScreen() {
         function render() {
           if (document.getElementById('pwa-recovery-screen')) return;
@@ -346,9 +363,11 @@
             '<p style="margin:0 0 22px;color:#64748b;font-size:15px;line-height:1.5">Uma nova versão foi publicada. Seus dados e trabalhos offline serão preservados.</p>',
             '<button id="pwa-recovery-button" type="button" style="width:100%;border:0;border-radius:14px;padding:14px 18px;background:#2563eb;color:#fff;font-size:16px;font-weight:600;cursor:pointer">Atualizar aplicativo</button>',
             '<p id="pwa-recovery-status" role="status" aria-live="polite" style="margin:14px 0 0;color:#64748b;font-size:14px;line-height:1.5"></p>',
+            '<p id="pwa-recovery-detail" style="margin:20px 0 0;color:#94a3b8;font-size:11px;line-height:1.4;word-break:break-all"></p>',
             '</div>'
           ].join('');
           document.body.appendChild(screen);
+          document.getElementById('pwa-recovery-detail').textContent = getRecoveryDetailText();
 
           document.getElementById('pwa-recovery-button').addEventListener('click', function () {
             var button = document.getElementById('pwa-recovery-button');
@@ -366,6 +385,7 @@
                 document.getElementById('pwa-recovery-status').textContent = navigator.onLine === false
                   ? 'Conecte-se à internet e tente novamente. Seus dados continuam salvos.'
                   : 'Não foi possível atualizar agora. Confira sua conexão e tente novamente.';
+                document.getElementById('pwa-recovery-detail').textContent = getRecoveryDetailText(describeRecoveryReason(error));
               });
           });
         }
@@ -381,6 +401,7 @@
         if (window.__isLocalDevHost || recoveryInProgress) return;
 
         recoveryInProgress = true;
+        lastRecoveryReason = describeRecoveryReason(reason);
         var now = Date.now();
         var lastRecoveryAt = getLastRecoveryAt();
 
@@ -412,7 +433,8 @@
 
       window.addEventListener('vite:preloadError', function (event) {
         event.preventDefault();
-        recoverFromStaleAssets('vite:preloadError');
+        // O payload traz o arquivo que nao carregou; vai para o detalhe da tela.
+        recoverFromStaleAssets('preload ' + (event.payload && event.payload.message ? event.payload.message : 'vite:preloadError'));
       });
 
       window.addEventListener('error', function (event) {
@@ -422,7 +444,8 @@
           && String(event.message || '').toLowerCase().indexOf('unexpected token') !== -1;
         if (isAssetUrl(resourceUrl) || isAssetSyntaxError
           || (isAssetUrl(event.filename) && isStaleModuleMessage(event.message))) {
-          recoverFromStaleAssets(resourceUrl || event.filename || event.message);
+          recoverFromStaleAssets((resourceUrl ? 'arquivo ' + resourceUrl : '')
+            || [event.filename, event.message].filter(Boolean).join(' '));
         }
       }, true);
 

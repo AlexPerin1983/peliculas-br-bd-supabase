@@ -120,6 +120,23 @@ describe('PWA stale asset recovery', () => {
         expect(document.body.textContent).toContain('Atualizar aplicativo');
     });
 
+    it('mostra na tela o motivo da recuperação para o suporte', () => {
+        const recoveryScript = readRecoveryScript();
+
+        (window as typeof window & { __isLocalDevHost?: boolean }).__isLocalDevHost = false;
+        window.sessionStorage.setItem('peliculas-br-asset-recovery-at', String(Date.now()));
+        window.eval(recoveryScript!);
+
+        (window as typeof window & {
+            __recoverPeliculasApp?: (reason: string) => void;
+        }).__recoverPeliculasApp?.(`arquivo ${window.location.origin}/assets/Agenda-abc123.js`);
+
+        const detail = document.getElementById('pwa-recovery-detail')?.textContent || '';
+        expect(detail).toContain('arquivo /assets/Agenda-abc123.js');
+        expect(detail).toContain('tela 2026-10-27-diag');
+        expect(detail).not.toContain(window.location.origin);
+    });
+
     it('clears historical app caches while preserving unrelated caches', async () => {
         const recoveryScript = readRecoveryScript();
         const deleteCache = vi.fn().mockResolvedValue(true);
