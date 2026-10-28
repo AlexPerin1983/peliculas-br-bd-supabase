@@ -1,7 +1,7 @@
 // Service Worker com Auto-Atualização
 // ========================================
 // VERSÃO: Mude este número para forçar atualização nos clientes
-const SW_VERSION = 'v2.7.7';
+const SW_VERSION = 'v2.7.8';
 const CACHE_NAME = `peliculas-br-bd-${SW_VERSION}`;
 const TECHNICAL_CACHE_PREFIXES = [
     'peliculas-br-bd-',
@@ -65,9 +65,9 @@ const findAssetReferences = (text, insideAssets = false) => {
 
 // Arquivos com hash no nome têm o mesmo conteúdo em qualquer versão: reaproveita
 // o que já está no aparelho para não baixar de novo a cada publicação.
-const findAssetInPreviousCaches = async (pathname) => {
+const findAssetInPreviousCaches = async (pathname, targetCacheName) => {
     const cacheNames = (await caches.keys())
-        .filter((name) => name.startsWith('peliculas-br-bd-') && name !== CACHE_NAME);
+        .filter((name) => name.startsWith('peliculas-br-bd-') && name !== targetCacheName);
 
     for (const cacheName of cacheNames) {
         const cache = await caches.open(cacheName);
@@ -80,11 +80,11 @@ const findAssetInPreviousCaches = async (pathname) => {
     return null;
 };
 
-const downloadAssetForPrecache = async (cache, pathname) => {
+const downloadAssetForPrecache = async (cache, cacheName, pathname) => {
     const alreadyCached = await cache.match(pathname);
     if (alreadyCached) return alreadyCached;
 
-    let response = await findAssetInPreviousCaches(pathname);
+    let response = await findAssetInPreviousCaches(pathname, cacheName);
     if (!response) {
         response = await fetch(pathname);
         if (!response.ok || !hasExpectedAssetContentType(pathname, response)) {
@@ -99,9 +99,9 @@ const downloadAssetForPrecache = async (cache, pathname) => {
 // Guarda o app inteiro (todas as telas), não só as que o usuário já abriu.
 // Parte do index.html e segue os arquivos citados dentro de cada JS/CSS.
 // Falha num arquivo não impede a instalação: ele é baixado quando for usado.
-const precacheAppFiles = async (cache) => {
+const precacheAppFiles = async (cache, cacheName) => {
     const shell = await cache.match('/');
-    if (!shell) return;
+    if (!shell) return { failures: 1 };
 
     const queue = findAssetReferences(await shell.text());
     const seen = new Set();
@@ -109,7 +109,7 @@ const precacheAppFiles = async (cache) => {
 
     const processAsset = async (pathname) => {
         try {
-            const response = await downloadAssetForPrecache(cache, pathname);
+            const response = await downloadAssetForPrecache(cache, cacheName, pathname);
             if (!response) {
                 failures += 1;
                 return;
@@ -134,6 +134,61 @@ const precacheAppFiles = async (cache) => {
     }
 
     console.log(`[SW ${SW_VERSION}] ${seen.size - failures} arquivos guardados para uso offline (${failures} falharam)`);
+    return { failures };
+};
+
+// Cada publicação troca o index.html, mesmo quando este arquivo não muda. Depois
+// de abrir o app com internet, confere se a página publicada é outra e, se for,
+// guarda a nova com todos os seus arquivos numa área separada. Só quando tudo
+// chegou ela passa a ser a cópia usada sem internet; se algo falhar, fica a
+// anterior (inteira) e a próxima abertura tenta de novo.
+const STAGING_CACHE_NAME = `${CACHE_NAME}-nova`;
+let savedAppRefresh = null;
+
+const refreshSavedApp = async () => {
+    const cache = await caches.open(CACHE_NAME);
+    const saved = await cache.match('/');
+    const fresh = await fetch(new Request('/', { cache: 'reload' }));
+    const contentType = (fresh.headers.get('content-type') || '').toLowerCase();
+    if (!fresh.ok || !contentType.includes('text/html')) return;
+
+    const freshHtml = await fresh.clone().text();
+    if (saved && await saved.text() === freshHtml) return;
+
+    await caches.delete(STAGING_CACHE_NAME);
+    const staging = await caches.open(STAGING_CACHE_NAME);
+    try {
+        await staging.put('/', fresh);
+        const { failures } = await precacheAppFiles(staging, STAGING_CACHE_NAME);
+        if (failures > 0) return;
+
+        const stagedRequests = await staging.keys();
+        const stagedPaths = new Set(stagedRequests.map((request) => new URL(request.url).pathname));
+        // A página por último: ela só aponta para arquivos que já estão guardados.
+        const ordered = [
+            ...stagedRequests.filter((request) => new URL(request.url).pathname !== '/'),
+            ...stagedRequests.filter((request) => new URL(request.url).pathname === '/')
+        ];
+        for (const request of ordered) {
+            await cache.put(request, await staging.match(request));
+        }
+        for (const request of await cache.keys()) {
+            const pathname = new URL(request.url).pathname;
+            if (pathname.startsWith('/assets/') && !stagedPaths.has(pathname)) {
+                await cache.delete(request);
+            }
+        }
+        console.log(`[SW ${SW_VERSION}] Cópia para uso sem internet atualizada para a versão publicada`);
+    } finally {
+        await caches.delete(STAGING_CACHE_NAME);
+    }
+};
+
+const refreshSavedAppInBackground = () => {
+    savedAppRefresh ??= refreshSavedApp()
+        .catch((error) => console.warn(`[SW ${SW_VERSION}] Não foi possível atualizar a cópia offline:`, error))
+        .finally(() => { savedAppRefresh = null; });
+    return savedAppRefresh;
 };
 
 const cdnCacheFirst = async (request) => {
@@ -152,10 +207,11 @@ const cdnCacheFirst = async (request) => {
 const isAppPagePath = (pathname) => !/\.[a-z0-9]+$/i.test(pathname);
 
 // Abertura do app: tenta a rede, mas sem internet (ou se ela demora) usa a página
-// guardada na instalação. Ela combina com os arquivos guardados desta versão, por
-// isso a resposta da rede não a substitui. Qualquer endereço do app (com ?tab=,
-// vindo de um aviso da agenda etc.) abre a mesma página inicial.
-const navigationResponse = async (request) => {
+// guardada. Ela combina com os arquivos guardados, por isso a resposta da rede não
+// a substitui direto (quem atualiza a cópia é refreshSavedApp). Qualquer endereço
+// do app (com ?tab=, vindo de um aviso da agenda etc.) abre a mesma página inicial.
+const navigationResponse = async (event) => {
+    const { request } = event;
     const cache = await caches.open(CACHE_NAME);
     const pathname = new URL(request.url).pathname;
     const savedPage = async () => (
@@ -170,7 +226,12 @@ const navigationResponse = async (request) => {
 
     try {
         const first = await Promise.race([network, slowNetwork]);
-        if (first) return first;
+        if (first) {
+            if (first.ok && isAppPagePath(pathname)) {
+                event.waitUntil(refreshSavedAppInBackground());
+            }
+            return first;
+        }
 
         const saved = await savedPage();
         if (saved) {
@@ -198,7 +259,7 @@ self.addEventListener('install', (event) => {
                 // 'reload' evita pegar um index.html antigo do cache do navegador,
                 // que apontaria para arquivos de outra versão.
                 return cache.addAll(ESSENTIAL_CACHE.map((path) => new Request(path, { cache: 'reload' })))
-                    .then(() => precacheAppFiles(cache));
+                    .then(() => precacheAppFiles(cache, CACHE_NAME));
             })
             .then(() => {
                 // NÃO força skipWaiting aqui. O novo Service Worker fica em "waiting"
@@ -273,7 +334,7 @@ self.addEventListener('fetch', (event) => {
     if (url.pathname.includes('/api/') || url.hostname.includes('supabase')) return;
 
     if (request.mode === 'navigate') {
-        event.respondWith(navigationResponse(request));
+        event.respondWith(navigationResponse(event));
         return;
     }
 
