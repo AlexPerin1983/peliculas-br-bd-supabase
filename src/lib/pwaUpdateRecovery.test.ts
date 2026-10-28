@@ -42,7 +42,8 @@ const makeHarness = ({ online = true, scope = 'https://app.filmstec.shop/' } = {
         indexedDB: { deleteDatabase },
     });
     appWindow.__recoverPeliculasApp('Failed to fetch dynamically imported module');
-    const button = document.getElementById('pwa-recovery-button') as HTMLButtonElement;
+    const button = (document.getElementById('pwa-recovery-button')
+        || document.getElementById('pwa-offline-button')) as HTMLButtonElement;
     expect(button).not.toBeNull();
     return { operations, unregister, registration, getRegistration, deleteCache, replace, fetch, deleteDatabase, button };
 };
@@ -50,6 +51,7 @@ const makeHarness = ({ online = true, scope = 'https://app.filmstec.shop/' } = {
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => {
     document.getElementById('pwa-recovery-screen')?.remove();
+    document.getElementById('pwa-offline-screen')?.remove();
     window.sessionStorage.clear();
     window.localStorage.removeItem('pending-offline-work-test');
     vi.clearAllTimers();
@@ -77,16 +79,18 @@ describe('manual recovery after the automatic PWA refresh failed', () => {
         expect(h.deleteDatabase).not.toHaveBeenCalled();
     });
 
-    it('keeps the installed files when the device is offline and allows retry', async () => {
+    it('offline, shows "Sem internet" instead of updating and keeps the installed files', async () => {
         const h = makeHarness({ online: false });
+        expect(document.getElementById('pwa-recovery-screen')).toBeNull();
+        expect(document.getElementById('pwa-offline-screen')?.textContent).toContain('Sem internet');
+
         h.button.click();
         await vi.advanceTimersByTimeAsync(1);
 
+        expect(h.registration.update).not.toHaveBeenCalled();
         expect(h.unregister).not.toHaveBeenCalled();
         expect(h.deleteCache).not.toHaveBeenCalled();
-        expect(h.replace).not.toHaveBeenCalled();
-        expect(h.button.disabled).toBe(false);
-        expect(document.getElementById('pwa-recovery-status')?.textContent).toContain('internet');
+        expect(h.replace).toHaveBeenCalledWith('/');
     });
 
     it('keeps the installed files when the new page cannot be reached', async () => {
