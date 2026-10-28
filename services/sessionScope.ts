@@ -81,8 +81,26 @@ export async function getProfile(userId: string): Promise<Profile | null> {
     return data;
 }
 
+// Para montar o acesso da conta: separa "perfil não existe" (conta nova, segue
+// para a tela do grupo) de "não deu para consultar" (sem internet). No segundo
+// caso lança o erro, para o app manter o perfil guardado no aparelho.
+async function getProfileForScope(userId: string): Promise<Profile | null> {
+    const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+    if (error) {
+        if (error.code === 'PGRST116') return null;
+        throw new Error(`profile_unavailable: ${error.message}`);
+    }
+
+    return data;
+}
+
 export async function ensureProfile(userId: string, email: string): Promise<Profile | null> {
-    const existingProfile = await getProfile(userId);
+    const existingProfile = await getProfileForScope(userId);
     if (existingProfile) return existingProfile;
 
     const { data, error } = await supabase
@@ -220,7 +238,7 @@ export async function getSessionScope(options?: {
     const profile =
         options?.ensureProfile && (options.email || user.email)
             ? await ensureProfile(user.id, options.email || user.email || '')
-            : await getProfile(user.id);
+            : await getProfileForScope(user.id);
     let member: OrganizationMember | null = null;
     let ownerUserId: string | null = user.id;
 

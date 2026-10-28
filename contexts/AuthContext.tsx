@@ -29,6 +29,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const AUTH_REQUEST_TIMEOUT_MS = 18_000;
 const AUTH_CONNECTION_ERROR_MESSAGE = 'Nao foi possivel conectar ao servidor agora. Tente novamente em instantes.';
+const OFFLINE_SIGN_OUT_CONFIRMATION = 'Você está sem internet. Se sair agora, só vai conseguir entrar de novo quando a internet voltar. Sair mesmo assim?';
 
 // Deve ser igual ao storageKey configurado em services/supabaseClient.ts
 const AUTH_SESSION_STORAGE_KEY = 'peliculas-br-bd-auth-v4';
@@ -397,6 +398,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     const signOut = async () => {
+        // Sem internet não dá para entrar de novo: confirma antes de sair.
+        if (navigator.onLine === false && !window.confirm(OFFLINE_SIGN_OUT_CONFIRMATION)) {
+            return;
+        }
         await supabase.auth.signOut();
         clearCachedScope();
         hasUsableScopeRef.current = false;

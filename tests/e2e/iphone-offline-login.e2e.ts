@@ -35,4 +35,29 @@ test.describe('login sem internet no iPhone', () => {
     await expect(page.getByRole('button', { name: 'Abrir menu' })).toBeVisible();
     await expect(page.getByText('Fazer Login')).toHaveCount(0);
   });
+
+  test('perfil inalcançável sem internet não leva para a tela do grupo', async ({ page }) => {
+    blockedWrites = await seedOfflineSession(page, { communityAccessGranted: true });
+
+    // Sem internet: a consulta do perfil falha como falha de rede (antes o app
+    // entendia "conta sem perfil" e mostrava "Aplicativo 100% gratuito").
+    let profileAttempts = 0;
+    await page.route('**/rest/v1/profiles**', async (route) => {
+      profileAttempts += 1;
+      await route.abort('internetdisconnected');
+    });
+    // Consulta (só leitura) da triagem do WhatsApp; o helper conta todo POST como escrita.
+    await page.route('**/rest/v1/rpc/whatsapp_triage_list', route => route.fulfill({
+      status: 200,
+      headers: { 'access-control-allow-origin': '*', 'content-type': 'application/json' },
+      body: '[]',
+    }));
+
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await expect.poll(() => profileAttempts).toBeGreaterThan(0);
+    await page.waitForTimeout(3000);
+
+    await expect(page.getByRole('button', { name: 'Abrir menu' })).toBeVisible();
+    await expect(page.getByText('Receber meu acesso gratuito')).toHaveCount(0);
+  });
 });
