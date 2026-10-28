@@ -5,6 +5,7 @@ import { Profile } from '../types';
 import { getSessionScope, SessionScope } from '../services/sessionScope';
 import { repairAgendaPushSubscription } from '../services/agendaPushNotifications';
 import { isSignupInProgress } from '../src/lib/signupFlow';
+import { shouldKeepSessionWhileOffline } from '../src/lib/offlineSession';
 
 interface AuthContextType {
     session: Session | null;
@@ -171,6 +172,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
                 if (!isMounted) return;
 
+                if (shouldKeepSessionWhileOffline({
+                    incomingSession: session,
+                    hasPersistedSession: readPersistedSession() !== null
+                })) {
+                    // Login vencido sem internet para renovar: segue com a conta guardada.
+                    if (!silentBoot) {
+                        setConnectionError(AUTH_CONNECTION_ERROR_MESSAGE);
+                    }
+                    setLoading(false);
+                    return;
+                }
+
                 setSession(session);
                 setUser(session?.user ?? null);
                 activeUserIdRef.current = session?.user.id ?? null;
@@ -218,6 +231,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 setIsPasswordRecovery(true);
             } else if (hasRecoveryContextInUrl(!!session)) {
                 setIsPasswordRecovery(true);
+            }
+
+            if (shouldKeepSessionWhileOffline({
+                event,
+                incomingSession: session,
+                hasPersistedSession: readPersistedSession() !== null
+            })) {
+                return;
             }
 
             const incomingUser = session?.user ?? null;
