@@ -619,6 +619,50 @@ describe('offlineFirstDb userInfo', () => {
     expect(deletePdfLocalMock).toHaveBeenCalledWith(42);
     expect(deletePdfRemoteMock).not.toHaveBeenCalled();
   });
+
+  it('com internet lenta, abre a agenda com os dados do aparelho sem sobrescrever o cache depois', async () => {
+    vi.useFakeTimers();
+    const bulkPutMock = vi.fn();
+    let resolveRemote: (value: unknown[]) => void = () => {};
+    const localAgendamento = {
+      id: 7,
+      clienteNome: 'Cliente no aparelho',
+      start: '2026-10-28T10:00:00.000Z',
+      _localId: 'remote_agendamento_7',
+      _syncStatus: 'synced',
+      _remoteId: 7
+    };
+
+    vi.doMock('./offlineDb', () => ({
+      offlineDb: { agendamentos: { bulkPut: bulkPutMock } },
+      getAllAgendamentosLocal: vi.fn().mockResolvedValue([localAgendamento])
+    }));
+
+    vi.doMock('./supabaseDb', () => ({
+      getAllAgendamentos: vi.fn(() => new Promise(resolve => { resolveRemote = resolve; }))
+    }));
+
+    vi.doMock('./syncService', () => ({
+      isOnlineNow: vi.fn().mockReturnValue(true),
+      syncAllPending: vi.fn()
+    }));
+
+    try {
+      const { getAllAgendamentos } = await import('./offlineFirstDb');
+      const result = getAllAgendamentos();
+      await vi.advanceTimersByTimeAsync(2500);
+
+      await expect(result).resolves.toEqual([
+        expect.objectContaining({ id: 7, clienteNome: 'Cliente no aparelho' })
+      ]);
+
+      resolveRemote([{ id: 7, clienteNome: 'Versao atrasada do servidor' }]);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(bulkPutMock).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe('offlineFirstDb getPDFsForClient', () => {
