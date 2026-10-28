@@ -397,11 +397,63 @@
         }
       }
 
+      // Sem internet nao ha versao nova para buscar: o arquivo que faltou apenas
+      // nao estava guardado no aparelho. Em vez de "Vamos atualizar" (que precisa
+      // de internet), avisa e deixa voltar ao inicio, que abre com o que esta guardado.
+      function showOfflineMissingScreen() {
+        function render() {
+          if (document.getElementById('pwa-offline-screen')) return;
+
+          var screen = document.createElement('div');
+          screen.id = 'pwa-offline-screen';
+          screen.setAttribute('role', 'alert');
+          screen.style.cssText = [
+            'position:fixed',
+            'inset:0',
+            'z-index:2147483647',
+            'display:flex',
+            'align-items:center',
+            'justify-content:center',
+            'padding:24px',
+            'background:#f8fafc',
+            'font-family:Roboto,Arial,sans-serif',
+            'color:#1e293b'
+          ].join(';');
+          screen.innerHTML = [
+            '<div style="width:100%;max-width:420px;text-align:center">',
+            '<h1 style="margin:0 0 10px;font-size:22px;line-height:1.25">Sem internet</h1>',
+            '<p style="margin:0 0 22px;color:#64748b;font-size:15px;line-height:1.5">Esta parte do aplicativo ainda não foi guardada no celular. Seus dados continuam salvos. Conecte-se à internet para abri-la.</p>',
+            '<button id="pwa-offline-button" type="button" style="width:100%;border:0;border-radius:14px;padding:14px 18px;background:#2563eb;color:#fff;font-size:16px;font-weight:600;cursor:pointer">Voltar ao início</button>',
+            '</div>'
+          ].join('');
+          document.body.appendChild(screen);
+
+          document.getElementById('pwa-offline-button').addEventListener('click', function () {
+            window.location.replace('/');
+          });
+          window.addEventListener('online', function () {
+            window.location.reload();
+          }, { once: true });
+        }
+
+        if (document.body) {
+          render();
+        } else {
+          document.addEventListener('DOMContentLoaded', render, { once: true });
+        }
+      }
+
       function recoverFromStaleAssets(reason) {
         if (window.__isLocalDevHost || recoveryInProgress) return;
 
         recoveryInProgress = true;
         lastRecoveryReason = describeRecoveryReason(reason);
+
+        if (navigator.onLine === false) {
+          console.warn('Arquivo do aplicativo indisponivel sem internet:', reason);
+          showOfflineMissingScreen();
+          return;
+        }
         var now = Date.now();
         var lastRecoveryAt = getLastRecoveryAt();
 

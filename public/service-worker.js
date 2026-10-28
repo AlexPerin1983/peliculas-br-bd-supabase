@@ -1,7 +1,7 @@
 // Service Worker com Auto-Atualização
 // ========================================
 // VERSÃO: Mude este número para forçar atualização nos clientes
-const SW_VERSION = 'v2.7.6';
+const SW_VERSION = 'v2.7.7';
 const CACHE_NAME = `peliculas-br-bd-${SW_VERSION}`;
 const TECHNICAL_CACHE_PREFIXES = [
     'peliculas-br-bd-',
@@ -16,13 +16,178 @@ const isAppTechnicalCache = (cacheName) => (
     || TECHNICAL_CACHE_PREFIXES.some((prefix) => cacheName.startsWith(prefix))
 );
 
+// Ícones (Font Awesome) e fontes vêm de outros sites. Ficam num cache próprio,
+// fora da limpeza por versão, porque os endereços não mudam a cada publicação.
+const CDN_CACHE_NAME = 'peliculas-br-cdn-v1';
+const CDN_HOSTS = ['cdnjs.cloudflare.com', 'fonts.googleapis.com', 'fonts.gstatic.com'];
+
 // Lista de recursos essenciais para cache offline
 const ESSENTIAL_CACHE = [
     '/',
     '/offline.html'
 ];
 
-// Instalação - cacheia recursos essenciais
+// Com internet fraca, a abertura do app não espera mais que isto pela rede.
+const NAVIGATION_TIMEOUT_MS = 4000;
+
+const ASSET_REFERENCE_PATTERN = /\/?assets\/[A-Za-z0-9_.-]+\.(?:m?js|css|woff2?|ttf|otf|png|jpe?g|svg|webp|gif|wasm)/g;
+const MAX_PRECACHE_FILES = 400;
+const PRECACHE_PARALLEL_DOWNLOADS = 6;
+
+const hasExpectedAssetContentType = (pathname, response) => {
+    if (!pathname.startsWith('/assets/')) return true;
+
+    const contentType = (response.headers.get('content-type') || '').toLowerCase();
+    if (/\.m?js$/i.test(pathname)) {
+        return contentType.includes('javascript');
+    }
+    if (/\.css$/i.test(pathname)) {
+        return contentType.includes('text/css');
+    }
+
+    return !contentType.includes('text/html');
+};
+
+// Dentro dos próprios arquivos, alguns são citados só como "./nome.js" (mesma pasta).
+const RELATIVE_ASSET_PATTERN = /["'`]\.\/([A-Za-z0-9_.-]+\.(?:m?js|css))["'`]/g;
+
+const findAssetReferences = (text, insideAssets = false) => {
+    const references = (text.match(ASSET_REFERENCE_PATTERN) || []).map((reference) => (
+        reference.startsWith('/') ? reference : `/${reference}`
+    ));
+    if (insideAssets) {
+        for (const match of text.matchAll(RELATIVE_ASSET_PATTERN)) {
+            references.push(`/assets/${match[1]}`);
+        }
+    }
+    return references;
+};
+
+// Arquivos com hash no nome têm o mesmo conteúdo em qualquer versão: reaproveita
+// o que já está no aparelho para não baixar de novo a cada publicação.
+const findAssetInPreviousCaches = async (pathname) => {
+    const cacheNames = (await caches.keys())
+        .filter((name) => name.startsWith('peliculas-br-bd-') && name !== CACHE_NAME);
+
+    for (const cacheName of cacheNames) {
+        const cache = await caches.open(cacheName);
+        const response = await cache.match(pathname);
+        if (response && response.ok && hasExpectedAssetContentType(pathname, response)) {
+            return response;
+        }
+    }
+
+    return null;
+};
+
+const downloadAssetForPrecache = async (cache, pathname) => {
+    const alreadyCached = await cache.match(pathname);
+    if (alreadyCached) return alreadyCached;
+
+    let response = await findAssetInPreviousCaches(pathname);
+    if (!response) {
+        response = await fetch(pathname);
+        if (!response.ok || !hasExpectedAssetContentType(pathname, response)) {
+            return null;
+        }
+    }
+
+    await cache.put(pathname, response.clone());
+    return response;
+};
+
+// Guarda o app inteiro (todas as telas), não só as que o usuário já abriu.
+// Parte do index.html e segue os arquivos citados dentro de cada JS/CSS.
+// Falha num arquivo não impede a instalação: ele é baixado quando for usado.
+const precacheAppFiles = async (cache) => {
+    const shell = await cache.match('/');
+    if (!shell) return;
+
+    const queue = findAssetReferences(await shell.text());
+    const seen = new Set();
+    let failures = 0;
+
+    const processAsset = async (pathname) => {
+        try {
+            const response = await downloadAssetForPrecache(cache, pathname);
+            if (!response) {
+                failures += 1;
+                return;
+            }
+            if (/\.(?:m?js|css)$/i.test(pathname)) {
+                queue.push(...findAssetReferences(await response.text(), true));
+            }
+        } catch (error) {
+            failures += 1;
+        }
+    };
+
+    while (queue.length > 0 && seen.size < MAX_PRECACHE_FILES) {
+        const batch = [];
+        while (queue.length > 0 && batch.length < PRECACHE_PARALLEL_DOWNLOADS && seen.size < MAX_PRECACHE_FILES) {
+            const pathname = queue.shift();
+            if (seen.has(pathname)) continue;
+            seen.add(pathname);
+            batch.push(processAsset(pathname));
+        }
+        await Promise.all(batch);
+    }
+
+    console.log(`[SW ${SW_VERSION}] ${seen.size - failures} arquivos guardados para uso offline (${failures} falharam)`);
+};
+
+const cdnCacheFirst = async (request) => {
+    const cache = await caches.open(CDN_CACHE_NAME);
+    const cached = await cache.match(request);
+    if (cached) return cached;
+
+    const response = await fetch(request);
+    // Folhas de estilo carregadas sem CORS chegam "opacas" (status 0), mas valem.
+    if (response.ok || response.type === 'opaque') {
+        cache.put(request, response.clone()).catch(() => undefined);
+    }
+    return response;
+};
+
+const isAppPagePath = (pathname) => !/\.[a-z0-9]+$/i.test(pathname);
+
+// Abertura do app: tenta a rede, mas sem internet (ou se ela demora) usa a página
+// guardada na instalação. Ela combina com os arquivos guardados desta versão, por
+// isso a resposta da rede não a substitui. Qualquer endereço do app (com ?tab=,
+// vindo de um aviso da agenda etc.) abre a mesma página inicial.
+const navigationResponse = async (request) => {
+    const cache = await caches.open(CACHE_NAME);
+    const pathname = new URL(request.url).pathname;
+    const savedPage = async () => (
+        await cache.match(request) || (isAppPagePath(pathname) ? await cache.match('/') : undefined)
+    );
+
+    const network = fetch(request);
+    let timer;
+    const slowNetwork = new Promise((resolve) => {
+        timer = setTimeout(() => resolve(null), NAVIGATION_TIMEOUT_MS);
+    });
+
+    try {
+        const first = await Promise.race([network, slowNetwork]);
+        if (first) return first;
+
+        const saved = await savedPage();
+        if (saved) {
+            network.catch(() => undefined);
+            return saved;
+        }
+        return await network;
+    } catch (error) {
+        return await savedPage()
+            || await cache.match('/offline.html')
+            || new Response('', { status: 503, statusText: 'Offline' });
+    } finally {
+        clearTimeout(timer);
+    }
+};
+
+// Instalação - cacheia recursos essenciais e o app inteiro
 self.addEventListener('install', (event) => {
     console.log(`[SW ${SW_VERSION}] Instalando...`);
 
@@ -30,7 +195,10 @@ self.addEventListener('install', (event) => {
         caches.open(CACHE_NAME)
             .then((cache) => {
                 console.log(`[SW ${SW_VERSION}] Cacheando recursos essenciais`);
-                return cache.addAll(ESSENTIAL_CACHE);
+                // 'reload' evita pegar um index.html antigo do cache do navegador,
+                // que apontaria para arquivos de outra versão.
+                return cache.addAll(ESSENTIAL_CACHE.map((path) => new Request(path, { cache: 'reload' })))
+                    .then(() => precacheAppFiles(cache));
             })
             .then(() => {
                 // NÃO força skipWaiting aqui. O novo Service Worker fica em "waiting"
@@ -91,6 +259,12 @@ self.addEventListener('fetch', (event) => {
     // Ignora requisições não-GET
     if (request.method !== 'GET') return;
 
+    // Ícones e fontes de outros sites: guardados no primeiro uso para aparecerem sem internet
+    if (CDN_HOSTS.includes(url.hostname)) {
+        event.respondWith(cdnCacheFirst(request));
+        return;
+    }
+
     // Ignora extensões do Chrome e outras origens
     if (url.origin !== location.origin) return;
     if (isLocalDev || isViteRequest) return;
@@ -98,23 +272,12 @@ self.addEventListener('fetch', (event) => {
     // Ignora requisições de API (supabase, etc)
     if (url.pathname.includes('/api/') || url.hostname.includes('supabase')) return;
 
+    if (request.mode === 'navigate') {
+        event.respondWith(navigationResponse(request));
+        return;
+    }
+
     const isHashedAsset = url.pathname.startsWith('/assets/');
-    const isJavaScriptAsset = isHashedAsset && /\.m?js$/i.test(url.pathname);
-    const isCssAsset = isHashedAsset && /\.css$/i.test(url.pathname);
-
-    const hasExpectedAssetContentType = (response) => {
-        if (!isHashedAsset) return true;
-
-        const contentType = (response.headers.get('content-type') || '').toLowerCase();
-        if (isJavaScriptAsset) {
-            return contentType.includes('javascript');
-        }
-        if (isCssAsset) {
-            return contentType.includes('text/css');
-        }
-
-        return !contentType.includes('text/html');
-    };
 
     const fetchAndCache = () => (
         fetch(request)
@@ -122,7 +285,7 @@ self.addEventListener('fetch', (event) => {
                 // Um bundle antigo inexistente pode cair no fallback da SPA e receber
                 // index.html com status 200. Nunca devolvemos nem armazenamos HTML como
                 // JavaScript/CSS: o erro aciona a recuperacao segura no index.
-                if (response && response.status === 200 && !hasExpectedAssetContentType(response)) {
+                if (response && response.status === 200 && !hasExpectedAssetContentType(url.pathname, response)) {
                     return new Response('', {
                         status: 502,
                         statusText: 'Invalid asset response',
@@ -153,7 +316,7 @@ self.addEventListener('fetch', (event) => {
     if (isHashedAsset) {
         event.respondWith(
             matchCurrentCache().then((cachedResponse) => {
-                if (cachedResponse && hasExpectedAssetContentType(cachedResponse)) {
+                if (cachedResponse && hasExpectedAssetContentType(url.pathname, cachedResponse)) {
                     return cachedResponse;
                 }
 
@@ -170,9 +333,6 @@ self.addEventListener('fetch', (event) => {
             return matchCurrentCache().then((response) => {
                 if (response) {
                     return response;
-                }
-                if (request.mode === 'navigate') {
-                    return caches.open(CACHE_NAME).then((cache) => cache.match('/offline.html'));
                 }
                 return new Response('', { status: 503, statusText: 'Offline' });
             });
