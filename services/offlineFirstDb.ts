@@ -5,6 +5,7 @@
 // 1. Salva localmente primeiro (resposta imediata)
 // 2. Tenta sincronizar com Supabase em background
 // 3. Carrega do Supabase quando online, do local quando offline
+//    (com internet lenta, desiste do Supabase após um prazo se o aparelho já tem os dados)
 
 import { Client, Measurement, UserInfo, Film, PaymentMethods, SavedPDF, Agendamento, ProposalOption, StandaloneExpense } from '../types';
 import * as supabaseDb from './supabaseDb';
@@ -12,8 +13,11 @@ import * as offlineDb from './offlineDb';
 import { normalizeFilmForPersistence } from '../src/lib/filmPersistence';
 import { isOnlineNow, refreshSyncStatus, syncAllPending } from './syncService';
 import { ProposalOptionsHistoryEntry } from './proposalSync';
+import { withRemoteDeadline } from '../src/lib/remoteReadDeadline';
 
 const POSTGRES_INTEGER_MAX = 2147483647;
+
+const hasLocalClients = async () => (await offlineDb.offlineDb.clients.count()) > 0;
 
 const isPersistedIntegerId = (value: unknown): value is number => (
     typeof value === 'number'
@@ -95,7 +99,11 @@ export async function getAllClients(): Promise<Client[]> {
             }
 
             // 3. Buscar do Supabase
-            const supabaseClients = await supabaseDb.getAllClients();
+            const supabaseClients = await withRemoteDeadline(
+                supabaseDb.getAllClients(),
+                async () => localClients.length > 0,
+                'clientes'
+            );
 
             // 4. Atualizar cache local com dados do Supabase usando bulkPut (muito mais rápido)
             const now = Date.now();
@@ -231,7 +239,11 @@ export async function getAllCustomFilms(): Promise<Film[]> {
             }
 
             // 3. Buscar do Supabase
-            const supabaseFilms = await supabaseDb.getAllCustomFilms();
+            const supabaseFilms = await withRemoteDeadline(
+                supabaseDb.getAllCustomFilms(),
+                async () => localFilms.length > 0,
+                'películas'
+            );
 
             // 4. Atualizar cache local com dados do Supabase usando bulkPut
             const now = Date.now();
@@ -426,7 +438,11 @@ export async function getProposalOptions(clientId: number): Promise<ProposalOpti
                 return normalizedLocalOptions;
             }
 
-            const snapshot = await supabaseDb.getProposalOptionsSnapshot(clientId);
+            const snapshot = await withRemoteDeadline(
+                supabaseDb.getProposalOptionsSnapshot(clientId),
+                async () => localOptions.length > 0,
+                'medidas'
+            );
 
             await offlineDb.replaceProposalOptionsCache(clientId, snapshot.options, 'synced', snapshot.revision);
 
@@ -629,7 +645,11 @@ export async function getClientPage(
             }
 
             const [remotePage, localClients] = await Promise.all([
-                supabaseDb.getClientPage({ ...query, offset, limit }),
+                withRemoteDeadline(
+                    supabaseDb.getClientPage({ ...query, offset, limit }),
+                    async () => (await getLocalClients()).length > 0,
+                    'lista de clientes'
+                ),
                 getLocalClients()
             ]);
             const now = Date.now();
@@ -678,7 +698,9 @@ export async function getClientPage(
 
 export async function getClientDashboardStats(): Promise<supabaseDb.ClientDashboardStats> {
     try {
-        if (isOnlineNow()) return await supabaseDb.getClientDashboardStats();
+        if (isOnlineNow()) {
+            return await withRemoteDeadline(supabaseDb.getClientDashboardStats(), hasLocalClients, 'resumo de clientes');
+        }
     } catch (error) {
         console.error('[OfflineFirst] Erro ao buscar resumo de clientes, usando cache local:', error);
     }
@@ -860,7 +882,11 @@ export async function getAllStandaloneExpenses(): Promise<StandaloneExpense[]> {
                 syncAllPending().catch(err => console.error('[OfflineFirst] Erro na sincronizacao de despesas:', err));
             }
 
-            const remoteExpenses = await supabaseDb.getAllStandaloneExpenses();
+            const remoteExpenses = await withRemoteDeadline(
+                supabaseDb.getAllStandaloneExpenses(),
+                async () => localExpenses.length > 0,
+                'despesas'
+            );
             const now = Date.now();
             const remoteExpensesToCache = remoteExpenses.map(expense => ({
                 ...expense,
@@ -1044,7 +1070,11 @@ export async function getAllAgendamentos(): Promise<Agendamento[]> {
                 syncAllPending().catch(err => console.error('[OfflineFirst] Erro na sincronizacao de agendamentos:', err));
             }
 
-            const remoteAgendamentos = await supabaseDb.getAllAgendamentos();
+            const remoteAgendamentos = await withRemoteDeadline(
+                supabaseDb.getAllAgendamentos(),
+                async () => localAgendamentos.length > 0,
+                'agenda'
+            );
             const pendingByRemoteId = new Map<number, offlineDb.LocalAgendamento>();
             for (const pending of pendingAgendamentos) {
                 const remoteId = getAgendamentoRemoteId(pending);
