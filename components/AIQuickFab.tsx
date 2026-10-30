@@ -67,14 +67,14 @@ const AIQuickFab: React.FC<AIQuickFabProps> = ({
         <div className="sm:hidden">
             {isOpen && (
                 <div
-                    className="fixed inset-0 z-40 bg-black/35 backdrop-blur-[2px]"
+                    className="fixed inset-0 z-[55] bg-black/35 backdrop-blur-[2px]"
                     onClick={() => setIsOpen(false)}
                     aria-hidden="true"
                 />
             )}
 
             <div
-                className="fixed right-3 z-40 flex flex-col items-end gap-3"
+                className={`fixed right-3 ${isOpen ? 'z-[55]' : 'z-40'} flex flex-col items-end gap-3`}
                 style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 6rem)' }}
             >
                 {isOpen && actions.map((action, index) => (
