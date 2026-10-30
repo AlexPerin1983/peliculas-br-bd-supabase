@@ -7,7 +7,7 @@ nas decisões que afetam usuários, dados ou publicação.
 ## 1. O que é o projeto
 
 App **Películas BR** (PWA) para instaladores de película: clientes, medidas, orçamentos
-em PDF, propostas com link, agenda, estoque, financeiro e módulo automotivo (beta).
+em PDF, propostas com link, agenda, estoque, financeiro e módulo automotivo.
 
 - Frontend: React + TypeScript + Vite + Tailwind. Entrada em `App.tsx`; telas em `components/`
   e `src/components/`; regras puras em `src/lib/` (com testes `*.test.ts` ao lado).
@@ -60,7 +60,7 @@ em PDF, propostas com link, agenda, estoque, financeiro e módulo automotivo (be
 
 | Funcionalidade | Quem vê hoje | Onde está o controle |
 |---|---|---|
-| **Automotivo** (orçamento de carros, tabela de preços, observações) | Só o login `windowfilm.br@gmail.com` | `canUseAutomotiveBeta` em `src/lib/automotive.ts`; aba e seção também dependem da chave em Configurações (`user_info.automotivo`) |
+| **Automotivo** (orçamento de carros, tabela de preços, observações) | Todas as contas veem a seção em Configurações; a aba no orçamento só aparece para a empresa que liga a chave | `canUseAutomotive` em `src/lib/automotive.ts` + chave em Configurações (`user_info.automotivo`) |
 | **WhatsApp conectado** (envio pós-venda, funil, triagem) | Só as empresas do próprio dono com conector ativo | RPC `whatsapp_connection_status()` / `whatsapp_triage_organization()` no banco |
 
 - Nada disso ganha aviso no grupo de WhatsApp dos aplicadores enquanto estiver fechado.
@@ -86,8 +86,8 @@ em PDF, propostas com link, agenda, estoque, financeiro e módulo automotivo (be
   `scripts/marketing-prints/capture.marketing.ts` (`npm run prints:marketing`, usa o Edge instalado).
 - Limitações: não testa sincronização nem criação de links (o app está offline); a tela de
   Configurações precisa de respostas falsas para `organization_members` e `organizations`, senão a
-  seção Equipe quebra; o e-mail da sessão falsa é `iphone.e2e@peliculasbr.test` (o Automotivo fica
-  escondido, a não ser que o teste troque o e-mail da sessão pelo da conta liberada).
+  seção Equipe quebra; o e-mail da sessão falsa é `iphone.e2e@peliculasbr.test` (para ver a aba
+  Automotivo, o teste liga a chave em Configurações ou grava `automotivo: { ativo: true }` no userInfo).
 - Atenção: `scripts/marketing-prints/` e a opção `activeModules` do helper **ainda não estão no
   Git** (ver seção 8).
 
@@ -113,7 +113,7 @@ sem ele pedir:**
 - Pastas novas: `docs/marketing/`, `docs/novidades/`, `scripts/marketing-pecas/`,
   `scripts/marketing-prints/`, `.claude/`.
 
-**Automotivo (beta)** — PRs #82 e #83 já no `main`:
+**Automotivo** — PRs #82, #83, #85–#87 no `main`; aberto para todas as empresas pela chave em Configurações:
 
 - Regras e preços: `src/lib/automotive.ts` (+ `automotive.test.ts`); tipos em `types.ts`
   (`AutomotiveVehicle`, `AutomotiveSettings`).

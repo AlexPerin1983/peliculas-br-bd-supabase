@@ -270,12 +270,9 @@ export const getAutomotivePriceTable = (settings: AutomotiveSettings | undefined
     return prices;
 };
 
-// Beta: só estas contas (e-mail do login) veem o automotivo, nas Configurações e no orçamento.
-const AUTOMOTIVE_BETA_EMAILS = ['windowfilm.br@gmail.com'];
-
-export const canUseAutomotiveBeta = (email: string | null | undefined): boolean => (
-    Boolean(email) && AUTOMOTIVE_BETA_EMAILS.includes(email!.trim().toLowerCase())
-);
+// Automotivo liberado para qualquer conta logada: a seção aparece nas Configurações e a aba
+// no orçamento só depois que a empresa liga "Fazer orçamentos de carros" (isAutomotiveEnabled).
+export const canUseAutomotive = (email: string | null | undefined): boolean => Boolean(email);
 
 export const isAutomotiveEnabled =(settings: AutomotiveSettings | undefined): boolean => Boolean(settings?.ativo);
 
