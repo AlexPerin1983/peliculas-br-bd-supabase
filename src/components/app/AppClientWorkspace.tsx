@@ -17,6 +17,7 @@ import {
 } from '../../lib/proposalAdjustments';
 import {
     BadgeCheck,
+    Car,
     CheckCircle2,
     CircleDollarSign,
     ChevronRight,
@@ -108,12 +109,15 @@ interface ProposalCommandCenterProps {
     isGeneratingPdf: boolean;
     onUpdateGeneralDiscount: (discount: ProposalDiscount) => void;
     onAddMeasurement: () => void;
-    onDuplicateMeasurements: () => void;
+    // Sem estes dois (aba Automotivo), os botões Com IA e Duplicar somem.
+    onDuplicateMeasurements?: () => void;
     onGeneratePdf: () => void;
     generatedProposalsCount?: number;
     onOpenGeneratedProposals?: () => void;
-    onOpenAIModal: () => void;
+    onOpenAIModal?: () => void;
     addLabel?: string;
+    // Aba Automotivo: a prontidão conta carros em vez de medidas e películas.
+    vehicleCount?: number;
 }
 
 interface GeneralDiscountInlineControlProps {
@@ -240,6 +244,7 @@ const ProposalCommandCenter: React.FC<ProposalCommandCenterProps> = ({
     onOpenAIModal,
     onOpenPrices,
     addLabel = 'Adicionar Medida',
+    vehicleCount,
 }) => {
     const activeMeasurements = measurements.filter(measurement => measurement.active !== false);
     const measurementsWithFilm = activeMeasurements.filter(measurement => Boolean(measurement.pelicula && measurement.pelicula !== 'Nenhuma'));
@@ -260,18 +265,25 @@ const ProposalCommandCenter: React.FC<ProposalCommandCenterProps> = ({
             ready: Boolean(selectedClient),
             icon: <UserRound className="h-4 w-4" aria-hidden="true" />,
         },
-        {
-            label: 'Medidas',
-            value: measurements.length > 0 ? `${measurements.length} grupo${measurements.length > 1 ? 's' : ''}` : 'Adicionar',
-            ready: measurements.length > 0,
-            icon: <Ruler className="h-4 w-4" aria-hidden="true" />,
-        },
-        {
-            label: 'Películas',
-            value: missingFilms === 0 && activeMeasurements.length > 0 ? 'Definidas' : `${missingFilms || activeMeasurements.length || 0} pendente${(missingFilms || activeMeasurements.length || 0) === 1 ? '' : 's'}`,
-            ready: activeMeasurements.length > 0 && missingFilms === 0,
-            icon: <PackageCheck className="h-4 w-4" aria-hidden="true" />,
-        },
+        ...(vehicleCount !== undefined ? [{
+            label: 'Carros',
+            value: vehicleCount > 0 ? `${vehicleCount} ${vehicleCount === 1 ? 'carro' : 'carros'}` : 'Adicionar',
+            ready: vehicleCount > 0,
+            icon: <Car className="h-4 w-4" aria-hidden="true" />,
+        }] : [
+            {
+                label: 'Medidas',
+                value: measurements.length > 0 ? `${measurements.length} grupo${measurements.length > 1 ? 's' : ''}` : 'Adicionar',
+                ready: measurements.length > 0,
+                icon: <Ruler className="h-4 w-4" aria-hidden="true" />,
+            },
+            {
+                label: 'Películas',
+                value: missingFilms === 0 && activeMeasurements.length > 0 ? 'Definidas' : `${missingFilms || activeMeasurements.length || 0} pendente${(missingFilms || activeMeasurements.length || 0) === 1 ? '' : 's'}`,
+                ready: activeMeasurements.length > 0 && missingFilms === 0,
+                icon: <PackageCheck className="h-4 w-4" aria-hidden="true" />,
+            },
+        ]),
         {
             label: 'Custos',
             value: hasCostBase ? 'Calculados' : 'Sem gastos',
@@ -409,22 +421,28 @@ const ProposalCommandCenter: React.FC<ProposalCommandCenterProps> = ({
                         <span>Enviar ao cliente ({generatedProposalsCount} {generatedProposalsCount === 1 ? 'gerada' : 'geradas'})</span>
                     </button>
                 ) : null}
-                <div className="grid grid-cols-2 gap-2">
-                    <button
-                        onClick={onOpenAIModal}
-                        className="flex h-11 items-center justify-center gap-2 rounded-[var(--radius-control)] border border-blue-100 bg-blue-50 text-sm font-semibold text-blue-700 shadow-[var(--shadow-hairline)] transition-all hover:bg-blue-100 active:scale-[0.99] dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-300"
-                    >
-                        <Sparkles className="h-4 w-4" aria-hidden="true" />
-                        <span>Com IA</span>
-                    </button>
-                    <button
-                        onClick={onDuplicateMeasurements}
-                        className="flex h-11 items-center justify-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] text-sm font-semibold text-[var(--text-body)] shadow-[var(--shadow-hairline)] transition-all hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)] active:scale-[0.99]"
-                    >
-                        <Copy className="h-4 w-4" aria-hidden="true" />
-                        <span>Duplicar</span>
-                    </button>
-                </div>
+                {(onOpenAIModal || onDuplicateMeasurements) && (
+                    <div className="grid grid-cols-2 gap-2">
+                        {onOpenAIModal && (
+                            <button
+                                onClick={onOpenAIModal}
+                                className="flex h-11 items-center justify-center gap-2 rounded-[var(--radius-control)] border border-blue-100 bg-blue-50 text-sm font-semibold text-blue-700 shadow-[var(--shadow-hairline)] transition-all hover:bg-blue-100 active:scale-[0.99] dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-300"
+                            >
+                                <Sparkles className="h-4 w-4" aria-hidden="true" />
+                                <span>Com IA</span>
+                            </button>
+                        )}
+                        {onDuplicateMeasurements && (
+                            <button
+                                onClick={onDuplicateMeasurements}
+                                className="flex h-11 items-center justify-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] text-sm font-semibold text-[var(--text-body)] shadow-[var(--shadow-hairline)] transition-all hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)] active:scale-[0.99]"
+                            >
+                                <Copy className="h-4 w-4" aria-hidden="true" />
+                                <span>Duplicar</span>
+                            </button>
+                        )}
+                    </div>
+                )}
             </div>
         </aside>
     );
@@ -649,13 +667,14 @@ export const AppClientWorkspace: React.FC<AppClientWorkspaceProps> = ({
                             isGeneratingPdf={isGeneratingPdf}
                             onUpdateGeneralDiscount={onUpdateGeneralDiscount}
                             onAddMeasurement={handleAdd}
-                            onDuplicateMeasurements={onDuplicateMeasurements}
+                            onDuplicateMeasurements={isAutomotive ? undefined : onDuplicateMeasurements}
                             onGeneratePdf={onGeneratePdf}
                             generatedProposalsCount={generatedProposalsCount}
                             onOpenGeneratedProposals={onOpenGeneratedProposals}
-                            onOpenAIModal={onOpenAIModal}
+                            onOpenAIModal={isAutomotive ? undefined : onOpenAIModal}
                             onOpenPrices={() => setIsDesktopTotalsOpen(true)}
                             addLabel={addLabel}
+                            vehicleCount={isAutomotive ? vehicles.length : undefined}
                         />
                     </div>
                 )}
@@ -687,10 +706,10 @@ export const AppClientWorkspace: React.FC<AppClientWorkspaceProps> = ({
                         </button>
                         <ActionsBar
                             onAddMeasurement={handleAdd}
-                            onDuplicateMeasurements={onDuplicateMeasurements}
+                            onDuplicateMeasurements={isAutomotive ? undefined : onDuplicateMeasurements}
                             onGeneratePdf={onGeneratePdf}
                             isGeneratingPdf={isGeneratingPdf}
-                            onOpenAIModal={onOpenAIModal}
+                            onOpenAIModal={isAutomotive ? undefined : onOpenAIModal}
                             addLabel={addLabel}
                         />
                     </div>
@@ -702,12 +721,12 @@ export const AppClientWorkspace: React.FC<AppClientWorkspaceProps> = ({
                         onUpdateGeneralDiscount={onUpdateGeneralDiscount}
                         onAddMeasurement={handleAdd}
                         addLabel={addLabel}
-                        onDuplicateMeasurements={onDuplicateMeasurements}
+                        onDuplicateMeasurements={isAutomotive ? undefined : onDuplicateMeasurements}
                         onGeneratePdf={onGeneratePdf}
                         generatedProposalsCount={generatedProposalsCount}
                         onOpenGeneratedProposals={onOpenGeneratedProposals}
                         isGeneratingPdf={isGeneratingPdf}
-                        onOpenAIModal={onOpenAIModal}
+                        onOpenAIModal={isAutomotive ? undefined : onOpenAIModal}
                         defaultHideMeasurements={defaultHideMeasurements}
                         defaultValidityDays={defaultValidityDays}
                         paymentConfig={proposalPaymentConfig}

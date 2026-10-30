@@ -34,6 +34,7 @@ import Modal from '../ui/Modal';
 import { useFeedback } from '../../src/contexts/FeedbackContext';
 import { PROPOSAL_EXPENSE_CATEGORY_OPTIONS, summarizeProposalExpenses } from '../../src/lib/proposalExpenses';
 import { matchesSearch, normalizeSearchText } from '../../src/lib/textSearch';
+import { describeSavedQuoteSize } from '../../src/lib/automotive';
 import { buildReviewFollowUpMessage } from '../../src/lib/reviewMessage';
 import { formatGarantiaMaoDeObra, garantiaEmDias } from '../../src/lib/filmWarranty';
 import { applyFilmWarrantyOverrides } from '../../src/lib/filmWarrantyOverrides';
@@ -3316,7 +3317,7 @@ const PdfHistoryItem: React.FC<{
                         ) : null}
                     </div>
                     <p className="mt-0.5 truncate text-xs text-[var(--text-muted)]">
-                        <span className="tabular-nums">{formatAreaBR(pdf.totalM2)}</span>
+                        <span className="tabular-nums">{describeSavedQuoteSize(pdf.totalM2, pdf.generalDiscount?.automotiveVehicles, formatAreaBR)}</span>
                         {expirationDate && !isApproved ? (
                             <>
                                 <span aria-hidden="true"> · </span>

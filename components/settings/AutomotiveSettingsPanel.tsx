@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { RotateCcw } from 'lucide-react';
-import type { AutomotiveCategoryPrice, AutomotiveSettings, VehicleCategory } from '../../types';
+import type { AutomotiveCategoryPrice, AutomotiveFilmWarranty, AutomotiveSettings, VehicleCategory } from '../../types';
+import { GARANTIA_UNIDADES, type GarantiaUnidade } from '../../src/lib/filmWarranty';
 import VehicleCategoryIcon from '../automotive/VehicleCategoryIcon';
 import {
     AUTOMOTIVE_FILM_TYPES,
@@ -25,6 +26,12 @@ const PRICE_FIELDS: { field: PriceField; label: string }[] = [
 ];
 
 const cellKey = (film: string, category: VehicleCategory, field: PriceField) => `${film}|${category}|${field}`;
+
+// Campo de garantia: vazio ou inválido = sem garantia.
+const parseWarrantyNumber = (text: string): number | undefined => {
+    const value = Number(text);
+    return text.trim() && Number.isFinite(value) && value > 0 ? Math.round(value) : undefined;
+};
 
 // Chave da aba Automotivo e tabela de preço sugerido por linha de película e categoria.
 const AutomotiveSettingsPanel: React.FC<AutomotiveSettingsPanelProps> = ({ value, onChange }) => {
@@ -62,6 +69,13 @@ const AutomotiveSettingsPanel: React.FC<AutomotiveSettingsPanelProps> = ({ value
             Object.entries(previous).filter(([key]) => !key.startsWith(`${selectedFilm}|`))
         ));
         onChange({ ...settings, precos: { ...prices, [selectedFilm]: suggested[selectedFilm] } });
+    };
+
+    // Garantia da linha escolhida; sem unidade escolhida, a mão de obra conta em meses.
+    const warranty: AutomotiveFilmWarranty = settings.garantias?.[selectedFilm] ?? {};
+    const updateWarranty = (patch: Partial<AutomotiveFilmWarranty>) => {
+        const next = { maoDeObraUnidade: 'meses' as const, ...warranty, ...patch };
+        onChange({ ...settings, garantias: { ...settings.garantias, [selectedFilm]: next } });
     };
 
     const getCellText = (category: VehicleCategory, field: PriceField) => {
@@ -150,6 +164,48 @@ const AutomotiveSettingsPanel: React.FC<AutomotiveSettingsPanelProps> = ({ value
                         <RotateCcw className="h-4 w-4" aria-hidden="true" />
                         Voltar aos preços sugeridos de {selectedFilm}
                     </button>
+                    <div className="space-y-2 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] p-3">
+                        <span className="block">
+                            <span className="block text-sm font-semibold text-[var(--text-strong)]">Garantia da {selectedFilm}</span>
+                            <span className="block text-xs text-[var(--text-muted)]">Sai no PDF dos carros com essa película. Vazio = não aparece.</span>
+                        </span>
+                        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)] gap-2">
+                            <label className="block">
+                                <span className="block text-[11px] font-bold uppercase tracking-[0.06em] text-[var(--text-muted)]">Fabricante (anos)</span>
+                                <input
+                                    type="number"
+                                    inputMode="numeric"
+                                    min={0}
+                                    value={warranty.fabricanteAnos ?? ''}
+                                    onChange={event => updateWarranty({ fabricanteAnos: parseWarrantyNumber(event.target.value) })}
+                                    aria-label={`Garantia do fabricante da ${selectedFilm}, em anos`}
+                                    className="ui-field mt-1 block h-10 w-full px-2 text-sm font-bold"
+                                />
+                            </label>
+                            <div className="block">
+                                <span className="block text-[11px] font-bold uppercase tracking-[0.06em] text-[var(--text-muted)]">Mão de obra</span>
+                                <div className="mt-1 flex gap-1.5">
+                                    <input
+                                        type="number"
+                                        inputMode="numeric"
+                                        min={0}
+                                        value={warranty.maoDeObra ?? ''}
+                                        onChange={event => updateWarranty({ maoDeObra: parseWarrantyNumber(event.target.value) })}
+                                        aria-label={`Garantia da mão de obra da ${selectedFilm}`}
+                                        className="ui-field block h-10 w-16 min-w-0 px-2 text-sm font-bold"
+                                    />
+                                    <select
+                                        value={warranty.maoDeObraUnidade ?? 'meses'}
+                                        onChange={event => updateWarranty({ maoDeObraUnidade: event.target.value as GarantiaUnidade })}
+                                        aria-label={`Unidade da garantia da mão de obra da ${selectedFilm}`}
+                                        className="ui-field block h-10 min-w-0 flex-1 px-2 text-sm"
+                                    >
+                                        {GARANTIA_UNIDADES.map(unit => <option key={unit.value} value={unit.value}>{unit.label}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     <label className="flex items-center gap-3 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] p-3">
                         <span className="min-w-0 flex-1">
                             <span className="block text-sm font-semibold text-[var(--text-strong)]">Remover película antiga</span>

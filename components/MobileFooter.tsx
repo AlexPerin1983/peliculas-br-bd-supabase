@@ -8,12 +8,13 @@ interface MobileFooterProps {
     onOpenGeneralDiscountModal: () => void;
     onUpdateGeneralDiscount: (value: ProposalDiscount) => void;
     onAddMeasurement: () => void;
-    onDuplicateMeasurements: () => void;
+    // Sem estes dois (aba Automotivo), os botões IA e Copia somem.
+    onDuplicateMeasurements?: () => void;
     onGeneratePdf: () => void;
     generatedProposalsCount?: number;
     onOpenGeneratedProposals?: () => void;
     isGeneratingPdf: boolean;
-    onOpenAIModal: () => void;
+    onOpenAIModal?: () => void;
     defaultHideMeasurements?: boolean;
     defaultValidityDays?: number;
     paymentConfig?: ProposalPaymentConfig;
@@ -105,8 +106,10 @@ const MobileFooter: React.FC<MobileFooterProps> = ({
                 <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.15)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-white/20 dark:border-slate-800/50 rounded-2xl px-2 py-2">
                     <div className="flex justify-between items-center relative">
                         <div className="flex gap-1">
-                            <ActionButton onClick={onOpenAIModal} label="IA" icon="fas fa-robot" />
-                            <ActionButton onClick={onDuplicateMeasurements} label="Copia" icon="fas fa-copy" />
+                            {onOpenAIModal && <ActionButton onClick={onOpenAIModal} label="IA" icon="fas fa-robot" />}
+                            {onDuplicateMeasurements && <ActionButton onClick={onDuplicateMeasurements} label="Copia" icon="fas fa-copy" />}
+                            {/* Aba Automotivo: sem IA/Copia, o espaço fica para o botão + continuar no centro. */}
+                            {!onOpenAIModal && !onDuplicateMeasurements && <span className="h-14 w-[8.25rem]" aria-hidden="true" />}
                         </div>
 
                         <div className="absolute left-1/2 -translate-x-1/2 -top-12">

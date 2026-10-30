@@ -14,7 +14,7 @@ import { calculateMeasurementPriceAdjustment, getMeasurementAdjustmentInputs } f
 import { resolveFilmPrices } from '../src/lib/filmPriceOverrides';
 import { findFilmByName, getVisibleCustomFields } from '../src/lib/filmCatalog';
 import { buildProposalPaymentOptions } from '../src/lib/paymentConditions';
-import { describeVehicleGlass, describeVehicleNotes, describeVehiclePackage, describeVehiclePartPrices, getVehicleCategoryInfo, getVehicleTotal } from '../src/lib/automotive';
+import { buildAutomotiveWarrantyEntries, describeVehicleGlass, describeVehicleNotes, describeVehiclePackage, describeVehiclePartPrices, getVehicleCategoryInfo, getVehicleTotal } from '../src/lib/automotive';
 
 // Define GeneralDiscount locally since it's not exported from types.ts
 interface GeneralDiscount {
@@ -1107,7 +1107,7 @@ const renderPdfContent = async (
 
         // --- Garantias e Especificações (Baseado em todas as opções) ---
 
-        // Películas dos carros também entram nas garantias e especificações.
+        // Películas dos carros também entram nas especificações (quando existem no catálogo).
         const optionsWithVehicleFilms = optionsData.map(opt => ({
             ...opt,
             measurements: [
@@ -1119,8 +1119,19 @@ const renderPdfContent = async (
         const hasCompletePricingOption = optionsData.some(opt => opt.totals.pricingMode !== 'labor_only');
         const uniqueFilmNames = Array.from(new Set(allFilmsUsed));
 
-        await addSectionTitle("Garantias");
-        for (const entry of buildPdfWarrantyEntries(optionsWithVehicleFilms, allFilms)) {
+        // Medidas usam a garantia do catálogo; carros, a das linhas automotivas (Configurações).
+        // Sem nenhuma garantia preenchida, a seção não sai (antes saía só o título).
+        const catalogWarrantyEntries = buildPdfWarrantyEntries(optionsData, allFilms);
+        const warrantyEntries = [
+            ...catalogWarrantyEntries,
+            ...buildAutomotiveWarrantyEntries(
+                optionsData.flatMap(opt => (opt.generalDiscount?.automotiveVehicles || []).map(vehicle => vehicle.pelicula)),
+                userInfo.automotivo,
+            ).filter(entry => !catalogWarrantyEntries.some(catalogEntry => catalogEntry.title === entry.title)),
+        ];
+
+        if (warrantyEntries.length > 0) await addSectionTitle("Garantias");
+        for (const entry of warrantyEntries) {
             if (yPos > pageHeight - 30) await addNewPage();
             doc.setFont("helvetica", 'bold');
             safeText(entry.title, margin, yPos);

@@ -3,10 +3,11 @@ import { Copy, FileText, Loader2, Plus, Sparkles } from 'lucide-react';
 
 interface ActionsBarProps {
     onAddMeasurement: () => void;
-    onDuplicateMeasurements: () => void;
+    // Sem estes dois (aba Automotivo), os botões de IA e Duplicar medidas somem.
+    onDuplicateMeasurements?: () => void;
     onGeneratePdf: () => void;
     isGeneratingPdf: boolean;
-    onOpenAIModal: () => void;
+    onOpenAIModal?: () => void;
     layout?: 'grid' | 'stacked';
     addLabel?: string;
 }
@@ -30,7 +31,7 @@ const ActionsBar: React.FC<ActionsBarProps> = ({
         </button>
     );
 
-    const aiButton = (
+    const aiButton = onOpenAIModal && (
         <button
             onClick={onOpenAIModal}
             className="flex h-12 items-center justify-center gap-2 rounded-[var(--radius-control)] border border-blue-100 bg-blue-50 font-semibold text-blue-700 shadow-[var(--shadow-hairline)] transition-all hover:bg-blue-100 active:scale-[0.99] dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-300"
@@ -40,7 +41,7 @@ const ActionsBar: React.FC<ActionsBarProps> = ({
         </button>
     );
 
-    const duplicateButton = (
+    const duplicateButton = onDuplicateMeasurements && (
         <button
             onClick={onDuplicateMeasurements}
             className="flex h-12 items-center justify-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] font-semibold text-[var(--text-body)] shadow-[var(--shadow-hairline)] transition-all hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)] active:scale-[0.99]"
@@ -76,16 +77,20 @@ const ActionsBar: React.FC<ActionsBarProps> = ({
             <div className="space-y-2">
                 {addMeasurementButton}
                 {pdfButton}
-                <div className="grid grid-cols-2 gap-2">
-                    {aiButton}
-                    {duplicateButton}
-                </div>
+                {(aiButton || duplicateButton) && (
+                    <div className="grid grid-cols-2 gap-2">
+                        {aiButton}
+                        {duplicateButton}
+                    </div>
+                )}
             </div>
         );
     }
 
     return (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(0,1fr)] sm:items-center">
+        <div className={`grid grid-cols-2 gap-3 sm:items-center ${aiButton || duplicateButton
+            ? 'sm:grid-cols-[minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(0,1fr)]'
+            : 'sm:grid-cols-2'}`}>
             {addMeasurementButton}
             {aiButton}
             {duplicateButton}

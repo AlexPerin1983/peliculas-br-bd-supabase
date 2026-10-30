@@ -1,6 +1,7 @@
 import React from 'react';
 import { SavedPDF } from '../../types';
 import Modal from '../ui/Modal';
+import { describeSavedQuoteSize } from '../../src/lib/automotive';
 
 interface PdfHistoryModalProps {
     isOpen: boolean;
@@ -27,7 +28,7 @@ const PdfHistoryModal: React.FC<PdfHistoryModalProps> = ({ isOpen, onClose, pdfs
                             <div className="flex-grow">
                                 <p className="font-semibold text-slate-800">{new Date(pdf.date).toLocaleString('pt-BR')}</p>
                                 <p className="text-sm text-slate-600">
-                                    {formatNumberBR(pdf.totalM2)} m² - R$ {formatNumberBR(pdf.totalPreco)}
+                                    {describeSavedQuoteSize(pdf.totalM2, pdf.generalDiscount?.automotiveVehicles, value => `${formatNumberBR(value)} m²`)} - R$ {formatNumberBR(pdf.totalPreco)}
                                 </p>
                             </div>
                             <div className="flex items-center space-x-2">
