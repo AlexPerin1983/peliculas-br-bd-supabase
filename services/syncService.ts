@@ -32,6 +32,7 @@ import {
     saveUserInfoRemote
 } from './supabaseDb';
 import { normalizeFilmForPersistence } from '../src/lib/filmPersistence';
+import { belongsToOtherAccount, readSyncAccountId, shouldRetryAfterAccountChange } from '../src/lib/syncAccount';
 import { ProposalOptionOperation, ProposalOptionsSaveResult } from './proposalSync';
 import {
     canAutomaticallyRetrySyncError,
@@ -512,7 +513,9 @@ export async function syncAllPending(options?: SyncRunOptions): Promise<void> {
             sanitizedQueue.push(item);
         }
 
-        const pendingItems = [...sanitizedQueue];
+        const accountId = readSyncAccountId();
+        // Alterações de outra conta ficam guardadas até essa conta entrar de novo.
+        const pendingItems = sanitizedQueue.filter(item => !belongsToOtherAccount(item, accountId));
         const seenItemIds = new Set(sanitizedQueue.map(item => item.id));
         while (pendingItems.length > 0 || prioritySavedPdfLocalIds.size > 0) {
             // PDF prioritário que entrou na fila depois desta passagem começar.
@@ -536,7 +539,8 @@ export async function syncAllPending(options?: SyncRunOptions): Promise<void> {
             if (isPrioritySavedPdfItem(item)) prioritySavedPdfLocalIds.delete(item.data._localId);
             const hasClassifiedFailure = !!item.errorInfo || !!item.lastError;
             if (item.status === 'error' && hasClassifiedFailure && !options?.retryBlocked
-                && !canAutomaticallyRetrySyncError(getSyncErrorInfo(item), item.retryCount)) {
+                && !canAutomaticallyRetrySyncError(getSyncErrorInfo(item), item.retryCount)
+                && !shouldRetryAfterAccountChange(item, accountId)) {
                 continue;
             }
             try {
@@ -571,7 +575,7 @@ export async function syncAllPending(options?: SyncRunOptions): Promise<void> {
                 const marked = await markSyncItemError(item.id!, currentStatus.error, info, {
                     timestamp: item.timestamp,
                     syncToken: item.data?.syncToken
-                });
+                }, accountId);
 
                 if (marked === false) {
                     // Uma nova edição substituiu a tentativa antiga: continua pendente.

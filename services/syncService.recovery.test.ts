@@ -87,7 +87,8 @@ describe('syncService recovery policy', () => {
       31,
       expect.any(String),
       { category: 'network', code: 'SYNC_NETWORK' },
-      { timestamp: item.timestamp, syncToken: undefined }
+      { timestamp: item.timestamp, syncToken: undefined },
+      null
     );
     expect(mocks.remove).not.toHaveBeenCalled();
   });

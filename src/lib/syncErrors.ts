@@ -76,7 +76,7 @@ export const getSyncErrorPresentation = (info: SyncErrorInfo, table?: string) =>
         network: { title: 'Aguardando conexão com o servidor', message: 'Conexão instável com o servidor. O envio será tentado novamente automaticamente quando houver conexão.' },
         server: { title: 'Servidor temporariamente indisponível', message: 'O servidor não respondeu a tempo ou está ocupado. O envio será tentado novamente automaticamente.' },
         authentication: { title: 'Sessão precisa ser renovada', message: 'Entre novamente na mesma conta e toque em Tentar novamente. Não limpe os dados do navegador.' },
-        permission: { title: 'Sem permissão para salvar', message: 'Sua conta não foi autorizada a salvar esta alteração. Peça a revisão do acesso na empresa e tente novamente após a correção.' },
+        permission: { title: 'Sem permissão para salvar', message: 'Sua conta não foi autorizada a salvar esta alteração. Se você usa mais de uma conta neste aparelho, entre na conta em que fez a alteração: ela será enviada sozinha. Se não, peça a revisão do acesso na empresa.' },
         validation: { title: 'Dado precisa de revisão', message: 'Um dado não foi aceito pelo servidor. Revise o preenchimento ou envie o diagnóstico ao suporte. A tentativa automática foi pausada.' },
         duplicate: { title: 'Registro já existente', message: 'O servidor encontrou um registro duplicado. Envie o diagnóstico ao suporte para conciliar os dados sem descartar suas alterações.' },
         conflict: { title: 'Alterações em outro aparelho', message: 'A versão do orçamento mudou durante o envio. Evite editar o mesmo orçamento nos dois aparelhos ao mesmo tempo e tente novamente.' },

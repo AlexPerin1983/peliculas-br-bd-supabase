@@ -5,6 +5,7 @@
 // e sincroniza com Supabase quando houver conexão
 
 import Dexie, { Table } from 'dexie';
+import { belongsToOtherAccount, readSyncAccountId } from '../src/lib/syncAccount';
 import { Client, Film, UserInfo, SavedPDF, Agendamento, ProposalOption, StandaloneExpense } from '../types';
 import { buildProposalOperations } from './proposalSync';
 import type { SyncErrorInfo } from '../src/lib/syncErrors';
@@ -42,6 +43,10 @@ export interface SyncQueueItem {
     lastError?: string;
     lastAttemptAt?: number;
     errorInfo?: SyncErrorInfo;
+    // Conta que fez a alteração (o banco local é o mesmo para todas as contas).
+    ownerUserId?: string;
+    // Conta logada na última tentativa que falhou.
+    lastAttemptUserId?: string;
 }
 
 export interface FailedSyncItem {
@@ -165,8 +170,10 @@ const getTemporaryPublicIdFromLocalId = (localId?: string): number | undefined =
 };
 
 async function enqueueSyncItem(item: Omit<SyncQueueItem, 'id' | 'status' | 'retryCount'>): Promise<void> {
+    const ownerUserId = readSyncAccountId() ?? undefined;
     await offlineDb.syncQueue.add({
         ...item,
+        ...(ownerUserId ? { ownerUserId } : {}),
         status: 'pending',
         retryCount: 0
     });
@@ -1138,12 +1145,19 @@ export async function clearAllLocalData(): Promise<void> {
 }
 
 // Obter contagem de itens pendentes de sincronização
+// Contadores da conta logada: alterações de outra conta ficam guardadas sem aparecer aqui.
+const countForCurrentAccount = async (status: SyncQueueItem['status']): Promise<number> => {
+    const accountId = readSyncAccountId();
+    return offlineDb.syncQueue.where('status').equals(status)
+        .filter(item => !belongsToOtherAccount(item, accountId)).count();
+};
+
 export async function getPendingSyncCount(): Promise<number> {
-    return await offlineDb.syncQueue.where('status').equals('pending').count();
+    return countForCurrentAccount('pending');
 }
 
 export async function getFailedSyncCount(): Promise<number> {
-    return await offlineDb.syncQueue.where('status').equals('error').count();
+    return countForCurrentAccount('error');
 }
 
 export async function hasLocalSyncDebt(): Promise<boolean> {
@@ -1184,8 +1198,10 @@ export async function getFailedSyncItems(limit = 20): Promise<FailedSyncItem[]> 
         .equals('error')
         .reverse()
         .sortBy('lastAttemptAt');
+    const accountId = readSyncAccountId();
 
     return items
+        .filter(item => !belongsToOtherAccount(item, accountId))
         .slice(0, limit)
         .map(item => ({
             id: item.id!,
@@ -1202,7 +1218,8 @@ export async function markSyncItemError(
     id: number,
     errorMessage: string,
     errorInfo?: SyncErrorInfo,
-    expected?: { timestamp: number; syncToken?: string }
+    expected?: { timestamp: number; syncToken?: string },
+    attemptUserId?: string | null
 ): Promise<boolean> {
     return offlineDb.transaction('rw', offlineDb.syncQueue, async () => {
         const item = await offlineDb.syncQueue.get(id);
@@ -1219,7 +1236,8 @@ export async function markSyncItemError(
             lastError: errorMessage,
             lastAttemptAt: Date.now(),
             retryCount: (item.retryCount || 0) + 1,
-            errorInfo
+            errorInfo,
+            lastAttemptUserId: attemptUserId ?? undefined
         });
         return true;
     });
