@@ -6,6 +6,7 @@ import type {
     VehicleGlassPart,
     VehicleGlassShade,
 } from '../../types';
+import { formatGarantiaMaoDeObra } from './filmWarranty';
 
 export interface VehicleCategoryInfo {
     id: VehicleCategory;
@@ -328,6 +329,41 @@ export const sumAutomotiveVehicles = (vehicles: AutomotiveVehicle[] | undefined)
 export const DEFAULT_REMOVAL_PRICE = 80;
 export const getDefaultRemovalPrice = (settings: AutomotiveSettings | undefined): number => (
     typeof settings?.valorRemocao === 'number' && settings.valorRemocao >= 0 ? settings.valorRemocao : DEFAULT_REMOVAL_PRICE
+);
+
+// Tamanho do orçamento salvo para listas: "12,50 m²", "2 carros" ou "12,50 m² · 1 carro".
+export const describeSavedQuoteSize = (
+    totalM2: number | undefined,
+    vehicles: AutomotiveVehicle[] | undefined,
+    formatArea: (value: number) => string,
+): string => {
+    const count = vehicles?.length ?? 0;
+    const area = Number.isFinite(totalM2) ? totalM2! : 0;
+    if (count === 0) return formatArea(area);
+    const cars = `${count} ${count === 1 ? 'carro' : 'carros'}`;
+    return area > 0 ? `${formatArea(area)} · ${cars}` : cars;
+};
+
+// Seção "Garantias" do PDF para as películas dos carros, no mesmo formato das do catálogo.
+// Linha sem garantia preenchida nas Configurações fica de fora.
+export const buildAutomotiveWarrantyEntries = (
+    filmNames: string[],
+    settings: AutomotiveSettings | undefined,
+): { title: string; lines: string[] }[] => (
+    Array.from(new Set(filmNames)).flatMap(filmName => {
+        const warranty = settings?.garantias?.[filmName];
+        const fabricante = warranty?.fabricanteAnos;
+        const hasFabricante = typeof fabricante === 'number' && fabricante > 0;
+        const hasMaoDeObra = typeof warranty?.maoDeObra === 'number' && warranty.maoDeObra > 0;
+        if (!hasFabricante && !hasMaoDeObra) return [];
+        return [{
+            title: filmName,
+            lines: [
+                ...(hasFabricante ? [`  - Garantia Fabricante: ${fabricante} ${fabricante === 1 ? 'ano' : 'anos'}`] : []),
+                ...(hasMaoDeObra ? [`  - Garantia Mão de Obra: ${formatGarantiaMaoDeObra(warranty!.maoDeObra, warranty!.maoDeObraUnidade)}`] : []),
+            ],
+        }];
+    })
 );
 
 // "Remover película antiga (+ R$ 80,00) · Vidro com risco ou trinca antes do serviço · Obs.: ..."

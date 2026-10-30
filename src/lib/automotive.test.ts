@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { AutomotiveSettings, AutomotiveVehicle } from '../../types';
 import {
+    buildAutomotiveWarrantyEntries,
+    describeSavedQuoteSize,
     AUTOMOTIVE_FILM_TYPES,
     DEFAULT_AUTOMOTIVE_PRICES,
     VEHICLE_CATEGORIES,
@@ -256,5 +258,28 @@ describe('novas categorias e teto solar', () => {
         expect(describeVehicleGlass(vehicle({ categoria: 'onibus', vidros: { te: '35', td: '35' } }))).toBe('Laterais: 35%');
         expect(describeVehiclePartPrices(vehicle({ categoria: 'onibus', aplicacao: 'partes', partes: ['te'], precoPartes: { te: 125 } })))
             .toBe('Lateral esq. R$ 125,00');
+    });
+});
+
+describe('lançamento: garantias e listas', () => {
+    it('monta a garantia de cada linha usada, sem repetir e pulando a vazia', () => {
+        const settings = { ativo: true, garantias: {
+            'Nano Cerâmica': { fabricanteAnos: 5, maoDeObra: 6, maoDeObraUnidade: 'meses' as const },
+            'Fumê comum': {},
+        } };
+        expect(buildAutomotiveWarrantyEntries(['Nano Cerâmica', 'Nano Cerâmica', 'Fumê comum'], settings)).toEqual([{
+            title: 'Nano Cerâmica',
+            lines: ['  - Garantia Fabricante: 5 anos', '  - Garantia Mão de Obra: 6 meses'],
+        }]);
+        expect(buildAutomotiveWarrantyEntries(['Nano Carbono'], { ativo: true, garantias: { 'Nano Carbono': { fabricanteAnos: 1 } } }))
+            .toEqual([{ title: 'Nano Carbono', lines: ['  - Garantia Fabricante: 1 ano'] }]);
+        expect(buildAutomotiveWarrantyEntries(['Nano Cerâmica'], undefined)).toEqual([]);
+    });
+
+    it('mostra carros no lugar de 0 m² nas listas de orçamentos', () => {
+        const area = (value: number) => `${value.toFixed(2)} m²`;
+        expect(describeSavedQuoteSize(12.5, undefined, area)).toBe('12.50 m²');
+        expect(describeSavedQuoteSize(0, [vehicle(), vehicle({ id: 2 })], area)).toBe('2 carros');
+        expect(describeSavedQuoteSize(3, [vehicle()], area)).toBe('3.00 m² · 1 carro');
     });
 });

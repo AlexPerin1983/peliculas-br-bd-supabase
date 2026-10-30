@@ -237,6 +237,14 @@ export interface AutomotiveSettings {
     precos?: AutomotivePriceTable;
     // Valor sugerido para remover película antiga (editável em cada carro).
     valorRemocao?: number;
+    // Garantia de cada linha de película do automotivo (sai no PDF dos carros).
+    garantias?: { [filmName: string]: AutomotiveFilmWarranty };
+}
+
+export interface AutomotiveFilmWarranty {
+    fabricanteAnos?: number;
+    maoDeObra?: number;
+    maoDeObraUnidade?: 'dias' | 'meses' | 'anos';
 }
 
 export interface SavedProposalDiscount {
