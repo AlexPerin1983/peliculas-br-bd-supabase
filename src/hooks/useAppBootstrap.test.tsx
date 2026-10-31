@@ -81,6 +81,61 @@ describe('useAppBootstrap', () => {
     expect(setHasLoadedAgendamentos).toHaveBeenCalledWith(true);
   });
 
+  describe('cliente aberto ao iniciar', () => {
+    const clientesDaConta = [
+      { id: 7, nome: 'Editado agora pelo socio', lastUpdated: '2026-10-31T12:00:00Z' },
+      { id: 3, nome: 'Meu cliente', lastUpdated: '2026-10-30T12:00:00Z' }
+    ];
+
+    const abrirApp = async () => {
+      dbMocks.getUserInfo.mockResolvedValue({ id: 'info', nome: 'Empresa' });
+      dbMocks.getAllClients.mockResolvedValue(clientesDaConta);
+      dbMocks.getAllCustomFilms.mockResolvedValue([]);
+      dbMocks.getAllAgendamentos.mockResolvedValue([]);
+      const setSelectedClientId = vi.fn();
+
+      renderHook(() => useAppBootstrap({
+        authUserId: 'user-1',
+        initialClientLoad: 'all',
+        initialPdfLoad: 'deferred',
+        setIsLoading: vi.fn(),
+        setClients: vi.fn(),
+        setClientListClients: vi.fn(),
+        setClientListHasMore: vi.fn(),
+        setClientListNextOffset: vi.fn(),
+        setHasLoadedAllClients: vi.fn(),
+        setSelectedClientId,
+        setUserInfo: vi.fn(),
+        setFilms: vi.fn(),
+        setAllSavedPdfs: vi.fn(),
+        setHistoryPdfs: vi.fn(),
+        setHistoryHasMore: vi.fn(),
+        setHistoryNextOffset: vi.fn(),
+        setHasLoadedAllPdfs: vi.fn(),
+        setAgendamentos: vi.fn(),
+        setHasLoadedHistory: vi.fn(),
+        setHasLoadedAgendamentos: vi.fn()
+      }));
+
+      await waitFor(() => expect(setSelectedClientId).toHaveBeenCalled());
+      return setSelectedClientId;
+    };
+
+    it('volta ao cliente deste aparelho mesmo que outro tenha sido editado depois', async () => {
+      window.localStorage.setItem('peliculas-br-selected-client-id', '3');
+      expect(await abrirApp()).toHaveBeenLastCalledWith(3);
+    });
+
+    it('abre o mais recente quando o aparelho nao tem cliente guardado', async () => {
+      expect(await abrirApp()).toHaveBeenLastCalledWith(7);
+    });
+
+    it('ignora cliente guardado que nao existe nesta conta', async () => {
+      window.localStorage.setItem('peliculas-br-selected-client-id', '999');
+      expect(await abrirApp()).toHaveBeenLastCalledWith(7);
+    });
+  });
+
   it('nao busca colecoes completas que a tela inicial nao usa', async () => {
     dbMocks.getUserInfo.mockResolvedValue({ id: 'info', nome: 'Empresa' });
     dbMocks.getAllCustomFilms.mockResolvedValue([]);

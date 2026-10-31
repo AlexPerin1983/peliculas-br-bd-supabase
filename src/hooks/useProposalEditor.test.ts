@@ -237,8 +237,79 @@ describe('useProposalEditor', () => {
     });
 
     expect(mockedDb.saveProposalOptions).toHaveBeenCalledWith(1, expect.any(Array));
-    expect(loadClients).toHaveBeenCalledWith(1, false);
+    // Baixar a lista inteira a cada salvamento deixava o preenchimento lento.
+    expect(loadClients).not.toHaveBeenCalled();
     expect(result.current.isDirty).toBe(false);
+  });
+
+  it('marca para salvar mesmo na segunda edicao seguida', async () => {
+    vi.useFakeTimers();
+    mockedDb.getProposalOptions.mockResolvedValue([{
+      id: 50, name: 'Opcao', measurements: [], generalDiscount: { value: '', type: 'fixed' }
+    }] as any);
+    mockedDb.saveProposalOptions.mockResolvedValue(undefined as any);
+
+    const { result } = buildHook();
+    await act(async () => {});
+
+    act(() => result.current.handleMeasurementsChange([{ id: 1, largura: '1' }] as any));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1600);
+    });
+    mockedDb.saveProposalOptions.mockClear();
+
+    act(() => result.current.handleMeasurementsChange([{ id: 1, largura: '2' }] as any));
+    expect(result.current.isDirty).toBe(true);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1600);
+    });
+    expect(mockedDb.saveProposalOptions).toHaveBeenCalledTimes(1);
+  });
+
+  it('recebe na tela a medida do outro aparelho e nao perde o que esta sendo digitado', async () => {
+    const sala = { id: 1, largura: '1', altura: '1', quantidade: 1 };
+    const doOutroAparelho = { id: 2, largura: '2', altura: '2', quantidade: 1 };
+    const base = { id: 50, name: 'Opcao', generalDiscount: { value: '', type: 'fixed' } };
+    mockedDb.getProposalOptions.mockResolvedValue([{ ...base, measurements: [sala] }] as any);
+    mockedDb.saveProposalOptions.mockResolvedValue(undefined as any);
+
+    const { result } = buildHook();
+    await act(async () => {});
+    const sentOptions = result.current.proposalOptions;
+
+    const salaEditada = { ...sala, largura: '9' };
+    act(() => result.current.handleMeasurementsChange([salaEditada] as any));
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent('proposal-sync-conflict-resolved', {
+        detail: {
+          clientId: 1,
+          sentOptions,
+          options: [{ ...sentOptions[0], measurements: [sala, doOutroAparelho] }]
+        }
+      }));
+    });
+
+    expect(result.current.measurements).toEqual([salaEditada, doOutroAparelho]);
+    expect(result.current.isDirty).toBe(true);
+  });
+
+  it('ignora a combinacao de medidas de outro cliente', async () => {
+    mockedDb.getProposalOptions.mockResolvedValue([{
+      id: 50, name: 'Opcao', measurements: [], generalDiscount: { value: '', type: 'fixed' }
+    }] as any);
+
+    const { result } = buildHook();
+    await act(async () => {});
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent('proposal-sync-conflict-resolved', {
+        detail: { clientId: 2, sentOptions: [], options: [{ id: 99, name: 'Outro', measurements: [], generalDiscount: {} }] }
+      }));
+    });
+
+    expect(result.current.proposalOptions.map(option => option.id)).toEqual([50]);
   });
 
   it('não bloqueia o salvamento enquanto a lista de clientes atualiza pela rede', async () => {

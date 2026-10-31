@@ -63,7 +63,18 @@ export type ProposalOptionOperation =
         measurementIds: number[];
     };
 
-const comparable = (value: unknown): string => JSON.stringify(value);
+// O banco devolve o JSON com os campos em outra ordem. A comparação não pode
+// depender disso, senão uma medida igual parece ter sido alterada.
+const canonical = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(canonical);
+    if (value && typeof value === 'object') {
+        const record = value as Record<string, unknown>;
+        return Object.fromEntries(Object.keys(record).sort().map(key => [key, canonical(record[key])]));
+    }
+    return value;
+};
+
+const comparable = (value: unknown): string => JSON.stringify(canonical(value));
 
 const same = (left: unknown, right: unknown): boolean => comparable(left) === comparable(right);
 

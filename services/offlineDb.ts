@@ -7,7 +7,7 @@
 import Dexie, { Table } from 'dexie';
 import { belongsToOtherAccount, readSyncAccountId } from '../src/lib/syncAccount';
 import { Client, Film, UserInfo, SavedPDF, Agendamento, ProposalOption, StandaloneExpense } from '../types';
-import { buildProposalOperations } from './proposalSync';
+import { buildProposalOperations, mergeProposalOptions } from './proposalSync';
 import type { SyncErrorInfo } from '../src/lib/syncErrors';
 
 // Tipos para dados com metadata de sincronização
@@ -585,7 +585,8 @@ export async function saveUserInfoLocal(userInfo: UserInfo): Promise<LocalUserIn
 
 export async function getProposalOptionsLocal(clientId: number): Promise<LocalProposalOption[]> {
     return await offlineDb.proposalOptions
-        .filter(po => po.clientId === clientId)
+        .where('clientId')
+        .equals(clientId)
         .toArray();
 }
 
@@ -623,6 +624,60 @@ export async function saveProposalOptionsLocal(clientId: number, options: Propos
             syncMeta?.revision ?? 0,
             syncMeta?.baseOptions ?? []
         );
+    });
+}
+
+/**
+ * O servidor aceitou um envio, mas o usuário continuou editando e já existe uma
+ * alteração mais nova na fila. Ela passa a partir da revisão confirmada; sem
+ * isso, o próximo envio voltaria como conflito com o próprio aparelho.
+ */
+export async function rebaseProposalOptionsSyncItem(
+    queueItemId: number,
+    clientId: number,
+    sentOptions: ProposalOption[],
+    confirmedOptions: ProposalOption[],
+    revision: number
+): Promise<void> {
+    const now = Date.now();
+
+    await offlineDb.transaction('rw', offlineDb.proposalOptions, offlineDb.proposalSyncMeta, offlineDb.syncQueue, async () => {
+        await offlineDb.proposalSyncMeta.put({
+            clientId,
+            revision,
+            baseOptions: confirmedOptions,
+            lastSyncedAt: now
+        });
+
+        const queuedItem = await offlineDb.syncQueue.get(queueItemId);
+        if (!queuedItem) return;
+
+        // Mantém o que veio do outro aparelho junto com as edições mais novas.
+        const { options } = mergeProposalOptions(sentOptions, queuedItem.data.options, confirmedOptions);
+
+        await offlineDb.syncQueue.update(queueItemId, {
+            data: {
+                ...queuedItem.data,
+                options,
+                operations: buildProposalOperations(confirmedOptions, options),
+                baseRevision: revision,
+                baseOptions: confirmedOptions
+            }
+        });
+
+        const existingOptions = await getProposalOptionsLocal(clientId);
+        for (const option of existingOptions) {
+            await offlineDb.proposalOptions.delete(option._localId!);
+        }
+        for (const [index, option] of options.entries()) {
+            await offlineDb.proposalOptions.put({
+                ...option,
+                clientId,
+                _localId: generateOrderedLocalId(now, index),
+                _syncStatus: 'pending',
+                _lastModified: now
+            });
+        }
     });
 }
 

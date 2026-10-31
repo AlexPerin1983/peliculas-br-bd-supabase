@@ -80,13 +80,15 @@ export function useAppBootstrap({
         setHasLoadedAllClients(true);
 
         let idToSelect = clientIdToSelect;
-        const lastKnownSelectedClientId = lastSelectedClientIdRef.current;
 
-        if (!idToSelect && lastKnownSelectedClientId) {
-            const lastClient = finalClients.find(client => client.id === lastKnownSelectedClientId);
-            if (lastClient) {
-                idToSelect = lastClient.id;
-            }
+        if (!idToSelect) {
+            // Cada aparelho volta ao cliente em que estava. O último cliente da
+            // conta e o mais recente valem só quando o aparelho não tem nenhum,
+            // senão duas pessoas na mesma conta caem no mesmo cliente ao abrir.
+            const deviceClientId = Number(localStorage.getItem('peliculas-br-selected-client-id'));
+            const lastClient = finalClients.find(client => client.id === deviceClientId)
+                ?? finalClients.find(client => client.id === lastSelectedClientIdRef.current);
+            idToSelect = lastClient?.id;
         }
 
         if (idToSelect) {

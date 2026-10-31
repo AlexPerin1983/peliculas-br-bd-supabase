@@ -8,6 +8,7 @@ import {
     getFailedSyncCount,
     getPendingSyncCount,
     markProposalOptionsAsSynced,
+    rebaseProposalOptionsSyncItem,
     markSyncItemError,
     markSyncItemPending,
     markAsSynced,
@@ -551,18 +552,28 @@ export async function syncAllPending(options?: SyncRunOptions): Promise<void> {
                 const processResult = await processQueueItem(item);
                 const acknowledged = await acknowledgeProcessedQueueItem(item);
 
-                if (acknowledged && processResult?.proposalOptions) {
-                    await markProposalOptionsAsSynced(
-                        processResult.proposalOptions.localClientId,
-                        processResult.proposalOptions.result.options,
-                        processResult.proposalOptions.result.revision
-                    );
+                if (processResult?.proposalOptions) {
+                    const { localClientId, result } = processResult.proposalOptions;
 
-                    if (processResult.proposalOptions.result.conflictResolved && typeof window !== 'undefined') {
+                    if (acknowledged) {
+                        await markProposalOptionsAsSynced(localClientId, result.options, result.revision);
+                    } else {
+                        await rebaseProposalOptionsSyncItem(
+                            item.id!,
+                            localClientId,
+                            item.data.options,
+                            result.options,
+                            result.revision
+                        );
+                    }
+
+                    if (result.conflictResolved && typeof window !== 'undefined') {
                         window.dispatchEvent(new CustomEvent('proposal-sync-conflict-resolved', {
                             detail: {
-                                clientId: processResult.proposalOptions.localClientId,
-                                preservedConflicts: processResult.proposalOptions.result.preservedConflicts
+                                clientId: localClientId,
+                                preservedConflicts: result.preservedConflicts,
+                                sentOptions: item.data.options,
+                                options: result.options
                             }
                         }));
                     }

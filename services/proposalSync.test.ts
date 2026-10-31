@@ -19,6 +19,30 @@ const measurement = (id: number, largura: string) => ({
     active: true
 });
 
+describe('comparacao independente da ordem dos campos', () => {
+    // O jsonb do banco devolve os campos em outra ordem.
+    const reordered = (item: ReturnType<typeof measurement>) => Object.fromEntries(
+        Object.entries(item).reverse()
+    ) as ReturnType<typeof measurement>;
+
+    it('nao gera operacao para medida igual vinda do servidor', () => {
+        const fromServer = [option([reordered(measurement(1, '1,00'))])];
+        const onScreen = [option([measurement(1, '1,00')])];
+
+        expect(buildProposalOperations(fromServer, onScreen)).toEqual([]);
+    });
+
+    it('nao duplica medida nova quando o servidor ja a confirmou', () => {
+        const local = [option([measurement(2, '2,00')])];
+        const remote = [option([reordered(measurement(2, '2,00'))])];
+
+        const result = mergeProposalOptions([option([])], local, remote);
+
+        expect(result.preservedConflicts).toBe(0);
+        expect(result.options[0].measurements.map(item => item.id)).toEqual([2]);
+    });
+});
+
 describe('mergeProposalOptions', () => {
     it('preserva medidas adicionadas simultaneamente em dois aparelhos', () => {
         const base = [option([measurement(1, '1,00')])];
