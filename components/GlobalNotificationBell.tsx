@@ -68,6 +68,8 @@ const formatDateTime = (timestamp: number) => new Intl.DateTimeFormat('pt-BR', {
 // O Realtime continua sendo o caminho principal. Este intervalo e apenas uma
 // contingencia para recuperar algum evento que nao tenha chegado.
 const FALLBACK_REFRESH_INTERVAL_MS = 5 * 60_000;
+// Vários eventos seguidos viram uma única recarga.
+const REALTIME_REFRESH_DELAY_MS = 3_000;
 
 const GlobalNotificationBell: React.FC<GlobalNotificationBellProps> = ({ onNavigate }) => {
     const [items, setItems] = useState<NotificationItem[]>([]);
@@ -167,6 +169,14 @@ const GlobalNotificationBell: React.FC<GlobalNotificationBellProps> = ({ onNavig
         const handleVisibility = refreshWhenVisible;
         let interval: number | null = null;
         let channel: ReturnType<typeof supabase.channel> | null = null;
+        let realtimeTimer: number | null = null;
+        const refreshAfterRealtimeEvent = () => {
+            if (realtimeTimer !== null) return;
+            realtimeTimer = window.setTimeout(() => {
+                realtimeTimer = null;
+                refreshWhenVisible();
+            }, REALTIME_REFRESH_DELAY_MS);
+        };
 
         // O sino não participa do primeiro conteúdo visível. Adiamos suas
         // consultas pesadas para não disputar rede com a tela que o usuário abriu.
@@ -175,13 +185,14 @@ const GlobalNotificationBell: React.FC<GlobalNotificationBellProps> = ({ onNavig
             interval = window.setInterval(refreshWhenVisible, FALLBACK_REFRESH_INTERVAL_MS);
             document.addEventListener('visibilitychange', handleVisibility);
             channel = supabase.channel('global-notification-center')
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'proposal_portal_messages' }, refreshWhenVisible)
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'agendamentos' }, refreshWhenVisible)
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'proposal_portal_messages' }, refreshAfterRealtimeEvent)
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'agendamentos' }, refreshAfterRealtimeEvent)
                 .subscribe();
         }, 1500);
 
         return () => {
             window.clearTimeout(startupTimer);
+            if (realtimeTimer !== null) window.clearTimeout(realtimeTimer);
             if (interval !== null) window.clearInterval(interval);
             document.removeEventListener('visibilitychange', handleVisibility);
             if (channel) void supabase.removeChannel(channel);

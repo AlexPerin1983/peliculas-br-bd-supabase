@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Film, Measurement, ProposalDiscount, ProposalExpense, ProposalOption, ProposalPricingMode, UIMeasurement } from '../../types';
 import * as db from '../../services/db';
+import { mergeProposalOptions } from '../../services/proposalSync';
 import { normalizeProposalExpenses } from '../lib/proposalExpenses';
 
 type DiscountType = ProposalDiscount;
@@ -173,7 +174,45 @@ export function useProposalEditor({
     const measurements = activeOption?.measurements || [];
     const generalDiscount = normalizeGeneralDiscount(activeOption?.generalDiscount);
 
-    const handleSaveChanges = useCallback(async () => {
+    // Quando outro aparelho alterou as mesmas medidas, a tela recebe o resultado
+    // combinado. Sem isso, a próxima edição apagaria o que veio do outro aparelho.
+    useEffect(() => {
+        const handleConflictResolved = (event: Event) => {
+            const detail = (event as CustomEvent<{
+                clientId?: number;
+                sentOptions?: ProposalOption[];
+                options?: ProposalOption[];
+            }>).detail;
+
+            if (
+                !detail?.options
+                || !detail.sentOptions
+                || detail.clientId !== selectedClientId
+                || loadedClientIdRef.current !== selectedClientId
+            ) {
+                return;
+            }
+
+            const { options } = mergeProposalOptions(detail.sentOptions, proposalOptionsRef.current, detail.options);
+            const normalizedOptions = options.map(option => ({
+                ...option,
+                generalDiscount: normalizeGeneralDiscount(option.generalDiscount)
+            }));
+
+            proposalOptionsRef.current = normalizedOptions;
+            setProposalOptions(normalizedOptions);
+            setActiveOptionId(current => (
+                normalizedOptions.some(option => option.id === current)
+                    ? current
+                    : normalizedOptions[0]?.id ?? null
+            ));
+        };
+
+        window.addEventListener('proposal-sync-conflict-resolved', handleConflictResolved);
+        return () => window.removeEventListener('proposal-sync-conflict-resolved', handleConflictResolved);
+    }, [selectedClientId]);
+
+    const persistProposalOptions = useCallback(async (): Promise<boolean> => {
         const currentProposalOptions = proposalOptionsRef.current;
 
         if (
@@ -183,32 +222,35 @@ export function useProposalEditor({
         ) {
             await db.saveProposalOptions(selectedClientId, currentProposalOptions);
             setIsDirty(false);
+            return true;
+        }
+
+        return false;
+    }, [selectedClientId]);
+
+    const handleSaveChanges = useCallback(async () => {
+        if (await persistProposalOptions()) {
             // O orçamento já está seguro no banco local neste ponto. A
             // atualização da lista pode depender da rede e não deve bloquear
             // a geração do PDF (principalmente em conexões instáveis).
-            void loadClients(selectedClientId, false).catch(error => {
+            void loadClients(selectedClientId!, false).catch(error => {
                 console.error('Erro ao atualizar clientes após salvar o orçamento:', error);
             });
         }
-    }, [selectedClientId, loadClients]);
+    }, [persistProposalOptions, selectedClientId, loadClients]);
 
     const updateActiveOption = useCallback((updater: (option: ProposalOption) => ProposalOption) => {
         if (!activeOptionId || loadedClientIdRef.current !== selectedClientId) {
             return;
         }
 
-        let hasUpdated = false;
+        setProposalOptions(currentOptions => currentOptions.map(option => (
+            option.id === activeOptionId ? updater(option) : option
+        )));
 
-        setProposalOptions(currentOptions => currentOptions.map(option => {
-            if (option.id !== activeOptionId) {
-                return option;
-            }
-
-            hasUpdated = true;
-            return updater(option);
-        }));
-
-        if (hasUpdated) {
+        // O React pode adiar a função acima; por isso a confirmação de que a
+        // opção existe não pode depender de ela já ter rodado.
+        if (proposalOptionsRef.current.some(option => option.id === activeOptionId)) {
             setIsDirty(true);
         }
     }, [activeOptionId, selectedClientId]);
@@ -241,12 +283,14 @@ export function useProposalEditor({
             return;
         }
 
+        // Salvamento automático não baixa a lista de clientes: ela é atualizada
+        // ao fim da sincronização, no máximo a cada 30 segundos.
         const timerId = setTimeout(() => {
-            handleSaveChanges();
+            void persistProposalOptions();
         }, 1500);
 
         return () => clearTimeout(timerId);
-    }, [proposalOptions, isDirty, handleSaveChanges]);
+    }, [proposalOptions, isDirty, persistProposalOptions]);
 
     const handleGeneralDiscountChange = useCallback((discount: DiscountType) => {
         updateActiveOption(option => ({

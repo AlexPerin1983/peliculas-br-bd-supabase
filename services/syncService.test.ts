@@ -367,6 +367,7 @@ describe('syncService', () => {
     };
     const deleteMock = vi.fn();
     const markProposalOptionsAsSyncedMock = vi.fn();
+    const rebaseProposalOptionsSyncItemMock = vi.fn();
 
     vi.doMock('./offlineDb', () => ({
       offlineDb: {
@@ -382,7 +383,8 @@ describe('syncService', () => {
       markSyncItemError: vi.fn(),
       markSyncItemPending: vi.fn(),
       markAsSynced: vi.fn(),
-      markProposalOptionsAsSynced: markProposalOptionsAsSyncedMock
+      markProposalOptionsAsSynced: markProposalOptionsAsSyncedMock,
+      rebaseProposalOptionsSyncItem: rebaseProposalOptionsSyncItemMock
     }));
 
     vi.doMock('./supabaseDb', () => ({
@@ -407,6 +409,8 @@ describe('syncService', () => {
 
     expect(deleteMock).not.toHaveBeenCalled();
     expect(markProposalOptionsAsSyncedMock).not.toHaveBeenCalled();
+    // A gravação mais nova parte da revisão aceita, para não virar conflito consigo mesma.
+    expect(rebaseProposalOptionsSyncItemMock).toHaveBeenCalledWith(60, 15, queueItem.data.options, queueItem.data.options, 2);
   });
 
   it('sincroniza cliente temporario antes das opcoes de proposta', async () => {
