@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import SyncStatusIndicator from './SyncStatusIndicator';
 import { subscribeSyncStatus, forcSync, type SyncStatus } from '../services/syncService';
 
@@ -13,6 +13,9 @@ const mockedForcSync = vi.mocked(forcSync);
 describe('SyncStatusIndicator', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   function buildStatus(status: Partial<SyncStatus> = {}): SyncStatus {
@@ -165,7 +168,76 @@ describe('SyncStatusIndicator', () => {
     expect(screen.queryByRole('button', { name: /sincronizar agora/i })).not.toBeInTheDocument();
   });
 
+  it('nao pisca a cada medida quando os envios terminam rapido', () => {
+    vi.useFakeTimers();
+    let emit!: (status: SyncStatus) => void;
+    mockedSubscribeSyncStatus.mockImplementation(listener => {
+      emit = listener;
+      listener(buildStatus());
+      return vi.fn();
+    });
+
+    const { container } = render(<SyncStatusIndicator />);
+
+    for (let measurement = 0; measurement < 5; measurement += 1) {
+      act(() => emit(buildStatus({ pendingCount: 1 })));
+      expect(container.firstChild).toBeNull();
+      act(() => emit(buildStatus({ pendingCount: 1, syncInProgress: true })));
+      expect(container.firstChild).toBeNull();
+      act(() => { vi.advanceTimersByTime(800); });
+      act(() => emit(buildStatus({ lastSyncAt: Date.now() })));
+      expect(container.firstChild).toBeNull();
+      act(() => { vi.advanceTimersByTime(2500); });
+      expect(container.firstChild).toBeNull();
+    }
+  });
+
+  it('avisa quando o envio passa a demorar e some ao terminar', () => {
+    vi.useFakeTimers();
+    let emit!: (status: SyncStatus) => void;
+    mockedSubscribeSyncStatus.mockImplementation(listener => {
+      emit = listener;
+      listener(buildStatus({ syncInProgress: true, pendingCount: 1 }));
+      return vi.fn();
+    });
+
+    const { container } = render(<SyncStatusIndicator />);
+    expect(container.firstChild).toBeNull();
+
+    act(() => { vi.advanceTimersByTime(3100); });
+    expect(screen.getByRole('button', { name: /sincronizando/i })).toBeInTheDocument();
+
+    act(() => emit(buildStatus({ lastSyncAt: Date.now() })));
+    expect(container.firstChild).toBeNull();
+  });
+
+  it('avisa alteracao que continua sem enviar mesmo sem erro registrado', () => {
+    vi.useFakeTimers();
+    mockedSubscribeSyncStatus.mockImplementation(listener => {
+      listener(buildStatus({ pendingCount: 2 }));
+      return vi.fn();
+    });
+
+    render(<SyncStatusIndicator />);
+    act(() => { vi.advanceTimersByTime(3100); });
+
+    expect(screen.getByRole('button', { name: /2 não enviados/i })).toBeInTheDocument();
+  });
+
+  it('mostra falha de envio na hora, sem esperar', () => {
+    vi.useFakeTimers();
+    mockedSubscribeSyncStatus.mockImplementation(listener => {
+      listener(buildStatus({ pendingCount: 1, error: 'proposalOptions: falha' }));
+      return vi.fn();
+    });
+
+    render(<SyncStatusIndicator />);
+
+    expect(screen.getByRole('button', { name: /1 não enviado/i })).toBeInTheDocument();
+  });
+
   it('mostra estado de sincronizacao em andamento com botao desabilitado', () => {
+    vi.useFakeTimers();
     mockedSubscribeSyncStatus.mockImplementation(listener => {
       listener(buildStatus({
         syncInProgress: true,
@@ -175,6 +247,7 @@ describe('SyncStatusIndicator', () => {
     });
 
     render(<SyncStatusIndicator />);
+    act(() => { vi.advanceTimersByTime(3100); });
 
     fireEvent.click(screen.getByRole('button', { name: /sincronizando/i }));
 

@@ -6,6 +6,8 @@ import { buildSyncDiagnostic } from '../src/lib/syncDiagnostics';
 
 interface SyncStatusIndicatorProps { showDetails?: boolean; }
 const formatTime = (value?: number | null) => value ? new Date(value).toLocaleTimeString('pt-BR') : '—';
+// Envio normal termina rápido: o selo só aparece se demorar além disso.
+const ROUTINE_SYNC_BADGE_DELAY_MS = 3_000;
 
 const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({ showDetails = false }) => {
     const [status, setStatus] = useState<SyncStatus>({
@@ -16,8 +18,22 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({ showDetails =
     const [copyMessage, setCopyMessage] = useState('');
     const [diagnosticFallback, setDiagnosticFallback] = useState('');
     const [retryError, setRetryError] = useState('');
+    const [routineSyncIsSlow, setRoutineSyncIsSlow] = useState(false);
 
     useEffect(() => subscribeSyncStatus(setStatus), []);
+
+    // Falha e falta de internet continuam aparecendo na hora.
+    const isRoutineSync = status.isOnline && !status.error && status.failedCount === 0
+        && (status.syncInProgress || status.pendingCount > 0);
+
+    useEffect(() => {
+        if (!isRoutineSync) {
+            setRoutineSyncIsSlow(false);
+            return;
+        }
+        const timer = window.setTimeout(() => setRoutineSyncIsSlow(true), ROUTINE_SYNC_BADGE_DELAY_MS);
+        return () => window.clearTimeout(timer);
+    }, [isRoutineSync]);
 
     const handleSync = async () => {
         setRetryError('');
@@ -45,6 +61,7 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({ showDetails =
     const lastAttemptAt = status.lastAttemptAt || Math.max(0, ...status.failedItems.map(item => item.lastAttemptAt || 0));
 
     if (status.isOnline && !hasProblem && !status.syncInProgress && !showDetails) return null;
+    if (isRoutineSync && !routineSyncIsSlow && !expanded && !showDetails) return null;
 
     const text = status.syncInProgress ? 'Sincronizando...'
         : !status.isOnline ? (notSentCount > 0 ? 'Salvo no aparelho' : 'Offline')
