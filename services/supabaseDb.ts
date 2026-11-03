@@ -80,7 +80,7 @@ export interface ClientDashboardStats {
     dormantCount: number;
 }
 
-const CLIENT_LIST_COLUMNS = 'id, nome, telefone, email, cpf_cnpj, cep, logradouro, numero, complemento, bairro, cidade, uf, last_updated, pinned, pinned_at';
+const CLIENT_LIST_COLUMNS = 'id, nome, telefone, email, cpf_cnpj, cep, logradouro, numero, complemento, bairro, cidade, uf, responsavel, cargo, info_adicional, last_updated, pinned, pinned_at';
 
 export const getAllClients = async (): Promise<Client[]> => {
     const userId = await getCurrentUserId();
@@ -112,6 +112,9 @@ export const getAllClients = async (): Promise<Client[]> => {
         bairro: row.bairro || '',
         cidade: row.cidade || '',
         uf: row.uf || '',
+        responsavel: row.responsavel || '',
+        cargo: row.cargo || '',
+        infoAdicional: row.info_adicional || '',
         lastUpdated: row.last_updated,
         pinned: row.pinned || false,
         pinnedAt: row.pinned_at ? new Date(row.pinned_at).getTime() : undefined
@@ -135,6 +138,10 @@ export const saveClient = async (client: Omit<Client, 'id'> | Client): Promise<C
         bairro: client.bairro || null,
         cidade: client.cidade || null,
         uf: client.uf || null,
+        // Só envia quando conhecido, para um cadastro antigo guardado no aparelho não apagar o que já está salvo.
+        ...(client.responsavel !== undefined ? { responsavel: client.responsavel || null } : {}),
+        ...(client.cargo !== undefined ? { cargo: client.cargo || null } : {}),
+        ...(client.infoAdicional !== undefined ? { info_adicional: client.infoAdicional || null } : {}),
         last_updated: new Date().toISOString(),
         pinned: client.pinned || false,
         pinned_at: client.pinnedAt ? new Date(client.pinnedAt).toISOString() : null
@@ -280,6 +287,9 @@ const mapRowToClient = (row: any): Client => ({
     bairro: row.bairro || '',
     cidade: row.cidade || '',
     uf: row.uf || '',
+    responsavel: row.responsavel || '',
+    cargo: row.cargo || '',
+    infoAdicional: row.info_adicional || '',
     lastUpdated: row.last_updated,
     pinned: row.pinned || false,
     pinnedAt: row.pinned_at ? new Date(row.pinned_at).getTime() : undefined

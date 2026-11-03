@@ -25,10 +25,32 @@ describe('ClientModal', () => {
     it('permite revelar todos os campos opcionais sem perder o fluxo atual', () => {
         render(<ClientModal {...defaultProps} />);
 
-        fireEvent.click(screen.getByRole('button', { name: /adicionar cpf, endereço e email/i }));
+        fireEvent.click(screen.getByRole('button', { name: /adicionar cpf\/cnpj, responsável, endereço e mais/i }));
 
         expect(screen.getByLabelText(/cpf\/cnpj/i)).toBeInTheDocument();
         expect(screen.getByLabelText(/^cep/i)).toBeInTheDocument();
         expect(screen.getByLabelText(/^email/i)).toBeInTheDocument();
+        expect(screen.getByLabelText(/^responsável/i)).toBeInTheDocument();
+        expect(screen.getByLabelText(/^cargo/i)).toBeInTheDocument();
+        expect(screen.getByLabelText(/outras informações/i)).toBeInTheDocument();
+    });
+
+    it('salva responsável, cargo e outras informações do cliente', async () => {
+        const onSave = vi.fn().mockResolvedValue(undefined);
+        const client = {
+            id: 7, nome: 'SENAT', telefone: '', email: '', cpfCnpj: '',
+            responsavel: 'Adenilza', cargo: 'Assistente Administrativa', infoAdicional: 'Unidade: B 028',
+        };
+        render(<ClientModal {...defaultProps} mode="edit" client={client} onSave={onSave} />);
+
+        expect(screen.getByLabelText(/^responsável/i)).toHaveValue('Adenilza');
+        fireEvent.change(screen.getByLabelText(/outras informações/i), { target: { value: 'Unidade: B 028\nProcesso: 000020289-7/2026' } });
+        fireEvent.click(screen.getByRole('button', { name: /salvar cliente/i }));
+
+        await vi.waitFor(() => expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+            responsavel: 'Adenilza',
+            cargo: 'Assistente Administrativa',
+            infoAdicional: 'Unidade: B 028\nProcesso: 000020289-7/2026',
+        })));
     });
 });

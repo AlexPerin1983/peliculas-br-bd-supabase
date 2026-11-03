@@ -68,6 +68,9 @@ const initialFormData: Omit<Client, 'id'> = {
     bairro: '',
     cidade: '',
     uf: '',
+    responsavel: '',
+    cargo: '',
+    infoAdicional: '',
 };
 
 const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSave, mode, client, initialName, aiData, onOpenAIModal }) => {
@@ -165,7 +168,7 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSave, mode
         setEmailSuggestion(null);
     };
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { id, value } = e.target;
         let maskedValue = value;
 
@@ -241,7 +244,7 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSave, mode
             }
 
             setFormData(finalFormState);
-            const optionalFields: Array<keyof typeof finalFormState> = ['email', 'cpfCnpj', 'cep', 'logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'uf'];
+            const optionalFields: Array<keyof typeof finalFormState> = ['email', 'cpfCnpj', 'cep', 'logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'uf', 'responsavel', 'cargo', 'infoAdicional'];
             const hasOptionalDetails = optionalFields.some(field => String(finalFormState[field] || '').trim() !== '');
             setShowOptionalFields(mode === 'edit' || Boolean(aiData) || hasOptionalDetails);
 
@@ -327,7 +330,7 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSave, mode
                             aria-expanded={showOptionalFields}
                         >
                             <i className="fas fa-plus" aria-hidden="true"></i>
-                            Adicionar CPF, endereço e email (opcional)
+                            Adicionar CPF/CNPJ, responsável, endereço e mais (opcional)
                         </button>
                     ) : null}
                     {showOptionalFields ? <>
@@ -342,6 +345,10 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSave, mode
                         // REMOVIDO: required
                         placeholder="000.000.000-00 ou 00.000.000/0000-00"
                     />
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <Input id="responsavel" label="Responsável" type="text" value={formData.responsavel || ''} onChange={handleChange} placeholder="Quem fala pela empresa" />
+                        <Input id="cargo" label="Cargo" type="text" value={formData.cargo || ''} onChange={handleChange} placeholder="Ex: Compras" />
+                    </div>
 
                     <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
                         <div className="relative">
@@ -388,6 +395,10 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSave, mode
                         <Input id="email" label="Email" type="email" value={formData.email} onChange={handleChange} onKeyDown={handleEmailKeyDown} autoComplete="off" placeholder="Ex: cliente@exemplo.com" />
                         {emailSuggestion && <div className="mt-1 text-left"><button type="button" onClick={handleEmailSuggestionClick} className="text-sm text-slate-500 hover:text-slate-800 transition-colors p-1 rounded">Sugestão: <span className="font-semibold">{emailSuggestion}</span></button></div>}
                         <div className="mt-2 flex flex-wrap gap-1.5">{popularDomains.map(domain => <button key={domain} type="button" onClick={() => handleDomainTagClick(domain)} className="px-2.5 py-1 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold rounded-full hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">@{domain}</button>)}</div>
+                    </div>
+
+                    <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
+                        <Input as="textarea" id="infoAdicional" label="Outras informações (saem no orçamento)" value={formData.infoAdicional || ''} onChange={handleChange} rows={3} placeholder={'Ex: Unidade: B 028 – João Pessoa/PB\nProcesso: 000020289-7/2026'} />
                     </div>
                     </> : null}
                 </fieldset>
