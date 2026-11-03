@@ -671,6 +671,27 @@ const renderPdfContent = async (
                 clientYPos += clientInfoLineHeight;
             }
 
+            // Linhas extras do cliente, com quebra na coluna e sem passar do fim da folha.
+            const clientInfoBottom = pageHeight - 8;
+            const addClientDetailText = (text: string) => {
+                doc.setFontSize(8);
+                doc.setTextColor(80, 80, 80);
+                for (const line of doc.splitTextToSize(text, maxClientInfoWidth) as string[]) {
+                    if (clientYPos > clientInfoBottom) return;
+                    safeText(line, margin, clientYPos);
+                    clientYPos += clientInfoLineHeight;
+                }
+            };
+
+            // Responsável e cargo (se existirem)
+            const clientResponsavel = client.responsavel?.trim();
+            const clientCargo = client.cargo?.trim();
+            if (clientResponsavel) {
+                addClientDetailText(`Responsável: ${clientResponsavel}${clientCargo ? ` (${clientCargo})` : ''}`);
+            } else if (clientCargo) {
+                addClientDetailText(`Cargo: ${clientCargo}`);
+            }
+
             // Telefone (se existir)
             if (client.telefone) {
                 doc.setFontSize(8);
@@ -697,6 +718,11 @@ const renderPdfContent = async (
                     safeText(line, margin, clientYPos);
                     clientYPos += clientInfoLineHeight;
                 }
+            }
+
+            // Outras informações (Unidade, Processo...), uma por linha como foi digitado
+            for (const infoLine of (client.infoAdicional || '').split(/\r?\n/).map(line => line.trim()).filter(Boolean)) {
+                addClientDetailText(infoLine);
             }
             // --- FIM DA SE??O DO CLIENTE ---
 
@@ -1320,7 +1346,26 @@ const renderPdfContent = async (
             "Observações: Quaisquer alterações no projeto podem resultar em ajustes no orçamento."
         );
 
-        const estimatedHeight = SECTION_TITLE_HEIGHT + (paymentLines.length * LINE_HEIGHT) + SPACING_AFTER_PAYMENTS + (conditions.length * LINE_HEIGHT) + SIGNATURE_HEIGHT;
+        // Textos longos (ex.: prazo de pagamento) quebram dentro da margem em vez de sair da folha.
+        const WRAPPED_LINE_HEIGHT = 4.5;
+        const wrapLines = (lines: string[], fontSize: number): string[][] => {
+            doc.setFontSize(fontSize);
+            return lines.map(line => doc.splitTextToSize(line, pageWidth - margin * 2) as string[]);
+        };
+        const wrappedHeight = (blocks: string[][]) =>
+            blocks.reduce((height, block) => height + LINE_HEIGHT + (block.length - 1) * WRAPPED_LINE_HEIGHT, 0);
+        const drawWrapped = (blocks: string[][]) => {
+            for (const block of blocks) {
+                block.forEach((part, index) => {
+                    safeText(part, margin, yPos);
+                    yPos += index === block.length - 1 ? LINE_HEIGHT : WRAPPED_LINE_HEIGHT;
+                });
+            }
+        };
+        const wrappedPaymentLines = wrapLines(paymentLines, 10);
+        const wrappedConditions = wrapLines(conditions, 9);
+
+        const estimatedHeight = SECTION_TITLE_HEIGHT + wrappedHeight(wrappedPaymentLines) + SPACING_AFTER_PAYMENTS + wrappedHeight(wrappedConditions) + SIGNATURE_HEIGHT;
 
         if (yPos + estimatedHeight > pageHeight - PAGE_BOTTOM_MARGIN) {
             await addNewPage();
@@ -1328,19 +1373,13 @@ const renderPdfContent = async (
 
         await addSectionTitle("Condições de Pagamento e Informações");
 
-        for (const line of paymentLines) {
-            safeText(line, margin, yPos);
-            yPos += LINE_HEIGHT;
-        }
+        drawWrapped(wrappedPaymentLines);
 
         yPos += SPACING_AFTER_PAYMENTS;
 
         doc.setFontSize(9);
         doc.setTextColor(100, 100, 100);
-        for (const line of conditions) {
-            safeText(line, margin, yPos);
-            yPos += LINE_HEIGHT;
-        }
+        drawWrapped(wrappedConditions);
 
         // --- Termo de Responsabilidade (integridade dos vidros) ---
         // Texto editável nas Configurações (undefined = usa o padrão do app). A inclusão

@@ -24,6 +24,10 @@ export interface Client {
     bairro?: string;
     cidade?: string;
     uf?: string;
+    // Contato na empresa e dados extras (Unidade, Processo...) que saem no PDF
+    responsavel?: string;
+    cargo?: string;
+    infoAdicional?: string;
     lastUpdated?: string; // Novo campo para rastrear a última modificação
     pinned?: boolean; // Fixar cliente no topo da lista
     pinnedAt?: number; // Timestamp de quando foi fixado

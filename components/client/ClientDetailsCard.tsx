@@ -20,7 +20,7 @@ const Field: React.FC<{ label: string; value?: string; href?: string | null; ext
         <div className="flex items-start gap-3 py-2.5">
             <div className="min-w-0 flex-1">
                 <dt className="text-[11px] font-medium text-[var(--text-muted)]">{label}</dt>
-                <dd className="mt-0.5 break-words text-sm text-[var(--text-strong)]">
+                <dd className="mt-0.5 whitespace-pre-line break-words text-sm text-[var(--text-strong)]">
                     {text ? (
                         href ? <a href={href} className="hover:underline" {...(external ? { target: '_blank', rel: 'noreferrer' } : {})}>{text}</a> : text
                     ) : (
@@ -61,6 +61,12 @@ const ClientDetailsCard: React.FC<{
                 <Field label="E-mail" value={client.email} href={client.email?.trim() ? `mailto:${client.email.trim()}` : null} onAdd={onEditClient} />
                 <Field label="Endereço" value={address} href={buildClientMapsUrl(client)} external onAdd={onEditClient} />
                 <Field label="CPF/CNPJ" value={client.cpfCnpj} onAdd={onEditClient} />
+                {client.responsavel?.trim() ? (
+                    <Field label="Responsável" value={[client.responsavel.trim(), client.cargo?.trim()].filter(Boolean).join(' — ')} onAdd={onEditClient} />
+                ) : null}
+                {client.infoAdicional?.trim() ? (
+                    <Field label="Outras informações" value={client.infoAdicional} onAdd={onEditClient} />
+                ) : null}
             </dl>
             <div className="flex flex-wrap gap-2 border-t border-[var(--border-subtle)] py-3 text-xs font-semibold">
                 <button type="button" onClick={onEditClient} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface)] px-3 text-[var(--text-body)]">
