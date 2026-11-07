@@ -54,6 +54,8 @@ interface PdfGenerationStatusModalProps {
     editableProposalKeys?: string[];
     /** Aberto pelo atalho "Enviar ao cliente": nada foi gerado agora. */
     openedFromShortcut?: boolean;
+    /** Texto do "Gerando" quando várias opções saem em fila (ex.: "Gerando opção 2 de 3..."). */
+    generatingLabel?: string;
 }
 
 const formatCurrency = (value: number) =>
@@ -230,6 +232,7 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
     onEditProposal,
     editableProposalKeys = [],
     openedFromShortcut = false,
+    generatingLabel,
 }) => {
     const [isSharing, setIsSharing] = useState(false);
     const [previewingKey, setPreviewingKey] = useState<string | null>(null);
@@ -400,7 +403,7 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
             <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
                 <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl p-8 text-center flex flex-col items-center">
                     <div className="loader mb-4"></div>
-                    <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-200">Gerando Orçamento...</h2>
+                    <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-200">{generatingLabel ?? 'Gerando Orçamento...'}</h2>
                     <p className="text-slate-600 dark:text-slate-400 mt-2">Por favor, aguarde um momento.</p>
                 </div>
             </div>

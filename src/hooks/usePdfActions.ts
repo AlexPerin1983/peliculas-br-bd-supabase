@@ -365,7 +365,8 @@ export function usePdfActions({
         return 'downloaded';
     }, [resolvePdfBlob, findPdfClient, downloadBlob]);
 
-    const executePdfGeneration = useCallback(async () => {
+    // Devolve se o PDF saiu (duplicar várias películas para a fila se não saiu).
+    const executePdfGeneration = useCallback(async (): Promise<boolean> => {
         const activeMeasurements = measurements.filter(measurement =>
             measurement.active &&
             parseFloat(String(measurement.largura).replace(',', '.')) > 0 &&
@@ -376,7 +377,7 @@ export function usePdfActions({
 
         if (activeMeasurements.length === 0 && !hasVehicles) {
             handleShowInfo('Não há medidas válidas para gerar um orçamento.');
-            return;
+            return false;
         }
 
         setPdfGenerationStatus('generating');
@@ -450,10 +451,12 @@ export function usePdfActions({
                 window.localStorage.setItem('peliculas-br-history-focus-client', String(selectedClientId));
             }
             setPdfGenerationStatus('success');
+            return true;
         } catch (error) {
             console.error('Erro ao gerar ou salvar PDF:', error);
             handleShowInfo('Ocorreu um erro ao gerar o PDF. Verifique o console para mais detalhes.');
             setPdfGenerationStatus('idle');
+            return false;
         }
     }, [
         measurements,
@@ -499,17 +502,18 @@ export function usePdfActions({
         await executePdfGeneration();
     }, [selectedClient, userInfo, activeOption, handleShowInfo, setIsSaveBeforePdfModalOpen, executePdfGeneration]);
 
-    const handleConfirmSaveBeforePdf = useCallback(async () => {
-        if (isSavingBeforePdf) return;
+    const handleConfirmSaveBeforePdf = useCallback(async (): Promise<boolean> => {
+        if (isSavingBeforePdf) return false;
 
         setIsSavingBeforePdf(true);
         try {
             await handleSaveChanges();
             setIsSaveBeforePdfModalOpen(false);
-            await executePdfGeneration();
+            return await executePdfGeneration();
         } catch (error) {
             console.error('Erro ao salvar o orçamento antes de gerar o PDF:', error);
             handleShowInfo('Não foi possível salvar o orçamento. Tente novamente.');
+            return false;
         } finally {
             setIsSavingBeforePdf(false);
         }

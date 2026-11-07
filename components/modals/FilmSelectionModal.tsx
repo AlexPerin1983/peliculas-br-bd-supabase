@@ -21,6 +21,11 @@ interface FilmSelectionModalProps {
      * scroll/foco/toque), então portar para o body deixava a lista travada.
      */
     renderInSheet?: boolean;
+    /**
+     * Marcar várias películas: tocar marca/desmarca e o botão do rodapé
+     * confirma todas de uma vez (onSelectMultiple), na ordem em que foram marcadas.
+     */
+    onSelectMultiple?: (filmNames: string[]) => void;
 }
 
 const FilmListItem: React.FC<{
@@ -31,7 +36,10 @@ const FilmListItem: React.FC<{
     swipedItemName: string | null;
     onSetSwipedItem: (name: string | null) => void;
     onTogglePin: (filmName: string) => void; // Nova prop
-}> = ({ film, onSelect, onEdit, onDelete, swipedItemName, onSetSwipedItem, onTogglePin }) => {
+    /** Definido só quando o seletor marca várias: mostra a caixa de marcar. */
+    checked?: boolean;
+}> = ({ film, onSelect, onEdit, onDelete, swipedItemName, onSetSwipedItem, onTogglePin, checked }) => {
+    const isCheckable = checked !== undefined;
     const [translateX, setTranslateX] = useState(0);
     const touchStartX = useRef(0);
     const touchStartY = useRef(0);
@@ -178,7 +186,9 @@ const FilmListItem: React.FC<{
     return (
         <div className={`relative rounded-lg overflow-hidden bg-white dark:bg-slate-800 border shadow-sm transition-all ${isPressing
             ? 'scale-95 border-slate-300 dark:border-slate-600'
-            : 'border-slate-200 dark:border-slate-700'
+            : checked
+                ? 'border-blue-500 ring-1 ring-blue-500'
+                : 'border-slate-200 dark:border-slate-700'
             } ${film.pinned ? 'border-l-4 border-l-blue-500' : ''}`}>
             <div className="absolute inset-y-0 right-0 flex">
                 <button
@@ -208,7 +218,9 @@ const FilmListItem: React.FC<{
                 className="relative z-10 w-full bg-white dark:bg-slate-800"
             >
                 <div
-                    role="button"
+                    role={isCheckable ? 'checkbox' : 'button'}
+                    aria-checked={isCheckable ? checked : undefined}
+                    aria-label={isCheckable ? film.nome : undefined}
                     tabIndex={0}
                     onClick={() => {
                         if (translateX !== 0 && swipeableRef.current) {
@@ -231,6 +243,16 @@ const FilmListItem: React.FC<{
                     }}
                     className="w-full text-left p-4 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors duration-150 flex items-center justify-between gap-4 cursor-pointer"
                 >
+                    {isCheckable && (
+                        <span
+                            aria-hidden="true"
+                            className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 transition-colors ${checked
+                                ? 'border-blue-500 bg-blue-500 text-white'
+                                : 'border-slate-300 dark:border-slate-500'}`}
+                        >
+                            {checked && <i className="fas fa-check text-xs"></i>}
+                        </span>
+                    )}
                     <div className="flex-grow min-w-0">
                         <div className="flex items-center gap-2">
                             {film.pinned && (
@@ -264,19 +286,30 @@ const useDebounce = (value: string, delay: number) => {
     return debouncedValue;
 };
 
-const FilmSelectionModal: React.FC<FilmSelectionModalProps> = ({ isOpen, onClose, films, onSelect, onAddNewFilm, onEditFilm, onDeleteFilm, onTogglePin, renderInSheet = false }) => {
+const FilmSelectionModal: React.FC<FilmSelectionModalProps> = ({ isOpen, onClose, films, onSelect, onAddNewFilm, onEditFilm, onDeleteFilm, onTogglePin, renderInSheet = false, onSelectMultiple }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [swipedItemName, setSwipedItemName] = useState<string | null>(null);
+    const [checkedFilms, setCheckedFilms] = useState<string[]>([]);
     const debouncedSearchTerm = useDebounce(searchTerm, 200);
     const inputRef = useRef<HTMLInputElement>(null);
     const isMobile = useIsMobile();
+    const isMultiple = !!onSelectMultiple;
 
     useEffect(() => {
         if (isOpen) {
             setSearchTerm('');
+            setCheckedFilms([]);
             setTimeout(() => inputRef.current?.focus(), 100);
         }
     }, [isOpen]);
+
+    // Película renomeada ou excluída enquanto marcada sai da seleção.
+    useEffect(() => {
+        setCheckedFilms(current => {
+            const next = current.filter(name => films.some(film => film.nome === name));
+            return next.length === current.length ? current : next;
+        });
+    }, [films]);
 
     const filteredFilms = useMemo(() => {
         const result = debouncedSearchTerm
@@ -290,8 +323,19 @@ const FilmSelectionModal: React.FC<FilmSelectionModalProps> = ({ isOpen, onClose
     if (!isOpen || typeof document === 'undefined') return null;
 
     const handleSelectFilm = (filmName: string) => {
+        if (isMultiple) {
+            setCheckedFilms(current => current.includes(filmName)
+                ? current.filter(name => name !== filmName)
+                : [...current, filmName]);
+            return;
+        }
         onSelect(filmName);
         onClose();
+    };
+
+    const handleConfirmMultiple = () => {
+        if (!onSelectMultiple || checkedFilms.length === 0) return;
+        onSelectMultiple(checkedFilms);
     };
 
     const handleAddNew = () => {
@@ -316,7 +360,16 @@ const FilmSelectionModal: React.FC<FilmSelectionModalProps> = ({ isOpen, onClose
             {/* Header */}
             <div className="flex-shrink-0 p-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 sticky top-0">
                 <div className="flex items-center justify-between gap-4 max-w-3xl mx-auto">
-                    <h2 className="text-xl font-bold text-slate-800 dark:text-slate-200">Selecionar Película</h2>
+                    <div className="min-w-0">
+                        <h2 className="text-xl font-bold text-slate-800 dark:text-slate-200">
+                            {isMultiple ? 'Selecionar Películas' : 'Selecionar Película'}
+                        </h2>
+                        {isMultiple && (
+                            <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
+                                Marque uma ou mais. Cada película vira uma opção com PDF.
+                            </p>
+                        )}
+                    </div>
                     <button type="button" onClick={onClose} aria-label="Fechar" className="text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white h-11 w-11 touch-manipulation flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800">
                         <i className="fas fa-times text-xl"></i>
                     </button>
@@ -357,6 +410,7 @@ const FilmSelectionModal: React.FC<FilmSelectionModalProps> = ({ isOpen, onClose
                             swipedItemName={swipedItemName}
                             onSetSwipedItem={setSwipedItemName}
                             onTogglePin={onTogglePin}
+                            checked={isMultiple ? checkedFilms.includes(film.nome) : undefined}
                         />
                     ))}
                     {filteredFilms.length === 0 && debouncedSearchTerm && (
@@ -376,10 +430,29 @@ const FilmSelectionModal: React.FC<FilmSelectionModalProps> = ({ isOpen, onClose
 
             {/* Footer */}
             <div className="flex-shrink-0 p-4 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 sticky bottom-0">
-                <div className="max-w-3xl mx-auto">
+                <div className="max-w-3xl mx-auto space-y-2">
+                    {isMultiple && (
+                        <button
+                            type="button"
+                            onClick={handleConfirmMultiple}
+                            disabled={checkedFilms.length === 0}
+                            className="w-full p-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-500 disabled:bg-slate-300 disabled:text-slate-500 dark:disabled:bg-slate-700 dark:disabled:text-slate-400 transition duration-300 shadow-md flex items-center justify-center gap-2"
+                        >
+                            <i className="fas fa-file-pdf"></i>
+                            <span className="font-semibold">
+                                {checkedFilms.length === 0
+                                    ? 'Marque as películas'
+                                    : checkedFilms.length === 1
+                                        ? 'Gerar 1 opção'
+                                        : `Gerar ${checkedFilms.length} opções`}
+                            </span>
+                        </button>
+                    )}
                     <button
                         onClick={() => onAddNewFilm('')}
-                        className="w-full p-3 bg-slate-800 dark:bg-slate-700 text-white font-semibold rounded-lg hover:bg-slate-700 dark:hover:bg-slate-600 transition duration-300 shadow-md flex items-center justify-center gap-2"
+                        className={`w-full p-3 font-semibold rounded-lg transition duration-300 flex items-center justify-center gap-2 ${isMultiple
+                            ? 'bg-transparent text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                            : 'bg-slate-800 dark:bg-slate-700 text-white hover:bg-slate-700 dark:hover:bg-slate-600 shadow-md'}`}
                     >
                         <i className="fas fa-plus"></i>
                         Adicionar Nova Película

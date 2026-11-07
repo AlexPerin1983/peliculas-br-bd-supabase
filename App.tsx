@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense, useRef, useLayoutEffect } from 'react';
 import './src/estoque-dark-mode.css';
 import { Client, Measurement, UserInfo, Film, PaymentMethods, SavedPDF, Agendamento, AgendamentoServiceStatus, SchedulingInfo, ExtractedClientData, UIMeasurement, ProposalExpense, ProposalOption, ProposalDiscount, AIInput, QuickClientDraft } from './types';
 import { CuttingOptimizer } from './utils/CuttingOptimizer';
@@ -499,6 +499,11 @@ const App: React.FC = () => {
     const [optionVariationPlan, setOptionVariationPlan] = useState<OptionVariationPlan | null>(null);
     const [pendingPdfOptionId, setPendingPdfOptionId] = useState<number | null>(null);
     const [duplicateSourcePdfKeys, setDuplicateSourcePdfKeys] = useState<string[]>([]);
+    // Seletor aberto pelo "Orçamento gerado": marca várias películas.
+    const [isDuplicateSelectorFromPdf, setIsDuplicateSelectorFromPdf] = useState(false);
+    // Várias películas marcadas: as que ainda faltam duplicar, uma opção com PDF
+    // de cada vez (total = quantas foram marcadas, para mostrar "2 de 3").
+    const [duplicateFilmQueue, setDuplicateFilmQueue] = useState<{ films: string[]; total: number } | null>(null);
     const [newFilmName, setNewFilmName] = useState<string>('');
     const [filmToApplyToAll, setFilmToApplyToAll] = useState<string | null>(null);
     const [editingMeasurementIdForFilm, setEditingMeasurementIdForFilm] = useState<number | null>(null);
@@ -1235,21 +1240,42 @@ const App: React.FC = () => {
     // Sem favoritas: abre o seletor de pelicula; ao escolher, duplica aplicando a todos.
     const handleOpenDuplicateFilmSelector = useCallback(() => {
         setIsDuplicateAllModalOpen(false);
+        setIsDuplicateSelectorFromPdf(false);
         setIsDuplicateFilmSelectorOpen(true);
     }, []);
+
+    // Do "Orçamento gerado": a opção leva o nome da película e o PDF sai em seguida.
+    const duplicateWithFilmForPdf = useCallback((filmName: string) => {
+        const optionName = getUniqueOptionName(filmName, proposalOptions.map(option => option.name));
+        const newOptionId = duplicateActiveOption(filmName, optionName);
+        if (newOptionId !== undefined) {
+            setPendingPdfOptionId(newOptionId);
+            return true;
+        }
+        return false;
+    }, [duplicateActiveOption, proposalOptions]);
 
     const handleSelectFilmForDuplicate = useCallback((filmName: string) => {
         if (duplicateFromPdfRef.current === 'awaiting-film') {
             // Veio do "Orçamento gerado": a opção leva o nome da película e o PDF sai em seguida.
             duplicateFromPdfRef.current = null;
-            const optionName = getUniqueOptionName(filmName, proposalOptions.map(option => option.name));
-            const newOptionId = duplicateActiveOption(filmName, optionName);
-            if (newOptionId !== undefined) setPendingPdfOptionId(newOptionId);
+            duplicateWithFilmForPdf(filmName);
         } else {
             duplicateActiveOption(filmName);
         }
         setIsDuplicateFilmSelectorOpen(false);
-    }, [duplicateActiveOption, proposalOptions]);
+    }, [duplicateActiveOption, duplicateWithFilmForPdf]);
+
+    // Várias películas marcadas no "Orçamento gerado": gera a primeira agora e
+    // as outras em fila, cada uma vira uma opção com o próprio PDF.
+    const handleSelectFilmsForDuplicate = useCallback((filmNames: string[]) => {
+        const [first, ...rest] = filmNames;
+        if (!first) return;
+        duplicateFromPdfRef.current = null;
+        setIsDuplicateFilmSelectorOpen(false);
+        setDuplicateFilmQueue(filmNames.length > 1 ? { films: rest, total: filmNames.length } : null);
+        if (!duplicateWithFilmForPdf(first)) setDuplicateFilmQueue(null);
+    }, [duplicateWithFilmForPdf]);
 
     const handleCloseDuplicateFilmSelector = useCallback(() => {
         setIsDuplicateFilmSelectorOpen(false);
@@ -1626,6 +1652,7 @@ const App: React.FC = () => {
         setDuplicateSourcePdfKeys(current => current.includes(latestKey) ? current : [...current, latestKey]);
         duplicateFromPdfRef.current = 'awaiting-film';
         setPdfGenerationStatus('idle');
+        setIsDuplicateSelectorFromPdf(true);
         setIsDuplicateFilmSelectorOpen(true);
     }, [latestGeneratedProposal]);
 
@@ -1634,8 +1661,36 @@ const App: React.FC = () => {
     useEffect(() => {
         if (pendingPdfOptionId === null || activeOption?.id !== pendingPdfOptionId) return;
         setPendingPdfOptionId(null);
-        void handleConfirmSaveBeforePdf();
+        void handleConfirmSaveBeforePdf().then(generated => {
+            if (generated) return;
+            // Não saiu: para a fila e tira o "Gerando" (as já geradas ficam no Histórico).
+            setDuplicateFilmQueue(null);
+            setPdfGenerationStatus(status => status === 'generating' ? 'idle' : status);
+        });
     }, [pendingPdfOptionId, activeOption?.id, handleConfirmSaveBeforePdf]);
+
+    // Saiu o PDF de uma das películas marcadas: guarda essa opção para mandar
+    // junto e passa para a próxima sem mostrar o "Orçamento gerado" no meio.
+    // Layout effect: troca para "Gerando" antes de a tela piscar o modal.
+    useLayoutEffect(() => {
+        if (pdfGenerationStatus !== 'success' || !duplicateFilmQueue || !latestGeneratedProposal) return;
+        const [nextFilm, ...rest] = duplicateFilmQueue.films;
+        if (!nextFilm) {
+            setDuplicateFilmQueue(null);
+            return;
+        }
+        const latestKey = getProposalKey(latestGeneratedProposal.pdf);
+        setDuplicateSourcePdfKeys(current => current.includes(latestKey) ? current : [...current, latestKey]);
+        setDuplicateFilmQueue({ ...duplicateFilmQueue, films: rest });
+        setPdfGenerationStatus('generating');
+        if (!duplicateWithFilmForPdf(nextFilm)) {
+            setDuplicateFilmQueue(null);
+            setPdfGenerationStatus('success');
+        }
+    }, [pdfGenerationStatus, duplicateFilmQueue, latestGeneratedProposal, duplicateWithFilmForPdf]);
+    const duplicateQueueProgressLabel = duplicateFilmQueue
+        ? `Gerando opção ${duplicateFilmQueue.total - duplicateFilmQueue.films.length} de ${duplicateFilmQueue.total}...`
+        : undefined;
 
     // Fechar não esquece as opções: o botão PDF reabre o modal com a lista.
     const handleClosePdfStatusModal = useCallback(() => {
@@ -3816,6 +3871,7 @@ Use somente o JSON definido e não inclua explicações fora dele.`;
         handleEditGeneratedProposal,
         editableGeneratedProposalKeys,
         isGeneratedListShortcut,
+        duplicateQueueProgressLabel,
         isProcessingAI,
         isAIQuickProposalModalOpen,
         setIsAIQuickProposalModalOpen,
@@ -3861,6 +3917,8 @@ Use somente o JSON definido e não inclua explicações fora dele.`;
         setIsDuplicateFilmSelectorOpen,
         handleCloseDuplicateFilmSelector,
         handleSelectFilmForDuplicate,
+        handleSelectFilmsForDuplicate,
+        isDuplicateSelectorFromPdf,
         measurementToDeleteId,
         setMeasurementToDeleteId,
         handleConfirmDeleteIndividualMeasurement: handleConfirmDeleteMeasurementWithFeedback,
