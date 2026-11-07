@@ -10,7 +10,7 @@ export const NIMBOT_LABEL_FORMATS = {
         qrSizePx: 104,
         recommended: true,
         layout: 'vertical' as const,
-        helper: 'Mais seguro para QR de servico'
+        helper: 'Mais seguro para ler o QR do serviço'
     },
     '50x50': {
         label: '50 x 50 mm',
@@ -19,7 +19,7 @@ export const NIMBOT_LABEL_FORMATS = {
         qrSizePx: 110,
         recommended: false,
         layout: 'vertical' as const,
-        helper: 'Formato quadrado com mais area'
+        helper: 'Quadrada, com mais área para o texto'
     },
     '50x30': {
         label: '50 x 30 mm',
@@ -28,7 +28,7 @@ export const NIMBOT_LABEL_FORMATS = {
         qrSizePx: 70,
         recommended: false,
         layout: 'horizontal' as const,
-        helper: 'Formato compacto horizontal'
+        helper: 'Compacta, deitada'
     }
 };
 
@@ -177,7 +177,7 @@ const ServicoQrThermalLabel = React.forwardRef<HTMLDivElement, ServicoQrThermalL
                 }}
             >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
-                    <div style={eyebrowStyle}>Etiqueta termica</div>
+                    <div style={eyebrowStyle}>Etiqueta térmica</div>
                     <div style={metaStyle}>{config.label}</div>
                 </div>
 
@@ -203,9 +203,9 @@ const ServicoQrThermalLabel = React.forwardRef<HTMLDivElement, ServicoQrThermalL
                                 'linear-gradient(135deg, rgba(241, 245, 249, 1), rgba(255, 255, 255, 1))'
                         }}
                     />
-                    <div style={{ ...filmStyle, fontSize: isHorizontal ? 8 : 9.2 }}>Preview da etiqueta</div>
+                    <div style={{ ...filmStyle, fontSize: isHorizontal ? 8 : 9.2 }}>Sua etiqueta aparece aqui</div>
                     <div style={{ ...referenceStyle, maxWidth: '92%' }}>
-                        Salve um servico para gerar o QR no tamanho selecionado.
+                        Gere a etiqueta para ver o QR no tamanho escolhido
                     </div>
                 </div>
             </div>
