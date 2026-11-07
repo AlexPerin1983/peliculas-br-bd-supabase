@@ -191,8 +191,8 @@ describe('redesenho mobile do estoque', () => {
         );
 
         expect(screen.getByText('2 retalhos')).toBeInTheDocument();
-        expect(screen.getByText('Melhor encaixe')).toBeInTheDocument();
-        expect(screen.getByText('Sem localização')).toBeInTheDocument();
+        expect(screen.getAllByText('Melhor encaixe').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('Sem localização').length).toBeGreaterThan(0);
         expect(screen.getAllByText('1,00 × 1,10 m').length).toBeGreaterThan(0);
 
         const mobileRow = screen.getAllByRole('button').find(button => button.textContent?.includes('#68'));

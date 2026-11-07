@@ -26,11 +26,12 @@ interface StatusDrawerProps {
     getStatusColor: (status: string) => string;
 }
 
-const TONES: Record<EstoqueStatusTone, { tile: string; current: string; mark: string }> = {
-    good: { tile: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400', current: 'border-emerald-500 bg-emerald-500/5', mark: 'text-emerald-600 dark:text-emerald-400' },
-    warn: { tile: 'bg-amber-500/15 text-amber-600 dark:text-amber-400', current: 'border-amber-500 bg-amber-500/5', mark: 'text-amber-600 dark:text-amber-400' },
-    muted: { tile: 'bg-slate-500/15 text-slate-600 dark:text-slate-300', current: 'border-slate-400 bg-slate-500/5', mark: 'text-slate-600 dark:text-slate-300' },
-    danger: { tile: 'bg-rose-500/15 text-rose-600 dark:text-rose-400', current: 'border-rose-500 bg-rose-500/5', mark: 'text-rose-600 dark:text-rose-400' },
+// A cor do status fica só no ponto, como nos cartões do Estoque ("● Ativa").
+const DOT: Record<EstoqueStatusTone, string> = {
+    good: 'bg-emerald-500',
+    warn: 'bg-amber-500',
+    muted: 'bg-slate-400',
+    danger: 'bg-rose-500',
 };
 
 const decimal = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -44,7 +45,7 @@ const describeItem = (type: 'bobina' | 'retalho', item: Bobina | Retalho) => {
     return `Retalho #${retalho.id} · ${decimal.format(retalho.larguraCm / 100)} × ${decimal.format(retalho.comprimentoCm / 100)} m`;
 };
 
-/** Folha para trocar o status de uma bobina ou retalho (celular e QR). */
+/** Troca o status de uma bobina ou retalho: folha no celular, janela no computador. */
 export const StatusDrawer: React.FC<StatusDrawerProps> = ({
     isOpen,
     onClose,
@@ -77,20 +78,20 @@ export const StatusDrawer: React.FC<StatusDrawerProps> = ({
     return (
         <Drawer.Root open={isOpen} onOpenChange={(open) => !open && !saving && onClose()}>
             <Drawer.Portal>
-                <Drawer.Overlay className="fixed inset-0 z-[60] bg-slate-950/55 backdrop-blur-[2px]" />
-                <Drawer.Content className="fixed inset-x-0 bottom-0 z-[61] flex max-h-[92dvh] flex-col rounded-t-[26px] border-t border-[var(--border-subtle)] bg-[var(--surface)] outline-none">
-                    <div className="mx-auto mt-3 h-1.5 w-12 shrink-0 rounded-full bg-[var(--border-strong)]" />
-                    <div className="mx-auto w-full max-w-md overflow-y-auto overscroll-contain px-4 pt-4" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)' }}>
-                        <Drawer.Title className="text-lg font-semibold text-[var(--text-strong)]">Alterar status</Drawer.Title>
-                        <Drawer.Description className="mt-0.5 truncate text-xs text-[var(--text-muted)]">
+                <Drawer.Overlay className="fixed inset-0 z-[60] bg-black/50" />
+                {/* No computador vira uma janela no meio da tela (inset-0 + m-auto, sem transform, que o vaul usa na animação). */}
+                <Drawer.Content className="fixed inset-x-0 bottom-0 z-[61] flex max-h-[92dvh] flex-col rounded-t-2xl border-t border-[var(--border-subtle)] bg-[var(--surface)] outline-none sm:inset-0 sm:m-auto sm:h-fit sm:w-[420px] sm:rounded-2xl sm:border sm:shadow-xl sm:after:hidden">
+                    <div className="mx-auto mt-3 h-1 w-10 shrink-0 rounded-full bg-[var(--border-strong)] sm:hidden" />
+                    <div className="w-full overflow-y-auto overscroll-contain px-5 pt-4 sm:pt-5" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)' }}>
+                        <Drawer.Title className="text-base font-semibold text-[var(--text-strong)]">Alterar status</Drawer.Title>
+                        <Drawer.Description className="mt-0.5 truncate text-xs tabular-nums text-[var(--text-muted)]">
                             {item.filmId} · {describeItem(type, item)}
                         </Drawer.Description>
 
-                        <div className="mt-4 space-y-2" role="radiogroup" aria-label="Status">
+                        <div className="mt-4 space-y-1.5" role="radiogroup" aria-label="Status">
                             {statusOptions.map((option) => {
                                 const meta = ESTOQUE_STATUS_META[option.value];
-                                const tone = TONES[meta?.tone ?? 'muted'];
-                                const Icon = meta?.icon;
+                                const dot = DOT[meta?.tone ?? 'muted'];
                                 const isCurrent = currentStatus === option.value;
                                 const isSaving = saving === option.value;
                                 return (
@@ -101,22 +102,21 @@ export const StatusDrawer: React.FC<StatusDrawerProps> = ({
                                         aria-checked={isCurrent}
                                         onClick={() => void handleStatusSelect(option.value)}
                                         disabled={isCurrent || saving !== null}
-                                        className={`flex w-full items-center gap-3 rounded-2xl border p-3 text-left transition-colors disabled:cursor-default ${isCurrent
-                                            ? `border-2 ${tone.current}`
-                                            : 'border-[var(--border-subtle)] bg-[var(--surface-raised)] enabled:active:bg-[var(--surface-muted)]'} ${saving !== null && !isSaving && !isCurrent ? 'opacity-50' : ''}`}
+                                        className={`flex w-full items-start gap-3 rounded-xl border px-3.5 py-3 text-left transition-colors disabled:cursor-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] ${isCurrent
+                                            ? 'border-[var(--border-strong)] bg-[var(--surface-muted)]'
+                                            : 'border-[var(--border-subtle)] enabled:hover:bg-[var(--surface-muted)] enabled:active:bg-[var(--surface-muted)]'} ${saving !== null && !isSaving && !isCurrent ? 'opacity-50' : ''}`}
                                     >
-                                        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${tone.tile}`}>
-                                            {Icon ? <Icon className="h-5 w-5" aria-hidden="true" /> : <span className="text-[13px] font-bold">{option.emoji}</span>}
-                                        </span>
+                                        <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${dot}`} aria-hidden="true" />
                                         <span className="min-w-0 flex-1">
-                                            <span className="block text-sm font-semibold text-[var(--text-strong)]">{meta?.label ?? getStatusLabel(option.value)}</span>
-                                            {meta ? <span className="mt-0.5 block text-xs leading-4 text-[var(--text-muted)]">{meta.description}</span> : null}
+                                            <span className="block text-sm font-medium text-[var(--text-strong)]">{meta?.label ?? getStatusLabel(option.value)}</span>
+                                            {meta ? <span className="mt-0.5 block text-xs text-[var(--text-muted)]">{meta.description}</span> : null}
                                         </span>
                                         {isSaving ? (
-                                            <LoaderCircle className="h-5 w-5 shrink-0 animate-spin text-[var(--text-muted)]" aria-label="Salvando" />
+                                            <LoaderCircle className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-[var(--text-muted)]" aria-label="Salvando" />
                                         ) : isCurrent ? (
-                                            <span className={`inline-flex shrink-0 items-center gap-1 text-xs font-semibold ${tone.mark}`}>
-                                                <Check className="h-4 w-4" aria-hidden="true" /> Atual
+                                            <span className="mt-0.5 inline-flex shrink-0 items-center gap-1 text-[var(--text-muted)]">
+                                                <Check className="h-4 w-4" aria-hidden="true" />
+                                                <span className="text-xs">Atual</span>
                                             </span>
                                         ) : null}
                                     </button>
@@ -124,20 +124,19 @@ export const StatusDrawer: React.FC<StatusDrawerProps> = ({
                             })}
                         </div>
 
-                        <div className="mt-4 text-sm font-semibold">
+                        <div className="mt-5 flex items-center justify-between gap-3">
+                            {item.id ? (
+                                <button type="button" onClick={handleDelete} disabled={saving !== null}
+                                    className="-ml-2 inline-flex h-10 items-center gap-1.5 rounded-lg px-2 text-[var(--text-muted)] transition-colors hover:bg-rose-50 hover:text-rose-600 disabled:opacity-60 dark:hover:bg-rose-950/30 dark:hover:text-rose-400">
+                                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                                    <span className="text-xs font-medium">Excluir {type === 'bobina' ? 'bobina' : 'retalho'}</span>
+                                </button>
+                            ) : <span />}
                             <button type="button" onClick={onClose} disabled={saving !== null}
-                                className="flex h-12 w-full items-center justify-center rounded-2xl bg-[var(--surface-muted)] text-[var(--text-body)] transition active:scale-[0.99] disabled:opacity-60">
-                                Cancelar
+                                className="inline-flex h-10 items-center rounded-xl border border-[var(--border-subtle)] px-4 text-[var(--text-body)] transition-colors hover:bg-[var(--surface-muted)] disabled:opacity-60">
+                                <span className="text-sm font-medium">Cancelar</span>
                             </button>
                         </div>
-                        {item.id ? (
-                            <div className="mt-1 flex justify-center text-xs font-semibold">
-                                <button type="button" onClick={handleDelete} disabled={saving !== null}
-                                    className="inline-flex h-10 items-center gap-1.5 rounded-xl px-3 text-rose-600 transition hover:bg-rose-50 disabled:opacity-60 dark:text-rose-400 dark:hover:bg-rose-950/30">
-                                    <Trash2 className="h-4 w-4" aria-hidden="true" /> Excluir {type === 'bobina' ? 'bobina' : 'retalho'}
-                                </button>
-                            </div>
-                        ) : null}
                     </div>
                 </Drawer.Content>
             </Drawer.Portal>

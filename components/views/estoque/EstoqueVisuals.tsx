@@ -26,6 +26,45 @@ export const StockRing: React.FC<{ ratio: number; active?: boolean; size?: numbe
     );
 };
 
+/**
+ * A bobina vista pela ponta: o tubo de papelão no meio e a película enrolada em
+ * volta. A espessura da película acompanha o que resta (pela área, como na
+ * bobina de verdade), então dá para ler o estoque de longe, como na prateleira.
+ */
+export const RollEnd: React.FC<{ ratio: number; active?: boolean; size?: number }> = ({ ratio, active = true, size = 72 }) => {
+    const safe = Math.max(0, Math.min(1, ratio));
+    const core = 9;
+    const full = 30;
+    const outer = Math.sqrt(core * core + safe * (full * full - core * core));
+    const wraps = Math.max(0, Math.floor((outer - core) / 2.4));
+    const uid = React.useId().replace(/:/g, '');
+    return (
+        <span className="relative shrink-0" style={{ width: size, height: size }} aria-hidden="true">
+            <svg viewBox="0 0 64 64" className="h-full w-full">
+                <defs>
+                    {/* Película fumê: leve variação de tom, como o rolo refletindo a luz. */}
+                    <radialGradient id={`film-${uid}`} cx="40%" cy="35%" r="70%">
+                        <stop offset="0%" stopColor={active ? '#5b6b80' : '#7c8594'} />
+                        <stop offset="100%" stopColor={active ? '#26303d' : '#4a515c'} />
+                    </radialGradient>
+                    <radialGradient id={`core-${uid}`} cx="45%" cy="40%" r="60%">
+                        <stop offset="0%" stopColor="#d9c3a0" />
+                        <stop offset="100%" stopColor="#a8875c" />
+                    </radialGradient>
+                </defs>
+                {/* Onde a bobina cheia chegaria: contorno bem discreto. */}
+                <circle cx="32" cy="32" r={full} fill="none" stroke="currentColor" strokeOpacity={0.12} strokeDasharray="2 3" className="text-[var(--text-muted)]" />
+                <circle cx="32" cy="32" r={outer} fill={`url(#film-${uid})`} />
+                {Array.from({ length: wraps }, (_, index) => (
+                    <circle key={index} cx="32" cy="32" r={core + 1.2 + index * 2.4} fill="none" stroke="#ffffff" strokeOpacity={0.07} strokeWidth={0.6} />
+                ))}
+                <circle cx="32" cy="32" r={core} fill={`url(#core-${uid})`} />
+                <circle cx="32" cy="32" r={core - 3.2} fill="var(--surface, #0f172a)" />
+            </svg>
+        </span>
+    );
+};
+
 const PIECE_TONES: Record<string, string> = {
     disponivel: 'border-blue-500 bg-blue-500/15 dark:border-blue-400 dark:bg-blue-400/20',
     reservado: 'border-amber-500 bg-amber-500/15',

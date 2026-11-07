@@ -17,10 +17,10 @@ const statCards = (stats: EstoqueStats) => [
         icon: <PackageIcon />,
     },
     {
-        label: 'Metros disponiveis',
-        value: `${formatStockMeters(stats.totalMetrosDisponiveis)}m`,
-        detail: 'estoque utilizavel',
-        tone: 'border border-[var(--border-subtle)] bg-[var(--brand-primary-soft)] text-[var(--brand-primary)]',
+        label: 'Metros disponíveis',
+        value: `${formatStockMeters(stats.totalMetrosDisponiveis)} m`,
+        detail: 'estoque utilizável',
+        tone: 'border border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-muted)]',
         accent: 'bg-[var(--brand-primary)]',
         icon: (
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -30,7 +30,7 @@ const statCards = (stats: EstoqueStats) => [
         ),
     },
     {
-        label: 'Retalhos disponiveis',
+        label: 'Retalhos disponíveis',
         value: stats.totalRetalhoDisponivel.toString(),
         detail: 'prontos para uso',
         tone: 'border border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-muted)]',
@@ -39,7 +39,7 @@ const statCards = (stats: EstoqueStats) => [
     },
     {
         label: 'Consumo 30 dias',
-        value: `${formatStockMeters(stats.consumoUltimos30Dias)}m`,
+        value: `${formatStockMeters(stats.consumoUltimos30Dias)} m`,
         detail: 'ritmo recente',
         tone: 'border border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-muted)]',
         accent: 'bg-[var(--brand-primary)]',
@@ -57,32 +57,18 @@ const EstoqueStatsBar: React.FC<EstoqueStatsBarProps> = ({ stats }) => {
     const items = statCards(stats);
 
     // Só no computador: no celular o resumo fica no topo (EstoqueMobileHeader).
+    // Uma faixa só com os quatro números, separados por linhas finas.
     return (
-        <section className="hidden gap-2.5 sm:grid sm:grid-cols-2 xl:grid-cols-4">
-            {items.map((item) => (
-                <article
+        <section className="hidden overflow-hidden rounded-[var(--radius-card)] border border-[var(--border-subtle)] bg-[var(--surface)] shadow-[var(--shadow-hairline)] sm:grid sm:grid-cols-2 xl:grid-cols-4" aria-label="Resumo do estoque">
+            {items.map((item, index) => (
+                <div
                     key={item.label}
-                    className="relative overflow-hidden rounded-[var(--radius-card)] border border-[var(--border-subtle)] bg-[var(--surface)] p-3.5 shadow-[var(--shadow-hairline)] transition-all duration-200 hover:-translate-y-px hover:shadow-[var(--shadow-soft)]"
+                    className={`px-5 py-4 ${index % 2 === 0 ? 'sm:border-r xl:border-r' : 'xl:border-r'} ${index === items.length - 1 ? 'xl:border-r-0' : ''} ${index < 2 ? 'sm:border-b xl:border-b-0' : ''} border-[var(--border-subtle)]`}
                 >
-                    <span className={`absolute inset-x-0 top-0 h-1 ${item.accent}`} aria-hidden="true" />
-                    <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                            <p className="text-[11px] font-semibold uppercase text-[var(--text-muted)]">
-                                {item.label}
-                            </p>
-                            <p className="mt-2 text-[1.45rem] font-semibold text-[var(--text-strong)]">
-                                {item.value}
-                            </p>
-                            <p className="mt-1 text-[12px] text-[var(--text-muted)]">
-                                {item.detail}
-                            </p>
-                        </div>
-
-                        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] ${item.tone}`}>
-                            {item.icon}
-                        </span>
-                    </div>
-                </article>
+                    <p className="text-xs text-[var(--text-muted)]">{item.label}</p>
+                    <p className="mt-1 text-2xl font-semibold tabular-nums text-[var(--text-strong)]">{item.value}</p>
+                    <p className="mt-0.5 text-xs text-[var(--text-muted)]">{item.detail}</p>
+                </div>
             ))}
         </section>
     );
