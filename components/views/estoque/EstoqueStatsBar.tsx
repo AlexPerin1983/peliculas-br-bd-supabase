@@ -57,31 +57,18 @@ const EstoqueStatsBar: React.FC<EstoqueStatsBarProps> = ({ stats }) => {
     const items = statCards(stats);
 
     // Só no computador: no celular o resumo fica no topo (EstoqueMobileHeader).
+    // Uma faixa só com os quatro números, separados por linhas finas.
     return (
-        <section className="hidden gap-2.5 sm:grid sm:grid-cols-2 xl:grid-cols-4">
-            {items.map((item) => (
-                <article
+        <section className="hidden overflow-hidden rounded-[var(--radius-card)] border border-[var(--border-subtle)] bg-[var(--surface)] shadow-[var(--shadow-hairline)] sm:grid sm:grid-cols-2 xl:grid-cols-4" aria-label="Resumo do estoque">
+            {items.map((item, index) => (
+                <div
                     key={item.label}
-                    className="rounded-[var(--radius-card)] border border-[var(--border-subtle)] bg-[var(--surface)] p-4 shadow-[var(--shadow-hairline)]"
+                    className={`px-5 py-4 ${index % 2 === 0 ? 'sm:border-r xl:border-r' : 'xl:border-r'} ${index === items.length - 1 ? 'xl:border-r-0' : ''} ${index < 2 ? 'sm:border-b xl:border-b-0' : ''} border-[var(--border-subtle)]`}
                 >
-                    <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                            <p className="text-xs font-medium text-[var(--text-muted)]">
-                                {item.label}
-                            </p>
-                            <p className="mt-2 text-2xl font-semibold tabular-nums text-[var(--text-strong)]">
-                                {item.value}
-                            </p>
-                            <p className="mt-1 text-xs text-[var(--text-muted)]">
-                                {item.detail}
-                            </p>
-                        </div>
-
-                        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] ${item.tone}`}>
-                            {item.icon}
-                        </span>
-                    </div>
-                </article>
+                    <p className="text-xs text-[var(--text-muted)]">{item.label}</p>
+                    <p className="mt-1 text-2xl font-semibold tabular-nums text-[var(--text-strong)]">{item.value}</p>
+                    <p className="mt-0.5 text-xs text-[var(--text-muted)]">{item.detail}</p>
+                </div>
             ))}
         </section>
     );
