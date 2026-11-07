@@ -56,7 +56,8 @@ const FilmListItem: React.FC<{
     const hasMoved = useRef(false);
 
     const pricePerM2 = film.preco || film.maoDeObra || 0;
-    const priceLabel = film.preco > 0 ? 'Preço' : (film.maoDeObra > 0 ? 'Mão de Obra' : 'Preço');
+    // Sem preço de venda, mostra a mão de obra (e diz que é ela).
+    const isLaborPrice = !(film.preco > 0) && film.maoDeObra > 0;
 
     useEffect(() => {
         if (swipedItemName !== film.nome && swipeableRef.current) {
@@ -184,12 +185,12 @@ const FilmListItem: React.FC<{
     };
 
     return (
-        <div className={`relative rounded-lg overflow-hidden bg-white dark:bg-slate-800 border shadow-sm transition-all ${isPressing
-            ? 'scale-95 border-slate-300 dark:border-slate-600'
+        <div className={`relative overflow-hidden rounded-xl border bg-white transition-[transform,border-color,box-shadow] duration-150 ease-out dark:bg-slate-800 ${isPressing
+            ? 'scale-[0.98] border-slate-300 dark:border-slate-600'
             : checked
                 ? 'border-blue-500 ring-1 ring-blue-500'
-                : 'border-slate-200 dark:border-slate-700'
-            } ${film.pinned ? 'border-l-4 border-l-blue-500' : ''}`}>
+                : 'border-slate-200 dark:border-slate-700/80'
+            }`}>
             <div className="absolute inset-y-0 right-0 flex">
                 <button
                     onClick={handleEditClick}
@@ -241,32 +242,30 @@ const FilmListItem: React.FC<{
                             onSelect(film.nome);
                         }
                     }}
-                    className="w-full text-left p-4 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors duration-150 flex items-center justify-between gap-4 cursor-pointer"
+                    className="flex min-h-14 w-full cursor-pointer items-center gap-3 px-4 py-3 text-left transition-colors duration-150 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 dark:hover:bg-slate-700/60"
                 >
                     {isCheckable && (
                         <span
                             aria-hidden="true"
-                            className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 transition-colors ${checked
+                            className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 transition-colors duration-150 ${checked
                                 ? 'border-blue-500 bg-blue-500 text-white'
                                 : 'border-slate-300 dark:border-slate-500'}`}
                         >
                             {checked && <i className="fas fa-check text-xs"></i>}
                         </span>
                     )}
-                    <div className="flex-grow min-w-0">
-                        <div className="flex items-center gap-2">
-                            {film.pinned && (
-                                <i className="fas fa-thumbtack text-blue-500 text-sm"></i>
-                            )}
-                            <p className="font-semibold text-slate-800 dark:text-slate-200 truncate">{film.nome}</p>
-                        </div>
+                    <div className="flex min-w-0 flex-1 items-center gap-2">
+                        {film.pinned && (
+                            <i className="fas fa-thumbtack w-3 shrink-0 text-xs text-slate-400 dark:text-slate-500" aria-label="Fixada"></i>
+                        )}
+                        <p className="truncate text-[15px] font-medium text-slate-800 dark:text-slate-100">{film.nome}</p>
                     </div>
-                    <div className="flex-shrink-0 text-right">
-                        <p className="font-bold text-slate-800 dark:text-slate-200">
+                    <p className="shrink-0 text-right tabular-nums">
+                        <span className="text-[15px] font-semibold text-slate-800 dark:text-slate-100">
                             {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(pricePerM2)}
-                        </p>
-                        <p className="text-sm text-slate-500 dark:text-slate-400">/ m² ({priceLabel})</p>
-                    </div>
+                        </span>
+                        <span className="text-xs text-slate-500 dark:text-slate-400">/m²{isLaborPrice ? ' mão de obra' : ''}</span>
+                    </p>
                 </div>
             </div>
         </div>
@@ -294,13 +293,18 @@ const FilmSelectionModal: React.FC<FilmSelectionModalProps> = ({ isOpen, onClose
     const inputRef = useRef<HTMLInputElement>(null);
     const isMobile = useIsMobile();
     const isMultiple = !!onSelectMultiple;
+    const [isSearchFocused, setIsSearchFocused] = useState(false);
 
     useEffect(() => {
         if (isOpen) {
             setSearchTerm('');
             setCheckedFilms([]);
-            setTimeout(() => inputRef.current?.focus(), 100);
+            setIsSearchFocused(false);
+            // Só com teclado físico: no celular o foco abre o teclado e cobre a lista.
+            const hasTouch = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
+            if (!isMobile && !hasTouch) setTimeout(() => inputRef.current?.focus(), 100);
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen]);
 
     // Película renomeada ou excluída enquanto marcada sai da seleção.
@@ -356,50 +360,54 @@ const FilmSelectionModal: React.FC<FilmSelectionModalProps> = ({ isOpen, onClose
     };
 
     const node = (
-        <div className="pointer-events-auto fixed inset-0 bg-white/95 pt-[env(safe-area-inset-top,0px)] dark:bg-slate-900/95 backdrop-blur-sm z-[10060] flex flex-col animate-fade-in" data-modal-companion>
+        <div className="pointer-events-auto fixed inset-0 z-[10060] flex flex-col bg-slate-50 pt-[env(safe-area-inset-top,0px)] animate-fade-in dark:bg-slate-900" data-modal-companion>
             {/* Header */}
-            <div className="flex-shrink-0 p-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 sticky top-0">
-                <div className="flex items-center justify-between gap-4 max-w-3xl mx-auto">
-                    <div className="min-w-0">
-                        <h2 className="text-xl font-bold text-slate-800 dark:text-slate-200">
-                            {isMultiple ? 'Selecionar Películas' : 'Selecionar Película'}
+            <div className="sticky top-0 flex-shrink-0 border-b border-slate-200 bg-white px-4 pb-3 pt-3 dark:border-slate-800 dark:bg-slate-900">
+                <div className="mx-auto flex max-w-3xl items-start justify-between gap-3">
+                    <div className="min-w-0 pt-1.5">
+                        <h2 className="text-lg font-semibold leading-6 text-slate-900 dark:text-slate-100">
+                            {isMultiple ? 'Selecionar películas' : 'Selecionar película'}
                         </h2>
                         {isMultiple && (
-                            <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
-                                Marque uma ou mais. Cada película vira uma opção com PDF.
+                            <p className="mt-0.5 text-[13px] leading-5 text-slate-500 dark:text-slate-400">
+                                Cada película marcada vira uma opção com PDF
                             </p>
                         )}
                     </div>
-                    <button type="button" onClick={onClose} aria-label="Fechar" className="text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white h-11 w-11 touch-manipulation flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800">
-                        <i className="fas fa-times text-xl"></i>
+                    <button type="button" onClick={onClose} aria-label="Fechar" className="flex h-10 w-10 shrink-0 touch-manipulation items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white">
+                        <i className="fas fa-times text-lg"></i>
                     </button>
                 </div>
-                <div className="mt-4 max-w-3xl mx-auto relative">
-                    <i className="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                <div className="relative mx-auto mt-3 max-w-3xl">
+                    <i className="fas fa-search pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-slate-400"></i>
                     <input
                         ref={inputRef}
-                        type="text"
+                        type="search"
+                        enterKeyHint="search"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        placeholder="Buscar pelo nome da película..."
-                        className="w-full pl-12 pr-12 py-3 bg-slate-100 dark:bg-slate-800 border border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400"
+                        onFocus={() => setIsSearchFocused(true)}
+                        onBlur={() => setIsSearchFocused(false)}
+                        placeholder="Buscar película"
+                        aria-label="Buscar película"
+                        className="h-11 w-full rounded-xl border border-transparent bg-slate-100 pl-10 pr-11 text-slate-900 placeholder:text-slate-500 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-400 dark:focus:bg-slate-800 [&::-webkit-search-cancel-button]:hidden"
                     />
                     {searchTerm && (
                         <button
                             type="button"
                             onClick={handleClearSearch}
-                            className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 h-8 w-8 flex items-center justify-center"
+                            className="absolute right-1.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
                             aria-label="Limpar busca"
                         >
-                            <i className="fas fa-times-circle text-lg"></i>
+                            <i className="fas fa-times-circle"></i>
                         </button>
                     )}
                 </div>
             </div>
 
             {/* Content */}
-            <div className="flex-grow overflow-y-auto p-4">
-                <div className="max-w-3xl mx-auto space-y-2">
+            <div className="flex-grow overflow-y-auto overscroll-contain px-4 py-3">
+                <div className="mx-auto max-w-3xl space-y-2">
                     {filteredFilms.map(film => (
                         <FilmListItem
                             key={film.nome}
@@ -414,51 +422,66 @@ const FilmSelectionModal: React.FC<FilmSelectionModalProps> = ({ isOpen, onClose
                         />
                     ))}
                     {filteredFilms.length === 0 && debouncedSearchTerm && (
-                        <div className="text-center py-10 px-4">
-                            <p className="text-slate-500 dark:text-slate-400 mb-4">Nenhuma película encontrada com o nome <strong className="text-slate-700 dark:text-slate-300">"{debouncedSearchTerm}"</strong>.</p>
+                        <div className="px-4 py-10 text-center">
+                            <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">Nenhuma película com o nome <span className="font-medium text-slate-700 dark:text-slate-200">“{debouncedSearchTerm}”</span></p>
                             <button
+                                type="button"
                                 onClick={handleAddNew}
-                                className="px-5 py-2.5 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 transition duration-300 shadow-sm flex items-center justify-center gap-2 mx-auto"
+                                className="mx-auto flex h-11 items-center justify-center gap-2 rounded-xl bg-slate-200 px-4 text-slate-700 transition-colors hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600"
                             >
-                                <i className="fas fa-plus"></i>
-                                Adicionar "{debouncedSearchTerm}"
+                                <i className="fas fa-plus text-sm"></i>
+                                <span className="text-sm font-medium">Adicionar “{debouncedSearchTerm}”</span>
                             </button>
                         </div>
+                    )}
+                    {/* Marcando várias, o rodapé fica só com "Gerar": adicionar vai no fim da lista. */}
+                    {isMultiple && !(filteredFilms.length === 0 && debouncedSearchTerm) && (
+                        <button
+                            type="button"
+                            onClick={() => onAddNewFilm(searchTerm)}
+                            className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 text-slate-600 transition-colors hover:bg-white dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                        >
+                            <i className="fas fa-plus text-sm"></i>
+                            <span className="text-sm font-medium">Adicionar nova película</span>
+                        </button>
                     )}
                 </div>
             </div>
 
             {/* Footer */}
-            <div className="flex-shrink-0 p-4 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 sticky bottom-0">
-                <div className="max-w-3xl mx-auto space-y-2">
-                    {isMultiple && (
-                        <button
-                            type="button"
-                            onClick={handleConfirmMultiple}
-                            disabled={checkedFilms.length === 0}
-                            className="w-full p-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-500 disabled:bg-slate-300 disabled:text-slate-500 dark:disabled:bg-slate-700 dark:disabled:text-slate-400 transition duration-300 shadow-md flex items-center justify-center gap-2"
-                        >
-                            <i className="fas fa-file-pdf"></i>
-                            <span className="font-semibold">
-                                {checkedFilms.length === 0
-                                    ? 'Marque as películas'
-                                    : checkedFilms.length === 1
-                                        ? 'Gerar 1 opção'
-                                        : `Gerar ${checkedFilms.length} opções`}
-                            </span>
-                        </button>
-                    )}
-                    <button
-                        onClick={() => onAddNewFilm('')}
-                        className={`w-full p-3 font-semibold rounded-lg transition duration-300 flex items-center justify-center gap-2 ${isMultiple
-                            ? 'bg-transparent text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                            : 'bg-slate-800 dark:bg-slate-700 text-white hover:bg-slate-700 dark:hover:bg-slate-600 shadow-md'}`}
-                    >
-                        <i className="fas fa-plus"></i>
-                        Adicionar Nova Película
-                    </button>
+            {/* No celular, enquanto digita na busca, o rodapé some para a lista caber acima do teclado. */}
+            {!(isMobile && isSearchFocused) && (
+                <div className="sticky bottom-0 flex-shrink-0 border-t border-slate-200 bg-white px-4 pb-[calc(12px+env(safe-area-inset-bottom,0px))] pt-3 dark:border-slate-800 dark:bg-slate-900">
+                    <div className="mx-auto max-w-3xl">
+                        {isMultiple ? (
+                            <button
+                                type="button"
+                                onClick={handleConfirmMultiple}
+                                disabled={checkedFilms.length === 0}
+                                className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 text-white transition-colors hover:bg-blue-500 active:scale-[0.99] disabled:bg-slate-200 disabled:text-slate-500 dark:disabled:bg-slate-800 dark:disabled:text-slate-400"
+                            >
+                                <i className="fas fa-file-pdf text-sm"></i>
+                                <span className="text-[15px] font-semibold">
+                                    {checkedFilms.length === 0
+                                        ? 'Marque as películas'
+                                        : checkedFilms.length === 1
+                                            ? 'Gerar 1 opção'
+                                            : `Gerar ${checkedFilms.length} opções`}
+                                </span>
+                            </button>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={() => onAddNewFilm('')}
+                                className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-slate-800 text-white transition-colors hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600"
+                            >
+                                <i className="fas fa-plus text-sm"></i>
+                                <span className="text-[15px] font-semibold">Adicionar nova película</span>
+                            </button>
+                        )}
+                    </div>
                 </div>
-            </div>
+            )}
       <style>{`
                 @keyframes fade-in {
                     from { opacity: 0; }
