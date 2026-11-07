@@ -1,6 +1,6 @@
 import React from 'react';
+import { Download, FileText, X } from 'lucide-react';
 import { Bobina, Retalho } from '../../../types';
-import { QrCodeIcon } from './EstoqueIcons';
 import { formatMetersFromCentimeters, formatStockMeters } from '../../../src/lib/estoqueDimensions';
 
 type EstoqueQrModalProps = {
@@ -12,6 +12,8 @@ type EstoqueQrModalProps = {
     onSavePDF: () => void;
 };
 
+// A janela mostra a etiqueta como ela sai na impressão (PDF de 8 × 10 cm):
+// papel branco com o QR, o código, a película e a medida.
 export default function EstoqueQrModal({
     showQRModal,
     qrCodeDataUrl,
@@ -22,91 +24,78 @@ export default function EstoqueQrModal({
 }: EstoqueQrModalProps) {
     if (!showQRModal) return null;
 
+    const { item, type } = showQRModal;
+    const isBobina = type === 'bobina';
+    const largura = formatMetersFromCentimeters(item.larguraCm);
+    const comprimento = 'comprimentoTotalM' in item
+        ? formatStockMeters(item.comprimentoTotalM)
+        : formatMetersFromCentimeters((item as Retalho).comprimentoCm);
+    const spinner = <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />;
+
     return (
         <div
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4"
+            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4"
             onClick={onClose}
         >
             <div
-                className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-xs overflow-hidden"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="estoque-qr-title"
+                className="w-full max-w-sm overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface)] shadow-xl"
                 onClick={(e) => e.stopPropagation()}
             >
-                <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700">
-                    <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-                            <QrCodeIcon />
-                        </div>
-                        <span className="font-semibold text-slate-800 dark:text-slate-100">
-                            {showQRModal.type === 'bobina' ? 'Bobina' : 'Retalho'}
-                        </span>
+                <div className="flex items-start justify-between gap-3 px-5 pb-4 pt-5">
+                    <div className="min-w-0">
+                        <h2 id="estoque-qr-title" className="text-base font-semibold text-[var(--text-strong)]">
+                            {isBobina ? 'Etiqueta da bobina' : 'Etiqueta do retalho'}
+                        </h2>
+                        <p className="mt-0.5 truncate text-xs text-[var(--text-muted)]">
+                            {item.filmId} · {isBobina ? 'Bobina' : 'Retalho'} #{item.id}
+                        </p>
                     </div>
                     <button
+                        type="button"
                         onClick={onClose}
-                        className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                        aria-label="Fechar"
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)]"
                     >
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M18 6L6 18M6 6l12 12" />
-                        </svg>
+                        <X className="h-4 w-4" aria-hidden="true" />
                     </button>
                 </div>
 
-                <div className="p-6 flex flex-col items-center">
-                    <div className="bg-white p-3 rounded-xl shadow-sm border border-slate-100 mb-4">
-                        {qrCodeDataUrl && (
-                            <img src={qrCodeDataUrl} alt="QR Code" className="w-40 h-40" />
+                {/* A etiqueta em papel, na proporção 8 × 10 cm. */}
+                <div className="bg-[var(--surface-muted)] px-5 py-6">
+                    <div className="mx-auto flex aspect-[4/5] w-[220px] flex-col items-center justify-center rounded-lg bg-white px-4 py-5 text-center shadow-[0_10px_30px_rgba(0,0,0,0.28)] ring-1 ring-black/5">
+                        {qrCodeDataUrl ? (
+                            <img src={qrCodeDataUrl} alt={`QR Code de ${item.filmId}`} className="h-36 w-36" />
+                        ) : (
+                            <span className="h-36 w-36 animate-pulse rounded bg-slate-100" aria-hidden="true" />
                         )}
+                        <p className="mt-2 font-mono text-[11px] tracking-wide text-slate-500">{item.codigoQr}</p>
+                        <p className="mt-1.5 line-clamp-2 text-base font-semibold leading-tight text-slate-900">{item.filmId}</p>
+                        <p className="mt-0.5 text-xs tabular-nums text-slate-500">{largura} m × {comprimento} m</p>
                     </div>
-
-                    <p className="font-mono text-sm text-slate-500 dark:text-slate-400 mb-2">
-                        {showQRModal.item.codigoQr}
-                    </p>
-
-                    <h3 className="font-bold text-lg text-slate-800 dark:text-slate-100 text-center">
-                        {showQRModal.item.filmId}
-                    </h3>
-
-                    <p className="text-slate-500 dark:text-slate-400 text-sm">
-                        {formatMetersFromCentimeters(showQRModal.item.larguraCm)}m x {'comprimentoTotalM' in showQRModal.item ? `${formatStockMeters(showQRModal.item.comprimentoTotalM)}m` : `${formatMetersFromCentimeters((showQRModal.item as Retalho).comprimentoCm)}m`}
-                    </p>
+                    <p className="mt-4 text-center text-xs text-[var(--text-muted)]">É assim que a etiqueta sai na impressão (8 × 10 cm)</p>
                 </div>
 
-                <div className="p-4 border-t border-slate-200 dark:border-slate-700 flex gap-3">
+                <div className="flex gap-2 px-5 py-4">
                     <button
+                        type="button"
                         onClick={onSaveImage}
                         disabled={isGenerating}
-                        className="flex-1 py-3 px-4 rounded-xl font-semibold text-white bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                        className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-body)] transition-colors hover:bg-[var(--surface-muted)] disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                        {isGenerating ? (
-                            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                        ) : (
-                            <>
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                    <polyline points="7 10 12 15 17 10" />
-                                    <line x1="12" y1="15" x2="12" y2="3" />
-                                </svg>
-                                PNG
-                            </>
-                        )}
+                        {isGenerating ? spinner : <Download className="h-4 w-4" aria-hidden="true" />}
+                        <span className="text-sm font-medium">Salvar imagem</span>
                     </button>
                     <button
+                        type="button"
                         onClick={onSavePDF}
                         disabled={isGenerating}
-                        className="flex-1 py-3 px-4 rounded-xl font-semibold text-white bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                        className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[var(--surface-inverse)] text-[var(--surface)] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                        {isGenerating ? (
-                            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                        ) : (
-                            <>
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                    <polyline points="14 2 14 8 20 8" />
-                                    <line x1="16" y1="13" x2="8" y2="13" />
-                                    <line x1="16" y1="17" x2="8" y2="17" />
-                                </svg>
-                                PDF
-                            </>
-                        )}
+                        {isGenerating ? spinner : <FileText className="h-4 w-4" aria-hidden="true" />}
+                        <span className="text-sm font-semibold">Baixar PDF</span>
                     </button>
                 </div>
             </div>
