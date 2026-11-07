@@ -64,7 +64,7 @@ const SERVICE_STATUS_OPTIONS: {
     { value: 'completed', label: 'Concluído', iconClassName: 'fas fa-check-circle', activeClasses: 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200' },
     { value: 'partial', label: 'Parcial', iconClassName: 'fas fa-hourglass-half', activeClasses: 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-200' },
     { value: 'cancelled', label: 'Cancelado', iconClassName: 'fas fa-ban', activeClasses: 'border-rose-500 bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-200' },
-    { value: 'no_show', label: 'Não compareceu', iconClassName: 'fas fa-user-slash', activeClasses: 'border-amber-500 bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-200' },
+    { value: 'no_show', label: 'Faltou', iconClassName: 'fas fa-user-slash', activeClasses: 'border-amber-500 bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-200' },
 ];
 
 const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -1012,7 +1012,7 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                     {isEditing && (
                         <div>
                             <label className="ui-label mb-1.5 block">Status do atendimento</label>
-                            <div className="grid grid-cols-2 gap-2">
+                            <div className="flex flex-wrap gap-2" role="group" aria-label="Status do atendimento">
                                 {SERVICE_STATUS_OPTIONS.map((option) => {
                                     const isActive = serviceStatus === option.value;
                                     return (
@@ -1031,10 +1031,10 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                                                 setServiceStatus(option.value);
                                             }}
                                             aria-pressed={isActive}
-                                            className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors ${isActive ? option.activeClasses : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-700/50 dark:text-slate-300 dark:hover:bg-slate-700'}`}
+                                            className={`inline-flex h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border px-3 transition-colors ${isActive ? option.activeClasses : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-700/50 dark:text-slate-300 dark:hover:bg-slate-700'}`}
                                         >
                                             <i className={`${option.iconClassName} text-xs`} aria-hidden="true"></i>
-                                            <span className="text-sm font-medium">{option.label}</span>
+                                            <span className="text-[13px] font-medium">{option.label}</span>
                                         </button>
                                     );
                                 })}
