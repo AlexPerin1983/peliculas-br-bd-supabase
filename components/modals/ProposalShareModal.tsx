@@ -250,6 +250,7 @@ const ProposalShareModal: React.FC<ProposalShareModalProps> = ({ isOpen, client,
         expiresAt: portal.expiresAt,
         prices: buildProposalPricesBlock(pdfs),
         amounts: pdfs.map(pdf => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(pdf.totalPreco)),
+        names: pdfs.map(pdf => pdf.proposalOptionName || pdf.nomeArquivo || ''),
         count: pdfs.length,
     });
     // Texto original do app (sem o modelo salvo).
@@ -273,9 +274,13 @@ const ProposalShareModal: React.FC<ProposalShareModalProps> = ({ isOpen, client,
     const currentStyle = styleOf(choice);
     const saveAsDefault = () => {
         if (!created || !currentStyle) return;
-        const { template, staleValues } = toShareTemplate(message, shareValues(created));
-        if (staleValues) {
+        const { template, problem } = toShareTemplate(message, shareValues(created));
+        if (problem === 'valores') {
             setTemplateNotice('Algum valor foi mudado à mão e iria igual para o próximo cliente. Deixe a lista de valores como veio (ou apague-a) para salvar.');
+            return;
+        }
+        if (problem === 'opcoes') {
+            setTemplateNotice('O nome de uma película ficou no texto e iria igual para o próximo cliente. Deixe a lista como veio (com ou sem os valores) ou apague-a para salvar.');
             return;
         }
         setSavedTemplates(saveShareTemplate(currentStyle, template));

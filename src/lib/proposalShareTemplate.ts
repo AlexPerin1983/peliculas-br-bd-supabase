@@ -15,8 +15,13 @@ export interface ShareMessageValues {
     prices: string;
     /** Valores em R$ de cada opção, para saber se algum ficou solto no texto. */
     amounts: string[];
+    /** Nome de cada opção (película), na mesma ordem da lista de valores. */
+    names: string[];
     count: number;
 }
+
+/** O que ficou solto no texto e iria igual para o próximo cliente. */
+export type ShareTemplateProblem = 'valores' | 'opcoes' | null;
 
 const STORAGE_KEY = 'peliculas-br-proposal-message-templates-v1';
 
@@ -28,13 +33,16 @@ const replaceAll = (text: string, search: string, token: string) =>
     search ? text.split(search).join(token) : text;
 
 /**
- * Troca o que é do cliente atual pelos campos do modelo. `staleValues` avisa
- * que algum valor em R$ foi mexido à mão e iria igual para o próximo cliente.
+ * Troca o que é do cliente atual pelos campos do modelo. `problem` avisa que um
+ * valor em R$ ou o nome de uma opção foi mexido à mão e iria igual para o
+ * próximo cliente (ex.: apagou o preço e deixou só "Color Stable").
  */
 export const toShareTemplate = (text: string, values: ShareMessageValues) => {
     let template = text.trim();
     template = replaceAll(template, values.url, '{{link}}');
     template = replaceAll(template, values.prices, '{{valores}}');
+    // Lista só com os nomes (o aplicador tirou os preços): vira a lista de opções.
+    template = replaceAll(template, values.names.join('\n'), '{{opcoes}}');
     template = replaceAll(template, formatExpiry(values.expiresAt), '{{validade}}');
     if (values.count > 1) template = replaceAll(template, optionsLabel(values.count), '{{n_opcoes}}');
     template = template.replace(/(^|[^\p{L}])(os orçamentos|o orçamento)(?![\p{L}])/gu, '$1{{o_orcamento}}');
@@ -43,14 +51,19 @@ export const toShareTemplate = (text: string, values: ShareMessageValues) => {
         const name = new RegExp(`(^|[^\\p{L}])${escapeRegExp(values.firstName)}(?![\\p{L}])`, 'gu');
         template = template.replace(name, '$1{{nome}}');
     }
-    const staleValues = values.amounts.some(amount => amount && template.includes(amount));
-    return { template, staleValues };
+    const problem: ShareTemplateProblem = values.amounts.some(amount => amount && template.includes(amount))
+        ? 'valores'
+        : values.names.some(name => name.trim() && template.includes(name.trim()))
+            ? 'opcoes'
+            : null;
+    return { template, problem };
 };
 
 /** Monta a mensagem do modelo salvo para o cliente e o link atuais. */
 export const fillShareTemplate = (template: string, values: ShareMessageValues) => {
     let text = template
         .replace(/\{\{\s*valores\s*\}\}/g, values.prices)
+        .replace(/\{\{\s*opcoes\s*\}\}/g, values.names.join('\n'))
         .replace(/\{\{\s*n_opcoes\s*\}\}/g, optionsLabel(values.count))
         .replace(/\{\{O_orcamento\}\}/g, () => {
             const label = quoteLabel(values.count);

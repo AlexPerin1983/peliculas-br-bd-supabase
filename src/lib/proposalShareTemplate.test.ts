@@ -11,6 +11,7 @@ const maria: ShareMessageValues = {
     expiresAt,
     prices: `Carbono: ${brl(4612.5)}\nBlackout: ${brl(768.75)}`,
     amounts: [brl(4612.5), brl(768.75)],
+    names: ['Carbono', 'Blackout'],
     count: 2,
 };
 const joao: ShareMessageValues = {
@@ -19,6 +20,7 @@ const joao: ShareMessageValues = {
     expiresAt: '2027-01-15T23:59:59',
     prices: `Silver 20: ${brl(980)}`,
     amounts: [brl(980)],
+    names: ['Silver 20'],
     count: 1,
 };
 
@@ -27,9 +29,9 @@ describe('proposalShareTemplate', () => {
 
     it('troca nome, link e "os orçamentos" do cliente atual pelos do próximo', () => {
         const edited = `Maria, segue os orçamentos que conversamos:\n${maria.url}\nQualquer coisa me chama.`;
-        const { template, staleValues } = toShareTemplate(edited, maria);
+        const { template, problem } = toShareTemplate(edited, maria);
 
-        expect(staleValues).toBe(false);
+        expect(problem).toBeNull();
         expect(template).toBe('{{nome}}, segue {{o_orcamento}} que conversamos:\n{{link}}\nQualquer coisa me chama.');
         expect(fillShareTemplate(template, joao)).toBe(`João, segue o orçamento que conversamos:\n${joao.url}\nQualquer coisa me chama.`);
     });
@@ -48,7 +50,32 @@ describe('proposalShareTemplate', () => {
 
     it('avisa quando um valor foi mexido à mão (iria igual para o próximo cliente)', () => {
         const edited = `Maria, o Carbono fica ${brl(4612.5)}.\n${maria.url}`;
-        expect(toShareTemplate(edited, maria).staleValues).toBe(true);
+        expect(toShareTemplate(edited, maria).problem).toBe('valores');
+    });
+
+    it('lista só com os nomes (preços apagados) leva as películas do próximo cliente', () => {
+        // Caso real: apagou o preço e deixou só a película; o próximo cliente
+        // não pode receber a película do anterior.
+        const one: ShareMessageValues = { ...joao, firstName: 'Amauri', prices: `Color Stable: ${brl(1200)}`, amounts: [brl(1200)], names: ['Color Stable'] };
+        const edited = `Amauri\nPreparei sua proposta:\n\nColor Stable\n\n${joao.url}`;
+        const { template, problem } = toShareTemplate(edited, one);
+
+        expect(problem).toBeNull();
+        expect(template).toBe('{{nome}}\nPreparei sua proposta:\n\n{{opcoes}}\n\n{{link}}');
+        const suntek: ShareMessageValues = { ...maria, firstName: 'Gilmar', names: ['Suntek'], prices: `Suntek: ${brl(352)}`, amounts: [brl(352)], count: 1 };
+        expect(fillShareTemplate(template, suntek)).toBe(`Gilmar\nPreparei sua proposta:\n\nSuntek\n\n${maria.url}`);
+    });
+
+    it('com várias opções, os nomes sem preço também viram a lista do próximo cliente', () => {
+        const edited = `Maria, seguem:\nCarbono\nBlackout\n${maria.url}`;
+        const { template } = toShareTemplate(edited, maria);
+        expect(template).toBe('{{nome}}, seguem:\n{{opcoes}}\n{{link}}');
+        expect(fillShareTemplate(template, joao)).toBe(`João, seguem:\nSilver 20\n${joao.url}`);
+    });
+
+    it('não salva se o nome de uma película ficou solto no texto', () => {
+        const edited = `Maria, o Blackout ficou ótimo.\n${maria.url}`;
+        expect(toShareTemplate(edited, maria).problem).toBe('opcoes');
     });
 
     it('cliente sem nome: tira o nome sem deixar vírgula sobrando', () => {
