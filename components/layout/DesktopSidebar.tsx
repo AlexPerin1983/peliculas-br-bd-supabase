@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-    ArrowDown,
-    ArrowUp,
     Boxes,
     CalendarDays,
+    Check,
+    ChevronDown,
+    ChevronUp,
     CircleUserRound,
     FileText,
     GripVertical,
@@ -74,6 +75,10 @@ const getMainNavItemLabel = (tabId: MenuTabId) =>
     MAIN_NAV_BY_TAB.get(tabId)?.label ?? 'Item';
 
 const SIDEBAR_COLLAPSED_KEY = 'peliculas-br-sidebar-collapsed';
+
+// Filete de linha fina (8% do texto) usado em bordas e divisórias.
+const HAIRLINE = 'border-slate-900/[0.08] dark:border-white/[0.08]';
+const ICON_STROKE = 1.75;
 
 const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
     activeTab,
@@ -188,11 +193,21 @@ const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
 
     const renderSectionLabel = (label: string) => (
         isCollapsed ? (
-            <div className="mx-auto my-2 h-px w-8 bg-[var(--border-subtle)] dark:bg-white/10" aria-hidden="true" />
+            <div className="mx-auto my-2 h-px w-6 bg-slate-900/[0.08] dark:bg-white/[0.08]" aria-hidden="true" />
         ) : (
-            <p className="ui-kicker mb-2 px-3 text-[var(--text-soft)] dark:text-slate-500">{label}</p>
+            <p className="mb-1 flex h-8 items-center px-3 text-xs font-medium text-[var(--text-muted)]">{label}</p>
         )
     );
+
+    // Linha do menu: 36 px de altura. A tela aberta ganha só um fundo um tom
+    // acima e o filete azul à esquerda (a "borda da película").
+    const rowClass = (isActive: boolean) => [
+        'group relative flex h-9 w-full items-center rounded-lg text-left transition-colors duration-150',
+        isCollapsed ? 'justify-center px-0' : 'gap-3 px-3',
+        isActive
+            ? 'bg-slate-100 dark:bg-white/[0.07]'
+            : 'hover:bg-slate-50 dark:hover:bg-white/[0.04]'
+    ].join(' ');
 
     const NavItem: React.FC<NavItemConfig> = ({ tabId, icon: Icon, label, badge }) => {
         const isActive = activeTab === tabId;
@@ -207,49 +222,37 @@ const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                 aria-label={label}
                 aria-current={isActive ? 'page' : undefined}
                 title={isCollapsed ? label : undefined}
-                className={[
-                    'group relative flex h-10 w-full items-center rounded-[var(--radius-control)] text-left transition-colors duration-200',
-                    isCollapsed ? 'justify-center px-0' : 'gap-3 px-3',
-                    isActive
-                        ? 'border border-[var(--border-subtle)] bg-[var(--brand-primary-soft)] text-[var(--brand-primary)] shadow-[var(--shadow-hairline)] dark:border-white/10 dark:bg-white/[0.075] dark:text-white'
-                        : 'border border-transparent text-[var(--text-muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)] dark:text-slate-400 dark:hover:bg-white/[0.055] dark:hover:text-slate-100'
-                ].join(' ')}
+                className={rowClass(isActive)}
             >
                 {isActive ? (
-                    <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-r-full bg-[var(--brand-primary)] dark:bg-blue-300" />
+                    <span
+                        data-menu-active-marker
+                        className="absolute left-0 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-r-full bg-[var(--brand-primary)]"
+                        aria-hidden="true"
+                    />
                 ) : null}
 
                 <Icon
                     className={`h-4 w-4 shrink-0 transition-colors ${
                         isActive
-                            ? 'text-[var(--brand-primary)] dark:text-blue-300'
-                            : 'text-[var(--text-soft)] group-hover:text-[var(--text-strong)] dark:text-slate-500 dark:group-hover:text-slate-300'
+                            ? 'text-[var(--brand-primary)]'
+                            : 'text-[var(--text-muted)] group-hover:text-[var(--text-body)]'
                     }`}
+                    strokeWidth={ICON_STROKE}
                     aria-hidden="true"
                 />
 
                 {!isCollapsed ? (
                     <>
-                        <span className="min-w-0 flex-1 truncate text-sm font-semibold">{label}</span>
-                        <span className="flex shrink-0 items-center gap-1.5">
-                            {isInitial ? (
-                                <span className="rounded-full border border-blue-200/80 bg-blue-50 px-1.5 py-px text-[8px] font-bold uppercase tracking-wide text-blue-700 dark:border-blue-300/20 dark:bg-blue-400/10 dark:text-blue-200">
-                                    Inicial
-                                </span>
-                            ) : null}
-                            {badge ? (
-                                <span className="rounded-full bg-blue-100 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-blue-600 dark:bg-blue-500/20 dark:text-blue-300">
-                                    {badge}
-                                </span>
-                            ) : null}
-                            {isActive ? (
-                                <span
-                                    data-menu-active-marker
-                                    className="h-1.5 w-1.5 rounded-full bg-[var(--brand-primary)] dark:bg-blue-300"
-                                    aria-hidden="true"
-                                />
-                            ) : null}
+                        <span className={`min-w-0 flex-1 truncate text-sm font-medium ${isActive ? 'text-[var(--text-strong)]' : 'text-[var(--text-body)]'}`}>
+                            {label}
                         </span>
+                        {isInitial ? (
+                            <span className="shrink-0 text-xs text-[var(--text-muted)]">Inicial</span>
+                        ) : null}
+                        {badge ? (
+                            <span className="shrink-0 text-xs text-[var(--text-muted)]">{badge}</span>
+                        ) : null}
                     </>
                 ) : null}
             </button>
@@ -269,15 +272,17 @@ const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
             setMenuAnnouncement(`${label}: posição ${nextPosition} de ${nextOrder.length}.`);
         };
 
+        const moveButtonClass = `flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[var(--text-muted)] transition-colors duration-150 hover:bg-slate-100 hover:text-[var(--text-strong)] disabled:pointer-events-none disabled:opacity-30 dark:hover:bg-white/[0.06]`;
+
         return (
             <div
                 key={tabId}
                 ref={node => registerMenuRow(menuTabId, node)}
                 className={[
-                    'flex min-h-11 items-center gap-1 rounded-[var(--radius-control)] border bg-[var(--surface-muted)] px-1.5 transition-[transform,box-shadow,border-color] dark:bg-white/[0.045]',
+                    'flex h-11 items-center gap-2 rounded-lg border bg-[var(--surface)] pl-1 pr-1 transition-[transform,box-shadow,border-color] duration-150 dark:bg-white/[0.03]',
                     draggingTabId === menuTabId
-                        ? 'relative z-20 scale-[1.015] border-blue-400 shadow-[0_10px_24px_rgba(37,99,235,0.18)] dark:border-blue-300/60'
-                        : 'border-[var(--border-subtle)] dark:border-white/10'
+                        ? 'relative z-20 scale-[1.015] border-[var(--brand-primary)] shadow-[0_8px_24px_rgba(15,23,42,0.14)] dark:shadow-[0_8px_24px_rgba(0,0,0,0.4)]'
+                        : HAIRLINE
                 ].join(' ')}
                 data-menu-tab={tabId}
                 data-menu-dragging={draggingTabId === menuTabId ? 'true' : undefined}
@@ -299,15 +304,15 @@ const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                             handleMove(1);
                         }
                     }}
-                    className="flex h-8 w-7 touch-none shrink-0 cursor-grab items-center justify-center rounded-lg text-[var(--text-soft)] hover:bg-[var(--surface)] hover:text-[var(--brand-primary)] active:cursor-grabbing dark:hover:bg-white/[0.06] dark:hover:text-blue-200"
+                    className="flex h-8 w-6 touch-none shrink-0 cursor-grab items-center justify-center rounded-md text-[var(--text-soft)] transition-colors hover:bg-slate-100 hover:text-[var(--text-body)] active:cursor-grabbing dark:hover:bg-white/[0.06]"
                 >
-                    <GripVertical className="h-3.5 w-3.5" aria-hidden="true" />
+                    <GripVertical className="h-3.5 w-3.5" strokeWidth={ICON_STROKE} aria-hidden="true" />
                 </button>
-                <Icon className="h-4 w-4 shrink-0 text-[var(--brand-primary)] dark:text-blue-300" aria-hidden="true" />
+                <Icon className="h-4 w-4 shrink-0 text-[var(--text-muted)]" strokeWidth={ICON_STROKE} aria-hidden="true" />
                 <div className="min-w-0 flex-1">
-                    <p className="truncate text-xs font-semibold text-[var(--text-strong)] dark:text-white">{label}</p>
+                    <p className="truncate text-sm font-medium leading-5 text-[var(--text-strong)]">{label}</p>
                     {isFirst ? (
-                        <p className="text-[8px] font-bold uppercase tracking-[0.1em] text-[var(--brand-primary)] dark:text-blue-300">
+                        <p className="text-xs leading-4 text-[var(--brand-primary)] dark:text-[var(--brand-primary-strong)]">
                             Tela inicial
                         </p>
                     ) : null}
@@ -317,18 +322,18 @@ const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                     onClick={() => handleMove(-1)}
                     disabled={isFirst}
                     aria-label={`Mover ${label} para cima, posição ${index + 1} de ${orderedMainNav.length}`}
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-muted)] disabled:opacity-25 dark:border-white/10 dark:bg-white/[0.055] dark:text-slate-200"
+                    className={moveButtonClass}
                 >
-                    <ArrowUp className="h-3.5 w-3.5" aria-hidden="true" />
+                    <ChevronUp className="h-4 w-4" strokeWidth={ICON_STROKE} aria-hidden="true" />
                 </button>
                 <button
                     type="button"
                     onClick={() => handleMove(1)}
                     disabled={isLast}
                     aria-label={`Mover ${label} para baixo, posição ${index + 1} de ${orderedMainNav.length}`}
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-muted)] disabled:opacity-25 dark:border-white/10 dark:bg-white/[0.055] dark:text-slate-200"
+                    className={moveButtonClass}
                 >
-                    <ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />
+                    <ChevronDown className="h-4 w-4" strokeWidth={ICON_STROKE} aria-hidden="true" />
                 </button>
             </div>
         );
@@ -339,48 +344,51 @@ const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
     return (
         <aside
             className={[
-                'sticky top-0 hidden h-screen shrink-0 flex-col overflow-hidden border-r border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-body)] shadow-[var(--shadow-hairline)] transition-[width,background-color,border-color] duration-300 lg:flex dark:bg-[#07111f] dark:text-white',
+                `sticky top-0 hidden h-screen shrink-0 flex-col overflow-hidden border-r ${HAIRLINE} bg-[var(--surface)] text-[var(--text-body)] lg:flex`,
                 isCollapsed ? 'w-[76px]' : 'w-64'
             ].join(' ')}
         >
-            <div className={`${isCollapsed ? 'px-3 py-4' : 'px-4 py-4'} border-b border-[var(--border-subtle)] dark:border-white/10`}>
-                <div className={`flex items-center ${isCollapsed ? 'flex-col gap-3' : 'justify-between gap-3'}`}>
-                    <div className={`flex min-w-0 items-center ${isCollapsed ? 'justify-center' : 'gap-2.5'}`}>
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-[var(--brand-primary)] text-white shadow-[0_12px_24px_rgba(21,94,239,0.24)]">
-                            <Layers3 className="h-4 w-4" aria-hidden="true" />
-                        </div>
-                        {!isCollapsed ? (
-                            <h1 className="truncate text-lg font-semibold tracking-normal text-[var(--text-strong)] dark:text-white">
-                                Películas<span className="text-[var(--brand-primary)] dark:text-blue-300">BR</span>
-                            </h1>
-                        ) : null}
+            <div
+                className={[
+                    `flex border-b ${HAIRLINE}`,
+                    isCollapsed ? 'flex-col items-center gap-2 px-3 py-3' : 'h-16 items-center justify-between gap-3 px-4'
+                ].join(' ')}
+            >
+                <div className={`flex min-w-0 items-center ${isCollapsed ? 'justify-center' : 'gap-2.5'}`}>
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--brand-primary)] text-white">
+                        <Layers3 className="h-4 w-4" strokeWidth={ICON_STROKE} aria-hidden="true" />
                     </div>
-
-                    <button
-                        type="button"
-                        onClick={() => {
-                            cancelMenuItemDrag();
-                            setIsEditingMenu(false);
-                            setIsCollapsed(current => !current);
-                        }}
-                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-muted)] shadow-[var(--shadow-hairline)] transition-all duration-200 hover:bg-[var(--surface)] hover:text-[var(--brand-primary)] dark:border-white/10 dark:bg-white/[0.045] dark:text-slate-400 dark:hover:bg-white/[0.08] dark:hover:text-blue-200"
-                        aria-label={isCollapsed ? 'Expandir menu lateral' : 'Recolher menu lateral'}
-                        title={isCollapsed ? 'Expandir menu lateral' : 'Recolher menu lateral'}
-                    >
-                        <CollapseIcon className="h-4 w-4" aria-hidden="true" />
-                    </button>
+                    {!isCollapsed ? (
+                        <h1 className="truncate text-base font-semibold text-[var(--text-strong)]">
+                            Películas<span className="text-[var(--brand-primary)] dark:text-[var(--brand-primary-strong)]">BR</span>
+                        </h1>
+                    ) : null}
                 </div>
+
+                <button
+                    type="button"
+                    onClick={() => {
+                        cancelMenuItemDrag();
+                        setIsEditingMenu(false);
+                        setIsCollapsed(current => !current);
+                    }}
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--text-muted)] transition-colors duration-150 hover:bg-slate-100 hover:text-[var(--text-strong)] dark:hover:bg-white/[0.06]"
+                    aria-label={isCollapsed ? 'Expandir menu lateral' : 'Recolher menu lateral'}
+                    title={isCollapsed ? 'Expandir menu lateral' : 'Recolher menu lateral'}
+                >
+                    <CollapseIcon className="h-4 w-4" strokeWidth={ICON_STROKE} aria-hidden="true" />
+                </button>
             </div>
 
             <nav
                 ref={navScrollRef}
-                className={`${isCollapsed ? 'px-3' : 'px-3'} flex-grow space-y-1 overflow-y-auto py-4`}
+                className="flex-grow overflow-y-auto px-3 py-3"
             >
                 {isCollapsed ? (
                     renderSectionLabel('Principal')
                 ) : (
-                    <div className="mb-2 flex items-center justify-between gap-2 px-3">
-                        <p className="ui-kicker text-[var(--text-soft)] dark:text-slate-500">
+                    <div className="mb-1 flex h-8 items-center justify-between gap-2 pl-3">
+                        <p className="text-xs font-medium text-[var(--text-muted)]">
                             {isEditingMenu ? 'Organizar menu' : 'Principal'}
                         </p>
                         <button
@@ -391,17 +399,23 @@ const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                             }}
                             aria-label={isEditingMenu ? 'Concluir organização do menu' : 'Organizar menu'}
                             aria-pressed={isEditingMenu}
-                            className="flex h-7 items-center gap-1.5 rounded-full border border-[var(--border-subtle)] bg-[var(--surface-muted)] px-2.5 text-[10px] font-bold text-[var(--brand-primary)] transition-colors hover:bg-[var(--brand-primary-soft)] dark:border-white/10 dark:bg-white/[0.045] dark:text-blue-300"
+                            className={`flex h-7 items-center gap-1.5 rounded-md px-2 transition-colors duration-150 hover:bg-slate-100 dark:hover:bg-white/[0.06] ${
+                                isEditingMenu
+                                    ? 'text-[var(--brand-primary)] dark:text-[var(--brand-primary-strong)]'
+                                    : 'text-[var(--text-muted)] hover:text-[var(--text-strong)]'
+                            }`}
                         >
-                            <Pencil className="h-3 w-3" aria-hidden="true" />
-                            {isEditingMenu ? 'Concluir' : 'Organizar'}
+                            {isEditingMenu
+                                ? <Check className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+                                : <Pencil className="h-3.5 w-3.5" strokeWidth={ICON_STROKE} aria-hidden="true" />}
+                            <span className="text-xs font-medium">{isEditingMenu ? 'Concluir' : 'Organizar'}</span>
                         </button>
                     </div>
                 )}
 
                 {isEditingMenu && !isCollapsed ? (
                     <>
-                        <div className="mx-1 mb-2 rounded-[var(--radius-control)] bg-[var(--brand-primary-soft)] px-3 py-2 text-[10px] leading-relaxed text-[var(--brand-primary)] dark:bg-blue-400/10 dark:text-blue-200">
+                        <div className="mb-3 px-3 text-xs leading-5 text-[var(--text-muted)]">
                             <p>Arraste pelo puxador ou use as setas. O primeiro item será aberto ao iniciar o aplicativo.</p>
                             <button
                                 type="button"
@@ -410,49 +424,53 @@ const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                                     onResetMenuOrder();
                                     setMenuAnnouncement('Ordem padrão restaurada. Dashboard é a tela inicial.');
                                 }}
-                                className="mt-1 font-bold underline underline-offset-2"
+                                className="mt-1 text-[var(--brand-primary)] hover:underline dark:text-[var(--brand-primary-strong)]"
                             >
-                                Restaurar ordem padrão
+                                <span className="text-xs font-medium">Restaurar ordem padrão</span>
                             </button>
                         </div>
                         <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
                             {menuAnnouncement}
                         </p>
-                        {orderedMainNav.map(renderEditableNavItem)}
+                        <div className="space-y-1">
+                            {orderedMainNav.map(renderEditableNavItem)}
+                        </div>
                     </>
                 ) : (
-                    visibleMainNav.map(item => (
-                        <NavItem key={item.tabId} {...item} />
-                    ))
+                    <div className="space-y-0.5">
+                        {visibleMainNav.map(item => (
+                            <NavItem key={item.tabId} {...item} />
+                        ))}
+                    </div>
                 )}
 
-                <div className="mt-3 space-y-1 border-t border-[var(--border-subtle)] pt-3 dark:border-white/10">
+                <div className={`mt-4 border-t ${HAIRLINE} pt-4`}>
                     {renderSectionLabel('Sistema')}
-                    {systemNav.map(item => (
-                        <NavItem key={item.tabId} {...item} />
-                    ))}
-                    <button
-                        type="button"
-                        onClick={() => setIsSupportOpen(true)}
-                        aria-label="Suporte"
-                        title={isCollapsed ? 'Suporte' : undefined}
-                        className={[
-                            'group relative flex h-10 w-full items-center rounded-[var(--radius-control)] border border-transparent text-left text-[var(--text-muted)] transition-colors duration-200 hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)] dark:text-slate-400 dark:hover:bg-white/[0.055] dark:hover:text-slate-100',
-                            isCollapsed ? 'justify-center px-0' : 'gap-3 px-3'
-                        ].join(' ')}
-                    >
-                        <Headset
-                            className="h-4 w-4 shrink-0 text-[var(--text-soft)] transition-colors group-hover:text-[var(--text-strong)] dark:text-slate-500 dark:group-hover:text-slate-300"
-                            aria-hidden="true"
-                        />
-                        {!isCollapsed ? (
-                            <span className="min-w-0 flex-1 truncate text-sm font-semibold">Suporte</span>
-                        ) : null}
-                    </button>
+                    <div className="space-y-0.5">
+                        {systemNav.map(item => (
+                            <NavItem key={item.tabId} {...item} />
+                        ))}
+                        <button
+                            type="button"
+                            onClick={() => setIsSupportOpen(true)}
+                            aria-label="Suporte"
+                            title={isCollapsed ? 'Suporte' : undefined}
+                            className={rowClass(false)}
+                        >
+                            <Headset
+                                className="h-4 w-4 shrink-0 text-[var(--text-muted)] transition-colors group-hover:text-[var(--text-body)]"
+                                strokeWidth={ICON_STROKE}
+                                aria-hidden="true"
+                            />
+                            {!isCollapsed ? (
+                                <span className="min-w-0 flex-1 truncate text-sm font-medium text-[var(--text-body)]">Suporte</span>
+                            ) : null}
+                        </button>
+                    </div>
                 </div>
             </nav>
 
-            <div className={`${isCollapsed ? 'items-center px-3' : 'px-4'} flex flex-col gap-3 border-t border-[var(--border-subtle)] py-4 dark:border-white/10`}>
+            <div className={`${isCollapsed ? 'items-center' : ''} flex flex-col gap-2 border-t ${HAIRLINE} px-3 py-3`}>
                 <ThemeToggle variant="sidebar" compact={isCollapsed} />
 
                 {!isCollapsed ? (
@@ -463,12 +481,12 @@ const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
 
                 <div
                     className={[
-                        'flex cursor-default items-center rounded-[var(--radius-control)] transition-colors hover:bg-[var(--surface-muted)] dark:hover:bg-white/[0.055]',
-                        isCollapsed ? 'h-10 w-10 justify-center p-0' : 'w-full gap-3 p-2'
+                        'flex items-center',
+                        isCollapsed ? 'h-10 w-10 justify-center' : 'w-full gap-3 px-1 py-1'
                     ].join(' ')}
                     title={user?.email || userName}
                 >
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-[var(--radius-control)] bg-[var(--brand-primary)] text-xs font-bold text-white shadow-[0_10px_22px_rgba(37,99,235,0.22)]">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-slate-100 text-xs font-semibold text-[var(--text-body)] ring-1 ring-inset ring-slate-900/[0.08] dark:bg-white/[0.06] dark:ring-white/[0.08]">
                         {companyLogo ? (
                             <img src={companyLogo} alt="Logo da empresa" className="h-full w-full object-cover" />
                         ) : (
@@ -477,41 +495,40 @@ const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                     </div>
                     {!isCollapsed ? (
                         <div className="min-w-0 flex-grow">
-                            <p className="truncate text-sm font-semibold leading-tight text-[var(--text-strong)] dark:text-white">
+                            <p className="truncate text-sm font-medium leading-5 text-[var(--text-strong)]">
                                 {userName}
                             </p>
-                            <p className="mt-0.5 truncate text-[10px] text-[var(--text-muted)] dark:text-slate-500">
+                            <p className="truncate text-xs leading-4 text-[var(--text-muted)]">
                                 {user?.email || ''}
                             </p>
                         </div>
                     ) : null}
                 </div>
 
-                <div className={`${isCollapsed ? 'w-10' : 'w-full'} border-t border-[var(--border-subtle)] pt-3 dark:border-white/10`}>
-                    <button
-                        type="button"
-                        onClick={handleSignOut}
-                        disabled={isSigningOut}
-                        aria-label="Sair da aplicação"
-                        title={isCollapsed ? 'Sair da aplicação' : undefined}
-                        className={[
-                            'group flex h-10 w-full items-center rounded-[var(--radius-control)] border border-transparent text-[var(--text-muted)] transition-all duration-200 hover:border-red-200 hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-60 dark:text-slate-400 dark:hover:border-red-400/20 dark:hover:bg-red-500/10 dark:hover:text-red-200',
-                            isCollapsed ? 'justify-center px-0' : 'gap-3 px-3'
-                        ].join(' ')}
-                    >
-                        {isSigningOut ? (
-                            <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden="true" />
-                        ) : (
-                            <LogOut className="h-4 w-4 shrink-0 text-[var(--text-soft)] transition-colors group-hover:text-red-700 dark:text-slate-500 dark:group-hover:text-red-200" aria-hidden="true" />
-                        )}
+                <button
+                    type="button"
+                    onClick={handleSignOut}
+                    disabled={isSigningOut}
+                    aria-label="Sair da conta"
+                    title={isCollapsed ? 'Sair da conta' : undefined}
+                    className={`${rowClass(false)} disabled:cursor-not-allowed disabled:opacity-60`}
+                >
+                    {isSigningOut ? (
+                        <Loader2 className="h-4 w-4 shrink-0 animate-spin text-[var(--text-muted)]" aria-hidden="true" />
+                    ) : (
+                        <LogOut
+                            className="h-4 w-4 shrink-0 text-[var(--text-muted)] transition-colors group-hover:text-[var(--text-body)]"
+                            strokeWidth={ICON_STROKE}
+                            aria-hidden="true"
+                        />
+                    )}
 
-                        {!isCollapsed ? (
-                            <span className="min-w-0 flex-1 truncate text-left text-sm font-semibold">
-                                {isSigningOut ? 'Saindo...' : 'Sair'}
-                            </span>
-                        ) : null}
-                    </button>
-                </div>
+                    {!isCollapsed ? (
+                        <span className="min-w-0 flex-1 truncate text-sm font-medium text-[var(--text-body)]">
+                            {isSigningOut ? 'Saindo…' : 'Sair da conta'}
+                        </span>
+                    ) : null}
+                </button>
             </div>
 
             <SupportModal isOpen={isSupportOpen} onClose={() => setIsSupportOpen(false)} />
