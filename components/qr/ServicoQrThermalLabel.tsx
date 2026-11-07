@@ -38,6 +38,8 @@ interface ServicoQrThermalLabelProps {
     servico: ServicoPrestado | null;
     format: NimbotLabelFormat;
     className?: string;
+    /** Prévia enquanto o formulário é preenchido: sem QR de verdade nem código. */
+    draft?: boolean;
 }
 
 const multiLineClamp = (lines: number): React.CSSProperties => ({
@@ -54,21 +56,27 @@ const getTypeLabel = (tipo?: ServicoPrestado['tipo_local']) => {
         case 'comercial':
             return 'Comercial';
         case 'condominio':
-            return 'Condominio';
+            return 'Condomínio';
         case 'empresa':
             return 'Empresa';
         case 'outros':
             return 'Outros';
         default:
-            return 'Aplicacao';
+            return 'Aplicação';
     }
 };
 
 const getFilmText = (servico: ServicoPrestado | null) =>
-    servico?.filme_aplicado?.trim() || 'Pelicula aplicada';
+    servico?.filme_aplicado?.trim() || 'Película aplicada';
 
 const getPrimaryReference = (servico: ServicoPrestado | null) =>
-    servico?.cliente_nome?.trim() || 'Aplicacao registrada';
+    servico?.cliente_nome?.trim() || 'Nome do local ou cliente';
+
+const getDateText = (servico: ServicoPrestado | null) => {
+    const date = servico?.data_servico ? new Date(servico.data_servico) : null;
+    if (!date || Number.isNaN(date.getTime())) return '';
+    return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+};
 
 const getSecondaryReference = (servico: ServicoPrestado | null) => {
     const location = [servico?.cidade?.trim(), servico?.uf?.trim()].filter(Boolean).join(' / ');
@@ -76,10 +84,15 @@ const getSecondaryReference = (servico: ServicoPrestado | null) => {
 };
 
 const ServicoQrThermalLabel = React.forwardRef<HTMLDivElement, ServicoQrThermalLabelProps>(
-    ({ servico, format, className = '' }, ref) => {
+    ({ servico, format, className = '', draft = false }, ref) => {
         const config = NIMBOT_LABEL_FORMATS[format];
-        const qrUrl = servico ? gerarUrlServico(servico.codigo_qr) : '';
+        const qrUrl = servico && !draft ? gerarUrlServico(servico.codigo_qr) : '';
         const isHorizontal = config.layout === 'horizontal';
+        const isSquare = !isHorizontal && config.heightMm <= config.widthMm;
+        // Tamanho do QR em mm, para caber na etiqueta sem empurrar o texto para fora.
+        const qrMm = isHorizontal
+            ? 16
+            : Math.min(28, config.widthMm - 6.4, config.heightMm - 24.4);
 
         const rootStyle: React.CSSProperties = {
             width: `${config.widthMm}mm`,
@@ -128,7 +141,7 @@ const ServicoQrThermalLabel = React.forwardRef<HTMLDivElement, ServicoQrThermalL
             lineHeight: 1.08,
             color: '#334155',
             fontWeight: 500,
-            ...multiLineClamp(2)
+            ...multiLineClamp(isSquare ? 1 : 2)
         };
 
         const secondaryReferenceStyle: React.CSSProperties = {
@@ -145,7 +158,7 @@ const ServicoQrThermalLabel = React.forwardRef<HTMLDivElement, ServicoQrThermalL
             letterSpacing: '0.02em',
             color: '#0f172a',
             textTransform: 'uppercase',
-            ...multiLineClamp(2)
+            ...multiLineClamp(isSquare ? 1 : 2)
         };
 
         const codeStyle: React.CSSProperties = {
@@ -165,6 +178,38 @@ const ServicoQrThermalLabel = React.forwardRef<HTMLDivElement, ServicoQrThermalL
             flexShrink: 0,
             boxSizing: 'border-box'
         };
+
+        const qrNode = draft ? (
+            <div
+                style={{
+                    width: `${qrMm}mm`,
+                    height: `${qrMm}mm`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    border: '1px dashed #94a3b8',
+                    background: '#f8fafc',
+                    color: '#94a3b8',
+                    fontSize: 7,
+                    fontWeight: 700,
+                    letterSpacing: '0.08em',
+                    textAlign: 'center',
+                    lineHeight: 1.2,
+                    boxSizing: 'border-box'
+                }}
+            >
+                QR
+            </div>
+        ) : (
+            <QRCodeSVG
+                value={qrUrl}
+                size={config.qrSizePx}
+                level="H"
+                includeMargin={false}
+                style={{ width: `${qrMm}mm`, height: `${qrMm}mm`, display: 'block' }}
+            />
+        );
+        const codeText = draft ? 'Código ao gerar' : servico?.codigo_qr ?? '';
 
         const placeholder = (
             <div
@@ -235,7 +280,7 @@ const ServicoQrThermalLabel = React.forwardRef<HTMLDivElement, ServicoQrThermalL
                                 height: '100%'
                             }}
                         >
-                            <QRCodeSVG value={qrUrl} size={config.qrSizePx} level="H" includeMargin={false} />
+                            {qrNode}
                         </div>
 
                         <div
@@ -251,20 +296,22 @@ const ServicoQrThermalLabel = React.forwardRef<HTMLDivElement, ServicoQrThermalL
                             }}
                         >
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
-                                <div style={eyebrowStyle}>Padrao da aplicacao</div>
+                                <div style={eyebrowStyle}>Padrão da aplicação</div>
                                 <div style={metaStyle}>{getTypeLabel(servico.tipo_local)}</div>
                             </div>
                             <div style={filmStyle}>{filmText}</div>
                             <div style={referenceStyle}>{primaryReferenceText}</div>
                             <div style={secondaryReferenceStyle}>{secondaryReferenceText}</div>
                             <div style={{ ...codeStyle, paddingTop: 1.5, borderTop: '1px solid #e2e8f0' }}>
-                                {servico.codigo_qr}
+                                {codeText}
                             </div>
                         </div>
                     </div>
                 </div>
             );
         }
+
+        const dateText = getDateText(servico);
 
         return (
             <div ref={ref} className={className} style={rootStyle}>
@@ -275,25 +322,24 @@ const ServicoQrThermalLabel = React.forwardRef<HTMLDivElement, ServicoQrThermalL
                     }}
                 >
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
-                        <div style={eyebrowStyle}>Padrao da aplicacao</div>
+                        <div style={eyebrowStyle}>Padrão da aplicação</div>
                         <div style={metaStyle}>{getTypeLabel(servico.tipo_local)}</div>
                     </div>
 
                     <div
                         style={{
-                            display: 'grid',
-                            gridTemplateColumns: '17.4mm minmax(0, 1fr)',
-                            gap: '1.2mm',
+                            display: 'flex',
+                            flexDirection: 'column',
                             alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '1.2mm',
                             flex: 1,
                             minHeight: 0
                         }}
                     >
-                        <div style={qrFrameStyle}>
-                            <QRCodeSVG value={qrUrl} size={config.qrSizePx} level="H" includeMargin={false} />
-                        </div>
+                        <div style={qrFrameStyle}>{qrNode}</div>
 
-                        <div style={{ display: 'grid', gap: 1, minWidth: 0 }}>
+                        <div style={{ display: 'grid', gap: 1, width: '100%', minWidth: 0, textAlign: 'center' }}>
                             <div style={filmStyle}>{filmText}</div>
                             <div style={referenceStyle}>{primaryReferenceText}</div>
                             <div style={secondaryReferenceStyle}>{secondaryReferenceText}</div>
@@ -301,8 +347,8 @@ const ServicoQrThermalLabel = React.forwardRef<HTMLDivElement, ServicoQrThermalL
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, borderTop: '1px solid #e2e8f0', paddingTop: '1mm' }}>
-                        <div style={{ ...codeStyle, flex: 1, minWidth: 0 }}>{servico.codigo_qr}</div>
-                        <div style={{ ...codeStyle, textAlign: 'right', maxWidth: '46%' }}>{secondaryReferenceText}</div>
+                        <div style={{ ...codeStyle, flex: 1, minWidth: 0 }}>{codeText}</div>
+                        {dateText ? <div style={{ ...codeStyle, textAlign: 'right', flexShrink: 0 }}>{dateText}</div> : null}
                     </div>
                 </div>
             </div>

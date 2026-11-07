@@ -321,7 +321,17 @@ const ServicoQrView: React.FC<ServicoQrViewProps> = ({
     const activeStepMeta = STEP_META[step];
     const companyDisplayName = userInfo?.empresa || userInfo?.nome || 'Empresa não configurada';
     const selectedFilmLabel = filmeAplicado || 'Sem película';
-    const previewStatusLabel = savedServico ? 'Pronta' : 'Em preparo';
+    const previewStatusLabel = savedServico ? 'Pronta para imprimir' : 'Prévia';
+    // Enquanto não gera, a etiqueta da direita mostra o que está sendo preenchido.
+    const draftServico = useMemo(() => ({
+        codigo_qr: '',
+        cliente_nome: clienteNome,
+        cidade,
+        uf: uf.toUpperCase(),
+        tipo_local: tipoLocal,
+        filme_aplicado: filmeAplicado,
+        data_servico: dataServico ? new Date(`${dataServico}T12:00:00`).toISOString() : undefined
+    }) as ServicoPrestado, [cidade, clienteNome, dataServico, filmeAplicado, tipoLocal, uf]);
 
     const resetForm = useCallback(() => {
         setStep('form');
@@ -440,7 +450,7 @@ const ServicoQrView: React.FC<ServicoQrViewProps> = ({
                 filme_aplicado: filmeAplicado,
                 filme_detalhes: selectedFilm ? criarDetalhesFilme(selectedFilm) : undefined,
                 metros_aplicados: metrosAplicados ? parseFloat(metrosAplicados.replace(',', '.')) : undefined,
-                data_servico: new Date(dataServico).toISOString(),
+                data_servico: new Date(`${dataServico}T12:00:00`).toISOString(),
                 observacoes: observacoes.trim() || undefined,
                 empresa_nome: empresaSnapshot.empresa_nome || userInfo.empresa || userInfo.nome,
                 empresa_telefone: empresaSnapshot.empresa_telefone,
@@ -550,11 +560,6 @@ const ServicoQrView: React.FC<ServicoQrViewProps> = ({
         setSuccessMessage(`Histórico aberto no formato ${formatConfig.label}.`);
         scrollToSection(previewSectionRef);
     }, [formatConfig.label, scrollToSection]);
-
-    const handleBackToForm = useCallback(() => {
-        setStep('form');
-        scrollToSection(formSectionRef);
-    }, [scrollToSection]);
 
     const buscarClienteButton = (
         <button
@@ -701,8 +706,66 @@ const ServicoQrView: React.FC<ServicoQrViewProps> = ({
         </form>
     );
 
+    const historySection = (
+    <section className={`${SECTION_CARD_CLASSNAME} scroll-mt-24 overflow-hidden`}>
+        <h3 className="text-base font-semibold text-[var(--text-strong)]">
+            Etiquetas recentes <span className="font-normal tabular-nums text-[var(--text-muted)]">{recentServicos.length}</span>
+        </h3>
+
+        {isHistoryLoading ? (
+            <div className="mt-3 space-y-2">
+                {[1, 2, 3].map((item) => (
+                    <div key={item} className="h-14 animate-pulse rounded-[var(--radius-control)] bg-[var(--surface-muted)]" />
+                ))}
+            </div>
+        ) : recentServicos.length === 0 ? (
+            <p className="mt-2 text-sm text-[var(--text-muted)]">
+                Nenhuma etiqueta gerada ainda. A primeira aparece aqui
+            </p>
+        ) : (
+            <>
+                <div className="-mx-1 mt-3 flex snap-x snap-mandatory gap-2 overflow-x-auto px-1 pb-1 scrollbar-hide sm:hidden">
+                    {recentServicos.map((servico) => (
+                        <button
+                            key={servico.codigo_qr}
+                            type="button"
+                            onClick={() => handleLoadRecentServico(servico)}
+                            className="w-[80%] min-w-[80%] snap-center rounded-[var(--radius-control)] border border-[var(--border-subtle)] p-3 text-left transition-colors active:bg-[var(--surface-muted)]"
+                        >
+                            <span className="block truncate text-sm font-medium text-[var(--text-strong)]">{servico.cliente_nome}</span>
+                            <span className="mt-0.5 block truncate text-xs text-[var(--text-muted)]">{servico.filme_aplicado}</span>
+                            <span className="mt-1 block truncate text-xs tabular-nums text-[var(--text-muted)]">{buildHistoryChips(servico).join(' · ')}</span>
+                        </button>
+                    ))}
+                </div>
+
+                <ul className="-mx-5 -mb-5 mt-3 hidden divide-y divide-[var(--border-subtle)] border-t border-[var(--border-subtle)] sm:block">
+                    {recentServicos.map((servico) => (
+                        <li key={servico.codigo_qr}>
+                            <button
+                                type="button"
+                                onClick={() => handleLoadRecentServico(servico)}
+                                aria-current={savedServico?.codigo_qr === servico.codigo_qr ? 'true' : undefined}
+                                className={`group flex w-full items-center gap-3 px-5 py-3 text-left transition-colors hover:bg-[var(--surface-muted)] ${savedServico?.codigo_qr === servico.codigo_qr ? 'bg-[var(--surface-muted)] shadow-[inset_2px_0_0_var(--brand-primary)]' : ''}`}
+                            >
+                                <span className="min-w-0 flex-1">
+                                    <span className="block truncate text-sm font-medium text-[var(--text-strong)]">{servico.cliente_nome}</span>
+                                    <span className="mt-0.5 block truncate text-xs tabular-nums text-[var(--text-muted)]">
+                                        {[servico.filme_aplicado, ...buildHistoryChips(servico)].filter(Boolean).join(' · ')}
+                                    </span>
+                                </span>
+                                <ChevronRight className="h-4 w-4 shrink-0 text-[var(--text-muted)] transition-colors group-hover:text-[var(--text-strong)]" aria-hidden="true" />
+                            </button>
+                        </li>
+                    ))}
+                </ul>
+            </>
+        )}
+    </section>
+    );
+
     return (
-        <div className="max-w-full space-y-4 overflow-x-hidden bg-[var(--app-bg)] pb-28 sm:-m-6 sm:p-6">
+        <div className="max-w-full space-y-4 overflow-x-clip bg-[var(--app-bg)] pb-28 sm:-m-6 sm:p-6">
             {successMessage && (
                 <div className="flex items-center gap-2 rounded-[var(--radius-control)] border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-800 dark:text-emerald-200">
                     <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -731,16 +794,21 @@ const ServicoQrView: React.FC<ServicoQrViewProps> = ({
 
             <div className="grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.82fr)] xl:items-start">
                 {!isMobile && (
-                    <section ref={formSectionRef} className={`${SECTION_CARD_CLASSNAME} scroll-mt-24`}>
-                        <div className="mb-5 flex items-center justify-between gap-3">
-                            <h3 className="text-base font-semibold text-[var(--text-strong)]">Dados do serviço</h3>
-                            {buscarClienteButton}
-                        </div>
-                        {etiquetaForm}
-                    </section>
+                    <div className="min-w-0 space-y-4">
+                        <section ref={formSectionRef} className={`${SECTION_CARD_CLASSNAME} scroll-mt-24`}>
+                            <div className="mb-5 flex items-center justify-between gap-3">
+                                <h3 className="text-base font-semibold text-[var(--text-strong)]">
+                                    {savedServico ? 'Nova etiqueta' : 'Dados do serviço'}
+                                </h3>
+                                {buscarClienteButton}
+                            </div>
+                            {etiquetaForm}
+                        </section>
+                        {historySection}
+                    </div>
                 )}
 
-                <div className="space-y-4 xl:sticky xl:top-6">
+                <div className="space-y-4 xl:sticky xl:top-24">
                     <section ref={previewSectionRef} className={`${SECTION_CARD_CLASSNAME} scroll-mt-24`}>
                         <div className="fixed left-[-10000px] top-0 pointer-events-none opacity-0">
                             <ServicoQrThermalLabel ref={printRef} servico={savedServico} format={labelFormat} />
@@ -750,7 +818,7 @@ const ServicoQrView: React.FC<ServicoQrViewProps> = ({
                             <div className="min-w-0">
                                 <h3 className="text-base font-semibold text-[var(--text-strong)]">Etiqueta</h3>
                                 <p className="mt-0.5 truncate text-xs text-[var(--text-muted)]">
-                                    {savedServico ? `${savedServico.cliente_nome} · ${savedServico.filme_aplicado}` : 'Preencha os dados e gere a etiqueta'}
+                                    {savedServico ? `${savedServico.cliente_nome} · ${savedServico.filme_aplicado}` : 'Atualiza enquanto você preenche os dados'}
                                 </p>
                             </div>
                             <span className="flex shrink-0 items-center gap-1.5 text-xs text-[var(--text-muted)]">
@@ -785,91 +853,51 @@ const ServicoQrView: React.FC<ServicoQrViewProps> = ({
                         {/* A etiqueta em papel, do jeito que sai na impressora térmica. */}
                         <div className="mt-4 flex min-h-[240px] items-center justify-center rounded-[var(--radius-control)] bg-[var(--surface-muted)] p-6 sm:min-h-[300px]">
                             <div className="origin-center scale-[0.9] shadow-[0_8px_24px_rgba(15,23,42,0.18)] sm:scale-[1.08] lg:scale-[1.22]">
-                                <ServicoQrThermalLabel servico={savedServico} format={labelFormat} />
+                                <ServicoQrThermalLabel servico={savedServico ?? draftServico} draft={!savedServico} format={labelFormat} />
                             </div>
                         </div>
 
                         {savedServico && (
-                            <div className="mt-4">
-                                <p className="text-xs text-[var(--text-muted)]">Link do serviço</p>
-                                <code className="mt-1 block truncate rounded-[var(--radius-control)] bg-[var(--surface-muted)] px-3 py-2 font-mono text-xs text-[var(--text-body)]">
-                                    {qrUrl}
-                                </code>
-                            </div>
-                        )}
-
-                        {savedServico && !isMobile && (
-                            <div className="mt-4 grid grid-cols-2 gap-2 border-t border-[var(--border-subtle)] pt-4">
-                                <ActionButton size="md" className="w-full" onClick={handlePrint} icon={<Printer className="h-4 w-4" />}>
-                                    Imprimir
-                                </ActionButton>
-                                <ActionButton variant="secondary" size="md" className="w-full" onClick={handleSaveImage} loading={isExportingImage} loadingText="Gerando PNG..." icon={<FileImage className="h-4 w-4" />}>
-                                    Salvar PNG
-                                </ActionButton>
-                                <ActionButton variant="secondary" size="md" className="w-full" onClick={handleCopyUrl} disabled={!qrUrl} icon={<Copy className="h-4 w-4" />}>
-                                    Copiar link
-                                </ActionButton>
-                                <ActionButton variant="ghost" size="md" className="w-full" onClick={handleBackToForm} icon={<RotateCcw className="h-4 w-4" />}>
-                                    Voltar
-                                </ActionButton>
-                            </div>
-                        )}
-                    </section>
-
-                    <section className={`${SECTION_CARD_CLASSNAME} scroll-mt-24 overflow-hidden`}>
-                        <h3 className="text-base font-semibold text-[var(--text-strong)]">
-                            Etiquetas recentes <span className="font-normal tabular-nums text-[var(--text-muted)]">{recentServicos.length}</span>
-                        </h3>
-
-                        {isHistoryLoading ? (
-                            <div className="mt-3 space-y-2">
-                                {[1, 2, 3].map((item) => (
-                                    <div key={item} className="h-14 animate-pulse rounded-[var(--radius-control)] bg-[var(--surface-muted)]" />
-                                ))}
-                            </div>
-                        ) : recentServicos.length === 0 ? (
-                            <p className="mt-2 text-sm text-[var(--text-muted)]">
-                                Nenhuma etiqueta gerada ainda. A primeira aparece aqui
-                            </p>
-                        ) : (
-                            <>
-                                <div className="-mx-1 mt-3 flex snap-x snap-mandatory gap-2 overflow-x-auto px-1 pb-1 scrollbar-hide sm:hidden">
-                                    {recentServicos.map((servico) => (
+                            <div className="mt-4 space-y-3">
+                                {!isMobile && (
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <ActionButton size="md" className="w-full" onClick={handlePrint} icon={<Printer className="h-4 w-4" />}>
+                                            Imprimir
+                                        </ActionButton>
+                                        <ActionButton variant="secondary" size="md" className="w-full" onClick={handleSaveImage} loading={isExportingImage} loadingText="Gerando PNG..." icon={<FileImage className="h-4 w-4" />}>
+                                            Salvar PNG
+                                        </ActionButton>
+                                    </div>
+                                )}
+                                <div>
+                                    <p className="text-xs text-[var(--text-muted)]">Link que o QR abre</p>
+                                    <div className="mt-1 flex items-center gap-1 rounded-[var(--radius-control)] bg-[var(--surface-muted)] py-1 pl-3 pr-1">
+                                        <code className="min-w-0 flex-1 truncate font-mono text-xs text-[var(--text-body)]">{qrUrl}</code>
                                         <button
-                                            key={servico.codigo_qr}
                                             type="button"
-                                            onClick={() => handleLoadRecentServico(servico)}
-                                            className="w-[80%] min-w-[80%] snap-center rounded-[var(--radius-control)] border border-[var(--border-subtle)] p-3 text-left transition-colors active:bg-[var(--surface-muted)]"
+                                            onClick={handleCopyUrl}
+                                            className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-[calc(var(--radius-control)-2px)] px-2.5 text-[var(--text-muted)] transition-colors hover:bg-[var(--surface)] hover:text-[var(--text-strong)]"
                                         >
-                                            <span className="block truncate text-sm font-medium text-[var(--text-strong)]">{servico.cliente_nome}</span>
-                                            <span className="mt-0.5 block truncate text-xs text-[var(--text-muted)]">{servico.filme_aplicado}</span>
-                                            <span className="mt-1 block truncate text-xs tabular-nums text-[var(--text-muted)]">{buildHistoryChips(servico).join(' · ')}</span>
+                                            <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                                            <span className="text-xs font-medium">Copiar</span>
                                         </button>
-                                    ))}
+                                    </div>
                                 </div>
-
-                                <ul className="-mx-5 -mb-5 mt-3 hidden divide-y divide-[var(--border-subtle)] border-t border-[var(--border-subtle)] sm:block">
-                                    {recentServicos.map((servico) => (
-                                        <li key={servico.codigo_qr}>
-                                            <button
-                                                type="button"
-                                                onClick={() => handleLoadRecentServico(servico)}
-                                                className="group flex w-full items-center gap-3 px-5 py-3 text-left transition-colors hover:bg-[var(--surface-muted)]"
-                                            >
-                                                <span className="min-w-0 flex-1">
-                                                    <span className="block truncate text-sm font-medium text-[var(--text-strong)]">{servico.cliente_nome}</span>
-                                                    <span className="mt-0.5 block truncate text-xs tabular-nums text-[var(--text-muted)]">
-                                                        {[servico.filme_aplicado, ...buildHistoryChips(servico)].filter(Boolean).join(' · ')}
-                                                    </span>
-                                                </span>
-                                                <ChevronRight className="h-4 w-4 shrink-0 text-[var(--text-muted)] transition-colors group-hover:text-[var(--text-strong)]" aria-hidden="true" />
-                                            </button>
-                                        </li>
-                                    ))}
-                                </ul>
-                            </>
+                                {!isMobile && (
+                                    <button
+                                        type="button"
+                                        onClick={resetForm}
+                                        className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-[var(--radius-control)] border border-dashed border-[var(--border-strong)] text-[var(--text-body)] transition-colors hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)]"
+                                    >
+                                        <Plus className="h-4 w-4" aria-hidden="true" />
+                                        <span className="text-sm font-medium">Nova etiqueta</span>
+                                    </button>
+                                )}
+                            </div>
                         )}
                     </section>
+
+                    {isMobile && historySection}
                 </div>
             </div>
 
