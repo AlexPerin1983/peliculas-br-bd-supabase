@@ -14,6 +14,7 @@ import { buildServiceStockPlans } from '../../src/lib/serviceStockConsumption';
 import { useSubscription } from '../../contexts/SubscriptionContext';
 import { EVENT_TYPES, getAgendamentoColor, getCalendarDots, getEventTypeMeta } from '../../src/lib/agendamentoEventTypes';
 import { splitContinuationNote } from '../../src/lib/multiDaySchedule';
+import { formatOptionName } from '../../src/lib/optionName';
 import { buildAppointmentConfirmation } from '../../src/lib/appointmentConfirmation';
 import { AgendaTypeFilter, matchesAgendaFilters } from '../../src/lib/agendaFilters';
 import { buildDayRoute, DayRoute } from '../../src/lib/dayRoute';
@@ -1100,7 +1101,7 @@ const AppointmentCard: React.FC<{
                                 <i className="fas fa-file-invoice mt-0.5 shrink-0 text-[10px]" aria-hidden="true"></i>
                                 <span className="line-clamp-2">
                                     {agendamento.proposalNames?.length
-                                        ? agendamento.proposalNames.join(' · ')
+                                        ? agendamento.proposalNames.map(name => formatOptionName(name)).join(' · ')
                                         : `${linkedProposalCount} proposta${linkedProposalCount > 1 ? 's' : ''}`}
                                 </span>
                             </p>

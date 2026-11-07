@@ -1,6 +1,7 @@
 import React, { lazy, Suspense, useState, useEffect, useMemo, FormEvent } from 'react';
 import { Agendamento, AgendamentoEventType, AgendamentoServiceStatus, Client, QuickClientDraft, UserInfo, SavedPDF, SchedulingInfo } from '../../types';
 import Modal from '../ui/Modal';
+import { formatOptionName } from '../../src/lib/optionName';
 import ActionButton from '../ui/ActionButton';
 import Input from '../ui/Input';
 import SearchableSelect from '../ui/SearchableSelect';
@@ -45,12 +46,12 @@ interface AgendamentoModalProps {
 
 const StatusBadge: React.FC<{ status?: SavedPDF['status'] }> = ({ status = 'pending' }) => {
     const statusInfo = {
-        approved: { text: 'Aprovado', classes: 'bg-green-100 text-green-800' },
-        revised: { text: 'Revisar', classes: 'bg-yellow-100 text-yellow-800' },
-        pending: { text: 'Pendente', classes: 'bg-slate-200 text-slate-800' }
+        approved: { text: 'Aprovado', classes: 'bg-green-100 text-green-800 dark:bg-green-950/40 dark:text-green-300' },
+        revised: { text: 'Revisar', classes: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950/40 dark:text-yellow-300' },
+        pending: { text: 'Pendente', classes: 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200' }
     };
     const { text, classes } = statusInfo[status];
-    return <span className={`px-2 py-1 text-xs font-semibold rounded-full ${classes}`}>{text}</span>;
+    return <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${classes}`}>{text}</span>;
 };
 
 const SERVICE_STATUS_OPTIONS: {
@@ -63,7 +64,7 @@ const SERVICE_STATUS_OPTIONS: {
     { value: 'completed', label: 'Concluído', iconClassName: 'fas fa-check-circle', activeClasses: 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200' },
     { value: 'partial', label: 'Parcial', iconClassName: 'fas fa-hourglass-half', activeClasses: 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-200' },
     { value: 'cancelled', label: 'Cancelado', iconClassName: 'fas fa-ban', activeClasses: 'border-rose-500 bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-200' },
-    { value: 'no_show', label: 'Não compareceu', iconClassName: 'fas fa-user-slash', activeClasses: 'border-amber-500 bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-200' },
+    { value: 'no_show', label: 'Faltou', iconClassName: 'fas fa-user-slash', activeClasses: 'border-amber-500 bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-200' },
 ];
 
 const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -566,7 +567,7 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
             <form id="agendamentoForm" onSubmit={handleSubmit} className="space-y-5">
                 <fieldset disabled={isSaving} className="space-y-5">
                     {quickClient?.reviewHints?.length ? (
-                        <div role="status" className="flex gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+                        <div role="status" className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
                             <i className="fas fa-triangle-exclamation mt-0.5" aria-hidden="true"></i>
                             <div>
                                 <p className="font-semibold">Confira antes de salvar</p>
@@ -593,7 +594,7 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                                                         aria-label={`Agendar para ${client.nome}`}
                                                         className="flex w-full items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left transition-colors hover:border-blue-300 dark:border-slate-700 dark:bg-slate-900/60 dark:hover:border-blue-700"
                                                     >
-                                                        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${colorForName(client.nome)}`}>
+                                                        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white ${colorForName(client.nome)}`}>
                                                             {clientInitials(client.nome)}
                                                         </span>
                                                         <span className="min-w-0 flex-1">
@@ -632,16 +633,16 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                                 <button
                                     type="button"
                                     onClick={handleChooseExistingClient}
-                                    className="text-xs font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                                    className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
                                 >
-                                    Já é cliente? Escolher da lista
+                                    <span className="text-xs font-semibold">Já é cliente? Escolher da lista</span>
                                 </button>
                             </div>
                         </section>
                     ) : (
                     <div>
                         {matchedClient ? (
-                            <div role="status" className="mb-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-200">
+                            <div role="status" className="mb-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-200">
                                 <span className="flex items-center gap-2">
                                     <i className="fas fa-user-check" aria-hidden="true"></i>
                                     Achei {matchedClient.nome} nos seus clientes.
@@ -649,9 +650,9 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                                 <button
                                     type="button"
                                     onClick={handleUseNewClient}
-                                    className="text-xs font-semibold text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-300"
+                                    className="text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-300"
                                 >
-                                    Não é? Cadastrar como cliente novo
+                                    <span className="text-xs font-semibold">Não é? Cadastrar como cliente novo</span>
                                 </button>
                             </div>
                         ) : null}
@@ -677,7 +678,7 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                                 const subtitle = clientSubtitle(client);
                                 return (
                                     <div className="flex items-center gap-3 px-3 py-2.5">
-                                        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${colorForName(client.nome)}`}>
+                                        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white ${colorForName(client.nome)}`}>
                                             {clientInitials(client.nome)}
                                         </span>
                                         <div className="min-w-0 flex-1">
@@ -791,7 +792,7 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                                             const proposalId = proposal.id as number;
                                             const isSelected = selectedProposalIds.includes(proposalId);
                                             const isScheduledElsewhere = proposalIdsScheduledElsewhere.has(proposalId) && !isSelected;
-                                            const proposalName = proposal.proposalOptionName || proposal.nomeArquivo || ('Proposta #' + proposalId);
+                                            const proposalName = formatOptionName(proposal.proposalOptionName) || proposal.nomeArquivo || ('Proposta #' + proposalId);
 
                                             return (
                                                 <label
@@ -814,11 +815,11 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                                                                 : [...current, proposalId]
                                                         ))}
                                                         aria-label={'Selecionar ' + proposalName}
-                                                        className="h-5 w-5 shrink-0 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                                        className="h-5 w-5 shrink-0 rounded border-slate-300 accent-blue-600 focus:ring-blue-500 dark:[color-scheme:dark]"
                                                     />
                                                     <div className="min-w-0 flex-1">
                                                         <div className="flex items-center gap-2">
-                                                            <span className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">{proposalName}</span>
+                                                            <span className="truncate text-sm font-medium text-slate-800 dark:text-slate-100">{proposalName}</span>
                                                             <StatusBadge status={proposal.status} />
                                                         </div>
                                                         <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
@@ -865,13 +866,13 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                                             role="radio"
                                             aria-checked={isActive}
                                             onClick={() => handleSelectEventType(type.value)}
-                                            className={`flex min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-1 py-2 text-[12px] font-semibold transition-colors ${isActive
+                                            className={`flex min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-1 py-2 transition-colors ${isActive
                                                 ? 'bg-white shadow-sm dark:bg-slate-700'
                                                 : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'}`}
                                             style={isActive ? { color: type.color } : undefined}
                                         >
                                             <i className={`${type.iconClassName} text-[13px]`} aria-hidden="true"></i>
-                                            <span className="max-w-full truncate">{type.label}</span>
+                                            <span className="max-w-full truncate text-[12px] font-medium leading-4">{type.label}</span>
                                         </button>
                                     );
                                 })}
@@ -967,10 +968,10 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                                         const last = [date, ...current].filter(Boolean).sort().pop();
                                         return last ? [...current, nextDayKey(last)] : current;
                                     })}
-                                    className="inline-flex h-8 items-center gap-1.5 rounded-full border border-dashed border-slate-300 px-3 text-xs font-semibold text-slate-600 hover:border-blue-300 hover:text-blue-700 dark:border-slate-600 dark:text-slate-300"
+                                    className="inline-flex h-8 items-center gap-1.5 rounded-full border border-dashed border-slate-300 px-3 text-slate-600 transition-colors hover:border-blue-300 hover:text-blue-700 dark:border-slate-600 dark:text-slate-300"
                                 >
                                     <i className="fas fa-plus text-[10px]" aria-hidden="true"></i>
-                                    Mais um dia
+                                    <span className="text-xs font-semibold">Mais um dia</span>
                                 </button>
                             </div>
                         ) : null}
@@ -1011,7 +1012,7 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                     {isEditing && (
                         <div>
                             <label className="ui-label mb-1.5 block">Status do atendimento</label>
-                            <div className="grid grid-cols-2 gap-2">
+                            <div className="flex flex-wrap gap-2" role="group" aria-label="Status do atendimento">
                                 {SERVICE_STATUS_OPTIONS.map((option) => {
                                     const isActive = serviceStatus === option.value;
                                     return (
@@ -1030,10 +1031,10 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                                                 setServiceStatus(option.value);
                                             }}
                                             aria-pressed={isActive}
-                                            className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors ${isActive ? option.activeClasses : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-700/50 dark:text-slate-300 dark:hover:bg-slate-700'}`}
+                                            className={`inline-flex h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border px-3 transition-colors ${isActive ? option.activeClasses : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-700/50 dark:text-slate-300 dark:hover:bg-slate-700'}`}
                                         >
                                             <i className={`${option.iconClassName} text-xs`} aria-hidden="true"></i>
-                                            <span className="text-sm font-medium">{option.label}</span>
+                                            <span className="text-[13px] font-medium">{option.label}</span>
                                         </button>
                                     );
                                 })}
