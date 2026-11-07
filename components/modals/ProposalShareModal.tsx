@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Ban, CalendarClock, Check, Copy, ExternalLink, Link2, LoaderCircle, MessageCircle, RefreshCw, ShieldCheck, Star } from 'lucide-react';
 import type { Client, SavedPDF } from '../../types';
 import {
+    buildProposalPricesBlock,
     buildProposalShareMessage,
     buildProposalShortShareMessage,
     createProposalPortal,
@@ -14,6 +15,14 @@ import {
 } from '../../src/lib/proposalPortal';
 import { buildProposalWhatsAppAppUrl, buildProposalWhatsAppBusinessUrl } from '../../src/lib/proposalMessages';
 import { attachProposalLink } from '../../src/lib/proposalShareText';
+import {
+    fillShareTemplate,
+    loadShareTemplates,
+    saveShareTemplate,
+    toShareTemplate,
+    type ShareMessageStyle,
+    type ShareMessageValues,
+} from '../../src/lib/proposalShareTemplate';
 import Modal from '../ui/Modal';
 import ProposalWhatsAppChooser from './ProposalWhatsAppChooser';
 
@@ -114,6 +123,9 @@ const ProposalShareModal: React.FC<ProposalShareModalProps> = ({ isOpen, client,
     const readyMessages = useMemo(() => messageOptions.map(option => option.trim()).filter(Boolean), [messageOptions]);
     const [choice, setChoice] = useState(readMessageStyle);
     const [message, setMessage] = useState('');
+    // Textos salvos com "Salvar como padrão" (Curta e Com valores), neste aparelho.
+    const [savedTemplates, setSavedTemplates] = useState(loadShareTemplates);
+    const [templateNotice, setTemplateNotice] = useState('');
 
     // Links que ainda podem receber estas propostas (o mais recente primeiro).
     const updatablePortals = existing.filter(portal => portal.updatable && !(portal.sameProposals && !portal.expired));
@@ -202,6 +214,8 @@ const ProposalShareModal: React.FC<ProposalShareModalProps> = ({ isOpen, client,
         setConfirmingRevoke(false);
         setChoice(readMessageStyle());
         setMessage('');
+        setSavedTemplates(loadShareTemplates());
+        setTemplateNotice('');
 
         // Antes de criar, procura os links que este cliente já recebeu.
         let cancelled = false;
@@ -228,16 +242,50 @@ const ProposalShareModal: React.FC<ProposalShareModalProps> = ({ isOpen, client,
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen, pdfKey]);
 
-    const buildChoiceMessage = (nextChoice: number, portal: CreatedProposalPortal) => (
+    const styleOf = (option: number): ShareMessageStyle | null =>
+        option === SHORT_CHOICE ? 'short' : option === DEFAULT_CHOICE || !readyMessages[option] ? 'full' : null;
+    const shareValues = (portal: CreatedProposalPortal): ShareMessageValues => ({
+        firstName: client.nome.trim().split(/\s+/)[0] || '',
+        url: portal.url,
+        expiresAt: portal.expiresAt,
+        prices: buildProposalPricesBlock(pdfs),
+        amounts: pdfs.map(pdf => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(pdf.totalPreco)),
+        count: pdfs.length,
+    });
+    // Texto original do app (sem o modelo salvo).
+    const buildOriginalMessage = (nextChoice: number, portal: CreatedProposalPortal) => (
         nextChoice === SHORT_CHOICE
             ? buildProposalShortShareMessage(pdfs, portal.url)
             : nextChoice === DEFAULT_CHOICE || !readyMessages[nextChoice]
                 ? buildProposalShareMessage(client, pdfs, portal.url, portal.expiresAt)
                 : attachProposalLink(readyMessages[nextChoice], portal.url, portal.expiresAt)
     );
+    const buildChoiceMessage = (nextChoice: number, portal: CreatedProposalPortal) => {
+        const style = styleOf(nextChoice);
+        const saved = style ? savedTemplates[style] : undefined;
+        return saved ? fillShareTemplate(saved, shareValues(portal)) : buildOriginalMessage(nextChoice, portal);
+    };
     const chooseMessage = (nextChoice: number) => {
         setChoice(nextChoice);
         saveMessageStyle(nextChoice);
+        setTemplateNotice('');
+    };
+    const currentStyle = styleOf(choice);
+    const saveAsDefault = () => {
+        if (!created || !currentStyle) return;
+        const { template, staleValues } = toShareTemplate(message, shareValues(created));
+        if (staleValues) {
+            setTemplateNotice('Algum valor foi mudado à mão e iria igual para o próximo cliente. Deixe a lista de valores como veio (ou apague-a) para salvar.');
+            return;
+        }
+        setSavedTemplates(saveShareTemplate(currentStyle, template));
+        setTemplateNotice('Mensagem salva. Nas próximas vezes ela já vem assim, com o nome e o link de cada cliente.');
+    };
+    const restoreOriginal = () => {
+        if (!created || !currentStyle) return;
+        setSavedTemplates(saveShareTemplate(currentStyle, null));
+        setMessage(buildOriginalMessage(choice, created));
+        setTemplateNotice('Voltou ao texto original do app.');
     };
     const choiceLabel = (option: number) => option === SHORT_CHOICE ? 'Curta' : option === DEFAULT_CHOICE ? 'Com valores' : String(option + 1);
 
@@ -248,6 +296,8 @@ const ProposalShareModal: React.FC<ProposalShareModalProps> = ({ isOpen, client,
     }, [created, choice]);
 
     const linkMissing = !!created && !!message && !message.includes(created.url);
+    // Mexeu no texto que o app montou: oferece salvar como padrão.
+    const isEditedMessage = !!created && !!message && message.trim() !== buildChoiceMessage(choice, created).trim();
     const whatsappAppUrl = created ? buildProposalWhatsAppAppUrl(client.telefone, message) : null;
     const whatsappBusinessUrl = created ? buildProposalWhatsAppBusinessUrl(client.telefone, message) : null;
 
@@ -393,7 +443,7 @@ const ProposalShareModal: React.FC<ProposalShareModalProps> = ({ isOpen, client,
                                     ))}
                                 </div>
                             </div>
-                            <textarea value={message} onChange={event => setMessage(event.target.value)} rows={8} aria-label="Mensagem que será enviada"
+                            <textarea value={message} onChange={event => { setMessage(event.target.value); setTemplateNotice(''); }} rows={8} aria-label="Mensagem que será enviada"
                                 className="w-full resize-none rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-3 text-[13px] leading-5 text-[var(--text-body)] focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
                             {linkMissing ? (
                                 <p className="flex items-center justify-between gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
@@ -401,7 +451,23 @@ const ProposalShareModal: React.FC<ProposalShareModalProps> = ({ isOpen, client,
                                     <button type="button" onClick={() => setMessage(buildChoiceMessage(choice, created))} className="shrink-0 underline">Refazer</button>
                                 </p>
                             ) : (
-                                <p className="text-[11px] text-[var(--text-muted)]">Pode ajustar o texto à vontade; o link já está incluído.</p>
+                                <div className="flex items-start justify-between gap-3">
+                                    <p className="text-[11px] text-[var(--text-muted)]">
+                                        {templateNotice || (isEditedMessage
+                                            ? 'Gostou do texto? Salve para ele vir assim nas próximas vezes.'
+                                            : 'Pode ajustar o texto à vontade; o link já está incluído.')}
+                                    </p>
+                                    {currentStyle && isEditedMessage ? (
+                                        <button type="button" onClick={saveAsDefault}
+                                            className="shrink-0 rounded-full bg-blue-600 px-3 py-1.5 text-white hover:bg-blue-700">
+                                            <span className="text-xs font-bold">Salvar como padrão</span>
+                                        </button>
+                                    ) : currentStyle && savedTemplates[currentStyle] ? (
+                                        <button type="button" onClick={restoreOriginal} className="shrink-0 text-[var(--brand-primary)] underline">
+                                            <span className="text-xs font-semibold">Voltar ao texto original</span>
+                                        </button>
+                                    ) : null}
+                                </div>
                             )}
                         </div>
 

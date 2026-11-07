@@ -12,6 +12,7 @@ vi.mock('../../src/lib/proposalPortal', () => ({
     setProposalPortalHighlight: vi.fn(),
     buildProposalShareMessage: (_client: Client, _pdfs: SavedPDF[], url: string) => `Veja sua proposta: ${url}`,
     buildProposalShortShareMessage: (_pdfs: SavedPDF[], url: string) => `Segue: ${url}`,
+    buildProposalPricesBlock: (pdfs: SavedPDF[]) => pdfs.map(pdf => `${pdf.proposalOptionName}: ${pdf.totalPreco}`).join('\n'),
 }));
 
 const client: Client = {
@@ -106,10 +107,10 @@ describe('ProposalShareModal', () => {
         const textarea = screen.getByRole('textbox', { name: 'Mensagem que será enviada' }) as HTMLTextAreaElement;
         // Sem escolha anterior: a mensagem com valores, como antes.
         expect(screen.getByRole('button', { name: 'Mensagem com valores' })).toHaveAttribute('aria-pressed', 'true');
-        expect(textarea.value).toBe(`Veja sua proposta: ${portalUrl}`);
+        await waitFor(() => expect(textarea.value).toBe(`Veja sua proposta: ${portalUrl}`));
 
         fireEvent.click(screen.getByRole('button', { name: 'Mensagem curta' }));
-        expect(textarea.value).toBe(`Segue: ${portalUrl}`);
+        await waitFor(() => expect(textarea.value).toBe(`Segue: ${portalUrl}`));
         unmount();
 
         // Na próxima vez já abre na curta.
@@ -117,7 +118,38 @@ describe('ProposalShareModal', () => {
         fireEvent.click(await screen.findByRole('button', { name: /Criar link da proposta/i }));
         await screen.findByText('Link criado com sucesso');
         expect(screen.getByRole('button', { name: 'Mensagem curta' })).toHaveAttribute('aria-pressed', 'true');
-        expect((screen.getByRole('textbox', { name: 'Mensagem que será enviada' }) as HTMLTextAreaElement).value).toBe(`Segue: ${portalUrl}`);
+        await waitFor(() => expect((screen.getByRole('textbox', { name: 'Mensagem que será enviada' }) as HTMLTextAreaElement).value).toBe(`Segue: ${portalUrl}`));
+    });
+
+    it('salva o texto editado como padrão e na próxima vez já vem assim, com o nome e o link do cliente', async () => {
+        const { unmount } = render(<ProposalShareModal isOpen client={client} pdfs={[pdf]} onClose={vi.fn()} />);
+        fireEvent.click(await screen.findByRole('button', { name: /Criar link da proposta/i }));
+        await screen.findByText('Link criado com sucesso');
+        fireEvent.click(screen.getByRole('button', { name: 'Mensagem curta' }));
+        const textarea = screen.getByRole('textbox', { name: 'Mensagem que será enviada' }) as HTMLTextAreaElement;
+        await waitFor(() => expect(textarea.value).toBe(`Segue: ${portalUrl}`));
+
+        // Sem mexer no texto, não há o que salvar.
+        expect(screen.queryByRole('button', { name: 'Salvar como padrão' })).not.toBeInTheDocument();
+        fireEvent.change(textarea, { target: { value: `Camila, segue o orçamento:\n${portalUrl}` } });
+        fireEvent.click(screen.getByRole('button', { name: 'Salvar como padrão' }));
+        expect(screen.getByText(/Mensagem salva/)).toBeInTheDocument();
+        unmount();
+
+        // Outro cliente, outro link: o texto salvo vem com o nome e o link dele.
+        const otherUrl = 'https://app.filmstec.shop/p/joao/xyz';
+        vi.mocked(createProposalPortal).mockResolvedValue({
+            portalId: 'portal-2', token: 'xyz', shareCode: 'xyz', expiresAt: '2026-10-21T23:59:59Z', url: otherUrl,
+        });
+        render(<ProposalShareModal isOpen client={{ ...client, nome: 'João Lima' }} pdfs={[pdf]} onClose={vi.fn()} />);
+        fireEvent.click(await screen.findByRole('button', { name: /Criar link da proposta/i }));
+        await screen.findByText('Link criado com sucesso');
+        const next = screen.getByRole('textbox', { name: 'Mensagem que será enviada' }) as HTMLTextAreaElement;
+        await waitFor(() => expect(next.value).toBe(`João, segue o orçamento:\n${otherUrl}`));
+
+        // Voltar ao original apaga o texto salvo.
+        fireEvent.click(screen.getByRole('button', { name: 'Voltar ao texto original' }));
+        expect(next.value).toBe(`Segue: ${otherUrl}`);
     });
 
     it('não oferece envio sem telefone do cliente', async () => {
