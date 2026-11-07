@@ -17,10 +17,10 @@ const statCards = (stats: EstoqueStats) => [
         icon: <PackageIcon />,
     },
     {
-        label: 'Metros disponiveis',
-        value: `${formatStockMeters(stats.totalMetrosDisponiveis)}m`,
-        detail: 'estoque utilizavel',
-        tone: 'border border-[var(--border-subtle)] bg-[var(--brand-primary-soft)] text-[var(--brand-primary)]',
+        label: 'Metros disponíveis',
+        value: `${formatStockMeters(stats.totalMetrosDisponiveis)} m`,
+        detail: 'estoque utilizável',
+        tone: 'border border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-muted)]',
         accent: 'bg-[var(--brand-primary)]',
         icon: (
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -30,7 +30,7 @@ const statCards = (stats: EstoqueStats) => [
         ),
     },
     {
-        label: 'Retalhos disponiveis',
+        label: 'Retalhos disponíveis',
         value: stats.totalRetalhoDisponivel.toString(),
         detail: 'prontos para uso',
         tone: 'border border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-muted)]',
@@ -39,7 +39,7 @@ const statCards = (stats: EstoqueStats) => [
     },
     {
         label: 'Consumo 30 dias',
-        value: `${formatStockMeters(stats.consumoUltimos30Dias)}m`,
+        value: `${formatStockMeters(stats.consumoUltimos30Dias)} m`,
         detail: 'ritmo recente',
         tone: 'border border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-muted)]',
         accent: 'bg-[var(--brand-primary)]',
@@ -62,23 +62,22 @@ const EstoqueStatsBar: React.FC<EstoqueStatsBarProps> = ({ stats }) => {
             {items.map((item) => (
                 <article
                     key={item.label}
-                    className="relative overflow-hidden rounded-[var(--radius-card)] border border-[var(--border-subtle)] bg-[var(--surface)] p-3.5 shadow-[var(--shadow-hairline)] transition-all duration-200 hover:-translate-y-px hover:shadow-[var(--shadow-soft)]"
+                    className="rounded-[var(--radius-card)] border border-[var(--border-subtle)] bg-[var(--surface)] p-4 shadow-[var(--shadow-hairline)]"
                 >
-                    <span className={`absolute inset-x-0 top-0 h-1 ${item.accent}`} aria-hidden="true" />
                     <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                            <p className="text-[11px] font-semibold uppercase text-[var(--text-muted)]">
+                            <p className="text-xs font-medium text-[var(--text-muted)]">
                                 {item.label}
                             </p>
-                            <p className="mt-2 text-[1.45rem] font-semibold text-[var(--text-strong)]">
+                            <p className="mt-2 text-2xl font-semibold tabular-nums text-[var(--text-strong)]">
                                 {item.value}
                             </p>
-                            <p className="mt-1 text-[12px] text-[var(--text-muted)]">
+                            <p className="mt-1 text-xs text-[var(--text-muted)]">
                                 {item.detail}
                             </p>
                         </div>
 
-                        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] ${item.tone}`}>
+                        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] ${item.tone}`}>
                             {item.icon}
                         </span>
                     </div>

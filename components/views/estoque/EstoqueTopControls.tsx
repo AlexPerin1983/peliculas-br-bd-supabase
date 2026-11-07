@@ -63,7 +63,7 @@ const EstoqueTopControls: React.FC<EstoqueTopControlsProps> = ({
     const mobileSummary =
         activeTab === 'bobinas'
             ? `${bobinasCount} bobinas em acompanhamento`
-            : `${retalhosCount} retalhos disponiveis`;
+            : `${retalhosCount} retalhos disponíveis`;
 
     const statusOptions = useMemo(() => getEstoqueStatusOptions(activeTab), [activeTab]);
 
@@ -77,7 +77,7 @@ const EstoqueTopControls: React.FC<EstoqueTopControlsProps> = ({
                         : 'border-transparent bg-transparent text-[var(--text-muted)] hover:text-[var(--text-strong)]'
                 }`}
                 onClick={() => onViewModeChange('grid')}
-                title="Visualizacao em grade"
+                title="Visualização em grade"
             >
                 <svg xmlns="http://www.w3.org/2000/svg" width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <rect x="3" y="3" width="7" height="7"></rect>
@@ -94,7 +94,7 @@ const EstoqueTopControls: React.FC<EstoqueTopControlsProps> = ({
                         : 'border-transparent bg-transparent text-[var(--text-muted)] hover:text-[var(--text-strong)]'
                 }`}
                 onClick={() => onViewModeChange('list')}
-                title="Visualizacao em lista"
+                title="Visualização em lista"
             >
                 <svg xmlns="http://www.w3.org/2000/svg" width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="8" y1="6" x2="21" y2="6"></line>
@@ -110,7 +110,6 @@ const EstoqueTopControls: React.FC<EstoqueTopControlsProps> = ({
 
     return (
         <section className="relative overflow-hidden rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface-raised)] p-3.5 shadow-[var(--shadow-soft)] sm:p-5">
-            <div className="absolute inset-x-0 top-0 h-1 bg-[var(--brand-primary)]" aria-hidden="true" />
             {mobileSearchOpen ? (
                 <div className="sm:hidden">
                     <div className="flex items-center gap-2">
@@ -137,7 +136,7 @@ const EstoqueTopControls: React.FC<EstoqueTopControlsProps> = ({
                                 type="text"
                                 value={searchTerm}
                                 onChange={(event) => onSearchChange(event.target.value)}
-                                placeholder={`Buscar ${activeTab === 'bobinas' ? 'bobina' : 'retalho'}...`}
+                                placeholder={`Buscar ${activeTab === 'bobinas' ? 'bobina' : 'retalho'}`}
                                 className="h-10 w-full rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] pl-10 pr-10 text-[13px] font-medium text-[var(--text-strong)] outline-none transition-all focus:border-[var(--brand-primary)] focus:bg-[var(--surface)] focus:ring-4 focus:ring-blue-500/10"
                             />
                             {searchTerm ? (
@@ -154,7 +153,7 @@ const EstoqueTopControls: React.FC<EstoqueTopControlsProps> = ({
                     </div>
 
                     <p className="pt-2 pl-11 text-[11px] text-[var(--text-muted)]">
-                        {searchTerm.trim() ? `${visibleCount} resultados em foco` : 'Busque por ID, filme, lote ou localizacao'}
+                        {searchTerm.trim() ? `${visibleCount} resultados em foco` : 'Busque por película, ID, lote ou local'}
                     </p>
                 </div>
             ) : (
@@ -162,7 +161,7 @@ const EstoqueTopControls: React.FC<EstoqueTopControlsProps> = ({
                     <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                             <div className="mb-2 hidden items-center gap-2 sm:flex">
-                                <span className="ui-kicker">Controle de materiais</span>
+                                <span className="text-xs font-medium text-[var(--text-muted)]">Controle de materiais</span>
                                 <span className="h-1 w-1 rounded-full bg-[var(--border-strong)]" aria-hidden="true" />
                                 <span className="text-[11px] font-semibold text-[var(--text-muted)]">
                                     {resultSummary}
@@ -227,7 +226,7 @@ const EstoqueTopControls: React.FC<EstoqueTopControlsProps> = ({
                             type="button"
                             className={`${tabBaseClassName} ${
                                 activeTab === 'bobinas'
-                                    ? 'border-[var(--brand-primary)] bg-[var(--brand-primary)] text-white shadow-[0_14px_28px_rgba(21,94,239,0.22)]'
+                                    ? 'border-[var(--brand-primary)] bg-[var(--brand-primary)] text-white'
                                     : 'border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-body)] hover:bg-[var(--surface)] hover:text-[var(--text-strong)]'
                             }`}
                             onClick={() => onChangeTab('bobinas')}
@@ -251,7 +250,7 @@ const EstoqueTopControls: React.FC<EstoqueTopControlsProps> = ({
                             type="button"
                             className={`${tabBaseClassName} ${
                                 activeTab === 'retalhos'
-                                    ? 'border-[var(--brand-primary)] bg-[var(--brand-primary)] text-white shadow-[0_14px_28px_rgba(21,94,239,0.22)]'
+                                    ? 'border-[var(--brand-primary)] bg-[var(--brand-primary)] text-white'
                                     : 'border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-body)] hover:bg-[var(--surface)] hover:text-[var(--text-strong)]'
                             }`}
                             onClick={() => onChangeTab('retalhos')}
@@ -279,7 +278,7 @@ const EstoqueTopControls: React.FC<EstoqueTopControlsProps> = ({
                             </span>
                             <input
                                 type="text"
-                                placeholder={`Buscar ${activeTab === 'bobinas' ? 'bobina' : 'retalho'} por ID, filme ou localizacao...`}
+                                placeholder={`Buscar ${activeTab === 'bobinas' ? 'bobina' : 'retalho'} por película, ID ou local`}
                                 value={searchTerm}
                                 onChange={(event) => onSearchChange(event.target.value)}
                                 className="h-11 w-full rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] pl-10 pr-4 text-[14px] text-[var(--text-strong)] outline-none transition-all focus:border-[var(--brand-primary)] focus:bg-[var(--surface)] focus:ring-4 focus:ring-blue-500/10"
