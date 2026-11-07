@@ -33,6 +33,11 @@ type Filter = 'all' | 'negotiating' | 'customers' | 'reactivate' | 'pinned';
 type Sort = 'activity' | 'name' | 'value';
 
 const PAGE_SIZE = 20;
+
+// Mesma grade para a linha e para o cabeçalho das colunas (computador).
+// Celular: avatar | nome ... quando / situação + valor. Computador: uma coluna para cada coisa.
+const ROW_GRID = "grid items-center gap-x-3 gap-y-1 grid-cols-[auto_auto_minmax(0,1fr)_auto] [grid-template-areas:'avatar_name_name_when'_'avatar_stage_value_value'] sm:gap-y-0.5 sm:grid-cols-[44px_minmax(0,2.2fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)] sm:[grid-template-areas:'avatar_name_stage_value_when'_'avatar_phone_stage_value_when']";
+const HEADER_GRID = 'grid items-center gap-x-3 grid-cols-[44px_minmax(0,2.2fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)]';
 const digitsOf = (value?: string) => (value || '').replace(/\D/g, '');
 
 const SORT_LABELS: Record<Sort, string> = {
@@ -166,65 +171,76 @@ const ClientListView: React.FC<ClientListViewProps> = ({
         { id: 'pinned', label: 'Fixados' },
     ];
 
-    const infoFor = ({ client, summary }: Row) => {
+    const valueFor = (summary: ClientSummary) => {
         if (summary.openValue > 0) return `${formatMoneyShort(summary.openValue)} em aberto`;
         if (summary.closedValue > 0) return `${formatMoneyShort(summary.closedValue)} fechado`;
-        return client.telefone || 'Sem telefone';
+        return null;
     };
 
     return (
-        <div className="mx-auto w-full max-w-3xl space-y-4 pb-28 animate-fade-in sm:pb-0">
-            <header className="flex items-end justify-between gap-3 px-1 pt-1">
+        <div className="mx-auto w-full max-w-3xl space-y-4 pb-28 animate-fade-in sm:max-w-none sm:pb-0">
+            <header className="flex items-end justify-between gap-3 px-1 pt-1 sm:px-0">
                 <div className="min-w-0">
-                    <h1 className="text-[26px] font-semibold leading-tight tracking-[-0.02em] text-[var(--text-strong)]">Clientes</h1>
-                    <p className="mt-1 text-sm text-[var(--text-muted)]">
+                    <h1 className="text-[26px] font-semibold leading-tight tracking-[-0.02em] text-[var(--text-strong)] sm:text-2xl">Clientes</h1>
+                    <p className="mt-1 text-sm tabular-nums text-[var(--text-muted)]">
                         {isLoading ? 'Carregando…' : `${clients.length}${hasMoreServerClients ? '+' : ''} ${clients.length === 1 ? 'cliente' : 'clientes'}`}
                     </p>
                 </div>
-                <div className="hidden shrink-0 sm:block">
-                    <ActionButton onClick={onAddClient} variant="primary" size="md" icon={<UserPlus className="h-4 w-4" aria-hidden="true" />}>
-                        Novo cliente
-                    </ActionButton>
-                </div>
+                <button
+                    type="button"
+                    onClick={onAddClient}
+                    className="hidden h-10 shrink-0 items-center gap-2 rounded-[var(--radius-control)] bg-[var(--surface-inverse)] px-3.5 text-[var(--surface)] transition-opacity hover:opacity-90 sm:inline-flex"
+                >
+                    <UserPlus className="h-4 w-4" aria-hidden="true" />
+                    <span className="text-sm font-semibold">Novo cliente</span>
+                </button>
             </header>
 
-            <div className="flex gap-2">
-                <label className="relative block flex-1">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-soft)]" aria-hidden="true" />
-                    <input
-                        ref={searchRef}
-                        type="text"
-                        value={searchTerm}
-                        onChange={event => setSearchTerm(event.target.value)}
-                        placeholder="Buscar por nome ou telefone"
-                        aria-label="Buscar cliente"
-                        disabled={isLoading}
-                        style={{ fontSize: 16 }}
-                        className="h-11 w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] pl-10 pr-10 text-[var(--text-strong)] shadow-[var(--shadow-hairline)] outline-none transition placeholder:text-[var(--text-soft)] focus:border-[var(--brand-primary)] focus:ring-4 focus:ring-blue-500/10"
-                    />
-                    {searchTerm ? (
-                        <button type="button" onClick={() => setSearchTerm('')} aria-label="Limpar busca"
-                            className="absolute inset-y-0 right-0 flex items-center pr-3 text-[var(--text-soft)] transition-colors hover:text-[var(--text-strong)]">
-                            <X className="h-4 w-4" aria-hidden="true" />
-                        </button>
-                    ) : null}
-                </label>
-                <label className="relative hidden shrink-0 sm:block">
-                    <span className="sr-only">Ordenar</span>
-                    <select value={sort} onChange={event => setSort(event.target.value as Sort)} aria-label="Ordenar clientes" style={{ fontSize: 14 }}
-                        className="h-11 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] px-3 text-[var(--text-body)] outline-none">
-                        {(Object.keys(SORT_LABELS) as Sort[]).map(option => <option key={option} value={option}>{SORT_LABELS[option]}</option>)}
-                    </select>
-                </label>
-            </div>
+            {/* Celular: busca e filtros empilhados. Computador: filtros à esquerda, busca e ordem à direita. */}
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex gap-2 lg:order-2 lg:w-[460px] lg:shrink-0">
+                    <label className="relative block flex-1">
+                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-soft)]" aria-hidden="true" />
+                        <input
+                            ref={searchRef}
+                            type="text"
+                            value={searchTerm}
+                            onChange={event => setSearchTerm(event.target.value)}
+                            placeholder="Buscar por nome ou telefone"
+                            aria-label="Buscar cliente"
+                            disabled={isLoading}
+                            style={{ fontSize: 16 }}
+                            className="h-11 w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] pl-10 pr-10 text-[var(--text-strong)] outline-none transition-colors placeholder:text-[var(--text-soft)] focus:border-[var(--brand-primary)] sm:h-10 sm:rounded-[var(--radius-control)]"
+                        />
+                        {searchTerm ? (
+                            <button type="button" onClick={() => setSearchTerm('')} aria-label="Limpar busca"
+                                className="absolute inset-y-0 right-0 flex items-center pr-3 text-[var(--text-soft)] transition-colors hover:text-[var(--text-strong)]">
+                                <X className="h-4 w-4" aria-hidden="true" />
+                            </button>
+                        ) : null}
+                    </label>
+                    <label className="relative hidden shrink-0 sm:block">
+                        <span className="sr-only">Ordenar</span>
+                        <select value={sort} onChange={event => setSort(event.target.value as Sort)} aria-label="Ordenar clientes" style={{ fontSize: 14 }}
+                            className="h-10 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] px-3 text-[var(--text-body)] outline-none">
+                            {(Object.keys(SORT_LABELS) as Sort[]).map(option => <option key={option} value={option}>{SORT_LABELS[option]}</option>)}
+                        </select>
+                    </label>
+                </div>
 
-            <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5 text-xs font-semibold [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="group" aria-label="Filtrar clientes">
-                {chips.map(chip => (
-                    <button key={chip.id} type="button" aria-pressed={filter === chip.id} onClick={() => setFilter(chip.id)}
-                        className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 transition-colors ${filter === chip.id ? 'border-blue-600 bg-blue-600 text-white' : 'border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-body)]'}`}>
-                        {chip.label} <span className={`tabular-nums ${filter === chip.id ? 'text-white/80' : 'opacity-70'}`}>{counts[chip.id]}</span>
-                    </button>
-                ))}
+                <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none] lg:order-1 lg:mx-0 lg:px-0 lg:pb-0 [&::-webkit-scrollbar]:hidden" role="group" aria-label="Filtrar clientes">
+                    {chips.map(chip => {
+                        const isActive = filter === chip.id;
+                        return (
+                            <button key={chip.id} type="button" aria-pressed={isActive} onClick={() => setFilter(chip.id)}
+                                className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 transition-colors ${isActive
+                                    ? 'border-[var(--text-strong)] bg-[var(--text-strong)] text-[var(--surface)]'
+                                    : 'border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-body)] hover:bg-[var(--surface-muted)]'}`}>
+                                <span className="text-xs font-medium">{chip.label}</span> <span className={`text-xs tabular-nums ${isActive ? 'opacity-70' : 'text-[var(--text-muted)]'}`}>{counts[chip.id]}</span>
+                            </button>
+                        );
+                    })}
+                </div>
             </div>
             <div className="px-1 text-xs sm:hidden">
                 <button type="button" onClick={cycleSort} aria-label={`Ordem: ${SORT_LABELS[sort]}. Toque para mudar`} className="inline-flex items-center gap-1.5 text-[var(--text-muted)]">
@@ -240,7 +256,7 @@ const ClientListView: React.FC<ClientListViewProps> = ({
                         description="Tente outro nome ou telefone, ou cadastre um novo cliente." actionLabel="Adicionar cliente" onAction={onAddClient} />
                 ) : filter !== 'all' ? (
                     <div className="rounded-2xl border border-dashed border-[var(--border-subtle)] px-4 py-8 text-center text-sm text-[var(--text-muted)]">
-                        <p>{filter === 'reactivate' ? 'Ninguém para reativar agora.' : filter === 'pinned' ? 'Nenhum cliente fixado.' : 'Nenhum cliente nesse filtro.'}</p>
+                        <p>{filter === 'reactivate' ? 'Ninguém para reativar agora' : filter === 'pinned' ? 'Nenhum cliente fixado' : 'Nenhum cliente nesse filtro'}</p>
                         <p className="mt-2 text-xs font-semibold"><button type="button" onClick={() => setFilter('all')} className="text-[var(--brand-primary)]">Ver todos</button></p>
                     </div>
                 ) : (
@@ -254,44 +270,65 @@ const ClientListView: React.FC<ClientListViewProps> = ({
                             Clientes com telefone, sem nada em andamento e sem contato há mais de 90 dias. Um "oi, como ficaram as películas?" costuma render indicação e novos ambientes.
                         </p>
                     ) : null}
-                    <ul className="space-y-2">
-                        {displayed.map(row => {
-                            const { client, summary } = row;
-                            const whatsappUrl = buildClientWhatsAppUrl(client);
-                            return (
-                                <li key={client.id} className={`flex items-center gap-1 rounded-2xl border bg-[var(--surface-raised)] pr-1.5 shadow-[var(--shadow-hairline)] ${client.pinned ? 'border-blue-200 dark:border-blue-900/60' : 'border-[var(--border-subtle)]'}`}>
-                                    <button type="button" onClick={() => client.id != null && onOpenClient(client.id)}
-                                        className="flex min-w-0 flex-1 items-center gap-3 py-3 pl-3 text-left">
-                                        <ClientAvatar client={client} />
-                                        <span className="min-w-0 flex-1">
-                                            <span className="flex items-baseline gap-2">
-                                                <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-[var(--text-strong)]">{client.nome}</span>
-                                                {summary.lastActivityAt ? <span className="shrink-0 text-[11px] text-[var(--text-muted)]">{relativeDays(summary.lastActivityAt)}</span> : null}
+
+                    {/* No computador a lista vira uma tabela: cada coisa na sua coluna. */}
+                    <div className="sm:overflow-hidden sm:rounded-[var(--radius-panel)] sm:border sm:border-[var(--border-subtle)] sm:bg-[var(--surface)]">
+                        <div className="hidden items-center gap-1 border-b border-[var(--border-subtle)] pr-1.5 sm:flex" aria-hidden="true">
+                            <div className={`${HEADER_GRID} flex-1 py-2.5 pl-4 text-xs text-[var(--text-muted)]`}>
+                                <span className="col-span-2">Cliente</span>
+                                <span>Situação</span>
+                                <span>Orçamentos</span>
+                                <span>Última atividade</span>
+                            </div>
+                            <span className="w-[76px] shrink-0" />
+                        </div>
+                        <ul className="space-y-2 sm:space-y-0 sm:divide-y sm:divide-[var(--border-subtle)]">
+                            {displayed.map(row => {
+                                const { client, summary } = row;
+                                const whatsappUrl = buildClientWhatsAppUrl(client);
+                                const value = valueFor(summary);
+                                return (
+                                    <li key={client.id} className={`group/row flex items-center gap-1 rounded-2xl border bg-[var(--surface-raised)] pr-1.5 shadow-[var(--shadow-hairline)] transition-colors sm:rounded-none sm:border-0 sm:bg-transparent sm:shadow-none sm:hover:bg-[var(--surface-muted)] ${client.pinned ? 'border-blue-200 dark:border-blue-900/60' : 'border-[var(--border-subtle)]'}`}>
+                                        <button type="button" onClick={() => client.id != null && onOpenClient(client.id)}
+                                            className={`${ROW_GRID} min-w-0 flex-1 py-3 pl-3 text-left sm:pl-4`}>
+                                            <span className="[grid-area:avatar]"><ClientAvatar client={client} /></span>
+                                            <span className="min-w-0 truncate text-[15px] font-semibold text-[var(--text-strong)] [grid-area:name] sm:text-sm sm:font-medium">{client.nome}</span>
+                                            <span className="hidden min-w-0 truncate text-xs tabular-nums text-[var(--text-muted)] [grid-area:phone] sm:block">{client.telefone || 'Sem telefone'}</span>
+                                            <span className="flex [grid-area:stage]"><ClientStageBadge stage={summary.stage} /></span>
+                                            {value ? (
+                                                <span className="min-w-0 truncate text-xs tabular-nums text-[var(--text-muted)] [grid-area:value] sm:text-sm sm:text-[var(--text-body)]">{value}</span>
+                                            ) : (
+                                                <>
+                                                    <span className="min-w-0 truncate text-xs text-[var(--text-muted)] [grid-area:value] sm:hidden">{client.telefone || 'Sem telefone'}</span>
+                                                    <span className="hidden text-sm text-[var(--text-soft)] [grid-area:value] sm:block">—</span>
+                                                </>
+                                            )}
+                                            <span className="shrink-0 text-right text-[11px] text-[var(--text-muted)] [grid-area:when] sm:text-left sm:text-xs">
+                                                {summary.lastActivityAt ? relativeDays(summary.lastActivityAt) : ''}
                                             </span>
-                                            <span className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-[var(--text-muted)]">
-                                                <ClientStageBadge stage={summary.stage} />
-                                                <span className="truncate">{infoFor(row)}</span>
-                                            </span>
-                                        </span>
-                                    </button>
-                                    {whatsappUrl ? (
-                                        <a href={whatsappUrl} target="_blank" rel="noreferrer" aria-label={`WhatsApp de ${client.nome}`}
-                                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-emerald-600 transition hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/30">
-                                            <MessageCircle className="h-[18px] w-[18px]" aria-hidden="true" />
-                                        </a>
-                                    ) : null}
-                                    <button type="button" onClick={() => client.id != null && onTogglePin(client.id)}
-                                        aria-label={client.pinned ? 'Desafixar cliente' : 'Fixar cliente no topo'} title={client.pinned ? 'Desafixar' : 'Fixar no topo'}
-                                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition ${client.pinned ? 'text-[var(--brand-primary)]' : 'text-[var(--text-soft)] hover:text-[var(--text-strong)]'}`}>
-                                        <Pin className="h-4 w-4" aria-hidden="true" fill={client.pinned ? 'currentColor' : 'none'} />
-                                    </button>
-                                </li>
-                            );
-                        })}
-                    </ul>
+                                        </button>
+                                        {whatsappUrl ? (
+                                            <a href={whatsappUrl} target="_blank" rel="noreferrer" aria-label={`WhatsApp de ${client.nome}`} title="Abrir WhatsApp"
+                                                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-emerald-600 transition-colors hover:bg-emerald-500/10 dark:text-emerald-400 sm:text-[var(--text-muted)] sm:dark:text-[var(--text-muted)] sm:hover:text-emerald-600 sm:dark:hover:text-emerald-400">
+                                                <MessageCircle className="h-[18px] w-[18px]" aria-hidden="true" />
+                                            </a>
+                                        ) : (
+                                            <span className="hidden h-9 w-9 shrink-0 sm:block" aria-hidden="true" />
+                                        )}
+                                        <button type="button" onClick={() => client.id != null && onTogglePin(client.id)}
+                                            aria-label={client.pinned ? 'Desafixar cliente' : 'Fixar cliente no topo'} title={client.pinned ? 'Desafixar' : 'Fixar no topo'}
+                                            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-colors hover:bg-[var(--surface)] ${client.pinned ? 'text-[var(--brand-primary)]' : 'text-[var(--text-soft)] hover:text-[var(--text-strong)] sm:opacity-0 sm:group-hover/row:opacity-100 sm:focus-visible:opacity-100'}`}>
+                                            <Pin className="h-4 w-4" aria-hidden="true" fill={client.pinned ? 'currentColor' : 'none'} />
+                                        </button>
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                    </div>
 
                     {(visibleCount < filtered.length || hasMoreServerClients) ? (
-                        <div className="flex justify-center pt-1">
+                        <div className="flex flex-col items-center gap-2 pt-1">
+                            <span className="text-xs tabular-nums text-[var(--text-muted)]">Mostrando {displayed.length} de {filtered.length}{hasMoreServerClients ? '+' : ''}</span>
                             <ActionButton onClick={handleLoadMore} variant="secondary" size="md" icon={<Plus className="h-4 w-4" aria-hidden="true" />} disabled={isLoadingMoreClients}>
                                 {isLoadingMoreClients ? 'Carregando...' : 'Carregar mais'}
                             </ActionButton>
