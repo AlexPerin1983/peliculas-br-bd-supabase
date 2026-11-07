@@ -1,3 +1,4 @@
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Drawer } from 'vaul';
 import { Agendamento, AgendamentoServiceStatus, AgendamentoStockStatus, Client, SavedPDF, UserInfo } from '../../types';
@@ -1598,10 +1599,10 @@ const AgendaQuickButton: React.FC<{
     <button
         type="button"
         onClick={onClick}
-        className="inline-flex h-8 shrink-0 items-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] px-3 text-xs font-black text-[var(--text-strong)] shadow-[var(--shadow-hairline)] transition-colors hover:bg-[var(--surface-muted)]"
+        className="inline-flex h-8 shrink-0 items-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] px-3 text-[var(--text-body)] transition-colors hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)]"
     >
         <i className={`${iconClassName} text-[11px] text-[var(--text-muted)]`} aria-hidden="true"></i>
-        {label}
+        <span className="text-xs font-medium">{label}</span>
     </button>
 );
 
@@ -1620,7 +1621,9 @@ const VoiceScheduleButton: React.FC<{ onClick?: () => void }> = ({ onClick }) =>
     ) : null
 );
 
-const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
+const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
+const CALENDAR_ICON_BUTTON = 'inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius-control)] text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)]';
 
 const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, onEditAgendamento, onUpdateServiceStatus, onSaveReceiptDescription, onCompleteAgendamentoWithValue, onContinueAgendamento, onRescheduleAgendamento, onCreateNewAgendamento, onCreateAgendamentoByVoice, googleReviewsLink, userInfo }) => {
     const { canUseEstoque } = useSubscription();
@@ -2438,66 +2441,100 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
             </div>
 
             <div className="hidden lg:grid lg:grid-cols-[minmax(0,1fr)_400px] lg:gap-5 lg:items-start">
-                <section className="rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface-raised)] p-5 shadow-[var(--shadow-soft)]">
-                    <header className="flex items-center justify-between mb-4">
-                        <button onClick={() => changeMonth(-1)} className="h-10 w-10 flex items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] hover:bg-[var(--surface-muted)] text-[var(--text-muted)] hover:text-[var(--text-strong)]">
-                            <i className="fas fa-chevron-left"></i>
-                        </button>
-                        <h2 className="text-xl font-bold text-[var(--text-strong)]">
-                            {currentMonthLabel}
-                        </h2>
-                        <button onClick={() => changeMonth(1)} className="h-10 w-10 flex items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] hover:bg-[var(--surface-muted)] text-[var(--text-muted)] hover:text-[var(--text-strong)]">
-                            <i className="fas fa-chevron-right"></i>
-                        </button>
-                    </header>
-
-                    <div className="mb-4 flex items-center justify-between gap-3">
+                <section className="rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface)] p-5 shadow-[var(--shadow-hairline)]">
+                    {/* Uma linha: mês com as setas, atalhos e o resumo do mês em texto. */}
+                    <header className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex items-center gap-1">
+                            <h2 className="mr-2 text-xl font-semibold text-[var(--text-strong)] first-letter:uppercase">
+                                {currentMonthLabel}
+                            </h2>
+                            <button type="button" onClick={() => changeMonth(-1)} aria-label="Mês anterior" className={CALENDAR_ICON_BUTTON}>
+                                <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                            </button>
+                            <button type="button" onClick={() => changeMonth(1)} aria-label="Próximo mês" className={CALENDAR_ICON_BUTTON}>
+                                <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                            </button>
+                        </div>
                         <div className="flex items-center gap-2">
                             <AgendaQuickButton onClick={handleGoToday} iconClassName="far fa-calendar-check" label="Hoje" />
                             {nextAppointment ? (
                                 <AgendaQuickButton onClick={handleGoNextAppointment} iconClassName="fas fa-map-pin" label="Próximo" />
                             ) : null}
                         </div>
-                        <CalendarMonthStats {...monthStats} />
-                    </div>
+                    </header>
+
+                    <p className="-mt-2 mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs tabular-nums text-[var(--text-muted)]">
+                        <span>{monthStats.total} {monthStats.total === 1 ? 'atendimento' : 'atendimentos'} no mês</span>
+                        {monthStats.completed > 0 ? <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />{monthStats.completed} {monthStats.completed === 1 ? 'concluído' : 'concluídos'}</span> : null}
+                        {monthStats.scheduled > 0 ? <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-blue-500" aria-hidden="true" />{monthStats.scheduled} {monthStats.scheduled === 1 ? 'agendado' : 'agendados'}</span> : null}
+                        {monthStats.missed > 0 ? <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-rose-500" aria-hidden="true" />{monthStats.missed} cancelado{monthStats.missed === 1 ? '' : 's'} ou faltou</span> : null}
+                    </p>
 
                     <AgendaPushReminderControl onActiveChange={setAlertsActive} />
 
-                    <div className="grid grid-cols-7 gap-1 text-center text-sm font-semibold text-[var(--text-muted)] mb-2">
-                        {weekDays.map((day) => <div key={day}>{day}</div>)}
-                    </div>
-
-                    <div className="grid grid-cols-7 gap-1">
-                        {daysInMonth.map((day, index) => {
-                            const dayAgendamentos = day ? agendamentosByDate.get(day.toDateString()) || [] : [];
-                            return (
-                                <div
-                                    key={day ? day.toISOString() : `desktop-empty-${index}`}
-                                    onClick={() => day && selectDate(day)}
-                                    className={day ? getDayCellClasses(day) : 'relative pt-[100%] bg-transparent'}
-                                >
-                                    {day && (
-                                        <div className="absolute inset-0 p-1.5 flex flex-col items-center overflow-hidden">
-                                            {dayAgendamentos.length > 0 ? (
-                                                <span className="absolute right-1 top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--brand-primary)] px-1 text-[11px] font-semibold tabular-nums text-white">
-                                                    {dayAgendamentos.length}
+                    {/* Mês em grade de verdade: cada dia mostra os atendimentos com hora e nome, na cor do tipo. */}
+                    <div className="mt-4 overflow-hidden rounded-[var(--radius-control)] border border-[var(--border-subtle)]">
+                        <div className="grid grid-cols-7 border-b border-[var(--border-subtle)] bg-[var(--surface-muted)]">
+                            {weekDays.map((day) => (
+                                <div key={day} className="px-2 py-2 text-xs text-[var(--text-muted)]">{day}</div>
+                            ))}
+                        </div>
+                        <div className="grid grid-cols-7 [&>*:nth-child(7n)]:border-r-0">
+                            {daysInMonth.map((day, index) => {
+                                if (!day) {
+                                    return <div key={`desktop-empty-${index}`} className="min-h-[112px] border-b border-r border-[var(--border-subtle)] bg-[var(--surface-muted)]/50" />;
+                                }
+                                const dayAgendamentos = [...(agendamentosByDate.get(day.toDateString()) || [])]
+                                    .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+                                const visible = dayAgendamentos.slice(0, 3);
+                                const hidden = dayAgendamentos.length - visible.length;
+                                const selected = isSelected(day);
+                                const today = isToday(day);
+                                return (
+                                    <button
+                                        type="button"
+                                        key={day.toISOString()}
+                                        onClick={() => selectDate(day)}
+                                        aria-pressed={selected}
+                                        aria-label={`${day.getDate()}, ${dayAgendamentos.length} ${dayAgendamentos.length === 1 ? 'atendimento' : 'atendimentos'}`}
+                                        className={`relative flex min-h-[112px] flex-col gap-1 border-b border-r border-[var(--border-subtle)] p-1.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--brand-primary)] ${selected ? 'bg-[var(--brand-primary-soft)]' : 'hover:bg-[var(--surface-muted)]'}`}
+                                    >
+                                        {selected ? <span className="pointer-events-none absolute inset-0 ring-2 ring-inset ring-[var(--brand-primary)]" aria-hidden="true" /> : null}
+                                        <span className={`ml-0.5 inline-flex h-6 min-w-6 items-center justify-center self-start rounded-full px-1 text-xs tabular-nums ${today ? 'bg-[var(--brand-primary)] font-semibold text-white' : selected ? 'font-semibold text-[var(--text-strong)]' : 'text-[var(--text-body)]'}`}>
+                                            {day.getDate()}
+                                        </span>
+                                        {visible.map((agendamento) => {
+                                            const color = getAgendamentoColor(agendamento);
+                                            const off = agendamento.serviceStatus === 'cancelled' || agendamento.serviceStatus === 'no_show';
+                                            const done = agendamento.serviceStatus === 'completed';
+                                            return (
+                                                <span
+                                                    key={agendamento.id ?? agendamento.start}
+                                                    className={`flex min-w-0 items-center gap-1 rounded-[4px] border-l-2 bg-[var(--surface-muted)] px-1.5 py-0.5 text-[11px] leading-4 ${off ? 'opacity-50' : ''}`}
+                                                    style={{ borderLeftColor: color || 'var(--border-strong)' }}
+                                                    title={`${formatTime(agendamento.start)} · ${agendamento.clienteNome || 'Cliente sem nome'}`}
+                                                >
+                                                    <span className="shrink-0 tabular-nums text-[var(--text-muted)]">{formatTime(agendamento.start)}</span>
+                                                    <span className={`min-w-0 truncate text-[var(--text-strong)] ${off ? 'line-through' : ''}`}>
+                                                        {agendamento.clienteNome?.trim().split(/\s+/)[0] || 'Sem nome'}
+                                                    </span>
+                                                    {done ? <i className="fas fa-check ml-auto shrink-0 text-[9px] text-emerald-600 dark:text-emerald-400" aria-hidden="true"></i> : null}
                                                 </span>
-                                            ) : null}
-                                            <span className={getDayNumberClasses(day)}>
-                                                {day.getDate()}
-                                            </span>
-                                            <CalendarDayDots agendamentos={dayAgendamentos} />
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
+                                            );
+                                        })}
+                                        {hidden > 0 ? (
+                                            <span className="px-1.5 text-[11px] text-[var(--text-muted)]">+{hidden} {hidden === 1 ? 'outro' : 'outros'}</span>
+                                        ) : null}
+                                    </button>
+                                );
+                            })}
+                        </div>
                     </div>
 
                     <CalendarTypeLegend showUntyped={monthHasUntyped} showHint={false} />
                 </section>
 
-                <aside className="rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface-raised)] p-4 shadow-[var(--shadow-soft)] lg:sticky lg:top-4">
+                <aside className="rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface)] p-4 shadow-[var(--shadow-hairline)] lg:sticky lg:top-24">
                     <div className="flex justify-between items-center pb-3 mb-4 border-b border-[var(--border-subtle)]">
                         <div>
                             <DayHeadingLabel date={selectedDate} className="text-[var(--text-muted)]" />
