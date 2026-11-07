@@ -46,12 +46,12 @@ interface AgendamentoModalProps {
 
 const StatusBadge: React.FC<{ status?: SavedPDF['status'] }> = ({ status = 'pending' }) => {
     const statusInfo = {
-        approved: { text: 'Aprovado', classes: 'bg-green-100 text-green-800' },
-        revised: { text: 'Revisar', classes: 'bg-yellow-100 text-yellow-800' },
-        pending: { text: 'Pendente', classes: 'bg-slate-200 text-slate-800' }
+        approved: { text: 'Aprovado', classes: 'bg-green-100 text-green-800 dark:bg-green-950/40 dark:text-green-300' },
+        revised: { text: 'Revisar', classes: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950/40 dark:text-yellow-300' },
+        pending: { text: 'Pendente', classes: 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200' }
     };
     const { text, classes } = statusInfo[status];
-    return <span className={`px-2 py-1 text-xs font-semibold rounded-full ${classes}`}>{text}</span>;
+    return <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${classes}`}>{text}</span>;
 };
 
 const SERVICE_STATUS_OPTIONS: {
@@ -567,7 +567,7 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
             <form id="agendamentoForm" onSubmit={handleSubmit} className="space-y-5">
                 <fieldset disabled={isSaving} className="space-y-5">
                     {quickClient?.reviewHints?.length ? (
-                        <div role="status" className="flex gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+                        <div role="status" className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
                             <i className="fas fa-triangle-exclamation mt-0.5" aria-hidden="true"></i>
                             <div>
                                 <p className="font-semibold">Confira antes de salvar</p>
@@ -594,7 +594,7 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                                                         aria-label={`Agendar para ${client.nome}`}
                                                         className="flex w-full items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left transition-colors hover:border-blue-300 dark:border-slate-700 dark:bg-slate-900/60 dark:hover:border-blue-700"
                                                     >
-                                                        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${colorForName(client.nome)}`}>
+                                                        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white ${colorForName(client.nome)}`}>
                                                             {clientInitials(client.nome)}
                                                         </span>
                                                         <span className="min-w-0 flex-1">
@@ -633,16 +633,16 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                                 <button
                                     type="button"
                                     onClick={handleChooseExistingClient}
-                                    className="text-xs font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                                    className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
                                 >
-                                    Já é cliente? Escolher da lista
+                                    <span className="text-xs font-semibold">Já é cliente? Escolher da lista</span>
                                 </button>
                             </div>
                         </section>
                     ) : (
                     <div>
                         {matchedClient ? (
-                            <div role="status" className="mb-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-200">
+                            <div role="status" className="mb-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-200">
                                 <span className="flex items-center gap-2">
                                     <i className="fas fa-user-check" aria-hidden="true"></i>
                                     Achei {matchedClient.nome} nos seus clientes.
@@ -650,9 +650,9 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                                 <button
                                     type="button"
                                     onClick={handleUseNewClient}
-                                    className="text-xs font-semibold text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-300"
+                                    className="text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-300"
                                 >
-                                    Não é? Cadastrar como cliente novo
+                                    <span className="text-xs font-semibold">Não é? Cadastrar como cliente novo</span>
                                 </button>
                             </div>
                         ) : null}
@@ -678,7 +678,7 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                                 const subtitle = clientSubtitle(client);
                                 return (
                                     <div className="flex items-center gap-3 px-3 py-2.5">
-                                        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${colorForName(client.nome)}`}>
+                                        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white ${colorForName(client.nome)}`}>
                                             {clientInitials(client.nome)}
                                         </span>
                                         <div className="min-w-0 flex-1">
@@ -815,11 +815,11 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                                                                 : [...current, proposalId]
                                                         ))}
                                                         aria-label={'Selecionar ' + proposalName}
-                                                        className="h-5 w-5 shrink-0 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                                        className="h-5 w-5 shrink-0 rounded border-slate-300 accent-blue-600 focus:ring-blue-500 dark:[color-scheme:dark]"
                                                     />
                                                     <div className="min-w-0 flex-1">
                                                         <div className="flex items-center gap-2">
-                                                            <span className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">{proposalName}</span>
+                                                            <span className="truncate text-sm font-medium text-slate-800 dark:text-slate-100">{proposalName}</span>
                                                             <StatusBadge status={proposal.status} />
                                                         </div>
                                                         <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
@@ -968,10 +968,10 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                                         const last = [date, ...current].filter(Boolean).sort().pop();
                                         return last ? [...current, nextDayKey(last)] : current;
                                     })}
-                                    className="inline-flex h-8 items-center gap-1.5 rounded-full border border-dashed border-slate-300 px-3 text-xs font-semibold text-slate-600 hover:border-blue-300 hover:text-blue-700 dark:border-slate-600 dark:text-slate-300"
+                                    className="inline-flex h-8 items-center gap-1.5 rounded-full border border-dashed border-slate-300 px-3 text-slate-600 transition-colors hover:border-blue-300 hover:text-blue-700 dark:border-slate-600 dark:text-slate-300"
                                 >
                                     <i className="fas fa-plus text-[10px]" aria-hidden="true"></i>
-                                    Mais um dia
+                                    <span className="text-xs font-semibold">Mais um dia</span>
                                 </button>
                             </div>
                         ) : null}
