@@ -1096,19 +1096,19 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                                     onClick={toggleHideMeasurements}
                                     role="switch"
                                     aria-checked={hideMeasurements}
-                                    className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left transition-colors hover:bg-slate-50 dark:hover:bg-slate-800"
+                                    className="flex w-full items-center justify-between gap-3 px-3 py-3 text-left transition-colors hover:bg-slate-50 dark:hover:bg-slate-800"
                                 >
                                     <span className="flex min-w-0 items-center gap-2.5">
-                                        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${hideMeasurements ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300'}`}>
+                                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500 dark:bg-slate-700/70 dark:text-slate-300">
                                             {hideMeasurements ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                                         </span>
                                         <span className="min-w-0">
-                                            <span className="block text-xs font-semibold text-slate-800 dark:text-slate-100">Ocultar medidas</span>
-                                            <span className="block truncate text-[9px] text-slate-500">Protege dimensões e m² contra cópia</span>
+                                            <span className="block text-[13px] font-medium text-slate-800 dark:text-slate-100">Ocultar medidas</span>
+                                            <span className="mt-0.5 block text-[11px] leading-4 text-slate-500 dark:text-slate-400">Protege dimensões e m² contra cópia</span>
                                         </span>
                                     </span>
-                                    <span className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${hideMeasurements ? 'bg-blue-500' : 'bg-slate-300 dark:bg-slate-600'}`}>
-                                        <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${hideMeasurements ? 'left-[18px]' : 'left-0.5'}`} />
+                                    <span className={`relative h-5 w-9 shrink-0 rounded-full transition-colors duration-150 ${hideMeasurements ? 'bg-blue-500' : 'bg-slate-300 dark:bg-slate-600'}`}>
+                                        <span className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-150 ease-out ${hideMeasurements ? 'translate-x-4' : 'translate-x-0'}`} />
                                     </span>
                                 </button>
 
@@ -1117,53 +1117,53 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                                     onClick={toggleIncluirTermo}
                                     role="switch"
                                     aria-checked={incluirTermo}
-                                    className="flex w-full items-center justify-between gap-3 border-t border-slate-100 px-3 py-2.5 text-left transition-colors hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
+                                    className="flex w-full items-center justify-between gap-3 border-t border-slate-100 px-3 py-3 text-left transition-colors hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
                                 >
                                     <span className="flex min-w-0 items-center gap-2.5">
-                                        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${incluirTermo ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/50 dark:text-emerald-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300'}`}>
+                                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500 dark:bg-slate-700/70 dark:text-slate-300">
                                             {incluirTermo ? <ShieldCheck className="h-3.5 w-3.5" /> : <Shield className="h-3.5 w-3.5" />}
                                         </span>
                                         <span className="min-w-0">
-                                            <span className="block text-xs font-semibold text-slate-800 dark:text-slate-100">Termo de responsabilidade</span>
-                                            <span className="block truncate text-[9px] text-slate-500">Inclui a proteção sobre vidros fragilizados</span>
+                                            <span className="block text-[13px] font-medium text-slate-800 dark:text-slate-100">Termo de responsabilidade</span>
+                                            <span className="mt-0.5 block text-[11px] leading-4 text-slate-500 dark:text-slate-400">Inclui a proteção sobre vidros fragilizados</span>
                                         </span>
                                     </span>
-                                    <span className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${incluirTermo ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`}>
-                                        <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${incluirTermo ? 'left-[18px]' : 'left-0.5'}`} />
+                                    <span className={`relative h-5 w-9 shrink-0 rounded-full transition-colors duration-150 ${incluirTermo ? 'bg-blue-500' : 'bg-slate-300 dark:bg-slate-600'}`}>
+                                        <span className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-150 ease-out ${incluirTermo ? 'translate-x-4' : 'translate-x-0'}`} />
                                     </span>
                                 </button>
 
                                 {/* Validade desta proposta: define o vencimento ao gerar o PDF. */}
-                                <div className="border-t border-slate-100 px-3 py-2.5 dark:border-slate-700">
+                                <div className="border-t border-slate-100 px-3 py-3 dark:border-slate-700">
                                     <div className="flex min-w-0 items-center gap-2.5">
-                                        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${hasOwnValidity ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300'}`}>
+                                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500 dark:bg-slate-700/70 dark:text-slate-300">
                                             <CalendarClock className="h-3.5 w-3.5" />
                                         </span>
                                         <span className="min-w-0">
-                                            <span className="block text-xs font-semibold text-slate-800 dark:text-slate-100">Validade da proposta</span>
-                                            <span className="block truncate text-[9px] text-slate-500">
+                                            <span className="block text-[13px] font-medium text-slate-800 dark:text-slate-100">Validade da proposta</span>
+                                            <span className="mt-0.5 block text-[11px] leading-4 text-slate-500 dark:text-slate-400">
                                                 Vence em {validityExpiresOn} · {hasOwnValidity ? 'só nesta proposta' : `padrão da empresa (${companyValidityDays} dias)`}
                                             </span>
                                         </span>
                                     </div>
-                                    <div className="mt-2 flex flex-wrap items-center gap-1.5 pl-[38px]" role="group" aria-label="Validade da proposta em dias">
+                                    <div className="mt-2 flex flex-wrap items-center gap-1.5 pl-[42px]" role="group" aria-label="Validade da proposta em dias">
                                         {PROPOSAL_VALIDITY_OPTIONS.map(days => {
                                             const selected = !showOtherValidity && validityDays === days;
                                             return (
                                                 <button key={days} type="button" aria-pressed={selected}
                                                     onClick={() => { setIsOtherValidityOpen(false); setValidityDays(days); }}
-                                                    className={`h-7 min-w-[38px] rounded-lg px-2 text-xs font-semibold tabular-nums transition-colors ${selected
-                                                        ? 'bg-blue-600 text-white'
-                                                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600'}`}>
-                                                    {days}
+                                                    className={`flex h-8 min-w-10 items-center justify-center rounded-lg border px-2 transition-colors ${selected
+                                                        ? 'border-blue-500/70 bg-blue-50 text-blue-700 dark:border-blue-400/60 dark:bg-blue-500/15 dark:text-blue-200'
+                                                        : 'border-transparent bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-700/70 dark:text-slate-200 dark:hover:bg-slate-600'}`}>
+                                                    <span className="text-[13px] font-medium tabular-nums">{days}</span>
                                                 </button>
                                             );
                                         })}
                                         <button type="button" aria-pressed={showOtherValidity} onClick={() => setIsOtherValidityOpen(true)}
-                                            className={`h-7 rounded-lg px-2.5 text-xs font-semibold transition-colors ${showOtherValidity
-                                                ? 'bg-blue-600 text-white'
-                                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600'}`}>
-                                            Outro
+                                            className={`flex h-8 items-center justify-center rounded-lg border px-3 transition-colors ${showOtherValidity
+                                                ? 'border-blue-500/70 bg-blue-50 text-blue-700 dark:border-blue-400/60 dark:bg-blue-500/15 dark:text-blue-200'
+                                                : 'border-transparent bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-700/70 dark:text-slate-200 dark:hover:bg-slate-600'}`}>
+                                            <span className="text-[13px] font-medium">Outro</span>
                                         </button>
                                         {showOtherValidity && (
                                             <label className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
