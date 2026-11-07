@@ -29,8 +29,8 @@ const numberFormatter = new Intl.NumberFormat('pt-BR', {
 const areaValue = (item: Retalho) => item.areaM2 ?? (item.larguraCm * item.comprimentoCm) / 10000;
 const area = (item: Retalho) => numberFormatter.format(areaValue(item));
 const meters = (centimeters: number) => numberFormatter.format(centimeters / 100);
-const statusButton = 'inline-flex h-9 items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] px-3 text-[12px] font-semibold text-[var(--text-body)]';
-const iconButton = 'inline-flex h-9 w-9 items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-muted)]';
+const statusButton = 'inline-flex h-9 items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] px-3 text-[var(--text-body)] transition-colors hover:bg-[var(--surface-muted)]';
+const iconButton = 'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-muted)] transition-colors hover:text-[var(--text-strong)]';
 
 const getFitLabel = (item: Retalho, index: number, searchDimensions?: SearchDimensions) => {
     if (!searchDimensions) return null;
@@ -134,9 +134,83 @@ export default function EstoqueRetalhosPanel({
         </div>
     );
 
-    const grid = <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{filteredRetalhos.map(item => <article key={item.id} className="relative overflow-hidden rounded-[var(--radius-card)] border border-[var(--border-subtle)] bg-[var(--surface)] p-4 shadow-[var(--shadow-hairline)]"><span className="absolute inset-x-0 top-0 h-1 bg-[var(--brand-primary)]"/><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-[1.02rem] font-semibold text-[var(--text-strong)]">{item.filmId}</p><p className="mt-1 text-[12px] text-[var(--text-muted)]">Retalho #{item.id}</p></div><span className="rounded-full px-2.5 py-1 text-[10px] uppercase text-white" style={{ backgroundColor: getStatusColor(item.status) }}>{getStatusLabel(item.status)}</span></div><div className="mt-4 rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-3"><p className="text-[10px] uppercase text-[var(--text-muted)]">Área</p><p className="mt-1 text-[2rem] font-semibold text-[var(--text-strong)]">{area(item)}<span className="ml-1 text-[.95rem] text-[var(--text-muted)]">m²</span></p><p className="mt-2 text-[11px] text-[var(--text-muted)]">{item.larguraCm} × {item.comprimentoCm} cm</p></div><div className="mt-4 flex gap-2 border-t border-[var(--border-subtle)] pt-4"><button className={`${statusButton} flex-1`} onClick={() => onChangeStatus('retalho', item)}>Status</button><button className={iconButton} onClick={() => onShowQR('retalho', item)}><QrCodeIcon /></button><button className={`${iconButton} text-rose-500`} onClick={() => onDelete('retalho', item.id!)}><TrashIcon /></button></div></article>)}</div>;
+    // Computador: o mesmo modelo das bobinas, com a peça desenhada na proporção.
+    const statusLine = (item: Retalho) => (
+        <span className="inline-flex shrink-0 items-center gap-1.5 text-xs text-[var(--text-muted)]">
+            <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: getStatusColor(item.status) }} aria-hidden="true" />
+            {getStatusLabel(item.status)}
+        </span>
+    );
+    const location = (item: Retalho) => item.localizacao
+        ? <span className="truncate">{item.localizacao}</span>
+        : <span className="truncate text-amber-700 dark:text-amber-300">Sem localização</span>;
+    const actions = (item: Retalho) => (
+        <>
+            <button type="button" className={`${statusButton} flex-1`} onClick={() => onChangeStatus('retalho', item)}>
+                <span className="text-xs font-medium">Mudar status</span>
+            </button>
+            <button type="button" className={iconButton} onClick={() => onShowQR('retalho', item)} title="QR Code" aria-label={`QR Code do retalho #${item.id}`}><QrCodeIcon /></button>
+            <button type="button" className={`${iconButton} hover:border-rose-300 hover:text-rose-600 dark:hover:border-rose-800 dark:hover:text-rose-400`} onClick={() => onDelete('retalho', item.id!)} title="Excluir" aria-label={`Excluir retalho #${item.id}`}><TrashIcon /></button>
+        </>
+    );
 
-    const list = <div className="overflow-hidden rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface)]">{filteredRetalhos.map((item, index) => <article key={item.id} className={`flex items-center gap-4 px-5 py-4 ${index ? 'border-t border-[var(--border-subtle)]' : ''}`}><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><p className="truncate text-[15px] font-semibold text-[var(--text-strong)]">{item.filmId}</p><span className="rounded-full px-2 py-0.5 text-[10px] uppercase text-white" style={{ backgroundColor: getStatusColor(item.status) }}>{getStatusLabel(item.status)}</span></div><p className="mt-1 text-[12px] text-[var(--text-muted)]">#{item.id} · {item.larguraCm} × {item.comprimentoCm} cm · {area(item)} m²</p></div><button className={statusButton} onClick={() => onChangeStatus('retalho', item)}>Status</button><button className={iconButton} onClick={() => onShowQR('retalho', item)}><QrCodeIcon /></button><button className={`${iconButton} text-rose-500`} onClick={() => onDelete('retalho', item.id!)}><TrashIcon /></button></article>)}</div>;
+    const grid = (
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {filteredRetalhos.map((item, index) => {
+                const fit = getFitLabel(item, index, searchDimensions);
+                return (
+                    <article key={item.id} className="flex flex-col rounded-[var(--radius-card)] border border-[var(--border-subtle)] bg-[var(--surface)] p-5 shadow-[var(--shadow-hairline)] transition-colors hover:border-[var(--border-strong)]">
+                        <button type="button" onClick={() => onOpenDetails({ type: 'retalho', item })} className="flex items-start gap-4 text-left" aria-label={`Abrir retalho #${item.id} de ${item.filmId}`}>
+                            <PieceShape larguraCm={item.larguraCm} comprimentoCm={item.comprimentoCm} status={item.status} size={72} />
+                            <span className="min-w-0 flex-1">
+                                <span className="flex items-start justify-between gap-2">
+                                    <span className="truncate text-base font-semibold text-[var(--text-strong)]">{item.filmId}</span>
+                                    {fit ? <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${fit.className}`}>{fit.label}</span> : statusLine(item)}
+                                </span>
+                                <span className="mt-0.5 flex min-w-0 gap-1 text-xs text-[var(--text-muted)]">
+                                    <span className="shrink-0">Retalho #{item.id} ·</span>{location(item)}
+                                </span>
+                                <span className="mt-3 block tabular-nums">
+                                    <span className="text-2xl font-semibold text-[var(--text-strong)]">{meters(item.larguraCm)} × {meters(item.comprimentoCm)} m</span>
+                                </span>
+                                <span className="mt-0.5 block text-sm tabular-nums text-[var(--text-muted)]">{area(item)} m²</span>
+                            </span>
+                        </button>
+                        <div className="mt-4 flex gap-2 border-t border-[var(--border-subtle)] pt-4">{actions(item)}</div>
+                    </article>
+                );
+            })}
+        </div>
+    );
+
+    const list = (
+        <div className="overflow-hidden rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface)]">
+            {filteredRetalhos.map((item, index) => {
+                const fit = getFitLabel(item, index, searchDimensions);
+                return (
+                    <article key={item.id} className={`flex items-center gap-4 px-5 py-3 ${index ? 'border-t border-[var(--border-subtle)]' : ''}`}>
+                        <button type="button" onClick={() => onOpenDetails({ type: 'retalho', item })} className="flex min-w-0 flex-1 items-center gap-4 text-left" aria-label={`Abrir retalho #${item.id} de ${item.filmId}`}>
+                            <PieceShape larguraCm={item.larguraCm} comprimentoCm={item.comprimentoCm} status={item.status} />
+                            <span className="min-w-0 flex-1">
+                                <span className="flex items-center gap-2">
+                                    <span className="truncate text-sm font-semibold text-[var(--text-strong)]">{item.filmId}</span>
+                                    {fit ? <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${fit.className}`}>{fit.label}</span> : statusLine(item)}
+                                </span>
+                                <span className="mt-0.5 flex min-w-0 gap-1 text-xs text-[var(--text-muted)]">
+                                    <span className="shrink-0">#{item.id} ·</span>{location(item)}
+                                </span>
+                            </span>
+                            <span className="shrink-0 text-right tabular-nums">
+                                <span className="block text-sm font-semibold text-[var(--text-strong)]">{meters(item.larguraCm)} × {meters(item.comprimentoCm)} m</span>
+                                <span className="block text-xs text-[var(--text-muted)]">{area(item)} m²</span>
+                            </span>
+                        </button>
+                        <div className="flex w-[220px] shrink-0 gap-2">{actions(item)}</div>
+                    </article>
+                );
+            })}
+        </div>
+    );
 
     return <>{mobile}<div className="hidden sm:block">{viewMode === 'grid' ? grid : list}</div></>;
 }
