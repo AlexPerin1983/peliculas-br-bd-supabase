@@ -29,6 +29,7 @@ import { buildProposalPaymentOptions } from '../../src/lib/paymentConditions';
 import { buildProposalWhatsAppUrl } from '../../src/lib/proposalMessages';
 import type { ProposalPaymentChoice, ProposalPaymentSelection } from '../../types';
 import { PortalRatingLine, PortalShowcaseSection } from '../portal/PortalShowcase';
+import { formatOptionName } from '../../src/lib/optionName';
 
 // Foto de exemplo para a página de demonstração (sem depender de arquivos externos).
 const demoPhoto = (label: string, from: string, to: string) => `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${from}"/><stop offset="1" stop-color="${to}"/></linearGradient></defs><rect width="800" height="600" fill="url(#g)"/><text x="40" y="560" font-family="Arial" font-size="40" fill="white">${label}</text></svg>`)}`;
@@ -447,7 +448,7 @@ const ProposalPortalView: React.FC = () => {
         const message = buildProposalDecisionWhatsAppMessage({
             clientName: data.clientName,
             companyName: data.company.name,
-            proposalName: decisionProposal.proposalOptionName || decisionProposal.nomeArquivo || 'Proposta',
+            proposalName: formatOptionName(decisionProposal.proposalOptionName) || decisionProposal.nomeArquivo || 'Proposta',
             proposalValue: latestDecision.condition_value ?? proposalCondition?.finalValue ?? decisionProposal.totalPreco ?? 0,
             decision: latestDecision,
             portalUrl: window.location.href,
@@ -639,7 +640,7 @@ const ProposalPortalView: React.FC = () => {
                         {data.proposals.map((proposal, index) => {
                             const active = proposal.id === selected?.id;
                             const proposalCondition = getProposalCondition(proposal, now);
-                            const name = proposal.proposalOptionName || proposal.nomeArquivo || `Proposta ${index + 1}`;
+                            const name = formatOptionName(proposal.proposalOptionName) || proposal.nomeArquivo || `Proposta ${index + 1}`;
                             const price = proposalCondition?.finalValue ?? proposal.totalPreco ?? 0;
                             return (
                                 <div key={proposal.id} className={`relative ${index > 0 ? 'border-t border-black/[0.06]' : ''}`}>
@@ -825,7 +826,7 @@ const ProposalPortalView: React.FC = () => {
                 </div>
             ) : null}
 
-            {modal && selected ? <ResponseModal kind={modal} proposalName={selected.proposalOptionName || selected.nomeArquivo || 'Proposta'} proposalValue={selectedCondition?.finalValue ?? selected.totalPreco ?? 0} paymentOptions={paymentOptions} initialPaymentKey={selectedPaymentKey} busy={busy} initialBody={responseInitialBody} onClose={() => { setModal(null); setResponseInitialBody(''); }} onSubmit={submitResponse} /> : null}
+            {modal && selected ? <ResponseModal kind={modal} proposalName={formatOptionName(selected.proposalOptionName) || selected.nomeArquivo || 'Proposta'} proposalValue={selectedCondition?.finalValue ?? selected.totalPreco ?? 0} paymentOptions={paymentOptions} initialPaymentKey={selectedPaymentKey} busy={busy} initialBody={responseInitialBody} onClose={() => { setModal(null); setResponseInitialBody(''); }} onSubmit={submitResponse} /> : null}
             {decisionAssistant ? <DecisionAssistantModal busy={busy} onClose={() => setDecisionAssistant(false)} onMessage={body => void sendGuidedMessage(body)} onNegotiate={body => { if (isDownloadBlocked) void sendGuidedMessage(body); else void performResponse('negotiation', { body }); }} onReject={body => { if (isDownloadBlocked) void sendGuidedMessage(body); else void performResponse('rejected', { body }); }} /> : null}
         </div>
     );

@@ -132,7 +132,7 @@ describe('flow journeys', () => {
     );
 
     await waitFor(() => {
-      expect(proposalEditor.result.current.activeOption?.name).toBe('Opcao 1');
+      expect(proposalEditor.result.current.activeOption?.name).toBe('Opção 1');
     });
 
     act(() => {
@@ -189,7 +189,7 @@ describe('flow journeys', () => {
       9,
       expect.arrayContaining([
         expect.objectContaining({
-          name: 'Opcao 1',
+          name: 'Opção 1',
           measurements: expect.arrayContaining([
             expect.objectContaining({
               pelicula: 'Blackout',

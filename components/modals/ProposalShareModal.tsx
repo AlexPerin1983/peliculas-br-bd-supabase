@@ -25,6 +25,7 @@ import {
 } from '../../src/lib/proposalShareTemplate';
 import Modal from '../ui/Modal';
 import ProposalWhatsAppChooser from './ProposalWhatsAppChooser';
+import { formatOptionName } from '../../src/lib/optionName';
 
 interface ProposalShareModalProps {
     isOpen: boolean;
@@ -250,7 +251,7 @@ const ProposalShareModal: React.FC<ProposalShareModalProps> = ({ isOpen, client,
         expiresAt: portal.expiresAt,
         prices: buildProposalPricesBlock(pdfs),
         amounts: pdfs.map(pdf => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(pdf.totalPreco)),
-        names: pdfs.map(pdf => pdf.proposalOptionName || pdf.nomeArquivo || ''),
+        names: pdfs.map(pdf => formatOptionName(pdf.proposalOptionName) || pdf.nomeArquivo || ''),
         count: pdfs.length,
     });
     // Texto original do app (sem o modelo salvo).
@@ -355,7 +356,7 @@ const ProposalShareModal: React.FC<ProposalShareModalProps> = ({ isOpen, client,
                             <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--text-muted)]">Propostas incluídas</p>
                             <div className="max-h-40 space-y-2 overflow-y-auto">
                                 {pdfs.map((pdf, index) => {
-                                    const name = pdf.proposalOptionName || pdf.nomeArquivo || `Proposta ${index + 1}`;
+                                    const name = formatOptionName(pdf.proposalOptionName) || pdf.nomeArquivo || `Proposta ${index + 1}`;
                                     const highlighted = pdf.id != null && pdf.id === highlightId;
                                     return (
                                         <div key={pdf.id ?? index} className={`flex items-center justify-between gap-3 rounded-xl border bg-[var(--surface)] px-3 py-2.5 ${highlighted ? 'border-amber-300 dark:border-amber-700' : 'border-[var(--border-subtle)]'}`}>

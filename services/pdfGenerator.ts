@@ -15,6 +15,7 @@ import { resolveFilmPrices } from '../src/lib/filmPriceOverrides';
 import { findFilmByName, getVisibleCustomFields } from '../src/lib/filmCatalog';
 import { buildProposalPaymentOptions } from '../src/lib/paymentConditions';
 import { buildAutomotiveWarrantyEntries, describeVehicleGlass, describeVehicleNotes, describeVehiclePackage, describeVehiclePartPrices, getVehicleCategoryInfo, getVehicleTotal } from '../src/lib/automotive';
+import { formatOptionName } from '../src/lib/optionName';
 
 // Define GeneralDiscount locally since it's not exported from types.ts
 interface GeneralDiscount {
@@ -382,6 +383,8 @@ const renderPdfContent = async (
     includeCover: boolean,
     isCombined: boolean = false
 ) => {
+    // Opções antigas se chamam "Opcao 1": no PDF sai "Opção 1".
+    optionsData = optionsData.map(option => ({ ...option, proposalOptionName: formatOptionName(option.proposalOptionName) }));
     try {
         const pageWidth = doc.internal.pageSize.width;
         const pageHeight = doc.internal.pageSize.height;

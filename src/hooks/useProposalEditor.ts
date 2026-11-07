@@ -99,7 +99,7 @@ const normalizeGeneralDiscount = (
 
 const createDefaultOption = (): ProposalOption => ({
     id: Date.now(),
-    name: 'Opcao 1',
+    name: 'Opção 1',
     measurements: [],
     generalDiscount: { ...EMPTY_GENERAL_DISCOUNT }
 });
@@ -360,7 +360,7 @@ export function useProposalEditor({
         const newFilmFor = (current: string) => filmName || filmReplacements?.[current];
         const newOption: ProposalOption = {
             id: Date.now(),
-            name: optionName || `Opcao ${proposalOptions.length + 1}`,
+            name: optionName || `Opção ${proposalOptions.length + 1}`,
             measurements: activeOption.measurements.map((measurement, index) => {
                 const newFilm = newFilmFor(measurement.pelicula);
                 return {
@@ -386,7 +386,7 @@ export function useProposalEditor({
         setProposalOptions(currentOptions => {
             const newOption: ProposalOption = {
                 id: Date.now(),
-                name: `Opcao ${currentOptions.length + 1}`,
+                name: `Opção ${currentOptions.length + 1}`,
                 measurements: [],
                 generalDiscount: { ...EMPTY_GENERAL_DISCOUNT }
             };

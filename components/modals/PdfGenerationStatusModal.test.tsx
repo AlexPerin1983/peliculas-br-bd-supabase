@@ -666,7 +666,7 @@ describe('PdfGenerationStatusModal', () => {
             />
         );
 
-        fireEvent.click(screen.getByRole('button', { name: 'Renomear Opcao 1' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Renomear Opção 1' }));
         fireEvent.click(screen.getByRole('button', { name: 'Pink Silver' }));
         expect(screen.getByRole('textbox', { name: /Novo nome/ })).toHaveValue('Pink Silver');
         expect(screen.getByRole('button', { name: 'Sala' })).toBeInTheDocument();
