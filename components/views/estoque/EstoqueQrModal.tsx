@@ -1,5 +1,5 @@
 import React from 'react';
-import { Download, FileText, X } from 'lucide-react';
+import { Download, ExternalLink, FileText, X } from 'lucide-react';
 import { Bobina, Retalho } from '../../../types';
 import { formatMetersFromCentimeters, formatStockMeters } from '../../../src/lib/estoqueDimensions';
 
@@ -76,6 +76,16 @@ export default function EstoqueQrModal({
                         <p className="mt-0.5 text-xs tabular-nums text-slate-500">{largura} m × {comprimento} m</p>
                     </div>
                     <p className="mt-4 text-center text-xs text-[var(--text-muted)]">É assim que a etiqueta sai na impressão (8 × 10 cm)</p>
+                    {/* Mesmo endereço gravado no QR (generateQRCodeImage em useEstoqueOperations). */}
+                    <a
+                        href={`${window.location.origin}?qr=${encodeURIComponent(item.codigoQr)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mx-auto mt-2 flex w-fit items-center gap-1.5 rounded-lg px-2 py-1 text-[var(--text-body)] underline-offset-4 transition-colors hover:text-[var(--text-strong)] hover:underline"
+                    >
+                        <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                        <span className="text-xs font-medium">Abrir a página que o QR mostra</span>
+                    </a>
                 </div>
 
                 <div className="flex gap-2 px-5 py-4">
