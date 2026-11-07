@@ -41,7 +41,7 @@ describe('useProposalEditor', () => {
     await act(async () => {});
 
     expect(result.current.proposalOptions).toHaveLength(1);
-    expect(result.current.activeOption?.name).toBe('Opcao 1');
+    expect(result.current.activeOption?.name).toBe('Opção 1');
     expect(result.current.activeOption?.measurements).toEqual([]);
     expect(result.current.generalDiscount.pricingMode).toBe('complete');
   });

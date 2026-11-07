@@ -5,6 +5,7 @@ import { isOnlineNow, prioritizeSavedPdfSync, syncAllPending } from '../../servi
 import type { Client, ProposalPaymentChoice, ProposalPaymentSelection, SavedPDF } from '../../types';
 import type { ProposalConditionFields } from './proposalCondition';
 import type { PublicPortalShowcase } from '../../supabase/functions/proposal-portal/portalShowcase';
+import { formatOptionName } from './optionName';
 
 export type ProposalPortalDecision = 'approved' | 'rejected' | 'negotiation';
 export type ProposalOfferType = 'percentage' | 'fixed';
@@ -445,7 +446,7 @@ export const revokeProposalPortal = async (portalId: string) => {
 
 // Uma linha por opção: "Nome: R$ 1.234,56".
 export const buildProposalPricesBlock = (pdfs: SavedPDF[]) =>
-    pdfs.map(pdf => `${pdf.proposalOptionName || pdf.nomeArquivo}: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(pdf.totalPreco)}`).join('\n');
+    pdfs.map(pdf => `${formatOptionName(pdf.proposalOptionName) || pdf.nomeArquivo}: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(pdf.totalPreco)}`).join('\n');
 
 // Mensagem curta, para quando a conversa com o cliente já está aberta: sem
 // saudação e sem valores (o cliente vê tudo no link).

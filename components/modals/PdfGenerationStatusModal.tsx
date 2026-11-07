@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { Client, SavedPDF } from '../../types';
 import ProposalShareModal from './ProposalShareModal';
 import { getProposalKey, suggestOptionNames } from '../../src/lib/generatedProposals';
+import { formatOptionName } from '../../src/lib/optionName';
 
 type ShareResult = 'shared' | 'downloaded' | 'unavailable';
 
@@ -62,7 +63,7 @@ const formatCurrency = (value: number) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
 
 const describeProposal = (pdf: SavedPDF) =>
-    `${pdf.proposalOptionName || 'Proposta'} · ${formatCurrency(pdf.totalPreco)}`;
+    `${formatOptionName(pdf.proposalOptionName) || 'Proposta'} · ${formatCurrency(pdf.totalPreco)}`;
 
 const shareMessageFor = (result: ShareResult, count = 1) => result === 'shared'
     ? count > 1 ? `${count} PDFs compartilhados, um por opção.` : 'PDF compartilhado com sucesso.'
@@ -311,7 +312,7 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
         try {
             const opened = await onPreviewProposal(pdf);
             setShareMessage(opened
-                ? `PDF de "${pdf.proposalOptionName || 'Proposta'}" aberto para conferência.`
+                ? `PDF de "${formatOptionName(pdf.proposalOptionName) || 'Proposta'}" aberto para conferência.`
                 : 'Não foi possível abrir o PDF. Tente novamente.');
         } finally {
             setPreviewingKey(null);
@@ -338,7 +339,7 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
             const result = await onDeleteProposal(pdf);
             setSelectedKeys(current => current.filter(item => item !== key));
             setConfirmingDeleteKey(null);
-            setShareMessage(deletedMessage(pdf.proposalOptionName || 'Proposta', result));
+            setShareMessage(deletedMessage(formatOptionName(pdf.proposalOptionName) || 'Proposta', result));
             result?.done?.catch(() => {
                 setShareMessage('Não foi possível excluir tudo. A lista foi atualizada; tente de novo.');
             });
@@ -479,7 +480,7 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
                                 {clientProposals.map(pdf => {
                                     const key = getProposalKey(pdf);
                                     const isSelected = selectedKeys.includes(key);
-                                    const name = pdf.proposalOptionName || 'Proposta';
+                                    const name = formatOptionName(pdf.proposalOptionName) || 'Proposta';
                                     const isConfirming = confirmingDeleteKey === key;
                                     const totalVersions = proposalVersions?.[key]?.total ?? 1;
                                     const keptVersions = proposalVersions?.[key]?.kept ?? 0;

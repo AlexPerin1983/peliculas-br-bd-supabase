@@ -4,6 +4,7 @@ import { ChevronRight, CreditCard, MoreVertical, Pencil, Plus, Receipt, Trash2, 
 import { Drawer } from 'vaul';
 import { ProposalOption, ProposalPricingMode } from '../types';
 import { selectAllForOverwrite } from '../src/lib/selectOnFocus';
+import { formatOptionName } from '../src/lib/optionName';
 
 const MOBILE_MEDIA_QUERY = '(max-width: 639px)';
 
@@ -70,7 +71,7 @@ export const getOptionDisplayName = (option: ProposalOption): string => {
         return firstFilmName;
     }
 
-    return optionName || firstFilmName || 'Opcao';
+    return formatOptionName(optionName) || firstFilmName || 'Opção';
 };
 
 interface ProposalOptionsCarouselProps {
@@ -481,7 +482,7 @@ const ProposalOptionsCarousel: React.FC<ProposalOptionsCarouselProps> = ({
                                 <div className="overflow-y-auto overscroll-contain p-3 pb-[max(env(safe-area-inset-bottom),0.75rem)]">
                                     <div className="mx-auto mb-3 h-1.5 w-12 flex-shrink-0 rounded-full bg-slate-300 dark:bg-slate-700" />
                                     <div className="mb-2 px-2">
-                                        <p className="ui-kicker">Opcao ativa</p>
+                                        <p className="ui-kicker">Opção ativa</p>
                                         <Drawer.Title className="mt-0.5 truncate text-lg font-black leading-tight text-[var(--text-strong)]">
                                             {getOptionDisplayName(sheetOption)}
                                         </Drawer.Title>
@@ -512,7 +513,7 @@ const ProposalOptionsCarousel: React.FC<ProposalOptionsCarouselProps> = ({
                     >
                         <div className="flex items-start justify-between gap-3 border-b border-[var(--border-subtle)] bg-[var(--surface-raised)] px-4 py-3.5">
                             <div className="min-w-0">
-                                <p className="ui-kicker">Opcao ativa</p>
+                                <p className="ui-kicker">Opção ativa</p>
                                 <h2 className="mt-1 truncate text-lg font-black leading-tight text-[var(--text-strong)]">
                                     {getOptionDisplayName(actionsOption)}
                                 </h2>

@@ -2140,7 +2140,7 @@ Regras:
             const proposalOptionId = Date.now();
             const proposalOption: ProposalOption = {
                 id: proposalOptionId,
-                name: 'Opcao 1',
+                name: 'Opção 1',
                 measurements: quickMeasurements.map(({ isNew, ...measurement }) => measurement),
                 generalDiscount: { value: '', type: 'fixed', operation: 'discount', pricingMode: 'complete' }
             };
