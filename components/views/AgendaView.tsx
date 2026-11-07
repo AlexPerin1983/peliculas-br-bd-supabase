@@ -1052,7 +1052,7 @@ const AppointmentCard: React.FC<{
     };
 
     return (
-        <article className="relative overflow-hidden rounded-[var(--radius-card)] border border-[var(--border-subtle)] bg-[var(--surface)] text-left shadow-[var(--shadow-hairline)] transition-all duration-200 hover:shadow-[var(--shadow-soft)]">
+        <article className="relative overflow-hidden rounded-[var(--radius-card)] border border-[var(--border-subtle)] bg-[var(--surface)] text-left shadow-[var(--shadow-hairline)]">
             <EventColorStripe agendamento={agendamento} />
             <button
                 type="button"
@@ -1061,17 +1061,17 @@ const AppointmentCard: React.FC<{
             >
                 <div className="grid grid-cols-[64px_minmax(0,1fr)_auto] items-start gap-3">
                     <div className="flex min-h-[74px] flex-col items-center justify-between rounded-[var(--radius-control)] bg-[var(--surface-muted)] px-2 py-2 text-center">
-                        <span className="text-sm font-black leading-none text-[var(--text-strong)]">{startTime}</span>
+                        <span className="text-sm font-semibold leading-none tabular-nums text-[var(--text-strong)]">{startTime}</span>
                         <span className={`my-1 h-5 w-0.5 rounded-full ${meta.railClasses}`} aria-hidden="true"></span>
-                        <span className="text-sm font-black leading-none text-[var(--text-strong)]">{endTime}</span>
+                        <span className="text-sm font-medium leading-none tabular-nums text-[var(--text-muted)]">{endTime}</span>
                     </div>
 
                     <div className="min-w-0">
-                        <p className="truncate text-base font-black leading-tight text-[var(--text-strong)] sm:text-lg">
+                        <p className="truncate text-base font-semibold leading-tight text-[var(--text-strong)] sm:text-lg">
                             {agendamento.clienteNome}
                         </p>
                         {agendamento.title ? (
-                            <p className="mt-0.5 truncate text-sm font-semibold text-[var(--text-muted)]">{agendamento.title}</p>
+                            <p className="mt-0.5 truncate text-sm text-[var(--text-muted)]">{agendamento.title}</p>
                         ) : null}
                         <div className="mt-2 flex flex-wrap items-center gap-2">
                             <EventTypeChip agendamento={agendamento} />
@@ -1089,7 +1089,7 @@ const AppointmentCard: React.FC<{
                             ) : null}
                             <ContinuationChip originDate={continuation.originDate} />
                             {bairro ? (
-                                <span className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-[var(--surface-muted)] px-2 py-1 text-xs font-bold text-[var(--text-muted)]" title={clientAddress}>
+                                <span className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-[var(--surface-muted)] px-2 py-1 text-xs font-medium text-[var(--text-muted)]" title={clientAddress}>
                                     <i className="fas fa-map-marker-alt text-[10px]" aria-hidden="true"></i>
                                     <span className="truncate">{bairro}</span>
                                 </span>
@@ -1118,12 +1118,12 @@ const AppointmentCard: React.FC<{
             </button>
 
             {showEndedPrompt ? (
-                <div className="border-t border-amber-200 bg-amber-50 p-3 dark:border-amber-900/50 dark:bg-amber-950/20">
+                <div className="border-t border-amber-300/60 bg-[var(--surface-muted)] p-3 dark:border-amber-800/50">
                     {isConfirmingValue ? (
                         valueConfirmationPanel
                     ) : (
                         <>
-                            <p className="mb-2 flex items-center gap-1.5 text-xs font-bold text-amber-800 dark:text-amber-200">
+                            <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-amber-800 dark:text-amber-300">
                                 <i className="fas fa-circle-exclamation text-[11px]" aria-hidden="true"></i>
                                 Horário encerrado — como foi o atendimento?
                             </p>
@@ -1131,35 +1131,35 @@ const AppointmentCard: React.FC<{
                                 <button
                                     type="button"
                                     onClick={handleCompleteClick}
-                                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[var(--radius-control)] border border-emerald-300 bg-emerald-100 px-2 text-xs font-bold text-emerald-800 transition-colors hover:bg-emerald-200 dark:border-emerald-800/70 dark:bg-emerald-950/40 dark:text-emerald-200"
+                                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[var(--radius-control)] bg-emerald-600 px-2 text-white transition-colors hover:bg-emerald-700"
                                 >
                                     <i className="fas fa-check text-[11px]" aria-hidden="true"></i>
-                                    <span className="truncate">Concluído</span>
+                                    <span className="truncate text-xs font-semibold">Concluído</span>
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => onUpdateServiceStatus(agendamento, 'no_show')}
-                                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[var(--radius-control)] border border-amber-300 bg-white px-2 text-xs font-bold text-amber-800 transition-colors hover:bg-amber-100 dark:border-amber-800/70 dark:bg-slate-800 dark:text-amber-200"
+                                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] px-2 text-[var(--text-body)] transition-colors hover:bg-[var(--surface-muted)]"
                                 >
-                                    <i className="fas fa-user-slash text-[11px]" aria-hidden="true"></i>
-                                    <span className="truncate">Faltou</span>
+                                    <i className="fas fa-user-slash text-[11px] text-amber-600 dark:text-amber-400" aria-hidden="true"></i>
+                                    <span className="truncate text-xs font-medium">Faltou</span>
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => onUpdateServiceStatus(agendamento, 'cancelled')}
-                                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[var(--radius-control)] border border-rose-300 bg-white px-2 text-xs font-bold text-rose-800 transition-colors hover:bg-rose-100 dark:border-rose-800/70 dark:bg-slate-800 dark:text-rose-200"
+                                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] px-2 text-[var(--text-body)] transition-colors hover:bg-[var(--surface-muted)]"
                                 >
-                                    <i className="fas fa-ban text-[11px]" aria-hidden="true"></i>
-                                    <span className="truncate">Cancelado</span>
+                                    <i className="fas fa-ban text-[11px] text-rose-600 dark:text-rose-400" aria-hidden="true"></i>
+                                    <span className="truncate text-xs font-medium">Cancelado</span>
                                 </button>
                             </div>
                             <button
                                 type="button"
                                 onClick={() => onContinueAgendamento(agendamento)}
-                                className="mt-2 inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-[var(--radius-control)] border border-indigo-300 bg-indigo-100 px-2 text-xs font-bold text-indigo-800 transition-colors hover:bg-indigo-200 dark:border-indigo-800/70 dark:bg-indigo-950/40 dark:text-indigo-200"
+                                className="mt-2 inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] px-2 text-[var(--text-body)] transition-colors hover:bg-[var(--surface-muted)]"
                             >
-                                <i className="fas fa-hourglass-half text-[11px]" aria-hidden="true"></i>
-                                <span className="truncate">Não terminou? Continuar outro dia</span>
+                                <i className="fas fa-hourglass-half text-[11px] text-indigo-500 dark:text-indigo-300" aria-hidden="true"></i>
+                                <span className="truncate text-xs font-medium">Não terminou? Continuar outro dia</span>
                             </button>
                         </>
                     )}
@@ -1174,8 +1174,8 @@ const AppointmentCard: React.FC<{
                         <>
                             <div className="flex items-center justify-between gap-2">
                                 <div className="min-w-0">
-                                    <span className="block text-[10px] font-bold uppercase text-emerald-700/70 dark:text-emerald-300/60">Valor final</span>
-                                    <span className="block text-sm font-black text-emerald-800 dark:text-emerald-200">
+                                    <span className="block text-[11px] font-medium text-emerald-700/80 dark:text-emerald-300/70">Valor final</span>
+                                    <span className="block text-sm font-semibold tabular-nums text-emerald-800 dark:text-emerald-200">
                                         {hasCurrentValue ? `R$ ${formatCurrencyBR(currentValue!)}` : 'Sem valor'}
                                     </span>
                                 </div>
@@ -1346,24 +1346,22 @@ const NextAppointmentCard: React.FC<{
     const iconButtonClassName = 'inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-control)] border transition-colors';
 
     return (
-        <article className="relative flex items-center gap-2 overflow-hidden rounded-[var(--radius-card)] border border-[var(--brand-primary)]/30 bg-gradient-to-br from-[color-mix(in_srgb,var(--brand-primary)_10%,var(--surface))] to-[var(--surface)] py-3 pl-4 pr-3 shadow-[var(--shadow-soft)]">
+        <article className="relative flex items-center gap-2 overflow-hidden rounded-[var(--radius-card)] border border-[var(--border-subtle)] bg-[var(--surface)] py-3 pl-4 pr-3 shadow-[var(--shadow-hairline)]">
             <EventColorStripe agendamento={agendamento} />
             <button
                 type="button"
                 onClick={() => onOpen(agendamento)}
                 className="min-w-0 flex-1 text-left"
             >
-                <span className="flex items-center gap-2 text-[11px] font-black uppercase tracking-wide text-[var(--brand-primary)]">
-                    <i className="fas fa-bolt text-[10px]" aria-hidden="true"></i>
-                    Próximo
-                    <span className="rounded-full bg-[var(--brand-primary)] px-2 py-0.5 normal-case tracking-normal text-white">
-                        {highlight}
-                    </span>
+                <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
+                    <span className="font-semibold text-[var(--brand-primary)]">Próximo</span>
+                    <span aria-hidden="true">·</span>
+                    <span className="truncate">{highlight}</span>
                 </span>
-                <span className="mt-1 block truncate text-base font-black leading-tight text-[var(--text-strong)]">
+                <span className="mt-1 block truncate text-base font-semibold leading-tight text-[var(--text-strong)]">
                     {agendamento.clienteNome}
                 </span>
-                <span className="mt-0.5 block truncate text-xs font-semibold text-[var(--text-muted)]">
+                <span className="mt-0.5 block truncate text-xs tabular-nums text-[var(--text-muted)]">
                     {details}
                 </span>
             </button>
@@ -1415,11 +1413,11 @@ const STATUS_COUNT_ICONS = {
 // Separador de dia nas listas (Lista e Semana): "AMANHÃ ——— 2".
 const AgendaDayGroupHeader: React.FC<{ label: string; count: number; highlighted?: boolean }> = ({ label, count, highlighted = false }) => (
     <div className="flex items-center gap-2">
-        <span className={`text-xs font-black uppercase tracking-wide ${highlighted ? 'text-[var(--brand-primary)]' : 'text-[var(--text-muted)]'}`}>
+        <span className={`text-xs font-semibold ${highlighted ? 'text-[var(--brand-primary)]' : 'text-[var(--text-muted)]'}`}>
             {label}
         </span>
         <span className="h-px flex-1 bg-[var(--border-subtle)]"></span>
-        {count > 0 ? <span className="text-xs font-bold text-[var(--text-soft)]">{count}</span> : null}
+        {count > 0 ? <span className="text-xs font-medium tabular-nums text-[var(--text-soft)]">{count}</span> : null}
     </div>
 );
 
@@ -1484,7 +1482,7 @@ const CalendarMonthStats: React.FC<{
     scheduled: number;
     missed: number;
 }> = ({ total, completed, scheduled, missed }) => (
-    <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] font-bold text-[var(--text-muted)]">
+    <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] font-medium tabular-nums text-[var(--text-muted)]">
         <span className="inline-flex h-7 items-center rounded-full bg-[var(--surface-muted)] px-2.5">{total} no mês</span>
         <span title="Concluídos" className="hidden h-7 items-center gap-1 rounded-full bg-emerald-50 px-2 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-200 sm:inline-flex">
             <i className={`${STATUS_COUNT_ICONS.completed} text-[9px]`} aria-hidden="true"></i>
@@ -1503,7 +1501,7 @@ const CalendarMonthStats: React.FC<{
 
 // Legenda dos pontinhos: a cor de cada tipo. "Sem tipo" só aparece quando há agendamento antigo à vista.
 const CalendarTypeLegend: React.FC<{ showUntyped: boolean; showHint?: boolean }> = ({ showUntyped, showHint = true }) => (
-    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] font-bold text-[var(--text-muted)]">
+    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] font-medium text-[var(--text-muted)]">
         {EVENT_TYPES.map((type) => (
             <span key={type.value} className="inline-flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full" style={{ backgroundColor: type.color }}></span>
@@ -1898,22 +1896,20 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
         const classes = [
             'relative',
             'pt-[100%]',
-            'rounded-[var(--radius-card)]',
+            'rounded-lg',
             'border',
-            'bg-[var(--surface)]',
-            'shadow-[var(--shadow-hairline)]',
             'cursor-pointer',
-            'transition-all',
-            'duration-200',
+            'transition-colors',
+            'duration-150',
             'hover:bg-[var(--surface-muted)]',
         ];
 
         if (isSelected(day)) {
-            classes.push('border-blue-500', 'ring-2', 'ring-blue-500/20');
+            classes.push('border-blue-500/70', 'bg-blue-500/10');
         } else if (isToday(day)) {
-            classes.push('border-slate-300', 'dark:border-slate-600');
+            classes.push('border-[var(--border-subtle)]', 'bg-[var(--surface)]');
         } else {
-            classes.push('border-[var(--border-subtle)]');
+            classes.push('border-transparent');
         }
 
         return classes.join(' ');
@@ -2046,7 +2042,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                                 onClick={() => setShowAlertsPanel((prev) => !prev)}
                                 aria-label="Configurar alertas"
                                 aria-expanded={showAlertsPanel}
-                                className={`inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius-control)] border transition-colors ${alertsActive ? 'border-emerald-500 bg-emerald-500 text-white shadow-[0_4px_12px_rgba(16,185,129,0.35)]' : showAlertsPanel ? 'border-[var(--brand-primary)] bg-[var(--brand-primary)]/10 text-[var(--brand-primary)]' : 'border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-muted)] hover:bg-[var(--surface)] hover:text-[var(--text-strong)]'}`}
+                                className={`inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius-control)] border transition-colors ${alertsActive ? 'border-emerald-500 bg-emerald-500 text-white' : showAlertsPanel ? 'border-[var(--brand-primary)] bg-[var(--brand-primary)]/10 text-[var(--brand-primary)]' : 'border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-muted)] hover:bg-[var(--surface)] hover:text-[var(--text-strong)]'}`}
                             >
                                 <i className={`${alertsActive ? 'fas' : 'far'} fa-bell text-sm`} aria-hidden="true"></i>
                             </button>
@@ -2096,7 +2092,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                                     {day && (
                                         <div className="absolute inset-0 p-1.5 flex flex-col items-center overflow-hidden">
                                             {dayAgendamentos.length > 0 ? (
-                                                <span className="absolute right-1 top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--brand-primary)] px-1 text-[9px] font-black text-white">
+                                                <span className="absolute right-1 top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--brand-primary)] px-1 text-[10px] font-semibold tabular-nums text-white">
                                                     {dayAgendamentos.length}
                                                 </span>
                                             ) : null}
@@ -2156,7 +2152,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                                 >
                                     <div className="absolute inset-0 p-1.5 flex flex-col items-center overflow-hidden">
                                         {dayAgendamentos.length > 0 ? (
-                                            <span className="absolute right-1 top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--brand-primary)] px-1 text-[9px] font-black text-white">
+                                            <span className="absolute right-1 top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--brand-primary)] px-1 text-[10px] font-semibold tabular-nums text-white">
                                                 {dayAgendamentos.length}
                                             </span>
                                         ) : null}
@@ -2195,7 +2191,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                                 iconOnly
                                 iconClassName="fas fa-plus"
                                 aria-label="Criar novo agendamento para o dia selecionado"
-                                className="shadow-lg shadow-blue-900/20"
+                                className="shadow-sm"
                             />
                         </div>
                     </div>
@@ -2268,7 +2264,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                                 iconOnly
                                 iconClassName="fas fa-plus"
                                 aria-label="Criar novo agendamento para o dia selecionado"
-                                className="shadow-lg shadow-blue-900/20"
+                                className="shadow-sm"
                             />
                         </div>
                     </div>
@@ -2325,7 +2321,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                                 iconOnly
                                 iconClassName="fas fa-plus"
                                 aria-label="Criar novo agendamento"
-                                className="shadow-lg shadow-blue-900/20"
+                                className="shadow-sm"
                             />
                         </div>
                     </div>
@@ -2482,7 +2478,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                                     {day && (
                                         <div className="absolute inset-0 p-1.5 flex flex-col items-center overflow-hidden">
                                             {dayAgendamentos.length > 0 ? (
-                                                <span className="absolute right-1 top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--brand-primary)] px-1 text-[10px] font-black text-white">
+                                                <span className="absolute right-1 top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--brand-primary)] px-1 text-[11px] font-semibold tabular-nums text-white">
                                                     {dayAgendamentos.length}
                                                 </span>
                                             ) : null}
