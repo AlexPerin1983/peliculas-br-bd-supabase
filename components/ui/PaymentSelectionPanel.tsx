@@ -110,8 +110,8 @@ export const PaymentSelectionPanel: React.FC<PaymentSelectionPanelProps> = ({
         <section className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-800/50" aria-label="Condições de pagamento desta proposta">
             <div className="mb-1 flex items-center justify-between gap-2">
                 <div className="flex min-w-0 items-center gap-2">
-                    <CreditCard className="h-4 w-4 shrink-0 text-blue-500" aria-hidden="true" />
-                    <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">Pagamento no orçamento</h3>
+                    <CreditCard className="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
+                    <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Pagamento no orçamento</h3>
                 </div>
                 {hasOverride && onReset && (
                     // Tamanho no contêiner: o `font: inherit` global ignora classes de texto nos botões.
@@ -122,7 +122,7 @@ export const PaymentSelectionPanel: React.FC<PaymentSelectionPanelProps> = ({
                     </span>
                 )}
             </div>
-            <p className="mb-2.5 text-[10px] leading-4 text-slate-500 dark:text-slate-400">Escolha o que aparece no PDF e no link. A configuração da empresa não muda.</p>
+            <p className="mb-3 text-[11px] leading-4 text-slate-500 dark:text-slate-400">Escolha o que aparece no PDF e no link. A configuração da empresa não muda.</p>
 
             {simpleMethods.length > 0 && (
                 <div className="mb-2 flex flex-wrap gap-1.5 text-[12px] font-semibold" role="group" aria-label="Formas à vista">
@@ -189,14 +189,14 @@ export const PaymentSelectionPanel: React.FC<PaymentSelectionPanelProps> = ({
                                     aria-label={labels[company.tipo]}
                                 />
                                 <span>{labels[company.tipo]}</span>
-                                <span className={`ml-auto truncate text-right text-[11px] tabular-nums ${active && selected.length ? 'font-bold text-blue-700 dark:text-blue-300' : 'font-normal text-slate-400'}`}>
+                                <span className={`ml-auto truncate text-right text-[11px] tabular-nums ${active && selected.length ? 'font-semibold text-blue-700 dark:text-blue-300' : 'font-normal text-slate-400'}`}>
                                     {summary}
                                 </span>
                             </label>
 
                             {active && available.length > 0 && (
                                 <>
-                                    <div className="mt-2 grid grid-cols-6 gap-1.5 text-[12px] font-bold" aria-label={`Parcelas ${labels[company.tipo]}`}>
+                                    <div className="mt-2 grid grid-cols-6 gap-1.5 text-[12px] font-semibold" aria-label={`Parcelas ${labels[company.tipo]}`}>
                                         {available.map(count => {
                                             const blocked = !allowed.includes(count);
                                             const checked = selected.includes(count);
@@ -214,7 +214,7 @@ export const PaymentSelectionPanel: React.FC<PaymentSelectionPanelProps> = ({
                                                     className={`flex h-8 items-center justify-center rounded-md border tabular-nums transition-colors ${blocked
                                                         ? 'cursor-not-allowed border-dashed border-slate-200 bg-transparent text-slate-300 dark:border-slate-700 dark:text-slate-600'
                                                         : checked
-                                                            ? 'border-blue-500 bg-blue-600 text-white'
+                                                            ? 'border-blue-500/70 bg-blue-50 text-blue-700 dark:border-blue-400/60 dark:bg-blue-500/15 dark:text-blue-200'
                                                             : 'border-slate-200 bg-slate-50 text-slate-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}
                                                 >
                                                     {count}x
@@ -223,16 +223,16 @@ export const PaymentSelectionPanel: React.FC<PaymentSelectionPanelProps> = ({
                                         })}
                                     </div>
                                     {!isNoInterest && blockedCount > 0 && blockedCount < available.length && (
-                                        <p className="mt-1.5 text-[10px] text-slate-400">Até {noInterestTop}x já é sem juros; com juros começa em {allowed[0]}x.</p>
+                                        <p className="mt-2 text-[11px] text-slate-400">Até {noInterestTop}x já é sem juros; com juros começa em {allowed[0]}x.</p>
                                     )}
                                     {!isNoInterest && methodOptions.length > 0 && (
-                                        <p className="mt-1.5 text-[10px] leading-4 text-slate-600 dark:text-slate-300">
+                                        <p className="mt-2 text-[11px] leading-4 tabular-nums text-slate-600 dark:text-slate-300">
                                             {methodOptions.map(option => `${option.installments}x de ${money(option.installmentValue)}`).join(' · ')}
                                             {topOption && <span className="text-slate-400"> · total em {topOption.installments}x: {money(topOption.customerTotal)}</span>}
                                         </p>
                                     )}
                                     {isNoInterest && (
-                                        <p className="mt-1.5 text-[10px] text-slate-400">Toque no número para oferecer até ele.</p>
+                                        <p className="mt-2 text-[11px] text-slate-400">Toque no número para oferecer até ele.</p>
                                     )}
                                 </>
                             )}

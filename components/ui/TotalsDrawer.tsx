@@ -42,6 +42,10 @@ interface TotalsDrawerProps {
     onSelectOption?: (optionId: number) => void;
 }
 
+// Medidas e porcentagens com vírgula ("30,75 m²"), como os valores em R$.
+const formatDecimalBR = (value: number, digits = 2) =>
+    (Number.isFinite(value) ? value : 0).toLocaleString('pt-BR', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+
 const formatNumberBR = (number: number) => {
     return new Intl.NumberFormat('pt-BR', {
         style: 'currency',
@@ -742,7 +746,7 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                         <div className="mx-auto max-w-md space-y-4">
                             <div className="flex min-h-10 items-center justify-between">
                                 <div>
-                                    <h2 className="text-lg font-bold leading-tight text-slate-900 dark:text-white">Resumo de Valores</h2>
+                                    <h2 className="text-lg font-semibold leading-tight text-slate-900 dark:text-white">Resumo de valores</h2>
                                     <p className="mt-0.5 text-[10px] text-slate-500 dark:text-slate-400">Confira, ajuste e gere o PDF.</p>
                                 </div>
                                 <button
@@ -766,10 +770,10 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                                         <i className="fas fa-chevron-left text-sm" />
                                     </button>
                                     <div className="flex min-w-0 flex-1 flex-col items-center">
-                                        <span className="text-[9px] font-medium uppercase tracking-[0.12em] text-slate-400 dark:text-slate-500">
+                                        <span className="text-[11px] text-slate-500 dark:text-slate-400">
                                             Opção {activeOptionIndex + 1} de {options.length}
                                         </span>
-                                        <span className="max-w-full truncate text-sm font-bold text-slate-900 dark:text-white">
+                                        <span className="max-w-full truncate text-sm font-semibold text-slate-900 dark:text-white">
                                             {activeOptionIndex >= 0 ? options[activeOptionIndex].name : '—'}
                                         </span>
                                         <div className="mt-1 flex items-center gap-1">
@@ -799,13 +803,13 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
 
                             <div className={`grid divide-slate-200 rounded-xl border border-slate-200 bg-slate-50 dark:divide-slate-700 dark:border-slate-700 dark:bg-slate-800/40 ${totals.totalLinearMeters > 0 ? 'grid-cols-2 divide-x' : 'grid-cols-1'}`}>
                                 <div className="px-3 py-2.5">
-                                    <span className="block text-[9px] font-medium uppercase tracking-[0.12em] text-slate-400">Área Total</span>
-                                    <span className="mt-0.5 block text-base font-bold text-slate-900 dark:text-white">{totals.totalM2.toFixed(2)} m²</span>
+                                    <span className="block text-xs text-slate-500 dark:text-slate-400">Área total</span>
+                                    <span className="mt-0.5 block text-base font-semibold tabular-nums text-slate-900 dark:text-white">{formatDecimalBR(totals.totalM2)} m²</span>
                                 </div>
                                 {totals.totalLinearMeters > 0 && (
                                     <div className="px-3 py-2.5">
-                                        <span className="block text-[9px] font-medium uppercase tracking-[0.12em] text-slate-400">Metro Linear</span>
-                                        <span className="mt-0.5 block text-base font-bold text-slate-900 dark:text-white">{totals.totalLinearMeters.toFixed(2)} m</span>
+                                        <span className="block text-xs text-slate-500 dark:text-slate-400">Metro linear</span>
+                                        <span className="mt-0.5 block text-base font-semibold tabular-nums text-slate-900 dark:text-white">{formatDecimalBR(totals.totalLinearMeters)} m</span>
                                     </div>
                                 )}
                             </div>
@@ -822,7 +826,7 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                             {totals.groupedTotals && Object.keys(totals.groupedTotals).length > 0 && (
                                 <div className="space-y-2">
                                     <div className="flex items-center justify-between px-1">
-                                        <h3 className="text-[10px] font-medium uppercase tracking-[0.12em] text-slate-400 dark:text-slate-500">Películas e preços</h3>
+                                        <h3 className="text-xs font-medium text-slate-500 dark:text-slate-400">Películas e preços</h3>
                                         <span className="text-[9px] text-slate-400"><span className="sm:hidden">Toque</span><span className="hidden sm:inline">Clique</span> para editar</span>
                                     </div>
                                     <div className="space-y-2">
@@ -840,7 +844,7 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                                                             {group.filmName}
                                                         </span>
                                                         <span className="flex min-w-0 items-center gap-1.5 text-[10px] text-slate-500 dark:text-slate-400">
-                                                            <span className="shrink-0">{group.totalM2.toFixed(2)} m² {group.totalLinearMeters > 0 ? `| ${group.totalLinearMeters.toFixed(2)} m` : ''}</span>
+                                                            <span className="shrink-0 tabular-nums">{formatDecimalBR(group.totalM2)} m² {group.totalLinearMeters > 0 ? `· ${formatDecimalBR(group.totalLinearMeters)} m` : ''}</span>
                                                             {hasFilmWarrantyOverride(generalDiscount.filmWarrantyOverrides, group.filmName) && (
                                                                 <span className="inline-flex min-w-0 items-center gap-0.5 truncate rounded-full bg-emerald-50 px-1.5 py-px text-[9px] font-bold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" title="Garantia personalizada nesta proposta">
                                                                     <ShieldCheck className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />
@@ -910,7 +914,7 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                                                             <div className="flex items-center justify-between rounded-lg bg-blue-50 px-2 py-1.5 dark:bg-blue-900/20">
                                                                 <div className="flex flex-col">
                                                                     <span className="text-[11px] font-semibold text-blue-700 dark:text-blue-300">Venda metro linear</span>
-                                                                    <span className="text-[10px] font-medium text-blue-500/80 dark:text-blue-300/70">{formatNumberBR(group.unitSalePriceLinearMeter)}/m × {group.totalLinearMeters.toFixed(2)} m</span>
+                                                                    <span className="text-[10px] font-medium text-blue-500/80 dark:text-blue-300/70">{formatNumberBR(group.unitSalePriceLinearMeter)}/m × {formatDecimalBR(group.totalLinearMeters)} m</span>
                                                                 </div>
                                                                 <span className="text-xs font-bold text-blue-700 dark:text-blue-300">{formatNumberBR(group.linearSaleSubtotal)}</span>
                                                             </div>
@@ -961,20 +965,20 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                             )}
 
                             <div className="space-y-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-3 shadow-[var(--shadow-soft)]">
-                                <h3 className="text-[10px] font-medium uppercase tracking-[0.12em] text-[var(--text-soft)]">Resumo de Custos</h3>
+                                <h3 className="text-xs font-medium text-[var(--text-muted)]">Resumo de custos</h3>
                                 <div className="space-y-1.5">
                                     <div className="flex items-center justify-between">
-                                        <span className="text-xs text-[var(--text-muted)]">Total Material</span>
+                                        <span className="text-xs text-[var(--text-muted)]">Total material</span>
                                         <span className="text-sm font-semibold text-[var(--text-strong)]">{formatNumberBR(totals.totalMaterial)}</span>
                                     </div>
                                     <div className="flex items-center justify-between">
-                                        <span className="text-xs text-[var(--text-muted)]">Total Mão de Obra</span>
+                                        <span className="text-xs text-[var(--text-muted)]">Total mão de obra</span>
                                         <span className="text-sm font-semibold text-[var(--text-strong)]">{formatNumberBR(totals.totalLabor)}</span>
                                     </div>
                                     {totals.linearMeterCost > 0 && (
                                         <div className="flex items-center justify-between border-t border-[var(--border-subtle)] pt-2">
-                                            <span className="text-xs text-blue-600 dark:text-blue-400">Total Metro Linear</span>
-                                            <span className="text-sm font-semibold text-blue-600 dark:text-blue-400">{formatNumberBR(totals.linearMeterCost)}</span>
+                                            <span className="text-xs text-[var(--text-muted)]">Total metro linear</span>
+                                            <span className="text-sm font-semibold tabular-nums text-[var(--text-strong)]">{formatNumberBR(totals.linearMeterCost)}</span>
                                         </div>
                                     )}
                                     {totals.operationalExpenses > 0 && (
@@ -992,7 +996,7 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                                             <div className="flex items-center justify-between">
                                                 <span className="text-xs text-[var(--text-muted)]">Resultado estimado</span>
                                                 <span className={`text-sm font-semibold ${totals.estimatedProfit >= 0 ? 'text-emerald-600 dark:text-emerald-300' : 'text-red-600 dark:text-red-300'}`}>
-                                                    {formatNumberBR(totals.estimatedProfit)} ({totals.estimatedMarginPercentage.toFixed(1)}%)
+                                                    {formatNumberBR(totals.estimatedProfit)} ({formatDecimalBR(totals.estimatedMarginPercentage, 1)}%)
                                                 </span>
                                             </div>
                                         </>
@@ -1009,7 +1013,7 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                                 >
                                     <span className="min-w-0 flex-1">
                                         <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                                            <span className="text-sm font-bold text-slate-700 dark:text-slate-200">Acréscimo e desconto</span>
+                                            <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Acréscimo e desconto</span>
                                             {!adjustmentsOpen && hiddenIncreaseAmount > 0 && (
                                                 <span className="text-[11px] font-bold text-blue-600 dark:text-blue-300">+{formatNumberBR(hiddenIncreaseAmount)}</span>
                                             )}
@@ -1027,8 +1031,8 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                                 {adjustmentsOpen && (
                                     <div className="space-y-3 border-t border-slate-200 p-2.5 dark:border-slate-700">
                                         <div className="sticky top-2 z-10 flex items-center justify-between gap-3 rounded-xl bg-slate-900 px-3 py-2.5 text-white shadow-lg shadow-slate-900/15 dark:bg-slate-950 sm:hidden" aria-live="polite">
-                                            <span className="text-[9px] font-bold uppercase tracking-[0.1em] text-slate-400">Total atualizado</span>
-                                            <strong className="shrink-0 text-xl font-black tracking-tight">{formatNumberBR(totals.finalTotal)}</strong>
+                                            <span className="text-[11px] text-slate-400">Total atualizado</span>
+                                            <strong className="shrink-0 text-xl font-semibold tabular-nums">{formatNumberBR(totals.finalTotal)}</strong>
                                         </div>
 
                                         <div className="grid grid-cols-2 gap-2 sm:grid-cols-1 sm:gap-3">
@@ -1065,10 +1069,10 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                             <div className="hidden rounded-xl bg-slate-900 px-3 py-3 text-white dark:bg-slate-950 sm:block">
                                 <div className="flex items-center justify-between gap-4">
                                     <div className="flex flex-col">
-                                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total do orçamento</span>
+                                        <span className="text-xs text-slate-400">Total do orçamento</span>
                                         <span className="text-[9px] text-slate-500">Valor que sairá no PDF</span>
                                     </div>
-                                    <span className="text-right text-2xl font-black tracking-tight text-white">
+                                    <span className="text-right text-2xl font-semibold tabular-nums text-white">
                                         {formatNumberBR(totals.finalTotal)}
                                     </span>
                                 </div>
@@ -1085,7 +1089,7 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
 
                             <div className="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800/50">
                                 <div className="border-b border-slate-100 px-3 py-2 dark:border-slate-700">
-                                    <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">Opções do PDF</span>
+                                    <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Opções do PDF</span>
                                 </div>
                                 <button
                                     type="button"
@@ -1198,7 +1202,7 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                                     >
                                         <i className="fas fa-paper-plane text-sm" aria-hidden="true" />
                                         <span className="min-w-0 flex-1 truncate">
-                                            <span className="text-sm font-bold">Enviar ao cliente</span>
+                                            <span className="text-sm font-semibold">Enviar ao cliente</span>
                                             <span className="text-xs font-medium text-emerald-700/80 dark:text-emerald-300/80"> · {generatedProposalsCount} {generatedProposalsCount === 1 ? 'opção gerada' : 'opções geradas'}</span>
                                         </span>
                                         <i className="fas fa-chevron-right text-xs opacity-70" aria-hidden="true" />
@@ -1206,8 +1210,8 @@ export const TotalsDrawer: React.FC<TotalsDrawerProps> = ({
                                 ) : null}
                                 <div className={`mx-auto grid max-w-md gap-2 sm:block ${adjustmentsOpen ? 'grid-cols-1' : 'grid-cols-[minmax(0,0.95fr)_minmax(0,1.2fr)]'}`}>
                                     {!adjustmentsOpen && <div className="flex h-12 min-w-0 flex-col justify-center rounded-xl bg-slate-900 px-3 text-white shadow-sm dark:bg-slate-950 sm:hidden" aria-live="polite">
-                                        <span className="block text-[8px] font-bold uppercase tracking-[0.08em] text-slate-400">Total atualizado</span>
-                                        <span className="block truncate text-[17px] font-black leading-tight">{formatNumberBR(totals.finalTotal)}</span>
+                                        <span className="block text-[11px] text-slate-400">Total atualizado</span>
+                                        <span className="block truncate text-[17px] font-semibold leading-tight tabular-nums">{formatNumberBR(totals.finalTotal)}</span>
                                     </div>}
                                     <button
                                         type="button"
