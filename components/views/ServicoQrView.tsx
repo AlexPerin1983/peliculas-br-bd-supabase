@@ -265,6 +265,7 @@ const ServicoSearchModal: React.FC<{
 
 const SECTION_CARD_CLASSNAME = 'rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface)] p-4 shadow-[var(--shadow-hairline)] sm:p-5';
 const FIELD_CLASSNAME = 'ui-field w-full px-3.5 py-3 text-[14px] outline-none';
+const FIELD_GROUP_CLASSNAME = 'text-sm font-medium text-[var(--text-strong)]';
 const FIELD_LABEL_CLASSNAME = 'mb-1.5 block text-xs font-medium text-[var(--text-muted)]';
 
 const ServicoQrView: React.FC<ServicoQrViewProps> = ({
@@ -565,142 +566,168 @@ const ServicoQrView: React.FC<ServicoQrViewProps> = ({
         <button
             type="button"
             onClick={handleOpenClientModal}
-            className="inline-flex h-10 w-full items-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-subtle)] px-3 text-left text-[var(--text-body)] transition-colors hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)] sm:w-auto"
+            className="-mr-2 inline-flex h-7 items-center gap-1.5 rounded-[var(--radius-control)] px-2 text-[var(--brand-primary)] transition-colors hover:bg-[var(--surface-muted)]"
         >
-            <Search className="h-4 w-4 shrink-0" aria-hidden="true" />
-            <span className="min-w-0 flex-1 truncate text-sm font-medium">Buscar cliente</span>
+            <Search className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            <span className="text-xs font-medium">Buscar nos clientes</span>
         </button>
     );
 
+    // Dois grupos, na ordem em que a informação chega: quem é o cliente, depois o que foi aplicado.
     const etiquetaForm = (
-        <form id="servicoForm" onSubmit={handleSubmit} className="space-y-4">
-            <fieldset disabled={isSubmitting} className="space-y-4">
-                <div className="grid gap-3 lg:grid-cols-[minmax(0,1.35fr)_minmax(220px,0.65fr)]">
+        <form id="servicoForm" onSubmit={handleSubmit}>
+            <fieldset disabled={isSubmitting} className="space-y-6">
+                <div className="space-y-3">
+                    <p className={FIELD_GROUP_CLASSNAME}>Cliente</p>
                     <div>
-                        <label className={FIELD_LABEL_CLASSNAME}>Nome do local / cliente *</label>
+                        <div className="mb-1.5 flex items-center justify-between gap-2">
+                            <label htmlFor="servico-cliente" className="block text-xs font-medium text-[var(--text-muted)]">
+                                Nome do local ou cliente <span className="text-[var(--text-soft)]">*</span>
+                            </label>
+                            {buscarClienteButton}
+                        </div>
                         <input
+                            id="servico-cliente"
                             ref={inputRef}
                             type="text"
                             value={clienteNome}
                             onChange={(event) => setClienteNome(event.target.value)}
-                            placeholder="Ex: Condomínio Solar"
+                            placeholder="Ex.: Condomínio Solar"
+                            autoComplete="off"
                             className={FIELD_CLASSNAME}
                         />
                     </div>
-                    <div>
-                        <label className={FIELD_LABEL_CLASSNAME}>Tipo de local</label>
-                        <select
-                            value={tipoLocal}
-                            onChange={(event) => setTipoLocal(event.target.value as TipoLocal)}
-                            className={FIELD_CLASSNAME}
-                        >
-                            <option value="residencial">Residência</option>
-                            <option value="comercial">Comercial</option>
-                            <option value="condominio">Condomínio</option>
-                            <option value="empresa">Empresa</option>
-                            <option value="outros">Outros</option>
-                        </select>
+
+                    <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+                        <div>
+                            <label htmlFor="servico-tipo" className={FIELD_LABEL_CLASSNAME}>Tipo de local</label>
+                            <select
+                                id="servico-tipo"
+                                value={tipoLocal}
+                                onChange={(event) => setTipoLocal(event.target.value as TipoLocal)}
+                                className={FIELD_CLASSNAME}
+                            >
+                                <option value="residencial">Residência</option>
+                                <option value="comercial">Comercial</option>
+                                <option value="condominio">Condomínio</option>
+                                <option value="empresa">Empresa</option>
+                                <option value="outros">Outros</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label htmlFor="servico-endereco" className={FIELD_LABEL_CLASSNAME}>Endereço</label>
+                            <input
+                                id="servico-endereco"
+                                type="text"
+                                value={endereco}
+                                onChange={(event) => setEndereco(event.target.value)}
+                                placeholder="Rua e número"
+                                className={FIELD_CLASSNAME}
+                            />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-[minmax(0,1fr)_88px] gap-3">
+                        <div>
+                            <label htmlFor="servico-cidade" className={FIELD_LABEL_CLASSNAME}>Cidade</label>
+                            <input
+                                id="servico-cidade"
+                                type="text"
+                                value={cidade}
+                                onChange={(event) => setCidade(event.target.value)}
+                                placeholder="Cidade"
+                                className={FIELD_CLASSNAME}
+                            />
+                        </div>
+                        <div>
+                            <label htmlFor="servico-uf" className={FIELD_LABEL_CLASSNAME}>UF</label>
+                            <input
+                                id="servico-uf"
+                                type="text"
+                                value={uf}
+                                onChange={(event) => setUf(event.target.value.toUpperCase())}
+                                maxLength={2}
+                                placeholder="UF"
+                                className={`${FIELD_CLASSNAME} text-center uppercase`}
+                            />
+                        </div>
                     </div>
                 </div>
 
-                <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_168px]">
-                    <div>
-                        <label className={FIELD_LABEL_CLASSNAME}>Endereço</label>
-                        <input
-                            type="text"
-                            value={endereco}
-                            onChange={(event) => setEndereco(event.target.value)}
-                            placeholder="Rua, número"
-                            className={FIELD_CLASSNAME}
-                        />
+                <div className="space-y-3 border-t border-[var(--border-subtle)] pt-5">
+                    <p className={FIELD_GROUP_CLASSNAME}>Serviço</p>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="col-span-2">
+                            <label htmlFor="servico-filme" className={FIELD_LABEL_CLASSNAME}>
+                                Película aplicada <span className="text-[var(--text-soft)]">*</span>
+                            </label>
+                            <select
+                                id="servico-filme"
+                                value={filmeAplicado}
+                                onChange={(event) => setFilmeAplicado(event.target.value)}
+                                className={FIELD_CLASSNAME}
+                            >
+                                <option value="">Selecione</option>
+                                {films.map((film) => (
+                                    <option key={film.nome} value={film.nome}>
+                                        {film.nome}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label htmlFor="servico-area" className={FIELD_LABEL_CLASSNAME}>Área aplicada</label>
+                            <div className="relative">
+                                <input
+                                    id="servico-area"
+                                    type="text"
+                                    inputMode="decimal"
+                                    value={metrosAplicados}
+                                    onChange={(event) => setMetrosAplicados(event.target.value.replace(/[^\d.,]/g, ''))}
+                                    placeholder="0,00"
+                                    className={`${FIELD_CLASSNAME} pr-11 tabular-nums`}
+                                />
+                                <span className="pointer-events-none absolute inset-y-0 right-3.5 flex items-center text-sm text-[var(--text-muted)]">m²</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label htmlFor="servico-data" className={FIELD_LABEL_CLASSNAME}>Data</label>
+                            <input
+                                id="servico-data"
+                                type="date"
+                                value={dataServico}
+                                onChange={(event) => setDataServico(event.target.value)}
+                                className={`${FIELD_CLASSNAME} px-3`}
+                            />
+                        </div>
                     </div>
-                    <div>
-                        <label className={FIELD_LABEL_CLASSNAME}>UF</label>
-                        <input
-                            type="text"
-                            value={uf}
-                            onChange={(event) => setUf(event.target.value)}
-                            maxLength={2}
-                            placeholder="SP"
-                            className={`${FIELD_CLASSNAME} text-center uppercase`}
-                        />
-                    </div>
-                </div>
 
-                <div className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_160px]">
                     <div>
-                        <label className={FIELD_LABEL_CLASSNAME}>Cidade</label>
-                        <input
-                            type="text"
-                            value={cidade}
-                            onChange={(event) => setCidade(event.target.value)}
-                            placeholder="Cidade"
-                            className={FIELD_CLASSNAME}
-                        />
-                    </div>
-                    <div>
-                        <label className={FIELD_LABEL_CLASSNAME}>Data</label>
-                        <input
-                            type="date"
-                            value={dataServico}
-                            onChange={(event) => setDataServico(event.target.value)}
-                            className={`${FIELD_CLASSNAME} px-3`}
-                        />
-                    </div>
-                </div>
-
-                <div className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
-                    <div>
-                        <label className={FIELD_LABEL_CLASSNAME}>Película aplicada *</label>
-                        <select
-                            value={filmeAplicado}
-                            onChange={(event) => setFilmeAplicado(event.target.value)}
-                            className={FIELD_CLASSNAME}
-                        >
-                            <option value="">Selecione...</option>
-                            {films.map((film) => (
-                                <option key={film.nome} value={film.nome}>
-                                    {film.nome}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-                    <div>
-                        <label className={FIELD_LABEL_CLASSNAME}>Área aplicada (m²)</label>
-                        <input
-                            type="text"
-                            inputMode="decimal"
-                            value={metrosAplicados}
-                            onChange={(event) => setMetrosAplicados(event.target.value)}
-                            placeholder="12,50"
-                            className={FIELD_CLASSNAME}
+                        <div className="mb-1.5 flex items-baseline justify-between gap-2">
+                            <label htmlFor="servico-obs" className="block text-xs font-medium text-[var(--text-muted)]">Observações</label>
+                            <span className="text-xs text-[var(--text-soft)]">Só para você, não saem na etiqueta</span>
+                        </div>
+                        <textarea
+                            id="servico-obs"
+                            value={observacoes}
+                            onChange={(event) => setObservacoes(event.target.value)}
+                            rows={3}
+                            placeholder="Ex.: garantia de 5 anos, retorno em 30 dias"
+                            className={`${FIELD_CLASSNAME} resize-none`}
                         />
                     </div>
                 </div>
 
-                <div>
-                    <label className={FIELD_LABEL_CLASSNAME}>Observações</label>
-                    <textarea
-                        value={observacoes}
-                        onChange={(event) => setObservacoes(event.target.value)}
-                        rows={4}
-                        placeholder="Observações internas do atendimento..."
-                        className={`${FIELD_CLASSNAME} resize-none`}
-                    />
-                </div>
-
-                <p className="flex items-start gap-2 text-xs text-[var(--text-muted)]">
-                    <QrCode className="mt-px h-4 w-4 shrink-0" aria-hidden="true" />
-                    <span>O QR abre a página do serviço para o cliente. A impressão sai no formato escolhido</span>
-                </p>
-
-                <div className="flex flex-col-reverse gap-2 border-t border-[var(--border-subtle)] pt-4 sm:flex-row sm:justify-end">
-                    <ActionButton type="button" variant="secondary" size="md" onClick={resetForm} icon={<RotateCcw className="h-4 w-4" />}>
-                        Limpar
-                    </ActionButton>
-                    <ActionButton type="submit" form="servicoForm" size="md" loading={isSubmitting} loadingText="Gerando etiqueta..." icon={<CheckCircle2 className="h-4 w-4" />}>
-                        Gerar etiqueta
-                    </ActionButton>
+                <div className="flex flex-col-reverse gap-2 border-t border-[var(--border-subtle)] pt-4 sm:flex-row sm:items-center sm:justify-between">
+                    <span className="hidden text-xs text-[var(--text-soft)] sm:inline">* obrigatório</span>
+                    <div className="flex flex-col-reverse gap-2 sm:flex-row">
+                        <ActionButton type="button" variant="ghost" size="md" onClick={resetForm} icon={<RotateCcw className="h-4 w-4" />}>
+                            Limpar
+                        </ActionButton>
+                        <ActionButton type="submit" form="servicoForm" size="md" loading={isSubmitting} loadingText="Gerando etiqueta..." icon={<QrCode className="h-4 w-4" />}>
+                            Gerar etiqueta
+                        </ActionButton>
+                    </div>
                 </div>
             </fieldset>
         </form>
@@ -796,11 +823,10 @@ const ServicoQrView: React.FC<ServicoQrViewProps> = ({
                 {!isMobile && (
                     <div className="min-w-0 space-y-4">
                         <section ref={formSectionRef} className={`${SECTION_CARD_CLASSNAME} scroll-mt-24`}>
-                            <div className="mb-5 flex items-center justify-between gap-3">
+                            <div className="mb-5">
                                 <h3 className="text-base font-semibold text-[var(--text-strong)]">
-                                    {savedServico ? 'Nova etiqueta' : 'Dados do serviço'}
+                                    Nova etiqueta
                                 </h3>
-                                {buscarClienteButton}
                             </div>
                             {etiquetaForm}
                         </section>
@@ -956,7 +982,7 @@ const ServicoQrView: React.FC<ServicoQrViewProps> = ({
                     open={isFormDrawerOpen}
                     onOpenChange={setIsFormDrawerOpen}
                     title="Dados da etiqueta"
-                    description="Preencha os dados para gerar a etiqueta térmica."
+                    description="A etiqueta é gerada com os dados abaixo"
                 >
                     <div className="space-y-4">
                         {error && (
@@ -965,7 +991,6 @@ const ServicoQrView: React.FC<ServicoQrViewProps> = ({
                                 <span>{error}</span>
                             </div>
                         )}
-                        {buscarClienteButton}
                         {etiquetaForm}
                     </div>
                 </MobileActionsDrawer>
