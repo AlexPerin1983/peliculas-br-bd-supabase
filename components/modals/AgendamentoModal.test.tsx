@@ -82,7 +82,7 @@ describe('AgendamentoModal', () => {
             />
         );
 
-        expect(screen.getByText('Novo Agendamento')).toBeInTheDocument();
+        expect(screen.getByText('Novo agendamento')).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Agendar' })).toBeInTheDocument();
         expect(screen.queryByText(/sugerir com ia/i)).not.toBeInTheDocument();
     });

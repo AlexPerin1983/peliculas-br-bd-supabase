@@ -514,13 +514,14 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
 
     const modalTitle = (
         <div className="flex items-center gap-3">
-            <span>{isEditing ? "Editar Agendamento" : "Novo Agendamento"}</span>
+            <span>{isEditing ? "Editar agendamento" : "Novo agendamento"}</span>
             {isEditing && (
                 <button
                     type="button"
                     onClick={handleExportToCalendar}
                     className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"
-                    title="Exportar para Calendário"
+                    title="Exportar para o calendário"
+                    aria-label="Exportar para o calendário"
                 >
                     <i className="fas fa-file-export text-sm"></i>
                 </button>
@@ -535,8 +536,9 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                     type="button"
                     onClick={handleDelete}
                     disabled={isSaving}
-                    variant="danger"
+                    variant="ghost"
                     size="sm"
+                    className="!text-red-600 hover:!bg-red-50 dark:!text-red-400 dark:hover:!bg-red-950/30"
                 >
                     Excluir
                 </ActionButton>
@@ -556,7 +558,7 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
         </>
     );
 
-    const inputClassName = "bg-slate-100/70 border-slate-200 placeholder:text-slate-400 focus:bg-white focus:border-slate-400 focus:ring-slate-400 focus:ring-1 dark:bg-slate-700 dark:border-slate-600 dark:placeholder:text-slate-500 dark:text-slate-200 dark:focus:bg-slate-800 dark:focus:border-slate-500";
+    const inputClassName = "bg-slate-100/70 border-slate-200 placeholder:text-slate-400 focus:bg-white focus:border-slate-400 focus:ring-slate-400 focus:ring-1 dark:bg-slate-700 dark:border-slate-600 dark:placeholder:text-slate-500 dark:text-slate-200 dark:focus:bg-slate-800 dark:focus:border-slate-500 dark:[color-scheme:dark]";
     const textareaClassName = `${inputClassName} min-h-[120px] resize-none`;
 
     return (
@@ -746,7 +748,7 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                                             : 'border-slate-200 bg-white text-blue-700 hover:bg-blue-50 dark:border-slate-600 dark:bg-slate-900 dark:text-blue-300'}`}
                                     >
                                         <i className="fas fa-pen text-[10px]" aria-hidden="true"></i>
-                                        <span className="text-xs font-bold">{isCurrentClientIncomplete ? 'Completar' : 'Editar'}</span>
+                                        <span className="text-xs font-semibold">{isCurrentClientIncomplete ? 'Completar' : 'Editar'}</span>
                                     </button>
                                 ) : null}
                             </div>
@@ -986,14 +988,22 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
 
                     {availability && (
                         availability.free <= 0 ? (
-                            <div className="flex items-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-200">
-                                <i className="fas fa-triangle-exclamation" aria-hidden="true"></i>
-                                <span>Horário cheio — todos os {availability.capacity} colaborador(es) já estão ocupados. Escolha outro horário.</span>
+                            <div className="flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-200">
+                                <i className="fas fa-triangle-exclamation text-xs" aria-hidden="true"></i>
+                                <span>
+                                    {availability.capacity === 1
+                                        ? 'Horário cheio: já existe um atendimento neste horário. Escolha outro.'
+                                        : `Horário cheio: os ${availability.capacity} colaboradores estão ocupados. Escolha outro.`}
+                                </span>
                             </div>
                         ) : (
-                            <div className="flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-200">
-                                <i className="fas fa-user-check" aria-hidden="true"></i>
-                                <span>{availability.free} de {availability.capacity} colaborador(es) livre(s) neste horário.</span>
+                            <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-200">
+                                <i className="fas fa-user-check text-xs" aria-hidden="true"></i>
+                                <span>
+                                    {availability.capacity === 1
+                                        ? 'Horário livre'
+                                        : `${availability.free} de ${availability.capacity} ${availability.free === 1 ? 'colaborador livre' : 'colaboradores livres'} neste horário`}
+                                </span>
                             </div>
                         )
                     )}
@@ -1023,7 +1033,7 @@ const AgendamentoModal: React.FC<AgendamentoModalProps> = ({ isOpen, onClose, on
                                             className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors ${isActive ? option.activeClasses : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-700/50 dark:text-slate-300 dark:hover:bg-slate-700'}`}
                                         >
                                             <i className={`${option.iconClassName} text-xs`} aria-hidden="true"></i>
-                                            {option.label}
+                                            <span className="text-sm font-medium">{option.label}</span>
                                         </button>
                                     );
                                 })}
