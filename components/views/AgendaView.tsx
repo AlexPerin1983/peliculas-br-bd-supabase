@@ -1052,7 +1052,7 @@ const AppointmentCard: React.FC<{
     };
 
     return (
-        <article className="relative overflow-hidden rounded-[var(--radius-card)] border border-[var(--border-subtle)] bg-[var(--surface)] text-left shadow-[var(--shadow-hairline)] transition-all duration-200 hover:shadow-[var(--shadow-soft)]">
+        <article className="relative overflow-hidden rounded-[var(--radius-card)] border border-[var(--border-subtle)] bg-[var(--surface)] text-left shadow-[var(--shadow-hairline)]">
             <EventColorStripe agendamento={agendamento} />
             <button
                 type="button"
@@ -1061,17 +1061,17 @@ const AppointmentCard: React.FC<{
             >
                 <div className="grid grid-cols-[64px_minmax(0,1fr)_auto] items-start gap-3">
                     <div className="flex min-h-[74px] flex-col items-center justify-between rounded-[var(--radius-control)] bg-[var(--surface-muted)] px-2 py-2 text-center">
-                        <span className="text-sm font-black leading-none text-[var(--text-strong)]">{startTime}</span>
+                        <span className="text-sm font-semibold leading-none tabular-nums text-[var(--text-strong)]">{startTime}</span>
                         <span className={`my-1 h-5 w-0.5 rounded-full ${meta.railClasses}`} aria-hidden="true"></span>
-                        <span className="text-sm font-black leading-none text-[var(--text-strong)]">{endTime}</span>
+                        <span className="text-sm font-medium leading-none tabular-nums text-[var(--text-muted)]">{endTime}</span>
                     </div>
 
                     <div className="min-w-0">
-                        <p className="truncate text-base font-black leading-tight text-[var(--text-strong)] sm:text-lg">
+                        <p className="truncate text-base font-semibold leading-tight text-[var(--text-strong)] sm:text-lg">
                             {agendamento.clienteNome}
                         </p>
                         {agendamento.title ? (
-                            <p className="mt-0.5 truncate text-sm font-semibold text-[var(--text-muted)]">{agendamento.title}</p>
+                            <p className="mt-0.5 truncate text-sm text-[var(--text-muted)]">{agendamento.title}</p>
                         ) : null}
                         <div className="mt-2 flex flex-wrap items-center gap-2">
                             <EventTypeChip agendamento={agendamento} />
@@ -1089,7 +1089,7 @@ const AppointmentCard: React.FC<{
                             ) : null}
                             <ContinuationChip originDate={continuation.originDate} />
                             {bairro ? (
-                                <span className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-[var(--surface-muted)] px-2 py-1 text-xs font-bold text-[var(--text-muted)]" title={clientAddress}>
+                                <span className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-[var(--surface-muted)] px-2 py-1 text-xs font-medium text-[var(--text-muted)]" title={clientAddress}>
                                     <i className="fas fa-map-marker-alt text-[10px]" aria-hidden="true"></i>
                                     <span className="truncate">{bairro}</span>
                                 </span>
@@ -1118,12 +1118,12 @@ const AppointmentCard: React.FC<{
             </button>
 
             {showEndedPrompt ? (
-                <div className="border-t border-amber-200 bg-amber-50 p-3 dark:border-amber-900/50 dark:bg-amber-950/20">
+                <div className="border-t border-amber-300/60 bg-[var(--surface-muted)] p-3 dark:border-amber-800/50">
                     {isConfirmingValue ? (
                         valueConfirmationPanel
                     ) : (
                         <>
-                            <p className="mb-2 flex items-center gap-1.5 text-xs font-bold text-amber-800 dark:text-amber-200">
+                            <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-amber-800 dark:text-amber-300">
                                 <i className="fas fa-circle-exclamation text-[11px]" aria-hidden="true"></i>
                                 Horário encerrado — como foi o atendimento?
                             </p>
@@ -1131,35 +1131,35 @@ const AppointmentCard: React.FC<{
                                 <button
                                     type="button"
                                     onClick={handleCompleteClick}
-                                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[var(--radius-control)] border border-emerald-300 bg-emerald-100 px-2 text-xs font-bold text-emerald-800 transition-colors hover:bg-emerald-200 dark:border-emerald-800/70 dark:bg-emerald-950/40 dark:text-emerald-200"
+                                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[var(--radius-control)] bg-emerald-600 px-2 text-white transition-colors hover:bg-emerald-700"
                                 >
                                     <i className="fas fa-check text-[11px]" aria-hidden="true"></i>
-                                    <span className="truncate">Concluído</span>
+                                    <span className="truncate text-xs font-semibold">Concluído</span>
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => onUpdateServiceStatus(agendamento, 'no_show')}
-                                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[var(--radius-control)] border border-amber-300 bg-white px-2 text-xs font-bold text-amber-800 transition-colors hover:bg-amber-100 dark:border-amber-800/70 dark:bg-slate-800 dark:text-amber-200"
+                                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] px-2 text-[var(--text-body)] transition-colors hover:bg-[var(--surface-muted)]"
                                 >
-                                    <i className="fas fa-user-slash text-[11px]" aria-hidden="true"></i>
-                                    <span className="truncate">Faltou</span>
+                                    <i className="fas fa-user-slash text-[11px] text-amber-600 dark:text-amber-400" aria-hidden="true"></i>
+                                    <span className="truncate text-xs font-medium">Faltou</span>
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => onUpdateServiceStatus(agendamento, 'cancelled')}
-                                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[var(--radius-control)] border border-rose-300 bg-white px-2 text-xs font-bold text-rose-800 transition-colors hover:bg-rose-100 dark:border-rose-800/70 dark:bg-slate-800 dark:text-rose-200"
+                                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] px-2 text-[var(--text-body)] transition-colors hover:bg-[var(--surface-muted)]"
                                 >
-                                    <i className="fas fa-ban text-[11px]" aria-hidden="true"></i>
-                                    <span className="truncate">Cancelado</span>
+                                    <i className="fas fa-ban text-[11px] text-rose-600 dark:text-rose-400" aria-hidden="true"></i>
+                                    <span className="truncate text-xs font-medium">Cancelado</span>
                                 </button>
                             </div>
                             <button
                                 type="button"
                                 onClick={() => onContinueAgendamento(agendamento)}
-                                className="mt-2 inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-[var(--radius-control)] border border-indigo-300 bg-indigo-100 px-2 text-xs font-bold text-indigo-800 transition-colors hover:bg-indigo-200 dark:border-indigo-800/70 dark:bg-indigo-950/40 dark:text-indigo-200"
+                                className="mt-2 inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] px-2 text-[var(--text-body)] transition-colors hover:bg-[var(--surface-muted)]"
                             >
-                                <i className="fas fa-hourglass-half text-[11px]" aria-hidden="true"></i>
-                                <span className="truncate">Não terminou? Continuar outro dia</span>
+                                <i className="fas fa-hourglass-half text-[11px] text-indigo-500 dark:text-indigo-300" aria-hidden="true"></i>
+                                <span className="truncate text-xs font-medium">Não terminou? Continuar outro dia</span>
                             </button>
                         </>
                     )}
@@ -1174,8 +1174,8 @@ const AppointmentCard: React.FC<{
                         <>
                             <div className="flex items-center justify-between gap-2">
                                 <div className="min-w-0">
-                                    <span className="block text-[10px] font-bold uppercase text-emerald-700/70 dark:text-emerald-300/60">Valor final</span>
-                                    <span className="block text-sm font-black text-emerald-800 dark:text-emerald-200">
+                                    <span className="block text-[11px] font-medium text-emerald-700/80 dark:text-emerald-300/70">Valor final</span>
+                                    <span className="block text-sm font-semibold tabular-nums text-emerald-800 dark:text-emerald-200">
                                         {hasCurrentValue ? `R$ ${formatCurrencyBR(currentValue!)}` : 'Sem valor'}
                                     </span>
                                 </div>
