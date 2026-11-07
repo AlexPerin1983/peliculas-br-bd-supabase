@@ -1,5 +1,31 @@
 import React, { useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
+import {
+    Boxes,
+    CalendarDays,
+    Check,
+    ChevronDown,
+    ChevronUp,
+    CircleUserRound,
+    FileText,
+    GripVertical,
+    Headset,
+    History,
+    Layers3,
+    LayoutDashboard,
+    LogOut,
+    type LucideIcon,
+    MapPinned,
+    MessageCircle,
+    MessagesSquare,
+    Pencil,
+    QrCode,
+    Settings,
+    Share2,
+    ShieldUser,
+    Truck,
+    UsersRound
+} from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import SyncStatusIndicator from './SyncStatusIndicator';
 import ThemeToggle from './ui/ThemeToggle';
@@ -48,7 +74,7 @@ interface HeaderProps {
 
 interface NavItem {
     tabId: ActiveTab;
-    icon: string;
+    icon: LucideIcon;
     label: string;
     hint: string;
     badge?: string;
@@ -56,30 +82,35 @@ interface NavItem {
 
 // Itens principais personalizaveis. A ordem inicial preserva o menu conhecido;
 // conta, configuracoes e acoes operacionais continuam fixas em "Sistema".
+// Os ícones são os mesmos da barra lateral do computador.
 const SECTION_GERAL: NavItem[] = [
-    { tabId: 'dashboard', icon: 'fas fa-chart-line', label: 'Dashboard', hint: 'visao geral do negocio' },
+    { tabId: 'dashboard', icon: LayoutDashboard, label: 'Dashboard', hint: 'visao geral do negocio' },
 ];
 
 const SECTION_VENDAS: NavItem[] = [
-    { tabId: 'clients_list', icon: 'fas fa-user-friends', label: 'Clientes', hint: 'cadastro e histórico' },
-    { tabId: 'client', icon: 'fas fa-file-invoice-dollar', label: 'Orçamento', hint: 'montar e enviar' },
-    { tabId: 'proposals', icon: 'fas fa-comments', label: 'Propostas', hint: 'respostas e negociações' },
-    { tabId: 'history', icon: 'fas fa-history', label: 'Histórico', hint: 'registros, PDFs e consultas' },
-    { tabId: 'films', icon: 'fas fa-layer-group', label: 'Películas', hint: 'catálogo e seleção' },
+    { tabId: 'clients_list', icon: UsersRound, label: 'Clientes', hint: 'cadastro e histórico' },
+    { tabId: 'client', icon: FileText, label: 'Orçamento', hint: 'montar e enviar' },
+    { tabId: 'proposals', icon: MessagesSquare, label: 'Propostas', hint: 'respostas e negociações' },
+    { tabId: 'history', icon: History, label: 'Histórico', hint: 'registros, PDFs e consultas' },
+    { tabId: 'films', icon: Layers3, label: 'Películas', hint: 'catálogo e seleção' },
 ];
 
 const SECTION_OPERACAO: NavItem[] = [
-    { tabId: 'agenda', icon: 'fas fa-calendar-alt', label: 'Agenda', hint: 'visitas, prazos e tarefas' },
-    { tabId: 'saved_places', icon: 'fas fa-map-marker-alt', label: 'Meus locais', hint: 'endereços e rotas favoritas' },
-    { tabId: 'estoque', icon: 'fas fa-boxes', label: 'Estoque', hint: 'bobinas, retalhos e status' },
-    { tabId: 'qr_code', icon: 'fas fa-qrcode', label: 'QR Code', hint: 'rótulos e leitura rápida' },
-    { tabId: 'fornecedores', icon: 'fas fa-truck', label: 'Fornecedores', hint: 'compras, contatos e apoio' },
+    { tabId: 'agenda', icon: CalendarDays, label: 'Agenda', hint: 'visitas, prazos e tarefas' },
+    { tabId: 'saved_places', icon: MapPinned, label: 'Meus locais', hint: 'endereços e rotas favoritas' },
+    { tabId: 'estoque', icon: Boxes, label: 'Estoque', hint: 'bobinas, retalhos e status' },
+    { tabId: 'qr_code', icon: QrCode, label: 'QR Code', hint: 'rótulos e leitura rápida' },
+    { tabId: 'fornecedores', icon: Truck, label: 'Fornecedores', hint: 'compras, contatos e apoio' },
 ];
 
 const SECTION_SISTEMA: NavItem[] = [
-    { tabId: 'settings', icon: 'fas fa-cog', label: 'Configurações', hint: 'preferências e ajustes do app' },
-    { tabId: 'account', icon: 'fas fa-user-circle', label: 'Minha Conta', hint: 'perfil, acesso e segurança' },
+    { tabId: 'settings', icon: Settings, label: 'Configurações', hint: 'preferências e ajustes do app' },
+    { tabId: 'account', icon: CircleUserRound, label: 'Minha Conta', hint: 'perfil, acesso e segurança' },
 ];
+
+// Filete de linha fina (8% do texto) usado em bordas e divisórias do menu.
+const HAIRLINE = 'border-slate-900/[0.08] dark:border-white/[0.08]';
+const ICON_STROKE = 1.75;
 
 const PRIMARY_NAV_ITEMS = [
     ...SECTION_GERAL,
@@ -424,13 +455,9 @@ const Header: React.FC<HeaderProps> = ({
     const userName = companyInfo?.empresa?.trim() || user?.email?.split('@')[0] || 'Usuário';
     const initials = userName.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase() || 'U';
     const companyLogo = companyInfo?.logo || undefined;
-    const shellWidth = shellMetrics.width;
-    const measuredShellHeight = shellMetrics.height;
-    const shellProgress = Math.max(0, Math.min(1, (shellWidth - 320) / 68));
-    const interpolate = (min: number, max: number) => min + (max - min) * shellProgress;
-    const isCompactShell = shellWidth < 348;
-    const isShortShell = measuredShellHeight > 0 && measuredShellHeight < 760;
-    const fluidSidebarStyle = {
+    // Medidas fixas na grade de 4 px: linhas de 48 px (alvo de toque confortável),
+    // 2 px entre linhas e 12 px de margem lateral.
+    const sidebarStyle = {
         width: 'min(calc(100vw - 10px), 392px)',
         minWidth: 'min(calc(100vw - 8px), 304px)',
         maxWidth: '392px',
@@ -438,36 +465,13 @@ const Header: React.FC<HeaderProps> = ({
         maxHeight: '100dvh',
         transform: menuState === 'open' ? `translateX(${dragOffsetX}px)` : undefined,
         touchAction: 'pan-y',
-        ['--sidebar-shell-gap' as '--sidebar-shell-gap']: '0px',
-        ['--sidebar-header-safe' as '--sidebar-header-safe']: '0px',
-        ['--sidebar-content-radius' as '--sidebar-content-radius']: `${Math.round(interpolate(20, 24))}px`,
-        ['--sidebar-safe-top' as '--sidebar-safe-top']: 'max(0.75rem, env(safe-area-inset-top))',
-        ['--sidebar-safe-bottom' as '--sidebar-safe-bottom']: 'max(0.75rem, env(safe-area-inset-bottom))',
-        ['--sidebar-pad-x' as '--sidebar-pad-x']: `${Math.round(interpolate(14, 18))}px`,
-        ['--sidebar-pad-top' as '--sidebar-pad-top']: `${Math.round(interpolate(15, 21))}px`,
-        ['--sidebar-pad-bottom' as '--sidebar-pad-bottom']: `${Math.round(interpolate(14, 18))}px`,
-        ['--sidebar-avatar' as '--sidebar-avatar']: `${Math.round(interpolate(isCompactShell ? 44 : 47, 56))}px`,
-        ['--sidebar-avatar-font' as '--sidebar-avatar-font']: `${interpolate(0.86, 0.95).toFixed(3)}rem`,
-        ['--sidebar-title' as '--sidebar-title']: `${interpolate(isCompactShell ? 1.22 : 1.34, 1.58).toFixed(3)}rem`,
-        ['--sidebar-email' as '--sidebar-email']: `${interpolate(0.75, 0.83).toFixed(3)}rem`,
-        ['--sidebar-gap' as '--sidebar-gap']: `${interpolate(10, 13)}px`,
-        ['--sidebar-item-gap' as '--sidebar-item-gap']: `${interpolate(11, 14)}px`,
-        ['--sidebar-item-px' as '--sidebar-item-px']: `${interpolate(12, 15)}px`,
-        ['--sidebar-item-py' as '--sidebar-item-py']: `${interpolate(isShortShell ? 9.8 : 10.6, 12.2)}px`,
-        ['--sidebar-item-font' as '--sidebar-item-font']: `${interpolate(0.9, 0.95).toFixed(3)}rem`,
-        ['--sidebar-icon-box' as '--sidebar-icon-box']: `${Math.round(interpolate(29, 34))}px`,
-        ['--sidebar-icon-size' as '--sidebar-icon-size']: `${interpolate(0.87, 0.97).toFixed(3)}rem`,
-        ['--sidebar-footer-icon' as '--sidebar-footer-icon']: `${Math.round(interpolate(29, 34))}px`,
-        ['--sidebar-nav-top' as '--sidebar-nav-top']: `${Math.round(interpolate(isShortShell ? 15 : 17, 20))}px`,
-        ['--sidebar-section-top' as '--sidebar-section-top']: `${Math.round(interpolate(15, 18))}px`,
-        ['--sidebar-chevron' as '--sidebar-chevron']: `${interpolate(0.78, 0.88).toFixed(3)}rem`,
     } as React.CSSProperties;
 
     const waItems: NavItem[] = isWaConnectorEnabled()
-        ? [{ tabId: 'wa_connector', icon: 'fab fa-whatsapp', label: 'WhatsApp', hint: 'capturar contato como cliente', badge: 'Local' }]
+        ? [{ tabId: 'wa_connector', icon: MessageCircle, label: 'WhatsApp', hint: 'capturar contato como cliente', badge: 'Local' }]
         : [];
     const adminItems: NavItem[] = isAdmin
-        ? [{ tabId: 'admin', icon: 'fas fa-user-shield', label: 'Admin', hint: 'gestao da equipe e acessos' }]
+        ? [{ tabId: 'admin', icon: ShieldUser, label: 'Admin', hint: 'gestao da equipe e acessos' }]
         : [];
 
     const orderedPrimaryItems = displayedMenuOrder
@@ -504,10 +508,10 @@ const Header: React.FC<HeaderProps> = ({
                 key={item.tabId}
                 ref={node => registerMenuRow(tabId, node)}
                 className={[
-                    'flex w-full items-center gap-1.5 rounded-[18px] border bg-white/75 px-1.5 py-1.5 transition-[transform,box-shadow,border-color] dark:bg-white/[0.045]',
+                    'flex h-14 w-full items-center gap-2 rounded-xl border bg-[var(--surface)] pl-1 pr-2 transition-[transform,box-shadow,border-color] duration-150 dark:bg-white/[0.03]',
                     draggingTabId === tabId
-                        ? 'relative z-20 scale-[1.015] border-blue-400 shadow-[0_12px_28px_rgba(37,99,235,0.2)] dark:border-cyan-300/60'
-                        : 'border-slate-200/80 shadow-sm dark:border-white/10'
+                        ? 'relative z-20 scale-[1.015] border-[var(--brand-primary)] shadow-[0_8px_24px_rgba(15,23,42,0.14)] dark:shadow-[0_8px_24px_rgba(0,0,0,0.4)]'
+                        : HAIRLINE
                 ].join(' ')}
                 data-menu-tab={item.tabId}
                 data-menu-dragging={draggingTabId === tabId ? 'true' : undefined}
@@ -530,19 +534,17 @@ const Header: React.FC<HeaderProps> = ({
                             handleMoveMenuItem(tabId, 1);
                         }
                     }}
-                    className="flex h-11 w-10 touch-none flex-shrink-0 cursor-grab items-center justify-center rounded-xl text-slate-400 transition-colors active:cursor-grabbing active:bg-blue-50 active:text-blue-600 dark:text-slate-400 dark:active:bg-cyan-300/10 dark:active:text-cyan-200"
+                    className="flex h-11 w-10 touch-none flex-shrink-0 cursor-grab items-center justify-center rounded-lg text-[var(--text-soft)] transition-colors active:cursor-grabbing active:bg-slate-100 active:text-[var(--text-body)] dark:active:bg-white/[0.06]"
                 >
-                    <i className="fas fa-grip-vertical text-sm" aria-hidden="true" />
+                    <GripVertical className="h-4 w-4" strokeWidth={ICON_STROKE} aria-hidden="true" />
                 </button>
-                <div className="flex h-[var(--sidebar-icon-box)] w-[var(--sidebar-icon-box)] flex-shrink-0 items-center justify-center">
-                    <i className={`${item.icon} text-[var(--sidebar-icon-size)] text-blue-500/90 dark:text-cyan-300/90`} />
-                </div>
-                <div className="min-w-0 flex-1">
-                    <p className="truncate text-[var(--sidebar-item-font)] font-medium text-slate-800 dark:text-white/92">
+                <item.icon className="h-[18px] w-[18px] flex-shrink-0 text-[var(--text-muted)]" strokeWidth={ICON_STROKE} aria-hidden="true" />
+                <div className="ml-1 min-w-0 flex-1">
+                    <p className="truncate text-[15px] font-medium leading-5 text-[var(--text-strong)]">
                         {item.label}
                     </p>
                     {isFirst ? (
-                        <p className="mt-0.5 text-[9px] font-bold uppercase tracking-[0.12em] text-blue-600 dark:text-cyan-300">
+                        <p className="text-xs leading-4 text-[var(--brand-primary)]">
                             Tela inicial
                         </p>
                     ) : null}
@@ -553,76 +555,67 @@ const Header: React.FC<HeaderProps> = ({
                         onClick={() => handleMoveMenuItem(tabId, -1)}
                         disabled={isFirst}
                         aria-label={`Mover ${item.label} para cima, posição ${index + 1} de ${orderedPrimaryItems.length}`}
-                        className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition-colors active:scale-95 disabled:cursor-not-allowed disabled:opacity-25 dark:border-white/10 dark:bg-white/[0.055] dark:text-slate-200"
+                        className={`flex h-10 w-10 items-center justify-center rounded-[10px] border ${HAIRLINE} text-[var(--text-body)] transition-[background-color,transform] duration-150 active:scale-95 active:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30 dark:active:bg-white/[0.06]`}
                     >
-                        <i className="fas fa-chevron-up text-xs" aria-hidden="true" />
+                        <ChevronUp className="h-[18px] w-[18px]" strokeWidth={ICON_STROKE} aria-hidden="true" />
                     </button>
                     <button
                         type="button"
                         onClick={() => handleMoveMenuItem(tabId, 1)}
                         disabled={isLast}
                         aria-label={`Mover ${item.label} para baixo, posição ${index + 1} de ${orderedPrimaryItems.length}`}
-                        className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition-colors active:scale-95 disabled:cursor-not-allowed disabled:opacity-25 dark:border-white/10 dark:bg-white/[0.055] dark:text-slate-200"
+                        className={`flex h-10 w-10 items-center justify-center rounded-[10px] border ${HAIRLINE} text-[var(--text-body)] transition-[background-color,transform] duration-150 active:scale-95 active:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30 dark:active:bg-white/[0.06]`}
                     >
-                        <i className="fas fa-chevron-down text-xs" aria-hidden="true" />
+                        <ChevronDown className="h-[18px] w-[18px]" strokeWidth={ICON_STROKE} aria-hidden="true" />
                     </button>
                 </div>
             </div>
         );
     };
 
-    const renderNavItem = (
-        item: NavItem,
-        tone: 'primary' | 'system',
-        isInitial = false
-    ) => {
+    // Uma linha do menu. A tela aberta ganha só um fundo um tom acima e o
+    // filete azul à esquerda (a "borda da película"); nada de selos ou bolinhas.
+    const rowClass = (isActive: boolean) => [
+        'group relative flex h-12 w-full items-center gap-3 rounded-[10px] px-3 text-left transition-[background-color,transform] duration-150 active:scale-[0.99]',
+        isActive
+            ? 'bg-slate-100 dark:bg-white/[0.07]'
+            : 'hover:bg-slate-50 active:bg-slate-100 dark:hover:bg-white/[0.04] dark:active:bg-white/[0.06]',
+    ].join(' ');
+
+    const renderNavItem = (item: NavItem, isInitial = false) => {
         const isActive = activeTab === item.tabId;
+        const Icon = item.icon;
 
         return (
             <button
                 key={item.tabId}
+                type="button"
                 data-menu-tab={item.tabId}
                 onClick={() => handleNav(item.tabId)}
                 aria-current={isActive ? 'page' : undefined}
-                className={[
-                    'group relative flex w-full items-center gap-[var(--sidebar-item-gap)] px-[var(--sidebar-item-px)] py-[var(--sidebar-item-py)] text-left transition-all duration-200 active:scale-[0.985]',
-                    tone === 'primary' ? 'rounded-[18px]' : 'rounded-2xl',
-                    isActive
-                        ? isCompactShell
-                            ? 'bg-blue-50/72 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] dark:bg-white/[0.055] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]'
-                            : 'bg-blue-50/90 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] dark:bg-white/[0.075] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
-                        : 'bg-transparent hover:bg-slate-100/80 dark:hover:bg-white/[0.03]',
-                ].join(' ')}
+                className={rowClass(isActive)}
             >
-                <div className="flex h-[var(--sidebar-icon-box)] w-[var(--sidebar-icon-box)] flex-shrink-0 items-center justify-center">
-                    <i className={`${item.icon} text-[var(--sidebar-icon-size)] ${isActive ? 'text-blue-600 dark:text-cyan-300' : 'text-blue-500/85 group-hover:text-blue-700 dark:text-cyan-300/85 dark:group-hover:text-cyan-200'}`} />
-                </div>
-
-                <div className="min-w-0 flex-1">
-                    <p className={`truncate text-[var(--sidebar-item-font)] font-medium tracking-[0.005em] ${isActive ? 'text-slate-900 dark:text-white' : 'text-slate-700 group-hover:text-slate-900 dark:text-white/88 dark:group-hover:text-white'}`}>
-                        {item.label}
-                    </p>
-                </div>
-
-                <div className="flex flex-shrink-0 items-center gap-2">
-                    {isInitial ? (
-                        <span className="rounded-full border border-blue-200/80 bg-blue-50/80 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-blue-700 dark:border-cyan-300/20 dark:bg-cyan-300/10 dark:text-cyan-200">
-                            Inicial
-                        </span>
-                    ) : null}
-                    {item.badge ? (
-                        <span className="rounded-full bg-blue-100 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-blue-600 dark:bg-blue-500/20 dark:text-blue-300">
-                            {item.badge}
-                        </span>
-                    ) : null}
-                    {isActive ? (
-                        <span
-                            data-menu-active-marker
-                            className="h-2 w-2 rounded-full bg-blue-500 dark:bg-cyan-300/90"
-                            aria-hidden="true"
-                        />
-                    ) : null}
-                </div>
+                {isActive ? (
+                    <span
+                        data-menu-active-marker
+                        className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-[var(--brand-primary)]"
+                        aria-hidden="true"
+                    />
+                ) : null}
+                <Icon
+                    className={`h-[18px] w-[18px] flex-shrink-0 transition-colors ${isActive ? 'text-[var(--brand-primary)]' : 'text-[var(--text-muted)] group-hover:text-[var(--text-body)]'}`}
+                    strokeWidth={ICON_STROKE}
+                    aria-hidden="true"
+                />
+                <span className={`min-w-0 flex-1 truncate text-[15px] font-medium ${isActive ? 'text-[var(--text-strong)]' : 'text-[var(--text-body)]'}`}>
+                    {item.label}
+                </span>
+                {isInitial ? (
+                    <span className="flex-shrink-0 text-xs text-[var(--text-muted)]">Inicial</span>
+                ) : null}
+                {item.badge ? (
+                    <span className="flex-shrink-0 text-xs text-[var(--text-muted)]">{item.badge}</span>
+                ) : null}
             </button>
         );
     };
@@ -693,7 +686,7 @@ const Header: React.FC<HeaderProps> = ({
                             aria-hidden="true"
                             onClick={closeMenu}
                             className={[
-                                'absolute inset-0 bg-slate-950/45 backdrop-blur-[2px] transition-opacity duration-[420ms] ease-[cubic-bezier(0.32,0.72,0,1)]',
+                                'absolute inset-0 bg-slate-950/40 transition-opacity duration-[420ms] ease-[cubic-bezier(0.32,0.72,0,1)]',
                                 isMenuVisible ? 'opacity-100' : 'opacity-0',
                             ].join(' ')}
                         />
@@ -705,84 +698,75 @@ const Header: React.FC<HeaderProps> = ({
                             onTouchCancel={handleMenuTouchEnd}
                             ref={shellRef}
                             className={[
-                                'absolute inset-y-0 left-0 flex h-dvh max-h-dvh flex-col overflow-hidden rounded-r-[var(--sidebar-content-radius)] border-r border-slate-200/80 bg-white shadow-[0_18px_40px_rgba(15,23,42,0.16)] will-change-transform dark:border-slate-700/80 dark:bg-[#23314d] dark:shadow-[0_20px_42px_rgba(2,6,23,0.34)]',
+                                'absolute inset-y-0 left-0 flex h-dvh max-h-dvh flex-col overflow-hidden rounded-r-[20px] bg-[var(--surface)] shadow-[0_16px_40px_rgba(15,23,42,0.18)] will-change-transform dark:shadow-[0_16px_40px_rgba(0,0,0,0.45)]',
                                 isDraggingMenu
                                     ? 'transition-none'
                                     : 'transition-transform duration-[440ms] ease-[cubic-bezier(0.32,0.72,0,1)]',
                                 isMenuVisible ? 'translate-x-0' : '-translate-x-full',
                             ].join(' ')}
-                            style={fluidSidebarStyle}
+                            style={sidebarStyle}
                         >
-                            <div className="relative flex h-full flex-col overflow-hidden rounded-r-[var(--sidebar-content-radius)]">
-                                <div className="absolute inset-x-0 top-0 h-full bg-[linear-gradient(180deg,rgba(59,130,246,0.08),transparent_52%)] dark:bg-[linear-gradient(180deg,rgba(255,255,255,0.05),transparent_52%)]" />
-
-                                <div className="relative overflow-visible px-[var(--sidebar-pad-x)] pb-[var(--sidebar-pad-bottom)] pt-[calc(var(--sidebar-pad-top)+var(--sidebar-safe-top))]">
-                                    <div className="absolute left-0 right-0 bottom-0 h-px bg-slate-200/80 dark:bg-cyan-300/20" />
-
-                                    <div className="relative">
-                                        <div className="grid grid-cols-[var(--sidebar-avatar)_minmax(0,1fr)] items-center gap-x-[var(--sidebar-gap)] gap-y-1">
-                                            <div className="row-span-2 h-[var(--sidebar-avatar)] w-[var(--sidebar-avatar)] overflow-hidden rounded-full border-[3px] border-slate-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.12)] dark:border-white/90 dark:bg-white/10 dark:shadow-[0_8px_24px_rgba(15,23,42,0.16)]">
-                                                {companyLogo ? (
-                                                    <img
-                                                        src={companyLogo}
-                                                        alt="Logo da empresa"
-                                                        className="h-full w-full object-cover"
-                                                    />
-                                                ) : (
-                                                    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200 text-[var(--sidebar-avatar-font)] font-bold text-slate-700 dark:from-slate-200 dark:to-slate-300">
-                                                        {initials}
-                                                    </div>
-                                                )}
+                            {/* Cartão da empresa: a única parte com cor própria (o logo do aplicador). */}
+                            <div className={`border-b ${HAIRLINE} px-5 pb-4 pt-[calc(max(0.75rem,env(safe-area-inset-top))+1rem)]`}>
+                                <div className="flex items-center gap-3">
+                                    <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-xl bg-slate-100 ring-1 ring-inset ring-slate-900/[0.08] dark:bg-white/[0.06] dark:ring-white/[0.08]">
+                                        {companyLogo ? (
+                                            <img
+                                                src={companyLogo}
+                                                alt="Logo da empresa"
+                                                className="h-full w-full object-cover"
+                                            />
+                                        ) : (
+                                            <div className="flex h-full w-full items-center justify-center text-base font-semibold text-[var(--text-body)]">
+                                                {initials}
                                             </div>
-                                            <div className="flex min-w-0 items-center gap-2">
-                                                <p className="min-w-0 flex-1 truncate text-[var(--sidebar-title)] font-semibold leading-[0.96] tracking-[-0.03em] text-slate-900 dark:text-white">
-                                                    {userName}
-                                                </p>
-                                                <button
-                                                    type="button"
-                                                    onPointerDown={event => event.stopPropagation()}
-                                                    onTouchStart={event => event.stopPropagation()}
-                                                    onClick={event => {
-                                                        event.preventDefault();
-                                                        event.stopPropagation();
-                                                        setIsCompanyShareOpen(true);
-                                                    }}
-                                                    aria-label="Compartilhar empresa"
-                                                    title="Compartilhar empresa"
-                                                    className="flex h-9 w-9 shrink-0 touch-manipulation items-center justify-center rounded-xl border border-blue-200/80 bg-blue-50 text-blue-600 shadow-sm transition-all active:scale-95 dark:border-cyan-300/20 dark:bg-cyan-300/10 dark:text-cyan-200"
-                                                >
-                                                    <i className="fas fa-share-nodes text-[13px]" aria-hidden="true" />
-                                                </button>
-                                            </div>
-                                            <p className="min-w-0 truncate text-[var(--sidebar-email)] text-blue-600/90 dark:text-cyan-200/95">
-                                                {companyInfo?.email || user?.email || ''}
-                                            </p>
-                                        </div>
+                                        )}
                                     </div>
-                                </div>
-
-                                <div className="relative min-h-0 flex-1">
-                                    <div
-                                        ref={navScrollRef}
-                                        data-menu-scroll-area
-                                        onScroll={updateNavScrollIndicator}
-                                        className="relative h-full overflow-y-auto px-[calc(var(--sidebar-pad-x)-0.08rem)] py-[var(--sidebar-nav-top)] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
-                                        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                                    <div className="min-w-0 flex-1">
+                                        <p className="truncate text-lg font-semibold leading-6 text-[var(--text-strong)]">
+                                            {userName}
+                                        </p>
+                                        <p className="truncate text-[13px] leading-5 text-[var(--text-muted)]">
+                                            {companyInfo?.email || user?.email || ''}
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onPointerDown={event => event.stopPropagation()}
+                                        onTouchStart={event => event.stopPropagation()}
+                                        onClick={event => {
+                                            event.preventDefault();
+                                            event.stopPropagation();
+                                            setIsCompanyShareOpen(true);
+                                        }}
+                                        aria-label="Compartilhar empresa"
+                                        title="Compartilhar empresa"
+                                        className={`-mr-1 flex h-9 w-9 flex-shrink-0 touch-manipulation items-center justify-center rounded-[10px] border ${HAIRLINE} text-[var(--text-muted)] transition-colors duration-150 active:bg-slate-100 dark:active:bg-white/[0.06]`}
                                     >
-                                    {navSections.map((section, index) => {
+                                        <Share2 className="h-4 w-4" strokeWidth={ICON_STROKE} aria-hidden="true" />
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="relative min-h-0 flex-1">
+                                <div
+                                    ref={navScrollRef}
+                                    data-menu-scroll-area
+                                    onScroll={updateNavScrollIndicator}
+                                    className="relative h-full overflow-y-auto px-3 pb-4 pt-3 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+                                    style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                                >
+                                    {navSections.map(section => {
                                         const isSistema = section.id === 'sistema';
+                                        const isEditingSection = isEditingMenu && section.id === 'menu';
                                         return (
                                             <section
                                                 key={section.id}
-                                                className={[
-                                                    'relative',
-                                                    index === 0 ? '' : 'mt-[var(--sidebar-section-top)]',
-                                                    isSistema ? 'border-t border-slate-200/80 pt-[var(--sidebar-section-top)] dark:border-cyan-300/18' : '',
-                                                ].filter(Boolean).join(' ')}
+                                                className={isSistema ? `mt-4 border-t ${HAIRLINE} pt-4` : undefined}
                                             >
-                                                <div className="mb-1.5 flex items-center justify-between gap-3 px-[var(--sidebar-item-px)]">
-                                                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
-                                                        {isEditingMenu && section.id === 'menu' ? 'Organizar menu' : section.label}
+                                                <div className="mb-1 flex h-8 items-center justify-between gap-3 pl-3">
+                                                    <p className="text-[13px] font-medium text-[var(--text-muted)]">
+                                                        {isEditingSection ? 'Organizar menu' : section.label}
                                                     </p>
                                                     {section.id === 'menu' ? (
                                                         <button
@@ -793,25 +777,24 @@ const Header: React.FC<HeaderProps> = ({
                                                             }}
                                                             aria-label={isEditingMenu ? 'Concluir organização do menu' : 'Organizar menu'}
                                                             aria-pressed={isEditingMenu}
-                                                            className="flex min-h-8 items-center gap-1.5 rounded-full border border-blue-200/80 bg-blue-50 px-3 text-[10px] font-bold text-blue-700 transition-colors active:scale-95 dark:border-cyan-300/20 dark:bg-cyan-300/10 dark:text-cyan-200"
+                                                            className={`flex h-8 items-center gap-1.5 rounded-lg px-2 transition-colors duration-150 active:bg-slate-100 dark:active:bg-white/[0.06] ${isEditingMenu ? 'text-[var(--brand-primary)]' : 'text-[var(--text-muted)]'}`}
                                                         >
-                                                            <i className={`fas ${isEditingMenu ? 'fa-check' : 'fa-pen'} text-[9px]`} aria-hidden="true" />
-                                                            {isEditingMenu ? 'Concluir' : 'Organizar'}
+                                                            {isEditingMenu
+                                                                ? <Check className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+                                                                : <Pencil className="h-3.5 w-3.5" strokeWidth={ICON_STROKE} aria-hidden="true" />}
+                                                            <span className="text-[13px] font-medium">{isEditingMenu ? 'Concluir' : 'Organizar'}</span>
                                                         </button>
                                                     ) : null}
                                                 </div>
-                                                {isEditingMenu && section.id === 'menu' ? (
-                                                    <div className="mb-2 rounded-2xl bg-blue-50/80 px-3 py-2.5 text-[10px] leading-relaxed text-blue-800 dark:bg-cyan-300/10 dark:text-cyan-100">
-                                                        <div className="flex items-start gap-2">
-                                                            <i className="fas fa-house mt-0.5 text-[9px]" aria-hidden="true" />
-                                                            <p>Arraste pelo puxador ou use as setas. O primeiro item será aberto ao iniciar o aplicativo.</p>
-                                                        </div>
+                                                {isEditingSection ? (
+                                                    <div className="mb-3 px-3 text-[13px] leading-5 text-[var(--text-muted)]">
+                                                        <p>Arraste pelo puxador ou use as setas. O primeiro item será aberto ao iniciar o aplicativo.</p>
                                                         <button
                                                             type="button"
                                                             onClick={handleResetMenuOrder}
-                                                            className="mt-2 font-bold text-blue-700 underline decoration-blue-300 underline-offset-2 dark:text-cyan-200 dark:decoration-cyan-400/50"
+                                                            className="-ml-1 mt-1 flex h-8 items-center rounded-lg px-1 text-[var(--brand-primary)] transition-colors duration-150 active:bg-slate-100 dark:active:bg-white/[0.06]"
                                                         >
-                                                            Restaurar ordem padrão
+                                                            <span className="text-[13px] font-medium">Restaurar ordem padrão</span>
                                                         </button>
                                                     </div>
                                                 ) : null}
@@ -820,82 +803,75 @@ const Header: React.FC<HeaderProps> = ({
                                                         {menuAnnouncement}
                                                     </p>
                                                 ) : null}
-                                                <div className="space-y-1">
-                                                    {isEditingMenu && section.id === 'menu'
+                                                <div className={isEditingSection ? 'space-y-2' : 'space-y-0.5'}>
+                                                    {isEditingSection
                                                         ? orderedPrimaryItems.map(renderEditableNavItem)
                                                         : section.items.map(item => renderNavItem(
                                                             item,
-                                                            isSistema ? 'system' : 'primary',
                                                             section.id === 'menu' && item.tabId === displayedMenuOrder[0]
                                                         ))}
                                                     {isSistema && (
                                                         <button
+                                                            type="button"
                                                             onClick={() => {
                                                                 setIsSupportOpen(true);
                                                                 closeMenu();
                                                             }}
-                                                            className="group relative flex w-full items-center gap-[var(--sidebar-item-gap)] rounded-2xl px-[var(--sidebar-item-px)] py-[var(--sidebar-item-py)] text-left transition-all duration-200 hover:bg-slate-100/80 active:scale-[0.985] dark:hover:bg-white/[0.03]"
+                                                            className={rowClass(false)}
                                                         >
-                                                            <div className="flex h-[var(--sidebar-icon-box)] w-[var(--sidebar-icon-box)] flex-shrink-0 items-center justify-center">
-                                                                <i className="fas fa-headset text-[var(--sidebar-icon-size)] text-blue-500/85 group-hover:text-blue-700 dark:text-cyan-300/85 dark:group-hover:text-cyan-200" />
-                                                            </div>
-                                                            <div className="min-w-0 flex-1">
-                                                                <p className="truncate text-[var(--sidebar-item-font)] font-medium tracking-[0.005em] text-slate-700 group-hover:text-slate-900 dark:text-white/88 dark:group-hover:text-white">
-                                                                    Suporte
-                                                                </p>
-                                                            </div>
+                                                            <Headset
+                                                                className="h-[18px] w-[18px] flex-shrink-0 text-[var(--text-muted)] transition-colors group-hover:text-[var(--text-body)]"
+                                                                strokeWidth={ICON_STROKE}
+                                                                aria-hidden="true"
+                                                            />
+                                                            <span className="min-w-0 flex-1 truncate text-[15px] font-medium text-[var(--text-body)]">
+                                                                Suporte
+                                                            </span>
                                                         </button>
                                                     )}
                                                 </div>
                                             </section>
                                         );
                                     })}
-                                    </div>
-
-                                    {hasMoreNavContent ? (
-                                        <div
-                                            aria-hidden="true"
-                                            data-menu-scroll-more
-                                            className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex h-12 items-end justify-center bg-gradient-to-t from-white via-white/95 to-transparent pb-1 dark:from-[#23314d] dark:via-[#23314d]/95"
-                                        >
-                                            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/95 text-blue-500 shadow-sm ring-1 ring-slate-200/80 dark:bg-[#23314d] dark:text-cyan-300 dark:ring-white/10">
-                                                <i className="fas fa-chevron-down text-[9px]" />
-                                            </span>
-                                        </div>
-                                    ) : null}
                                 </div>
 
-                                <div className="relative z-10 border-t border-slate-200/80 px-[calc(var(--sidebar-pad-x)-0.08rem)] pb-[calc(var(--sidebar-pad-bottom)+var(--sidebar-safe-bottom))] pt-[var(--sidebar-pad-bottom)] dark:border-cyan-300/16">
-                                    <ThemeToggle variant="sidebar" className="mb-2" />
-                                    <button
-                                        type="button"
-                                        onPointerDown={event => event.stopPropagation()}
-                                        onTouchStart={event => event.stopPropagation()}
-                                        onClick={event => {
-                                            event.preventDefault();
-                                            event.stopPropagation();
-                                            void handleSignOut();
-                                        }}
-                                        className="relative z-10 flex w-full items-center gap-[var(--sidebar-item-gap)] rounded-2xl px-[var(--sidebar-item-px)] py-[var(--sidebar-item-py)] text-left transition-all duration-200 hover:bg-slate-100/80 active:scale-[0.985] dark:hover:bg-white/[0.03]"
+                                {hasMoreNavContent ? (
+                                    <div
+                                        aria-hidden="true"
+                                        data-menu-scroll-more
+                                        className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex h-10 items-end justify-center bg-gradient-to-t from-[var(--surface)] to-transparent pb-1"
                                     >
-                                        <div className="flex h-[var(--sidebar-footer-icon)] w-[var(--sidebar-footer-icon)] items-center justify-center text-blue-600 dark:text-cyan-300">
-                                            <i className="fas fa-sign-out-alt text-[var(--sidebar-icon-size)]" />
-                                        </div>
-                                        <div className="min-w-0 flex-1">
-                                            <p className="truncate text-[var(--sidebar-item-font)] font-medium text-slate-700 dark:text-white/92">
-                                                Sair da conta
-                                            </p>
-                                        </div>
-                                    </button>
-
-                                    <div className="mt-2 flex items-center justify-center gap-1.5 text-[11px] font-medium text-slate-400 dark:text-slate-500">
-                                        <span>PelículasBR</span>
-                                        <span className="rounded-full bg-blue-100 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-blue-600 dark:bg-blue-500/20 dark:text-blue-300">
-                                            beta
-                                        </span>
-                                        <span>v0.1.0</span>
+                                        <ChevronDown className="h-4 w-4 text-[var(--text-muted)]" strokeWidth={ICON_STROKE} />
                                     </div>
-                                </div>
+                                ) : null}
+                            </div>
+
+                            <div className={`relative z-10 border-t ${HAIRLINE} px-3 pb-[calc(max(0.75rem,env(safe-area-inset-bottom))+0.25rem)] pt-2`}>
+                                <ThemeToggle variant="sidebar" size="lg" />
+                                <button
+                                    type="button"
+                                    onPointerDown={event => event.stopPropagation()}
+                                    onTouchStart={event => event.stopPropagation()}
+                                    onClick={event => {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        void handleSignOut();
+                                    }}
+                                    className={`relative z-10 mt-0.5 ${rowClass(false)}`}
+                                >
+                                    <LogOut
+                                        className="h-[18px] w-[18px] flex-shrink-0 text-[var(--text-muted)] transition-colors group-hover:text-[var(--text-body)]"
+                                        strokeWidth={ICON_STROKE}
+                                        aria-hidden="true"
+                                    />
+                                    <span className="min-w-0 flex-1 truncate text-[15px] font-medium text-[var(--text-body)]">
+                                        Sair da conta
+                                    </span>
+                                </button>
+
+                                <p className="mt-2 text-center text-xs text-[var(--text-muted)]">
+                                    PelículasBR · beta
+                                </p>
                             </div>
                         </aside>
                     </div>,
