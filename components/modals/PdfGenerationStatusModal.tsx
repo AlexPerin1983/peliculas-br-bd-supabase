@@ -192,7 +192,7 @@ const SwipeRow: React.FC<{
                         style={{ width: SWIPE_ACTION_WIDTH }}
                     >
                         <i className={`${action.icon} text-base`} aria-hidden="true"></i>
-                        <span className="text-[10px] font-bold uppercase">{action.label}</span>
+                        <span className="text-[11px] font-medium">{action.label}</span>
                     </button>
                 ))}
             </div>
@@ -464,10 +464,10 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
                         </div>
                         <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
                             {onPreviewProposal
-                                ? 'Marque as opções para enviar. Toque no olho para conferir o PDF de cada uma.'
-                                : 'Marque as opções para enviar ao cliente.'}
+                                ? 'Marque o que vai para o cliente. O olho abre o PDF.'
+                                : 'Marque o que vai para o cliente.'}
                             {onRenameProposal ? (
-                                <span className="sm:hidden"> Deslize uma opção para a direita para renomear{onEditProposal && editableProposalKeys.length > 0 ? ' ou editar' : ''}.</span>
+                                <span className="sm:hidden"> Deslize para a direita para renomear{onEditProposal && editableProposalKeys.length > 0 ? ' ou editar' : ''}.</span>
                             ) : null}
                         </p>
 
@@ -476,7 +476,7 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
                                 Nenhuma proposta deste cliente na lista.
                             </p>
                         ) : (
-                            <ul className="mt-2 space-y-1.5">
+                            <ul className="mt-3 space-y-2">
                                 {clientProposals.map(pdf => {
                                     const key = getProposalKey(pdf);
                                     const isSelected = selectedKeys.includes(key);
@@ -494,14 +494,14 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
                                             key: 'rename',
                                             label: 'Renomear',
                                             icon: 'fas fa-i-cursor',
-                                            className: 'bg-slate-600 hover:bg-slate-700',
+                                            className: 'bg-slate-500 hover:bg-slate-600',
                                             onClick: () => startRename(pdf),
                                         }] : []),
                                         ...(onEditProposal && editableProposalKeys.includes(key) ? [{
                                             key: 'edit',
                                             label: 'Editar',
                                             icon: 'fas fa-pen',
-                                            className: 'bg-blue-600 hover:bg-blue-700',
+                                            className: 'bg-slate-700 hover:bg-slate-800',
                                             onClick: () => onEditProposal(pdf),
                                         }] : []),
                                     ];
@@ -581,34 +581,43 @@ const PdfGenerationStatusModal: React.FC<PdfGenerationStatusModalProps> = ({
                                                 isOpen={swipedKey === key}
                                                 onOpenChange={open => setSwipedKey(current => (open ? key : current === key ? null : current))}
                                             >
-                                            <div className={`flex items-center rounded-lg border transition-colors ${isSelected
-                                                ? 'border-emerald-400 bg-emerald-50 dark:border-emerald-700 dark:bg-emerald-950/30'
-                                                : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900/60'}`}
+                                            <div className={`flex items-center rounded-lg border transition-colors duration-150 ${isSelected
+                                                ? 'border-emerald-500/60 bg-emerald-50 dark:border-emerald-600/50 dark:bg-emerald-950/20'
+                                                : 'border-slate-200 bg-white dark:border-slate-700/80 dark:bg-slate-900/60'}`}
                                             >
-                                                <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 py-2.5 pl-3">
+                                                <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 py-3 pl-3">
                                                     <input
                                                         type="checkbox"
                                                         checked={isSelected}
                                                         onChange={() => toggleProposal(key)}
-                                                        className="h-5 w-5 shrink-0 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                                                        className="peer sr-only"
                                                     />
+                                                    {/* Caixa própria: a do navegador sai branca e gritante no tema escuro. */}
+                                                    <span
+                                                        aria-hidden="true"
+                                                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 transition-colors duration-150 peer-focus-visible:ring-2 peer-focus-visible:ring-emerald-500/40 ${isSelected
+                                                            ? 'border-emerald-600 bg-emerald-600 text-white'
+                                                            : 'border-slate-300 dark:border-slate-500'}`}
+                                                    >
+                                                        {isSelected ? <i className="fas fa-check text-[10px]"></i> : null}
+                                                    </span>
                                                     <span className="min-w-0 flex-1">
-                                                        <span className="flex items-center gap-1.5">
-                                                            <span className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">{name}</span>
+                                                        <span className="flex items-center gap-2">
+                                                            <span className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">{name}</span>
                                                             {key === latestKey && !openedFromShortcut ? (
-                                                                <span className="shrink-0 rounded-full bg-emerald-600 px-1.5 py-0.5 text-[10px] font-bold uppercase leading-none text-white">Nova</span>
+                                                                <span className="shrink-0 rounded-md bg-emerald-100 px-1.5 py-0.5 text-[11px] font-medium leading-none text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">Nova</span>
                                                             ) : null}
                                                             {isLinked ? (
                                                                 <span
                                                                     title="Já enviada ao cliente por link"
-                                                                    className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold uppercase leading-none text-blue-700 dark:bg-blue-900/50 dark:text-blue-300"
+                                                                    className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium leading-none text-slate-500 dark:text-slate-400"
                                                                 >
-                                                                    <i className="fas fa-link text-[8px]" aria-hidden="true"></i>
+                                                                    <i className="fas fa-link text-[9px]" aria-hidden="true"></i>
                                                                     Link
                                                                 </span>
                                                             ) : null}
                                                         </span>
-                                                        <span className="block text-xs text-slate-500 dark:text-slate-400">
+                                                        <span className="mt-0.5 block text-xs tabular-nums text-slate-500 dark:text-slate-400">
                                                             {formatCurrency(pdf.totalPreco)} · {new Date(pdf.date).toLocaleDateString('pt-BR')}
                                                         </span>
                                                     </span>
