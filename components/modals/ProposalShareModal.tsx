@@ -3,6 +3,7 @@ import { Ban, CalendarClock, Check, Copy, ExternalLink, Link2, LoaderCircle, Mes
 import type { Client, SavedPDF } from '../../types';
 import {
     buildProposalShareMessage,
+    buildProposalShortShareMessage,
     createProposalPortal,
     findClientProposalPortals,
     refreshProposalPortal,
@@ -26,8 +27,29 @@ interface ProposalShareModalProps {
     messageOptions?: string[];
 }
 
-// -1 = mensagem padrão do link (com os valores); 0..n = mensagens prontas.
+// -2 = mensagem curta ("Segue o orçamento:" + link); -1 = mensagem com saudação
+// e valores; 0..n = mensagens prontas.
+const SHORT_CHOICE = -2;
 const DEFAULT_CHOICE = -1;
+
+// Curta ou com valores: o aparelho lembra a última usada, para não ter que
+// trocar a cada envio.
+const MESSAGE_STYLE_KEY = 'peliculas-br-proposal-message-style';
+const readMessageStyle = () => {
+    try {
+        return window.localStorage.getItem(MESSAGE_STYLE_KEY) === 'short' ? SHORT_CHOICE : DEFAULT_CHOICE;
+    } catch {
+        return DEFAULT_CHOICE;
+    }
+};
+const saveMessageStyle = (choice: number) => {
+    if (choice !== SHORT_CHOICE && choice !== DEFAULT_CHOICE) return;
+    try {
+        window.localStorage.setItem(MESSAGE_STYLE_KEY, choice === SHORT_CHOICE ? 'short' : 'full');
+    } catch {
+        // Sem armazenamento: só não lembra a escolha.
+    }
+};
 
 const dateInput = (date: Date) => {
     const year = date.getFullYear();
@@ -90,7 +112,7 @@ const ProposalShareModal: React.FC<ProposalShareModalProps> = ({ isOpen, client,
     const pdfKey = pdfs.map(pdf => pdf.id).join(',');
 
     const readyMessages = useMemo(() => messageOptions.map(option => option.trim()).filter(Boolean), [messageOptions]);
-    const [choice, setChoice] = useState(DEFAULT_CHOICE);
+    const [choice, setChoice] = useState(readMessageStyle);
     const [message, setMessage] = useState('');
 
     // Links que ainda podem receber estas propostas (o mais recente primeiro).
@@ -178,7 +200,7 @@ const ProposalShareModal: React.FC<ProposalShareModalProps> = ({ isOpen, client,
         setIsWhatsAppChooserOpen(false);
         setEditingValidity(false);
         setConfirmingRevoke(false);
-        setChoice(DEFAULT_CHOICE);
+        setChoice(readMessageStyle());
         setMessage('');
 
         // Antes de criar, procura os links que este cliente já recebeu.
@@ -207,10 +229,17 @@ const ProposalShareModal: React.FC<ProposalShareModalProps> = ({ isOpen, client,
     }, [isOpen, pdfKey]);
 
     const buildChoiceMessage = (nextChoice: number, portal: CreatedProposalPortal) => (
-        nextChoice === DEFAULT_CHOICE || !readyMessages[nextChoice]
-            ? buildProposalShareMessage(client, pdfs, portal.url, portal.expiresAt)
-            : attachProposalLink(readyMessages[nextChoice], portal.url, portal.expiresAt)
+        nextChoice === SHORT_CHOICE
+            ? buildProposalShortShareMessage(pdfs, portal.url)
+            : nextChoice === DEFAULT_CHOICE || !readyMessages[nextChoice]
+                ? buildProposalShareMessage(client, pdfs, portal.url, portal.expiresAt)
+                : attachProposalLink(readyMessages[nextChoice], portal.url, portal.expiresAt)
     );
+    const chooseMessage = (nextChoice: number) => {
+        setChoice(nextChoice);
+        saveMessageStyle(nextChoice);
+    };
+    const choiceLabel = (option: number) => option === SHORT_CHOICE ? 'Curta' : option === DEFAULT_CHOICE ? 'Com valores' : String(option + 1);
 
     // Com o link na tela, monta a mensagem escolhida já com o link dentro (editável antes de enviar).
     useEffect(() => {
@@ -352,19 +381,17 @@ const ProposalShareModal: React.FC<ProposalShareModalProps> = ({ isOpen, client,
                         <div className="space-y-2">
                             <div className="flex items-center justify-between gap-2">
                                 <span className="text-xs font-bold text-[var(--text-body)]">Mensagem com o link</span>
-                                {readyMessages.length > 0 && (
-                                    <div className="flex gap-1" role="group" aria-label="Escolher mensagem">
-                                        {[DEFAULT_CHOICE, ...readyMessages.map((_, index) => index)].map(option => (
-                                            <button key={option} type="button" aria-pressed={choice === option} onClick={() => setChoice(option)}
-                                                aria-label={option === DEFAULT_CHOICE ? 'Mensagem padrão' : `Mensagem pronta ${option + 1}`}
-                                                className={`h-7 min-w-[28px] rounded-full px-2.5 text-xs font-bold transition-colors ${choice === option
-                                                    ? 'bg-blue-600 text-white'
-                                                    : 'bg-[var(--surface-muted)] text-[var(--text-muted)] hover:text-[var(--text-strong)]'}`}>
-                                                {option === DEFAULT_CHOICE ? 'Padrão' : option + 1}
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
+                                <div className="flex flex-wrap justify-end gap-1" role="group" aria-label="Escolher mensagem">
+                                    {[SHORT_CHOICE, DEFAULT_CHOICE, ...readyMessages.map((_, index) => index)].map(option => (
+                                        <button key={option} type="button" aria-pressed={choice === option} onClick={() => chooseMessage(option)}
+                                            aria-label={option < 0 ? `Mensagem ${choiceLabel(option).toLowerCase()}` : `Mensagem pronta ${option + 1}`}
+                                            className={`h-7 min-w-[28px] rounded-full px-2.5 transition-colors ${choice === option
+                                                ? 'bg-blue-600 text-white'
+                                                : 'bg-[var(--surface-muted)] text-[var(--text-muted)] hover:text-[var(--text-strong)]'}`}>
+                                            <span className="text-xs font-bold">{choiceLabel(option)}</span>
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
                             <textarea value={message} onChange={event => setMessage(event.target.value)} rows={8} aria-label="Mensagem que será enviada"
                                 className="w-full resize-none rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-3 text-[13px] leading-5 text-[var(--text-body)] focus:outline-none focus:ring-2 focus:ring-blue-500/30" />

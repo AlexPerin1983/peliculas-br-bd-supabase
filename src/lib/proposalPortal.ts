@@ -443,6 +443,12 @@ export const revokeProposalPortal = async (portalId: string) => {
     if (error) throw new Error(error.message || 'Não foi possível encerrar o link.');
 };
 
+// Mensagem curta, para quando a conversa com o cliente já está aberta: sem
+// saudação e sem valores (o cliente vê tudo no link).
+export const buildProposalShortShareMessage = (pdfs: SavedPDF[], portalUrl: string) =>
+    `${pdfs.length > 1 ? 'Segue os orçamentos' : 'Segue o orçamento'}:
+${portalUrl}`;
+
 export const buildProposalShareMessage = (client: Client, pdfs: SavedPDF[], portalUrl: string, expiresAt: string) => {
     const firstName = client.nome.trim().split(/\s+/)[0];
     const greeting = firstName ? `Oi, ${firstName}! Tudo bem? 🙂` : 'Oi! Tudo bem? 🙂';

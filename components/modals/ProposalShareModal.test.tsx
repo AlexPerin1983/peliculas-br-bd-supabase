@@ -11,6 +11,7 @@ vi.mock('../../src/lib/proposalPortal', () => ({
     revokeProposalPortal: vi.fn(),
     setProposalPortalHighlight: vi.fn(),
     buildProposalShareMessage: (_client: Client, _pdfs: SavedPDF[], url: string) => `Veja sua proposta: ${url}`,
+    buildProposalShortShareMessage: (_pdfs: SavedPDF[], url: string) => `Segue: ${url}`,
 }));
 
 const client: Client = {
@@ -25,6 +26,7 @@ const portalUrl = 'https://app.filmstec.shop/p/camila/abc123';
 
 describe('ProposalShareModal', () => {
     beforeEach(() => {
+        window.localStorage.clear();
         vi.mocked(createProposalPortal).mockReset();
         vi.mocked(findClientProposalPortals).mockReset().mockResolvedValue([]);
         vi.mocked(refreshProposalPortal).mockReset();
@@ -94,6 +96,28 @@ describe('ProposalShareModal', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Enviar no WhatsApp' }));
         const appLink = screen.getByRole('link', { name: /WhatsApp do celular/i });
         expect(decodeURIComponent(appLink.getAttribute('href') || '')).toContain('Camila, orçamento aqui:');
+    });
+
+    it('troca entre mensagem curta e com valores e lembra a escolha no aparelho', async () => {
+        const { unmount } = render(<ProposalShareModal isOpen client={client} pdfs={[pdf]} onClose={vi.fn()} />);
+        fireEvent.click(await screen.findByRole('button', { name: /Criar link da proposta/i }));
+        await screen.findByText('Link criado com sucesso');
+
+        const textarea = screen.getByRole('textbox', { name: 'Mensagem que será enviada' }) as HTMLTextAreaElement;
+        // Sem escolha anterior: a mensagem com valores, como antes.
+        expect(screen.getByRole('button', { name: 'Mensagem com valores' })).toHaveAttribute('aria-pressed', 'true');
+        expect(textarea.value).toBe(`Veja sua proposta: ${portalUrl}`);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Mensagem curta' }));
+        expect(textarea.value).toBe(`Segue: ${portalUrl}`);
+        unmount();
+
+        // Na próxima vez já abre na curta.
+        render(<ProposalShareModal isOpen client={client} pdfs={[pdf]} onClose={vi.fn()} />);
+        fireEvent.click(await screen.findByRole('button', { name: /Criar link da proposta/i }));
+        await screen.findByText('Link criado com sucesso');
+        expect(screen.getByRole('button', { name: 'Mensagem curta' })).toHaveAttribute('aria-pressed', 'true');
+        expect((screen.getByRole('textbox', { name: 'Mensagem que será enviada' }) as HTMLTextAreaElement).value).toBe(`Segue: ${portalUrl}`);
     });
 
     it('não oferece envio sem telefone do cliente', async () => {

@@ -1,6 +1,6 @@
 import { vi } from 'vitest';
 import type { SavedPDF } from '../../types';
-import { createProposalPortal, findClientProposalPortals, loadClientPortalLinks, loadPublicProposalPortal, markProposalPortalLost, openPublicProposalPdf, recordProposalFollowUp, refreshProposalPortal, reopenProposalPortal, revokeProposalPortal, setProposalOfferDeadline, snoozeProposalFollowUp } from './proposalPortal';
+import { buildProposalShortShareMessage, createProposalPortal, findClientProposalPortals, loadClientPortalLinks, loadPublicProposalPortal, markProposalPortalLost, openPublicProposalPdf, recordProposalFollowUp, refreshProposalPortal, reopenProposalPortal, revokeProposalPortal, setProposalOfferDeadline, snoozeProposalFollowUp } from './proposalPortal';
 
 const {
     rpcMock,
@@ -441,5 +441,16 @@ describe('acompanhamento das propostas', () => {
         await reopenProposalPortal(['a', 'b']);
         expect(portals.in).toHaveBeenLastCalledWith('id', ['a', 'b']);
         expect(events.insert).toHaveBeenLastCalledWith([expect.objectContaining({ portal_id: 'a', kind: 'reopened' }), expect.objectContaining({ portal_id: 'b', kind: 'reopened' })]);
+    });
+});
+
+describe('buildProposalShortShareMessage', () => {
+    it('diz "o orçamento" com uma opção e "os orçamentos" com várias, sem valores', () => {
+        const url = 'https://app.filmstec.shop/p/maria/abc';
+        const one = [{ totalPreco: 1133.75 }] as SavedPDF[];
+        expect(buildProposalShortShareMessage(one, url)).toBe(`Segue o orçamento:
+${url}`);
+        expect(buildProposalShortShareMessage([...one, ...one], url)).toBe(`Segue os orçamentos:
+${url}`);
     });
 });
