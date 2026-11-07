@@ -135,6 +135,8 @@ interface ModalsContainerProps {
     handleEditGeneratedProposal: (pdf: SavedPDF) => void;
     editableGeneratedProposalKeys: string[];
     isGeneratedListShortcut: boolean;
+    /** Várias películas em fila: "Gerando opção 2 de 3...". */
+    duplicateQueueProgressLabel?: string;
     handleOpenAIVariationFromGeneratedPdf?: () => void;
     isAIVariationModalOpen: boolean;
     handleCancelAIVariation: () => void;
@@ -243,6 +245,9 @@ interface ModalsContainerProps {
     setIsDuplicateFilmSelectorOpen: (value: boolean) => void;
     handleCloseDuplicateFilmSelector: () => void;
     handleSelectFilmForDuplicate: (filmName: string) => void;
+    /** Do "Orçamento gerado": várias películas, uma opção com PDF para cada. */
+    handleSelectFilmsForDuplicate: (filmNames: string[]) => void;
+    isDuplicateSelectorFromPdf: boolean;
     activeOption: ProposalOption | null;
 
     // Measurement Delete Modal
@@ -445,6 +450,7 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
                     onClose={props.handleCloseDuplicateFilmSelector}
                     films={props.films}
                     onSelect={(filmName) => props.handleSelectFilmForDuplicate(filmName)}
+                    onSelectMultiple={props.isDuplicateSelectorFromPdf ? props.handleSelectFilmsForDuplicate : undefined}
                     onAddNewFilm={props.handleAddNewFilm}
                     onEditFilm={props.handleEditFilm}
                     onDeleteFilm={props.handleRequestDeleteFilm}
@@ -554,6 +560,7 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
                     onEditProposal={props.handleEditGeneratedProposal}
                     editableProposalKeys={props.editableGeneratedProposalKeys}
                     openedFromShortcut={props.isGeneratedListShortcut}
+                    generatingLabel={props.duplicateQueueProgressLabel}
                 />
             )}
 
