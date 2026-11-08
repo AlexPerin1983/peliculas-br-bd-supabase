@@ -1637,7 +1637,10 @@ const DesktopDayTimeline: React.FC<{
     date: Date;
     agendamentos: Agendamento[];
     onOpen: (agendamento: Agendamento) => void;
-}> = ({ date, agendamentos, onOpen }) => {
+    /** Celular: horas mais baixas e coluna das horas mais estreita. */
+    compact?: boolean;
+}> = ({ date, agendamentos, onOpen, compact = false }) => {
+    const hourHeight = compact ? 52 : DAY_HOUR_HEIGHT;
     const [now, setNow] = useState(() => new Date());
     useEffect(() => {
         const timer = window.setInterval(() => setNow(new Date()), 60_000);
@@ -1677,30 +1680,30 @@ const DesktopDayTimeline: React.FC<{
     const isToday = date.toDateString() === now.toDateString();
     const nowMinutes = now.getHours() * 60 + now.getMinutes();
     const showNow = isToday && nowMinutes >= firstHour * 60 && nowMinutes <= lastHour * 60;
-    const top = (minutes: number) => ((minutes - firstHour * 60) / 60) * DAY_HOUR_HEIGHT;
+    const top = (minutes: number) => ((minutes - firstHour * 60) / 60) * hourHeight;
 
     return (
-        <div className="relative mt-4 overflow-hidden rounded-[var(--radius-control)] border border-[var(--border-subtle)]">
+        <div className={`relative overflow-hidden rounded-[var(--radius-control)] border border-[var(--border-subtle)] ${compact ? 'mb-4 bg-[var(--surface)]' : 'mt-4'}`}>
             {items.length === 0 ? (
                 <p className="border-b border-[var(--border-subtle)] bg-[var(--surface-muted)] px-4 py-2.5 text-xs text-[var(--text-muted)]">
                     Nenhum atendimento neste dia
                 </p>
             ) : null}
-            <div className="relative" style={{ height: hours.length * DAY_HOUR_HEIGHT }}>
+            <div className="relative" style={{ height: hours.length * hourHeight }}>
                 {hours.map((hour, index) => (
                     <div
                         key={hour}
                         className="absolute inset-x-0 flex border-t border-[var(--border-subtle)] first:border-t-0"
-                        style={{ top: index * DAY_HOUR_HEIGHT, height: DAY_HOUR_HEIGHT }}
+                        style={{ top: index * hourHeight, height: hourHeight }}
                     >
-                        <span className="w-16 shrink-0 -translate-y-px px-3 pt-1.5 text-right text-xs tabular-nums text-[var(--text-muted)]">
+                        <span className={`${compact ? 'w-12 px-2' : 'w-16 px-3'} shrink-0 pt-1.5 text-right text-xs tabular-nums text-[var(--text-muted)]`}>
                             {String(hour).padStart(2, '0')}:00
                         </span>
                         <span className="flex-1 border-l border-[var(--border-subtle)]" />
                     </div>
                 ))}
 
-                <div className="absolute inset-y-0 left-16 right-2">
+                <div className={`absolute inset-y-0 right-2 ${compact ? 'left-12' : 'left-16'}`}>
                     {withWidth.map(({ agendamento, start, end, lane, lanes }) => {
                         const color = getAgendamentoColor(agendamento) || 'var(--text-muted)';
                         const meta = getEventTypeMeta(agendamento.eventType);
@@ -2420,11 +2423,22 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                     >
                     <DayAgendaSummary agendamentos={selectedDayAgendamentos} route={selectedDayRoute} />
 
+                    {viewMode === 'day' && selectedDayAgendamentos.length > 0 ? (
+                        <DesktopDayTimeline
+                            compact
+                            date={selectedDate}
+                            agendamentos={selectedDayAgendamentos}
+                            onOpen={(agendamento) => {
+                                document.getElementById(`agenda-card-${agendamento.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            }}
+                        />
+                    ) : null}
+
                     {selectedDayAgendamentos.length > 0 ? (
                         <div className="space-y-3">
                             {selectedDayAgendamentos.map((agendamento) => {
                                 const client = clientsById.get(agendamento.clienteId);
-                                return <AppointmentCard key={agendamento.id} agendamento={agendamento} client={client} linkedPdf={agendamento.pdfId ? pdfById.get(agendamento.pdfId) : undefined} linkedPdfs={agendamento.linkedPdfs} stockSourcePdfs={agendamento.stockSourcePdfs} canUseStock={canUseEstoque} onEdit={onEditAgendamento} onUpdateServiceStatus={onUpdateServiceStatus} onSaveReceiptDescription={onSaveReceiptDescription} onCompleteWithValue={onCompleteAgendamentoWithValue} onContinueAgendamento={onContinueAgendamento} onReschedule={onRescheduleAgendamento} googleReviewsLink={googleReviewsLink} userInfo={userInfo} reviewStars={agendamento.id != null ? (reviewRatings[agendamento.id] || 0) : 0} onUpdateReviewRating={handleUpdateReviewRating} />;
+                                return <div key={agendamento.id} id={`agenda-card-${agendamento.id}`} className="scroll-mt-24"><AppointmentCard key={agendamento.id} agendamento={agendamento} client={client} linkedPdf={agendamento.pdfId ? pdfById.get(agendamento.pdfId) : undefined} linkedPdfs={agendamento.linkedPdfs} stockSourcePdfs={agendamento.stockSourcePdfs} canUseStock={canUseEstoque} onEdit={onEditAgendamento} onUpdateServiceStatus={onUpdateServiceStatus} onSaveReceiptDescription={onSaveReceiptDescription} onCompleteWithValue={onCompleteAgendamentoWithValue} onContinueAgendamento={onContinueAgendamento} onReschedule={onRescheduleAgendamento} googleReviewsLink={googleReviewsLink} userInfo={userInfo} reviewStars={agendamento.id != null ? (reviewRatings[agendamento.id] || 0) : 0} onUpdateReviewRating={handleUpdateReviewRating} /></div>;
                             })}
                         </div>
                     ) : (
