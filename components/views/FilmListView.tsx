@@ -2,10 +2,10 @@ import React, { lazy, Suspense, useDeferredValue, useEffect, useMemo, useRef, us
 import { Film } from '../../types';
 import ActionButton from '../ui/ActionButton';
 import ContentState from '../ui/ContentState';
-import PageCollectionToolbar from '../ui/PageCollectionToolbar';
+import { ChevronDown, ChevronRight, Copy, FileUp, Pencil, Percent, Pin, Plus, Search, Trash2, X } from 'lucide-react';
 import ViewModeToggle from '../ui/ViewModeToggle';
 import { matchesSearch, normalizeSearchText } from '../../src/lib/textSearch';
-import { formatGarantiaMaoDeObraCurto } from '../../src/lib/filmWarranty';
+import { formatGarantiaMaoDeObra } from '../../src/lib/filmWarranty';
 import { getVisibleCustomFields, sortFilmsForDisplay } from '../../src/lib/filmCatalog';
 
 const FilmPriceAdjustmentModal = lazy(() => import('../modals/FilmPriceAdjustmentModal'));
@@ -35,38 +35,69 @@ type FilmViewMode = 'grid' | 'list';
 
 const FILM_VIEW_MODE_STORAGE_KEY = 'peliculas-view-mode';
 
+const TOOLBAR_BUTTON = 'inline-flex h-9 items-center gap-1.5 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] px-3 text-[var(--text-body)] transition-colors hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)]';
+
 const formatCurrency = (value: number) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
-const getFilmAccentColor = (film: Film) =>
-    film.pinned ? 'bg-[var(--surface-inverse)]' : 'bg-[var(--brand-primary)]';
+const warrantyText = (film: Film) => [
+    film.garantiaFabricante ? `${film.garantiaFabricante} ${film.garantiaFabricante === 1 ? 'ano' : 'anos'} de fábrica` : null,
+    film.garantiaMaoDeObra ? `${formatGarantiaMaoDeObra(film.garantiaMaoDeObra, film.garantiaMaoDeObraUnidade)} de mão de obra` : null,
+].filter(Boolean).join(' · ');
 
-const getFilmAccentDotClass = (film: Film) =>
-    film.pinned ? 'bg-[var(--surface-inverse)]' : 'bg-[var(--brand-primary)]';
+const FILM_METRICS: Array<{ key: 'vtl' | 'uv' | 'ir' | 'tser'; label: string; title: string }> = [
+    { key: 'vtl', label: 'VTL', title: 'Luz visível que passa' },
+    { key: 'uv', label: 'UV', title: 'Raios UV bloqueados' },
+    { key: 'ir', label: 'IR', title: 'Infravermelho (calor) bloqueado' },
+    { key: 'tser', label: 'TSER', title: 'Energia solar total rejeitada' },
+];
+
+const filmMetrics = (film: Film) =>
+    FILM_METRICS
+        .map((metric) => ({ ...metric, value: film[metric.key] }))
+        .filter((metric): metric is typeof metric & { value: number } => typeof metric.value === 'number' && metric.value > 0);
+
+/**
+ * Amostra da película: um pedaço de vidro com o céu atrás, escurecido pela
+ * luz visível que passa (VTL). 70% fica clarinho, 5% fica quase preto.
+ */
+const FilmSwatch: React.FC<{ vtl?: number; size?: 'md' | 'sm' }> = ({ vtl, size = 'md' }) => {
+    const known = typeof vtl === 'number' && vtl > 0;
+    const shade = known ? Math.min(0.9, Math.max(0.04, 1 - vtl / 100)) : 0;
+    const dimensions = size === 'md' ? 'h-12 w-10' : 'h-10 w-8';
+    return (
+        <span
+            className={`relative shrink-0 overflow-hidden rounded-[6px] border border-black/10 bg-gradient-to-b from-sky-200 to-sky-50 dark:border-white/10 ${dimensions}`}
+            title={known ? `Passa ${vtl}% da luz` : 'Sem VTL cadastrado'}
+            aria-hidden="true"
+        >
+            <span className="absolute inset-0" style={{ backgroundColor: `rgba(15, 23, 42, ${shade})` }} />
+            <span className="absolute -top-2 left-1.5 h-[140%] w-1.5 rotate-[18deg] bg-white/35" />
+            {!known ? <span className="absolute inset-1 rounded-[3px] border border-dashed border-slate-400/60" /> : null}
+        </span>
+    );
+};
 
 const FilmItemActions: React.FC<FilmItemActionHandlers & {
     film: Film;
     size: 'card' | 'row';
 }> = ({ film, onEdit, onDuplicate, onTogglePin, onDelete, size }) => {
-    const control = size === 'card'
-        ? 'h-9 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] hover:bg-[var(--surface)] sm:h-10'
-        : 'h-8 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] shadow-sm hover:bg-[var(--surface-muted)]';
-    const iconButton = `${control} inline-flex shrink-0 items-center justify-center transition-all ${size === 'card' ? 'w-9 sm:w-10' : 'w-8'}`;
+    const iconButton = `inline-flex shrink-0 items-center justify-center rounded-[var(--radius-control)] transition-colors ${size === 'card' ? 'h-9 w-9' : 'h-8 w-8'}`;
     const run = (event: React.MouseEvent, action: () => void) => {
         event.stopPropagation();
         action();
     };
 
     return (
-        <div className="flex gap-2">
+        <div className="flex items-center gap-1">
             <button
                 type="button"
                 onClick={(event) => run(event, () => onEdit(film))}
-                className={`${control} inline-flex items-center gap-1.5 text-[11px] font-medium text-[var(--text-body)] transition-all hover:text-[var(--text-strong)] ${size === 'card' ? 'px-3.5 sm:px-4 sm:text-xs' : 'px-3'}`}
+                className={`inline-flex items-center gap-1.5 rounded-[var(--radius-control)] border border-[var(--border-subtle)] px-3 text-[var(--text-body)] transition-colors hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)] ${size === 'card' ? 'mr-1 h-9' : 'mr-1 h-8'}`}
                 title="Editar"
             >
-                <i className="fas fa-pen text-[9px] sm:text-[10px]" aria-hidden="true"></i>
-                Editar
+                <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                <span className="text-xs font-medium">Editar</span>
             </button>
             <button
                 type="button"
@@ -74,27 +105,27 @@ const FilmItemActions: React.FC<FilmItemActionHandlers & {
                 aria-pressed={!!film.pinned}
                 aria-label={film.pinned ? `Desafixar ${film.nome}` : `Fixar ${film.nome} no topo`}
                 title={film.pinned ? 'Desafixar' : 'Fixar no topo'}
-                className={`${iconButton} ${film.pinned ? 'text-[var(--brand-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-strong)]'}`}
+                className={`${iconButton} ${film.pinned ? 'text-[var(--brand-primary)] hover:bg-[var(--surface-muted)]' : 'text-[var(--text-muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)]'}`}
             >
-                <i className={`fas fa-thumbtack text-[10px] sm:text-[11px] ${film.pinned ? '' : 'rotate-45'}`} aria-hidden="true"></i>
+                <Pin className="h-4 w-4" fill={film.pinned ? 'currentColor' : 'none'} aria-hidden="true" />
             </button>
             <button
                 type="button"
                 onClick={(event) => run(event, () => onDuplicate(film))}
                 aria-label={`Duplicar ${film.nome}`}
                 title="Duplicar"
-                className={`${iconButton} text-[var(--text-muted)] hover:text-[var(--text-strong)]`}
+                className={`${iconButton} text-[var(--text-muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)]`}
             >
-                <i className="fas fa-copy text-[10px] sm:text-[11px]" aria-hidden="true"></i>
+                <Copy className="h-4 w-4" aria-hidden="true" />
             </button>
             <button
                 type="button"
                 onClick={(event) => run(event, () => onDelete(film.nome))}
                 aria-label={`Excluir ${film.nome}`}
                 title="Excluir"
-                className={`${iconButton} text-[var(--text-muted)] hover:bg-[var(--danger)] hover:text-white`}
+                className={`${iconButton} text-[var(--text-muted)] hover:bg-rose-500/10 hover:text-rose-600 dark:hover:text-rose-400`}
             >
-                <i className="fas fa-trash-alt text-[10px] sm:text-[11px]" aria-hidden="true"></i>
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
             </button>
         </div>
     );
@@ -104,10 +135,10 @@ const FilmCustomFieldsGrid: React.FC<{ film: Film; valueClassName: string }> = (
     <>
         {getVisibleCustomFields(film).map(([key, value]) => (
             <div key={key}>
-                <span className="text-[8px] font-semibold uppercase text-[var(--text-soft)] sm:text-[9px]">
+                <span className="text-xs text-[var(--text-muted)]">
                     {key}
                 </span>
-                <p className={`mt-1 ${valueClassName}`}>
+                <p className={`mt-0.5 ${valueClassName}`}>
                     {value}
                 </p>
             </div>
@@ -115,48 +146,43 @@ const FilmCustomFieldsGrid: React.FC<{ film: Film; valueClassName: string }> = (
     </>
 );
 
-const TechIndicator: React.FC<{
-    label: string;
-    value: number | undefined;
-    color: string;
-}> = ({ label, value, color }) => {
-    if (value === undefined || value === 0) return null;
-
-    const clampedValue = Math.min(value, 100);
-
+/** Números técnicos com uma barra fina de 0 a 100%. */
+const FilmMetricsStrip: React.FC<{ film: Film }> = ({ film }) => {
+    const metrics = filmMetrics(film);
+    if (metrics.length === 0) return null;
     return (
-        <div className="flex flex-col items-center gap-1">
-            <div className="relative flex h-11 w-11 items-center justify-center sm:h-12 sm:w-12">
-                <svg className="h-full w-full -rotate-90">
-                    <circle
-                        cx="24"
-                        cy="24"
-                        r="20"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                        fill="transparent"
-                        className="text-[var(--border-subtle)]"
-                    />
-                    <circle
-                        cx="24"
-                        cy="24"
-                        r="20"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                        fill="transparent"
-                        strokeDasharray={125.6}
-                        strokeDashoffset={125.6 - (125.6 * clampedValue) / 100}
-                        strokeLinecap="round"
-                        className={color}
-                    />
-                </svg>
-                <span className="absolute text-[9px] font-semibold text-[var(--text-strong)] sm:text-[10px]">
-                    {value}%
-                </span>
-            </div>
-            <span className="text-[9px] font-semibold uppercase text-[var(--text-soft)] sm:text-[10px]">
-                {label}
-            </span>
+        <dl className="grid gap-3 rounded-[var(--radius-control)] bg-[var(--surface-muted)] px-3 py-2.5" style={{ gridTemplateColumns: `repeat(${metrics.length}, minmax(0, 1fr))` }}>
+            {metrics.map((metric) => (
+                <div key={metric.key} title={metric.title}>
+                    <dt className="text-[11px] text-[var(--text-muted)]">{metric.label}</dt>
+                    <dd className="mt-0.5 text-sm font-medium tabular-nums text-[var(--text-strong)]">{metric.value}%</dd>
+                    <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-[var(--border-subtle)]">
+                        <div className="h-full rounded-full bg-[var(--text-muted)]" style={{ width: `${Math.min(metric.value, 100)}%` }} />
+                    </div>
+                </div>
+            ))}
+        </dl>
+    );
+};
+
+const FilmImages: React.FC<{ film: Film; onOpenGallery: (images: string[], initialIndex: number) => void }> = ({ film, onOpenGallery }) => {
+    if (!film.imagens?.length) return null;
+    return (
+        <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+            {film.imagens.map((image, imageIndex) => (
+                <button
+                    key={`${film.nome}-${imageIndex}`}
+                    type="button"
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        onOpenGallery(film.imagens!, imageIndex);
+                    }}
+                    className="h-12 w-12 shrink-0 overflow-hidden rounded-[var(--radius-control)] border border-[var(--border-subtle)] transition-colors hover:border-[var(--border-strong)]"
+                    aria-label={`Abrir imagem ${imageIndex + 1} de ${film.nome}`}
+                >
+                    <img src={image} alt="" className="h-full w-full object-cover" />
+                </button>
+            ))}
         </div>
     );
 };
@@ -167,104 +193,40 @@ const FilmCard: React.FC<FilmItemActionHandlers & {
     onToggleExpand: () => void;
     onOpenGallery: (images: string[], initialIndex: number) => void;
     index: number;
-}> = ({ film, onEdit, onDuplicate, onTogglePin, onDelete, isExpanded, onToggleExpand, onOpenGallery, index }) => {
-    const handleImageClick = (imageIndex: number, event: React.MouseEvent) => {
-        event.stopPropagation();
-        if (film.imagens && film.imagens.length > 0) {
-            onOpenGallery(film.imagens, imageIndex);
-        }
-    };
-
-    const hasTechnicalData = Boolean(film.uv || film.ir || film.vtl || film.espessura || film.tser);
-    const hasImages = (film.imagens?.length || 0) > 0;
+}> = ({ film, onEdit, onDuplicate, onTogglePin, onDelete, isExpanded, onToggleExpand, onOpenGallery }) => {
     const hasDetails = Boolean(film.espessura) || getVisibleCustomFields(film).length > 0;
-
-    const accentColor = getFilmAccentColor(film);
+    const warranty = warrantyText(film);
 
     return (
-        <article
-            className="group animate-stagger relative overflow-hidden rounded-[var(--radius-card)] border border-[var(--border-subtle)] bg-[var(--surface)] shadow-[var(--shadow-hairline)] transition-all duration-300 hover:-translate-y-0.5 hover:border-[var(--brand-primary)] hover:shadow-[var(--shadow-soft)]"
-            style={{ animationDelay: `${index * 0.08}s` }}
-        >
-            <div className={`h-1 w-full ${accentColor}`} />
-
-            <div className="p-4 sm:p-5">
-                <div className="mb-4 flex items-start justify-between gap-3 sm:mb-5 sm:gap-4">
+        <article className="flex flex-col overflow-hidden rounded-[var(--radius-card)] border border-[var(--border-subtle)] bg-[var(--surface)] shadow-[var(--shadow-hairline)] transition-colors hover:border-[var(--border-strong)]">
+            <div className="flex flex-1 flex-col gap-4 p-5">
+                <div className="flex items-start gap-3">
+                    <FilmSwatch vtl={film.vtl} />
                     <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5 sm:gap-2">
-                            <h3 className="truncate text-[1.25rem] font-semibold leading-tight text-[var(--text-strong)] sm:text-[1.55rem]">
+                        <div className="flex items-center gap-1.5">
+                            <h3 className="truncate text-base font-semibold leading-tight text-[var(--text-strong)]">
                                 {film.nome}
                             </h3>
-                            {film.pinned ? (
-                                <i
-                                    className="fas fa-thumbtack rotate-45 text-[9px] text-[var(--brand-primary)] sm:text-[10px]"
-                                    title="Fixado"
-                                    aria-hidden="true"
-                                />
-                            ) : null}
+                            {film.pinned ? <Pin className="h-3.5 w-3.5 shrink-0 text-[var(--brand-primary)]" fill="currentColor" aria-label="Fixada" /> : null}
                         </div>
-
-                        <div className="mt-2 flex flex-wrap items-center gap-1.5 sm:gap-2">
-                            {film.garantiaFabricante ? (
-                                <span className="inline-flex items-center gap-1 rounded-full border border-[var(--border-subtle)] bg-[var(--surface-muted)] px-2 py-1 text-[9px] font-semibold text-[var(--text-body)] sm:px-2.5 sm:text-[10px]">
-                                    <i className="fas fa-shield-alt text-[7px] sm:text-[8px]" aria-hidden="true"></i>
-                                    {film.garantiaFabricante} anos fabricante
-                                </span>
-                            ) : null}
-                            {film.garantiaMaoDeObra ? (
-                                <span className="inline-flex items-center gap-1 rounded-full border border-[var(--border-subtle)] bg-[var(--surface-muted)] px-2 py-1 text-[9px] font-semibold text-[var(--text-body)] sm:px-2.5 sm:text-[10px]">
-                                    <i className="fas fa-tools text-[7px] sm:text-[8px]" aria-hidden="true"></i>
-                                    {formatGarantiaMaoDeObraCurto(film.garantiaMaoDeObra, film.garantiaMaoDeObraUnidade)} M.O.
-                                </span>
-                            ) : null}
-                        </div>
-                    </div>
-
-                    <div className="shrink-0 text-right">
-                        <p className="text-[1.5rem] font-semibold leading-none text-[var(--text-strong)] sm:text-[1.85rem]">
-                            {formatCurrency(film.preco || 0)}
-                        </p>
-                        <p className="mt-1 text-[9px] font-semibold uppercase text-[var(--text-soft)] sm:text-[10px]">
-                            por m²
-                        </p>
-                        {film.maoDeObra ? (
-                            <p className="mt-1 text-[10px] font-medium text-[var(--text-muted)] sm:text-[11px]">
-                                + {formatCurrency(film.maoDeObra)} M.O.
-                            </p>
-                        ) : null}
+                        <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">{warranty || 'Sem garantia cadastrada'}</p>
                     </div>
                 </div>
 
-                {hasTechnicalData ? (
-                    <div className="mb-4 rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] px-2.5 py-3 sm:mb-5 sm:px-3 sm:py-4">
-                        <div className="flex items-center justify-around gap-3">
-                            <TechIndicator label="VTL" value={film.vtl} color="text-[var(--brand-primary)]" />
-                            <TechIndicator label="UV" value={film.uv} color="text-[var(--brand-primary)]" />
-                            <TechIndicator label="IR" value={film.ir} color="text-[var(--brand-primary)]" />
-                            {film.tser ? (
-                                <TechIndicator label="TSER" value={film.tser} color="text-[var(--brand-primary)]" />
-                            ) : null}
-                        </div>
-                    </div>
-                ) : null}
+                <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                    <p className="tabular-nums">
+                        <span className="text-xl font-semibold text-[var(--text-strong)]">{formatCurrency(film.preco || 0)}</span>
+                        <span className="text-xs text-[var(--text-muted)]"> por m²</span>
+                    </p>
+                    {film.maoDeObra ? (
+                        <p className="text-xs tabular-nums text-[var(--text-muted)]">+ {formatCurrency(film.maoDeObra)} de mão de obra</p>
+                    ) : null}
+                </div>
 
-                {hasImages ? (
-                    <div className="mb-4 flex gap-2 overflow-x-auto pb-1 no-scrollbar sm:mb-5">
-                        {film.imagens!.map((image, imageIndex) => (
-                            <button
-                                key={`${film.nome}-${imageIndex}`}
-                                type="button"
-                                onClick={(event) => handleImageClick(imageIndex, event)}
-                                className="h-12 w-12 shrink-0 overflow-hidden rounded-[var(--radius-control)] border border-[var(--border-subtle)] shadow-sm transition-all hover:-translate-y-0.5 hover:border-[var(--brand-primary)] sm:h-14 sm:w-14"
-                                aria-label={`Abrir imagem ${imageIndex + 1} de ${film.nome}`}
-                            >
-                                <img src={image} alt="" className="h-full w-full object-cover" />
-                            </button>
-                        ))}
-                    </div>
-                ) : null}
+                <FilmMetricsStrip film={film} />
+                <FilmImages film={film} onOpenGallery={onOpenGallery} />
 
-                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border-subtle)] pt-3.5 sm:pt-4">
+                <div className="mt-auto flex items-center justify-between gap-2 border-t border-[var(--border-subtle)] pt-3">
                     <FilmItemActions
                         film={film}
                         size="card"
@@ -279,58 +241,32 @@ const FilmCard: React.FC<FilmItemActionHandlers & {
                             type="button"
                             onClick={onToggleExpand}
                             aria-expanded={isExpanded}
-                            className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase text-[var(--text-soft)] transition-colors hover:text-[var(--text-strong)] sm:gap-2 sm:text-[11px]"
+                            className="inline-flex h-9 items-center gap-1 rounded-[var(--radius-control)] px-2 text-[var(--text-muted)] transition-colors hover:text-[var(--text-strong)]"
                         >
-                            {isExpanded ? 'Menos' : 'Detalhes'}
-                            <i
-                                className={`fas fa-chevron-down text-[9px] transition-transform duration-300 sm:text-[10px] ${isExpanded ? 'rotate-180' : ''}`}
-                                aria-hidden="true"
-                            ></i>
+                            <span className="text-xs font-medium">{isExpanded ? 'Menos' : 'Detalhes'}</span>
+                            <ChevronDown className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} aria-hidden="true" />
                         </button>
                     ) : null}
                 </div>
             </div>
 
-            <div
-                className={`overflow-hidden border-t border-[var(--border-subtle)] bg-[var(--surface-muted)] transition-all duration-300 ${
-                    isExpanded ? 'max-h-48 px-4 py-3.5 opacity-100 sm:px-5 sm:py-4' : 'max-h-0 px-4 opacity-0 sm:px-5'
-                }`}
-            >
-                <div className="grid grid-cols-2 gap-4 text-[13px] sm:text-sm">
+            {hasDetails ? (
+                <div hidden={!isExpanded} className="grid grid-cols-2 gap-4 border-t border-[var(--border-subtle)] bg-[var(--surface-muted)] px-5 py-4 text-sm [&[hidden]]:hidden">
                     {film.espessura ? (
                         <div>
-                            <span className="text-[8px] font-semibold uppercase text-[var(--text-soft)] sm:text-[9px]">
-                                Espessura
-                            </span>
-                            <p className="mt-1 font-semibold text-[var(--text-strong)]">
-                                {film.espessura} mc
-                            </p>
+                            <span className="text-xs text-[var(--text-muted)]">Espessura</span>
+                            <p className="mt-0.5 font-medium text-[var(--text-strong)]">{film.espessura} mc</p>
                         </div>
                     ) : null}
-
-                    <FilmCustomFieldsGrid film={film} valueClassName="font-semibold text-[var(--text-strong)]" />
+                    <FilmCustomFieldsGrid film={film} valueClassName="font-medium text-[var(--text-strong)]" />
                 </div>
-            </div>
+            ) : null}
         </article>
     );
 };
 
-const FilmMetricChip: React.FC<{
-    label: string;
-    value: number | undefined;
-    toneClassName: string;
-}> = ({ label, value, toneClassName }) => {
-    if (value === undefined || value === 0) return null;
-
-    return (
-        <span
-            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-medium ${toneClassName}`}
-        >
-            <span className="text-[8px] leading-none">{label}</span>
-            <span>{value}%</span>
-        </span>
-    );
-};
+// Mesmas colunas para a linha e o cabeçalho da lista no computador.
+const LIST_GRID = 'sm:grid sm:grid-cols-[minmax(0,2.4fr)_repeat(4,minmax(44px,0.45fr))_minmax(0,1.1fr)_236px] sm:items-center sm:gap-4';
 
 const FilmListAppleRow: React.FC<FilmItemActionHandlers & {
     film: Film;
@@ -338,204 +274,100 @@ const FilmListAppleRow: React.FC<FilmItemActionHandlers & {
     onToggleExpand: () => void;
     onOpenGallery: (images: string[], initialIndex: number) => void;
     index: number;
-}> = ({ film, onEdit, onDuplicate, onTogglePin, onDelete, isExpanded, onToggleExpand, onOpenGallery, index }) => {
-    const firstImage = film.imagens?.[0];
-    const hasImages = Boolean(firstImage);
-    const hasTechnicalData = Boolean(film.vtl || film.uv || film.ir || film.tser);
-    const accentDotClass = getFilmAccentDotClass(film);
-    const warrantySummary = [
-        film.garantiaFabricante ? `${film.garantiaFabricante} anos fabricante` : null,
-        film.garantiaMaoDeObra ? `${formatGarantiaMaoDeObraCurto(film.garantiaMaoDeObra, film.garantiaMaoDeObraUnidade)} M.O.` : null,
-    ]
-        .filter(Boolean)
-        .join(' / ');
-    const technicalSummary = [
-        film.vtl ? `VTL ${film.vtl}%` : null,
-        film.uv ? `UV ${film.uv}%` : null,
-        film.ir ? `IR ${film.ir}%` : null,
-        film.tser ? `TSER ${film.tser}%` : null,
-    ]
-        .filter(Boolean)
-        .slice(0, 3)
-        .join(' / ');
-    const collapsedSummary = [warrantySummary, technicalSummary].filter(Boolean).join(' / ');
+}> = ({ film, onEdit, onDuplicate, onTogglePin, onDelete, isExpanded, onToggleExpand, onOpenGallery }) => {
+    const warranty = warrantyText(film);
+    const hasExtra = Boolean(film.imagens?.length || film.espessura || getVisibleCustomFields(film).length > 0);
 
     return (
-        <article
-            className="group animate-stagger relative bg-transparent transition-all duration-300"
-            style={{ animationDelay: `${index * 0.05}s` }}
-        >
-            <button
-                type="button"
-                onClick={onToggleExpand}
-                aria-expanded={isExpanded}
-                className="w-full px-4 py-3 text-left transition-colors hover:bg-[var(--surface-muted)] sm:px-5 sm:py-3.5"
-            >
-                <div className="flex items-start gap-3">
-                    {hasImages ? (
-                        <div className="relative hidden h-11 w-11 shrink-0 overflow-hidden rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] shadow-[var(--shadow-hairline)] sm:block sm:h-12 sm:w-12">
-                            <img src={firstImage} alt="" className="h-full w-full object-cover" />
-                            {(film.imagens?.length || 0) > 1 ? (
-                                <span className="absolute bottom-1 right-1 rounded-full bg-slate-950/75 px-1.5 py-0.5 text-[9px] font-semibold text-white">
-                                    {film.imagens!.length}
-                                </span>
-                            ) : null}
-                        </div>
-                    ) : (
-                        <div className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-muted)] shadow-[var(--shadow-hairline)] sm:flex sm:h-12 sm:w-12">
-                            <i className="fas fa-layer-group text-[12px]" aria-hidden="true"></i>
-                        </div>
-                    )}
+        <article className="group/row">
+            <div className={`flex items-center gap-3 px-4 py-3 transition-colors hover:bg-[var(--surface-muted)] sm:px-5 ${LIST_GRID}`}>
+                <button
+                    type="button"
+                    onClick={onToggleExpand}
+                    aria-expanded={isExpanded}
+                    className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                >
+                    <FilmSwatch vtl={film.vtl} size="sm" />
+                    <span className="min-w-0 flex-1">
+                        <span className="flex items-center gap-1.5">
+                            <h3 className="truncate text-sm font-medium text-[var(--text-strong)]">{film.nome}</h3>
+                            {film.pinned ? <Pin className="h-3 w-3 shrink-0 text-[var(--brand-primary)]" fill="currentColor" aria-label="Fixada" /> : null}
+                        </span>
+                        <span className="mt-0.5 block truncate text-xs text-[var(--text-muted)]">{warranty || 'Sem garantia cadastrada'}</span>
+                        {/* Celular: preço embaixo do nome. */}
+                        <span className="mt-1 block text-sm font-semibold tabular-nums text-[var(--text-strong)] sm:hidden">
+                            {formatCurrency(film.preco || 0)} <span className="text-xs font-normal text-[var(--text-muted)]">/m²</span>
+                        </span>
+                    </span>
+                    <ChevronRight className={`h-4 w-4 shrink-0 text-[var(--text-muted)] transition-transform sm:hidden ${isExpanded ? 'rotate-90' : ''}`} aria-hidden="true" />
+                </button>
 
-                    <div className="min-w-0 flex-1">
-                        <div className="flex items-start gap-1.5">
-                            <span className={`mt-[0.38rem] h-2 w-2 shrink-0 rounded-full ${accentDotClass}`} />
-                            <h3 className="text-[0.92rem] font-medium leading-[1.2] text-[var(--text-strong)] sm:truncate sm:text-[1.04rem]">
-                                {film.nome}
-                            </h3>
-                            {film.pinned ? (
-                                <i
-                                    className="mt-[0.2rem] fas fa-thumbtack rotate-45 text-[8px] text-[var(--brand-primary)]"
-                                    title="Fixado"
-                                    aria-hidden="true"
-                                />
-                            ) : null}
-                        </div>
+                {FILM_METRICS.map((metric) => (
+                    <span key={metric.key} className="hidden text-right text-sm tabular-nums text-[var(--text-body)] sm:block" title={metric.title}>
+                        {film[metric.key] ? `${film[metric.key]}%` : <span className="text-[var(--text-soft)]">—</span>}
+                    </span>
+                ))}
 
-                        <p className="mt-1 text-[11px] font-medium text-[var(--text-muted)]">
-                            <span className="sm:hidden">{warrantySummary || 'Toque para ver detalhes técnicos'}</span>
-                            <span className="hidden sm:inline">{collapsedSummary || 'Toque para ver detalhes técnicos'}</span>
-                        </p>
+                <span className="hidden text-right sm:block">
+                    <span className="block text-sm font-semibold tabular-nums text-[var(--text-strong)]">{formatCurrency(film.preco || 0)}</span>
+                    {film.maoDeObra ? <span className="block text-xs tabular-nums text-[var(--text-muted)]">+ {formatCurrency(film.maoDeObra)} M.O.</span> : null}
+                </span>
 
-                        <div className="mt-2 flex items-center justify-between gap-3 pr-1 sm:hidden">
-                            <div className="min-w-0">
-                                <p className="text-[0.98rem] font-semibold leading-none text-[var(--text-strong)]">
-                                    {formatCurrency(film.preco || 0)}
-                                </p>
-                                {film.maoDeObra ? (
-                                    <p className="mt-1 text-[10px] font-medium text-[var(--text-muted)]">
-                                        + {formatCurrency(film.maoDeObra)} M.O.
-                                    </p>
-                                ) : null}
-                            </div>
-                            <p className="text-[8px] font-semibold uppercase text-[var(--text-soft)]">
-                                por m²
-                            </p>
-                        </div>
-                    </div>
-
-                    <div className="hidden shrink-0 pl-2 text-right sm:block">
-                        <p className="text-[1.02rem] font-semibold leading-none text-[var(--text-strong)] sm:text-[1.12rem]">
-                            {formatCurrency(film.preco || 0)}
-                        </p>
-                        <p className="mt-1 text-[8px] font-semibold uppercase text-[var(--text-soft)]">
-                            por m²
-                        </p>
-                        {film.maoDeObra ? (
-                            <p className="mt-1 text-[10px] font-medium text-[var(--text-muted)]">
-                                + {formatCurrency(film.maoDeObra)} M.O.
-                            </p>
-                        ) : null}
-                    </div>
-
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-muted)]">
-                        <i
-                            className={`fas fa-chevron-right text-[10px] transition-transform duration-300 ${isExpanded ? 'rotate-90' : ''}`}
-                            aria-hidden="true"
-                        ></i>
-                    </div>
-                </div>
-            </button>
-
-            <div
-                className={`overflow-hidden transition-all duration-300 ${
-                    isExpanded ? 'max-h-[360px] opacity-100' : 'max-h-0 opacity-0'
-                }`}
-            >
-                <div className="border-t border-[var(--border-subtle)] bg-[var(--surface-muted)] px-4 py-3 sm:px-5">
-                    <div className="space-y-3">
-                        {hasTechnicalData ? (
-                            <div className="flex flex-wrap gap-1.5">
-                                <FilmMetricChip
-                                    label="VTL"
-                                    value={film.vtl}
-                                    toneClassName="border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-body)]"
-                                />
-                                <FilmMetricChip
-                                    label="UV"
-                                    value={film.uv}
-                                    toneClassName="border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-body)]"
-                                />
-                                <FilmMetricChip
-                                    label="IR"
-                                    value={film.ir}
-                                    toneClassName="border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-body)]"
-                                />
-                                <FilmMetricChip
-                                    label="TSER"
-                                    value={film.tser}
-                                    toneClassName="border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-body)]"
-                                />
-                            </div>
-                        ) : null}
-
-                        {hasImages ? (
-                            <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
-                                {film.imagens!.map((image, imageIndex) => (
-                                    <button
-                                        key={`${film.nome}-${imageIndex}`}
-                                        type="button"
-                                        onClick={() => onOpenGallery(film.imagens!, imageIndex)}
-                                        className="h-11 w-11 shrink-0 overflow-hidden rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] transition-all hover:border-[var(--brand-primary)]"
-                                        aria-label={`Abrir imagem ${imageIndex + 1} de ${film.nome}`}
-                                    >
-                                        <img src={image} alt="" className="h-full w-full object-cover" />
-                                    </button>
-                                ))}
-                            </div>
-                        ) : null}
-
-                        <div className="grid grid-cols-2 gap-3 text-[12px] sm:text-[13px]">
-                            {film.maoDeObra ? (
-                                <div>
-                                    <span className="text-[8px] font-semibold uppercase text-[var(--text-soft)] sm:text-[9px]">
-                                        Mão de obra
-                                    </span>
-                                    <p className="mt-1 font-medium text-[var(--text-strong)]">
-                                        {formatCurrency(film.maoDeObra)}
-                                    </p>
-                                </div>
-                            ) : null}
-                            {film.espessura ? (
-                                <div>
-                                    <span className="text-[8px] font-semibold uppercase text-[var(--text-soft)] sm:text-[9px]">
-                                        Espessura
-                                    </span>
-                                    <p className="mt-1 font-medium text-[var(--text-strong)]">
-                                        {film.espessura} mc
-                                    </p>
-                                </div>
-                            ) : null}
-                            <FilmCustomFieldsGrid film={film} valueClassName="font-medium text-[var(--text-strong)]" />
-                        </div>
-
-                        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border-subtle)] pt-3">
-                            <FilmItemActions
-                                film={film}
-                                size="row"
-                                onEdit={onEdit}
-                                onDuplicate={onDuplicate}
-                                onTogglePin={onTogglePin}
-                                onDelete={onDelete}
-                            />
-
-                            <span className="text-[10px] font-medium text-[var(--text-soft)]">
-                                {film.imagens?.length ? `${film.imagens.length} ${film.imagens.length === 1 ? 'imagem' : 'imagens'}` : 'Sem imagens'}
-                            </span>
-                        </div>
-                    </div>
+                <div className="hidden items-center justify-end gap-1 sm:flex">
+                    <FilmItemActions
+                        film={film}
+                        size="row"
+                        onEdit={onEdit}
+                        onDuplicate={onDuplicate}
+                        onTogglePin={onTogglePin}
+                        onDelete={onDelete}
+                    />
+                    <button
+                        type="button"
+                        onClick={onToggleExpand}
+                        aria-expanded={isExpanded}
+                        aria-label={isExpanded ? `Fechar detalhes de ${film.nome}` : `Ver detalhes de ${film.nome}`}
+                        disabled={!hasExtra}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius-control)] text-[var(--text-muted)] transition-colors hover:bg-[var(--surface)] hover:text-[var(--text-strong)] disabled:invisible"
+                    >
+                        <ChevronDown className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} aria-hidden="true" />
+                    </button>
                 </div>
             </div>
+
+            {isExpanded ? (
+                <div className="space-y-3 border-t border-[var(--border-subtle)] bg-[var(--surface-muted)] px-4 py-3 sm:px-5">
+                    <div className="sm:hidden">
+                        <FilmMetricsStrip film={film} />
+                    </div>
+                    <FilmImages film={film} onOpenGallery={onOpenGallery} />
+                    <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+                        {film.maoDeObra ? (
+                            <div className="sm:hidden">
+                                <span className="text-xs text-[var(--text-muted)]">Mão de obra</span>
+                                <p className="mt-0.5 font-medium tabular-nums text-[var(--text-strong)]">{formatCurrency(film.maoDeObra)}</p>
+                            </div>
+                        ) : null}
+                        {film.espessura ? (
+                            <div>
+                                <span className="text-xs text-[var(--text-muted)]">Espessura</span>
+                                <p className="mt-0.5 font-medium text-[var(--text-strong)]">{film.espessura} mc</p>
+                            </div>
+                        ) : null}
+                        <FilmCustomFieldsGrid film={film} valueClassName="font-medium text-[var(--text-strong)]" />
+                    </div>
+                    <div className="border-t border-[var(--border-subtle)] pt-3 sm:hidden">
+                        <FilmItemActions
+                            film={film}
+                            size="row"
+                            onEdit={onEdit}
+                            onDuplicate={onDuplicate}
+                            onTogglePin={onTogglePin}
+                            onDelete={onDelete}
+                        />
+                    </div>
+                </div>
+            ) : null}
         </article>
     );
 };
@@ -676,59 +508,29 @@ const FilmListDesktopHeader: React.FC<FilmListDesktopHeaderProps> = ({
     totalFilms,
     filteredCount,
     searchTerm,
-    onSearchChange,
-    onClearSearch,
     onAdd,
-}) => {
-    const summary =
-        totalFilms === 0
-            ? 'Monte um catálogo premium com busca e manutenção mais claras.'
-            : filteredCount !== totalFilms
-              ? `${filteredCount} de ${totalFilms} películas em foco agora.`
-              : `${totalFilms} películas prontas para consulta, edição e venda.`;
-
-    return (
-        <section className="hidden sm:block">
-            <div className="relative overflow-hidden rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface-raised)] p-5 shadow-[var(--shadow-soft)]">
-                <div className="absolute inset-x-0 top-0 h-1 bg-[var(--brand-primary)]" aria-hidden="true" />
-                <div className="mb-5 flex items-end justify-between gap-4">
-                    <div className="space-y-2">
-                        <span className="ui-kicker">
-                            Catálogo
-                        </span>
-                        <div className="flex items-center gap-3">
-                            <h2 className="text-3xl font-black text-[var(--text-strong)]">
-                                Películas
-                            </h2>
-                            <span className="inline-flex min-h-8 items-center rounded-full bg-[var(--surface-muted)] px-3 text-xs font-bold text-[var(--text-muted)]">
-                                {totalFilms}
-                            </span>
-                        </div>
-                        <p className="max-w-2xl text-sm leading-6 text-[var(--text-muted)]">
-                            {summary}
-                        </p>
-                    </div>
-
-                    {totalFilms > 0 ? (
-                        <div className="hidden items-center gap-2 rounded-full border border-[var(--border-subtle)] bg-[var(--surface)] px-3 py-2 text-xs font-semibold text-[var(--text-muted)] shadow-[var(--shadow-hairline)] lg:inline-flex">
-                            <span className="inline-flex h-2 w-2 rounded-full bg-[var(--brand-primary)]"></span>
-                            {filteredCount} visíveis agora
-                        </div>
-                    ) : null}
-                </div>
-
-                <PageCollectionToolbar
-                    search={searchTerm}
-                    onSearchChange={onSearchChange}
-                    onClearSearch={onClearSearch}
-                    searchPlaceholder="Buscar película..."
-                    primaryActionLabel="Nova película"
-                    onPrimaryAction={onAdd}
-                />
-            </div>
-        </section>
-    );
-};
+}) => (
+    <header className="hidden items-end justify-between gap-3 sm:flex">
+        <div className="min-w-0">
+            <h2 className="text-2xl font-semibold leading-tight text-[var(--text-strong)]">Películas</h2>
+            <p className="mt-1 text-sm tabular-nums text-[var(--text-muted)]">
+                {totalFilms === 0
+                    ? 'Nenhuma película no catálogo'
+                    : searchTerm.trim()
+                        ? `${filteredCount} de ${totalFilms} películas`
+                        : `${totalFilms} ${totalFilms === 1 ? 'película' : 'películas'} no catálogo`}
+            </p>
+        </div>
+        <button
+            type="button"
+            onClick={onAdd}
+            className="inline-flex h-10 shrink-0 items-center gap-2 rounded-[var(--radius-control)] bg-[var(--surface-inverse)] px-3.5 text-[var(--surface)] transition-opacity hover:opacity-90"
+        >
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            <span className="text-sm font-semibold">Nova película</span>
+        </button>
+    </header>
+);
 
 const FilmListView: React.FC<FilmListViewProps> = ({ films, onAdd, onEdit, onDuplicate, onTogglePin, onSaveFilms, onImportTable, onDelete, onOpenGallery }) => {
     const [isPriceAdjustmentOpen, setIsPriceAdjustmentOpen] = useState(false);
@@ -831,40 +633,51 @@ const FilmListView: React.FC<FilmListViewProps> = ({ films, onAdd, onEdit, onDup
             />
 
             {films.length > 0 ? (
-                <div className="flex items-start justify-between gap-3 px-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                        <span className="inline-flex items-center rounded-full border border-[var(--border-subtle)] bg-[var(--surface)] px-3 py-1.5 text-[11px] font-medium text-[var(--text-muted)] shadow-[var(--shadow-hairline)] sm:text-xs">
-                            {filteredFilms.length} de {films.length} películas
-                        </span>
-                        {searchTerm.trim() ? (
+                <div className="flex flex-wrap items-center gap-2 px-1 sm:px-0">
+                    <label className="relative hidden min-w-0 flex-1 sm:block sm:max-w-md">
+                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-soft)]" aria-hidden="true" />
+                        <input
+                            type="text"
+                            value={searchTerm}
+                            onChange={(event) => handleSearchChange(event.target.value)}
+                            placeholder="Buscar por nome ou preço"
+                            aria-label="Buscar película"
+                            style={{ fontSize: 14 }}
+                            className="h-10 w-full rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] pl-10 pr-9 text-[var(--text-strong)] outline-none transition-colors placeholder:text-[var(--text-soft)] focus:border-[var(--brand-primary)]"
+                        />
+                        {searchTerm ? (
                             <button
                                 type="button"
                                 onClick={handleClearSearch}
-                                className="inline-flex items-center gap-2 rounded-full border border-[var(--border-subtle)] bg-[var(--surface)] px-3 py-1.5 text-[11px] font-medium text-[var(--text-muted)] shadow-[var(--shadow-hairline)] transition-colors hover:text-[var(--text-strong)] sm:text-xs"
+                                aria-label="Limpar busca"
+                                className="absolute inset-y-0 right-0 flex items-center pr-3 text-[var(--text-soft)] transition-colors hover:text-[var(--text-strong)]"
                             >
-                                <i className="fas fa-times-circle text-[11px]" aria-hidden="true"></i>
-                                Limpar busca
+                                <X className="h-4 w-4" aria-hidden="true" />
                             </button>
                         ) : null}
+                    </label>
+                    <span className="text-xs tabular-nums text-[var(--text-muted)] sm:hidden">
+                        {filteredFilms.length} de {films.length} películas
+                    </span>
+                    <div className="ml-auto flex items-center gap-2">
                         <button
                             type="button"
                             onClick={() => setIsPriceAdjustmentOpen(true)}
-                            className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border-subtle)] bg-[var(--surface)] px-3 py-1.5 text-[11px] font-semibold text-[var(--text-body)] shadow-[var(--shadow-hairline)] transition-colors hover:text-[var(--text-strong)] sm:text-xs"
+                            className={TOOLBAR_BUTTON}
                         >
-                            <i className="fas fa-percent text-[10px]" aria-hidden="true"></i>
-                            Reajustar preços
+                            <Percent className="h-3.5 w-3.5" aria-hidden="true" />
+                            <span className="text-xs font-medium sm:text-sm">Reajustar preços</span>
                         </button>
                         <button
                             type="button"
                             onClick={onImportTable}
-                            className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border-subtle)] bg-[var(--surface)] px-3 py-1.5 text-[11px] font-semibold text-[var(--text-body)] shadow-[var(--shadow-hairline)] transition-colors hover:text-[var(--text-strong)] sm:text-xs"
+                            className={TOOLBAR_BUTTON}
                         >
-                            <i className="fas fa-file-import text-[10px]" aria-hidden="true"></i>
-                            Importar tabela
+                            <FileUp className="h-3.5 w-3.5" aria-hidden="true" />
+                            <span className="text-xs font-medium sm:text-sm">Importar tabela</span>
                         </button>
+                        <ViewModeToggle value={viewMode} onChange={setViewMode} />
                     </div>
-
-                    <ViewModeToggle value={viewMode} onChange={setViewMode} />
                 </div>
             ) : null}
 
@@ -881,7 +694,7 @@ const FilmListView: React.FC<FilmListViewProps> = ({ films, onAdd, onEdit, onDup
             {displayedFilms.length > 0 ? (
                 <>
                     {viewMode === 'grid' ? (
-                        <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2 xl:grid-cols-3">
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                             {displayedFilms.map((film, index) => (
                                 <FilmCard
                                     key={film.nome}
@@ -898,7 +711,14 @@ const FilmListView: React.FC<FilmListViewProps> = ({ films, onAdd, onEdit, onDup
                             ))}
                         </div>
                     ) : (
-                        <div className="divide-y divide-[var(--border-subtle)] overflow-hidden rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface)] shadow-[var(--shadow-soft)]">
+                        <div className="overflow-hidden rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface)]">
+                            <div className={`hidden border-b border-[var(--border-subtle)] px-5 py-2.5 text-xs text-[var(--text-muted)] ${LIST_GRID}`} aria-hidden="true">
+                                <span>Película</span>
+                                {FILM_METRICS.map((metric) => <span key={metric.key} className="text-right" title={metric.title}>{metric.label}</span>)}
+                                <span className="text-right">Preço por m²</span>
+                                <span />
+                            </div>
+                            <div className="divide-y divide-[var(--border-subtle)]">
                             {displayedFilms.map((film, index) => (
                                 <FilmListAppleRow
                                     key={film.nome}
@@ -913,6 +733,7 @@ const FilmListView: React.FC<FilmListViewProps> = ({ films, onAdd, onEdit, onDup
                                     index={index}
                                 />
                             ))}
+                            </div>
                         </div>
                     )}
 
@@ -922,7 +743,6 @@ const FilmListView: React.FC<FilmListViewProps> = ({ films, onAdd, onEdit, onDup
                                 onClick={handleLoadMore}
                                 variant="secondary"
                                 size="md"
-                                className="group rounded-full px-6"
                             >
                                 Carregar mais
                             </ActionButton>
