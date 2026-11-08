@@ -15,9 +15,10 @@ import { getActiveInvite, createOrganizationInvite } from '../../services/invite
 import { processLogoImage } from '../../services/imageProcessing';
 import { useTheme } from '../../src/contexts/ThemeContext';
 import { useFeedback } from '../../src/contexts/FeedbackContext';
-import { Car, CheckCircle2, DollarSign, Facebook, FileSignature, Instagram, Loader2, MessageSquare, Moon, Palette, QrCode, Save, Settings, Share2, Shield, Smartphone, Sun, Users, Clock, Building2, Bot, Youtube, ChevronDown, Sparkles, X, Layers } from 'lucide-react';
+import { Car, CheckCircle2, DollarSign, Facebook, FileSignature, Instagram, Loader2, MessageSquare, Moon, Palette, QrCode, Save, Settings, Share2, Shield, Smartphone, Sun, Users, Clock, Building2, Bot, Youtube, ChevronDown, Sparkles, Trash2, X, Layers } from 'lucide-react';
 import { FeatureGate } from '../subscription/SubscriptionComponents';
 import PortalShowcaseSettings from '../settings/PortalShowcaseSettings';
+import DeleteAccountPanel from '../settings/DeleteAccountPanel';
 import { PremiumFeatureSection } from '../subscription/PremiumFeatureSection';
 
 interface UserSettingsViewProps {
@@ -1137,16 +1138,30 @@ const UserSettingsView: React.FC<UserSettingsViewProps> = ({
             {/* ===== SECAO: POLITICA DE PRIVACIDADE ===== */}
             <SettingsSection
                 title="Política de Privacidade"
-                subtitle="Termos e condições de uso"
+                subtitle="Como seus dados são usados"
                 icon={<Shield className="w-5 h-5" />}
+                showFooterSave={false}
             >
-                <button
-                    type="button"
+                <a
+                    href="/privacidade"
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className={`${secondaryButtonClassName} w-full`}
                 >
                     <Shield className="h-4 w-4" aria-hidden="true" />
                     Ver Política de Privacidade
-                </button>
+                </a>
+            </SettingsSection>
+
+            {/* ===== SECAO: EXCLUIR CONTA ===== */}
+            <SettingsSection
+                title="Excluir minha conta"
+                subtitle="Apagar a conta e os dados"
+                icon={<Trash2 className="w-5 h-5" />}
+                sectionId="excluir-conta"
+                showFooterSave={false}
+            >
+                <DeleteAccountPanel />
             </SettingsSection>
 
             {/* Modal de Assinatura */}

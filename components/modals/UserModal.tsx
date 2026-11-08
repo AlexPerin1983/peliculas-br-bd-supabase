@@ -509,7 +509,7 @@ const UserModal: React.FC<UserModalProps> = ({ isOpen, onClose, onSave, userInfo
                             </button>
 
                             <a
-                                href="/privacy-policy"
+                                href="/privacidade"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="w-full px-4 py-3 bg-slate-100 text-slate-700 font-semibold rounded-lg hover:bg-slate-200 transition-colors flex items-center justify-center gap-2 text-sm"

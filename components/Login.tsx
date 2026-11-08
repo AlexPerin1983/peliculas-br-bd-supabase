@@ -532,6 +532,16 @@ export const Login: React.FC = () => {
                         )}
                     </button>
                 </div>
+
+                <nav aria-label="Informações legais" className="mt-6 flex items-center justify-center gap-3 text-slate-400">
+                    <a href="/privacidade" target="_blank" rel="noopener noreferrer" className="hover:text-slate-600 hover:underline">
+                        <span className="text-xs">Política de Privacidade</span>
+                    </a>
+                    <span aria-hidden="true" className="text-xs">·</span>
+                    <a href="/excluir-conta" target="_blank" rel="noopener noreferrer" className="hover:text-slate-600 hover:underline">
+                        <span className="text-xs">Excluir conta</span>
+                    </a>
+                </nav>
             </div>
             </div>
         </div>
