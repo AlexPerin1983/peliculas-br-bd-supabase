@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 import { useSubscription } from '../../contexts/SubscriptionContext';
 import { SubscriptionModule } from '../../services/subscriptionService';
+import { isPlayStoreApp } from '../../src/lib/playStoreApp';
+import { StoreUnavailableNotice } from './StoreUnavailableNotice';
 import {
     createAbacatePixCheckoutForModule,
     createAbacateSubscriptionCheckoutForModule
@@ -73,6 +75,7 @@ interface UpgradePromptProps {
 }
 
 export function UpgradePrompt({ module, onUpgradeClick, compact = false }: UpgradePromptProps) {
+    if (isPlayStoreApp()) return <StoreUnavailableNotice />;
     if (compact) {
         return (
             <div className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-amber-500/20 to-yellow-500/20 border border-amber-500/30 rounded-lg text-amber-200 text-sm">
@@ -214,7 +217,13 @@ const resourceNames: Record<string, string> = {
     agendamentos: 'agendamentos'
 };
 
-export function LimitWarning({ resource, currentCount, onUpgradeClick }: LimitWarningProps) {
+export function LimitWarning(props: LimitWarningProps) {
+    // Aviso de limite leva à compra: não aparece no app da Google Play.
+    if (isPlayStoreApp()) return null;
+    return <LimitWarningContent {...props} />;
+}
+
+function LimitWarningContent({ resource, currentCount, onUpgradeClick }: LimitWarningProps) {
     const { isLimitReached, getRemainingQuota, info, isUnlimited } = useSubscription();
 
     if (isUnlimited) return null;
@@ -273,6 +282,7 @@ interface ModuleCardProps {
 }
 
 export function ModuleCard({ module, isActive = false, expiresAt, onActivate }: ModuleCardProps) {
+    if (isPlayStoreApp()) return null;
     const DynamicIcon = getIconComponent(module.icon);
 
     return (
@@ -403,7 +413,12 @@ interface LockedScreenProps {
     onBackClick?: () => void;
 }
 
-export function LockedScreen({
+export function LockedScreen(props: LockedScreenProps) {
+    if (isPlayStoreApp()) return <StoreUnavailableNotice />;
+    return <LockedScreenContent {...props} />;
+}
+
+function LockedScreenContent({
     moduleId,
     title,
     description,
@@ -598,6 +613,7 @@ interface ProBadgeProps {
 }
 
 export function ProBadge({ size = 'sm', className = '' }: ProBadgeProps) {
+    if (isPlayStoreApp()) return null;
     const sizes = {
         sm: 'text-[10px] px-1.5 py-0.5',
         md: 'text-xs px-2 py-0.5',
@@ -634,7 +650,7 @@ export function ProButton({ moduleId, children, onUpgradeClick, onClick, classNa
     const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
         if (hasAccess) {
             onClick?.(e);
-        } else {
+        } else if (!isPlayStoreApp()) {
             onUpgradeClick?.();
         }
     };
@@ -745,7 +761,12 @@ interface ActivateModuleModalProps {
     pixKey?: string;
 }
 
-export function ActivateModuleModal({
+export function ActivateModuleModal(props: ActivateModuleModalProps) {
+    if (isPlayStoreApp()) return null;
+    return <ActivateModuleModalContent {...props} />;
+}
+
+function ActivateModuleModalContent({
     isOpen,
     onClose,
     module

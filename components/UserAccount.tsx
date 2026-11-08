@@ -21,6 +21,7 @@ import { supabase } from '../services/supabaseClient';
 import { type SubscriptionModule } from '../services/subscriptionService';
 import { cancelAbacateSubscriptionForModule } from '../services/abacateBillingService';
 import { PremiumModuleModal } from './subscription/PremiumModuleModal';
+import { isPlayStoreApp } from '../src/lib/playStoreApp';
 
 type FeedbackMessage = {
     type: 'error' | 'success';
@@ -70,6 +71,7 @@ const getIconComponent = (iconName?: string) => {
 export const UserAccount: React.FC = () => {
     const { user, signOut, isAdmin, isOwner, memberRole } = useAuth();
     const { info, modules, isLoading: subscriptionLoading, hasModule, refresh } = useSubscription();
+    const hidePlans = isPlayStoreApp();
 
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -242,7 +244,9 @@ export const UserAccount: React.FC = () => {
 
     return (
         <>
-            <div className="space-y-5 pb-10 xl:grid xl:grid-cols-[minmax(0,1.5fr)_minmax(340px,0.55fr)] xl:items-start xl:gap-5 xl:space-y-0">
+            <div className={hidePlans ? 'space-y-5 pb-10' : 'space-y-5 pb-10 xl:grid xl:grid-cols-[minmax(0,1.5fr)_minmax(340px,0.55fr)] xl:items-start xl:gap-5 xl:space-y-0'}>
+                {/* No app da Google Play o plano, os preços e a cobrança não aparecem. */}
+                {!hidePlans && (
                 <section className="ui-surface overflow-hidden">
                     <header className="border-b border-[var(--border-subtle)] bg-[var(--surface)] p-4 sm:p-5">
                         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -654,8 +658,9 @@ export const UserAccount: React.FC = () => {
                         )}
                     </div>
                 </section>
+                )}
 
-                <section className="ui-surface overflow-hidden xl:sticky xl:top-24">
+                <section className={hidePlans ? 'ui-surface overflow-hidden' : 'ui-surface overflow-hidden xl:sticky xl:top-24'}>
                     <header className="border-b border-[var(--border-subtle)] bg-[var(--surface)] p-4 sm:p-5">
                         <div className="flex items-center gap-3">
                             <div className="ui-icon-frame h-11 w-11 shrink-0 text-[var(--brand-primary)]">
