@@ -38,8 +38,8 @@ const getStatusText = (state: AgendaPushState | null, errorMessage: string | nul
     if (errorMessage) return errorMessage;
     if (successMessage) return successMessage;
     if (!state) return 'Verificando';
-    if (!state.supported) return 'Indisponivel neste navegador';
-    if (!state.hasPublicKey) return 'Configuracao pendente';
+    if (!state.supported) return 'Indisponível neste navegador';
+    if (!state.hasPublicKey) return 'Configuração pendente';
     if (state.permission === 'denied') return 'Bloqueado no navegador';
     if (state.subscribed && state.dailySummaryEnabled) return `Agenda e propostas · ativo ${formatReminderLabel(state.reminderMinutes)} + resumo ${state.dailySummaryTime}`;
     if (state.subscribed) return `Agenda e propostas · ativo ${formatReminderLabel(state.reminderMinutes)}`;
