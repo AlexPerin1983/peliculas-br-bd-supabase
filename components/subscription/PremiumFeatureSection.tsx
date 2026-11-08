@@ -16,6 +16,8 @@ import {
 } from 'lucide-react';
 import { useSubscription } from '../../contexts/SubscriptionContext';
 import { PremiumModuleModal } from './PremiumModuleModal';
+import { StoreUnavailableNotice } from './StoreUnavailableNotice';
+import { isPlayStoreApp } from '../../src/lib/playStoreApp';
 
 interface PremiumFeatureSectionProps {
     moduleId: string;
@@ -89,7 +91,12 @@ const formatCurrency = (value: number) => `R$ ${value.toFixed(2).replace('.', ',
 const formatFeatureName = (feature: string) =>
     feature.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 
-export const PremiumFeatureSection: React.FC<PremiumFeatureSectionProps> = ({
+// No app da Google Play não mostramos oferta, preço nem selo premium.
+export const PremiumFeatureSection: React.FC<PremiumFeatureSectionProps> = (props) => (
+    isPlayStoreApp() ? <StoreUnavailableNotice /> : <PremiumFeatureOffer {...props} />
+);
+
+const PremiumFeatureOffer: React.FC<PremiumFeatureSectionProps> = ({
     moduleId,
     title,
     description,

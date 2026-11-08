@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { type SubscriptionModule } from '../../services/subscriptionService';
+import { isPlayStoreApp } from '../../src/lib/playStoreApp';
 import {
     createAbacatePixCheckoutForModule,
     createAbacateSubscriptionCheckoutForModule
@@ -57,7 +58,12 @@ const getIconComponent = (iconName?: string) => {
     return icons[iconName as keyof typeof icons] || Crown;
 };
 
-export const PremiumModuleModal: React.FC<PremiumModuleModalProps> = ({
+// No app da Google Play a tela de contratação não existe.
+export const PremiumModuleModal: React.FC<PremiumModuleModalProps> = (props) => (
+    isPlayStoreApp() ? null : <PremiumModuleModalContent {...props} />
+);
+
+const PremiumModuleModalContent: React.FC<PremiumModuleModalProps> = ({
     isOpen,
     module,
     onClose

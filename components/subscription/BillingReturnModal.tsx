@@ -10,6 +10,7 @@ import {
     ShieldCheck,
     X
 } from 'lucide-react';
+import { isPlayStoreApp } from '../../src/lib/playStoreApp';
 
 export type BillingReturnStatus = 'waiting' | 'confirmed' | 'timeout' | 'cancelled';
 export type BillingReturnMode = 'pix' | 'subscription';
@@ -103,7 +104,7 @@ export const BillingReturnModal: React.FC<BillingReturnModalProps> = ({
     attempts = 0,
     onClose
 }) => {
-    if (!isOpen) {
+    if (!isOpen || isPlayStoreApp()) {
         return null;
     }
 

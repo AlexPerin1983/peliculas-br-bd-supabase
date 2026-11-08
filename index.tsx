@@ -12,6 +12,7 @@ import { SubscriptionProvider } from './contexts/SubscriptionContext';
 import { ResetPassword } from './components/ResetPassword';
 import UpdateBanner from './components/UpdateBanner';
 import { redirectToCanonicalHostIfNeeded } from './src/lib/canonicalHost';
+import { isPlayStoreApp } from './src/lib/playStoreApp';
 import { readPasswordRecoveryTokens } from './src/lib/passwordRecovery';
 import { supabase } from './services/supabaseClient';
 
@@ -225,6 +226,9 @@ const bootstrapPasswordRecoverySession = async () => {
     console.error('[PasswordRecovery] Erro inesperado ao preparar a sessao:', error);
   }
 };
+
+// Grava logo na abertura se o app veio da Google Play (o referrer some depois).
+isPlayStoreApp();
 
 void redirectToCanonicalHostIfNeeded()
   .then(async redirected => {

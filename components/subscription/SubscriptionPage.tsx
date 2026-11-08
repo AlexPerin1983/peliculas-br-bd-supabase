@@ -15,6 +15,8 @@ import {
 } from './SubscriptionComponents';
 import { PremiumModuleModal } from './PremiumModuleModal';
 import { SubscriptionModule } from '../../services/subscriptionService';
+import { isPlayStoreApp } from '../../src/lib/playStoreApp';
+import { StoreUnavailableNotice } from './StoreUnavailableNotice';
 
 interface SubscriptionPageProps {
     onBack?: () => void;
@@ -28,7 +30,13 @@ interface SubscriptionPageProps {
     };
 }
 
-export function SubscriptionPage({ onBack }: SubscriptionPageProps) {
+// No app da Google Play a página de planos não existe.
+export function SubscriptionPage(props: SubscriptionPageProps) {
+    if (isPlayStoreApp()) return <StoreUnavailableNotice />;
+    return <SubscriptionPageContent {...props} />;
+}
+
+function SubscriptionPageContent({ onBack }: SubscriptionPageProps) {
     const {
         info,
         modules,
