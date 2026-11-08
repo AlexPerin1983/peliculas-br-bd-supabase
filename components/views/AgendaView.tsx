@@ -1625,10 +1625,150 @@ const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
 const CALENDAR_ICON_BUTTON = 'inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius-control)] text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)]';
 
+// Visão Dia (computador): linha do tempo por hora, cada atendimento do tamanho da duração.
+const DAY_HOUR_HEIGHT = 60;
+
+const minutesOfDay = (value: string) => {
+    const date = new Date(value);
+    return date.getHours() * 60 + date.getMinutes();
+};
+
+const DesktopDayTimeline: React.FC<{
+    date: Date;
+    agendamentos: Agendamento[];
+    onOpen: (agendamento: Agendamento) => void;
+}> = ({ date, agendamentos, onOpen }) => {
+    const [now, setNow] = useState(() => new Date());
+    useEffect(() => {
+        const timer = window.setInterval(() => setNow(new Date()), 60_000);
+        return () => window.clearInterval(timer);
+    }, []);
+
+    const items = [...agendamentos]
+        .map((agendamento) => {
+            const start = minutesOfDay(agendamento.start);
+            const rawEnd = agendamento.end ? minutesOfDay(agendamento.end) : start + 60;
+            const sameDayEnd = agendamento.end && new Date(agendamento.end).toDateString() !== new Date(agendamento.start).toDateString() ? 24 * 60 : rawEnd;
+            return { agendamento, start, end: Math.max(sameDayEnd, start + 30) };
+        })
+        .sort((a, b) => a.start - b.start || b.end - a.end);
+
+    // Atendimentos no mesmo horário ficam lado a lado.
+    const laneEnds: number[] = [];
+    const placed = items.map((item) => {
+        let lane = laneEnds.findIndex((end) => end <= item.start);
+        if (lane === -1) {
+            lane = laneEnds.length;
+            laneEnds.push(item.end);
+        } else {
+            laneEnds[lane] = item.end;
+        }
+        return { ...item, lane };
+    });
+    const withWidth = placed.map((item) => {
+        const overlapping = placed.filter((other) => other.start < item.end && other.end > item.start);
+        const lanes = Math.max(...overlapping.map((other) => other.lane)) + 1;
+        return { ...item, lanes };
+    });
+
+    const firstHour = Math.min(7, ...items.map((item) => Math.floor(item.start / 60)));
+    const lastHour = Math.max(19, ...items.map((item) => Math.ceil(item.end / 60)));
+    const hours = Array.from({ length: lastHour - firstHour }, (_, index) => firstHour + index);
+    const isToday = date.toDateString() === now.toDateString();
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    const showNow = isToday && nowMinutes >= firstHour * 60 && nowMinutes <= lastHour * 60;
+    const top = (minutes: number) => ((minutes - firstHour * 60) / 60) * DAY_HOUR_HEIGHT;
+
+    return (
+        <div className="relative mt-4 overflow-hidden rounded-[var(--radius-control)] border border-[var(--border-subtle)]">
+            {items.length === 0 ? (
+                <p className="border-b border-[var(--border-subtle)] bg-[var(--surface-muted)] px-4 py-2.5 text-xs text-[var(--text-muted)]">
+                    Nenhum atendimento neste dia
+                </p>
+            ) : null}
+            <div className="relative" style={{ height: hours.length * DAY_HOUR_HEIGHT }}>
+                {hours.map((hour, index) => (
+                    <div
+                        key={hour}
+                        className="absolute inset-x-0 flex border-t border-[var(--border-subtle)] first:border-t-0"
+                        style={{ top: index * DAY_HOUR_HEIGHT, height: DAY_HOUR_HEIGHT }}
+                    >
+                        <span className="w-16 shrink-0 -translate-y-px px-3 pt-1.5 text-right text-xs tabular-nums text-[var(--text-muted)]">
+                            {String(hour).padStart(2, '0')}:00
+                        </span>
+                        <span className="flex-1 border-l border-[var(--border-subtle)]" />
+                    </div>
+                ))}
+
+                <div className="absolute inset-y-0 left-16 right-2">
+                    {withWidth.map(({ agendamento, start, end, lane, lanes }) => {
+                        const color = getAgendamentoColor(agendamento) || 'var(--text-muted)';
+                        const meta = getEventTypeMeta(agendamento.eventType);
+                        const off = agendamento.serviceStatus === 'cancelled' || agendamento.serviceStatus === 'no_show';
+                        const done = agendamento.serviceStatus === 'completed';
+                        const height = top(end) - top(start);
+                        return (
+                            <button
+                                type="button"
+                                key={agendamento.id ?? agendamento.start}
+                                onClick={() => onOpen(agendamento)}
+                                className={`absolute flex flex-col justify-start overflow-hidden rounded-[6px] border-l-[3px] px-2.5 py-1.5 text-left transition-[filter] hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] ${off ? 'opacity-55' : ''}`}
+                                style={{
+                                    top: top(start) + 2,
+                                    height: Math.max(height - 4, 26),
+                                    left: `calc(${(lane / lanes) * 100}% + 6px)`,
+                                    width: `calc(${100 / lanes}% - 8px)`,
+                                    borderLeftColor: color,
+                                    backgroundColor: `color-mix(in srgb, ${color} 14%, var(--surface))`,
+                                }}
+                                title={`${formatTime(agendamento.start)}–${formatTime(agendamento.end)} · ${agendamento.clienteNome || 'Cliente sem nome'}`}
+                            >
+                                <span className="flex items-center gap-1.5 text-xs tabular-nums text-[var(--text-muted)]">
+                                    {formatTime(agendamento.start)}–{formatTime(agendamento.end)}
+                                    {done ? <i className="fas fa-check text-[10px] text-emerald-600 dark:text-emerald-400" aria-label="Concluído"></i> : null}
+                                    {off ? <span className="text-rose-600 dark:text-rose-400">{agendamento.serviceStatus === 'no_show' ? 'Faltou' : 'Cancelado'}</span> : null}
+                                </span>
+                                <span className={`block truncate text-sm font-medium text-[var(--text-strong)] ${off ? 'line-through' : ''}`}>
+                                    {agendamento.clienteNome || 'Cliente sem nome'}
+                                </span>
+                                {height >= 64 && meta ? (
+                                    <span className="block truncate text-xs" style={{ color }}>{meta.label}</span>
+                                ) : null}
+                            </button>
+                        );
+                    })}
+
+                    {showNow ? (
+                        <div className="pointer-events-none absolute inset-x-0 z-10 flex items-center" style={{ top: top(nowMinutes) }} aria-hidden="true">
+                            <span className="-ml-1 h-2 w-2 rounded-full bg-rose-500" />
+                            <span className="h-px flex-1 bg-rose-500" />
+                        </div>
+                    ) : null}
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, onEditAgendamento, onUpdateServiceStatus, onSaveReceiptDescription, onCompleteAgendamentoWithValue, onContinueAgendamento, onRescheduleAgendamento, onCreateNewAgendamento, onCreateAgendamentoByVoice, googleReviewsLink, userInfo }) => {
     const { canUseEstoque } = useSubscription();
     const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState(new Date());
+    const [desktopView, setDesktopView] = useState<'month' | 'day'>(() => {
+        try {
+            return window.localStorage.getItem('agenda-desktop-view') === 'day' ? 'day' : 'month';
+        } catch {
+            return 'month';
+        }
+    });
+    const changeDesktopView = (view: 'month' | 'day') => {
+        setDesktopView(view);
+        try {
+            window.localStorage.setItem('agenda-desktop-view', view);
+        } catch {
+            // Sem armazenamento: vale só nesta sessão.
+        }
+    };
     const [reviewRatings, setReviewRatings] = useState<Record<number, number>>(() => readAllReviewRatings());
 
     const handleUpdateReviewRating = useCallback((agendamentoId: number, stars: number) => {
@@ -2446,16 +2586,32 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                     <header className="mb-4 flex flex-wrap items-center justify-between gap-3">
                         <div className="flex items-center gap-1">
                             <h2 className="mr-2 text-xl font-semibold text-[var(--text-strong)] first-letter:uppercase">
-                                {currentMonthLabel}
+                                {desktopView === 'day' ? selectedDateString : currentMonthLabel}
                             </h2>
-                            <button type="button" onClick={() => changeMonth(-1)} aria-label="Mês anterior" className={CALENDAR_ICON_BUTTON}>
+                            <button type="button" onClick={() => (desktopView === 'day' ? changeDay(-1) : changeMonth(-1))} aria-label={desktopView === 'day' ? 'Dia anterior' : 'Mês anterior'} className={CALENDAR_ICON_BUTTON}>
                                 <ChevronLeft className="h-4 w-4" aria-hidden="true" />
                             </button>
-                            <button type="button" onClick={() => changeMonth(1)} aria-label="Próximo mês" className={CALENDAR_ICON_BUTTON}>
+                            <button type="button" onClick={() => (desktopView === 'day' ? changeDay(1) : changeMonth(1))} aria-label={desktopView === 'day' ? 'Próximo dia' : 'Próximo mês'} className={CALENDAR_ICON_BUTTON}>
                                 <ChevronRight className="h-4 w-4" aria-hidden="true" />
                             </button>
                         </div>
                         <div className="flex items-center gap-2">
+                            <div role="tablist" aria-label="Visão da agenda" className="mr-1 inline-flex rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-0.5">
+                                {([['month', 'Mês'], ['day', 'Dia']] as const).map(([value, label]) => (
+                                    <button
+                                        key={value}
+                                        type="button"
+                                        role="tab"
+                                        aria-selected={desktopView === value}
+                                        onClick={() => changeDesktopView(value)}
+                                        className={`h-7 rounded-[calc(var(--radius-control)-2px)] px-3 transition-colors ${desktopView === value
+                                            ? 'bg-[var(--surface)] text-[var(--text-strong)] shadow-[var(--shadow-hairline)]'
+                                            : 'text-[var(--text-muted)] hover:text-[var(--text-strong)]'}`}
+                                    >
+                                        <span className="text-xs font-medium">{label}</span>
+                                    </button>
+                                ))}
+                            </div>
                             <AgendaQuickButton onClick={handleGoToday} iconClassName="far fa-calendar-check" label="Hoje" />
                             {nextAppointment ? (
                                 <AgendaQuickButton onClick={handleGoNextAppointment} iconClassName="fas fa-map-pin" label="Próximo" />
@@ -2463,6 +2619,15 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                         </div>
                     </header>
 
+                    {desktopView === 'day' ? (
+                        <p className="-mt-2 text-xs tabular-nums text-[var(--text-muted)]">
+                            {selectedDayAgendamentos.length === 0
+                                ? 'Dia livre'
+                                : `${selectedDayAgendamentos.length} ${selectedDayAgendamentos.length === 1 ? 'atendimento' : 'atendimentos'} · clique num atendimento para abrir`}
+                        </p>
+                    ) : null}
+
+                    {desktopView === 'month' ? (<>
                     <p className="-mt-2 mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs tabular-nums text-[var(--text-muted)]">
                         <span>{monthStats.total} {monthStats.total === 1 ? 'atendimento' : 'atendimentos'} no mês</span>
                         {monthStats.completed > 0 ? <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />{monthStats.completed} {monthStats.completed === 1 ? 'concluído' : 'concluídos'}</span> : null}
@@ -2530,6 +2695,10 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                             })}
                         </div>
                     </div>
+
+                    </>) : (
+                        <DesktopDayTimeline date={selectedDate} agendamentos={selectedDayAgendamentos} onOpen={onEditAgendamento} />
+                    )}
 
                     <CalendarTypeLegend showUntyped={monthHasUntyped} showHint={false} />
                 </section>
