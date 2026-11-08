@@ -17,19 +17,35 @@ import { abacateRequest } from '../_shared/abacate.ts';
 import { corsHeaders, createSupabaseAdminClient } from '../_shared/billing.ts';
 
 const CONFIRMATION_WORD = 'EXCLUIR';
-const STORAGE_BUCKETS = ['pdfs', 'portfolio', 'avatars'];
+const STORAGE_BUCKETS = ['pdfs', 'portfolio'];
 
-// Tabelas com dados da empresa gravados por user_id (do dono ou de um membro).
-// A ordem importa: filhos antes dos pais.
-const COMPANY_TABLES_BY_USER = [
-    'proposal_condition_push_deliveries',
-    'proposal_follow_up_history',
+// Listas conferidas no banco de produção em 08/11/2026 (colunas e chaves estrangeiras).
+// Tabelas filhas sem dono próprio (histórico, itens do link, avisos) somem em cascata
+// quando o cliente, o PDF, o link ou a assinatura correspondente é apagado.
+
+// Tabelas da empresa com organization_id. Inclui as que travam a exclusão da
+// organização (clients, proposal_options, bobinas, retalhos, consumos).
+const COMPANY_TABLES_BY_ORG = [
+    'proposal_portals',
     'proposal_option_history',
     'proposal_option_states',
-    'client_follow_ups',
-    'agenda_push_deliveries',
-    'agenda_push_daily_summaries',
-    'agenda_push_daily_engagement',
+    'whatsapp_outbox',
+    'whatsapp_intern_proposals',
+    'whatsapp_contact_suggestions',
+    'whatsapp_connectors',
+    'organization_invites',
+    'agenda_push_subscriptions',
+    'consumos',
+    'retalhos',
+    'bobinas',
+    'standalone_expenses',
+    'proposal_message_templates',
+    'proposal_options',
+    'clients',
+];
+
+// Tabelas da empresa gravadas por user_id (do dono ou de um membro). Filhos antes dos pais.
+const COMPANY_TABLES_BY_USER = [
     'consumos',
     'retalhos',
     'bobinas',
@@ -47,30 +63,28 @@ const COMPANY_TABLES_BY_USER = [
     'user_info',
 ];
 
-// Tabelas da empresa ligadas por organization_id. Filhos antes dos pais.
-const COMPANY_TABLES_BY_ORG = [
-    'proposal_portal_messages',
-    'proposal_portal_items',
-    'proposal_portal_follow_ups',
-    'proposal_portals',
-    'proposal_follow_up_history',
-    'client_follow_ups',
-    'proposal_message_templates',
-    'standalone_expenses',
-    'whatsapp_outbox',
-    'whatsapp_contact_suggestions',
-    'whatsapp_connectors',
-    'organization_invites',
-];
-
 // Dados pessoais do usuário que saem junto com ele, seja dono ou membro.
 const PERSONAL_TABLES_BY_USER = [
     'agenda_push_subscriptions',
     'ai_usage_events',
 ];
 
-// Registros criados pelo membro que passam para o dono da empresa.
+// Registros criados pelo membro que passam para o dono da empresa (user_id).
 const MEMBER_TABLES_TO_REASSIGN = COMPANY_TABLES_BY_USER.filter((table) => table !== 'user_info');
+
+// Outras colunas que apontam para o login sem cascata (travariam a exclusão) ou com
+// cascata (apagariam dados da empresa). No membro, passam para o dono.
+const MEMBER_CREATOR_COLUMNS_TO_REASSIGN: Array<[string, string]> = [
+    ['proposal_portals', 'created_by'],
+    ['location_measurements', 'created_by_user_id'],
+    ['organization_invites', 'created_by'],
+];
+
+// Colunas de quem confirmou um pagamento manual (administrador): ficam vazias.
+const AUDIT_COLUMNS_TO_CLEAR: Array<[string, string]> = [
+    ['module_activations', 'payment_confirmed_by'],
+    ['payment_history', 'confirmed_by'],
+];
 
 type AdminClient = ReturnType<typeof createSupabaseAdminClient>;
 
@@ -225,25 +239,32 @@ serve(async (req) => {
             const memberIds = (members ?? [])
                 .map((member) => member.user_id as string)
                 .filter((id) => id && id !== user.id);
-            const companyUserIds = [user.id, ...memberIds];
+            // Linhas dos membros saem pela empresa (organization_id) e em cascata pelos
+            // clientes; por user_id só apagamos as do próprio dono, para nunca atingir
+            // dados que o membro tenha fora desta empresa.
 
             // 1) Para a cobrança antes de apagar qualquer coisa.
             for (const orgId of ownedOrgIds) {
                 await cancelRecurringSubscriptions(admin, orgId);
             }
 
-            // 2) Arquivos (PDFs, fotos de trabalhos, avatar).
+            // 2) Arquivos (PDFs e fotos de trabalhos ficam na pasta do dono).
             for (const bucket of STORAGE_BUCKETS) {
                 await cleanup.removeStorageFolder(bucket, user.id);
             }
 
             // 3) Dados da empresa.
-            await cleanup.deleteIn('proposal_portals', 'user_id', companyUserIds);
             for (const table of COMPANY_TABLES_BY_ORG) {
                 await cleanup.deleteIn(table, 'organization_id', ownedOrgIds);
             }
             for (const table of COMPANY_TABLES_BY_USER) {
-                await cleanup.deleteIn(table, 'user_id', companyUserIds);
+                await cleanup.deleteIn(table, 'user_id', [user.id]);
+            }
+            // Links de proposta criados pelos membros já saíram pela empresa; os do dono
+            // sem empresa definida saem aqui.
+            await cleanup.deleteIn('proposal_portals', 'created_by', [user.id]);
+            if (memberIds.length) {
+                cleanup.warnings.push(`${memberIds.length} membro(s) perderam o acesso à empresa`);
             }
             for (const table of PERSONAL_TABLES_BY_USER) {
                 await cleanup.deleteIn(table, 'user_id', [user.id]);
@@ -262,15 +283,20 @@ serve(async (req) => {
             for (const table of MEMBER_TABLES_TO_REASSIGN) {
                 await cleanup.update(table, { user_id: ownerId }, 'user_id', user.id);
             }
+            for (const [table, column] of MEMBER_CREATOR_COLUMNS_TO_REASSIGN) {
+                await cleanup.update(table, { [column]: ownerId }, column, user.id);
+            }
             for (const table of PERSONAL_TABLES_BY_USER) {
                 await cleanup.deleteIn(table, 'user_id', [user.id]);
             }
+            await cleanup.deleteIn('user_info', 'user_id', [user.id]);
             await cleanup.deleteIn('organization_members', 'user_id', [user.id]);
-            await cleanup.removeStorageFolder('avatars', user.id);
         }
 
         // 5) Referências sem exclusão em cascata que travariam a remoção do login.
-        await cleanup.update('global_measurements', { created_by_user_id: null }, 'created_by_user_id', user.id);
+        for (const [table, column] of AUDIT_COLUMNS_TO_CLEAR) {
+            await cleanup.update(table, { [column]: null }, column, user.id);
+        }
         await cleanup.deleteIn('profiles', 'id', [user.id]);
 
         const { error: deleteUserError } = await admin.auth.admin.deleteUser(user.id);
