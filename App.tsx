@@ -45,6 +45,7 @@ import AIQuickFab from './components/AIQuickFab';
 import OnboardingTour from './components/onboarding/OnboardingTour';
 import { seedExampleDataIfNeeded } from './services/seedData';
 import { createPastedMeasurementsFromClipboard } from './src/lib/measurementClipboard';
+import { getDefaultFilm } from './src/lib/filmCatalog';
 import { canUseAutomotiveBeta } from './src/lib/automotive';
 import {
     buildQuickClientRecord,
@@ -2357,7 +2358,7 @@ Regras:
                         quantidade: item.quantidade || 1,
                         ambiente: item.ambiente || 'Desconhecido',
                         tipoAplicacao: 'Desconhecido',
-                        pelicula: films[0]?.nome || 'Nenhuma',
+                        pelicula: getDefaultFilm(films)?.nome || 'Nenhuma',
                         active: true,
                         isNew: index === 0,
                         discount: { value: '0', type: 'percentage' },
@@ -2459,7 +2460,7 @@ Regras:
                     quantidade: item.quantidade || 1,
                     ambiente: item.ambiente || 'Desconhecido',
                     tipoAplicacao: 'Desconhecido',
-                    pelicula: films[0]?.nome || 'Nenhuma',
+                    pelicula: getDefaultFilm(films)?.nome || 'Nenhuma',
                     active: true,
                     isNew: index === 0,
                     discount: { value: '0', type: 'percentage' },
@@ -2514,7 +2515,7 @@ Regras:
                         quantidade: item.quantidade || 1,
                         ambiente: item.local || 'Desconhecido',
                         tipoAplicacao: 'Desconhecido',
-                        pelicula: films[0]?.nome || 'Nenhuma',
+                        pelicula: getDefaultFilm(films)?.nome || 'Nenhuma',
                         active: true,
                         isNew: index === 0,
                         discount: { value: '0', type: 'percentage' },
@@ -4210,7 +4211,7 @@ Use somente o JSON definido e não inclua explicações fora dele.`;
                                     handleMeasurementsChange([...measurements, ...importedMeasurements]);
                                     setIsLocationImportModalOpen(false);
                                 }}
-                                currentFilm={films[0]?.nome}
+                                currentFilm={getDefaultFilm(films)?.nome}
                             />
                         </Suspense>
                     )}

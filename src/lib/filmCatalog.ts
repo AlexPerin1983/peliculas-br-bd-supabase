@@ -109,6 +109,13 @@ export const buildFilmDuplicate = (film: Film, films: Film[]): Film => {
     };
 };
 
+/**
+ * Película usada quando ninguém escolheu (ex.: a IA não reconheceu o modelo):
+ * a primeira fixada, na ordem da lista; sem nenhuma fixada, a primeira do cadastro.
+ */
+export const getDefaultFilm = (films: Film[]): Film | undefined =>
+    sortFilmsForDisplay(films.filter(film => film.pinned))[0] ?? films[0];
+
 /** Fixadas primeiro (a fixada mais recente no topo), depois em ordem alfabética. */
 export const sortFilmsForDisplay = (films: Film[]): Film[] =>
     [...films].sort((left, right) => {
