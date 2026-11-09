@@ -515,6 +515,8 @@ type MonthlyExpenseSummary = {
     estimatedProfit: number;
     estimatedMarginPercentage: number;
     expensesByCategory: ProposalExpenseCategoryTotal[];
+    // Soma do valor principal dos atendimentos aprovados (usado no cartão do celular).
+    approvedRevenue?: number;
 };
 
 type FunnelReferencePdfMap = Record<string, number>;
@@ -765,6 +767,7 @@ const buildPeriodExpenseSummary = (
 
         summary.pdfCount += opportunity.pdfs.length;
         summary.approvedCount += opportunity.approvedCount;
+        summary.approvedRevenue += opportunity.approvedCount > 0 ? opportunity.funnelRevenue : 0;
         summary.opportunityCount += 1;
         summary.totalRevenue += opportunity.funnelRevenue;
         summary.presentedRevenue += opportunity.presentedRevenue;
@@ -781,6 +784,7 @@ const buildPeriodExpenseSummary = (
         label,
         pdfCount: 0,
         approvedCount: 0,
+        approvedRevenue: 0,
         opportunityCount: 0,
         totalRevenue: 0,
         presentedRevenue: 0,
@@ -1739,6 +1743,13 @@ const GROUP_AVATAR_CLASSNAMES = new Map<object, string>([
     [PDF_STATUS_META.revised, 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'],
     [PDF_STATUS_META.pending, 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'],
     [EXPIRED_GROUP_TONE, 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300'],
+]);
+
+// Cor do texto do status na lista do celular (pendente não ganha destaque).
+const GROUP_STATUS_TEXT_CLASSNAMES = new Map<object, string>([
+    [PDF_STATUS_META.approved, 'text-emerald-600 dark:text-emerald-400'],
+    [PDF_STATUS_META.revised, 'text-amber-600 dark:text-amber-400'],
+    [EXPIRED_GROUP_TONE, 'text-rose-600 dark:text-rose-400'],
 ]);
 
 const getClientInitials = (name: string) => {
@@ -2724,6 +2735,10 @@ const MonthlyExpenseSummaryCard: React.FC<{
     if (!selectedSummary) return null;
 
     const hasCategoryExpenses = selectedSummary.expensesByCategory.length > 0;
+    const approvedRevenue = selectedSummary.approvedRevenue ?? 0;
+    const closedShare = selectedSummary.totalRevenue > 0
+        ? Math.min(100, Math.max(0, (approvedRevenue / selectedSummary.totalRevenue) * 100))
+        : 0;
     const resultTone = selectedSummary.estimatedProfit >= 0
         ? 'text-emerald-700 dark:text-emerald-300'
         : 'text-rose-700 dark:text-rose-300';
@@ -2780,25 +2795,6 @@ const MonthlyExpenseSummaryCard: React.FC<{
         {
             label: 'Resultado',
             value: formatNumberBR(selectedSummary.estimatedProfit),
-            className: resultTone
-        }
-    ];
-    // Celular: mesmo cartão de números das telas de Estoque e Propostas.
-    const mobileStats = [
-        {
-            label: 'Pipeline',
-            value: formatCompactCurrencyBR(selectedSummary.totalRevenue),
-            detail: `${selectedSummary.opportunityCount} ${selectedSummary.opportunityCount === 1 ? 'oportunidade' : 'oportunidades'}`
-        },
-        {
-            label: 'Aprovados',
-            value: String(selectedSummary.approvedCount),
-            detail: selectedSummary.approvedCount === 1 ? 'orçamento' : 'orçamentos'
-        },
-        {
-            label: 'Resultado',
-            value: formatCompactCurrencyBR(selectedSummary.estimatedProfit),
-            detail: `margem ${formatPercentageBR(selectedSummary.estimatedMarginPercentage)}`,
             className: resultTone
         }
     ];
@@ -2980,20 +2976,39 @@ const MonthlyExpenseSummaryCard: React.FC<{
                 type="button"
                 onClick={onToggleExpanded}
                 aria-label="Resumo do período: ver detalhes"
-                className="block w-full overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface)] text-left sm:hidden"
+                className="block w-full rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface)] p-4 text-left transition-colors active:bg-[var(--surface-muted)] sm:hidden"
             >
-                <span className="grid grid-cols-3 divide-x divide-[var(--border-subtle)]">
-                    {mobileStats.map(stat => (
-                        <span key={stat.label} className="block min-w-0 px-2 py-3 text-center">
-                            <span className="block truncate text-[11px] text-[var(--text-muted)]">{stat.label}</span>
-                            <span className={`mt-0.5 block truncate text-lg font-semibold tabular-nums tracking-[-0.01em] text-[var(--text-strong)] ${stat.className || ''}`}>{stat.value}</span>
-                            <span className="mt-0.5 block truncate text-[11px] text-[var(--text-muted)]">{stat.detail}</span>
-                        </span>
-                    ))}
+                <span className="flex items-center justify-between gap-3">
+                    <span className="text-xs text-[var(--text-muted)]">Fechado no período</span>
+                    <span className="inline-flex items-center gap-0.5 text-xs font-medium text-[var(--brand-primary)]">
+                        Resumo
+                        <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+                    </span>
                 </span>
-                <span className="flex items-center justify-center gap-1 border-t border-[var(--border-subtle)] py-2 text-xs font-semibold text-[var(--brand-primary)]">
-                    Ver resumo do período
-                    <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+                <span className="mt-1 flex min-w-0 items-baseline gap-2">
+                    <span className="shrink-0 text-[28px] font-semibold leading-tight tabular-nums text-[var(--text-strong)]">
+                        {formatCompactCurrencyBR(approvedRevenue)}
+                    </span>
+                    <span className="min-w-0 truncate text-sm tabular-nums text-[var(--text-muted)]">
+                        de {formatCompactCurrencyBR(selectedSummary.totalRevenue)} orçados
+                    </span>
+                </span>
+                <span className="mt-3 block h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700/70" aria-hidden="true">
+                    <span className="block h-full rounded-full bg-emerald-500" style={{ width: `${closedShare}%` }} />
+                </span>
+                <span className="mt-4 grid grid-cols-2 gap-4 border-t border-[var(--border-subtle)] pt-3">
+                    <span className="min-w-0">
+                        <span className="block text-xs text-[var(--text-muted)]">Fechados</span>
+                        <span className="mt-0.5 block truncate text-sm font-medium tabular-nums text-[var(--text-strong)]">
+                            {selectedSummary.approvedCount} de {selectedSummary.opportunityCount} {selectedSummary.opportunityCount === 1 ? 'atendimento' : 'atendimentos'}
+                        </span>
+                    </span>
+                    <span className="min-w-0">
+                        <span className="block text-xs text-[var(--text-muted)]">Em aberto</span>
+                        <span className="mt-0.5 block truncate text-sm font-medium tabular-nums text-[var(--text-strong)]">
+                            {formatCompactCurrencyBR(Math.max(0, selectedSummary.totalRevenue - approvedRevenue))}
+                        </span>
+                    </span>
                 </span>
             </button>
             <div className="ui-card hidden overflow-visible p-4 sm:block">
@@ -4386,14 +4401,14 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
                         clientGroupRefs.current.delete(client.id!);
                     }
                 }}
-                className={`relative overflow-hidden rounded-2xl border shadow-[var(--shadow-hairline)] transition-all duration-300 sm:rounded-[var(--radius-panel)] sm:bg-[var(--surface)] sm:hover:-translate-y-0.5 sm:hover:border-[var(--border-strong)] ${isHighlighted ? 'ring-2 ring-blue-500 sm:ring-offset-2 sm:ring-offset-[var(--surface)] sm:!border-[var(--brand-primary)]' : ''} ${hasSelectedInGroup ? 'border-blue-200 bg-blue-50/70 dark:border-blue-900/60 dark:bg-blue-950/20 sm:border-[var(--brand-primary)] sm:ring-2 sm:ring-blue-500/15' : 'border-[var(--border-subtle)] bg-[var(--surface-raised)]'}`}>
+                className={`relative overflow-hidden transition-colors sm:rounded-[var(--radius-panel)] sm:border sm:bg-[var(--surface)] sm:shadow-[var(--shadow-hairline)] sm:transition-all sm:duration-300 sm:hover:-translate-y-0.5 sm:hover:border-[var(--border-strong)] ${isHighlighted ? 'bg-blue-50 dark:bg-blue-950/30 sm:ring-2 sm:ring-blue-500 sm:ring-offset-2 sm:ring-offset-[var(--surface)] sm:!border-[var(--brand-primary)]' : ''} ${hasSelectedInGroup ? 'border-blue-200 bg-blue-50/70 dark:border-blue-900/60 dark:bg-blue-950/20 sm:border-[var(--brand-primary)] sm:ring-2 sm:ring-blue-500/15' : 'border-[var(--border-subtle)]'}`}>
                 <button
                     onClick={() => handleToggleExpand(client.id!)}
-                    className="w-full px-3 py-3 text-left transition-colors duration-200 hover:bg-[var(--surface-muted)] active:bg-[var(--surface-muted)] sm:px-4 sm:py-3"
+                    className="w-full px-4 py-3 text-left transition-colors duration-200 hover:bg-[var(--surface-muted)] active:bg-[var(--surface-muted)]"
                     aria-expanded={isExpanded}
                 >
                     <div className="flex items-center gap-3 sm:items-start">
-                        <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-sm font-semibold sm:hidden ${avatarClassName}`} aria-hidden="true">
+                        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-medium sm:hidden ${avatarClassName}`} aria-hidden="true">
                             {initials}
                         </div>
                         <div className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-[10px] border border-slate-200 bg-slate-50 text-xs font-semibold text-blue-600 dark:border-slate-700 dark:bg-slate-800 dark:text-blue-300 sm:flex">
@@ -4403,7 +4418,7 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
                         <div className="min-w-0 flex-1">
                             <div className="flex items-baseline gap-1.5 sm:items-start">
                                 <span className={`mt-[0.38rem] hidden h-2 w-2 shrink-0 rounded-full sm:block ${status.tone.dotClassName}`} />
-                                <h3 className="min-w-0 flex-1 truncate text-[15px] font-semibold leading-tight tracking-[-0.01em] text-slate-900 dark:text-slate-50 sm:flex-none sm:text-[1rem]">
+                                <h3 className="min-w-0 flex-1 truncate text-[15px] font-medium leading-tight text-slate-900 dark:text-slate-50 sm:flex-none sm:text-[1rem] sm:font-semibold sm:tracking-[-0.01em]">
                                     {client.nome}
                                 </h3>
                                 <p className={`shrink-0 text-sm font-semibold tabular-nums sm:hidden ${status.tone === PDF_STATUS_META.approved ? 'text-emerald-600 dark:text-emerald-400' : 'text-[var(--text-strong)]'}`}>
@@ -4415,9 +4430,12 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
                             </p>
 
                             <div className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-[var(--text-muted)] sm:hidden">
-                                <span className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${status.tone.chipClassName}`}>
-                                    {status.tone.label}
-                                </span>
+                                {status.tone !== PDF_STATUS_META.pending ? (
+                                    <span className={`shrink-0 font-medium ${GROUP_STATUS_TEXT_CLASSNAMES.get(status.tone) || ''}`}>
+                                        {status.tone.label}
+                                        <span className="font-normal text-[var(--text-muted)]" aria-hidden="true"> ·</span>
+                                    </span>
+                                ) : null}
                                 {hasSelectedInGroup ? (
                                     <span
                                         className="inline-flex shrink-0 items-center gap-1 rounded-full bg-blue-600 px-2 py-0.5 text-[11px] font-semibold text-white"
@@ -4428,7 +4446,7 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
                                     </span>
                                 ) : null}
                                 <span className="min-w-0 flex-1 truncate">{mobileContext}</span>
-                                <span className="shrink-0 text-[11px]">{latestDate}</span>
+                                <span className="shrink-0 tabular-nums">{latestDate}</span>
                             </div>
                         </div>
 
@@ -5077,7 +5095,7 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
             <div>
                 {displayedHistory.length > 0 ? (
                     <>
-                        <div className="grid grid-cols-1 items-start gap-2 sm:gap-3 2xl:grid-cols-2">
+                        <div className="grid grid-cols-1 items-start divide-y divide-[var(--border-subtle)] overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface)] sm:gap-3 sm:divide-y-0 sm:overflow-visible sm:rounded-none sm:border-0 sm:bg-transparent 2xl:grid-cols-2">
                             {displayedHistory.map(group => (
                                 <ClientHistoryGroup key={group.client.id} group={group} />
                             ))}
