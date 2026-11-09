@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { Measurement, Film } from '../../types';
+import { getDefaultFilm } from '../lib/filmCatalog';
 
 type UIMeasurement = Measurement & { isNew?: boolean };
 
@@ -14,7 +15,7 @@ export const useMeasurements = (
         quantidade: 1,
         ambiente: 'Desconhecido',
         tipoAplicacao: 'Desconhecido',
-        pelicula: films[0]?.nome || 'Nenhuma',
+        pelicula: getDefaultFilm(films)?.nome || 'Nenhuma',
         active: true,
         discount: { value: '0', type: 'percentage' },
     }), [films]);

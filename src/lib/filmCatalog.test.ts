@@ -5,6 +5,7 @@ import {
     findFilmByName,
     findFilmNameConflict,
     FILM_PREVIOUS_NAMES_KEY,
+    getDefaultFilm,
     getFilmPreviousNames,
     getVisibleCustomFields,
     isFilmNameTaken,
@@ -118,5 +119,17 @@ describe('catálogo de películas', () => {
         ]);
 
         expect(sorted.map(item => item.nome)).toEqual(['Nano', 'Blackout', 'G5', 'g20', 'G35']);
+    });
+
+    it('usa a primeira fixada como película padrão e, sem fixadas, a primeira do cadastro', () => {
+        const catalog = [
+            film({ nome: 'Blackout' }),
+            film({ nome: 'Color Stable', pinned: true, pinnedAt: 1 }),
+            film({ nome: 'Nano', pinned: true, pinnedAt: 2 }),
+        ];
+
+        expect(getDefaultFilm(catalog)?.nome).toBe('Nano');
+        expect(getDefaultFilm([film({ nome: 'Blackout' }), film({ nome: 'Carbono' })])?.nome).toBe('Blackout');
+        expect(getDefaultFilm([])).toBeUndefined();
     });
 });

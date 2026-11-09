@@ -3,6 +3,7 @@ import { Film, Measurement, ProposalDiscount, ProposalExpense, ProposalOption, P
 import * as db from '../../services/db';
 import { mergeProposalOptions } from '../../services/proposalSync';
 import { normalizeProposalExpenses } from '../lib/proposalExpenses';
+import { getDefaultFilm } from '../lib/filmCatalog';
 
 type DiscountType = ProposalDiscount;
 
@@ -326,7 +327,7 @@ export function useProposalEditor({
         quantidade: 1,
         ambiente: 'Desconhecido',
         tipoAplicacao: 'Desconhecido',
-        pelicula: films[0]?.nome || 'Nenhuma',
+        pelicula: getDefaultFilm(films)?.nome || 'Nenhuma',
         active: true,
         discount: { value: '0', type: 'percentage' }
     }), [films]);
