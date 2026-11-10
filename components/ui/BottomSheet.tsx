@@ -1,8 +1,9 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Drawer } from 'vaul';
 import { X } from 'lucide-react';
 import { useIsMobile } from '../../src/hooks/useIsMobile';
+import { registerBackHandler } from '../../src/lib/backButton';
 
 interface BottomSheetProps {
     isOpen: boolean;
@@ -33,6 +34,14 @@ const BottomSheet: React.FC<BottomSheetProps> = ({
     bodyClassName = 'mt-2 space-y-1',
 }) => {
     const isMobile = useIsMobile();
+    const onCloseRef = useRef(onClose);
+    onCloseRef.current = onClose;
+
+    // Botão voltar do celular (Android): fecha a gaveta em vez de sair da tela.
+    useEffect(() => {
+        if (!isOpen) return;
+        return registerBackHandler(() => onCloseRef.current());
+    }, [isOpen]);
 
     useEffect(() => {
         if (!isOpen || isMobile) return;

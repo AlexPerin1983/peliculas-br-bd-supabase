@@ -2,6 +2,7 @@ import React from 'react';
 import { act, cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Modal from './Modal';
+import { consumeBackButton } from '../../src/lib/backButton';
 
 // Como no vaul (Radix): com deferred, o portal só mostra o conteúdo depois de montar.
 const portalState = vi.hoisted(() => ({ deferred: false }));
@@ -149,5 +150,31 @@ describe('Modal keyboardAwareFooter', () => {
         // Espaço no fim para rolar até lá, menor que a área (o rodapé não sai do lugar).
         expect(parseInt(container.style.paddingBottom, 10)).toBeGreaterThan(0);
         expect(parseInt(container.style.paddingBottom, 10)).toBeLessThan(311);
+    });
+});
+
+describe('Modal e o botão voltar do celular', () => {
+    afterEach(() => cleanup());
+
+    it('o voltar fecha o modal aberto e, depois de fechado, não age mais', () => {
+        mobileState.value = true;
+        const onClose = vi.fn();
+        const { rerender } = render(
+            <Modal isOpen onClose={onClose} title="Editar agendamento"><p>Conteúdo</p></Modal>
+        );
+
+        expect(consumeBackButton()).toBe(true);
+        expect(onClose).toHaveBeenCalledTimes(1);
+
+        rerender(<Modal isOpen={false} onClose={onClose} title="Editar agendamento"><p>Conteúdo</p></Modal>);
+        expect(consumeBackButton()).toBe(false);
+    });
+
+    it('com o fechar bloqueado, o voltar não fecha nem sai da tela', () => {
+        const onClose = vi.fn();
+        render(<Modal isOpen disableClose onClose={onClose} title="Salvando"><p>Conteúdo</p></Modal>);
+
+        expect(consumeBackButton()).toBe(true);
+        expect(onClose).not.toHaveBeenCalled();
     });
 });

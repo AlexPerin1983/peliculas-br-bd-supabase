@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Drawer } from 'vaul';
 import { X } from 'lucide-react';
 import { useIsMobile } from '../../src/hooks/useIsMobile';
+import { registerBackHandler } from '../../src/lib/backButton';
 
 interface ModalProps {
     isOpen: boolean;
@@ -44,6 +45,14 @@ const Modal: React.FC<ModalProps> = ({
 
     onCloseRef.current = onClose;
     disableCloseRef.current = disableClose;
+
+    // Botão voltar do celular (Android): fecha este modal em vez de sair da tela.
+    useEffect(() => {
+        if (!isOpen) return;
+        return registerBackHandler(() => {
+            if (!disableCloseRef.current) onCloseRef.current();
+        });
+    }, [isOpen]);
 
     // No desktop, mantém o foco dentro do diálogo e permite fechar com Escape.
     useEffect(() => {
