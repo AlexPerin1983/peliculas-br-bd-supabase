@@ -262,6 +262,52 @@ export const normalizeAndGroupMeasurementExtraction = (
     };
 };
 
+/** Medida estimada pela foto (o cliente mandou só a imagem, sem números). */
+export interface EstimatedMeasurement {
+    local: string;
+    largura: string;
+    altura: string;
+    quantidade: number;
+}
+
+export interface EstimatedMeasurementResult {
+    items: EstimatedMeasurement[];
+    note: string;
+}
+
+/** A leitura não achou nenhuma largura/altura escrita na imagem. */
+export const isMissingMeasurementsError = (error: unknown): boolean => (
+    error instanceof MeasurementExtractionError
+    && (error.code === 'NO_MEASUREMENTS' || error.code === 'INVALID_MEASUREMENTS')
+);
+
+// Uma janela ou porta de verdade fica entre 10 cm e 6 m.
+const MIN_ESTIMATE_CM = 10;
+const MAX_ESTIMATE_CM = 600;
+
+/** Normaliza a estimativa da IA: só linhas com largura e altura plausíveis, no máximo 20. */
+export const normalizeEstimatedMeasurements = (payload: AIMeasurementExtractionPayload): EstimatedMeasurementResult => {
+    const rows = Array.isArray(payload.medidas) ? payload.medidas : [];
+    const items: EstimatedMeasurement[] = [];
+
+    for (const row of rows) {
+        const widthCm = parsePositiveDimensionCm(row?.largura);
+        const heightCm = parsePositiveDimensionCm(row?.altura);
+        if (!widthCm || !heightCm) continue;
+        if ([widthCm, heightCm].some(value => value < MIN_ESTIMATE_CM || value > MAX_ESTIMATE_CM)) continue;
+
+        items.push({
+            local: normalizeText(row.local),
+            largura: formatMeters(widthCm),
+            altura: formatMeters(heightCm),
+            quantidade: parsePositiveInteger(row?.quantidade) ?? 1,
+        });
+        if (items.length >= 20) break;
+    }
+
+    return { items, note: normalizeText(payload.observacao) };
+};
+
 export const getFriendlyMeasurementExtractionError = (error: unknown): { title: string; message: string } => {
     const internalCode = error instanceof MeasurementExtractionError
         ? error.code

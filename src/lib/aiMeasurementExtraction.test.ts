@@ -1,7 +1,9 @@
 import {
     MeasurementExtractionError,
     getFriendlyMeasurementExtractionError,
+    isMissingMeasurementsError,
     normalizeAndGroupMeasurementExtraction,
+    normalizeEstimatedMeasurements,
     parseMeasurementExtractionResponse
 } from './aiMeasurementExtraction';
 
@@ -109,5 +111,32 @@ describe('aiMeasurementExtraction', () => {
 
         expect(friendly.title).toBe('Lista muito grande');
         expect(friendly.message).not.toMatch(/SyntaxError|JSON\.parse/i);
+    });
+});
+
+describe('medidas estimadas pela foto', () => {
+    it('so pede estimativa quando a leitura nao achou medida escrita', () => {
+        expect(isMissingMeasurementsError(new MeasurementExtractionError('NO_MEASUREMENTS'))).toBe(true);
+        expect(isMissingMeasurementsError(new MeasurementExtractionError('INVALID_MEASUREMENTS'))).toBe(true);
+        expect(isMissingMeasurementsError(new MeasurementExtractionError('COUNT_MISMATCH'))).toBe(false);
+        expect(isMissingMeasurementsError(new Error('rede'))).toBe(false);
+    });
+
+    it('mantem so medidas plausiveis, em metros com virgula, e quantidade minima 1', () => {
+        const result = normalizeEstimatedMeasurements({
+            medidas: [
+                { local: ' Quarto - janela de correr ', largura: '1,5', altura: '1.2', quantidade: 0 },
+                { local: 'Erro', largura: '0', altura: '1,00', quantidade: 1 },
+                { local: 'Gigante', largura: '12,00', altura: '1,00', quantidade: 1 },
+                { local: 'Banheiro', largura: '0,60', altura: '0,40', quantidade: 2 },
+            ],
+            observacao: 'Usei a porta como referencia.',
+        });
+
+        expect(result.items).toEqual([
+            { local: 'Quarto - janela de correr', largura: '1,50', altura: '1,20', quantidade: 1 },
+            { local: 'Banheiro', largura: '0,60', altura: '0,40', quantidade: 2 },
+        ]);
+        expect(result.note).toBe('Usei a porta como referencia.');
     });
 });
