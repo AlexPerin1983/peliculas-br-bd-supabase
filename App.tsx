@@ -524,7 +524,7 @@ const App: React.FC = () => {
     const [postClientSaveAction, setPostClientSaveAction] = useState<'openAgendamentoModal' | null>(null);
     const [isAIMeasurementModalOpen, setIsAIMeasurementModalOpen] = useState(false);
     // Foto sem medidas escritas: estimativas da IA esperando o aplicador conferir.
-    const [estimatedMeasurements, setEstimatedMeasurements] = useState<EstimatedMeasurementResult | null>(null);
+    const [estimatedMeasurements, setEstimatedMeasurements] = useState<(EstimatedMeasurementResult & { quickProposalClient?: QuickProposalExtraction['cliente'] }) | null>(null);
     const [isAIClientModalOpen, setIsAIClientModalOpen] = useState(false);
     const [isAIQuickProposalModalOpen, setIsAIQuickProposalModalOpen] = useState(false);
     const [isAIScheduleModalOpen, setIsAIScheduleModalOpen] = useState(false);
@@ -2029,6 +2029,60 @@ const App: React.FC = () => {
             .filter((measurement): measurement is UIMeasurement => Boolean(measurement));
     };
 
+    // Foto sem medidas escritas: a IA estima largura e altura pela imagem (o aplicador confere depois).
+    const estimateMeasurementsFromImages = async (imageParts: any[]): Promise<EstimatedMeasurementResult> => {
+        const { Type: SchemaType } = await import('@google/genai');
+        const estimateModel = createGeminiModel({
+            apiKey: userInfo?.aiConfig?.apiKey,
+            feature: 'measurement_extraction',
+            generationConfig: {
+                maxOutputTokens: 4096,
+                responseMimeType: 'application/json',
+                responseSchema: {
+                    type: SchemaType.OBJECT,
+                    properties: {
+                        medidas: {
+                            type: SchemaType.ARRAY,
+                            items: {
+                                type: SchemaType.OBJECT,
+                                properties: {
+                                    local: { type: SchemaType.STRING },
+                                    largura: { type: SchemaType.STRING },
+                                    altura: { type: SchemaType.STRING },
+                                    quantidade: { type: SchemaType.INTEGER }
+                                },
+                                required: ['local', 'largura', 'altura', 'quantidade']
+                            }
+                        },
+                        observacao: { type: SchemaType.STRING }
+                    },
+                    required: ['medidas', 'observacao']
+                }
+            }
+        });
+        const estimateResult = await estimateModel.generateContent([`O cliente mandou foto(s) de janelas, portas ou vidros, mas SEM medidas escritas.
+Estime a largura e a altura aproximadas de cada janela, porta ou vidro visível, para um orçamento inicial de película.
+
+COMO ESTIMAR:
+1. Uma entrada para cada janela, porta ou vidro visível. Vãos iguais podem ficar juntos com quantidade maior que 1.
+2. Meça a esquadria inteira (todas as folhas juntas), não cada folha separada.
+3. Use referências da própria imagem: porta comum tem cerca de 0,80 x 2,10 m; pé-direito de 2,60 a 2,80 m; bancada ou pia com 0,90 m de altura; azulejos, pisos, vaso sanitário, móveis e outros objetos de tamanho conhecido.
+4. Arredonde para múltiplos de 0,05 m.
+5. Se não houver nenhuma janela, porta ou vidro, devolva medidas vazia.
+
+CAMPOS:
+- largura e altura: metros, com duas casas e vírgula decimal, como "1,20".
+- local: curto, com o ambiente provável e o tipo, como "Quarto - janela de correr" ou "Banheiro - basculante". Use string vazia se não der para saber.
+- quantidade: número de vãos iguais.
+- observacao: uma frase curta dizendo quais referências usou.
+
+Responda somente no JSON definido.`, ...imageParts]);
+        return normalizeEstimatedMeasurements(parseMeasurementExtractionResponse(
+            estimateResult.response.text(),
+            estimateResult.response.finishReason
+        ));
+    };
+
     const processQuickProposalWithGemini = async (
         input: AIInput
     ): Promise<QuickProposalExtraction> => {
@@ -2136,10 +2190,34 @@ Regras:
             const quickMeasurements = createQuickProposalMeasurements(extracted.medidas || []);
 
             if (quickMeasurements.length === 0) {
+                // Só fotos das janelas, sem números: estima pela imagem e o aplicador confere antes.
+                if (input.images?.length) {
+                    const imageParts = await Promise.all(input.images.map(async file => ({ inlineData: await blobToBase64(file) })));
+                    const estimate = await estimateMeasurementsFromImages(imageParts);
+                    if (estimate.items.length > 0) {
+                        setIsAIQuickProposalModalOpen(false);
+                        setEstimatedMeasurements({ ...estimate, quickProposalClient: extracted.cliente || {} });
+                        return;
+                    }
+                }
                 handleShowInfo("Não foi possível encontrar medidas válidas para montar a proposta.");
                 return;
             }
 
+            await saveQuickProposal(extracted.cliente, quickMeasurements);
+        } catch (error) {
+            console.error("Erro ao criar proposta rapida com IA:", error);
+            handleShowInfo(`Erro: ${error instanceof Error ? error.message : 'Tente novamente'}`);
+            throw error;
+        } finally {
+            setIsProcessingAI(false);
+        }
+    }, [userInfo, createEmptyMeasurement, films, loadClients, handleShowInfo, showToast]);
+
+    // Salva cliente e proposta da proposta rápida (medidas lidas ou estimadas e conferidas).
+    const saveQuickProposal = async (clientData: QuickProposalExtraction['cliente'] | undefined, quickMeasurements: UIMeasurement[]) => {
+        {
+            const extracted = { cliente: clientData };
             const savedClient = await db.saveClient(buildQuickProposalClient(extracted.cliente));
             if (!savedClient.id) {
                 throw new Error("Não foi possível identificar o cliente salvo.");
@@ -2167,14 +2245,8 @@ Regras:
                 tone: 'success',
                 duration: 2800
             });
-        } catch (error) {
-            console.error("Erro ao criar proposta rapida com IA:", error);
-            handleShowInfo(`Erro: ${error instanceof Error ? error.message : 'Tente novamente'}`);
-            throw error;
-        } finally {
-            setIsProcessingAI(false);
         }
-    }, [userInfo, createEmptyMeasurement, films, loadClients, handleShowInfo, showToast]);
+    };
 
     const handleProcessAIClientInput = useCallback(async (input: AIInput) => {
 
@@ -3413,55 +3485,7 @@ Ignore botões, menus, propagandas e outros textos da interface. Responda soment
                 // pela imagem e o aplicador confere numa lista editável antes de adicionar.
                 if (!input.images?.length || !isMissingMeasurementsError(readError)) throw readError;
 
-                const estimateModel = createGeminiModel({
-                    apiKey: userInfo?.aiConfig?.apiKey,
-                    feature: 'measurement_extraction',
-                    generationConfig: {
-                        maxOutputTokens: 4096,
-                        responseMimeType: 'application/json',
-                        responseSchema: {
-                            type: SchemaType.OBJECT,
-                            properties: {
-                                medidas: {
-                                    type: SchemaType.ARRAY,
-                                    items: {
-                                        type: SchemaType.OBJECT,
-                                        properties: {
-                                            local: { type: SchemaType.STRING },
-                                            largura: { type: SchemaType.STRING },
-                                            altura: { type: SchemaType.STRING },
-                                            quantidade: { type: SchemaType.INTEGER }
-                                        },
-                                        required: ['local', 'largura', 'altura', 'quantidade']
-                                    }
-                                },
-                                observacao: { type: SchemaType.STRING }
-                            },
-                            required: ['medidas', 'observacao']
-                        }
-                    }
-                });
-                const estimateResult = await estimateModel.generateContent([`O cliente mandou foto(s) de janelas, portas ou vidros, mas SEM medidas escritas.
-Estime a largura e a altura aproximadas de cada janela, porta ou vidro visível, para um orçamento inicial de película.
-
-COMO ESTIMAR:
-1. Uma entrada para cada janela, porta ou vidro visível. Vãos iguais podem ficar juntos com quantidade maior que 1.
-2. Meça a esquadria inteira (todas as folhas juntas), não cada folha separada.
-3. Use referências da própria imagem: porta comum tem cerca de 0,80 x 2,10 m; pé-direito de 2,60 a 2,80 m; bancada ou pia com 0,90 m de altura; azulejos, pisos, vaso sanitário, móveis e outros objetos de tamanho conhecido.
-4. Arredonde para múltiplos de 0,05 m.
-5. Se não houver nenhuma janela, porta ou vidro, devolva medidas vazia.
-
-CAMPOS:
-- largura e altura: metros, com duas casas e vírgula decimal, como "1,20".
-- local: curto, com o ambiente provável e o tipo, como "Quarto - janela de correr" ou "Banheiro - basculante". Use string vazia se não der para saber.
-- quantidade: número de vãos iguais.
-- observacao: uma frase curta dizendo quais referências usou.
-
-Responda somente no JSON definido.`, ...sourceParts]);
-                const estimate = normalizeEstimatedMeasurements(parseMeasurementExtractionResponse(
-                    estimateResult.response.text(),
-                    estimateResult.response.finishReason
-                ));
+                const estimate = await estimateMeasurementsFromImages(sourceParts);
                 if (estimate.items.length === 0) throw readError;
 
                 setIsAIMeasurementModalOpen(false);
@@ -3602,13 +3626,21 @@ Use somente o JSON definido e não inclua explicações fora dele.`;
             observation: 'Medida aproximada pela foto. Confirmar no local.',
             isNew: false
         }));
-        handleMeasurementsChange([...measurements, ...newMeasurements]);
+        const quickProposalClient = estimatedMeasurements?.quickProposalClient;
         setEstimatedMeasurements(null);
+        if (quickProposalClient) {
+            void saveQuickProposal(quickProposalClient, newMeasurements).catch(error => {
+                console.error('Erro ao criar proposta rapida com medidas aproximadas:', error);
+                handleShowInfo(`Erro: ${error instanceof Error ? error.message : 'Tente novamente'}`);
+            });
+            return;
+        }
+        handleMeasurementsChange([...measurements, ...newMeasurements]);
         showToast(
             newMeasurements.length === 1 ? '1 medida aproximada adicionada. Confirme no local.' : `${newMeasurements.length} medidas aproximadas adicionadas. Confirme no local.`,
             { tone: 'success', duration: 3500 }
         );
-    }, [createEmptyMeasurement, handleMeasurementsChange, measurements, showToast]);
+    }, [createEmptyMeasurement, estimatedMeasurements, handleMeasurementsChange, handleShowInfo, measurements, showToast]);
 
     const LoadingSpinner = () => (
         <div className="w-full p-4">
