@@ -606,12 +606,6 @@ const ProposalPortalView: React.FC = () => {
         : currency.format(selectedPayment?.customerTotal ?? payTotal);
     const blockedLabel = isApprovalBlocked ? (selectedCondition?.expired ? 'Condição expirada' : 'Prazo encerrado') : null;
     const needsPayment = paymentOptions.length > 0 && !selectedPayment;
-    const showSteps = !hasFinalDecision && paymentOptions.length > 0;
-    const stepBadge = (step: number, done: boolean) => (
-        <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold tabular-nums ${done ? 'bg-[var(--portal-brand)] text-[var(--portal-brand-ink)]' : 'bg-slate-900/[0.06] text-slate-600'}`} aria-hidden="true">
-            {done ? <Check className="h-3.5 w-3.5" /> : step}
-        </span>
-    );
     const cardGroups = [
         { title: 'Sem juros', options: cardOptions.filter(option => option.methodType === 'parcelado_sem_juros') },
         { title: 'Com juros', options: cardOptions.filter(option => option.methodType === 'parcelado_com_juros') },
@@ -694,15 +688,14 @@ const ProposalPortalView: React.FC = () => {
                     </section>
                 ) : null}
 
-                {/* Opções da proposta */}
+                {/* Opções da proposta: uma lista só, como um extrato; o PDF é da opção escolhida */}
                 <section className="mt-8" aria-label="Opções da proposta">
                     {!singleProposal ? (
-                        <div className="mb-4 flex items-center gap-2.5">
-                            {showSteps ? stepBadge(1, true) : null}
+                        <div className="mb-3">
                             <h2 className="text-lg font-semibold text-slate-950">{hasFinalDecision ? 'Opções da proposta' : 'Escolha a opção'}</h2>
                         </div>
                     ) : null}
-                    <div className="space-y-3">
+                    <div className={`overflow-hidden ${CARD}`}>
                         {data.proposals.map((proposal, index) => {
                             const active = proposal.id === selected?.id;
                             const proposalCondition = getProposalCondition(proposal, now);
@@ -710,43 +703,44 @@ const ProposalPortalView: React.FC = () => {
                             const price = proposalCondition?.finalValue ?? proposal.totalPreco ?? 0;
                             const chosen = !singleProposal && active;
                             return (
-                                <div key={proposal.id} className={`${CARD} transition-[border-color,box-shadow] duration-150 ${chosen ? '!border-[var(--portal-brand)] shadow-[0_0_0_1px_var(--portal-brand)]' : 'hover:border-black/[0.14]'}`}>
-                                    <button
-                                        type="button"
-                                        onClick={() => setSelectedId(proposal.id!)}
-                                        aria-pressed={singleProposal ? undefined : active}
-                                        className="flex w-full items-start gap-3 rounded-t-2xl px-5 pt-5 text-left disabled:cursor-default"
-                                    >
-                                        {!singleProposal ? <span className="mt-1.5"><Radio active={active} /></span> : null}
-                                        {/* Celular: nome em linha inteira e o preço embaixo; telas maiores: preço à direita. */}
-                                        <span className="min-w-0 flex-1 sm:flex sm:items-start sm:justify-between sm:gap-4">
-                                            <span className="block min-w-0">
-                                                <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                                                    <span className="text-[18px] font-semibold leading-snug text-slate-950">{name}</span>
-                                                    {proposal.highlighted && !singleProposal ? <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">Recomendada</span> : null}
-                                                </span>
-                                                <span className="mt-0.5 block text-sm text-slate-500">{proposal.totalM2 ? `${proposal.totalM2.toFixed(2).replace('.', ',')} m² de película` : 'Detalhes completos no PDF'}</span>
-                                            </span>
-                                            <span className="mt-3 flex items-end justify-between gap-3 sm:mt-0 sm:block sm:shrink-0 sm:text-right">
-                                                <span className="block whitespace-nowrap text-[22px] font-semibold leading-tight tabular-nums tracking-[-0.01em] text-slate-950">{currency.format(price)}</span>
-                                                {proposalCondition ? (
-                                                    <span className="block text-right">
-                                                        <span className="block text-xs tabular-nums text-slate-400 line-through">{currency.format(proposalCondition.originalValue)}</span>
-                                                        <span className={`block whitespace-nowrap text-xs font-medium ${proposalCondition.expired ? 'text-slate-400' : 'text-emerald-700'}`}>{proposalCondition.expired ? 'Condição expirada' : `Economize ${currency.format(proposalCondition.discountAmount)}`}</span>
-                                                    </span>
-                                                ) : null}
-                                            </span>
+                                <button
+                                    key={proposal.id}
+                                    type="button"
+                                    onClick={() => setSelectedId(proposal.id!)}
+                                    aria-pressed={singleProposal ? undefined : active}
+                                    className={`relative flex w-full items-center gap-3 px-5 py-4 text-left transition-colors ${index > 0 ? 'border-t border-black/[0.06]' : ''} ${chosen ? 'bg-slate-50' : 'hover:bg-slate-50/60'}`}
+                                >
+                                    {chosen ? <span className="absolute inset-y-0 left-0 w-[3px] bg-[var(--portal-brand)]" aria-hidden="true" /> : null}
+                                    {!singleProposal ? <Radio active={active} /> : null}
+                                    <span className="min-w-0 flex-1">
+                                        <span className="block text-[16px] font-medium leading-snug text-slate-950">{name}</span>
+                                        <span className="mt-0.5 block text-[13px] text-slate-500">
+                                            {proposal.highlighted && !singleProposal ? <><span className="font-medium text-amber-700">Recomendada</span><span aria-hidden="true"> · </span></> : null}
+                                            {proposal.totalM2 ? `${proposal.totalM2.toFixed(2).replace('.', ',')} m²` : 'Detalhes no PDF'}
                                         </span>
-                                    </button>
-                                    <div className={`flex items-center justify-between gap-3 pb-3 pr-5 pt-1 ${singleProposal ? 'pl-5' : 'pl-[50px]'}`}>
-                                        <button type="button" disabled={isDownloadBlocked || downloadingId === proposal.id} onClick={() => void download(proposal.id!)} className="-ml-2 inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg px-2 text-sm font-medium text-[var(--portal-brand)] transition-colors hover:bg-[var(--portal-brand)]/[0.06] disabled:text-slate-300">
-                                            {downloadingId === proposal.id ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Ver detalhes em PDF
-                                        </button>
-                                    </div>
-                                </div>
+                                    </span>
+                                    <span className="shrink-0 text-right">
+                                        <span className="block whitespace-nowrap text-[17px] font-semibold tabular-nums text-slate-950">{currency.format(price)}</span>
+                                        {proposalCondition ? (
+                                            <span className="block whitespace-nowrap text-xs tabular-nums text-slate-400 line-through">{currency.format(proposalCondition.originalValue)}</span>
+                                        ) : null}
+                                    </span>
+                                </button>
                             );
                         })}
                     </div>
+                    {selected?.id != null ? (
+                        <button
+                            type="button"
+                            disabled={isDownloadBlocked || downloadingId === selected.id}
+                            onClick={() => void download(selected.id!)}
+                            aria-label="Ver em PDF a opção escolhida"
+                            className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-black/[0.1] bg-white text-sm font-medium text-slate-800 transition-colors hover:bg-slate-50 disabled:text-slate-300"
+                        >
+                            {downloadingId === selected.id ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4 text-slate-500" />}
+                            {singleProposal ? 'Ver proposta completa em PDF' : `Ver ${selectedName} em PDF`}
+                        </button>
+                    ) : null}
                 </section>
 
                 {/* Condição especial */}
@@ -769,10 +763,7 @@ const ProposalPortalView: React.FC = () => {
                 {/* Forma de pagamento */}
                 {paymentOptions.length > 0 && !hasFinalDecision ? (
                     <section id="formas-pagamento" className="mt-10 scroll-mt-6" aria-label="Forma de pagamento">
-                        <div className="flex items-center gap-2.5">
-                            {showSteps && !singleProposal ? stepBadge(2, Boolean(selectedPayment)) : null}
-                            <h2 className="text-lg font-semibold text-slate-950">Escolha como pagar</h2>
-                        </div>
+                        <h2 className="text-lg font-semibold text-slate-950">Escolha como pagar</h2>
                         <p className="mt-1 text-sm text-slate-500">Valores para {selectedName}, {currency.format(payTotal)}</p>
                         <div className={`mt-4 overflow-hidden ${CARD}`} role="radiogroup" aria-label="Formas de pagamento">
                             {cashOptions.map((option, index) => {
