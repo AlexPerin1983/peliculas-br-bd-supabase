@@ -606,19 +606,29 @@ const ProposalPortalView: React.FC = () => {
         : currency.format(selectedPayment?.customerTotal ?? payTotal);
     const blockedLabel = isApprovalBlocked ? (selectedCondition?.expired ? 'Condição expirada' : 'Prazo encerrado') : null;
     const needsPayment = paymentOptions.length > 0 && !selectedPayment;
+    const showSteps = !hasFinalDecision && paymentOptions.length > 0;
+    const stepBadge = (step: number, done: boolean) => (
+        <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold tabular-nums ${done ? 'bg-[var(--portal-brand)] text-[var(--portal-brand-ink)]' : 'bg-slate-900/[0.06] text-slate-600'}`} aria-hidden="true">
+            {done ? <Check className="h-3.5 w-3.5" /> : step}
+        </span>
+    );
+    const cardGroups = [
+        { title: 'Sem juros', options: cardOptions.filter(option => option.methodType === 'parcelado_sem_juros') },
+        { title: 'Com juros', options: cardOptions.filter(option => option.methodType === 'parcelado_com_juros') },
+    ].filter(group => group.options.length > 0);
     const approve = () => { if (needsPayment) scrollTo('formas-pagamento'); else startApproval(); };
     const coverFacts = [
         hasFinalDecision ? null : { label: remaining?.remaining ? 'Válida até' : 'Validade', value: remaining?.remaining ? validUntil : 'Prazo encerrado', detail: remaining?.remaining ? daysLeft : null },
         formatArea(selected?.totalM2) ? { label: 'Área de película', value: formatArea(selected?.totalM2)!, detail: null } : null,
-        !singleProposal ? { label: 'Opções', value: `${data.proposals.length} para comparar`, detail: null } : null,
+        !singleProposal ? { label: 'Para comparar', value: `${data.proposals.length} opções`, detail: null } : null,
     ].filter((fact): fact is { label: string; value: string; detail: string | null } => Boolean(fact));
     const heading = data.portal.status === 'approved'
         ? `Obrigado, ${firstName}. Proposta aprovada.`
         : data.portal.status === 'rejected' || data.portal.status === 'negotiating'
-            ? `${firstName}, recebemos sua resposta.`
+            ? `${firstName}, recebemos sua resposta`
             : data.portal.status === 'revoked' || data.portal.status === 'expired' || !remaining?.remaining
-                ? `${firstName}, esta proposta foi encerrada.`
-                : `${firstName}, sua proposta está pronta.`;
+                ? `${firstName}, esta proposta foi encerrada`
+                : `${firstName}, sua proposta está pronta`;
 
     return (
         <div className="min-h-screen bg-[#f6f6f3] text-slate-900 antialiased" style={{ '--portal-brand': brand, '--portal-brand-ink': readableInk(brand), '--portal-cover': coverInk(data.company.colors?.secundaria) } as React.CSSProperties}>
@@ -648,13 +658,13 @@ const ProposalPortalView: React.FC = () => {
                         <PortalRatingLine showcase={data.company.showcase} inverted />
 
                         {coverFacts.length > 0 ? (
-                            <dl className="mt-8 flex flex-wrap gap-x-10 gap-y-4 border-t border-white/10 pt-5">
+                            <dl className="mt-8 flex flex-wrap gap-x-6 gap-y-4 border-t border-white/10 pt-5 sm:gap-x-10">
                                 {coverFacts.map(fact => (
                                     <div key={fact.label} className="min-w-0">
                                         <dt className="text-xs text-white/50">{fact.label}</dt>
                                         <dd className="mt-1 text-[15px] font-medium tabular-nums text-white">
                                             {fact.value}
-                                            {fact.detail ? <span className="font-normal text-white/50"> · {fact.detail}</span> : null}
+                                            {fact.detail ? <span className="block text-xs font-normal text-white/50">{fact.detail}</span> : null}
                                         </dd>
                                     </div>
                                 ))}
@@ -686,7 +696,12 @@ const ProposalPortalView: React.FC = () => {
 
                 {/* Opções da proposta */}
                 <section className="mt-8" aria-label="Opções da proposta">
-                    {!singleProposal ? <h2 className="mb-3 text-sm font-medium text-slate-500">{hasFinalDecision ? 'Opções da proposta' : `${data.proposals.length} opções para você comparar`}</h2> : null}
+                    {!singleProposal ? (
+                        <div className="mb-4 flex items-center gap-2.5">
+                            {showSteps ? stepBadge(1, true) : null}
+                            <h2 className="text-lg font-semibold text-slate-950">{hasFinalDecision ? 'Opções da proposta' : 'Escolha a opção'}</h2>
+                        </div>
+                    ) : null}
                     <div className="space-y-3">
                         {data.proposals.map((proposal, index) => {
                             const active = proposal.id === selected?.id;
@@ -713,12 +728,12 @@ const ProposalPortalView: React.FC = () => {
                                         <span className="shrink-0 text-right">
                                             {proposalCondition ? <span className="block text-xs tabular-nums text-slate-400 line-through">{currency.format(proposalCondition.originalValue)}</span> : null}
                                             <span className="block text-[22px] font-semibold leading-tight tabular-nums tracking-[-0.01em] text-slate-950">{currency.format(price)}</span>
+                                            {proposalCondition ? <span className={`mt-1 block text-xs font-medium ${proposalCondition.expired ? 'text-slate-400' : 'text-emerald-700'}`}>{proposalCondition.expired ? 'Condição especial expirada' : `Economize ${currency.format(proposalCondition.discountAmount)}`}</span> : null}
                                         </span>
                                     </button>
-                                    <div className="flex items-center justify-between gap-3 px-5 pb-4 pt-3">
-                                        {proposalCondition ? <span className={`text-xs font-medium ${proposalCondition.expired ? 'text-slate-400' : 'text-emerald-700'}`}>{proposalCondition.expired ? 'Condição especial expirada' : `Você economiza ${currency.format(proposalCondition.discountAmount)}`}</span> : <span />}
-                                        <button type="button" disabled={isDownloadBlocked || downloadingId === proposal.id} onClick={() => void download(proposal.id!)} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-black/[0.1] px-3 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:text-slate-300">
-                                            {downloadingId === proposal.id ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Ver PDF
+                                    <div className={`flex items-center justify-between gap-3 pb-3 pr-5 pt-1 ${singleProposal ? 'pl-5' : 'pl-[50px]'}`}>
+                                        <button type="button" disabled={isDownloadBlocked || downloadingId === proposal.id} onClick={() => void download(proposal.id!)} className="-ml-2 inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg px-2 text-sm font-medium text-[var(--portal-brand)] transition-colors hover:bg-[var(--portal-brand)]/[0.06] disabled:text-slate-300">
+                                            {downloadingId === proposal.id ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Ver detalhes em PDF
                                         </button>
                                     </div>
                                 </div>
@@ -744,13 +759,14 @@ const ProposalPortalView: React.FC = () => {
                     </section>
                 ) : null}
 
-                <PortalShowcaseSection showcase={data.company.showcase} companyName={data.company.name} />
-
                 {/* Forma de pagamento */}
                 {paymentOptions.length > 0 && !hasFinalDecision ? (
                     <section id="formas-pagamento" className="mt-10 scroll-mt-6" aria-label="Forma de pagamento">
-                        <h2 className="text-lg font-semibold tracking-[-0.01em] text-slate-950">Forma de pagamento</h2>
-                        <p className="mt-1 text-sm text-slate-500">Escolha antes de aprovar. Valores para {currency.format(payTotal)}.</p>
+                        <div className="flex items-center gap-2.5">
+                            {showSteps && !singleProposal ? stepBadge(2, Boolean(selectedPayment)) : null}
+                            <h2 className="text-lg font-semibold text-slate-950">Escolha como pagar</h2>
+                        </div>
+                        <p className="mt-1 text-sm text-slate-500">Valores para {selectedName}, {currency.format(payTotal)}</p>
                         <div className={`mt-4 overflow-hidden ${CARD}`} role="radiogroup" aria-label="Formas de pagamento">
                             {cashOptions.map((option, index) => {
                                 const active = selectedPaymentKey === optionKey(option);
@@ -781,44 +797,49 @@ const ProposalPortalView: React.FC = () => {
                                             <span className="block text-[13px] text-slate-500">{noInterestTop > 1 ? `Até ${noInterestTop}x sem juros` : 'Parcelado'}{cardOptions.at(-1)!.installments > noInterestTop ? ` · até ${cardOptions.at(-1)!.installments}x no cartão` : ''}</span>
                                         </span>
                                     </div>
-                                    <div className="mt-3 grid grid-cols-6 gap-1.5 pl-[30px]" role="radiogroup" aria-label="Parcelas no cartão">
-                                        {cardOptions.map(option => {
-                                            const active = selectedPaymentKey === optionKey(option);
-                                            const noInterest = option.methodType === 'parcelado_sem_juros';
-                                            return (
-                                                <button
-                                                    key={optionKey(option)}
-                                                    type="button"
-                                                    role="radio"
-                                                    aria-checked={active}
-                                                    aria-label={`${option.installments}x ${noInterest ? 'sem juros' : 'no cartão'}`}
-                                                    onClick={() => setSelectedPaymentKey(optionKey(option))}
-                                                    className={`relative h-10 rounded-lg border text-sm tabular-nums transition-colors ${active
-                                                        ? 'border-[var(--portal-brand)] bg-[var(--portal-brand)] font-semibold text-[var(--portal-brand-ink)]'
-                                                        : 'border-black/[0.08] bg-white font-medium text-slate-700 hover:border-black/20'}`}
-                                                >
-                                                    {option.installments}x
-                                                    {noInterest && !active ? <span className="absolute right-1 top-1 h-1 w-1 rounded-full bg-emerald-500" aria-hidden="true" /> : null}
-                                                </button>
-                                            );
-                                        })}
+                                    <div className="mt-3 space-y-4 pl-[30px]" role="radiogroup" aria-label="Parcelas no cartão">
+                                        {cardGroups.map(group => (
+                                            <div key={group.title}>
+                                                <p className={`text-xs font-medium ${group.title === 'Sem juros' ? 'text-emerald-700' : 'text-slate-500'}`}>{group.title}</p>
+                                                <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4">
+                                                    {group.options.map(option => {
+                                                        const active = selectedPaymentKey === optionKey(option);
+                                                        const noInterest = option.methodType === 'parcelado_sem_juros';
+                                                        return (
+                                                            <button
+                                                                key={optionKey(option)}
+                                                                type="button"
+                                                                role="radio"
+                                                                aria-checked={active}
+                                                                aria-label={`${option.installments}x ${noInterest ? 'sem juros' : 'no cartão'}`}
+                                                                onClick={() => setSelectedPaymentKey(optionKey(option))}
+                                                                className={`flex h-14 flex-col items-center justify-center rounded-[10px] border tabular-nums transition-colors ${active
+                                                                    ? 'border-[var(--portal-brand)] bg-[var(--portal-brand)] text-[var(--portal-brand-ink)]'
+                                                                    : 'border-black/[0.08] bg-white text-slate-900 hover:border-black/20'}`}
+                                                            >
+                                                                <span className="text-sm font-semibold leading-tight">{option.installments}x</span>
+                                                                <span className={`text-xs leading-tight ${active ? 'opacity-85' : 'text-slate-500'}`}>{currency.format(option.installmentValue)}</span>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
-                                    <p className="mt-3 min-h-10 pl-[30px] text-[13px] leading-5 text-slate-600">
-                                        {selectedCard ? <>
-                                            <span className="font-semibold tabular-nums text-slate-900">{selectedCard.installments}x de {currency.format(selectedCard.installmentValue)}</span>
-                                            {selectedCard.methodType === 'parcelado_sem_juros' ? <span className="text-emerald-700"> sem juros</span> : null}
-                                            <span className="block tabular-nums text-slate-500">
-                                                Total {currency.format(selectedCard.customerTotal)}
-                                                {selectedCard.lastInstallmentValue != null ? ` · última parcela ${currency.format(selectedCard.lastInstallmentValue)}` : ''}
-                                            </span>
-                                        </> : <span className="text-slate-400">{noInterestTop > 1 ? <><span className="mr-1 inline-block h-1 w-1 rounded-full bg-emerald-500 align-middle" />sem juros · </> : null}escolha em quantas vezes</span>}
-                                    </p>
+                                    {selectedCard ? (
+                                        <p className="mt-3 pl-[30px] text-[13px] leading-5 tabular-nums text-slate-500">
+                                            Total {currency.format(selectedCard.customerTotal)}
+                                            {selectedCard.lastInstallmentValue != null ? ` · última parcela ${currency.format(selectedCard.lastInstallmentValue)}` : ''}
+                                        </p>
+                                    ) : null}
                                 </div>
                             ) : null}
                         </div>
                     </section>
                 ) : null}
 
+
+                <PortalShowcaseSection showcase={data.company.showcase} companyName={data.company.name} />
 
                 {/* Mensagens */}
                 <section id="conversa" className="mt-10 scroll-mt-6" aria-label="Mensagens">
@@ -858,7 +879,7 @@ const ProposalPortalView: React.FC = () => {
 
             {/* Computador: resumo da escolha sempre à vista, com o botão de aprovar */}
             {isDesktop && selected ? (
-                <aside className="sticky top-6 -mt-24 pb-12" aria-label="Resumo da sua escolha">
+                <aside className="sticky top-6 -mt-44 pb-12" aria-label="Resumo da sua escolha">
                     <div className="rounded-2xl border border-black/[0.07] bg-white p-6 shadow-[0_12px_32px_-12px_rgba(16,24,40,0.18)]">
                         <p className="text-xs text-slate-500">{singleProposal ? 'Sua proposta' : 'Opção escolhida'}</p>
                         <p className="mt-1 text-lg font-semibold leading-snug text-slate-950">{selectedName}</p>
@@ -901,7 +922,7 @@ const ProposalPortalView: React.FC = () => {
                                     onClick={approve}
                                     className="mt-5 flex h-12 w-full items-center justify-center rounded-xl bg-[var(--portal-brand)] px-5 text-[15px] font-medium text-[var(--portal-brand-ink)] transition-opacity hover:opacity-90 disabled:bg-slate-200 disabled:text-slate-400"
                                 >
-                                    {needsPayment ? 'Continuar' : 'Aprovar'}
+                                    {needsPayment ? 'Escolher pagamento' : 'Aprovar proposta'}
                                 </button>
                                 <button type="button" onClick={() => setDecisionAssistant(true)} aria-label="Conversar com a empresa" className="mt-2 flex h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50">
                                     <MessageSquareText className="h-4 w-4" aria-hidden="true" /> Tirar uma dúvida
@@ -927,9 +948,9 @@ const ProposalPortalView: React.FC = () => {
                             type="button"
                             disabled={isApprovalBlocked}
                             onClick={approve}
-                            className="flex h-12 shrink-0 items-center justify-center rounded-xl bg-[var(--portal-brand)] px-5 text-[15px] font-medium text-[var(--portal-brand-ink)] transition-opacity hover:opacity-90 disabled:bg-slate-200 disabled:text-slate-400"
+                            className="flex h-12 shrink-0 items-center justify-center rounded-xl bg-[var(--portal-brand)] px-4 text-[15px] font-medium text-[var(--portal-brand-ink)] transition-opacity hover:opacity-90 disabled:bg-slate-200 disabled:text-slate-400"
                         >
-                            {needsPayment ? 'Continuar' : 'Aprovar'}
+                            {needsPayment ? 'Escolher pagamento' : 'Aprovar proposta'}
                         </button>
                     </div>
                 </div>
