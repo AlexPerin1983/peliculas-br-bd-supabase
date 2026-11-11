@@ -941,16 +941,18 @@ const ProposalPortalView: React.FC = () => {
                     <div className="mx-auto flex max-w-2xl items-center gap-3 px-5 py-3">
                         <div className="min-w-0 flex-1">
                             <p className="truncate text-xs text-slate-500">{blockedLabel ?? paymentLabel ?? 'Total'}</p>
-                            <p className="truncate text-base font-semibold tabular-nums tracking-[-0.01em] text-slate-950">{amountLabel}</p>
+                            <p className="whitespace-nowrap text-[15px] font-semibold tabular-nums tracking-[-0.01em] text-slate-950 sm:text-base">{amountLabel}</p>
                         </div>
                         <button type="button" onClick={() => setDecisionAssistant(true)} aria-label="Conversar com a empresa" className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-black/[0.1] text-slate-700 transition-colors hover:bg-slate-50"><MessageSquareText className="h-5 w-5" /></button>
                         <button
                             type="button"
                             disabled={isApprovalBlocked}
                             onClick={approve}
-                            className="flex h-12 shrink-0 items-center justify-center rounded-xl bg-[var(--portal-brand)] px-4 text-[15px] font-medium text-[var(--portal-brand-ink)] transition-opacity hover:opacity-90 disabled:bg-slate-200 disabled:text-slate-400"
+                            className="flex h-12 shrink-0 items-center justify-center whitespace-nowrap rounded-xl bg-[var(--portal-brand)] px-4 text-[15px] font-medium text-[var(--portal-brand-ink)] transition-opacity hover:opacity-90 disabled:bg-slate-200 disabled:text-slate-400"
                         >
-                            {needsPayment ? 'Escolher pagamento' : 'Aprovar proposta'}
+                            {/* No celular o rótulo é curto para caber o valor ao lado. */}
+                            <span className="sm:hidden">{needsPayment ? 'Escolher' : 'Aprovar'}</span>
+                            <span className="hidden sm:inline">{needsPayment ? 'Escolher pagamento' : 'Aprovar proposta'}</span>
                         </button>
                     </div>
                 </div>
