@@ -804,11 +804,11 @@ const ProposalPortalView: React.FC = () => {
                                             <span className="block text-[13px] text-slate-500">{noInterestTop > 1 ? `Até ${noInterestTop}x sem juros` : 'Parcelado'}{cardOptions.at(-1)!.installments > noInterestTop ? ` · até ${cardOptions.at(-1)!.installments}x no cartão` : ''}</span>
                                         </span>
                                     </div>
-                                    <div className="mt-3 space-y-4 pl-[30px]" role="radiogroup" aria-label="Parcelas no cartão">
+                                    <div className="mt-4 space-y-4 sm:pl-[30px]" role="radiogroup" aria-label="Parcelas no cartão">
                                         {cardGroups.map(group => (
                                             <div key={group.title}>
                                                 <p className={`text-xs font-medium ${group.title === 'Sem juros' ? 'text-emerald-700' : 'text-slate-500'}`}>{group.title}</p>
-                                                <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4">
+                                                <div className="mt-2 grid grid-cols-3 gap-1.5 min-[360px]:grid-cols-4 sm:gap-2">
                                                     {group.options.map(option => {
                                                         const active = selectedPaymentKey === optionKey(option);
                                                         const noInterest = option.methodType === 'parcelado_sem_juros';
@@ -820,12 +820,12 @@ const ProposalPortalView: React.FC = () => {
                                                                 aria-checked={active}
                                                                 aria-label={`${option.installments}x ${noInterest ? 'sem juros' : 'no cartão'}`}
                                                                 onClick={() => setSelectedPaymentKey(optionKey(option))}
-                                                                className={`flex h-14 flex-col items-center justify-center rounded-[10px] border tabular-nums transition-colors ${active
+                                                                className={`flex h-14 min-w-0 flex-col items-center justify-center rounded-[10px] border px-1 tabular-nums transition-colors ${active
                                                                     ? 'border-[var(--portal-brand)] bg-[var(--portal-brand)] text-[var(--portal-brand-ink)]'
                                                                     : 'border-black/[0.08] bg-white text-slate-900 hover:border-black/20'}`}
                                                             >
                                                                 <span className="text-sm font-semibold leading-tight">{option.installments}x</span>
-                                                                <span className={`text-xs leading-tight ${active ? 'opacity-85' : 'text-slate-500'}`}>{currency.format(option.installmentValue)}</span>
+                                                                <span className={`whitespace-nowrap text-[11px] leading-tight sm:text-xs ${active ? 'opacity-85' : 'text-slate-500'}`}>{currency.format(option.installmentValue)}</span>
                                                             </button>
                                                         );
                                                     })}
@@ -834,7 +834,7 @@ const ProposalPortalView: React.FC = () => {
                                         ))}
                                     </div>
                                     {selectedCard ? (
-                                        <p className="mt-3 pl-[30px] text-[13px] leading-5 tabular-nums text-slate-500">
+                                        <p className="mt-3 text-[13px] leading-5 tabular-nums text-slate-500 sm:pl-[30px]">
                                             Total {currency.format(selectedCard.customerTotal)}
                                             {selectedCard.lastInstallmentValue != null ? ` · última parcela ${currency.format(selectedCard.lastInstallmentValue)}` : ''}
                                         </p>
