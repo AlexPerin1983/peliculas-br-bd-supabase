@@ -30,6 +30,7 @@ import { buildProposalWhatsAppUrl } from '../../src/lib/proposalMessages';
 import type { ProposalPaymentChoice, ProposalPaymentSelection } from '../../types';
 import { PortalRatingLine, PortalShowcaseSection } from '../portal/PortalShowcase';
 import { formatOptionName } from '../../src/lib/optionName';
+import { useIsMobile } from '../../src/hooks/useIsMobile';
 
 // Foto de exemplo para a página de demonstração (sem depender de arquivos externos).
 const demoPhoto = (label: string, from: string, to: string) => `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${from}"/><stop offset="1" stop-color="${to}"/></linearGradient></defs><rect width="800" height="600" fill="url(#g)"/><text x="40" y="560" font-family="Arial" font-size="40" fill="white">${label}</text></svg>`)}`;
@@ -47,14 +48,27 @@ const formatRemaining = (expiresAt: string, now: number) => {
 
 const formatLongDate = (value: string) => new Date(value).toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' });
 
+const hexLuminance = (hex: string) => {
+    const match = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+    if (!match) return null;
+    const value = parseInt(match[1], 16);
+    return (0.2126 * ((value >> 16) & 255) + 0.7152 * ((value >> 8) & 255) + 0.0722 * (value & 255)) / 255;
+};
+
 // Texto legível sobre a cor da empresa (cores claras pedem texto escuro).
 const readableInk = (hex: string) => {
-    const match = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
-    if (!match) return '#ffffff';
-    const value = parseInt(match[1], 16);
-    const luminance = (0.2126 * ((value >> 16) & 255) + 0.7152 * ((value >> 8) & 255) + 0.0722 * (value & 255)) / 255;
-    return luminance > 0.62 ? '#111827' : '#ffffff';
+    const luminance = hexLuminance(hex);
+    return luminance != null && luminance > 0.62 ? '#111827' : '#ffffff';
 };
+
+// Fundo da capa: a cor escura da empresa quando ela é escura de verdade; senão, um grafite neutro.
+const COVER_FALLBACK = '#12151a';
+const coverInk = (hex?: string) => {
+    const luminance = hex ? hexLuminance(hex) : null;
+    return hex && luminance != null && luminance < 0.16 ? `#${hex.trim().replace(/^#/, '')}` : COVER_FALLBACK;
+};
+
+const CARD = 'rounded-2xl border border-black/[0.07] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)]';
 
 const Radio: React.FC<{ active: boolean }> = ({ active }) => (
     <span className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] ${active ? 'border-[var(--portal-brand)]' : 'border-slate-300'}`} aria-hidden="true">
@@ -362,6 +376,8 @@ const ProposalPortalView: React.FC = () => {
     const [responseInitialBody, setResponseInitialBody] = useState('');
     const [selectedPaymentKey, setSelectedPaymentKey] = useState('');
     const portalActivityRef = useRef<string | undefined>(undefined);
+    // No computador o resumo com o botão de aprovar fica ao lado; no celular, na barra de baixo.
+    const isDesktop = !useIsMobile(1023);
 
     const reload = useCallback(async (trackView = false) => {
         if (import.meta.env.DEV && token === 'demo') {
@@ -580,6 +596,22 @@ const ProposalPortalView: React.FC = () => {
     const optionKey = (option: ProposalPaymentSelection) => `${option.methodType}:${option.installments}`;
     const scrollTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     const showActionBar = !hasFinalDecision;
+    const selectedName = selected ? formatOptionName(selected.proposalOptionName) || selected.nomeArquivo || 'Proposta' : 'Proposta';
+    const formatArea = (value?: number | null) => (value ? `${value.toFixed(2).replace('.', ',')} m²` : null);
+    const paymentLabel = selectedPayment
+        ? selectedPayment.methodType === 'pix' ? 'Pix à vista' : selectedPayment.methodType === 'boleto' ? 'Boleto à vista' : selectedPayment.methodType === 'parcelado_sem_juros' ? 'Cartão sem juros' : 'Cartão de crédito'
+        : null;
+    const amountLabel = selectedPayment && selectedPayment.installments > 1
+        ? `${selectedPayment.installments}x de ${currency.format(selectedPayment.installmentValue)}`
+        : currency.format(selectedPayment?.customerTotal ?? payTotal);
+    const blockedLabel = isApprovalBlocked ? (selectedCondition?.expired ? 'Condição expirada' : 'Prazo encerrado') : null;
+    const needsPayment = paymentOptions.length > 0 && !selectedPayment;
+    const approve = () => { if (needsPayment) scrollTo('formas-pagamento'); else startApproval(); };
+    const coverFacts = [
+        hasFinalDecision ? null : { label: remaining?.remaining ? 'Válida até' : 'Validade', value: remaining?.remaining ? validUntil : 'Prazo encerrado', detail: remaining?.remaining ? daysLeft : null },
+        formatArea(selected?.totalM2) ? { label: 'Área de película', value: formatArea(selected?.totalM2)!, detail: null } : null,
+        !singleProposal ? { label: 'Opções', value: `${data.proposals.length} para comparar`, detail: null } : null,
+    ].filter((fact): fact is { label: string; value: string; detail: string | null } => Boolean(fact));
     const heading = data.portal.status === 'approved'
         ? `Obrigado, ${firstName}. Proposta aprovada.`
         : data.portal.status === 'rejected' || data.portal.status === 'negotiating'
@@ -589,37 +621,56 @@ const ProposalPortalView: React.FC = () => {
                 : `${firstName}, sua proposta está pronta.`;
 
     return (
-        <div className="min-h-screen bg-[#f6f6f3] text-slate-900 antialiased" style={{ '--portal-brand': brand, '--portal-brand-ink': readableInk(brand) } as React.CSSProperties}>
+        <div className="min-h-screen bg-[#f6f6f3] text-slate-900 antialiased" style={{ '--portal-brand': brand, '--portal-brand-ink': readableInk(brand), '--portal-cover': coverInk(data.company.colors?.secundaria) } as React.CSSProperties}>
             {confetti ? <Confetti /> : null}
             <style>{`@keyframes portal-confetti { 0% { transform: translateY(-5vh) rotate(0); opacity: 1; } 100% { transform: translateY(110vh) rotate(760deg); opacity: .1; } }`}</style>
 
-            <header className="border-b border-black/[0.06] bg-white">
-                <div className="mx-auto flex max-w-2xl items-center justify-between gap-4 px-5 py-3.5">
-                    <div className="flex min-w-0 items-center gap-3">
-                        {data.company.logo
-                            ? <img src={data.company.logo} alt={data.company.name} className="h-9 w-9 rounded-lg object-contain" />
-                            : <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--portal-brand)] text-sm font-semibold text-[var(--portal-brand-ink)]">{data.company.name.charAt(0)}</div>}
-                        <p className="truncate text-[15px] font-semibold text-slate-900">{data.company.name}</p>
+            {/* Capa: quem enviou, para quem e até quando vale */}
+            <header className="bg-[var(--portal-cover)] text-white">
+                <div className="h-[3px] bg-[var(--portal-brand)]" aria-hidden="true" />
+                <div className="mx-auto max-w-2xl px-5 pb-10 pt-5 lg:max-w-5xl lg:px-8 lg:pb-20 lg:pt-6">
+                    <div className="flex items-center justify-between gap-4">
+                        <div className="flex min-w-0 items-center gap-3">
+                            {data.company.logo
+                                ? <img src={data.company.logo} alt={data.company.name} className="h-10 w-10 rounded-[10px] bg-white object-contain p-1" />
+                                : <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-[var(--portal-brand)] text-sm font-semibold text-[var(--portal-brand-ink)]">{data.company.name.charAt(0)}</div>}
+                            <p className="truncate text-[15px] font-medium text-white">{data.company.name}</p>
+                        </div>
+                        {!remaining?.remaining ? <p className="shrink-0 text-xs font-medium text-red-300">Prazo encerrado</p> : null}
                     </div>
-                    {!remaining?.remaining ? <p className="shrink-0 text-xs font-medium text-red-600">Prazo encerrado</p> : null}
+
+                    <div className="lg:max-w-[600px]">
+                        <h1 className="mt-10 text-[30px] font-semibold leading-[1.12] tracking-[-0.02em] text-white lg:mt-16 lg:text-[44px] lg:leading-[1.08]">{heading}</h1>
+                        <p className="mt-3 text-[15px] leading-6 text-white/65">
+                            {sentOn ? `Preparada por ${data.company.name} em ${sentOn}.` : `Preparada por ${data.company.name}.`}
+                            {!hasFinalDecision && !remaining?.remaining ? ' O prazo desta proposta terminou.' : ''}
+                        </p>
+                        <PortalRatingLine showcase={data.company.showcase} inverted />
+
+                        {coverFacts.length > 0 ? (
+                            <dl className="mt-8 flex flex-wrap gap-x-10 gap-y-4 border-t border-white/10 pt-5">
+                                {coverFacts.map(fact => (
+                                    <div key={fact.label} className="min-w-0">
+                                        <dt className="text-xs text-white/50">{fact.label}</dt>
+                                        <dd className="mt-1 text-[15px] font-medium tabular-nums text-white">
+                                            {fact.value}
+                                            {fact.detail ? <span className="font-normal text-white/50"> · {fact.detail}</span> : null}
+                                        </dd>
+                                    </div>
+                                ))}
+                            </dl>
+                        ) : null}
+                    </div>
                 </div>
             </header>
 
-            <main className={`mx-auto max-w-2xl px-5 ${showActionBar ? 'pb-32' : 'pb-12'}`}>
-                <section className="pt-8">
-                    <h1 className="text-[28px] font-semibold leading-[1.15] tracking-[-0.02em] text-slate-950">{heading}</h1>
-                    <p className="mt-2.5 text-[15px] leading-6 text-slate-500">
-                        {sentOn ? `Preparada por ${data.company.name} em ${sentOn}. ` : ''}
-                        {hasFinalDecision ? null : remaining?.remaining ? <>Válida até {validUntil} <span className="text-slate-400">({daysLeft})</span>.</> : 'O prazo desta proposta terminou.'}
-                    </p>
-                    <PortalRatingLine showcase={data.company.showcase} />
-                </section>
-
+            <div className="mx-auto max-w-2xl px-5 lg:grid lg:max-w-5xl lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start lg:gap-10 lg:px-8">
+            <main className={`min-w-0 ${showActionBar && !isDesktop ? 'pb-32' : 'pb-12'}`}>
                 {error ? <div className="mt-6 flex items-start justify-between gap-3 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700"><span>{error}</span><button type="button" onClick={() => setError('')} aria-label="Fechar aviso"><X className="h-4 w-4" /></button></div> : null}
 
                 {/* Próximo passo depois da decisão */}
                 {latestDecision && decisionWhatsAppUrl ? (
-                    <section className="mt-6 rounded-2xl border border-black/[0.07] bg-white px-5 py-5">
+                    <section className={`mt-6 px-5 py-5 ${CARD}`}>
                         <p className="flex items-center gap-2 text-sm font-semibold text-emerald-700"><CheckCircle2 className="h-4 w-4" /> {latestDecision.kind === 'approved' ? 'Próximo passo' : 'Resposta enviada'}</p>
                         <h2 className="mt-2 text-lg font-semibold text-slate-950">{latestDecision.kind === 'approved' ? 'Agora é só combinar a instalação.' : `Continue a conversa com ${data.company.name}.`}</h2>
                         <p className="mt-1 text-sm leading-6 text-slate-500">
@@ -636,37 +687,37 @@ const ProposalPortalView: React.FC = () => {
                 {/* Opções da proposta */}
                 <section className="mt-8" aria-label="Opções da proposta">
                     {!singleProposal ? <h2 className="mb-3 text-sm font-medium text-slate-500">{hasFinalDecision ? 'Opções da proposta' : `${data.proposals.length} opções para você comparar`}</h2> : null}
-                    <div className="overflow-hidden rounded-2xl border border-black/[0.07] bg-white">
+                    <div className="space-y-3">
                         {data.proposals.map((proposal, index) => {
                             const active = proposal.id === selected?.id;
                             const proposalCondition = getProposalCondition(proposal, now);
                             const name = formatOptionName(proposal.proposalOptionName) || proposal.nomeArquivo || `Proposta ${index + 1}`;
                             const price = proposalCondition?.finalValue ?? proposal.totalPreco ?? 0;
+                            const chosen = !singleProposal && active;
                             return (
-                                <div key={proposal.id} className={`relative ${index > 0 ? 'border-t border-black/[0.06]' : ''}`}>
-                                    {!singleProposal && active ? <span className="absolute inset-y-0 left-0 w-[3px] bg-[var(--portal-brand)]" aria-hidden="true" /> : null}
+                                <div key={proposal.id} className={`${CARD} transition-[border-color,box-shadow] duration-150 ${chosen ? '!border-[var(--portal-brand)] shadow-[0_0_0_1px_var(--portal-brand)]' : 'hover:border-black/[0.14]'}`}>
                                     <button
                                         type="button"
                                         onClick={() => setSelectedId(proposal.id!)}
                                         aria-pressed={singleProposal ? undefined : active}
-                                        className="flex w-full items-start gap-3 px-5 pt-5 text-left disabled:cursor-default"
+                                        className="flex w-full items-start gap-3 rounded-t-2xl px-5 pt-5 text-left disabled:cursor-default"
                                     >
-                                        {!singleProposal ? <span className={`mt-1 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] ${active ? 'border-[var(--portal-brand)]' : 'border-slate-300'}`}>{active ? <span className="h-2 w-2 rounded-full bg-[var(--portal-brand)]" /> : null}</span> : null}
+                                        {!singleProposal ? <span className="mt-1.5"><Radio active={active} /></span> : null}
                                         <span className="min-w-0 flex-1">
                                             <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                                                <span className="text-[17px] font-semibold text-slate-900">{name}</span>
+                                                <span className="text-[18px] font-semibold leading-snug text-slate-950">{name}</span>
                                                 {proposal.highlighted && !singleProposal ? <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">Recomendada</span> : null}
                                             </span>
                                             <span className="mt-0.5 block text-sm text-slate-500">{proposal.totalM2 ? `${proposal.totalM2.toFixed(2).replace('.', ',')} m² de película` : 'Detalhes completos no PDF'}</span>
                                         </span>
                                         <span className="shrink-0 text-right">
                                             {proposalCondition ? <span className="block text-xs tabular-nums text-slate-400 line-through">{currency.format(proposalCondition.originalValue)}</span> : null}
-                                            <span className="block text-[19px] font-semibold tabular-nums tracking-[-0.01em] text-slate-950">{currency.format(price)}</span>
+                                            <span className="block text-[22px] font-semibold leading-tight tabular-nums tracking-[-0.01em] text-slate-950">{currency.format(price)}</span>
                                         </span>
                                     </button>
                                     <div className="flex items-center justify-between gap-3 px-5 pb-4 pt-3">
                                         {proposalCondition ? <span className={`text-xs font-medium ${proposalCondition.expired ? 'text-slate-400' : 'text-emerald-700'}`}>{proposalCondition.expired ? 'Condição especial expirada' : `Você economiza ${currency.format(proposalCondition.discountAmount)}`}</span> : <span />}
-                                        <button type="button" disabled={isDownloadBlocked || downloadingId === proposal.id} onClick={() => void download(proposal.id!)} className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--portal-brand)] disabled:text-slate-300">
+                                        <button type="button" disabled={isDownloadBlocked || downloadingId === proposal.id} onClick={() => void download(proposal.id!)} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-black/[0.1] px-3 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:text-slate-300">
                                             {downloadingId === proposal.id ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Ver PDF
                                         </button>
                                     </div>
@@ -700,7 +751,7 @@ const ProposalPortalView: React.FC = () => {
                     <section id="formas-pagamento" className="mt-10 scroll-mt-6" aria-label="Forma de pagamento">
                         <h2 className="text-lg font-semibold tracking-[-0.01em] text-slate-950">Forma de pagamento</h2>
                         <p className="mt-1 text-sm text-slate-500">Escolha antes de aprovar. Valores para {currency.format(payTotal)}.</p>
-                        <div className="mt-4 overflow-hidden rounded-2xl border border-black/[0.07] bg-white" role="radiogroup" aria-label="Formas de pagamento">
+                        <div className={`mt-4 overflow-hidden ${CARD}`} role="radiogroup" aria-label="Formas de pagamento">
                             {cashOptions.map((option, index) => {
                                 const active = selectedPaymentKey === optionKey(option);
                                 return (
@@ -773,7 +824,7 @@ const ProposalPortalView: React.FC = () => {
                 <section id="conversa" className="mt-10 scroll-mt-6" aria-label="Mensagens">
                     <h2 className="text-lg font-semibold tracking-[-0.01em] text-slate-950">Mensagens</h2>
                     <p className="mt-1 text-sm text-slate-500">Fale direto com {data.company.name}.</p>
-                    <div className="mt-4 overflow-hidden rounded-2xl border border-black/[0.07] bg-white">
+                    <div className={`mt-4 overflow-hidden ${CARD}`}>
                         <div className="max-h-[320px] space-y-2.5 overflow-y-auto px-4 py-4">
                             {data.messages.length === 0
                                 ? <p className="py-4 text-center text-sm text-slate-400">Nenhuma mensagem ainda.</p>
@@ -805,22 +856,80 @@ const ProposalPortalView: React.FC = () => {
                 </footer>
             </main>
 
-            {/* Barra de decisão: sempre à mão, com o pagamento escolhido */}
-            {showActionBar ? (
+            {/* Computador: resumo da escolha sempre à vista, com o botão de aprovar */}
+            {isDesktop && selected ? (
+                <aside className="sticky top-6 -mt-24 pb-12" aria-label="Resumo da sua escolha">
+                    <div className="rounded-2xl border border-black/[0.07] bg-white p-6 shadow-[0_12px_32px_-12px_rgba(16,24,40,0.18)]">
+                        <p className="text-xs text-slate-500">{singleProposal ? 'Sua proposta' : 'Opção escolhida'}</p>
+                        <p className="mt-1 text-lg font-semibold leading-snug text-slate-950">{selectedName}</p>
+                        {formatArea(selected.totalM2) ? <p className="mt-0.5 text-sm text-slate-500">{formatArea(selected.totalM2)} de película</p> : null}
+
+                        <dl className="mt-5 space-y-2.5 border-t border-black/[0.06] pt-4 text-sm">
+                            {selectedCondition && !selectedCondition.expired ? (
+                                <div className="flex items-baseline justify-between gap-3">
+                                    <dt className="text-slate-500">Valor original</dt>
+                                    <dd className="tabular-nums text-slate-400 line-through">{currency.format(selectedCondition.originalValue)}</dd>
+                                </div>
+                            ) : null}
+                            <div className="flex items-baseline justify-between gap-3">
+                                <dt className="text-slate-500">Valor</dt>
+                                <dd className="font-medium tabular-nums text-slate-900">{currency.format(payTotal)}</dd>
+                            </div>
+                            {paymentOptions.length > 0 && !hasFinalDecision ? (
+                                <div className="flex items-baseline justify-between gap-3">
+                                    <dt className="text-slate-500">Pagamento</dt>
+                                    <dd className="text-right">
+                                        {paymentLabel
+                                            ? <span className="font-medium text-slate-900">{paymentLabel}</span>
+                                            : <button type="button" onClick={() => scrollTo('formas-pagamento')} className="font-medium text-[var(--portal-brand)] hover:underline">Escolher</button>}
+                                    </dd>
+                                </div>
+                            ) : null}
+                        </dl>
+
+                        <div className="mt-4 border-t border-black/[0.06] pt-4">
+                            <p className="text-xs text-slate-500">{blockedLabel ?? (selectedPayment && selectedPayment.installments > 1 ? 'Parcelas' : 'Total')}</p>
+                            <p className="mt-1 text-[30px] font-semibold leading-none tabular-nums tracking-[-0.02em] text-slate-950">{amountLabel}</p>
+                            {selectedPayment && selectedPayment.installments > 1 ? <p className="mt-1.5 text-xs tabular-nums text-slate-500">Total {currency.format(selectedPayment.customerTotal)}</p> : null}
+                        </div>
+
+                        {showActionBar ? (
+                            <>
+                                <button
+                                    type="button"
+                                    disabled={isApprovalBlocked}
+                                    onClick={approve}
+                                    className="mt-5 flex h-12 w-full items-center justify-center rounded-xl bg-[var(--portal-brand)] px-5 text-[15px] font-medium text-[var(--portal-brand-ink)] transition-opacity hover:opacity-90 disabled:bg-slate-200 disabled:text-slate-400"
+                                >
+                                    {needsPayment ? 'Continuar' : 'Aprovar'}
+                                </button>
+                                <button type="button" onClick={() => setDecisionAssistant(true)} aria-label="Conversar com a empresa" className="mt-2 flex h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50">
+                                    <MessageSquareText className="h-4 w-4" aria-hidden="true" /> Tirar uma dúvida
+                                </button>
+                                {!isApprovalBlocked ? <p className="mt-3 text-center text-xs leading-5 text-slate-400">Ao aprovar, a empresa é avisada na hora</p> : null}
+                            </>
+                        ) : null}
+                    </div>
+                </aside>
+            ) : null}
+            </div>
+
+            {/* Celular: barra de decisão sempre à mão, com o pagamento escolhido */}
+            {showActionBar && !isDesktop ? (
                 <div className="fixed inset-x-0 bottom-0 z-40 border-t border-black/[0.07] bg-white/95 backdrop-blur-md" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
                     <div className="mx-auto flex max-w-2xl items-center gap-3 px-5 py-3">
                         <div className="min-w-0 flex-1">
-                            <p className="truncate text-xs text-slate-500">{isApprovalBlocked ? (selectedCondition?.expired ? 'Condição expirada' : 'Prazo encerrado') : selectedPayment ? selectedPayment.methodType === 'pix' ? 'Pix à vista' : selectedPayment.methodType === 'boleto' ? 'Boleto à vista' : selectedPayment.methodType === 'parcelado_sem_juros' ? 'Cartão sem juros' : 'Cartão de crédito' : 'Total'}</p>
-                            <p className="truncate text-base font-semibold tabular-nums tracking-[-0.01em] text-slate-950">{selectedPayment && selectedPayment.installments > 1 ? `${selectedPayment.installments}x de ${currency.format(selectedPayment.installmentValue)}` : currency.format(selectedPayment?.customerTotal ?? payTotal)}</p>
+                            <p className="truncate text-xs text-slate-500">{blockedLabel ?? paymentLabel ?? 'Total'}</p>
+                            <p className="truncate text-base font-semibold tabular-nums tracking-[-0.01em] text-slate-950">{amountLabel}</p>
                         </div>
-                        <button type="button" onClick={() => setDecisionAssistant(true)} aria-label="Conversar com a empresa" className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-black/[0.1] text-slate-700 transition hover:bg-slate-50"><MessageSquareText className="h-5 w-5" /></button>
+                        <button type="button" onClick={() => setDecisionAssistant(true)} aria-label="Conversar com a empresa" className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-black/[0.1] text-slate-700 transition-colors hover:bg-slate-50"><MessageSquareText className="h-5 w-5" /></button>
                         <button
                             type="button"
                             disabled={isApprovalBlocked}
-                            onClick={() => { if (paymentOptions.length > 0 && !selectedPayment) scrollTo('formas-pagamento'); else startApproval(); }}
-                            className="flex h-12 shrink-0 items-center justify-center rounded-xl bg-[var(--portal-brand)] px-5 text-[15px] font-medium text-[var(--portal-brand-ink)] transition hover:opacity-90 disabled:bg-slate-200 disabled:text-slate-400"
+                            onClick={approve}
+                            className="flex h-12 shrink-0 items-center justify-center rounded-xl bg-[var(--portal-brand)] px-5 text-[15px] font-medium text-[var(--portal-brand-ink)] transition-opacity hover:opacity-90 disabled:bg-slate-200 disabled:text-slate-400"
                         >
-                            {paymentOptions.length > 0 && !selectedPayment ? 'Continuar' : 'Aprovar'}
+                            {needsPayment ? 'Continuar' : 'Aprovar'}
                         </button>
                     </div>
                 </div>

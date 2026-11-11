@@ -5,17 +5,18 @@ import type { PublicPortalShowcase } from '../../supabase/functions/proposal-por
 const formatRating = (rating: number) => rating.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
 /** "★ 4,9 · 127 avaliações no Google" (logo abaixo do título da proposta). */
-export const PortalRatingLine: React.FC<{ showcase?: PublicPortalShowcase | null }> = ({ showcase }) => {
+export const PortalRatingLine: React.FC<{ showcase?: PublicPortalShowcase | null; inverted?: boolean }> = ({ showcase, inverted = false }) => {
+    const muted = inverted ? 'text-white/60' : 'text-slate-500';
     if (!showcase?.rating) return null;
     const content = (
         <>
-            <span className="inline-flex items-center gap-0.5 text-amber-500" aria-hidden="true">
+            <span className={`inline-flex items-center gap-0.5 ${inverted ? 'text-amber-400' : 'text-amber-500'}`} aria-hidden="true">
                 {[1, 2, 3, 4, 5].map(value => (
                     <Star key={value} className="h-3.5 w-3.5" fill={value <= Math.round(showcase.rating!) ? 'currentColor' : 'none'} />
                 ))}
             </span>
-            <span className="font-semibold text-slate-900">{formatRating(showcase.rating)}</span>
-            {showcase.reviewCount ? <span className="text-slate-500">· {showcase.reviewCount.toLocaleString('pt-BR')} avaliações no Google</span> : <span className="text-slate-500">no Google</span>}
+            <span className={`font-semibold ${inverted ? 'text-white' : 'text-slate-900'}`}>{formatRating(showcase.rating)}</span>
+            {showcase.reviewCount ? <span className={muted}>· {showcase.reviewCount.toLocaleString('pt-BR')} avaliações no Google</span> : <span className={muted}>no Google</span>}
         </>
     );
     return (
