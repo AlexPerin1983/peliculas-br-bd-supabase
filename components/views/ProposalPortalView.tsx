@@ -784,31 +784,47 @@ const ProposalPortalView: React.FC = () => {
                                         role="radio"
                                         aria-checked={active}
                                         onClick={() => setSelectedPaymentKey(optionKey(option))}
-                                        className={`flex w-full items-center gap-3 px-5 py-4 text-left transition-colors ${index > 0 ? 'border-t border-black/[0.06]' : ''} ${active ? 'bg-[var(--portal-brand)]/[0.05]' : 'hover:bg-slate-50'}`}
+                                        className={`flex w-full items-center gap-3 px-5 py-4 text-left transition-colors ${index > 0 ? 'border-t border-black/[0.06]' : ''} ${active ? '' : 'hover:bg-slate-50/70'}`}
                                     >
                                         <Radio active={active} />
                                         <span className="min-w-0 flex-1">
-                                            <span className="block text-[15px] font-medium text-slate-900">{option.methodType === 'pix' ? 'Pix' : 'Boleto'}</span>
+                                            <span className="block text-[15px] font-medium text-slate-950">{option.methodType === 'pix' ? 'Pix' : 'Boleto'}</span>
                                             <span className={`block text-[13px] ${option.discountPercent > 0 ? 'text-emerald-700' : 'text-slate-500'}`}>{option.discountPercent > 0 ? `${option.discountPercent.toLocaleString('pt-BR')}% de desconto à vista` : 'À vista'}</span>
                                         </span>
-                                        <span className="shrink-0 text-right text-[15px] font-semibold tabular-nums text-slate-900">{currency.format(option.customerTotal)}</span>
+                                        <span className="shrink-0 text-right">
+                                            {option.discountPercent > 0 ? <span className="block text-xs tabular-nums text-slate-400 line-through">{currency.format(option.baseTotal)}</span> : null}
+                                            <span className="block text-[15px] font-semibold tabular-nums text-slate-950">{currency.format(option.customerTotal)}</span>
+                                        </span>
                                     </button>
                                 );
                             })}
                             {cardOptions.length > 0 ? (
-                                <div className={`px-5 py-4 ${cashOptions.length > 0 ? 'border-t border-black/[0.06]' : ''} ${selectedCard ? 'bg-[var(--portal-brand)]/[0.05]' : ''}`}>
-                                    <div className="flex items-center gap-3">
+                                <div className={cashOptions.length > 0 ? 'border-t border-black/[0.06]' : ''}>
+                                    <button
+                                        type="button"
+                                        onClick={() => { if (!selectedCard) setSelectedPaymentKey(optionKey(cardOptions.filter(option => option.methodType === 'parcelado_sem_juros').at(-1) ?? cardOptions[0])); }}
+                                        className={`flex w-full items-center gap-3 px-5 py-4 text-left transition-colors ${selectedCard ? '' : 'hover:bg-slate-50/70'}`}
+                                        aria-label="Cartão de crédito"
+                                    >
                                         <Radio active={Boolean(selectedCard)} />
                                         <span className="min-w-0 flex-1">
-                                            <span className="block text-[15px] font-medium text-slate-900">Cartão de crédito</span>
-                                            <span className="block text-[13px] text-slate-500">{noInterestTop > 1 ? `Até ${noInterestTop}x sem juros` : 'Parcelado'}{cardOptions.at(-1)!.installments > noInterestTop ? ` · até ${cardOptions.at(-1)!.installments}x no cartão` : ''}</span>
+                                            <span className="block text-[15px] font-medium text-slate-950">Cartão de crédito</span>
+                                            <span className="block text-[13px] text-slate-500">{noInterestTop > 1 ? `Até ${noInterestTop}x sem juros` : 'Parcelado'}</span>
                                         </span>
-                                    </div>
-                                    <div className="mt-4 space-y-4 sm:pl-[30px]" role="radiogroup" aria-label="Parcelas no cartão">
+                                        <span className="shrink-0 text-right">
+                                            <span className="block text-xs text-slate-400">até {cardOptions.at(-1)!.installments}x de</span>
+                                            <span className="block text-[15px] font-semibold tabular-nums text-slate-950">{currency.format(cardOptions.at(-1)!.installmentValue)}</span>
+                                        </span>
+                                    </button>
+
+                                    <div className="space-y-4 px-5 pb-5" role="radiogroup" aria-label="Parcelas no cartão">
                                         {cardGroups.map(group => (
                                             <div key={group.title}>
-                                                <p className={`text-xs font-medium ${group.title === 'Sem juros' ? 'text-emerald-700' : 'text-slate-500'}`}>{group.title}</p>
-                                                <div className="mt-2 grid grid-cols-3 gap-1.5 min-[360px]:grid-cols-4 sm:gap-2">
+                                                <p className="flex items-center gap-1.5 text-xs text-slate-500">
+                                                    {group.title === 'Sem juros' ? <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" /> : null}
+                                                    {group.title}
+                                                </p>
+                                                <div className="mt-2 grid grid-cols-3 gap-2 min-[360px]:grid-cols-4">
                                                     {group.options.map(option => {
                                                         const active = selectedPaymentKey === optionKey(option);
                                                         const noInterest = option.methodType === 'parcelado_sem_juros';
@@ -820,12 +836,12 @@ const ProposalPortalView: React.FC = () => {
                                                                 aria-checked={active}
                                                                 aria-label={`${option.installments}x ${noInterest ? 'sem juros' : 'no cartão'}`}
                                                                 onClick={() => setSelectedPaymentKey(optionKey(option))}
-                                                                className={`flex h-14 min-w-0 flex-col items-center justify-center rounded-[10px] border px-1 tabular-nums transition-colors ${active
-                                                                    ? 'border-[var(--portal-brand)] bg-[var(--portal-brand)] text-[var(--portal-brand-ink)]'
-                                                                    : 'border-black/[0.08] bg-white text-slate-900 hover:border-black/20'}`}
+                                                                className={`flex h-14 min-w-0 flex-col items-center justify-center rounded-[10px] border bg-white px-1 tabular-nums transition-[border-color,box-shadow] duration-150 ${active
+                                                                    ? 'border-[var(--portal-brand)] shadow-[0_0_0_1px_var(--portal-brand)]'
+                                                                    : 'border-black/[0.08] hover:border-black/[0.18]'}`}
                                                             >
-                                                                <span className="text-sm font-semibold leading-tight">{option.installments}x</span>
-                                                                <span className={`whitespace-nowrap text-[11px] leading-tight sm:text-xs ${active ? 'opacity-85' : 'text-slate-500'}`}>{currency.format(option.installmentValue)}</span>
+                                                                <span className={`text-sm leading-tight ${active ? 'font-semibold text-slate-950' : 'font-medium text-slate-800'}`}>{option.installments}x</span>
+                                                                <span className={`whitespace-nowrap text-[11px] leading-tight sm:text-xs ${active ? 'text-slate-700' : 'text-slate-500'}`}>{currency.format(option.installmentValue)}</span>
                                                             </button>
                                                         );
                                                     })}
@@ -833,11 +849,24 @@ const ProposalPortalView: React.FC = () => {
                                             </div>
                                         ))}
                                     </div>
+
                                     {selectedCard ? (
-                                        <p className="mt-3 text-[13px] leading-5 tabular-nums text-slate-500 sm:pl-[30px]">
-                                            Total {currency.format(selectedCard.customerTotal)}
-                                            {selectedCard.lastInstallmentValue != null ? ` · última parcela ${currency.format(selectedCard.lastInstallmentValue)}` : ''}
-                                        </p>
+                                        <div className="flex items-start justify-between gap-4 border-t border-black/[0.06] bg-slate-50/70 px-5 py-4" aria-live="polite">
+                                            <div className="min-w-0">
+                                                <p className="text-xs text-slate-500">Você paga</p>
+                                                <p className="mt-0.5 text-[17px] font-semibold tabular-nums text-slate-950">
+                                                    {selectedCard.installments}x de {currency.format(selectedCard.installmentValue)}
+                                                </p>
+                                                {selectedCard.lastInstallmentValue != null ? <p className="text-xs tabular-nums text-slate-500">última parcela {currency.format(selectedCard.lastInstallmentValue)}</p> : null}
+                                            </div>
+                                            <div className="shrink-0 text-right">
+                                                <p className="text-xs text-slate-500">Total</p>
+                                                <p className="mt-0.5 text-[15px] font-medium tabular-nums text-slate-950">{currency.format(selectedCard.customerTotal)}</p>
+                                                <p className={`text-xs tabular-nums ${selectedCard.customerTotal > selectedCard.baseTotal + 0.005 ? 'text-slate-500' : 'text-emerald-700'}`}>
+                                                    {selectedCard.customerTotal > selectedCard.baseTotal + 0.005 ? `inclui ${currency.format(selectedCard.customerTotal - selectedCard.baseTotal)} de juros` : 'sem juros'}
+                                                </p>
+                                            </div>
+                                        </div>
                                     ) : null}
                                 </div>
                             ) : null}
