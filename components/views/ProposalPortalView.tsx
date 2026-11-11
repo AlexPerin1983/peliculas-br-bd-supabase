@@ -718,17 +718,24 @@ const ProposalPortalView: React.FC = () => {
                                         className="flex w-full items-start gap-3 rounded-t-2xl px-5 pt-5 text-left disabled:cursor-default"
                                     >
                                         {!singleProposal ? <span className="mt-1.5"><Radio active={active} /></span> : null}
-                                        <span className="min-w-0 flex-1">
-                                            <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                                                <span className="text-[18px] font-semibold leading-snug text-slate-950">{name}</span>
-                                                {proposal.highlighted && !singleProposal ? <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">Recomendada</span> : null}
+                                        {/* Celular: nome em linha inteira e o preço embaixo; telas maiores: preço à direita. */}
+                                        <span className="min-w-0 flex-1 sm:flex sm:items-start sm:justify-between sm:gap-4">
+                                            <span className="block min-w-0">
+                                                <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                                    <span className="text-[18px] font-semibold leading-snug text-slate-950">{name}</span>
+                                                    {proposal.highlighted && !singleProposal ? <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">Recomendada</span> : null}
+                                                </span>
+                                                <span className="mt-0.5 block text-sm text-slate-500">{proposal.totalM2 ? `${proposal.totalM2.toFixed(2).replace('.', ',')} m² de película` : 'Detalhes completos no PDF'}</span>
                                             </span>
-                                            <span className="mt-0.5 block text-sm text-slate-500">{proposal.totalM2 ? `${proposal.totalM2.toFixed(2).replace('.', ',')} m² de película` : 'Detalhes completos no PDF'}</span>
-                                        </span>
-                                        <span className="shrink-0 text-right">
-                                            {proposalCondition ? <span className="block text-xs tabular-nums text-slate-400 line-through">{currency.format(proposalCondition.originalValue)}</span> : null}
-                                            <span className="block text-[22px] font-semibold leading-tight tabular-nums tracking-[-0.01em] text-slate-950">{currency.format(price)}</span>
-                                            {proposalCondition ? <span className={`mt-1 block text-xs font-medium ${proposalCondition.expired ? 'text-slate-400' : 'text-emerald-700'}`}>{proposalCondition.expired ? 'Condição especial expirada' : `Economize ${currency.format(proposalCondition.discountAmount)}`}</span> : null}
+                                            <span className="mt-3 flex items-end justify-between gap-3 sm:mt-0 sm:block sm:shrink-0 sm:text-right">
+                                                <span className="block whitespace-nowrap text-[22px] font-semibold leading-tight tabular-nums tracking-[-0.01em] text-slate-950">{currency.format(price)}</span>
+                                                {proposalCondition ? (
+                                                    <span className="block text-right">
+                                                        <span className="block text-xs tabular-nums text-slate-400 line-through">{currency.format(proposalCondition.originalValue)}</span>
+                                                        <span className={`block whitespace-nowrap text-xs font-medium ${proposalCondition.expired ? 'text-slate-400' : 'text-emerald-700'}`}>{proposalCondition.expired ? 'Condição expirada' : `Economize ${currency.format(proposalCondition.discountAmount)}`}</span>
+                                                    </span>
+                                                ) : null}
+                                            </span>
                                         </span>
                                     </button>
                                     <div className={`flex items-center justify-between gap-3 pb-3 pr-5 pt-1 ${singleProposal ? 'pl-5' : 'pl-[50px]'}`}>
