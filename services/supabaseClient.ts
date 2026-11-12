@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { supabaseConfig } from './supabaseConfig';
+import { createFetchWithTimeout } from '../src/lib/fetchTimeout';
 
 const supabaseUrl = supabaseConfig.url;
 const supabaseAnonKey = supabaseConfig.anonKey;
@@ -22,6 +23,8 @@ export const supabase = createClient(
             flowType: 'pkce',
             // Nova storage key para invalidar tokens locais gerados antes da rotacao das chaves.
             storageKey: 'peliculas-br-bd-auth-v4',
-        }
+        },
+        // Pedido pendurado em internet fraca é cancelado, para a fila de envio não travar.
+        global: { fetch: createFetchWithTimeout() },
     }
 );

@@ -14,7 +14,9 @@ const {
     prioritizeSavedPdfSyncMock,
     listPdfSyncQueueMock,
     getUserMock,
+    getSyncStatusMock,
 } = vi.hoisted(() => ({
+    getSyncStatusMock: vi.fn(() => ({ syncInProgress: true })),
     rpcMock: vi.fn(),
     fromMock: vi.fn(),
     functionsInvokeMock: vi.fn(),
@@ -34,6 +36,7 @@ vi.mock('../../services/supabaseClient', () => ({
 
 vi.mock('../../services/syncService', () => ({
     isOnlineNow: isOnlineNowMock,
+    getSyncStatus: getSyncStatusMock,
     syncAllPending: syncAllPendingMock,
     prioritizeSavedPdfSync: prioritizeSavedPdfSyncMock,
 }));
@@ -63,6 +66,7 @@ describe('links amigáveis de proposta', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         isOnlineNowMock.mockReturnValue(true);
+        getSyncStatusMock.mockReturnValue({ syncInProgress: true });
         listPdfSyncQueueMock.mockResolvedValue([]);
         window.history.replaceState({}, '', '/');
     });
@@ -226,6 +230,48 @@ describe('links amigáveis de proposta', () => {
         expect(rpcMock).toHaveBeenCalledWith('create_proposal_portal', expect.objectContaining({
             p_pdf_ids: [42],
         }));
+    });
+
+    it('avisa quantos orçamentos já subiram enquanto espera', async () => {
+        const pending = { _localId: 'local_123_pdf', id: -123, _syncStatus: 'pending' };
+        const synced = { _localId: 'local_123_pdf', id: 91, _remoteId: 91, _syncStatus: 'synced' };
+        findLocalPdfMock
+            .mockResolvedValueOnce(pending)
+            .mockResolvedValueOnce(pending)
+            .mockResolvedValueOnce(pending)
+            .mockResolvedValue(synced);
+        getLocalPdfMock.mockResolvedValue(synced);
+        rpcMock.mockResolvedValue({
+            data: [{ portal_id: 'portal-6', portal_token: 'token-seguro', expires_at: '2099-12-31T23:59:59.000Z' }],
+            error: null,
+        });
+        const onProgress = vi.fn();
+
+        await createProposalPortal([{ id: -123 } as SavedPDF], '2099-12-31', 'Elaine', onProgress);
+
+        expect(onProgress).toHaveBeenCalledWith({ done: 0, total: 1 });
+    });
+
+    it('quando o envio falha de vez, avisa na hora em vez de deixar esperando', async () => {
+        const localPdf = { _localId: 'local_123_pdf', id: 42, _remoteId: 42, _syncStatus: 'pending' };
+        findLocalPdfMock.mockResolvedValue(localPdf);
+        getLocalPdfMock.mockResolvedValue({ ...localPdf, _syncStatus: 'synced' });
+        listPdfSyncQueueMock.mockResolvedValue([{
+            id: 7,
+            table: 'savedPdfs',
+            action: 'update',
+            status: 'error',
+            retryCount: 1,
+            timestamp: Date.now(),
+            errorInfo: { category: 'network', code: 'SYNC_NETWORK' },
+            data: localPdf,
+        }]);
+        // A sincronização já terminou (com falha) e não está mais rodando.
+        getSyncStatusMock.mockReturnValue({ syncInProgress: false });
+
+        await expect(createProposalPortal([{ id: 42 } as SavedPDF], '2099-12-31', 'Elaine'))
+            .rejects.toThrow(/internet está fraca/);
+        expect(rpcMock).not.toHaveBeenCalled();
     });
 
     it('envia a última atividade conhecida nas verificações leves', async () => {

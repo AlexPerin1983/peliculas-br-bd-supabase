@@ -216,7 +216,7 @@ describe('ProposalShareModal', () => {
         expect(createProposalPortal).not.toHaveBeenCalled();
 
         fireEvent.click(screen.getByRole('button', { name: 'Atualizar o link de 20/09' }));
-        await waitFor(() => expect(refreshProposalPortal).toHaveBeenCalledWith('portal-old', [pdf], expect.any(String), 'Camila Soares'));
+        await waitFor(() => expect(refreshProposalPortal).toHaveBeenCalledWith('portal-old', [pdf], expect.any(String), 'Camila Soares', expect.any(Function)));
         expect(await screen.findByText('Link atualizado (mesmo endereço)')).toBeInTheDocument();
         expect(screen.getByDisplayValue('https://app.filmstec.shop/p/camila/old999')).toBeInTheDocument();
     });
@@ -232,7 +232,7 @@ describe('ProposalShareModal', () => {
         fireEvent.click(await screen.findByRole('button', { name: /Alterar validade/ }));
         fireEvent.change(screen.getByLabelText(/Válido até/), { target: { value: '2026-12-20' } });
         fireEvent.click(screen.getByRole('button', { name: /Salvar validade/ }));
-        await waitFor(() => expect(refreshProposalPortal).toHaveBeenCalledWith('portal-old', [pdf], '2026-12-20', 'Camila Soares'));
+        await waitFor(() => expect(refreshProposalPortal).toHaveBeenCalledWith('portal-old', [pdf], '2026-12-20', 'Camila Soares', expect.any(Function)));
         expect(await screen.findByText(`até ${new Date('2026-12-20T23:59:59Z').toLocaleDateString('pt-BR')}`)).toBeInTheDocument();
     });
 });
