@@ -1,7 +1,8 @@
 import { resolvePortalPricing } from '../../supabase/functions/proposal-portal/followUpPricing';
 import { supabase } from '../../services/supabaseClient';
 import { offlineDb, type LocalSavedPDF, type SyncQueueItem } from '../../services/offlineDb';
-import { isOnlineNow, prioritizeSavedPdfSync, syncAllPending } from '../../services/syncService';
+import { getSyncStatus, isOnlineNow, prioritizeSavedPdfSync, syncAllPending } from '../../services/syncService';
+import { getSyncErrorInfo, type SyncErrorInfo } from './syncErrors';
 import type { Client, ProposalPaymentChoice, ProposalPaymentSelection, SavedPDF } from '../../types';
 import type { ProposalConditionFields } from './proposalCondition';
 import type { PublicPortalShowcase } from '../../supabase/functions/proposal-portal/portalShowcase';
@@ -145,7 +146,10 @@ export const buildProposalPortalUrl = (accessKey: string, clientName?: string) =
 const POSTGRES_INTEGER_MAX = 2_147_483_647;
 // Com a fila cheia e internet lenta, os PDFs do link podem levar mais que alguns
 // segundos para subir (mesmo passando na frente da fila).
-const PDF_SYNC_TIMEOUT_MS = 45_000;
+// A espera continua enquanto os orçamentos vão subindo: só desiste depois deste
+// tempo sem nenhum avanço, ou ao bater o limite total.
+const PDF_SYNC_STALL_MS = 60_000;
+const PDF_SYNC_MAX_MS = 4 * 60_000;
 const PDF_SYNC_POLL_MS = 400;
 // A cada tantas voltas, confere também a fila (leitura mais pesada).
 const PDF_SYNC_FULL_CHECK_EVERY = 5;
@@ -223,16 +227,39 @@ const readProposalPdfSyncState = async (pdfIds: number[]) => {
     return pdfIds.map((pdfId, index) => {
         const localPdf = localPdfs[index];
         const persistedPdfId = resolvePersistedPdfId(pdfId, localPdf);
+        const queued = queuedMutations.filter(item => (
+            isQueuedPdfMutation(item, pdfId, localPdf, persistedPdfId)
+        ));
+        const failedItem = queued.find(item => item.status === 'error');
         return {
             persistedPdfId,
-            hasPendingMutation: queuedMutations.some(item => (
-                isQueuedPdfMutation(item, pdfId, localPdf, persistedPdfId)
-            )),
+            hasPendingMutation: queued.length > 0,
+            // Envio que falhou e ficou parado na fila (não está mais "sendo salvo").
+            failure: failedItem ? getSyncErrorInfo(failedItem) : undefined,
         };
     });
 };
 
-export const resolvePersistedProposalPdfIds = async (pdfIds: number[]): Promise<number[]> => {
+/** Quantos orçamentos do link já chegaram ao servidor. */
+export interface ProposalSaveProgress {
+    done: number;
+    total: number;
+}
+
+const describeSaveFailure = (failure: SyncErrorInfo): string => {
+    if (failure.category === 'network' || failure.category === 'server') {
+        return 'A internet está fraca e o orçamento não terminou de salvar. Tente criar o link de novo quando o sinal melhorar.';
+    }
+    if (failure.category === 'authentication') {
+        return 'Sua sessão expirou. Entre de novo na sua conta e crie o link.';
+    }
+    return 'Um destes orçamentos não foi aceito ao salvar, por isso o link não pode ser criado. Abra o aviso de sincronização do app e toque em Tentar novamente.';
+};
+
+export const resolvePersistedProposalPdfIds = async (
+    pdfIds: number[],
+    onProgress?: (progress: ProposalSaveProgress) => void,
+): Promise<number[]> => {
     const initialState = await readProposalPdfSyncState(pdfIds);
     if (initialState.every(item => isPersistedPdfId(item.persistedPdfId) && !item.hasPendingMutation)) {
         return initialState.map(item => item.persistedPdfId as number);
@@ -250,12 +277,19 @@ export const resolvePersistedProposalPdfIds = async (pdfIds: number[]): Promise<
     const localPdfs = await Promise.all(pdfIds.map(findLocalProposalPdf));
     const localIds = localPdfs.map(pdf => pdf?._localId);
     prioritizeSavedPdfSync(localIds.filter((localId): localId is string => !!localId));
-    void Promise.resolve(syncAllPending({ force: true })).catch(error => {
-        console.error('[proposalPortal] Erro ao sincronizar os PDFs do link:', error);
-    });
-    const deadline = Date.now() + PDF_SYNC_TIMEOUT_MS;
+    const startSync = () => {
+        void Promise.resolve(syncAllPending({ force: true })).catch(error => {
+            console.error('[proposalPortal] Erro ao sincronizar os PDFs do link:', error);
+        });
+    };
+    startSync();
+    const startedAt = Date.now();
+    let lastProgressAt = startedAt;
+    let bestDone = -1;
 
-    for (let round = 0; Date.now() < deadline; round += 1) {
+    for (let round = 0; ; round += 1) {
+        const now = Date.now();
+        if (now - lastProgressAt > PDF_SYNC_STALL_MS || now - startedAt > PDF_SYNC_MAX_MS) break;
         // Leve: só os registros destes PDFs, pela chave. A conferência completa
         // (com a fila) vem quando parecem prontos ou a cada algumas voltas.
         const looksReady = round > 0 && (await Promise.all(localIds.map(localId => (
@@ -267,17 +301,36 @@ export const resolvePersistedProposalPdfIds = async (pdfIds: number[]): Promise<
         ));
         if (round === 0 || looksReady || round % PDF_SYNC_FULL_CHECK_EVERY === 0) {
             const state = await readProposalPdfSyncState(pdfIds);
-            if (state.every(item => isPersistedPdfId(item.persistedPdfId) && !item.hasPendingMutation)) {
+            const done = state.filter(item => isPersistedPdfId(item.persistedPdfId) && !item.hasPendingMutation).length;
+            if (done === state.length) {
                 return state.map(item => item.persistedPdfId as number);
+            }
+            if (done > bestDone) {
+                bestDone = done;
+                lastProgressAt = Date.now();
+                onProgress?.({ done, total: state.length });
+            }
+            // A sincronização parou sem terminar estes orçamentos.
+            if (round > 0 && !getSyncStatus().syncInProgress) {
+                const failure = state.find(item => item.failure)?.failure;
+                // Falhou de vez: avisa na hora, em vez de deixar a pessoa esperando.
+                if (failure) throw new Error(describeSaveFailure(failure));
+                // Sobrou alteração nova na fila: manda de novo.
+                startSync();
             }
         }
         await new Promise(resolve => window.setTimeout(resolve, PDF_SYNC_POLL_MS));
     }
 
-    throw new Error('O or\u00e7amento ainda est\u00e1 sendo salvo. Aguarde alguns segundos e tente criar o link novamente.');
+    throw new Error('A internet est\u00e1 lenta e o or\u00e7amento ainda n\u00e3o terminou de salvar. Ele continua sendo enviado: aguarde um pouco e toque de novo para criar o link.');
 };
 
-export const createProposalPortal = async (pdfs: SavedPDF[], expirationDate: string, clientName: string): Promise<CreatedProposalPortal> => {
+export const createProposalPortal = async (
+    pdfs: SavedPDF[],
+    expirationDate: string,
+    clientName: string,
+    onSaveProgress?: (progress: ProposalSaveProgress) => void,
+): Promise<CreatedProposalPortal> => {
     const pdfIds = pdfs.map(pdf => pdf.id).filter((id): id is number => typeof id === 'number');
     if (pdfIds.length !== pdfs.length || pdfIds.length === 0) {
         throw new Error('Salve as propostas antes de criar o link.');
@@ -288,7 +341,7 @@ export const createProposalPortal = async (pdfs: SavedPDF[], expirationDate: str
         throw new Error('Escolha uma validade futura.');
     }
 
-    const persistedPdfIds = await resolvePersistedProposalPdfIds(pdfIds);
+    const persistedPdfIds = await resolvePersistedProposalPdfIds(pdfIds, onSaveProgress);
     const { data, error } = await supabase.rpc('create_proposal_portal', {
         p_pdf_ids: persistedPdfIds,
         p_expires_at: expiresAt.toISOString(),
@@ -406,7 +459,13 @@ export const findClientProposalPortals = async (pdfs: SavedPDF[], clientName: st
 };
 
 // Mantém o endereço e a conversa; troca as propostas mostradas e a validade.
-export const refreshProposalPortal = async (portalId: string, pdfs: SavedPDF[], expirationDate: string, clientName: string): Promise<CreatedProposalPortal> => {
+export const refreshProposalPortal = async (
+    portalId: string,
+    pdfs: SavedPDF[],
+    expirationDate: string,
+    clientName: string,
+    onSaveProgress?: (progress: ProposalSaveProgress) => void,
+): Promise<CreatedProposalPortal> => {
     const pdfIds = pdfs.map(pdf => pdf.id).filter((id): id is number => typeof id === 'number');
     if (pdfIds.length !== pdfs.length || pdfIds.length === 0) {
         throw new Error('Salve as propostas antes de atualizar o link.');
@@ -416,7 +475,7 @@ export const refreshProposalPortal = async (portalId: string, pdfs: SavedPDF[], 
         throw new Error('Escolha uma validade futura.');
     }
 
-    const persistedPdfIds = await resolvePersistedProposalPdfIds(pdfIds);
+    const persistedPdfIds = await resolvePersistedProposalPdfIds(pdfIds, onSaveProgress);
     const { data, error } = await supabase.rpc('refresh_proposal_portal', {
         p_portal_id: portalId,
         p_pdf_ids: persistedPdfIds,

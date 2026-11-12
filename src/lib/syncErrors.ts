@@ -51,7 +51,7 @@ export const classifySyncError = (error: unknown): SyncErrorInfo => {
     if (has('failed to fetch', 'networkerror', 'network error', 'load failed', 'err_network', 'falha de rede')) return result('network');
     if (['PGRST000', 'PGRST001', 'PGRST002', 'PGRST003', '57014', '53300', '57P01', '08000', '08001', '08003', '08006'].includes(code)
         || [408, 429, 500, 502, 503, 504].includes(Number(record.status))
-        || has('timeout', 'timed out', 'statement timeout', 'service unavailable', 'too many requests', 'bad gateway', 'fetch failed')) return result('server');
+        || has('timeout', 'timed out', 'tempo esgotado', 'aborted', 'statement timeout', 'service unavailable', 'too many requests', 'bad gateway', 'fetch failed')) return result('server');
     if (code === '23505' || has('duplicate key', 'unique constraint')) return result('duplicate');
     if (code === '23503' || has('foreign key', 'id do cliente nao encontrado', 'id do agendamento nao encontrado', 'nao existe para receber a medida')) return result('dependency');
     if (['22003', '22P02', '23502', '23514'].includes(code)

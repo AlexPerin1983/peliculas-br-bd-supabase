@@ -6,6 +6,7 @@ import {
     buildProposalShareMessage,
     buildProposalShortShareMessage,
     createProposalPortal,
+    type ProposalSaveProgress,
     findClientProposalPortals,
     refreshProposalPortal,
     revokeProposalPortal,
@@ -120,6 +121,7 @@ const ProposalShareModal: React.FC<ProposalShareModalProps> = ({ isOpen, client,
     // Opção destacada como "Recomendada" na página do cliente (só com 2 ou mais opções).
     const [highlightId, setHighlightId] = useState<number | null>(null);
     const pdfKey = pdfs.map(pdf => pdf.id).join(',');
+    const [saveProgress, setSaveProgress] = useState<ProposalSaveProgress | null>(null);
 
     const readyMessages = useMemo(() => messageOptions.map(option => option.trim()).filter(Boolean), [messageOptions]);
     const [choice, setChoice] = useState(readMessageStyle);
@@ -148,11 +150,19 @@ const ProposalShareModal: React.FC<ProposalShareModalProps> = ({ isOpen, client,
         }
     };
 
+    // Enquanto os orçamentos sobem (internet lenta), a tela mostra em que ponto está.
+    const savingLabel = saveProgress
+        ? (saveProgress.total > 1
+            ? `Salvando orçamentos… ${saveProgress.done} de ${saveProgress.total}`
+            : 'Salvando o orçamento…')
+        : '';
+
     const create = async () => {
         setBusy(true);
         setError('');
+        setSaveProgress(null);
         try {
-            const next = await createProposalPortal(pdfs, expiration, client.nome);
+            const next = await createProposalPortal(pdfs, expiration, client.nome, setSaveProgress);
             await applyHighlight(next.portalId);
             setCreated(next);
             setOrigin('created');
@@ -161,14 +171,16 @@ const ProposalShareModal: React.FC<ProposalShareModalProps> = ({ isOpen, client,
             setError(err instanceof Error ? err.message : 'Não foi possível criar o link.');
         } finally {
             setBusy(false);
+            setSaveProgress(null);
         }
     };
 
     const update = async (portal: ExistingProposalPortal) => {
         setBusy(true);
         setError('');
+        setSaveProgress(null);
         try {
-            const next = await refreshProposalPortal(portal.id, pdfs, expiration, client.nome);
+            const next = await refreshProposalPortal(portal.id, pdfs, expiration, client.nome, setSaveProgress);
             await applyHighlight(next.portalId);
             setCreated(next);
             setOrigin('updated');
@@ -178,6 +190,7 @@ const ProposalShareModal: React.FC<ProposalShareModalProps> = ({ isOpen, client,
             setError(err instanceof Error ? err.message : 'Não foi possível atualizar o link.');
         } finally {
             setBusy(false);
+            setSaveProgress(null);
         }
     };
 
@@ -400,6 +413,7 @@ const ProposalShareModal: React.FC<ProposalShareModalProps> = ({ isOpen, client,
 
                         {validityField}
                         {error ? <p className="rounded-xl bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 dark:bg-red-950/30 dark:text-red-300">{error}</p> : null}
+                        {busy && savingLabel ? <p role="status" className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">{savingLabel} Pode demorar com a internet fraca. Não feche esta tela.</p> : null}
 
                         {updatablePortals.length > 0 ? (
                             <div className="space-y-2">
@@ -408,7 +422,7 @@ const ProposalShareModal: React.FC<ProposalShareModalProps> = ({ isOpen, client,
                                 <button type="button" disabled={busy || pdfs.length === 0} onClick={() => void create()} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] text-sm font-semibold text-[var(--text-strong)] disabled:opacity-60"><Link2 className="h-4 w-4" /> Criar um link separado</button>
                             </div>
                         ) : (
-                            <button type="button" disabled={busy || pdfs.length === 0} onClick={() => void create()} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[var(--brand-primary)] text-sm font-black text-white shadow-lg shadow-blue-500/15 disabled:opacity-60">{busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />} {busy ? 'Criando link…' : 'Criar link da proposta'}</button>
+                            <button type="button" disabled={busy || pdfs.length === 0} onClick={() => void create()} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[var(--brand-primary)] text-sm font-black text-white shadow-lg shadow-blue-500/15 disabled:opacity-60">{busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />} {busy ? (savingLabel || 'Criando link…') : 'Criar link da proposta'}</button>
                         )}
                     </>
                 ) : (
@@ -510,6 +524,7 @@ const ProposalShareModal: React.FC<ProposalShareModalProps> = ({ isOpen, client,
                                 </div>
                             )}
                             {error ? <p className="rounded-xl bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 dark:bg-red-950/30 dark:text-red-300">{error}</p> : null}
+                        {busy && savingLabel ? <p role="status" className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">{savingLabel} Pode demorar com a internet fraca. Não feche esta tela.</p> : null}
                         </div>
                     </>
                 )}
