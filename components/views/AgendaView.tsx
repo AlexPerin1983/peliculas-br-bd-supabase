@@ -165,18 +165,24 @@ const ContinuationChip: React.FC<{ originDate?: string }> = ({ originDate }) => 
 const UNTYPED_DOT_CLASSES ='border-[1.5px] border-slate-400 dark:border-slate-500';
 
 // Pontinhos de um dia no calendário, na cor do tipo; agendamento antigo, sem tipo, fica só no contorno.
-const CalendarDayDots: React.FC<{ agendamentos: Agendamento[] }> = ({ agendamentos }) => {
+// No celular (compact) os pontinhos são menores e, quando há mais atendimentos do que pontinhos, aparece "+2".
+const CalendarDayDots: React.FC<{ agendamentos: Agendamento[]; compact?: boolean }> = ({ agendamentos, compact = false }) => {
     if (agendamentos.length === 0) return null;
+    const dots = getCalendarDots(agendamentos);
+    const extra = agendamentos.length - dots.length;
     return (
-        <div className="mt-1.5 flex flex-wrap items-center justify-center gap-1">
-            {getCalendarDots(agendamentos).map((dot, index) => (
+        <div className={compact ? 'mt-1 flex items-center justify-center gap-[3px]' : 'mt-1.5 flex flex-wrap items-center justify-center gap-1'}>
+            {dots.map((dot, index) => (
                 <span
                     key={dot.id ?? index}
                     title={dot.label}
-                    className={`h-2 w-2 rounded-full ${dot.color ? '' : UNTYPED_DOT_CLASSES} ${dot.muted ? 'opacity-35' : ''}`}
+                    className={`${compact ? 'h-1.5 w-1.5' : 'h-2 w-2'} rounded-full ${dot.color ? '' : UNTYPED_DOT_CLASSES} ${dot.muted ? 'opacity-35' : ''}`}
                     style={dot.color ? { backgroundColor: dot.color } : undefined}
                 ></span>
             ))}
+            {compact && extra > 0 ? (
+                <span className="text-[10px] font-semibold leading-none tabular-nums text-[var(--text-muted)]">+{extra}</span>
+            ) : null}
         </div>
     );
 };
@@ -1478,29 +1484,6 @@ const DayAgendaSummary: React.FC<{
     );
 };
 
-const CalendarMonthStats: React.FC<{
-    total: number;
-    completed: number;
-    scheduled: number;
-    missed: number;
-}> = ({ total, completed, scheduled, missed }) => (
-    <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] font-medium tabular-nums text-[var(--text-muted)]">
-        <span className="inline-flex h-7 items-center rounded-full bg-[var(--surface-muted)] px-2.5">{total} no mês</span>
-        <span title="Concluídos" className="hidden h-7 items-center gap-1 rounded-full bg-emerald-50 px-2 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-200 sm:inline-flex">
-            <i className={`${STATUS_COUNT_ICONS.completed} text-[9px]`} aria-hidden="true"></i>
-            {completed}
-        </span>
-        <span title="Agendados" className="hidden h-7 items-center gap-1 rounded-full bg-blue-50 px-2 text-blue-700 dark:bg-blue-950/30 dark:text-blue-200 sm:inline-flex">
-            <i className={`${STATUS_COUNT_ICONS.scheduled} text-[9px]`} aria-hidden="true"></i>
-            {scheduled}
-        </span>
-        <span title="Cancelados / Faltou" className="hidden h-7 items-center gap-1 rounded-full bg-rose-50 px-2 text-rose-700 dark:bg-rose-950/30 dark:text-rose-200 sm:inline-flex">
-            <i className={`${STATUS_COUNT_ICONS.missed} text-[9px]`} aria-hidden="true"></i>
-            {missed}
-        </span>
-    </div>
-);
-
 // Legenda dos pontinhos: a cor de cada tipo. "Sem tipo" só aparece quando há agendamento antigo à vista.
 const CalendarTypeLegend: React.FC<{ showUntyped: boolean; showHint?: boolean }> = ({ showUntyped, showHint = true }) => (
     <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] font-medium text-[var(--text-muted)]">
@@ -1527,11 +1510,11 @@ const CalendarTypeLegend: React.FC<{ showUntyped: boolean; showHint?: boolean }>
 
 type AgendaViewMode = 'day' | 'week' | 'grid' | 'list';
 
-const AGENDA_VIEW_MODE_OPTIONS: { key: AgendaViewMode; label: string; iconClassName: string }[] = [
-    { key: 'day', label: 'Dia', iconClassName: 'fas fa-calendar-day' },
-    { key: 'week', label: 'Semana', iconClassName: 'fas fa-calendar-week' },
-    { key: 'grid', label: 'Mês', iconClassName: 'fas fa-calendar-days' },
-    { key: 'list', label: 'Lista', iconClassName: 'fas fa-list-ul' },
+const AGENDA_VIEW_MODE_OPTIONS: { key: AgendaViewMode; label: string }[] = [
+    { key: 'day', label: 'Dia' },
+    { key: 'week', label: 'Semana' },
+    { key: 'grid', label: 'Mês' },
+    { key: 'list', label: 'Lista' },
 ];
 
 // Visao escolhida fica salva no navegador para reabrir a Agenda do mesmo jeito.
@@ -1570,7 +1553,8 @@ const AgendaViewToggle: React.FC<{
     viewMode: AgendaViewMode;
     onChange: (mode: AgendaViewMode) => void;
 }> = ({ viewMode, onChange }) => (
-    <div className="inline-flex shrink-0 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-0.5">
+    // Os quatro modos sempre com o nome escrito, do mesmo tamanho, ocupando a linha.
+    <div className="flex min-w-0 flex-1 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-0.5">
         {AGENDA_VIEW_MODE_OPTIONS.map((option) => {
             const isActive = viewMode === option.key;
             return (
@@ -1580,11 +1564,9 @@ const AgendaViewToggle: React.FC<{
                     onClick={() => onChange(option.key)}
                     aria-pressed={isActive}
                     aria-label={option.label}
-                    title={option.label}
-                    className={`inline-flex h-8 items-center gap-1.5 rounded-[calc(var(--radius-control)-2px)] px-2.5 text-xs font-black transition-colors ${isActive ? 'bg-[var(--surface)] text-[var(--text-strong)] shadow-[var(--shadow-hairline)]' : 'text-[var(--text-muted)]'}`}
+                    className={`inline-flex h-9 min-w-0 flex-1 items-center justify-center rounded-[calc(var(--radius-control)-2px)] px-1 transition-colors ${isActive ? 'bg-[var(--surface)] text-[var(--text-strong)] shadow-[var(--shadow-hairline)]' : 'text-[var(--text-muted)]'}`}
                 >
-                    <i className={`${option.iconClassName} text-[11px]`} aria-hidden="true"></i>
-                    {isActive ? option.label : null}
+                    <span className={`truncate text-[13px] ${isActive ? 'font-semibold' : 'font-medium'}`}>{option.label}</span>
                 </button>
             );
         })}
@@ -1622,6 +1604,8 @@ const VoiceScheduleButton: React.FC<{ onClick?: () => void }> = ({ onClick }) =>
 );
 
 const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
+const MOBILE_NAV_BUTTON = 'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)]';
 
 const CALENDAR_ICON_BUTTON = 'inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius-control)] text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)]';
 
@@ -1674,8 +1658,9 @@ const DesktopDayTimeline: React.FC<{
         return { ...item, lanes };
     });
 
-    const firstHour = Math.min(7, ...items.map((item) => Math.floor(item.start / 60)));
-    const lastHour = Math.max(19, ...items.map((item) => Math.ceil(item.end / 60)));
+    // No celular a linha do tempo vai só do primeiro ao último atendimento, sem as horas vazias em volta.
+    const firstHour = Math.min(compact ? 23 : 7, ...items.map((item) => Math.floor(item.start / 60)));
+    const lastHour = Math.max(compact ? firstHour + 1 : 19, ...items.map((item) => Math.ceil(item.end / 60)));
     const hours = Array.from({ length: lastHour - firstHour }, (_, index) => firstHour + index);
     const isToday = date.toDateString() === now.toDateString();
     const nowMinutes = now.getHours() * 60 + now.getMinutes();
@@ -2027,41 +2012,6 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
         return date.toDateString() === selectedDate.toDateString();
     };
 
-    const getDayNumberClasses = (day: Date) => {
-        const classes = ['flex', 'items-center', 'justify-center', 'h-6', 'w-6', 'text-sm', 'font-semibold', 'rounded-full', 'transition-colors'];
-        if (isSelected(day)) {
-            classes.push('bg-slate-800', 'dark:bg-slate-700', 'text-white');
-        } else if (isToday(day)) {
-            classes.push('bg-slate-200', 'dark:bg-slate-700', 'text-slate-800', 'dark:text-slate-200');
-        } else {
-            classes.push('text-slate-700', 'dark:text-slate-300');
-        }
-        return classes.join(' ');
-    };
-
-    const getDayCellClasses = (day: Date) => {
-        const classes = [
-            'relative',
-            'pt-[100%]',
-            'rounded-lg',
-            'border',
-            'cursor-pointer',
-            'transition-colors',
-            'duration-150',
-            'hover:bg-[var(--surface-muted)]',
-        ];
-
-        if (isSelected(day)) {
-            classes.push('border-blue-500/70', 'bg-blue-500/10');
-        } else if (isToday(day)) {
-            classes.push('border-[var(--border-subtle)]', 'bg-[var(--surface)]');
-        } else {
-            classes.push('border-transparent');
-        }
-
-        return classes.join(' ');
-    };
-
     // "Segunda-feira, 5 de outubro": só a primeira letra maiúscula, como se escreve.
     const selectedDateString = useMemo(() => (
         capitalizeFirst(selectedDate.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' }))
@@ -2139,6 +2089,45 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
         setListType('todos');
     };
 
+    // Setas da linha do período no celular: andam um dia, uma semana ou um mês conforme o modo.
+    const periodNav = viewMode === 'day'
+        ? { change: changeDay, prevLabel: 'Dia anterior', nextLabel: 'Próximo dia' }
+        : viewMode === 'week'
+            ? { change: changeWeek, prevLabel: 'Semana anterior', nextLabel: 'Próxima semana' }
+            : { change: changeMonth, prevLabel: 'Mês anterior', nextLabel: 'Próximo mês' };
+
+    // Dia do calendário no celular (mês e faixa da semana): número, hoje contornado, escolhido preenchido e pontinhos.
+    const renderMobileDayCell = (day: Date, heightClass: string, onSelect: (day: Date) => void, weekdayLabel?: string) => {
+        const dayAgendamentos = agendamentosByDate.get(day.toDateString()) || [];
+        const selected = isSelected(day);
+        const today = isToday(day);
+        const fullLabel = day.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
+        const countLabel = dayAgendamentos.length > 0
+            ? `, ${dayAgendamentos.length} ${dayAgendamentos.length === 1 ? 'atendimento' : 'atendimentos'}`
+            : '';
+        return (
+            <button
+                type="button"
+                key={day.toISOString()}
+                onClick={() => onSelect(day)}
+                onTouchStart={() => handleCellTouchStart(day)}
+                onTouchMove={clearLongPress}
+                onTouchEnd={clearLongPress}
+                aria-pressed={selected}
+                aria-label={`${fullLabel}${countLabel}`}
+                className={`flex ${heightClass} min-w-0 flex-col items-center rounded-[var(--radius-control)] border pt-1 transition-colors ${selected ? 'border-[var(--brand-primary)]/40 bg-[var(--brand-primary)]/10' : 'border-transparent active:bg-[var(--surface-muted)]'}`}
+            >
+                {weekdayLabel ? (
+                    <span className={`mb-0.5 text-[11px] font-medium ${today ? 'text-[var(--brand-primary)]' : 'text-[var(--text-muted)]'}`}>{weekdayLabel}</span>
+                ) : null}
+                <span className={`flex h-7 w-7 items-center justify-center rounded-full text-sm tabular-nums ${selected ? 'bg-[var(--brand-primary)] font-semibold text-white' : today ? 'font-semibold text-[var(--brand-primary)] ring-1 ring-inset ring-[var(--brand-primary)]/50' : 'font-medium text-[var(--text-body)]'}`}>
+                    {day.getDate()}
+                </span>
+                <CalendarDayDots agendamentos={dayAgendamentos} compact />
+            </button>
+        );
+    };
+
     const renderAppointmentCard = (agendamento: AgendamentoWithStatus) => (
         <AppointmentCard
             key={agendamento.id}
@@ -2172,149 +2161,86 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                     />
                 ) : null}
 
-                <section>
-                    <div className="mb-3 flex items-center justify-between gap-2">
-                        <AgendaQuickButton onClick={handleGoToday} iconClassName="far fa-calendar-check" label="Hoje" />
-                        <div className="flex items-center gap-2">
-                            <button
-                                type="button"
-                                onClick={handleOpenListSearch}
-                                aria-label="Buscar na agenda"
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-muted)] transition-colors hover:bg-[var(--surface)] hover:text-[var(--text-strong)]"
-                            >
-                                <i className="fas fa-magnifying-glass text-sm" aria-hidden="true"></i>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setShowAlertsPanel((prev) => !prev)}
-                                aria-label="Configurar alertas"
-                                aria-expanded={showAlertsPanel}
-                                className={`inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius-control)] border transition-colors ${alertsActive ? 'border-emerald-500 bg-emerald-500 text-white' : showAlertsPanel ? 'border-[var(--brand-primary)] bg-[var(--brand-primary)]/10 text-[var(--brand-primary)]' : 'border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-muted)] hover:bg-[var(--surface)] hover:text-[var(--text-strong)]'}`}
-                            >
-                                <i className={`${alertsActive ? 'fas' : 'far'} fa-bell text-sm`} aria-hidden="true"></i>
-                            </button>
-                            <AgendaViewToggle viewMode={viewMode} onChange={handleChangeViewMode} />
-                        </div>
+                <section className="space-y-3">
+                    {/* Linha 1: os modos com o nome escrito, busca e alertas. */}
+                    <div className="flex items-center gap-2">
+                        <AgendaViewToggle viewMode={viewMode} onChange={handleChangeViewMode} />
+                        <button
+                            type="button"
+                            onClick={handleOpenListSearch}
+                            aria-label="Buscar na agenda"
+                            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-muted)] transition-colors hover:text-[var(--text-strong)]"
+                        >
+                            <i className="fas fa-magnifying-glass text-sm" aria-hidden="true"></i>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setShowAlertsPanel((prev) => !prev)}
+                            aria-label="Configurar alertas"
+                            aria-expanded={showAlertsPanel}
+                            className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-control)] border transition-colors ${alertsActive ? 'border-emerald-500 bg-emerald-500 text-white' : showAlertsPanel ? 'border-[var(--brand-primary)] bg-[var(--brand-primary)]/10 text-[var(--brand-primary)]' : 'border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-muted)] hover:text-[var(--text-strong)]'}`}
+                        >
+                            <i className={`${alertsActive ? 'fas' : 'far'} fa-bell text-sm`} aria-hidden="true"></i>
+                        </button>
                     </div>
 
                     {showAlertsPanel ? <AgendaPushReminderControl onActiveChange={setAlertsActive} /> : null}
 
-                    {viewMode === 'grid' ? (
-                      <>
-                        <header className="mb-3 flex items-center justify-between gap-2">
-                            <div className="flex min-w-0 items-center gap-1">
-                                <button onClick={() => changeMonth(-1)} className="h-9 w-9 shrink-0 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400">
-                                    <i className="fas fa-chevron-left"></i>
-                                </button>
-                                <h2 className="truncate text-lg font-bold text-slate-800 dark:text-slate-200">
-                                    {currentMonthLabel}
-                                </h2>
-                                <button onClick={() => changeMonth(1)} className="h-9 w-9 shrink-0 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400">
-                                    <i className="fas fa-chevron-right"></i>
-                                </button>
-                            </div>
-                            <CalendarMonthStats {...monthStats} />
+                    {/* Linha 2: em que período estou, voltar para hoje e andar para trás ou para frente. */}
+                    {viewMode !== 'list' ? (
+                        <header className="flex items-center gap-1">
+                            <h2 className="min-w-0 flex-1 truncate text-base font-semibold text-[var(--text-strong)]">
+                                {viewMode === 'week' ? weekRangeLabel : currentMonthLabel}
+                                {viewMode === 'grid' && monthStats.total > 0 ? (
+                                    <span className="ml-2 text-xs font-medium tabular-nums text-[var(--text-muted)]">{monthStats.total} no mês</span>
+                                ) : null}
+                            </h2>
+                            <button
+                                type="button"
+                                onClick={handleGoToday}
+                                className="mr-1 inline-flex h-9 shrink-0 items-center rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] px-3 text-[var(--text-body)] transition-colors hover:bg-[var(--surface-muted)]"
+                            >
+                                <span className="text-[13px] font-medium">Hoje</span>
+                            </button>
+                            <button type="button" onClick={() => periodNav.change(-1)} aria-label={periodNav.prevLabel} className={MOBILE_NAV_BUTTON}>
+                                <i className="fas fa-chevron-left text-sm" aria-hidden="true"></i>
+                            </button>
+                            <button type="button" onClick={() => periodNav.change(1)} aria-label={periodNav.nextLabel} className={MOBILE_NAV_BUTTON}>
+                                <i className="fas fa-chevron-right text-sm" aria-hidden="true"></i>
+                            </button>
                         </header>
-
-                        <div className="grid grid-cols-7 gap-1 mb-2 text-center text-sm font-semibold text-slate-500">
-                            {weekDays.map((day) => <div key={day}>{day}</div>)}
-                        </div>
-
-                        <div
-                            className="grid grid-cols-7 gap-1 touch-pan-y"
-                            onTouchStart={handleGridTouchStart}
-                            onTouchEnd={handleGridTouchEnd}
-                        >
-                        {daysInMonth.map((day, index) => {
-                            const dayAgendamentos = day ? agendamentosByDate.get(day.toDateString()) || [] : [];
-                            return (
-                                <div
-                                    key={day ? day.toISOString() : `mobile-empty-${index}`}
-                                    onClick={() => handleDayClick(day)}
-                                    onTouchStart={() => handleCellTouchStart(day)}
-                                    onTouchMove={clearLongPress}
-                                    onTouchEnd={clearLongPress}
-                                    className={day ? getDayCellClasses(day) : 'relative pt-[100%] bg-transparent'}
-                                >
-                                    {day && (
-                                        <div className="absolute inset-0 p-1.5 flex flex-col items-center overflow-hidden">
-                                            {dayAgendamentos.length > 0 ? (
-                                                <span className="absolute right-1 top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--brand-primary)] px-1 text-[10px] font-semibold tabular-nums text-white">
-                                                    {dayAgendamentos.length}
-                                                </span>
-                                            ) : null}
-                                            <span className={getDayNumberClasses(day)}>
-                                                {day.getDate()}
-                                            </span>
-                                            <CalendarDayDots agendamentos={dayAgendamentos} />
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </div>
-
-                        <CalendarTypeLegend showUntyped={monthHasUntyped} />
-                      </>
                     ) : null}
 
-                    {viewMode === 'week' ? (
-                      <>
-                        <header className="mb-3 flex items-center justify-between gap-2">
-                            <div className="flex min-w-0 items-center gap-1">
-                                <button onClick={() => changeWeek(-1)} aria-label="Semana anterior" className="h-9 w-9 shrink-0 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400">
-                                    <i className="fas fa-chevron-left"></i>
-                                </button>
-                                <h2 className="truncate text-lg font-bold text-slate-800 dark:text-slate-200">
-                                    {weekRangeLabel}
-                                </h2>
-                                <button onClick={() => changeWeek(1)} aria-label="Próxima semana" className="h-9 w-9 shrink-0 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400">
-                                    <i className="fas fa-chevron-right"></i>
-                                </button>
+                    {viewMode === 'grid' ? (
+                        <div>
+                            <div className="mb-1 grid grid-cols-7 gap-1 text-center text-[11px] font-medium text-[var(--text-muted)]">
+                                {weekDays.map((day) => <div key={day}>{day}</div>)}
                             </div>
-                            <span className="inline-flex h-7 shrink-0 items-center rounded-full bg-[var(--surface-muted)] px-2.5 text-[11px] font-bold text-[var(--text-muted)]">
-                                {weekAgendamentos.length} na semana
-                            </span>
-                        </header>
-
-                        <div className="grid grid-cols-7 gap-1 mb-2 text-center text-sm font-semibold text-slate-500">
-                            {weekDays.map((day) => <div key={day}>{day}</div>)}
+                            <div
+                                className="grid grid-cols-7 gap-1 touch-pan-y"
+                                onTouchStart={handleGridTouchStart}
+                                onTouchEnd={handleGridTouchEnd}
+                            >
+                                {daysInMonth.map((day, index) => (day
+                                    ? renderMobileDayCell(day, 'h-[46px]', handleDayClick)
+                                    : <div key={`mobile-empty-${index}`} aria-hidden="true"></div>))}
+                            </div>
+                            <CalendarTypeLegend showUntyped={monthHasUntyped} />
                         </div>
+                    ) : null}
 
-                        <div
-                            className="grid grid-cols-7 gap-1 touch-pan-y"
-                            onTouchStart={handleGridTouchStart}
-                            onTouchEnd={handleWeekTouchEnd}
-                        >
-                        {weekStripDays.map((day) => {
-                            const dayAgendamentos = agendamentosByDate.get(day.toDateString()) || [];
-                            return (
-                                <div
-                                    key={day.toISOString()}
-                                    onClick={() => handleWeekDayClick(day)}
-                                    onTouchStart={() => handleCellTouchStart(day)}
-                                    onTouchMove={clearLongPress}
-                                    onTouchEnd={clearLongPress}
-                                    className={getDayCellClasses(day)}
-                                >
-                                    <div className="absolute inset-0 p-1.5 flex flex-col items-center overflow-hidden">
-                                        {dayAgendamentos.length > 0 ? (
-                                            <span className="absolute right-1 top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--brand-primary)] px-1 text-[10px] font-semibold tabular-nums text-white">
-                                                {dayAgendamentos.length}
-                                            </span>
-                                        ) : null}
-                                        <span className={getDayNumberClasses(day)}>
-                                            {day.getDate()}
-                                        </span>
-                                        <CalendarDayDots agendamentos={dayAgendamentos} />
-                                    </div>
-                                </div>
-                            );
-                        })}
+                    {/* Dia e Semana: a semana numa faixa; tocar num dia abre (ou rola até) ele. */}
+                    {viewMode === 'day' || viewMode === 'week' ? (
+                        <div>
+                            <div
+                                className="grid grid-cols-7 gap-1 touch-pan-y"
+                                onTouchStart={handleGridTouchStart}
+                                onTouchEnd={handleWeekTouchEnd}
+                            >
+                                {weekStripDays.map((day, index) => renderMobileDayCell(day, 'h-[68px]', viewMode === 'week' ? handleWeekDayClick : handleDayClick, weekDays[index]))}
+                            </div>
+                            {viewMode === 'week' ? <CalendarTypeLegend showUntyped={weekHasUntyped} showHint={false} /> : null}
                         </div>
-
-                        <CalendarTypeLegend showUntyped={weekHasUntyped} />
-                      </>
                     ) : null}
                 </section>
 
@@ -2344,7 +2270,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                     </div>
 
                     {/* Todos os dias da semana, em ordem; dia sem nada aparece como "Livre", com atalho para agendar (dia que já passou, sem atalho). */}
-                    <div className="space-y-5">
+                    <div className="space-y-2">
                         {weekStripDays.map((day) => {
                             const dayKey = day.toDateString();
                             const items = agendamentosByDate.get(dayKey) || [];
@@ -2355,26 +2281,30 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                                 <div
                                     key={dayKey}
                                     ref={(element) => { weekDayGroupRefs.current[dayKey] = element; }}
-                                    className="scroll-mt-24 space-y-3"
+                                    className={`scroll-mt-24 ${items.length > 0 ? 'space-y-3 pt-2' : ''}`}
                                 >
-                                    <AgendaDayGroupHeader label={label} count={items.length} highlighted={isSelected(day)} />
-                                    {items.length > 0 ? items.map(renderAppointmentCard) : isPastDay ? (
-                                        <p className="rounded-[var(--radius-control)] border border-dashed border-[var(--border-subtle)] px-3 py-2.5 text-sm font-semibold text-[var(--text-soft)]">
-                                            Livre
-                                        </p>
+                                    {items.length > 0 ? (
+                                        <>
+                                            <AgendaDayGroupHeader label={label} count={items.length} highlighted={isSelected(day)} />
+                                            {items.map(renderAppointmentCard)}
+                                        </>
                                     ) : (
-                                        <button
-                                            type="button"
-                                            onClick={() => onCreateNewAgendamento(day)}
-                                            aria-label={`Agendar para ${label.toLowerCase()}`}
-                                            className="flex w-full items-center justify-between rounded-[var(--radius-control)] border border-dashed border-[var(--border-subtle)] px-3 py-2.5 text-left transition-colors hover:bg-[var(--surface-muted)]"
-                                        >
-                                            <span className="text-sm font-semibold text-[var(--text-soft)]">Livre</span>
-                                            <span className="inline-flex items-center gap-1.5 text-xs font-bold text-[var(--brand-primary)]">
-                                                <i className="fas fa-plus text-[10px]" aria-hidden="true"></i>
-                                                Agendar
-                                            </span>
-                                        </button>
+                                        <div className="flex min-h-9 items-center gap-2">
+                                            <span className={`text-xs font-semibold ${isSelected(day) ? 'text-[var(--brand-primary)]' : 'text-[var(--text-muted)]'}`}>{label}</span>
+                                            <span className="h-px flex-1 bg-[var(--border-subtle)]"></span>
+                                            <span className="text-xs font-medium text-[var(--text-soft)]">Livre</span>
+                                            {isPastDay ? null : (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onCreateNewAgendamento(day)}
+                                                    aria-label={`Agendar para ${label.toLowerCase()}`}
+                                                    className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] px-3 text-[var(--brand-primary)] transition-colors hover:bg-[var(--surface-muted)]"
+                                                >
+                                                    <i className="fas fa-plus text-[10px]" aria-hidden="true"></i>
+                                                    <span className="text-xs font-semibold">Agendar</span>
+                                                </button>
+                                            )}
+                                        </div>
                                     )}
                                 </div>
                             );
@@ -2384,23 +2314,11 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                 ) : viewMode !== 'list' ? (
                 <section>
                     <div className="mb-4 flex items-end justify-between gap-4 border-b border-slate-200 pb-3 dark:border-slate-700">
-                        <div className="flex min-w-0 items-center gap-1">
-                            {viewMode === 'day' ? (
-                                <button onClick={() => changeDay(-1)} aria-label="Dia anterior" className="h-9 w-9 shrink-0 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400">
-                                    <i className="fas fa-chevron-left"></i>
-                                </button>
-                            ) : null}
-                            <div className="min-w-0">
-                                <DayHeadingLabel date={selectedDate} className="text-slate-500" />
-                                <h3 className="truncate text-lg font-bold leading-tight text-slate-800 dark:text-slate-200">
-                                    {selectedDateString}
-                                </h3>
-                            </div>
-                            {viewMode === 'day' ? (
-                                <button onClick={() => changeDay(1)} aria-label="Próximo dia" className="h-9 w-9 shrink-0 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400">
-                                    <i className="fas fa-chevron-right"></i>
-                                </button>
-                            ) : null}
+                        <div className="min-w-0">
+                            <DayHeadingLabel date={selectedDate} className="text-slate-500" />
+                            <h3 className="truncate text-lg font-bold leading-tight text-slate-800 dark:text-slate-200">
+                                {selectedDateString}
+                            </h3>
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
                             <VoiceScheduleButton onClick={onCreateAgendamentoByVoice} />
@@ -2423,7 +2341,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                     >
                     <DayAgendaSummary agendamentos={selectedDayAgendamentos} route={selectedDayRoute} />
 
-                    {viewMode === 'day' && selectedDayAgendamentos.length > 0 ? (
+                    {viewMode === 'day' && selectedDayAgendamentos.length > 1 ? (
                         <DesktopDayTimeline
                             compact
                             date={selectedDate}
@@ -2520,7 +2438,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                                         role="radio"
                                         aria-checked={isActive}
                                         onClick={() => setListType(option.value)}
-                                        className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-2.5 transition-colors ${isActive
+                                        className={`inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 transition-colors ${isActive
                                             ? 'border-transparent text-white shadow-sm'
                                             : 'border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-muted)] hover:text-[var(--text-strong)]'}`}
                                         style={isActive ? { backgroundColor: option.color ?? 'var(--brand-primary)' } : undefined}
