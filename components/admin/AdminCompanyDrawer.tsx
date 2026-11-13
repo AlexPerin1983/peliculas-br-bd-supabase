@@ -1,10 +1,12 @@
 import React from 'react';
 import { Drawer } from 'vaul';
-import { Ban, Copy, Crown, MessageCircle, Shield, Trash2, Unlock, X } from 'lucide-react';
+import { Ban, Copy, Crown, MessageCircle, Shield, Sparkles, Trash2, Unlock, X } from 'lucide-react';
 import ActionButton from '../ui/ActionButton';
 import { UserWithSubscription, isUserAdmin } from '../../src/hooks/useAdminUsers';
 import { EngagementRow } from '../../src/hooks/useAdminEngagement';
 import { useAdminCompanyDetail } from '../../src/hooks/useAdminCompanyDetail';
+import { useAdminCompanyAiUsage } from '../../src/hooks/useAdminCompanyAiUsage';
+import { AI_DAILY_LIMIT, aiFeatureLabel } from './aiUsage';
 import { useIsMobile } from '../../src/hooks/useIsMobile';
 import { buildWhatsappLink, formatInt, formatMoney, monthLabel, relativeDays } from './adminFormat';
 import { MiniBars } from './charts/MiniBars';
@@ -50,6 +52,7 @@ export const AdminCompanyDrawer: React.FC<AdminCompanyDrawerProps> = ({
     const open = !!profile;
     const isMobile = useIsMobile();
     const { series, loading: loadingSeries, error: seriesError } = useAdminCompanyDetail(profile?.id ?? null);
+    const { usage: aiUsage, loading: loadingAi, error: aiError } = useAdminCompanyAiUsage(profile?.id ?? null);
     const [copied, setCopied] = React.useState(false);
 
     const isAdmin = profile ? isUserAdmin(profile) : false;
@@ -172,6 +175,52 @@ export const AdminCompanyDrawer: React.FC<AdminCompanyDrawerProps> = ({
                                             colorClass="bg-blue-500"
                                             data={series.map(s => ({ label: monthLabel(s.mes), value: s.orcamentos, hint: `${monthLabel(s.mes)}: ${s.orcamentos} orç. · ${formatMoney(s.faturamento)}` }))}
                                         />
+                                    )}
+                                </div>
+
+                                {/* Uso de IA: quanto usou e em quê */}
+                                <div className="mb-4 rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+                                    <h4 className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200">
+                                        <Sparkles className="h-3.5 w-3.5 text-violet-500" /> Uso de IA
+                                    </h4>
+                                    {loadingAi ? (
+                                        <div className="py-4 text-center text-xs text-slate-400">Carregando uso de IA…</div>
+                                    ) : aiError || !aiUsage ? (
+                                        <div className="py-4 text-center text-xs text-red-400">{aiError || 'Não foi possível carregar o uso de IA.'}</div>
+                                    ) : aiUsage.usosTotal === 0 ? (
+                                        <div className="py-4 text-center text-xs text-slate-400">Ainda não usou a IA.</div>
+                                    ) : (
+                                        <>
+                                            <div className="grid grid-cols-3 gap-2">
+                                                <KpiCell
+                                                    label="Últimas 24h"
+                                                    value={<>{formatInt(aiUsage.usos24h)}<span className="ml-1 text-[11px] font-medium text-slate-400">de {AI_DAILY_LIMIT}</span></>}
+                                                    accent={aiUsage.usos24h >= AI_DAILY_LIMIT ? 'text-red-600 dark:text-red-400' : undefined}
+                                                />
+                                                <KpiCell label="7 dias" value={formatInt(aiUsage.usos7d)} />
+                                                <KpiCell label="30 dias" value={formatInt(aiUsage.usos30d)} />
+                                            </div>
+                                            {aiUsage.features.length > 0 && (
+                                                <div className="mt-3 space-y-2">
+                                                    {aiUsage.features.map(row => (
+                                                        <div key={row.feature}>
+                                                            <div className="mb-0.5 flex items-center justify-between gap-2 text-xs">
+                                                                <span className="truncate text-slate-600 dark:text-slate-300">{aiFeatureLabel(row.feature)}</span>
+                                                                <span className="shrink-0 font-semibold tabular-nums text-slate-900 dark:text-white">{formatInt(row.usos30d)}</span>
+                                                            </div>
+                                                            <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700">
+                                                                <div className="h-full rounded-full bg-violet-500" style={{ width: `${Math.max(4, (row.usos30d / aiUsage.features[0].usos30d) * 100)}%` }} />
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                            <p className="mt-3 text-[11px] leading-relaxed text-slate-500">
+                                                {formatInt(aiUsage.usosTotal)} uso(s) desde o começo
+                                                {aiUsage.falhas30d > 0 ? ` · ${formatInt(aiUsage.falhas30d)} com falha em 30 dias` : ''}
+                                                {` · último uso ${relativeDays(aiUsage.ultimoUso)}`}
+                                            </p>
+                                        </>
                                     )}
                                 </div>
 
