@@ -1658,9 +1658,13 @@ const DesktopDayTimeline: React.FC<{
         return { ...item, lanes };
     });
 
-    // No celular a linha do tempo vai só do primeiro ao último atendimento, sem as horas vazias em volta.
-    const firstHour = Math.min(compact ? 23 : 7, ...items.map((item) => Math.floor(item.start / 60)));
-    const lastHour = Math.max(compact ? firstHour + 1 : 19, ...items.map((item) => Math.ceil(item.end / 60)));
+    // No celular a linha do tempo vai de 1 hora antes do primeiro atendimento a 1 hora depois do último, sem o resto das horas vazias.
+    const firstHour = compact
+        ? Math.max(0, Math.min(23, ...items.map((item) => Math.floor(item.start / 60))) - 1)
+        : Math.min(7, ...items.map((item) => Math.floor(item.start / 60)));
+    const lastHour = compact
+        ? Math.min(24, Math.max(firstHour + 1, ...items.map((item) => Math.ceil(item.end / 60))) + 1)
+        : Math.max(19, ...items.map((item) => Math.ceil(item.end / 60)));
     const hours = Array.from({ length: lastHour - firstHour }, (_, index) => firstHour + index);
     const isToday = date.toDateString() === now.toDateString();
     const nowMinutes = now.getHours() * 60 + now.getMinutes();
@@ -2341,7 +2345,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ agendamentos, pdfs, clients, on
                     >
                     <DayAgendaSummary agendamentos={selectedDayAgendamentos} route={selectedDayRoute} />
 
-                    {viewMode === 'day' && selectedDayAgendamentos.length > 1 ? (
+                    {viewMode === 'day' && selectedDayAgendamentos.length > 0 ? (
                         <DesktopDayTimeline
                             compact
                             date={selectedDate}
