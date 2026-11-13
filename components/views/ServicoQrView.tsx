@@ -4,18 +4,14 @@ import {
     CalendarDays,
     CheckCircle2,
     ChevronRight,
-    Clipboard,
     Copy,
     FileImage,
-    Link2,
     Loader2,
     Plus,
     Printer,
     QrCode,
     RotateCcw,
     Search,
-    Tag,
-    UserRound,
     X,
     XCircle
 } from 'lucide-react';
@@ -269,23 +265,8 @@ const ServicoSearchModal: React.FC<{
 
 const SECTION_CARD_CLASSNAME = 'rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface)] p-4 shadow-[var(--shadow-hairline)] sm:p-5';
 const FIELD_CLASSNAME = 'ui-field w-full px-3.5 py-3 text-[14px] outline-none';
-const FIELD_LABEL_CLASSNAME = 'ui-label mb-1.5 block';
-const HISTORY_CHIP_CLASSNAME = 'rounded-full border border-[var(--border-subtle)] bg-[var(--surface)] px-2.5 py-1 text-[10px] font-semibold text-[var(--text-muted)]';
-const ICON_FRAME_CLASSNAME = 'ui-icon-frame h-10 w-10 shrink-0';
-
-const MiniMetric: React.FC<{
-    icon: React.ReactNode;
-    label: string;
-    value: string;
-}> = ({ icon, label, value }) => (
-    <div className="min-w-[148px] flex-1 shrink-0 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] px-3 py-2.5 shadow-[var(--shadow-hairline)] sm:min-w-0">
-        <div className="flex items-center gap-2 text-[var(--text-soft)]">
-            {icon}
-            <span className="truncate text-[10px] font-semibold uppercase">{label}</span>
-        </div>
-        <p className="mt-1 truncate text-[13px] font-semibold text-[var(--text-strong)]">{value}</p>
-    </div>
-);
+const FIELD_GROUP_CLASSNAME = 'text-sm font-medium text-[var(--text-strong)]';
+const FIELD_LABEL_CLASSNAME = 'mb-1.5 block text-xs font-medium text-[var(--text-muted)]';
 
 const ServicoQrView: React.FC<ServicoQrViewProps> = ({
     userInfo,
@@ -341,7 +322,17 @@ const ServicoQrView: React.FC<ServicoQrViewProps> = ({
     const activeStepMeta = STEP_META[step];
     const companyDisplayName = userInfo?.empresa || userInfo?.nome || 'Empresa não configurada';
     const selectedFilmLabel = filmeAplicado || 'Sem película';
-    const previewStatusLabel = savedServico ? 'Pronta' : 'Em preparo';
+    const previewStatusLabel = savedServico ? 'Pronta para imprimir' : 'Prévia';
+    // Enquanto não gera, a etiqueta da direita mostra o que está sendo preenchido.
+    const draftServico = useMemo(() => ({
+        codigo_qr: '',
+        cliente_nome: clienteNome,
+        cidade,
+        uf: uf.toUpperCase(),
+        tipo_local: tipoLocal,
+        filme_aplicado: filmeAplicado,
+        data_servico: dataServico ? new Date(`${dataServico}T12:00:00`).toISOString() : undefined
+    }) as ServicoPrestado, [cidade, clienteNome, dataServico, filmeAplicado, tipoLocal, uf]);
 
     const resetForm = useCallback(() => {
         setStep('form');
@@ -460,7 +451,7 @@ const ServicoQrView: React.FC<ServicoQrViewProps> = ({
                 filme_aplicado: filmeAplicado,
                 filme_detalhes: selectedFilm ? criarDetalhesFilme(selectedFilm) : undefined,
                 metros_aplicados: metrosAplicados ? parseFloat(metrosAplicados.replace(',', '.')) : undefined,
-                data_servico: new Date(dataServico).toISOString(),
+                data_servico: new Date(`${dataServico}T12:00:00`).toISOString(),
                 observacoes: observacoes.trim() || undefined,
                 empresa_nome: empresaSnapshot.empresa_nome || userInfo.empresa || userInfo.nome,
                 empresa_telefone: empresaSnapshot.empresa_telefone,
@@ -571,447 +562,368 @@ const ServicoQrView: React.FC<ServicoQrViewProps> = ({
         scrollToSection(previewSectionRef);
     }, [formatConfig.label, scrollToSection]);
 
-    const handleBackToForm = useCallback(() => {
-        setStep('form');
-        scrollToSection(formSectionRef);
-    }, [scrollToSection]);
-
     const buscarClienteButton = (
         <button
             type="button"
             onClick={handleOpenClientModal}
-            className="group inline-flex h-10 w-full items-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] px-3.5 text-left text-[13px] font-semibold text-[var(--text-muted)] shadow-[var(--shadow-hairline)] transition-all duration-200 hover:bg-[var(--surface)] hover:text-[var(--text-strong)] sm:max-w-[220px]"
+            className="-mr-2 inline-flex h-7 items-center gap-1.5 rounded-[var(--radius-control)] px-2 text-[var(--brand-primary)] transition-colors hover:bg-[var(--surface-muted)]"
         >
-            <Search className="h-4 w-4 shrink-0" aria-hidden="true" />
-            <span className="min-w-0 flex-1 truncate">Buscar cliente</span>
+            <Search className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            <span className="text-xs font-medium">Buscar nos clientes</span>
         </button>
     );
 
+    // Dois grupos, na ordem em que a informação chega: quem é o cliente, depois o que foi aplicado.
     const etiquetaForm = (
-        <form id="servicoForm" onSubmit={handleSubmit} className="space-y-4">
-            <fieldset disabled={isSubmitting} className="space-y-4">
-                <div className="grid gap-3 lg:grid-cols-[minmax(0,1.35fr)_minmax(220px,0.65fr)]">
+        <form id="servicoForm" onSubmit={handleSubmit}>
+            <fieldset disabled={isSubmitting} className="space-y-6">
+                <div className="space-y-3">
+                    <p className={FIELD_GROUP_CLASSNAME}>Cliente</p>
                     <div>
-                        <label className={FIELD_LABEL_CLASSNAME}>Nome do local / cliente *</label>
+                        <div className="mb-1.5 flex items-center justify-between gap-2">
+                            <label htmlFor="servico-cliente" className="block text-xs font-medium text-[var(--text-muted)]">
+                                Nome do local ou cliente <span className="text-[var(--text-soft)]">*</span>
+                            </label>
+                            {buscarClienteButton}
+                        </div>
                         <input
+                            id="servico-cliente"
                             ref={inputRef}
                             type="text"
                             value={clienteNome}
                             onChange={(event) => setClienteNome(event.target.value)}
-                            placeholder="Ex: Condomínio Solar"
+                            placeholder="Ex.: Condomínio Solar"
+                            autoComplete="off"
                             className={FIELD_CLASSNAME}
                         />
                     </div>
-                    <div>
-                        <label className={FIELD_LABEL_CLASSNAME}>Tipo de local</label>
-                        <select
-                            value={tipoLocal}
-                            onChange={(event) => setTipoLocal(event.target.value as TipoLocal)}
-                            className={FIELD_CLASSNAME}
-                        >
-                            <option value="residencial">Residência</option>
-                            <option value="comercial">Comercial</option>
-                            <option value="condominio">Condomínio</option>
-                            <option value="empresa">Empresa</option>
-                            <option value="outros">Outros</option>
-                        </select>
+
+                    <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+                        <div>
+                            <label htmlFor="servico-tipo" className={FIELD_LABEL_CLASSNAME}>Tipo de local</label>
+                            <select
+                                id="servico-tipo"
+                                value={tipoLocal}
+                                onChange={(event) => setTipoLocal(event.target.value as TipoLocal)}
+                                className={FIELD_CLASSNAME}
+                            >
+                                <option value="residencial">Residência</option>
+                                <option value="comercial">Comercial</option>
+                                <option value="condominio">Condomínio</option>
+                                <option value="empresa">Empresa</option>
+                                <option value="outros">Outros</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label htmlFor="servico-endereco" className={FIELD_LABEL_CLASSNAME}>Endereço</label>
+                            <input
+                                id="servico-endereco"
+                                type="text"
+                                value={endereco}
+                                onChange={(event) => setEndereco(event.target.value)}
+                                placeholder="Rua e número"
+                                className={FIELD_CLASSNAME}
+                            />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-[minmax(0,1fr)_88px] gap-3">
+                        <div>
+                            <label htmlFor="servico-cidade" className={FIELD_LABEL_CLASSNAME}>Cidade</label>
+                            <input
+                                id="servico-cidade"
+                                type="text"
+                                value={cidade}
+                                onChange={(event) => setCidade(event.target.value)}
+                                placeholder="Cidade"
+                                className={FIELD_CLASSNAME}
+                            />
+                        </div>
+                        <div>
+                            <label htmlFor="servico-uf" className={FIELD_LABEL_CLASSNAME}>UF</label>
+                            <input
+                                id="servico-uf"
+                                type="text"
+                                value={uf}
+                                onChange={(event) => setUf(event.target.value.toUpperCase())}
+                                maxLength={2}
+                                placeholder="UF"
+                                className={`${FIELD_CLASSNAME} text-center uppercase`}
+                            />
+                        </div>
                     </div>
                 </div>
 
-                <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_168px]">
+                <div className="space-y-3 border-t border-[var(--border-subtle)] pt-5">
+                    <p className={FIELD_GROUP_CLASSNAME}>Serviço</p>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="col-span-2">
+                            <label htmlFor="servico-filme" className={FIELD_LABEL_CLASSNAME}>
+                                Película aplicada <span className="text-[var(--text-soft)]">*</span>
+                            </label>
+                            <select
+                                id="servico-filme"
+                                value={filmeAplicado}
+                                onChange={(event) => setFilmeAplicado(event.target.value)}
+                                className={FIELD_CLASSNAME}
+                            >
+                                <option value="">Selecione</option>
+                                {films.map((film) => (
+                                    <option key={film.nome} value={film.nome}>
+                                        {film.nome}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label htmlFor="servico-area" className={FIELD_LABEL_CLASSNAME}>Área aplicada</label>
+                            <div className="relative">
+                                <input
+                                    id="servico-area"
+                                    type="text"
+                                    inputMode="decimal"
+                                    value={metrosAplicados}
+                                    onChange={(event) => setMetrosAplicados(event.target.value.replace(/[^\d.,]/g, ''))}
+                                    placeholder="0,00"
+                                    className={`${FIELD_CLASSNAME} pr-11 tabular-nums`}
+                                />
+                                <span className="pointer-events-none absolute inset-y-0 right-3.5 flex items-center text-sm text-[var(--text-muted)]">m²</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label htmlFor="servico-data" className={FIELD_LABEL_CLASSNAME}>Data</label>
+                            <input
+                                id="servico-data"
+                                type="date"
+                                value={dataServico}
+                                onChange={(event) => setDataServico(event.target.value)}
+                                className={`${FIELD_CLASSNAME} px-3`}
+                            />
+                        </div>
+                    </div>
+
                     <div>
-                        <label className={FIELD_LABEL_CLASSNAME}>Endereço</label>
-                        <input
-                            type="text"
-                            value={endereco}
-                            onChange={(event) => setEndereco(event.target.value)}
-                            placeholder="Rua, número"
-                            className={FIELD_CLASSNAME}
+                        <div className="mb-1.5 flex items-baseline justify-between gap-2">
+                            <label htmlFor="servico-obs" className="block text-xs font-medium text-[var(--text-muted)]">Observações</label>
+                            <span className="text-xs text-[var(--text-soft)]">Só para você, não saem na etiqueta</span>
+                        </div>
+                        <textarea
+                            id="servico-obs"
+                            value={observacoes}
+                            onChange={(event) => setObservacoes(event.target.value)}
+                            rows={3}
+                            placeholder="Ex.: garantia de 5 anos, retorno em 30 dias"
+                            className={`${FIELD_CLASSNAME} resize-none`}
                         />
                     </div>
-                    <div>
-                        <label className={FIELD_LABEL_CLASSNAME}>UF</label>
-                        <input
-                            type="text"
-                            value={uf}
-                            onChange={(event) => setUf(event.target.value)}
-                            maxLength={2}
-                            placeholder="SP"
-                            className={`${FIELD_CLASSNAME} text-center uppercase`}
-                        />
-                    </div>
                 </div>
 
-                <div className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_160px]">
-                    <div>
-                        <label className={FIELD_LABEL_CLASSNAME}>Cidade</label>
-                        <input
-                            type="text"
-                            value={cidade}
-                            onChange={(event) => setCidade(event.target.value)}
-                            placeholder="Cidade"
-                            className={FIELD_CLASSNAME}
-                        />
+                <div className="flex flex-col-reverse gap-2 border-t border-[var(--border-subtle)] pt-4 sm:flex-row sm:items-center sm:justify-between">
+                    <span className="hidden text-xs text-[var(--text-soft)] sm:inline">* obrigatório</span>
+                    <div className="flex flex-col-reverse gap-2 sm:flex-row">
+                        <ActionButton type="button" variant="ghost" size="md" onClick={resetForm} icon={<RotateCcw className="h-4 w-4" />}>
+                            Limpar
+                        </ActionButton>
+                        <ActionButton type="submit" form="servicoForm" size="md" loading={isSubmitting} loadingText="Gerando etiqueta..." icon={<QrCode className="h-4 w-4" />}>
+                            Gerar etiqueta
+                        </ActionButton>
                     </div>
-                    <div>
-                        <label className={FIELD_LABEL_CLASSNAME}>Data</label>
-                        <input
-                            type="date"
-                            value={dataServico}
-                            onChange={(event) => setDataServico(event.target.value)}
-                            className={`${FIELD_CLASSNAME} px-3`}
-                        />
-                    </div>
-                </div>
-
-                <div className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
-                    <div>
-                        <label className={FIELD_LABEL_CLASSNAME}>Película aplicada *</label>
-                        <select
-                            value={filmeAplicado}
-                            onChange={(event) => setFilmeAplicado(event.target.value)}
-                            className={FIELD_CLASSNAME}
-                        >
-                            <option value="">Selecione...</option>
-                            {films.map((film) => (
-                                <option key={film.nome} value={film.nome}>
-                                    {film.nome}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-                    <div>
-                        <label className={FIELD_LABEL_CLASSNAME}>Área aplicada (m²)</label>
-                        <input
-                            type="text"
-                            inputMode="decimal"
-                            value={metrosAplicados}
-                            onChange={(event) => setMetrosAplicados(event.target.value)}
-                            placeholder="12,50"
-                            className={FIELD_CLASSNAME}
-                        />
-                    </div>
-                </div>
-
-                <div>
-                    <label className={FIELD_LABEL_CLASSNAME}>Observações</label>
-                    <textarea
-                        value={observacoes}
-                        onChange={(event) => setObservacoes(event.target.value)}
-                        rows={4}
-                        placeholder="Observações internas do atendimento..."
-                        className={`${FIELD_CLASSNAME} resize-none`}
-                    />
-                </div>
-
-                <div className="flex items-start gap-2 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] px-3.5 py-3 text-[12px] leading-5 text-[var(--text-muted)]">
-                    <QrCode className="mt-0.5 h-4 w-4 shrink-0 text-[var(--brand-primary)]" aria-hidden="true" />
-                    <span>O QR abre a página pública e a impressão segue o formato térmico escolhido.</span>
-                </div>
-
-                <div className="flex flex-col-reverse gap-2 border-t border-[var(--border-subtle)] pt-4 sm:flex-row sm:justify-end">
-                    <ActionButton type="button" variant="secondary" size="md" onClick={resetForm} icon={<RotateCcw className="h-4 w-4" />}>
-                        Limpar
-                    </ActionButton>
-                    <ActionButton type="submit" form="servicoForm" size="md" loading={isSubmitting} loadingText="Gerando etiqueta..." icon={<CheckCircle2 className="h-4 w-4" />}>
-                        Gerar etiqueta
-                    </ActionButton>
                 </div>
             </fieldset>
         </form>
     );
 
+    const historySection = (
+    <section className={`${SECTION_CARD_CLASSNAME} scroll-mt-24 overflow-hidden`}>
+        <h3 className="text-base font-semibold text-[var(--text-strong)]">
+            Etiquetas recentes <span className="font-normal tabular-nums text-[var(--text-muted)]">{recentServicos.length}</span>
+        </h3>
+
+        {isHistoryLoading ? (
+            <div className="mt-3 space-y-2">
+                {[1, 2, 3].map((item) => (
+                    <div key={item} className="h-14 animate-pulse rounded-[var(--radius-control)] bg-[var(--surface-muted)]" />
+                ))}
+            </div>
+        ) : recentServicos.length === 0 ? (
+            <p className="mt-2 text-sm text-[var(--text-muted)]">
+                Nenhuma etiqueta gerada ainda. A primeira aparece aqui
+            </p>
+        ) : (
+            <>
+                <div className="-mx-1 mt-3 flex snap-x snap-mandatory gap-2 overflow-x-auto px-1 pb-1 scrollbar-hide sm:hidden">
+                    {recentServicos.map((servico) => (
+                        <button
+                            key={servico.codigo_qr}
+                            type="button"
+                            onClick={() => handleLoadRecentServico(servico)}
+                            className="w-[80%] min-w-[80%] snap-center rounded-[var(--radius-control)] border border-[var(--border-subtle)] p-3 text-left transition-colors active:bg-[var(--surface-muted)]"
+                        >
+                            <span className="block truncate text-sm font-medium text-[var(--text-strong)]">{servico.cliente_nome}</span>
+                            <span className="mt-0.5 block truncate text-xs text-[var(--text-muted)]">{servico.filme_aplicado}</span>
+                            <span className="mt-1 block truncate text-xs tabular-nums text-[var(--text-muted)]">{buildHistoryChips(servico).join(' · ')}</span>
+                        </button>
+                    ))}
+                </div>
+
+                <ul className="-mx-5 -mb-5 mt-3 hidden divide-y divide-[var(--border-subtle)] border-t border-[var(--border-subtle)] sm:block">
+                    {recentServicos.map((servico) => (
+                        <li key={servico.codigo_qr}>
+                            <button
+                                type="button"
+                                onClick={() => handleLoadRecentServico(servico)}
+                                aria-current={savedServico?.codigo_qr === servico.codigo_qr ? 'true' : undefined}
+                                className={`group flex w-full items-center gap-3 px-5 py-3 text-left transition-colors hover:bg-[var(--surface-muted)] ${savedServico?.codigo_qr === servico.codigo_qr ? 'bg-[var(--surface-muted)] shadow-[inset_2px_0_0_var(--brand-primary)]' : ''}`}
+                            >
+                                <span className="min-w-0 flex-1">
+                                    <span className="block truncate text-sm font-medium text-[var(--text-strong)]">{servico.cliente_nome}</span>
+                                    <span className="mt-0.5 block truncate text-xs tabular-nums text-[var(--text-muted)]">
+                                        {[servico.filme_aplicado, ...buildHistoryChips(servico)].filter(Boolean).join(' · ')}
+                                    </span>
+                                </span>
+                                <ChevronRight className="h-4 w-4 shrink-0 text-[var(--text-muted)] transition-colors group-hover:text-[var(--text-strong)]" aria-hidden="true" />
+                            </button>
+                        </li>
+                    ))}
+                </ul>
+            </>
+        )}
+    </section>
+    );
+
     return (
-        <div className="max-w-full space-y-4 overflow-x-hidden bg-[var(--app-bg)] pb-28 sm:-m-6 sm:p-6">
+        <div className="max-w-full space-y-4 overflow-x-clip bg-[var(--app-bg)] pb-28 sm:-m-6 sm:p-6">
             {successMessage && (
-                <div className="flex items-center gap-2 rounded-[var(--radius-control)] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-[var(--success)] shadow-[var(--shadow-hairline)]">
+                <div className="flex items-center gap-2 rounded-[var(--radius-control)] border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-800 dark:text-emerald-200">
                     <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
                     <span>{successMessage}</span>
                 </div>
             )}
 
             {error && (
-                <div className="flex items-center gap-2 rounded-[var(--radius-control)] border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-[var(--danger)] shadow-[var(--shadow-hairline)]">
+                <div className="flex items-center gap-2 rounded-[var(--radius-control)] border border-rose-500/25 bg-rose-500/10 px-4 py-3 text-sm text-rose-800 dark:text-rose-200">
                     <XCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
                     <span>{error}</span>
                 </div>
             )}
 
-            <section className="relative overflow-hidden rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface-raised)] p-4 shadow-[var(--shadow-soft)] sm:p-5">
-                <div className="absolute inset-x-0 top-0 h-1 bg-[var(--brand-primary)]" aria-hidden="true" />
-                <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-                    <div className="min-w-0">
-                        <div className="mb-2 flex items-center gap-2">
-                            <span className="ui-kicker">QR Code</span>
-                            <span className="h-1 w-1 rounded-full bg-[var(--border-strong)]" aria-hidden="true" />
-                            <span className="text-[11px] font-semibold text-[var(--text-muted)]">{activeStepMeta.label}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <h2 className="text-[1.4rem] font-semibold leading-tight tracking-normal text-[var(--text-strong)] sm:text-[2rem]">
-                                Etiquetas de serviço
-                            </h2>
-                            <span className="inline-flex min-h-5 items-center rounded-full bg-[var(--brand-primary-soft)] px-2 text-[10px] font-semibold text-[var(--brand-primary)]">
-                                {previewStatusLabel}
-                            </span>
-                        </div>
-                        <p className="mt-2 max-w-2xl text-[13px] leading-5 text-[var(--text-muted)]">
-                            Gera etiquetas térmicas com QR rastreável para atendimento, garantia e consulta pública.
-                        </p>
-                    </div>
-
-                    <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 scrollbar-hide sm:mx-0 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0 sm:pb-0 xl:min-w-[520px]">
-                        <MiniMetric icon={<UserRound className="h-3.5 w-3.5" />} label="Empresa" value={companyDisplayName} />
-                        <MiniMetric icon={<Tag className="h-3.5 w-3.5" />} label="Formato" value={formatConfig.label} />
-                        <MiniMetric icon={<CalendarDays className="h-3.5 w-3.5" />} label="Histórico" value={`${recentServicos.length} recentes`} />
-                    </div>
+            <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
+                <div className="min-w-0">
+                    <h2 className="text-xl font-semibold text-[var(--text-strong)] sm:text-2xl">Etiquetas de serviço</h2>
+                    <p className="mt-1 max-w-2xl text-sm text-[var(--text-muted)]">
+                        Etiqueta térmica com QR Code para atendimento, garantia e consulta do cliente
+                    </p>
                 </div>
-            </section>
+                <p className="truncate text-xs tabular-nums text-[var(--text-muted)]">
+                    {companyDisplayName} · {recentServicos.length} {recentServicos.length === 1 ? 'etiqueta recente' : 'etiquetas recentes'}
+                </p>
+            </header>
 
             <div className="grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.82fr)] xl:items-start">
                 {!isMobile && (
-                    <section ref={formSectionRef} className={`${SECTION_CARD_CLASSNAME} scroll-mt-24`}>
-                        <div className="mb-4 flex flex-col gap-3 border-b border-[var(--border-subtle)] pb-4 sm:flex-row sm:items-center sm:justify-between">
-                            <div className="flex min-w-0 items-center gap-3">
-                                <span className={ICON_FRAME_CLASSNAME}>
-                                    <Clipboard className="h-4 w-4" aria-hidden="true" />
-                                </span>
-                                <div className="min-w-0">
-                                    <p className="ui-kicker">Atendimento</p>
-                                    <h3 className="text-[1.25rem] font-semibold leading-tight tracking-normal text-[var(--text-strong)] sm:text-[1.55rem]">
-                                        Dados da etiqueta
-                                    </h3>
-                                </div>
+                    <div className="min-w-0 space-y-4">
+                        <section ref={formSectionRef} className={`${SECTION_CARD_CLASSNAME} scroll-mt-24`}>
+                            <div className="mb-5">
+                                <h3 className="text-base font-semibold text-[var(--text-strong)]">
+                                    Nova etiqueta
+                                </h3>
                             </div>
-                            {buscarClienteButton}
-                        </div>
-                        {etiquetaForm}
-                    </section>
+                            {etiquetaForm}
+                        </section>
+                        {historySection}
+                    </div>
                 )}
 
-                <div className="space-y-4 xl:sticky xl:top-6">
-                    <section className={SECTION_CARD_CLASSNAME}>
-                        <div className="flex items-start justify-between gap-3">
-                            <div className="flex min-w-0 items-start gap-3">
-                                <span className={ICON_FRAME_CLASSNAME}>
-                                    <QrCode className="h-4 w-4" aria-hidden="true" />
-                                </span>
-                                <div className="min-w-0">
-                                    <p className="ui-kicker">Preview Nimbot</p>
-                                    <h3 className="text-[1.2rem] font-semibold leading-tight tracking-normal text-[var(--text-strong)] sm:text-[1.45rem]">
-                                        Etiqueta para revisar
-                                    </h3>
-                                    <p className="mt-1 text-[12px] leading-5 text-[var(--text-muted)]">
-                                        {savedServico ? savedServico.cliente_nome : activeStepMeta.description}
-                                    </p>
-                                </div>
-                            </div>
-                            <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
-                                savedServico
-                                    ? 'border-emerald-200 bg-emerald-50 text-[var(--success)]'
-                                    : 'border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-muted)]'
-                            }`}>
-                                {previewStatusLabel}
-                            </span>
-                        </div>
-
-                        <div className="mt-4">
-                            <div className="flex items-center justify-between gap-3">
-                                <div className="min-w-0">
-                                    <p className="text-[11px] font-semibold uppercase text-[var(--text-soft)]">Formato da etiqueta</p>
-                                    <p className="mt-1 truncate text-[13px] font-semibold text-[var(--text-strong)]">{formatConfig.label}</p>
-                                </div>
-                                <span className="hidden text-[11px] font-medium text-[var(--text-muted)] sm:inline">
-                                    PNG e impressão sincronizados
-                                </span>
-                            </div>
-
-                            <div className="-mx-1 mt-3 flex snap-x snap-mandatory gap-2 overflow-x-auto px-1 pb-1 scrollbar-hide sm:mx-0 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0 sm:pb-0">
-                                {LABEL_FORMAT_ENTRIES.map(([key, value]) => (
-                                    <button
-                                        key={key}
-                                        type="button"
-                                        onClick={() => setLabelFormat(key)}
-                                        className={`w-[178px] shrink-0 snap-center rounded-[var(--radius-control)] border px-3 py-2.5 text-left transition-all duration-200 sm:w-full ${
-                                            labelFormat === key
-                                                ? 'border-[var(--brand-primary)] bg-[var(--brand-primary-soft)] text-[var(--brand-primary)] shadow-[var(--shadow-hairline)]'
-                                                : 'border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-body)] hover:bg-[var(--surface)]'
-                                        }`}
-                                    >
-                                        <div className="flex items-center justify-between gap-2">
-                                            <span className="truncate text-[12px] font-semibold">{value.label}</span>
-                                            {value.recommended && (
-                                                <span className="rounded-full bg-[var(--surface)] px-1.5 py-0.5 text-[9px] font-semibold text-[var(--brand-primary)]">
-                                                    Padrão
-                                                </span>
-                                            )}
-                                        </div>
-                                        <div className="mt-1 overflow-hidden text-[10px] leading-4 text-[var(--text-muted)]">{value.helper}</div>
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    </section>
-
+                <div className="space-y-4 xl:sticky xl:top-24">
                     <section ref={previewSectionRef} className={`${SECTION_CARD_CLASSNAME} scroll-mt-24`}>
                         <div className="fixed left-[-10000px] top-0 pointer-events-none opacity-0">
                             <ServicoQrThermalLabel ref={printRef} servico={savedServico} format={labelFormat} />
                         </div>
 
-                        <div className="flex items-center justify-between gap-3 border-b border-[var(--border-subtle)] pb-3">
+                        <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
-                                <p className="ui-kicker">Etiqueta</p>
-                                <p className="mt-1 truncate text-[13px] font-semibold text-[var(--text-strong)]">{selectedFilmLabel}</p>
+                                <h3 className="text-base font-semibold text-[var(--text-strong)]">Etiqueta</h3>
+                                <p className="mt-0.5 truncate text-xs text-[var(--text-muted)]">
+                                    {savedServico ? `${savedServico.cliente_nome} · ${savedServico.filme_aplicado}` : 'Atualiza enquanto você preenche os dados'}
+                                </p>
                             </div>
-                            <span className="rounded-full bg-[var(--surface-muted)] px-2.5 py-1 text-[11px] font-semibold text-[var(--text-muted)]">
-                                {formatConfig.label}
+                            <span className="flex shrink-0 items-center gap-1.5 text-xs text-[var(--text-muted)]">
+                                <span className={`h-1.5 w-1.5 rounded-full ${savedServico ? 'bg-emerald-500' : 'bg-slate-400'}`} aria-hidden="true" />
+                                {previewStatusLabel}
                             </span>
                         </div>
 
-                        <div className="mt-4 overflow-hidden rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-3 sm:p-4">
-                            <div className="flex min-h-[190px] items-center justify-center sm:min-h-[240px]">
-                                <div className="origin-center scale-[0.9] sm:scale-[1.08] lg:scale-[1.22]">
-                                    <ServicoQrThermalLabel servico={savedServico} format={labelFormat} />
-                                </div>
+                        <div role="radiogroup" aria-label="Formato da etiqueta" className="mt-4 grid grid-cols-3 gap-1 rounded-[var(--radius-control)] bg-[var(--surface-muted)] p-1">
+                            {LABEL_FORMAT_ENTRIES.map(([key, value]) => {
+                                const isActive = labelFormat === key;
+                                return (
+                                    <button
+                                        key={key}
+                                        type="button"
+                                        role="radio"
+                                        aria-checked={isActive}
+                                        onClick={() => setLabelFormat(key)}
+                                        className={`h-9 rounded-[calc(var(--radius-control)-2px)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] ${isActive
+                                            ? 'bg-[var(--surface)] text-[var(--text-strong)] shadow-[var(--shadow-hairline)]'
+                                            : 'text-[var(--text-muted)] hover:text-[var(--text-strong)]'}`}
+                                    >
+                                        <span className="text-xs font-medium tabular-nums">{value.label.replace(' x ', ' × ')}</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        <p className="mt-2 text-xs text-[var(--text-muted)]">
+                            {formatConfig.helper}{formatConfig.recommended ? ' · formato padrão' : ''}
+                        </p>
+
+                        {/* A etiqueta em papel, do jeito que sai na impressora térmica. */}
+                        <div className="mt-4 flex min-h-[240px] items-center justify-center rounded-[var(--radius-control)] bg-[var(--surface-muted)] p-6 sm:min-h-[300px]">
+                            <div className="origin-center scale-[0.9] shadow-[0_8px_24px_rgba(15,23,42,0.18)] sm:scale-[1.08] lg:scale-[1.22]">
+                                <ServicoQrThermalLabel servico={savedServico ?? draftServico} draft={!savedServico} format={labelFormat} />
                             </div>
                         </div>
 
                         {savedServico && (
-                            <div className="mt-4 border-t border-[var(--border-subtle)] pt-4">
-                                <div className="flex items-center gap-2 text-[var(--text-muted)]">
-                                    <Link2 className="h-4 w-4" aria-hidden="true" />
-                                    <span className="text-[11px] font-semibold uppercase">Link do serviço</span>
+                            <div className="mt-4 space-y-3">
+                                {!isMobile && (
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <ActionButton size="md" className="w-full" onClick={handlePrint} icon={<Printer className="h-4 w-4" />}>
+                                            Imprimir
+                                        </ActionButton>
+                                        <ActionButton variant="secondary" size="md" className="w-full" onClick={handleSaveImage} loading={isExportingImage} loadingText="Gerando PNG..." icon={<FileImage className="h-4 w-4" />}>
+                                            Salvar PNG
+                                        </ActionButton>
+                                    </div>
+                                )}
+                                <div>
+                                    <p className="text-xs text-[var(--text-muted)]">Link que o QR abre</p>
+                                    <div className="mt-1 flex items-center gap-1 rounded-[var(--radius-control)] bg-[var(--surface-muted)] py-1 pl-3 pr-1">
+                                        <code className="min-w-0 flex-1 truncate font-mono text-xs text-[var(--text-body)]">{qrUrl}</code>
+                                        <button
+                                            type="button"
+                                            onClick={handleCopyUrl}
+                                            className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-[calc(var(--radius-control)-2px)] px-2.5 text-[var(--text-muted)] transition-colors hover:bg-[var(--surface)] hover:text-[var(--text-strong)]"
+                                        >
+                                            <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                                            <span className="text-xs font-medium">Copiar</span>
+                                        </button>
+                                    </div>
                                 </div>
-                                <code className="mt-2 block truncate rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] px-3 py-2 text-[11px] text-[var(--text-body)]">
-                                    {qrUrl}
-                                </code>
+                                {!isMobile && (
+                                    <button
+                                        type="button"
+                                        onClick={resetForm}
+                                        className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-[var(--radius-control)] border border-dashed border-[var(--border-strong)] text-[var(--text-body)] transition-colors hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)]"
+                                    >
+                                        <Plus className="h-4 w-4" aria-hidden="true" />
+                                        <span className="text-sm font-medium">Nova etiqueta</span>
+                                    </button>
+                                )}
                             </div>
                         )}
                     </section>
 
-                    {savedServico && !isMobile && (
-                        <section className={`${SECTION_CARD_CLASSNAME} grid grid-cols-2 gap-2.5`}>
-                            <ActionButton size="md" className="w-full" onClick={handlePrint} icon={<Printer className="h-4 w-4" />}>
-                                Imprimir
-                            </ActionButton>
-                            <ActionButton variant="secondary" size="md" className="w-full" onClick={handleSaveImage} loading={isExportingImage} loadingText="Gerando PNG..." icon={<FileImage className="h-4 w-4" />}>
-                                Salvar PNG
-                            </ActionButton>
-                            <ActionButton variant="secondary" size="md" className="w-full" onClick={handleCopyUrl} disabled={!qrUrl} icon={<Copy className="h-4 w-4" />}>
-                                Copiar URL
-                            </ActionButton>
-                            <ActionButton variant="ghost" size="md" className="w-full" onClick={handleBackToForm} icon={<RotateCcw className="h-4 w-4" />}>
-                                Voltar
-                            </ActionButton>
-                        </section>
-                    )}
-
-                    <section className={`${SECTION_CARD_CLASSNAME} scroll-mt-24`}>
-                        <div className="mb-4 flex items-end justify-between gap-3">
-                            <div className="flex min-w-0 items-center gap-3">
-                                <span className={ICON_FRAME_CLASSNAME}>
-                                    <CalendarDays className="h-4 w-4" aria-hidden="true" />
-                                </span>
-                                <div className="min-w-0">
-                                    <p className="ui-kicker">Histórico recente</p>
-                                    <h3 className="mt-1 text-[1.1rem] font-semibold leading-tight tracking-normal text-[var(--text-strong)] sm:text-[1.35rem]">
-                                        Etiquetas recentes
-                                    </h3>
-                                </div>
-                            </div>
-                            <span className="rounded-full border border-[var(--border-subtle)] bg-[var(--surface-muted)] px-2.5 py-1 text-[11px] font-semibold text-[var(--text-muted)]">
-                                {recentServicos.length}
-                            </span>
-                        </div>
-
-                        {isHistoryLoading ? (
-                            <div className="space-y-2.5">
-                                {[1, 2, 3].map((item) => (
-                                    <div key={item} className="h-[72px] animate-pulse rounded-[var(--radius-control)] bg-[var(--surface-muted)]" />
-                                ))}
-                            </div>
-                        ) : recentServicos.length === 0 ? (
-                            <div className="rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-4 text-[13px] leading-6 text-[var(--text-muted)]">
-                                Nenhum serviço QR gerado ainda. Quando você salvar o primeiro, ele aparece aqui.
-                            </div>
-                        ) : (
-                            <>
-                                <div className="-mx-1 flex snap-x snap-mandatory gap-2.5 overflow-x-auto px-1 pb-1 scrollbar-hide sm:hidden">
-                                    {recentServicos.map((servico) => (
-                                        <button
-                                            key={servico.codigo_qr}
-                                            type="button"
-                                            onClick={() => handleLoadRecentServico(servico)}
-                                            className="w-[80%] min-w-[80%] snap-center rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-3.5 text-left shadow-[var(--shadow-hairline)] transition-all duration-200 active:scale-[0.98]"
-                                        >
-                                            <div className="flex items-center gap-2.5">
-                                                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--brand-primary)]">
-                                                    <QrCode className="h-4 w-4" aria-hidden="true" />
-                                                </span>
-                                                <div className="min-w-0 flex-1">
-                                                    <p className="truncate text-[13px] font-semibold text-[var(--text-strong)]">
-                                                        {servico.cliente_nome}
-                                                    </p>
-                                                    <p className="truncate text-[11px] text-[var(--text-muted)]">
-                                                        {servico.filme_aplicado}
-                                                    </p>
-                                                </div>
-                                                <ChevronRight className="h-4 w-4 shrink-0 text-[var(--text-muted)]" aria-hidden="true" />
-                                            </div>
-                                            <div className="mt-2.5 flex flex-wrap gap-1.5">
-                                                {buildHistoryChips(servico).map((chip) => (
-                                                    <span key={chip} className={HISTORY_CHIP_CLASSNAME}>
-                                                        {chip}
-                                                    </span>
-                                                ))}
-                                            </div>
-                                        </button>
-                                    ))}
-                                </div>
-
-                                <div className="hidden overflow-hidden rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] sm:block">
-                                    {recentServicos.map((servico, index) => (
-                                        <button
-                                            key={servico.codigo_qr}
-                                            type="button"
-                                            onClick={() => handleLoadRecentServico(servico)}
-                                            className={`group w-full px-4 py-3.5 text-left transition-all duration-200 hover:bg-[var(--surface)] ${
-                                                index > 0 ? 'border-t border-[var(--border-subtle)]' : ''
-                                            }`}
-                                        >
-                                            <div className="flex items-start gap-3">
-                                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-muted)]">
-                                                    <QrCode className="h-4 w-4" aria-hidden="true" />
-                                                </div>
-                                                <div className="min-w-0 flex-1">
-                                                    <div className="flex items-start gap-3">
-                                                        <div className="min-w-0 flex-1">
-                                                            <p className="truncate text-[14px] font-semibold leading-[1.25] tracking-normal text-[var(--text-strong)]">
-                                                                {servico.cliente_nome}
-                                                            </p>
-                                                            <p className="mt-0.5 truncate text-[12px] text-[var(--text-muted)]">
-                                                                {servico.filme_aplicado}
-                                                            </p>
-                                                        </div>
-                                                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-[var(--surface)] text-[var(--text-muted)] transition-all duration-200 group-hover:bg-[var(--surface-inverse)] group-hover:text-[var(--surface)]">
-                                                            <ChevronRight className="h-4 w-4" aria-hidden="true" />
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="mt-2 flex flex-wrap gap-2">
-                                                        {buildHistoryChips(servico).map((chip) => (
-                                                            <span key={chip} className={HISTORY_CHIP_CLASSNAME}>
-                                                                {chip}
-                                                            </span>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </button>
-                                    ))}
-                                </div>
-                            </>
-                        )}
-                    </section>
+                    {isMobile && historySection}
                 </div>
             </div>
 
@@ -1070,16 +982,15 @@ const ServicoQrView: React.FC<ServicoQrViewProps> = ({
                     open={isFormDrawerOpen}
                     onOpenChange={setIsFormDrawerOpen}
                     title="Dados da etiqueta"
-                    description="Preencha os dados para gerar a etiqueta térmica."
+                    description="A etiqueta é gerada com os dados abaixo"
                 >
                     <div className="space-y-4">
                         {error && (
-                            <div className="flex items-center gap-2 rounded-[var(--radius-control)] border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-[var(--danger)]">
+                            <div className="flex items-center gap-2 rounded-[var(--radius-control)] border border-rose-500/25 bg-rose-500/10 px-4 py-3 text-sm text-rose-800 dark:text-rose-200">
                                 <XCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
                                 <span>{error}</span>
                             </div>
                         )}
-                        {buscarClienteButton}
                         {etiquetaForm}
                     </div>
                 </MobileActionsDrawer>
