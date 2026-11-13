@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { formatOptionName } from '../../src/lib/optionName';
 import { createPortal } from 'react-dom';
 import {
     AlertTriangle,
@@ -81,31 +82,31 @@ const DESKTOP_PERIOD_OPTIONS: { key: PeriodKey; label: string }[] = [
     { key: 'custom', label: 'Personalizar' },
     { key: 'today', label: 'Hoje' },
     { key: 'yesterday', label: 'Ontem' },
-    { key: 'thisWeekSunday', label: 'Esta semana (dom. ate hoje)' },
-    { key: 'last7', label: '7 dias atras' },
-    { key: 'lastWeekSunday', label: 'Semana passada (dom. a sab.)' },
-    { key: 'last14', label: '14 dias atras' },
-    { key: 'month', label: 'Este mes' },
-    { key: 'last30', label: '30 dias atras' },
-    { key: 'previousMonth', label: 'Ultimo mes' },
-    { key: 'all', label: 'Todo o periodo' }
+    { key: 'thisWeekSunday', label: 'Esta semana (dom. até hoje)' },
+    { key: 'last7', label: '7 dias atrás' },
+    { key: 'lastWeekSunday', label: 'Semana passada (dom. a sáb.)' },
+    { key: 'last14', label: '14 dias atrás' },
+    { key: 'month', label: 'Este mês' },
+    { key: 'last30', label: '30 dias atrás' },
+    { key: 'previousMonth', label: 'Último mês' },
+    { key: 'all', label: 'Todo o período' }
 ];
 
 const MOBILE_PERIOD_OPTIONS: { key: PeriodKey; label: string }[] = [
     { key: 'custom', label: 'Personalizado' },
     { key: 'today', label: 'Hoje' },
     { key: 'yesterday', label: 'Ontem' },
-    { key: 'last7', label: '7 dias atras' },
-    { key: 'last14', label: '14 dias atras' },
-    { key: 'last30', label: '30 dias atras' },
+    { key: 'last7', label: '7 dias atrás' },
+    { key: 'last14', label: '14 dias atrás' },
+    { key: 'last30', label: '30 dias atrás' },
     { key: 'thisWeekSunday', label: 'Esta semana (dom - hoje)' },
     { key: 'thisWeekMonday', label: 'Esta semana (seg - hoje)' },
-    { key: 'lastWeekSunday', label: 'Semana passada (dom - sab)' },
+    { key: 'lastWeekSunday', label: 'Semana passada (dom - sáb)' },
     { key: 'lastWeekMonday', label: 'Semana passada (seg - dom)' },
-    { key: 'month', label: 'Este mes' },
-    { key: 'previousMonth', label: 'Mes passado' },
+    { key: 'month', label: 'Este mês' },
+    { key: 'previousMonth', label: 'Mês passado' },
     { key: 'year', label: 'Este ano' },
-    { key: 'all', label: 'Todo o periodo' }
+    { key: 'all', label: 'Todo o período' }
 ];
 
 const PERIOD_LABELS: Record<PeriodKey, string> = {
@@ -119,10 +120,10 @@ const PERIOD_LABELS: Record<PeriodKey, string> = {
     thisWeekMonday: 'Esta semana',
     lastWeekSunday: 'Semana passada',
     lastWeekMonday: 'Semana passada',
-    month: 'Este mes',
-    previousMonth: 'Mes passado',
+    month: 'Este mês',
+    previousMonth: 'Mês passado',
     year: 'Este ano',
-    all: 'Todo o periodo'
+    all: 'Todo o período'
 };
 
 const EXPENSE_CATEGORY_LABELS: Record<ProposalExpenseCategory, string> = {
@@ -284,7 +285,7 @@ const formatFullDate = (date: Date | null) => {
 };
 
 const formatRangeButtonLabel = (range: DateRange | null) => {
-    if (!range) return 'Todo o periodo';
+    if (!range) return 'Todo o período';
 
     if (isSameDay(range.start, range.end)) {
         return formatFullDate(range.start);
@@ -294,7 +295,7 @@ const formatRangeButtonLabel = (range: DateRange | null) => {
 };
 
 const formatMobileRangeLabel = (range: DateRange | null) => {
-    if (!range) return 'Todo o periodo';
+    if (!range) return 'Todo o período';
 
     if (isSameDay(range.start, range.end)) {
         return formatFullDate(range.start);
@@ -641,8 +642,8 @@ const StatusBadge: React.FC<{ status?: SavedPDF['status'] }> = ({ status }) => {
     const config = STATUS_CONFIG[resolvedStatus];
 
     return (
-        <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-1 text-[11px] font-semibold ${config.className}`}>
-            <span className={`h-1.5 w-1.5 rounded-full ${config.dot}`} />
+        <span className="inline-flex shrink-0 items-center gap-1.5 text-xs text-[var(--text-muted)]">
+            <span className={`h-1.5 w-1.5 rounded-full ${config.dot}`} aria-hidden="true" />
             {config.label}
         </span>
     );
@@ -696,7 +697,7 @@ const MetricCard: React.FC<{
 
 const EmptyLine: React.FC<{ title: string; description: string }> = ({ title, description }) => (
     <div className="rounded-[var(--radius-card)] border border-dashed border-[var(--border-subtle)] bg-[var(--surface-muted)] p-3 text-center sm:p-4">
-        <p className="text-sm font-bold text-[var(--text-strong)]">{title}</p>
+        <p className="text-sm font-semibold text-[var(--text-strong)]">{title}</p>
         <p className="mt-1 text-xs leading-relaxed text-[var(--text-muted)]">{description}</p>
     </div>
 );
@@ -1468,18 +1469,18 @@ const DashboardView: React.FC<DashboardViewProps> = ({
 
             {(isLoadingDashboardPdfs || isPreparingExpenseModal) && (
                 <div className="rounded-[var(--radius-card)] bg-[var(--surface-muted)] px-3 py-2 text-xs font-semibold text-[var(--text-muted)]">
-                    {isPreparingExpenseModal ? 'Preparando dados dos orcamentos...' : 'Atualizando indicadores do periodo...'}
+                    {isPreparingExpenseModal ? 'Preparando dados dos orçamentos…' : 'Atualizando indicadores do período…'}
                 </div>
             )}
             {dashboardPdfsError && (
                 <LoadErrorNotice
-                    message="Nao foi possivel atualizar os indicadores. Os demais recursos continuam disponiveis."
+                    message="Não foi possível atualizar os indicadores. Os demais recursos continuam disponíveis."
                     onRetry={() => setDashboardPdfsRetryKey(value => value + 1)}
                 />
             )}
             {standaloneExpensesError && (
                 <LoadErrorNotice
-                    message="Nao foi possivel atualizar as despesas avulsas."
+                    message="Não foi possível atualizar as despesas avulsas."
                     onRetry={() => setStandaloneExpensesRetryKey(value => value + 1)}
                 />
             )}
@@ -1589,7 +1590,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                     icon={<FileText className="h-5 w-5" aria-hidden="true" />}
                     label="Total orcado"
                     value={formatCurrency(periodStats.totalValue)}
-                    helper={`${periodStats.generatedCount} orcamentos no periodo`}
+                    helper={`${periodStats.generatedCount} ${periodStats.generatedCount === 1 ? 'orçamento' : 'orçamentos'} no período`}
                     tone="blue"
                     onClick={() => handleOpenHistory('all')}
                 />
@@ -1603,7 +1604,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                 />
                 <MetricCard
                     icon={<Gauge className="h-5 w-5" aria-hidden="true" />}
-                    label="Taxa de aprovacao"
+                    label="Taxa de aprovação"
                     value={formatPercent(periodStats.conversionRate)}
                     helper={`Ticket aprovado ${formatCurrency(periodStats.approvedAverageTicket)}`}
                     tone="slate"
@@ -1611,7 +1612,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                 />
                 <MetricCard
                     icon={<ReceiptText className="h-5 w-5" aria-hidden="true" />}
-                    label="Gastos do periodo"
+                    label="Gastos do período"
                     value={formatCurrency(periodStats.expenses)}
                     helper={`${categoryTotals.length} categorias, ${periodStandaloneExpenses.length} avulsas`}
                     tone="amber"
@@ -1619,7 +1620,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                 />
                 <MetricCard
                     icon={<Wrench className="h-5 w-5" aria-hidden="true" />}
-                    label="Servicos"
+                    label="Serviços"
                     value={isLoadingServicos ? '...' : String(periodServicos.length)}
                     helper={`${upcomingAgendamentos.length} proximos na agenda`}
                     tone="cyan"
@@ -1632,7 +1633,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                 <section className="ui-card min-w-0 overflow-hidden p-3 sm:p-5">
                     <div className="flex items-center justify-between gap-3">
                         <div>
-                            <p className="ui-kicker">Atenção</p>
+                            <p className="text-xs font-medium text-[var(--text-muted)]">Atenção</p>
                             <h2 className="mt-1 text-lg font-bold text-[var(--text-strong)]">O que precisa de ação</h2>
                         </div>
                         <AlertTriangle className="h-5 w-5 text-amber-500" aria-hidden="true" />
@@ -1649,28 +1650,28 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                         />
                         <AttentionItem
                             icon={<Clock3 className="h-4 w-4" aria-hidden="true" />}
-                            label={`${periodStats.pendingCount} orcamentos pendentes`}
+                            label={`${periodStats.pendingCount} ${periodStats.pendingCount === 1 ? 'orçamento pendente' : 'orçamentos pendentes'}`}
                             mobileValue={String(periodStats.pendingCount)}
                             mobileLabel="Pendentes"
-                            helper="Ver propostas que ainda nao foram fechadas"
+                            helper="Ver propostas que ainda não foram fechadas"
                             tone="amber"
                             onClick={() => handleOpenHistory('pending')}
                         />
                         <AttentionItem
                             icon={<FileText className="h-4 w-4" aria-hidden="true" />}
-                            label={`${pendingOlderThanSevenDays} antigos sem retorno`}
+                            label={`${pendingOlderThanSevenDays} ${pendingOlderThanSevenDays === 1 ? 'antigo sem retorno' : 'antigos sem retorno'}`}
                             mobileValue={String(pendingOlderThanSevenDays)}
                             mobileLabel="Antigos"
-                            helper="Pendentes ha mais de 7 dias"
+                            helper="Pendentes há mais de 7 dias"
                             tone={pendingOlderThanSevenDays > 0 ? 'rose' : 'slate'}
                             onClick={() => handleOpenHistory('pending')}
                         />
                         <AttentionItem
                             icon={<CalendarDays className="h-4 w-4" aria-hidden="true" />}
-                            label={`${upcomingAgendamentos.length} servicos agendados`}
+                            label={`${upcomingAgendamentos.length} ${upcomingAgendamentos.length === 1 ? 'serviço agendado' : 'serviços agendados'}`}
                             mobileValue={String(upcomingAgendamentos.length)}
                             mobileLabel="Agenda"
-                            helper={upcomingAgendamentos.length > 0 ? 'Abrir agenda da equipe' : 'Planejar proximos atendimentos'}
+                            helper={upcomingAgendamentos.length > 0 ? 'Abrir agenda da equipe' : 'Planejar próximos atendimentos'}
                             tone={upcomingAgendamentos.length > 0 ? 'emerald' : 'cyan'}
                             onClick={() => onTabChange('agenda')}
                         />
@@ -1680,7 +1681,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                 <section className="ui-card min-w-0 overflow-hidden p-3 sm:p-5">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <div>
-                            <p className="ui-kicker">Evolução</p>
+                            <p className="text-xs font-medium text-[var(--text-muted)]">Evolução</p>
                             <h2 className="mt-1 text-lg font-bold text-[var(--text-strong)]">Receita e gastos por dia</h2>
                         </div>
                         <div className="flex items-center gap-3 text-[11px] font-bold text-[var(--text-muted)]">
@@ -1724,7 +1725,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                 <section className="ui-card p-5">
                     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
                         <div>
-                            <p className="ui-kicker">Primeiros passos</p>
+                            <p className="text-xs font-medium text-[var(--text-muted)]">Primeiros passos</p>
                             <h2 className="mt-2 text-xl font-bold text-[var(--text-strong)]">Crie seu primeiro fluxo comercial</h2>
                             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[var(--text-muted)]">
                                 Cadastre um cliente ou gere uma proposta rapida com IA para o dashboard comecar a mostrar receita, gastos e tarefas.
@@ -1756,7 +1757,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                 <section className="ui-card min-w-0 overflow-hidden p-3 sm:p-5">
                     <div className="flex items-start justify-between gap-3">
                         <div>
-                            <p className="ui-kicker">Resultado</p>
+                            <p className="text-xs font-medium text-[var(--text-muted)]">Resultado</p>
                             <h2 className="mt-1 text-lg font-bold text-[var(--text-strong)]">Resumo financeiro</h2>
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
@@ -1765,26 +1766,26 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                                 onClick={() => onTabChange('history')}
                                 className="inline-flex h-9 items-center justify-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-muted)] px-3 text-xs font-bold text-[var(--text-strong)] transition-colors hover:bg-[var(--surface)] sm:h-10 sm:text-sm"
                             >
-                                Historico
+                                Histórico
                                 <ArrowRight className="h-4 w-4" aria-hidden="true" />
                             </button>
                         </div>
                     </div>
 
-                    <div className="mt-4 grid min-w-0 grid-cols-2 gap-2 sm:mt-5 sm:grid-cols-2 sm:gap-3 xl:grid-cols-5">
+                    <div className="mt-4 grid min-w-0 grid-cols-2 gap-2 sm:mt-5 sm:grid-cols-3 sm:gap-3 2xl:grid-cols-5">
                         <FinancialMetricTile
                             icon={<DollarSign className="h-3.5 w-3.5" aria-hidden="true" />}
-                            label="Ticket medio"
+                            label="Ticket médio"
                             value={formatCurrency(periodStats.averageTicket)}
                         />
                         <FinancialMetricTile
                             icon={<ReceiptText className="h-3.5 w-3.5" aria-hidden="true" />}
-                            label="Gasto periodo"
+                            label="Gasto do período"
                             value={formatCurrency(expenseRhythm.periodExpenses, true)}
                         />
                         <FinancialMetricTile
                             icon={<CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />}
-                            label="Media diaria"
+                            label="Média diária"
                             value={formatCurrency(expenseRhythm.dailyAverage, true)}
                             helper="Filtro atual"
                         />
@@ -1795,16 +1796,16 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                         />
                         <FinancialMetricTile
                             icon={<Layers3 className="h-3.5 w-3.5" aria-hidden="true" />}
-                            label="Area cotada"
-                            value={`${periodStats.totalM2.toFixed(2).replace('.', ',')} m2`}
-                            className="col-span-2 sm:col-span-1"
+                            label="Área cotada"
+                            value={`${periodStats.totalM2.toFixed(2).replace('.', ',')} m²`}
+                            className="col-span-2 sm:col-span-1 2xl:col-span-1"
                         />
                     </div>
 
                     <div className="mt-5 space-y-4">
                         <div>
                             <div className="mb-2 flex items-center justify-between gap-3">
-                                <span className="text-sm font-bold text-[var(--text-strong)]">Pipeline de orcamentos</span>
+                                <span className="text-sm font-bold text-[var(--text-strong)]">Pipeline de orçamentos</span>
                                 <span className="text-xs font-semibold text-[var(--text-muted)]">{periodStats.generatedCount} total</span>
                             </div>
                             <div className="h-3 overflow-hidden rounded-full bg-[var(--surface-muted)]">
@@ -1826,13 +1827,13 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                                 icon={<UsersRound className="h-4 w-4" aria-hidden="true" />}
                                 label="Maior cliente"
                                 value={topClient?.name || 'Sem dados'}
-                                helper={topClient ? formatCurrency(topClient.value) : 'Ainda sem orcamentos'}
+                                helper={topClient ? formatCurrency(topClient.value) : 'Ainda sem orçamentos'}
                             />
                             <InsightItem
                                 icon={<Layers3 className="h-4 w-4" aria-hidden="true" />}
-                                label="Pelicula destaque"
+                                label="Película destaque"
                                 value={topFilm?.name || 'Sem dados'}
-                                helper={topFilm ? `${topFilm.area.toFixed(2).replace('.', ',')} m2 cotados` : `${films.length} peliculas cadastradas`}
+                                helper={topFilm ? `${topFilm.area.toFixed(2).replace('.', ',')} m² cotados` : `${films.length} películas cadastradas`}
                             />
                             <InsightItem
                                 icon={<TrendingUp className="h-4 w-4" aria-hidden="true" />}
@@ -1847,7 +1848,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                 <section className="ui-card min-w-0 overflow-hidden p-3 sm:p-5">
                     <div className="flex items-center justify-between gap-3">
                         <div>
-                            <p className="ui-kicker">Custos</p>
+                            <p className="text-xs font-medium text-[var(--text-muted)]">Custos</p>
                             <h2 className="mt-1 text-lg font-bold text-[var(--text-strong)]">Gastos por categoria</h2>
                         </div>
                         <div className="flex items-center gap-2">
@@ -1883,7 +1884,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                             })
                         ) : (
                             <EmptyLine
-                                title="Sem gastos no periodo"
+                                title="Sem gastos no período"
                                 description="Use gastos da proposta ou despesas avulsas para acompanhar transporte, material, ferramentas e outros custos."
                             />
                         )}
@@ -1937,33 +1938,33 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                 <section className="ui-card min-w-0 overflow-hidden p-3 sm:p-5">
                     <PanelHeader
                         kicker="Comercial"
-                        title="Ultimos orcamentos"
+                        title="Últimos orçamentos"
                         icon={<ClipboardList className="h-5 w-5" aria-hidden="true" />}
                         onClick={() => onTabChange('history')}
                     />
                     <div className="mt-3 space-y-2.5 sm:mt-4 sm:space-y-3">
                         {periodPdfs.slice(0, 5).map(pdf => (
                             <div key={pdf.id || `${pdf.nomeArquivo}-${pdf.date}`} className="flex items-center gap-2.5 border-b border-[var(--border-subtle)] pb-2.5 last:border-b-0 last:pb-0 sm:gap-3 sm:pb-3">
-                                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-card)] bg-blue-50 text-blue-600 dark:bg-blue-400/10 dark:text-blue-200 sm:h-10 sm:w-10">
+                                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-card)] bg-[var(--surface-muted)] text-[var(--text-muted)] sm:h-10 sm:w-10">
                                     <FileText className="h-4 w-4" aria-hidden="true" />
                                 </div>
                                 <div className="min-w-0 flex-1">
-                                    <p className="truncate text-sm font-bold text-[var(--text-strong)]">
+                                    <p className="truncate text-sm font-semibold text-[var(--text-strong)]">
                                         {clientsById.get(pdf.clienteId)?.nome || pdf.clientName || 'Cliente'}
                                     </p>
                                     <p className="mt-0.5 truncate text-xs text-[var(--text-muted)]">
-                                        {formatShortDate(pdf.date)} - {pdf.proposalOptionName || 'Orcamento'}
+                                        {formatShortDate(pdf.date)} - {formatOptionName(pdf.proposalOptionName) || 'Orçamento'}
                                     </p>
                                 </div>
                                 <div className="flex shrink-0 flex-col items-end gap-1">
-                                    <span className="text-sm font-bold text-[var(--text-strong)]">{formatCurrency(getPdfValue(pdf), true)}</span>
+                                    <span className="text-sm font-semibold tabular-nums text-[var(--text-strong)]">{formatCurrency(getPdfValue(pdf), true)}</span>
                                     <StatusBadge status={pdf.status} />
                                 </div>
                             </div>
                         ))}
                         {periodPdfs.length === 0 && (
                             <EmptyLine
-                                title="Nenhum orcamento aqui"
+                                title="Nenhum orçamento aqui"
                                 description="Gere uma proposta para acompanhar valores, status e custos."
                             />
                         )}
@@ -1973,18 +1974,18 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                 <section className="ui-card min-w-0 overflow-hidden p-3 sm:p-5">
                     <PanelHeader
                         kicker="Agenda"
-                        title="Proximos servicos"
+                        title="Próximos serviços"
                         icon={<CalendarDays className="h-5 w-5" aria-hidden="true" />}
                         onClick={() => onTabChange('agenda')}
                     />
                     <div className="mt-3 space-y-2.5 sm:mt-4 sm:space-y-3">
                         {upcomingAgendamentos.map(agendamento => (
                             <div key={agendamento.id || `${agendamento.clienteId}-${agendamento.start}`} className="flex items-center gap-2.5 border-b border-[var(--border-subtle)] pb-2.5 last:border-b-0 last:pb-0 sm:gap-3 sm:pb-3">
-                                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-card)] bg-emerald-50 text-emerald-600 dark:bg-emerald-400/10 dark:text-emerald-200 sm:h-10 sm:w-10">
+                                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-card)] bg-[var(--surface-muted)] text-[var(--text-muted)] sm:h-10 sm:w-10">
                                     <CalendarDays className="h-4 w-4" aria-hidden="true" />
                                 </div>
                                 <div className="min-w-0 flex-1">
-                                    <p className="truncate text-sm font-bold text-[var(--text-strong)]">
+                                    <p className="truncate text-sm font-semibold text-[var(--text-strong)]">
                                         {agendamento.clienteNome || clientsById.get(agendamento.clienteId)?.nome || 'Cliente'}
                                     </p>
                                     <p className="mt-0.5 truncate text-xs text-[var(--text-muted)]">{formatDateTime(agendamento.start)}</p>
@@ -1995,7 +1996,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                         {upcomingAgendamentos.length === 0 && (
                             <EmptyLine
                                 title="Agenda livre"
-                                description="Quando um servico for agendado, ele aparece aqui para facilitar o acompanhamento."
+                                description="Quando um serviço for agendado, ele aparece aqui para facilitar o acompanhamento."
                             />
                         )}
                     </div>
@@ -2004,42 +2005,42 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                 <section className="ui-card min-w-0 overflow-hidden p-3 sm:p-5">
                     <PanelHeader
                         kicker="Entrega"
-                        title="Servicos QR recentes"
+                        title="Serviços QR recentes"
                         icon={<QrCode className="h-5 w-5" aria-hidden="true" />}
                         onClick={() => onTabChange('qr_code')}
                     />
                     <div className="mt-3 space-y-2.5 sm:mt-4 sm:space-y-3">
                         {periodServicos.slice(0, 5).map(servico => (
                             <div key={servico.id || servico.codigo_qr} className="flex items-center gap-2.5 border-b border-[var(--border-subtle)] pb-2.5 last:border-b-0 last:pb-0 sm:gap-3 sm:pb-3">
-                                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-card)] bg-cyan-50 text-cyan-600 dark:bg-cyan-400/10 dark:text-cyan-200 sm:h-10 sm:w-10">
+                                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-card)] bg-[var(--surface-muted)] text-[var(--text-muted)] sm:h-10 sm:w-10">
                                     <QrCode className="h-4 w-4" aria-hidden="true" />
                                 </div>
                                 <div className="min-w-0 flex-1">
-                                    <p className="truncate text-sm font-bold text-[var(--text-strong)]">{servico.cliente_nome}</p>
+                                    <p className="truncate text-sm font-semibold text-[var(--text-strong)]">{servico.cliente_nome}</p>
                                     <p className="mt-0.5 truncate text-xs text-[var(--text-muted)]">
                                         {servico.filme_aplicado} - {formatShortDate(servico.data_servico || servico.created_at)}
                                     </p>
                                 </div>
-                                <span className="shrink-0 text-xs font-bold text-[var(--text-muted)]">
-                                    {typeof servico.metros_aplicados === 'number' ? `${servico.metros_aplicados.toFixed(1).replace('.', ',')} m2` : 'QR'}
+                                <span className="shrink-0 text-xs font-medium tabular-nums text-[var(--text-muted)]">
+                                    {typeof servico.metros_aplicados === 'number' ? `${servico.metros_aplicados.toFixed(1).replace('.', ',')} m²` : 'QR'}
                                 </span>
                             </div>
                         ))}
                         {!isLoadingServicos && !servicesError && periodServicos.length === 0 && (
                             <EmptyLine
-                                title="Sem servicos QR"
-                                description="Registre servicos finalizados no modulo QR para criar historico de entrega e garantia."
+                                title="Sem serviços QR"
+                                description="Registre serviços finalizados no módulo QR para criar o histórico de entrega e garantia."
                             />
                         )}
                         {servicesError && !isLoadingServicos && (
                             <LoadErrorNotice
-                                message="Nao foi possivel atualizar os servicos QR."
+                                message="Não foi possível atualizar os serviços QR."
                                 onRetry={() => setServicesRetryKey(value => value + 1)}
                             />
                         )}
                         {isLoadingServicos && (
                             <div className="rounded-[var(--radius-card)] bg-[var(--surface-muted)] p-4 text-sm font-semibold text-[var(--text-muted)]">
-                                Carregando servicos...
+                                Carregando serviços…
                             </div>
                         )}
                     </div>
@@ -2050,7 +2051,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                 <QuickAction
                     icon={<Plus className="h-4 w-4" aria-hidden="true" />}
                     label="Nova proposta"
-                    description="Abrir proposta rapida"
+                    description="Abrir proposta rápida"
                     onClick={onOpenAIQuickProposal}
                     tone="blue"
                 />
@@ -2077,7 +2078,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                 />
                 <QuickAction
                     icon={<QrCode className="h-4 w-4" aria-hidden="true" />}
-                    label="Registrar servico"
+                    label="Registrar serviço"
                     description="Gerar etiqueta QR"
                     onClick={() => onTabChange('qr_code')}
                     tone="cyan"
@@ -2232,7 +2233,7 @@ const DesktopPeriodPicker: React.FC<{
                     type="button"
                     onClick={() => onShiftPeriod(-1)}
                     disabled={!canShiftPeriod}
-                    aria-label="Periodo anterior"
+                    aria-label="Período anterior"
                     className="flex h-10 w-10 items-center justify-center rounded-full text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)] disabled:cursor-not-allowed disabled:opacity-40"
                 >
                     <ChevronLeft className="h-5 w-5" aria-hidden="true" />
@@ -2241,7 +2242,7 @@ const DesktopPeriodPicker: React.FC<{
                     type="button"
                     onClick={() => onShiftPeriod(1)}
                     disabled={!canShiftPeriod}
-                    aria-label="Proximo periodo"
+                    aria-label="Próximo período"
                     className="flex h-10 w-10 items-center justify-center rounded-full text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)] disabled:cursor-not-allowed disabled:opacity-40"
                 >
                     <ChevronRight className="h-5 w-5" aria-hidden="true" />
@@ -2321,7 +2322,7 @@ const DesktopPeriodPicker: React.FC<{
                                 <button
                                     type="button"
                                     onClick={() => onChangeCalendarMonth(addMonths(calendarMonth, -1))}
-                                    aria-label="Mes anterior"
+                                    aria-label="Mês anterior"
                                     className="flex h-9 w-9 items-center justify-center rounded-full text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)]"
                                 >
                                     <ChevronLeft className="h-5 w-5" aria-hidden="true" />
@@ -2330,7 +2331,7 @@ const DesktopPeriodPicker: React.FC<{
                                 <button
                                     type="button"
                                     onClick={() => onChangeCalendarMonth(addMonths(calendarMonth, 1))}
-                                    aria-label="Proximo mes"
+                                    aria-label="Próximo mês"
                                     className="flex h-9 w-9 items-center justify-center rounded-full text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-muted)] hover:text-[var(--text-strong)]"
                                 >
                                     <ChevronRight className="h-5 w-5" aria-hidden="true" />
@@ -2569,7 +2570,7 @@ const MobilePeriodSelector: React.FC<{
         <div
             role="dialog"
             aria-modal="true"
-            aria-label="Filtro de periodo"
+            aria-label="Filtro de período"
             className="fixed inset-0 z-[90] flex min-h-[100dvh] w-screen flex-col bg-[var(--app-bg)] pt-[env(safe-area-inset-top,0px)] text-[var(--text-strong)] sm:hidden"
         >
             {view === 'list' ? (
@@ -2578,12 +2579,12 @@ const MobilePeriodSelector: React.FC<{
                         <button
                             type="button"
                             onClick={onClose}
-                            aria-label="Fechar filtro de periodo"
+                            aria-label="Fechar filtro de período"
                             className="flex h-11 w-11 items-center justify-center rounded-full text-[var(--text-strong)] transition-colors hover:bg-[var(--surface-muted)]"
                         >
                             <X className="h-7 w-7" aria-hidden="true" />
                         </button>
-                        <h2 className="text-2xl font-bold">Periodo</h2>
+                        <h2 className="text-2xl font-bold">Período</h2>
                     </div>
 
                     <div className="min-h-0 flex-1 overflow-y-auto">
@@ -2614,7 +2615,7 @@ const MobilePeriodSelector: React.FC<{
                             <button
                                 type="button"
                                 onClick={onClose}
-                                aria-label="Fechar filtro de periodo"
+                                aria-label="Fechar filtro de período"
                                 className="flex h-11 w-11 items-center justify-center rounded-full text-[var(--text-strong)] transition-colors hover:bg-[var(--surface-muted)]"
                             >
                                 <X className="h-7 w-7" aria-hidden="true" />
@@ -2832,10 +2833,10 @@ const FinancialMetricTile: React.FC<{
     <div className={`min-w-0 rounded-[var(--radius-card)] bg-[var(--surface-muted)] p-3 sm:p-4 ${className}`}>
         <div className="flex min-w-0 items-center gap-1.5 text-[var(--text-muted)]">
             <span className="shrink-0">{icon}</span>
-            <span className="min-w-0 truncate text-[11px] font-bold sm:text-xs">{label}</span>
+            <span className="min-w-0 truncate text-[11px] font-medium sm:text-xs">{label}</span>
         </div>
-        <p className="mt-2 break-words text-lg font-bold leading-tight text-[var(--text-strong)] sm:text-xl">{value}</p>
-        {helper && <p className="mt-1 truncate text-[10px] font-semibold text-[var(--text-muted)] sm:text-[11px]">{helper}</p>}
+        <p className="mt-2 whitespace-nowrap text-lg font-semibold leading-tight tabular-nums text-[var(--text-strong)] sm:text-xl">{value}</p>
+        {helper && <p className="mt-1 truncate text-[11px] text-[var(--text-muted)]">{helper}</p>}
     </div>
 );
 
@@ -2848,10 +2849,10 @@ const InsightItem: React.FC<{
     <div className="min-w-0 rounded-[var(--radius-card)] border border-[var(--border-subtle)] bg-[var(--surface)] p-2.5 sm:p-3">
         <div className="flex min-w-0 items-center gap-1.5 text-[var(--text-soft)] sm:gap-2">
             {icon}
-            <span className="min-w-0 truncate text-[9px] font-bold uppercase sm:text-[11px]">{label}</span>
+            <span className="min-w-0 truncate text-[11px] font-medium sm:text-xs">{label}</span>
         </div>
-        <p className="mt-2 truncate text-xs font-bold text-[var(--text-strong)] sm:text-sm">{value}</p>
-        <p className="mt-0.5 truncate text-[10px] text-[var(--text-muted)] sm:text-xs">{helper}</p>
+        <p className="mt-2 truncate text-xs font-semibold text-[var(--text-strong)] sm:text-sm">{value}</p>
+        <p className="mt-0.5 truncate text-[11px] tabular-nums text-[var(--text-muted)] sm:text-xs">{helper}</p>
     </div>
 );
 
@@ -2863,8 +2864,8 @@ const PanelHeader: React.FC<{
 }> = ({ kicker, title, icon, onClick }) => (
     <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-            <p className="ui-kicker">{kicker}</p>
-            <h2 className="mt-1 truncate text-base font-bold text-[var(--text-strong)] sm:text-lg">{title}</h2>
+            <p className="text-xs font-medium text-[var(--text-muted)]">{kicker}</p>
+            <h2 className="mt-0.5 truncate text-base font-semibold text-[var(--text-strong)] sm:text-lg">{title}</h2>
         </div>
         <button
             type="button"
@@ -2884,20 +2885,18 @@ const QuickAction: React.FC<{
     description: string;
     onClick: () => void;
     tone: Tone;
-}> = ({ icon, label, description, onClick, tone }) => {
-    const toneClass = TONE_CLASSES[tone];
-
+}> = ({ icon, label, description, onClick }) => {
     return (
         <button
             type="button"
             onClick={onClick}
             className="ui-card flex min-h-[70px] min-w-0 items-center gap-2.5 overflow-hidden p-3 text-left transition-colors hover:bg-[var(--surface-muted)] sm:min-h-[76px] sm:gap-3 sm:p-4"
         >
-            <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-card)] sm:h-10 sm:w-10 ${toneClass.icon}`}>
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-card)] bg-[var(--surface-muted)] text-[var(--text-muted)] sm:h-10 sm:w-10">
                 {icon}
             </span>
             <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-bold text-[var(--text-strong)]">{label}</span>
+                <span className="block truncate text-sm font-semibold text-[var(--text-strong)]">{label}</span>
                 <span className="mt-0.5 block truncate text-xs text-[var(--text-muted)]">{description}</span>
             </span>
             <ArrowRight className="hidden h-4 w-4 shrink-0 text-[var(--text-soft)] sm:block" aria-hidden="true" />

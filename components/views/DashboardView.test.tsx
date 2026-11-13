@@ -131,10 +131,10 @@ describe('DashboardView', () => {
     expect(screen.getByRole('button', { name: /Abrir filtro de data:/i })).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: /Hoje/i }).length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: /Abrir filtro de data desktop:/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Periodo anterior' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Proximo periodo' })).toBeInTheDocument();
-    expect(screen.getByText('Gasto periodo')).toBeInTheDocument();
-    expect(screen.getByText('Media diaria')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Período anterior' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Próximo período' })).toBeInTheDocument();
+    expect(screen.getByText('Gasto do período')).toBeInTheDocument();
+    expect(screen.getByText('Média diária')).toBeInTheDocument();
     expect(screen.getByText('O que precisa de ação')).toBeInTheDocument();
     expect(screen.getByText('Vencidas')).toBeInTheDocument();
     expect(screen.getByText('Receita e gastos por dia')).toBeInTheDocument();
@@ -143,7 +143,7 @@ describe('DashboardView', () => {
     expect(screen.getByText('Campanha local')).toBeInTheDocument();
     expect(screen.getAllByText('Cliente A').length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Pelicula X/).length).toBeGreaterThan(0);
-    expect(await screen.findByText('Servicos QR recentes')).toBeInTheDocument();
+    expect(await screen.findByText('Serviços QR recentes')).toBeInTheDocument();
   });
 
   it('busca apenas os periodos necessarios quando o historico completo foi adiado', async () => {
@@ -241,11 +241,11 @@ describe('DashboardView', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /Gastos do periodo/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Gastos do período/i }));
     expect(window.localStorage.getItem('peliculas-br-history-focus-filter')).toBe('expenses');
     expect(onTabChange).toHaveBeenCalledWith('history');
 
-    fireEvent.click(screen.getByRole('button', { name: /1 orcamentos pendentes/i }));
+    fireEvent.click(screen.getByRole('button', { name: /1 orçamento pendente/i }));
     expect(window.localStorage.getItem('peliculas-br-history-focus-filter')).toBe('pending');
 
     fireEvent.click(screen.getByRole('button', { name: /1 propostas vencidas/i }));
@@ -269,7 +269,7 @@ describe('DashboardView', () => {
 
     const dialog = screen.getByRole('dialog', { name: 'Filtro de data desktop' });
     expect(within(dialog).getByRole('button', { name: 'Ontem' })).toBeInTheDocument();
-    expect(within(dialog).getByRole('button', { name: /7 dias atras/i })).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: /7 dias atrás/i })).toBeInTheDocument();
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Personalizar' }));
 
@@ -293,9 +293,9 @@ describe('DashboardView', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Abrir filtro de data:/i }));
 
-    const dialog = screen.getByRole('dialog', { name: 'Filtro de periodo' });
+    const dialog = screen.getByRole('dialog', { name: 'Filtro de período' });
     expect(within(dialog).getByRole('button', { name: /Personalizado/i })).toBeInTheDocument();
-    expect(within(dialog).getByRole('button', { name: /14 dias atras/i })).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: /14 dias atrás/i })).toBeInTheDocument();
 
     fireEvent.click(within(dialog).getByRole('button', { name: /Personalizado/i }));
     expect(within(dialog).getByRole('button', { name: 'Salvar' })).toBeInTheDocument();
@@ -324,7 +324,7 @@ describe('DashboardView', () => {
     expect(screen.queryByRole('dialog', { name: 'Editar datas manualmente' })).not.toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Salvar' }));
 
-    expect(screen.queryByRole('dialog', { name: 'Filtro de periodo' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Filtro de período' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Abrir filtro de data: 10\/05 - 12\/05/i })).toBeInTheDocument();
   }, 15_000);
 
@@ -347,11 +347,11 @@ describe('DashboardView', () => {
     );
 
     expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeInTheDocument();
-    expect(await screen.findByText(/Nao foi possivel atualizar os indicadores/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Não foi possível atualizar os indicadores/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Tentar novamente' }));
 
     await waitFor(() => expect(getPDFPage).toHaveBeenCalledTimes(4));
-    await waitFor(() => expect(screen.queryByText(/Nao foi possivel atualizar os indicadores/i)).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText(/Não foi possível atualizar os indicadores/i)).not.toBeInTheDocument());
   });
 });
