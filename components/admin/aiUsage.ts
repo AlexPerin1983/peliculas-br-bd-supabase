@@ -72,3 +72,17 @@ export const summarizeAiUsage = (rows: AiUsageFeatureRow[]): AiUsageSummary => {
         features: rows.filter(row => row.usos30d > 0).sort((a, b) => b.usos30d - a.usos30d),
     };
 };
+
+export const AI_DAILY_LIMIT_MAX = 10000;
+
+// Limite próprio vindo do banco: número inteiro de 0 a 10000; qualquer outra coisa = sem limite próprio.
+export const normalizeAiDailyLimit = (value: unknown): number | null => {
+    if (value === null || value === undefined || value === '') return null;
+    const n = Number(value);
+    return Number.isInteger(n) && n >= 0 && n <= AI_DAILY_LIMIT_MAX ? n : null;
+};
+
+// O que o Admin digitou no campo: devolve o número a salvar ou null se não serve.
+export const parseAiDailyLimitInput = (text: string): number | null => (
+    /^\d{1,5}$/.test(text.trim()) ? normalizeAiDailyLimit(text.trim()) : null
+);
