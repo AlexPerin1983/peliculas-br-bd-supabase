@@ -17,6 +17,26 @@ import {
     matchesFilter,
 } from './admin/companyStatus';
 
+// A tela é dividida em seções; a escolhida fica salva no navegador.
+type AdminSection = 'empresas' | 'vencimentos' | 'ranking' | 'graficos' | 'regras';
+const ADMIN_SECTION_STORAGE_KEY = 'peliculas-br-admin-section-v1';
+const ADMIN_SECTIONS: { key: AdminSection; label: string }[] = [
+    { key: 'empresas', label: 'Empresas' },
+    { key: 'vencimentos', label: 'A vencer' },
+    { key: 'ranking', label: 'Ranking' },
+    { key: 'graficos', label: 'Gráficos' },
+    { key: 'regras', label: 'Regras' },
+];
+
+const readStoredAdminSection = (): AdminSection => {
+    try {
+        const saved = window.localStorage.getItem(ADMIN_SECTION_STORAGE_KEY);
+        return ADMIN_SECTIONS.some(item => item.key === saved) ? saved as AdminSection : 'empresas';
+    } catch {
+        return 'empresas';
+    }
+};
+
 export const AdminUsers: React.FC = () => {
     const { isAdmin } = useAuth();
     const {
@@ -51,6 +71,16 @@ export const AdminUsers: React.FC = () => {
     const [filterKey, setFilterKey] = React.useState<CompanyFilterKey>('todas');
     const [sortKey, setSortKey] = React.useState<'recentes' | 'orcamentos' | 'faturamento' | 'atividade' | 'az'>('recentes');
     const [visibleCount, setVisibleCount] = React.useState(20);
+    const [section, setSection] = React.useState<AdminSection>(() => readStoredAdminSection());
+
+    const changeSection = (next: AdminSection) => {
+        setSection(next);
+        try {
+            window.localStorage.setItem(ADMIN_SECTION_STORAGE_KEY, next);
+        } catch {
+            // Sem armazenamento: vale só nesta visita.
+        }
+    };
 
     const trialUserIds = React.useMemo(() => new Set(activeGrants.map(g => g.id)), [activeGrants]);
     const engagementMap = React.useMemo(() => new Map(engagementRows.map(r => [r.user_id, r])), [engagementRows]);
@@ -151,15 +181,40 @@ export const AdminUsers: React.FC = () => {
     if (!isAdmin) return null;
 
     return (
-        <div className="space-y-6">
-            {/* Overview: KPIs + visualizações */}
+        <div className="space-y-4">
+            {/* Números do topo: sempre à vista */}
             <AdminOverview
+                show="kpis"
                 profiles={profiles}
                 engagementRows={engagementRows}
                 trialUserIds={trialUserIds}
                 totals={totals}
                 activeWindowDays={activeWindowDays}
             />
+
+            {/* Seções da tela: uma de cada vez */}
+            <div role="tablist" aria-label="Seções do painel" className="flex gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-slate-100 p-1 scrollbar-hide dark:border-slate-700 dark:bg-slate-800">
+                {ADMIN_SECTIONS.map(item => {
+                    const active = section === item.key;
+                    return (
+                        <button
+                            key={item.key}
+                            type="button"
+                            role="tab"
+                            aria-selected={active}
+                            onClick={() => changeSection(item.key)}
+                            className={`inline-flex h-10 min-w-fit flex-1 items-center justify-center gap-1 rounded-lg px-2 transition-colors ${active
+                                ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-600 dark:text-white'
+                                : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white'}`}
+                        >
+                            <span className={`whitespace-nowrap text-[13px] ${active ? 'font-semibold' : 'font-medium'}`}>{item.label}</span>
+                            {item.key === 'vencimentos' && activeGrants.length > 0 && (
+                                <span className="rounded-full bg-amber-100 px-1.5 text-[11px] font-bold tabular-nums text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">{activeGrants.length}</span>
+                            )}
+                        </button>
+                    );
+                })}
+            </div>
 
             {/* Aviso da última ação — com o detalhe aberto, ele aparece lá dentro */}
             {feedback && !selectedProfile && (
@@ -172,7 +227,7 @@ export const AdminUsers: React.FC = () => {
             )}
 
             {/* Lista de empresas — toque numa empresa para ver e mudar o acesso */}
-            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+            {section === 'empresas' && <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
                 <div className="border-b border-slate-200 p-3 dark:border-slate-700 sm:p-6">
                     <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
@@ -338,10 +393,15 @@ export const AdminUsers: React.FC = () => {
                         </button>
                     </div>
                 )}
-            </div>
+            </div>}
 
             {/* Acessos ativos, do vencimento mais próximo para o mais distante */}
-            {activeGrants.length > 0 && (
+            {section === 'vencimentos' && activeGrants.length === 0 && (
+                <div className="rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                    <ContentState compact iconClassName="fas fa-clock" title="Nenhum acesso ativo" description="Quando uma empresa tiver acesso com data para acabar, ela aparece aqui." />
+                </div>
+            )}
+            {section === 'vencimentos' && activeGrants.length > 0 && (
                 <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
                     <div className="flex items-center gap-2 border-b border-slate-200 p-4 dark:border-slate-700">
                         <Clock className="h-4 w-4 text-slate-500" />
@@ -385,16 +445,30 @@ export const AdminUsers: React.FC = () => {
             )}
 
             {/* Ranking de engajamento — clicável */}
-            <AdminUserEngagement
-                rows={engagementRows}
-                loading={engLoading}
-                error={engError}
-                fetchEngagement={fetchEngagement}
-                onSelectCompany={openCompany}
-            />
+            {section === 'ranking' && (
+                <AdminUserEngagement
+                    rows={engagementRows}
+                    loading={engLoading}
+                    error={engError}
+                    fetchEngagement={fetchEngagement}
+                    onSelectCompany={openCompany}
+                />
+            )}
+
+            {/* Gráficos: cadastros por mês, módulos e saúde da base */}
+            {section === 'graficos' && (
+                <AdminOverview
+                    show="charts"
+                    profiles={profiles}
+                    engagementRows={engagementRows}
+                    trialUserIds={trialUserIds}
+                    totals={totals}
+                    activeWindowDays={activeWindowDays}
+                />
+            )}
 
             {/* Regras gerais de acesso (valem para todo mundo) */}
-            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+            {section === 'regras' && <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
                 <div className="flex items-center gap-2 border-b border-slate-200 p-4 dark:border-slate-700">
                     <Settings2 className="h-4 w-4 text-slate-500" />
                     <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">Regras gerais de acesso</h3>
@@ -476,7 +550,7 @@ export const AdminUsers: React.FC = () => {
                         </div>
                     </div>
                 </details>
-            </div>
+            </div>}
 
             {/* Detalhe da empresa */}
             <AdminCompanyDrawer

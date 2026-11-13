@@ -12,6 +12,8 @@ interface AdminOverviewProps {
     trialUserIds: Set<string>;
     totals: { orcamentos: number; clientes: number; faturamento: number; ativos30d: number; totalUsuarios: number };
     activeWindowDays: number;
+    /** Qual parte mostrar: só os números do topo, só os gráficos ou tudo (padrão). */
+    show?: 'all' | 'kpis' | 'charts';
 }
 
 const Card: React.FC<{ icon: React.ComponentType<{ className?: string }>; label: string; value: React.ReactNode; accent?: string; sub?: string; className?: string }> = ({ icon: Icon, label, value, accent = 'text-slate-900 dark:text-white', sub, className = '' }) => (
@@ -22,7 +24,7 @@ const Card: React.FC<{ icon: React.ComponentType<{ className?: string }>; label:
     </div>
 );
 
-export const AdminOverview: React.FC<AdminOverviewProps> = ({ profiles, engagementRows, trialUserIds, totals, activeWindowDays }) => {
+export const AdminOverview: React.FC<AdminOverviewProps> = ({ profiles, engagementRows, trialUserIds, totals, activeWindowDays, show = 'all' }) => {
     const companies = React.useMemo(() => profiles.filter(p => p.role !== 'admin'), [profiles]);
 
     // Novas empresas no mês corrente
@@ -83,7 +85,7 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({ profiles, engageme
     return (
         <div className="space-y-4">
             {/* KPIs — carrossel no mobile, grid no desktop */}
-            <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1 scrollbar-hide snap-x snap-mandatory sm:mx-0 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-6">
+            {show !== 'charts' && <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1 scrollbar-hide snap-x snap-mandatory sm:mx-0 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-6">
                 {[
                     { icon: Building2, label: 'Empresas', value: formatInt(companies.length) },
                     { icon: Activity, label: `Ativas (${activeWindowDays}d)`, value: <span className="text-green-600 dark:text-green-400">{totals.ativos30d}</span>, sub: `de ${companies.length}` },
@@ -94,10 +96,12 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({ profiles, engageme
                 ].map((kpi, i) => (
                     <Card key={i} icon={kpi.icon} label={kpi.label} value={kpi.value} accent={kpi.accent} sub={kpi.sub} className="snap-start min-w-[44%] shrink-0 sm:min-w-0" />
                 ))}
-            </div>
+            </div>}
 
-            {/* Visualizações — carrossel no mobile, grid no desktop */}
-            <div className="-mx-1 flex gap-4 overflow-x-auto px-1 pb-1 scrollbar-hide snap-x snap-mandatory lg:mx-0 lg:grid lg:grid-cols-3 lg:overflow-visible lg:px-0 lg:pb-0">
+            {/* Visualizações — numa aba própria ficam empilhadas; junto dos números, carrossel no mobile */}
+            {show !== 'kpis' && <div className={show === 'charts'
+                ? 'grid gap-4 lg:grid-cols-3 [&>div]:w-auto'
+                : '-mx-1 flex gap-4 overflow-x-auto px-1 pb-1 scrollbar-hide snap-x snap-mandatory lg:mx-0 lg:grid lg:grid-cols-3 lg:overflow-visible lg:px-0 lg:pb-0'}>
                 {/* Cadastros por mês */}
                 <div className="snap-start w-[86%] shrink-0 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800 lg:w-auto">
                     <h4 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200">Cadastros por mês</h4>
@@ -139,7 +143,7 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({ profiles, engageme
                         ]}
                     />
                 </div>
-            </div>
+            </div>}
         </div>
     );
 };
