@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { aiFeatureLabel, normalizeAiUsageRows, summarizeAiUsage } from './aiUsage';
+import { aiFeatureLabel, normalizeAiDailyLimit, normalizeAiUsageRows, parseAiDailyLimitInput, summarizeAiUsage } from './aiUsage';
 
 describe('uso de IA na ficha do Admin', () => {
     it('soma as funcionalidades e ordena pela mais usada em 30 dias', () => {
@@ -30,5 +30,23 @@ describe('uso de IA na ficha do Admin', () => {
     it('mostra o nome da funcionalidade em português e mantém o código desconhecido', () => {
         expect(aiFeatureLabel('schedule_extraction')).toBe('Agendamento por voz');
         expect(aiFeatureLabel('nova_funcao')).toBe('nova_funcao');
+    });
+
+    it('limite próprio: aceita de 0 a 10000 e trata o resto como sem limite próprio', () => {
+        expect(normalizeAiDailyLimit(50)).toBe(50);
+        expect(normalizeAiDailyLimit('0')).toBe(0);
+        expect(normalizeAiDailyLimit(null)).toBeNull();
+        expect(normalizeAiDailyLimit(-1)).toBeNull();
+        expect(normalizeAiDailyLimit(10001)).toBeNull();
+        expect(normalizeAiDailyLimit(1.5)).toBeNull();
+    });
+
+    it('campo do limite: só número inteiro vira valor para salvar', () => {
+        expect(parseAiDailyLimitInput(' 80 ')).toBe(80);
+        expect(parseAiDailyLimitInput('0')).toBe(0);
+        expect(parseAiDailyLimitInput('')).toBeNull();
+        expect(parseAiDailyLimitInput('abc')).toBeNull();
+        expect(parseAiDailyLimitInput('-5')).toBeNull();
+        expect(parseAiDailyLimitInput('99999')).toBeNull();
     });
 });

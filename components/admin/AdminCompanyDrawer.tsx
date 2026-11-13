@@ -7,6 +7,7 @@ import { EngagementRow } from '../../src/hooks/useAdminEngagement';
 import { useAdminCompanyDetail } from '../../src/hooks/useAdminCompanyDetail';
 import { useAdminCompanyAiUsage } from '../../src/hooks/useAdminCompanyAiUsage';
 import { AI_DAILY_LIMIT, aiFeatureLabel } from './aiUsage';
+import { AdminAiLimitControl } from './AdminAiLimitControl';
 import { useIsMobile } from '../../src/hooks/useIsMobile';
 import { buildWhatsappLink, formatInt, formatMoney, monthLabel, relativeDays } from './adminFormat';
 import { MiniBars } from './charts/MiniBars';
@@ -52,7 +53,9 @@ export const AdminCompanyDrawer: React.FC<AdminCompanyDrawerProps> = ({
     const open = !!profile;
     const isMobile = useIsMobile();
     const { series, loading: loadingSeries, error: seriesError } = useAdminCompanyDetail(profile?.id ?? null);
-    const { usage: aiUsage, loading: loadingAi, error: aiError } = useAdminCompanyAiUsage(profile?.id ?? null);
+    const { usage: aiUsage, loading: loadingAi, error: aiError, customLimit, limitAvailable, savingLimit, limitMessage, saveLimit } = useAdminCompanyAiUsage(profile?.id ?? null);
+    // Limite que vale hoje para esta empresa: o próprio, senão o padrão.
+    const aiDailyLimit = customLimit ?? AI_DAILY_LIMIT;
     const [copied, setCopied] = React.useState(false);
 
     const isAdmin = profile ? isUserAdmin(profile) : false;
@@ -194,8 +197,8 @@ export const AdminCompanyDrawer: React.FC<AdminCompanyDrawerProps> = ({
                                             <div className="grid grid-cols-3 gap-2">
                                                 <KpiCell
                                                     label="Últimas 24h"
-                                                    value={<>{formatInt(aiUsage.usos24h)}<span className="ml-1 text-[11px] font-medium text-slate-400">de {AI_DAILY_LIMIT}</span></>}
-                                                    accent={aiUsage.usos24h >= AI_DAILY_LIMIT ? 'text-red-600 dark:text-red-400' : undefined}
+                                                    value={<>{formatInt(aiUsage.usos24h)}<span className="ml-1 text-[11px] font-medium text-slate-400">de {aiDailyLimit}</span></>}
+                                                    accent={aiUsage.usos24h >= aiDailyLimit ? 'text-red-600 dark:text-red-400' : undefined}
                                                 />
                                                 <KpiCell label="7 dias" value={formatInt(aiUsage.usos7d)} />
                                                 <KpiCell label="30 dias" value={formatInt(aiUsage.usos30d)} />
@@ -221,6 +224,15 @@ export const AdminCompanyDrawer: React.FC<AdminCompanyDrawerProps> = ({
                                                 {` · último uso ${relativeDays(aiUsage.ultimoUso)}`}
                                             </p>
                                         </>
+                                    )}
+                                    {/* Limite diário desta empresa (o Admin não limita a si mesmo) */}
+                                    {!isAdmin && !loadingAi && limitAvailable && (
+                                        <AdminAiLimitControl
+                                            customLimit={customLimit}
+                                            saving={savingLimit}
+                                            message={limitMessage}
+                                            onSave={saveLimit}
+                                        />
                                     )}
                                 </div>
 

@@ -99,14 +99,21 @@ serve(async (req) => {
 
     const oneMinuteAgo = new Date(Date.now() - 60_000).toISOString();
     const oneDayAgo = new Date(Date.now() - 86_400_000).toISOString();
-    const [{ count: minuteCount }, { count: dayCount }] = await Promise.all([
+    const [{ count: minuteCount }, { count: dayCount }, { data: customLimit }] = await Promise.all([
         admin.from('ai_usage_events').select('id', { count: 'exact', head: true })
             .eq('user_id', user.id).gte('created_at', oneMinuteAgo),
         admin.from('ai_usage_events').select('id', { count: 'exact', head: true })
-            .eq('user_id', user.id).gte('created_at', oneDayAgo)
+            .eq('user_id', user.id).gte('created_at', oneDayAgo),
+        // Limite diario definido pelo Admin para este login. Sem linha (ou se a
+        // consulta falhar), vale o padrao.
+        admin.from('ai_usage_limits').select('daily_limit').eq('user_id', user.id).maybeSingle()
     ]);
+    const customDailyLimit = Number(customLimit?.daily_limit);
+    const dailyLimit = customLimit && Number.isInteger(customDailyLimit) && customDailyLimit >= 0
+        ? customDailyLimit
+        : MAX_REQUESTS_PER_DAY;
 
-    if ((minuteCount || 0) >= MAX_REQUESTS_PER_MINUTE || (dayCount || 0) >= MAX_REQUESTS_PER_DAY) {
+    if ((minuteCount || 0) >= MAX_REQUESTS_PER_MINUTE || (dayCount || 0) >= dailyLimit) {
         return jsonResponse({
             error: 'Limite de uso por usuario atingido',
             code: 'USER_RATE_LIMIT'
