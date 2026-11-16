@@ -3,303 +3,302 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>PelículasBR | O sistema dos profissionais de películas</title>
-    <meta name="description" content="Orçamentos, estoque, plano de corte, agenda e gestão em uma plataforma criada para instaladores de películas e wraps." />
-    <meta name="theme-color" content="#09072b" />
-    <meta property="og:title" content="PelículasBR | Sua operação em alta velocidade" />
-    <meta property="og:description" content="Menos desperdício. Mais margem. Uma plataforma com a energia de quem vive de transformar superfícies." />
+    <title>PelículasBR | O app do aplicador de películas</title>
+    <meta name="description" content="Meça, monte o orçamento e envie a proposta pelo celular. O cliente aprova pelo link e você vê quando ele abriu. Comece grátis, sem cartão." />
+    <meta name="theme-color" content="#f2f5fa" />
+    <meta property="og:title" content="PelículasBR | O app do aplicador de películas" />
+    <meta property="og:description" content="Orçamento em minutos e proposta que o cliente aprova pelo celular. Comece grátis, sem cartão." />
+    <link rel="canonical" href="https://www.filmstec.shop/" />
     <link rel="icon" type="image/png" href="/assets/brand/peliculasbr-icon.png" />
-    <link rel="preload" as="image" href="/assets/brand/hero-anime-wrap-v2.webp" fetchpriority="high" />
+    <link rel="preload" as="image" href="/assets/telas/orcamento-v1.webp" fetchpriority="high" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Bungee&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/home.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/claro.css" />
     <script defer src="/config.js"></script>
     <script defer src="/site.js"></script>
-    <script defer src="/home.js"></script>
   </head>
   <body>
-    <div class="scroll-progress" aria-hidden="true"><span data-scroll-progress></span></div>
-    <div class="cursor-dot" aria-hidden="true" data-cursor-dot></div>
-    <div class="cursor-ring" aria-hidden="true" data-cursor-ring><span>VER</span></div>
-    <header class="site-header" data-header>
-      <div class="shell header-inner">
-        <a class="brand" href="#inicio" aria-label="PelículasBR — início">
-          <span class="brand-mark" aria-hidden="true">P</span>
-          <span><strong>Películas</strong><b>BR</b><small>por Filmstec</small></span>
+    <header class="header">
+      <div class="shell header__in">
+        <a class="logo" href="/" aria-label="PelículasBR, página inicial">
+          <i class="logo__mark" aria-hidden="true">P</i>
+          <span>Películas<b>BR</b></span>
         </a>
-        <button class="menu-toggle" type="button" aria-label="Abrir menu" aria-expanded="false" data-menu-toggle><span></span><span></span><span></span></button>
-        <nav class="nav" data-nav aria-label="Navegação principal">
-          <a href="#solucoes">Soluções</a>
-          <a href="#fluxo">Como funciona</a>
+        <nav class="nav" aria-label="Navegação principal">
+          <a href="#como-funciona">Como funciona</a>
           <a href="#recursos">Recursos</a>
           <a href="#planos">Planos</a>
-          <a class="nav-login" data-app-home href="#">Entrar</a>
-          <a class="button button--lime button--small" data-app-home href="#">Começar grátis <span>↗</span></a>
+          <a href="#duvidas">Dúvidas</a>
         </nav>
+        <div class="header__end">
+          <a class="link-quiet" data-app-home href="https://app.filmstec.shop">Entrar</a>
+          <a class="btn" data-app-home href="https://app.filmstec.shop">Começar grátis</a>
+        </div>
       </div>
     </header>
 
     <main>
-      <section class="hero" id="inicio">
-        <div class="hero-noise" aria-hidden="true"></div>
-        <div class="shell hero-grid">
-          <div class="hero-copy" data-reveal>
-            <div class="tag tag--lime"><span>●</span> O sistema da galera da película</div>
-            <h1>Seu corre.<br /><span class="stroke-word">Sua marca.</span><br /><em>Seu controle.</em></h1>
-            <p>Da primeira medida ao pós-venda: orçamentos, estoque, cortes, agenda e equipe no mesmo ritmo do seu negócio.</p>
-            <div class="hero-actions">
-              <a class="button button--pink" data-app-home data-magnetic href="#">Testar agora <span>→</span></a>
-              <a class="play-link" href="#solucoes"><i aria-hidden="true">▶</i> Ver o que muda</a>
-            </div>
-            <div class="hero-stamp" aria-label="Feito para instaladores brasileiros">
-              <strong>100%</strong><span>feito para<br />instaladores</span><b>BR</b>
-            </div>
+      <section class="hero">
+        <div class="shell hero__in">
+          <div class="hero__copy">
+            <span class="chip">Para aplicadores e lojas de películas</span>
+            <h1>O app do aplicador de películas</h1>
+            <p class="lead">Meça, monte o orçamento e envie a proposta pelo celular. O cliente aprova pelo link e você vê quando ele abriu.</p>
+            <a class="pill" href="#como-funciona">Ver como funciona</a>
+            <ul class="hero__facts">
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>Comece grátis, sem cartão</li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>Funciona sem internet</li>
+            </ul>
           </div>
-
-          <div class="hero-visual" data-reveal>
-            <div class="hero-sun" aria-hidden="true"></div>
-            <div class="hero-image-wrap" data-parallax="18">
-              <img src="/assets/brand/hero-anime-wrap-v2.webp" alt="Mascote PelículasBR em um estúdio de envelopamento com carro colorido" fetchpriority="high" />
-            </div>
-            <span class="sticker sticker--top" data-parallax="-22">WRAP MODE <b>ON!</b></span>
-            <span class="sticker sticker--bottom" data-parallax="28">⚡ MAIS MARGEM</span>
-            <span class="spark spark--one" aria-hidden="true">✦</span>
-            <span class="spark spark--two" aria-hidden="true">★</span>
+          <div class="stage" aria-hidden="true">
+            <div class="device device--a"><img src="/assets/telas/orcamento-v1.webp" alt="" width="720" height="1237" /></div>
+            <div class="device device--b"><img src="/assets/telas/link-proposta-v1.webp" alt="" width="720" height="1237" /></div>
           </div>
         </div>
       </section>
 
-      <div class="marquee" aria-label="Principais benefícios">
-        <div class="marquee-track">
-          <span>ORÇAMENTO RÁPIDO</span><i>✦</i><span>CORTE INTELIGENTE</span><i>✦</i><span>ESTOQUE NO EIXO</span><i>✦</i><span>AGENDA SEM VACILO</span><i>✦</i><span>ORÇAMENTO RÁPIDO</span><i>✦</i><span>CORTE INTELIGENTE</span><i>✦</i>
-        </div>
-      </div>
-
-      <section class="impact" aria-label="Resultados do PelículasBR">
-        <div class="shell impact-grid">
-          <article data-reveal><b>01</b><strong>Menos retrabalho</strong><p>Informação certa desde o primeiro atendimento.</p></article>
-          <article data-reveal><b>02</b><strong>Mais velocidade</strong><p>Propostas profissionais em poucos minutos.</p></article>
-          <article data-reveal><b>03</b><strong>Margem protegida</strong><p>Planeje material e reduza desperdícios.</p></article>
-          <article data-reveal><b>04</b><strong>Cliente acompanhado</strong><p>Agenda, aplicação e pós-venda organizados.</p></article>
-        </div>
-      </section>
-
-      <section class="transformation section" id="experiencia">
+      <section class="section" id="como-funciona">
         <div class="shell">
-          <div class="section-intro transformation-intro" data-reveal>
-            <span class="tag tag--pink">Arraste para sentir a diferença</span>
-            <h2>Do caos da operação<br />ao <em>controle que aparece.</em></h2>
-            <p>Não é sobre deixar tudo bonito na tela. É sobre saber o que acontece, o que vem depois e onde sua margem está indo.</p>
+          <div class="section__head reveal">
+            <h2>Da medida ao fechamento, no celular</h2>
+            <p class="lead">Quatro passos que hoje ficam espalhados entre papel, calculadora e WhatsApp.</p>
           </div>
 
-          <div class="compare-stage" data-compare data-cursor="ARRASTE">
-            <img class="compare-stage__after" src="/assets/brand/control-workshop-v3.webp" alt="Oficina organizada com o mascote PelículasBR" loading="lazy" decoding="async" />
-            <div class="compare-stage__before" data-compare-before>
-              <img src="/assets/brand/chaos-workshop-v3.webp" alt="Oficina desorganizada antes do PelículasBR" loading="lazy" decoding="async" />
+          <div class="reveal">
+            <div class="tabs" role="tablist" aria-label="Passos do atendimento">
+              <button class="tab" role="tab" id="tab-medir" aria-controls="painel-medir" aria-selected="true">1. Medir</button>
+              <button class="tab" role="tab" id="tab-orcar" aria-controls="painel-orcar" aria-selected="false" tabindex="-1">2. Orçar</button>
+              <button class="tab" role="tab" id="tab-enviar" aria-controls="painel-enviar" aria-selected="false" tabindex="-1">3. Enviar</button>
+              <button class="tab" role="tab" id="tab-acompanhar" aria-controls="painel-acompanhar" aria-selected="false" tabindex="-1">4. Acompanhar</button>
             </div>
-            <span class="compare-label compare-label--before">ANTES / NO IMPROVISO</span>
-            <span class="compare-label compare-label--after">DEPOIS / NO CONTROLE</span>
-            <div class="compare-handle" data-compare-handle aria-hidden="true"><span>←</span><b></b><span>→</span></div>
-            <input class="compare-range" type="range" min="0" max="100" value="50" aria-label="Comparar oficina desorganizada e organizada" data-compare-range />
-          </div>
 
-          <div class="transformation-notes">
-            <article data-reveal><span>01</span><strong>Informação espalhada</strong><p>vira um fluxo que todo mundo entende.</p></article>
-            <article data-reveal><span>02</span><strong>Material esquecido</strong><p>vira estoque visível e aproveitável.</p></article>
-            <article data-reveal><span>03</span><strong>Cliente sem retorno</strong><p>vira agenda, histórico e próxima oportunidade.</p></article>
-          </div>
-        </div>
-      </section>
-
-      <section class="solutions section" id="solucoes">
-        <div class="shell">
-          <div class="section-intro" data-reveal>
-            <span class="tag tag--blue">Seu negócio no modo turbo</span>
-            <h2>Não é só um app.<br />É sua <em>central de comando.</em></h2>
-            <p>Uma experiência criada com a linguagem, os desafios e a velocidade de quem trabalha com películas todos os dias.</p>
-          </div>
-
-          <div class="bento">
-            <article class="bento-card bento-card--quote" data-reveal>
-              <div class="card-number">01 / ORÇAMENTOS</div>
-              <h3>Propostas que chegam <span>chegando.</span></h3>
-              <p>Monte opções, aplique medidas e valores e envie um PDF com aparência profissional.</p>
-              <div class="mini-proposal" aria-hidden="true">
-                <div><small>PROPOSTA #0248</small><b>Projeto automotivo</b></div>
-                <span>3 opções</span><strong>PRONTO ↗</strong>
+            <div class="steps" role="tabpanel" id="painel-medir" aria-labelledby="tab-medir">
+              <div class="step__text">
+                <h3>Lance as medidas no local</h3>
+                <p class="muted">Largura, altura e quantidade de cada vão, separadas por ambiente. A área sai calculada na hora.</p>
+                <ul class="checks">
+                  <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>Total de peças e de metros quadrados sempre à vista</li>
+                  <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>Aviso quando a peça vai precisar de emenda</li>
+                  <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>Continua funcionando sem sinal na obra</li>
+                </ul>
               </div>
-              <a href="/pacote-completo/">Explorar orçamentos <span>→</span></a>
-            </article>
+              <div class="step__media"><div class="device"><img src="/assets/telas/orcamento-v1.webp" alt="Tela de medidas do app com grupos, peças e área total" width="720" height="1237" loading="lazy" /></div></div>
+            </div>
 
-            <article class="bento-card bento-card--cut" data-reveal>
-              <div class="cut-copy">
-                <div class="card-number">02 / PLANO DE CORTE</div>
-                <h3>Cada centímetro <span>vale.</span></h3>
-                <p>Visualize a ocupação da bobina antes de cortar e aproveite melhor seu material.</p>
-                <a href="/corte-inteligente/">Conhecer o corte inteligente <span>→</span></a>
+            <div class="steps" role="tabpanel" id="painel-orcar" aria-labelledby="tab-orcar" hidden>
+              <div class="step__text">
+                <h3>Proposta em PDF com a sua marca</h3>
+                <p class="muted">Escolha a película de cada ambiente e o app monta o valor. Você pode oferecer mais de uma opção na mesma proposta.</p>
+                <ul class="checks">
+                  <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>Preço por metro quadrado, desconto e condições de pagamento</li>
+                  <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>Dados técnicos e garantia da película no documento</li>
+                  <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>Histórico de todos os orçamentos por cliente</li>
+                </ul>
               </div>
-              <div class="cut-image"><img src="/assets/brand/cutting-anime-v2.webp" alt="Mascote apresentando um plano de corte colorido" loading="lazy" decoding="async" /></div>
-            </article>
-
-            <article class="bento-card bento-card--stock" data-reveal>
-              <div class="card-number">03 / ESTOQUE</div>
-              <div class="rolls" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
-              <h3>Bobinas e retalhos <span>no radar.</span></h3>
-              <p>Saiba o que entrou, o que saiu e o que ainda pode virar venda.</p>
-              <a href="/controle-de-estoque/">Organizar estoque <span>→</span></a>
-            </article>
-
-            <article class="bento-card bento-card--ai" data-reveal>
-              <div class="card-number">04 / IA</div>
-              <div class="ai-orbit" aria-hidden="true"><span>IA</span><i></i><i></i><i></i></div>
-              <h3>Menos digitação.<br /><span>Mais ação.</span></h3>
-              <p>Transforme textos, fotos e conversas em informações prontas para usar.</p>
-              <a href="/extracao-com-ia/">Conhecer a inteligência <span>→</span></a>
-            </article>
-          </div>
-        </div>
-      </section>
-
-      <section class="flow section" id="fluxo">
-        <div class="flow-dots" aria-hidden="true"></div>
-        <div class="shell flow-grid">
-          <div class="flow-copy" data-reveal>
-            <span class="tag tag--orange">Do contato ao concluído</span>
-            <h2>Um fluxo que não <em>perde o embalo.</em></h2>
-            <ol>
-              <li><b>01</b><div><strong>Cadastre</strong><span>Cliente, veículo ou ambiente.</span></div></li>
-              <li><b>02</b><div><strong>Orce</strong><span>Medidas, materiais e opções.</span></div></li>
-              <li><b>03</b><div><strong>Execute</strong><span>Agenda, aplicação e progresso.</span></div></li>
-              <li><b>04</b><div><strong>Acompanhe</strong><span>Histórico, retorno e próxima venda.</span></div></li>
-            </ol>
-          </div>
-          <div class="flow-visual" data-reveal>
-            <img src="/assets/brand/workflow-anime-v2.webp" alt="Mascote percorrendo as etapas do atendimento até a conclusão" loading="lazy" decoding="async" />
-            <span class="flow-badge"><b>4 etapas</b> • 1 só sistema</span>
-          </div>
-        </div>
-      </section>
-
-      <section class="pocket section">
-        <div class="pocket-orbit pocket-orbit--one" aria-hidden="true"></div>
-        <div class="pocket-orbit pocket-orbit--two" aria-hidden="true"></div>
-        <div class="shell pocket-grid">
-          <div class="pocket-visual" data-tilt data-cursor="EXPLORAR">
-            <div class="pocket-frame" data-parallax="12">
-              <img src="/assets/brand/pocket-universe-v3.webp" alt="Mascote saindo de um celular cercado pelos recursos do PelículasBR" loading="lazy" decoding="async" />
+              <div class="step__media"><div class="device"><img src="/assets/telas/proposta-pdf-v1.webp" alt="Primeira página de uma proposta em PDF gerada pelo app" width="720" height="1018" loading="lazy" /></div></div>
             </div>
-            <span class="pocket-chip pocket-chip--one" data-parallax="-28">ORÇAR</span>
-            <span class="pocket-chip pocket-chip--two" data-parallax="24">CORTAR</span>
-            <span class="pocket-chip pocket-chip--three" data-parallax="-18">ENTREGAR</span>
-          </div>
-          <div class="pocket-copy" data-reveal>
-            <span class="tag tag--lime">Sua operação acompanha você</span>
-            <h2>Seu negócio cabe<br /><em>no seu bolso.</em></h2>
-            <p>No cliente, na loja ou entre uma aplicação e outra: acesse o que precisa sem depender de papelada ou memória.</p>
-            <div class="pocket-features">
-              <article><b>01</b><div><strong>Feito para celular</strong><span>Interface responsiva para o ritmo da rua.</span></div></article>
-              <article><b>02</b><div><strong>Atualização centralizada</strong><span>A mesma informação para toda a operação.</span></div></article>
-              <article><b>03</b><div><strong>Histórico sempre perto</strong><span>Cliente, serviço e próximo passo no mesmo lugar.</span></div></article>
+
+            <div class="steps" role="tabpanel" id="painel-enviar" aria-labelledby="tab-enviar" hidden>
+              <div class="step__text">
+                <h3>O cliente aprova pelo link</h3>
+                <p class="muted">Envie um link no lugar de um arquivo solto. O cliente compara as opções, tira dúvidas e escolhe pelo celular.</p>
+                <ul class="checks">
+                  <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>Validade da proposta visível para o cliente</li>
+                  <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>Espaço para pergunta e contraproposta</li>
+                  <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>Vitrine com suas fotos e avaliações</li>
+                </ul>
+              </div>
+              <div class="step__media"><div class="device"><img src="/assets/telas/link-proposta-v1.webp" alt="Página da proposta que o cliente abre pelo link" width="720" height="1237" loading="lazy" /></div></div>
             </div>
-            <a class="button button--pink" data-app-home data-magnetic href="#">Levar meu negócio comigo <span>→</span></a>
+
+            <div class="steps" role="tabpanel" id="painel-acompanhar" aria-labelledby="tab-acompanhar" hidden>
+              <div class="step__text">
+                <h3>Saiba quem abriu e quem sumiu</h3>
+                <p class="muted">A central de propostas mostra quem abriu, quem respondeu e qual proposta está para vencer.</p>
+                <ul class="checks">
+                  <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>Aviso quando o cliente abre a proposta</li>
+                  <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>Mensagens prontas para retomar a conversa</li>
+                  <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>Valor em aberto e aprovado no mês</li>
+                </ul>
+              </div>
+              <div class="step__media"><div class="device"><img src="/assets/telas/central-propostas-v1.webp" alt="Central de propostas com clientes que abriram e responderam" width="720" height="1237" loading="lazy" /></div></div>
+            </div>
           </div>
         </div>
       </section>
 
-      <section class="simulator section" id="simulador">
-        <div class="shell simulator-grid">
-          <div class="simulator-copy" data-reveal>
-            <span class="tag tag--orange">O desperdício que não aparece também custa</span>
-            <h2>Mexa nos números.<br /><em>Veja o tamanho do impacto.</em></h2>
-            <p>Uma estimativa ilustrativa para visualizar como pequenas perdas podem crescer ao longo do ano.</p>
-            <div class="simulator-disclaimer">Não é promessa de economia. O resultado depende do seu material, processo e volume real.</div>
-          </div>
-          <div class="calculator" data-reveal data-tilt>
-            <div class="calculator-head"><span>SIMULADOR DE APROVEITAMENTO</span><b>LIVE</b></div>
-            <label><span>Material usado por mês <output data-output="volume">150 m²</output></span><input type="range" min="20" max="600" value="150" step="10" data-calc="volume" /></label>
-            <label><span>Perda estimada hoje <output data-output="waste">12%</output></span><input type="range" min="2" max="30" value="12" step="1" data-calc="waste" /></label>
-            <label><span>Custo médio do material <output data-output="cost">R$ 40/m²</output></span><input type="range" min="10" max="120" value="40" step="5" data-calc="cost" /></label>
-            <div class="calculator-result">
-              <div><small>Material potencialmente perdido</small><strong data-result="meters">18 m²</strong><span>por mês</span></div>
-              <div><small>Custo anual estimado</small><strong data-result="money">R$ 8.640</strong><span>na operação</span></div>
-            </div>
-            <a href="/corte-inteligente/">Conhecer o plano de corte <span>→</span></a>
-          </div>
-        </div>
-      </section>
-
-      <section class="modules section" id="recursos">
+      <section class="section" id="recursos">
         <div class="shell">
-          <div class="section-intro section-intro--center" data-reveal>
-            <span class="tag tag--pink">Monte seu setup</span>
-            <h2>Do seu jeito.<br /><em>Sem perder a identidade.</em></h2>
-            <p>Comece com o essencial e conecte os recursos que fazem sentido para sua operação.</p>
+          <div class="section__head reveal">
+            <h2>Recursos para quem quer ir além</h2>
+            <p class="lead">Módulos que você liga quando a operação pede. Cada um tem uma página com os detalhes.</p>
           </div>
-          <div class="module-grid">
-            <a class="module module--lime" href="/controle-de-estoque/" data-reveal><span>EST</span><strong>Estoque</strong><p>Bobinas, retalhos e movimentações.</p><b>↗</b></a>
-            <a class="module module--pink" href="/corte-inteligente/" data-reveal><span>CUT</span><strong>Plano de corte</strong><p>Aproveitamento visual da bobina.</p><b>↗</b></a>
-            <a class="module module--orange" href="/gestao-de-equipe/" data-reveal><span>TEAM</span><strong>Equipe</strong><p>Responsáveis, etapas e acompanhamento.</p><b>↗</b></a>
-            <a class="module module--blue" href="/qr-code-servicos/" data-reveal><span>QR</span><strong>Pós-venda</strong><p>Serviços e histórico por QR Code.</p><b>↗</b></a>
-            <a class="module module--purple" href="/marca-propria/" data-reveal><span>PRO</span><strong>Marca própria</strong><p>Uma experiência com a sua cara.</p><b>↗</b></a>
+
+          <div class="grid reveal">
+            <a class="card card--wide" href="/corte-inteligente/">
+              <div class="card__top">
+                <span class="chip">Módulo</span>
+                <h3>Plano de corte</h3>
+                <p>Veja quanto de bobina o serviço vai gastar antes de cortar. O mapa mostra a posição de cada peça e onde passa a tesoura.</p>
+                <span class="card__go">Conhecer o plano de corte <i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg></i></span>
+              </div>
+              <div class="card__media"><img src="/assets/telas/plano-de-corte-v1.webp" alt="Mapa de corte da bobina com as peças numeradas" width="720" height="1237" loading="lazy" /></div>
+            </a>
+
+            <a class="card" href="/controle-de-estoque/">
+              <div class="card__top">
+                <span class="chip">Módulo</span>
+                <h3>Estoque de bobinas</h3>
+                <p>Bobinas e retalhos com metragem atualizada.</p>
+                <span class="card__go">Conhecer o estoque <i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg></i></span>
+              </div>
+              <div class="card__media"><img src="/assets/telas/estoque-v1.webp" alt="Lista de bobinas no estoque" width="720" height="1237" loading="lazy" /></div>
+            </a>
+
+            <a class="card" href="/extracao-com-ia/">
+              <div class="card__top">
+                <span class="chip">Módulo</span>
+                <h3>Medidas com IA</h3>
+                <p>Mande foto, áudio ou texto e confira antes de salvar.</p>
+                <span class="card__go">Conhecer a IA <i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg></i></span>
+              </div>
+              <div class="card__media"><img src="/assets/telas/ia-medidas-v1.webp" alt="Tela de entrada de medidas por inteligência artificial" width="720" height="1237" loading="lazy" /></div>
+            </a>
+
+            <a class="card" href="/qr-code-servicos/">
+              <div class="card__top">
+                <span class="chip">Módulo</span>
+                <h3>Garantia por QR Code</h3>
+                <p>Uma etiqueta no vidro leva o cliente à ficha do serviço.</p>
+                <span class="card__go">Conhecer o QR Code <i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg></i></span>
+              </div>
+              <div class="card__media"><img src="/assets/telas/qr-garantia-v1.webp" alt="Página pública do serviço aberta pelo QR Code" width="720" height="1237" loading="lazy" /></div>
+            </a>
           </div>
         </div>
       </section>
 
-      <section class="plans section" id="planos">
-        <div class="shell plans-grid">
-          <div class="plans-copy" data-reveal>
-            <span class="tag tag--lime">Comece sem travar</span>
-            <h2>Primeiro o resultado.<br /><em>Depois o plano.</em></h2>
-            <p>Teste o fluxo do PelículasBR e evolua quando sua operação pedir mais velocidade.</p>
-            <div class="plans-note"><b>SEM PEGADINHA</b><span>Você escolhe quando acelerar.</span></div>
+      <section class="section" id="planos">
+        <div class="shell">
+          <div class="section__head reveal">
+            <h2>Comece grátis e cresça no seu ritmo</h2>
+            <p class="lead">O plano grátis já faz orçamento, proposta e agenda. Os módulos entram quando fizer sentido.</p>
           </div>
-          <div class="plan-cards">
-            <article class="plan plan--free" data-reveal>
-              <span>START</span><h3>Plano grátis</h3><p>Para organizar o essencial e sentir a diferença.</p>
-              <ul><li>Clientes e orçamentos</li><li>Agenda de serviços</li><li>Experiência mobile</li></ul>
-              <a class="button button--dark" data-app-home href="#">Começar grátis</a>
-            </article>
-            <article class="plan plan--pro" data-reveal>
-              <span>FULL POWER</span><h3>Recursos premium</h3><p>Para quem quer escala, controle e uma marca mais forte.</p>
-              <ul><li>Estoque e plano de corte</li><li>IA e automações</li><li>Equipe, QR Code e marca própria</li></ul>
-              <a class="button button--lime" data-app-home href="#">Ver recursos <span>→</span></a>
-            </article>
+
+          <div class="plans reveal">
+            <div class="plan">
+              <div class="plan__head">
+                <h3>Grátis</h3>
+                <p class="price">R$ 0</p>
+              </div>
+              <ul class="checks">
+                <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>Até 10 clientes e 5 películas</li>
+                <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>10 propostas em PDF por mês</li>
+                <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>5 agendamentos por mês</li>
+              </ul>
+              <p class="plan__foot">Sem cartão. O acesso é liberado no grupo de aplicadores.</p>
+            </div>
+
+            <div class="plan">
+              <div class="plan__head">
+                <h3>Pacote Completo</h3>
+                <p class="price">R$ 149<small>por 6 meses</small></p>
+              </div>
+              <ul class="checks">
+                <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>Todos os módulos, sem limite de uso</li>
+                <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>Plano de corte, estoque, IA e QR Code</li>
+                <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>Equipe e proposta com a sua marca</li>
+              </ul>
+              <p class="plan__foot">Prefere um módulo só? Cada um sai por R$ 39 por 6 meses. <a class="plan__link" href="/pacote-completo/">Ver o pacote completo</a></p>
+            </div>
           </div>
         </div>
       </section>
 
-      <section class="faq section" id="duvidas">
-        <div class="shell faq-grid">
-          <div data-reveal><span class="tag tag--blue">Dúvidas frequentes</span><h2>Antes de<br /><em>apertar o play.</em></h2><p>O básico para começar com segurança.</p></div>
-          <div class="accordion" data-reveal>
-            <details open><summary>O PelículasBR funciona no celular?</summary><p>Sim. A experiência é responsiva e foi pensada para acompanhar o trabalho dentro e fora da loja.</p></details>
-            <details><summary>Preciso instalar alguma coisa?</summary><p>Não. Você acessa pelo navegador e entra com sua conta.</p></details>
-            <details><summary>Posso começar gratuitamente?</summary><p>Sim. O plano gratuito permite conhecer o fluxo antes de contratar recursos premium.</p></details>
-            <details><summary>O sistema serve para equipe?</summary><p>Sim. Os recursos de equipe ajudam a distribuir responsabilidades e acompanhar etapas do serviço.</p></details>
+      <section class="section" id="duvidas">
+        <div class="shell faq">
+          <div class="section__head section__head--flush reveal">
+            <h2>Dúvidas de quem está começando</h2>
+          </div>
+          <div class="faq__list reveal">
+            <details open>
+              <summary>Preciso de cartão para começar?<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg></summary>
+              <p>Não. Você cria a conta e usa o plano grátis sem informar cartão. Só paga se decidir ligar um módulo.</p>
+            </details>
+            <details>
+              <summary>Como libero o meu acesso?<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg></summary>
+              <p>Depois de criar a conta, o app convida você para o grupo de aplicadores no WhatsApp. O código de liberação fica fixado lá.</p>
+            </details>
+            <details>
+              <summary>Funciona sem internet?<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg></summary>
+              <p>Sim. Você mede e monta o orçamento sem sinal, e o app envia tudo quando a conexão volta. Para mandar o link da proposta é preciso estar conectado.</p>
+            </details>
+            <details>
+              <summary>Preciso instalar alguma coisa?<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg></summary>
+              <p>Não. O app abre no navegador do celular ou do computador e pode ser adicionado à tela inicial, no Android e no iPhone.</p>
+            </details>
+            <details>
+              <summary>A IA pode errar uma medida?<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg></summary>
+              <p>Pode, por isso nada é salvo sozinho. Você confere e ajusta cada medida antes de salvar.</p>
+            </details>
           </div>
         </div>
       </section>
 
-      <section class="final-cta">
-        <div class="final-bg" aria-hidden="true"></div>
-        <div class="shell final-inner" data-reveal>
-          <span class="tag tag--lime">Sua próxima fase começa aqui</span>
-          <h2>Mais cor.<br />Mais controle.<br /><em>Mais você.</em></h2>
-          <p>Leve a energia do seu trabalho para uma operação mais organizada, rápida e profissional.</p>
-          <a class="button button--pink" data-app-home href="#">Criar minha conta <span>→</span></a>
+      <section class="shell">
+        <div class="final reveal">
+          <h2>Faça o primeiro orçamento hoje</h2>
+          <p class="lead">Crie a conta, entre no grupo de aplicadores e libere o seu acesso. O passo a passo dentro do app leva cerca de 2 minutos.</p>
+          <a class="btn" data-app-home href="https://app.filmstec.shop">Começar grátis</a>
         </div>
       </section>
     </main>
 
     <footer class="footer">
-      <div class="shell footer-grid">
-        <a class="brand brand--footer" href="#inicio"><span class="brand-mark">P</span><span><strong>Películas</strong><b>BR</b><small>por Filmstec</small></span></a>
-        <p>Tecnologia feita para transformar serviços com películas em operações mais fortes.</p>
-        <div><a href="#solucoes">Soluções</a><a href="#recursos">Recursos</a><a href="#planos">Planos</a></div>
-        <div><a data-app-home href="#">Entrar no app</a><a href="#duvidas">Dúvidas</a><a href="mailto:suporte@filmstec.shop">Suporte</a></div>
+      <div class="shell footer__in">
+        <a class="logo" href="/" aria-label="PelículasBR, página inicial">
+          <i class="logo__mark" aria-hidden="true">P</i>
+          <span>Películas<b>BR</b></span>
+        </a>
+        <nav aria-label="Rodapé">
+          <a data-app-home href="https://app.filmstec.shop">Entrar no app</a>
+          <a href="https://app.filmstec.shop/privacidade/">Privacidade</a>
+          <a href="https://app.filmstec.shop/excluir-conta/">Excluir conta</a>
+        </nav>
+        <p>© <span data-current-year>2026</span> PelículasBR, um produto Filmstec.</p>
       </div>
-      <div class="shell footer-bottom"><span>© <span data-current-year></span> PelículasBR</span><span>Feito no Brasil • para quem faz acontecer</span></div>
     </footer>
+
+    <script>
+      (() => {
+        const tabs = [...document.querySelectorAll('[role="tab"]')];
+        const select = (tab, focus) => {
+          tabs.forEach((item) => {
+            const on = item === tab;
+            item.setAttribute('aria-selected', String(on));
+            item.tabIndex = on ? 0 : -1;
+            document.getElementById(item.getAttribute('aria-controls')).hidden = !on;
+          });
+          if (focus) tab.focus();
+        };
+        tabs.forEach((tab, index) => {
+          tab.addEventListener('click', () => select(tab));
+          tab.addEventListener('keydown', (event) => {
+            const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+            if (step) select(tabs[(index + step + tabs.length) % tabs.length], true);
+          });
+        });
+
+        const items = document.querySelectorAll('.reveal');
+        if (!('IntersectionObserver' in window)) return items.forEach((item) => item.classList.add('is-in'));
+        const observer = new IntersectionObserver((entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) { entry.target.classList.add('is-in'); observer.unobserve(entry.target); }
+          });
+        }, { rootMargin: '0px 0px -8% 0px' });
+        items.forEach((item) => observer.observe(item));
+      })();
+    </script>
   </body>
 </html>
