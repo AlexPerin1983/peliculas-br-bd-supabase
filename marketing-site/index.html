@@ -10,7 +10,7 @@
     <meta property="og:description" content="Orçamento em minutos e proposta que o cliente aprova pelo celular. Comece grátis, sem cartão." />
     <link rel="canonical" href="https://www.filmstec.shop/" />
     <link rel="icon" type="image/png" href="/assets/brand/peliculasbr-icon.png" />
-    <link rel="preload" as="image" href="/assets/telas/orcamento-v1.webp" fetchpriority="high" />
+    <link rel="preload" as="image" href="/assets/telas/link-proposta-v1.webp" fetchpriority="high" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700&display=swap" rel="stylesheet" />
@@ -39,91 +39,91 @@
     </header>
 
     <main>
-      <section class="hero">
-        <div class="shell hero__in">
-          <div class="hero__copy">
-            <span class="chip">Para aplicadores e lojas de películas</span>
-            <h1>O app do aplicador de películas</h1>
-            <p class="lead">Meça, monte o orçamento e envie a proposta pelo celular. O cliente aprova pelo link e você vê quando ele abriu.</p>
-            <a class="pill" href="#como-funciona">Ver como funciona</a>
-            <ul class="hero__facts">
-              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>Comece grátis, sem cartão</li>
-              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>Funciona sem internet</li>
-            </ul>
-          </div>
-          <div class="stage" aria-hidden="true">
-            <div class="device device--a"><img src="/assets/telas/orcamento-v1.webp" alt="" width="720" height="1237" /></div>
-            <div class="device device--b"><img src="/assets/telas/link-proposta-v1.webp" alt="" width="720" height="1237" /></div>
+      <section class="hero2">
+        <div class="shell hero2__copy">
+          <span class="chip">Para aplicadores e lojas de películas</span>
+          <h1>O app do aplicador de películas</h1>
+          <p class="lead">Meça, monte o orçamento e envie a proposta pelo celular. O cliente aprova pelo link e você vê quando ele abriu.</p>
+          <ul class="hero__facts">
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>Comece grátis, sem cartão</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>Funciona sem internet</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>Android, iPhone e computador</li>
+          </ul>
+        </div>
+        <div class="shell">
+          <div class="stage2" aria-hidden="true">
+            <div class="device device--dark stage2__side"><img src="/assets/telas/orcamento-v1.webp" alt="" width="720" height="1237" /></div>
+            <div class="device device--dark stage2__main"><img src="/assets/telas/link-proposta-v1.webp" alt="" width="720" height="1237" /></div>
+            <div class="device device--dark stage2__side"><img src="/assets/telas/central-propostas-v1.webp" alt="" width="720" height="1237" /></div>
           </div>
         </div>
+      </section>
+
+      <section class="shell">
+        <ul class="proof reveal">
+          <li><strong>mais de 300</strong><span>empresas cadastradas</span></li>
+          <li><strong>mais de R$ 4,8 milhões</strong><span>em orçamentos gerados</span></li>
+        </ul>
       </section>
 
       <section class="section" id="como-funciona">
         <div class="shell">
           <div class="section__head reveal">
+            <p class="eyebrow">Como funciona</p>
             <h2>Da medida ao fechamento, no celular</h2>
-            <p class="lead">Quatro passos que hoje ficam espalhados entre papel, calculadora e WhatsApp.</p>
           </div>
 
-          <div class="reveal">
-            <div class="tabs" role="tablist" aria-label="Passos do atendimento">
-              <button class="tab" role="tab" id="tab-medir" aria-controls="painel-medir" aria-selected="true">1. Medir</button>
-              <button class="tab" role="tab" id="tab-orcar" aria-controls="painel-orcar" aria-selected="false" tabindex="-1">2. Orçar</button>
-              <button class="tab" role="tab" id="tab-enviar" aria-controls="painel-enviar" aria-selected="false" tabindex="-1">3. Enviar</button>
-              <button class="tab" role="tab" id="tab-acompanhar" aria-controls="painel-acompanhar" aria-selected="false" tabindex="-1">4. Acompanhar</button>
+          <div class="flow reveal">
+            <div class="flow__list" role="tablist" aria-label="Passos do atendimento" aria-orientation="vertical">
+              <button class="flow__tab" role="tab" id="tab-medir" aria-controls="painel-medir" aria-selected="true">
+                <span class="flow__n">1</span>
+                <span class="flow__txt"><strong>Lance as medidas no local</strong><span>Largura, altura e quantidade de cada vão. A área sai calculada na hora, com aviso de emenda.</span></span>
+              </button>
+              <button class="flow__tab" role="tab" id="tab-orcar" aria-controls="painel-orcar" aria-selected="false" tabindex="-1">
+                <span class="flow__n">2</span>
+                <span class="flow__txt"><strong>Gere a proposta em PDF</strong><span>Escolha a película de cada ambiente. Dá para oferecer mais de uma opção na mesma proposta.</span></span>
+              </button>
+              <button class="flow__tab" role="tab" id="tab-enviar" aria-controls="painel-enviar" aria-selected="false" tabindex="-1">
+                <span class="flow__n">3</span>
+                <span class="flow__txt"><strong>O cliente aprova pelo link</strong><span>Ele compara as opções, tira dúvidas e escolhe pelo celular, com a validade à vista.</span></span>
+              </button>
+              <button class="flow__tab" role="tab" id="tab-acompanhar" aria-controls="painel-acompanhar" aria-selected="false" tabindex="-1">
+                <span class="flow__n">4</span>
+                <span class="flow__txt"><strong>Saiba quem abriu e quem sumiu</strong><span>A central mostra quem abriu, quem respondeu e qual proposta está para vencer.</span></span>
+              </button>
             </div>
+            <div class="flow__stage">
+              <div class="device" role="tabpanel" id="painel-medir" aria-labelledby="tab-medir"><img src="/assets/telas/orcamento-v1.webp" alt="Tela de medidas do app com grupos, peças e área total" width="720" height="1237" loading="lazy" /></div>
+              <div class="device" role="tabpanel" id="painel-orcar" aria-labelledby="tab-orcar" hidden><img src="/assets/telas/proposta-pdf-v1.webp" alt="Primeira página de uma proposta em PDF gerada pelo app" width="720" height="1018" loading="lazy" /></div>
+              <div class="device" role="tabpanel" id="painel-enviar" aria-labelledby="tab-enviar" hidden><img src="/assets/telas/link-proposta-v1.webp" alt="Página da proposta que o cliente abre pelo link" width="720" height="1237" loading="lazy" /></div>
+              <div class="device" role="tabpanel" id="painel-acompanhar" aria-labelledby="tab-acompanhar" hidden><img src="/assets/telas/central-propostas-v1.webp" alt="Central de propostas com clientes que abriram e responderam" width="720" height="1237" loading="lazy" /></div>
+            </div>
+          </div>
+        </div>
+      </section>
 
-            <div class="steps" role="tabpanel" id="painel-medir" aria-labelledby="tab-medir">
-              <div class="step__text">
-                <h3>Lance as medidas no local</h3>
-                <p class="muted">Largura, altura e quantidade de cada vão, separadas por ambiente. A área sai calculada na hora.</p>
-                <ul class="checks">
-                  <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>Total de peças e de metros quadrados sempre à vista</li>
-                  <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>Aviso quando a peça vai precisar de emenda</li>
-                  <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>Continua funcionando sem sinal na obra</li>
-                </ul>
-              </div>
-              <div class="step__media"><div class="device"><img src="/assets/telas/orcamento-v1.webp" alt="Tela de medidas do app com grupos, peças e área total" width="720" height="1237" loading="lazy" /></div></div>
-            </div>
-
-            <div class="steps" role="tabpanel" id="painel-orcar" aria-labelledby="tab-orcar" hidden>
-              <div class="step__text">
-                <h3>Proposta em PDF com a sua marca</h3>
-                <p class="muted">Escolha a película de cada ambiente e o app monta o valor. Você pode oferecer mais de uma opção na mesma proposta.</p>
-                <ul class="checks">
-                  <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>Preço por metro quadrado, desconto e condições de pagamento</li>
-                  <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>Dados técnicos e garantia da película no documento</li>
-                  <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>Histórico de todos os orçamentos por cliente</li>
-                </ul>
-              </div>
-              <div class="step__media"><div class="device"><img src="/assets/telas/proposta-pdf-v1.webp" alt="Primeira página de uma proposta em PDF gerada pelo app" width="720" height="1018" loading="lazy" /></div></div>
-            </div>
-
-            <div class="steps" role="tabpanel" id="painel-enviar" aria-labelledby="tab-enviar" hidden>
-              <div class="step__text">
-                <h3>O cliente aprova pelo link</h3>
-                <p class="muted">Envie um link no lugar de um arquivo solto. O cliente compara as opções, tira dúvidas e escolhe pelo celular.</p>
-                <ul class="checks">
-                  <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>Validade da proposta visível para o cliente</li>
-                  <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>Espaço para pergunta e contraproposta</li>
-                  <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>Vitrine com suas fotos e avaliações</li>
-                </ul>
-              </div>
-              <div class="step__media"><div class="device"><img src="/assets/telas/link-proposta-v1.webp" alt="Página da proposta que o cliente abre pelo link" width="720" height="1237" loading="lazy" /></div></div>
-            </div>
-
-            <div class="steps" role="tabpanel" id="painel-acompanhar" aria-labelledby="tab-acompanhar" hidden>
-              <div class="step__text">
-                <h3>Saiba quem abriu e quem sumiu</h3>
-                <p class="muted">A central de propostas mostra quem abriu, quem respondeu e qual proposta está para vencer.</p>
-                <ul class="checks">
-                  <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>Aviso quando o cliente abre a proposta</li>
-                  <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>Mensagens prontas para retomar a conversa</li>
-                  <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>Valor em aberto e aprovado no mês</li>
-                </ul>
-              </div>
-              <div class="step__media"><div class="device"><img src="/assets/telas/central-propostas-v1.webp" alt="Central de propostas com clientes que abriram e responderam" width="720" height="1237" loading="lazy" /></div></div>
-            </div>
+      <section class="section section--white" id="depois">
+        <div class="shell">
+          <div class="section__head reveal">
+            <p class="eyebrow">Depois do orçamento</p>
+            <h2>O app continua com você até o pós-venda</h2>
+          </div>
+          <div class="trio reveal">
+            <article class="shot">
+              <div class="shot__media"><img src="/assets/telas/agenda-v1.webp" alt="Agenda do app com os serviços do dia" width="720" height="1237" loading="lazy" /></div>
+              <h3>Agenda com alertas</h3>
+              <p>Os serviços marcados aparecem no celular na hora certa.</p>
+            </article>
+            <article class="shot">
+              <div class="shot__media"><img src="/assets/telas/painel-do-dia-v1.webp" alt="Painel do dia com as ações que pedem atenção" width="720" height="1237" loading="lazy" /></div>
+              <h3>Painel do dia</h3>
+              <p>O que precisa de atenção hoje e quanto está em aberto.</p>
+            </article>
+            <article class="shot">
+              <div class="shot__media"><img src="/assets/telas/avaliacao-google-v1.webp" alt="Tela para pedir avaliação no Google ao cliente" width="720" height="1237" loading="lazy" /></div>
+              <h3>Avaliação no Google</h3>
+              <p>Peça a avaliação ao cliente logo depois do serviço.</p>
+            </article>
           </div>
         </div>
       </section>
@@ -131,6 +131,7 @@
       <section class="section" id="recursos">
         <div class="shell">
           <div class="section__head reveal">
+            <p class="eyebrow">Módulos</p>
             <h2>Recursos para quem quer ir além</h2>
             <p class="lead">Módulos que você liga quando a operação pede. Cada um tem uma página com os detalhes.</p>
           </div>
@@ -182,6 +183,7 @@
       <section class="section" id="planos">
         <div class="shell">
           <div class="section__head reveal">
+            <p class="eyebrow">Planos</p>
             <h2>Comece grátis e cresça no seu ritmo</h2>
             <p class="lead">O plano grátis já faz orçamento, proposta e agenda. Os módulos entram quando fizer sentido.</p>
           </div>
@@ -219,6 +221,7 @@
       <section class="section" id="duvidas">
         <div class="shell faq">
           <div class="section__head section__head--flush reveal">
+            <p class="eyebrow">Dúvidas</p>
             <h2>Dúvidas de quem está começando</h2>
           </div>
           <div class="faq__list reveal">
