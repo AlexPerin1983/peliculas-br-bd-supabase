@@ -52,7 +52,7 @@ test.describe('navegação autenticada no iPhone', () => {
     await page.getByRole('button', { name: 'Salvar Cliente' }).tap();
     await page.getByRole('button', { name: 'Trocar de cliente' }).tap();
 
-    const search = page.getByPlaceholder('Buscar pelo nome do cliente...');
+    const search = page.getByPlaceholder('Buscar por nome, bairro ou CEP...');
     const backButton = page.getByRole('button', { name: 'Voltar', exact: true });
     await expect(search).toBeVisible();
     await expectLocatorInsideViewport(backButton);

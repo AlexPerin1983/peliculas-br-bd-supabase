@@ -867,6 +867,19 @@ export const getAllPDFs = async (): Promise<SavedPDF[]> => {
     return pdfs;
 };
 
+// Busca da lista de clientes: nome, contato e endereço (rua, bairro, cidade, CEP).
+// CEP digitado só com números também acha o CEP salvo com traço ("01310100" -> "01310-100").
+export const buildClientSearchFilter = (search: string) => {
+    const fields = ['nome', 'telefone', 'email', 'logradouro', 'bairro', 'cidade', 'cep'];
+    const conditions = fields.map(field => `${field}.ilike.%${search}%`);
+    const digits = search.replace(/\D/g, '');
+    if (/^[\d\s.-]+$/.test(search) && digits.length > 5 && digits.length <= 8) {
+        conditions.push(`cep.ilike.%${digits.slice(0, 5)}-${digits.slice(5)}%`);
+        if (digits !== search) conditions.push(`cep.ilike.%${digits}%`);
+    }
+    return conditions.join(',');
+};
+
 export const getClientPage = async ({
     offset = 0,
     limit = 50,
@@ -887,7 +900,7 @@ export const getClientPage = async ({
 
     const normalizedSearch = search?.trim().replace(/[,%()]/g, ' ').trim();
     if (normalizedSearch) {
-        query = query.or(`nome.ilike.%${normalizedSearch}%,telefone.ilike.%${normalizedSearch}%,email.ilike.%${normalizedSearch}%`);
+        query = query.or(buildClientSearchFilter(normalizedSearch));
     }
 
     const { data, error } = await query;

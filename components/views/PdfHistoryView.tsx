@@ -34,6 +34,7 @@ import Modal from '../ui/Modal';
 import { useFeedback } from '../../src/contexts/FeedbackContext';
 import { PROPOSAL_EXPENSE_CATEGORY_OPTIONS, summarizeProposalExpenses } from '../../src/lib/proposalExpenses';
 import { matchesSearch, normalizeSearchText } from '../../src/lib/textSearch';
+import { clientAddressSearchText } from '../../src/lib/clientSearch';
 import { describeSavedQuoteSize } from '../../src/lib/automotive';
 import { buildReviewFollowUpMessage } from '../../src/lib/reviewMessage';
 import { formatGarantiaMaoDeObra, garantiaEmDias } from '../../src/lib/filmWarranty';
@@ -1863,7 +1864,7 @@ const PdfHistoryMobileToolbar: React.FC<{
                     type="search"
                     value={searchTerm}
                     onChange={(event) => onSearchChange(event.target.value)}
-                    placeholder="Buscar cliente, valor ou data"
+                    placeholder="Buscar cliente, bairro, valor ou data"
                     autoComplete="off"
                     style={{ fontSize: 16 }}
                     className="h-11 w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] pl-10 pr-10 text-[var(--text-strong)] shadow-[var(--shadow-hairline)] outline-none transition placeholder:text-[var(--text-soft)] focus:border-[var(--brand-primary)] focus:ring-4 focus:ring-blue-500/10 [&::-webkit-search-cancel-button]:hidden"
@@ -1947,7 +1948,7 @@ const PdfHistoryDesktopHeader: React.FC<{
                                 type="text"
                                 value={searchTerm}
                                 onChange={(event) => onSearchChange(event.target.value)}
-                                placeholder="Buscar por cliente, proposta, data ou valor..."
+                                placeholder="Buscar por cliente, bairro, CEP, proposta, data ou valor..."
                                 className="ui-field h-11 w-full pl-10 pr-9 text-sm font-semibold"
                             />
                             {searchTerm ? (
@@ -3920,6 +3921,7 @@ const PdfHistoryView: React.FC<PdfHistoryViewProps> = ({ pdfs, hasMoreServerPdfs
                     group.client.telefone,
                     group.client.email,
                     group.client.cpfCnpj,
+                    clientAddressSearchText(group.client),
                 ].join(' ');
                 const pdfSearchText = group.pdfs.map(pdf => {
                     const date = parseDate(pdf.date);

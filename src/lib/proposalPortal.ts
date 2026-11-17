@@ -606,6 +606,8 @@ export interface CompanyProposalPortal {
     firstViewedAt?: string | null;
     lastViewedAt?: string | null;
     clientPhone?: string | null;
+    // Endereço do cliente, para achar a proposta pelo bairro ou CEP.
+    clientAddress?: Pick<Client, 'cep' | 'logradouro' | 'numero' | 'bairro' | 'cidade' | 'uf'>;
     lostAt?: string | null;
     lostReason?: string | null;
     followUps?: ProposalFollowUpEvent[];
@@ -637,7 +639,7 @@ export const loadCompanyProposalPortals = async (options: { clientId?: number } 
     const portalIds = portals.map(item => item.id);
     const clientIds = Array.from(new Set(portals.map(item => item.client_id)));
     const [{ data: clients }, { data: items }, { data: messages }, followUpResult] = await Promise.all([
-        supabase.from('clients').select('id, nome, telefone').in('id', clientIds),
+        supabase.from('clients').select('id, nome, telefone, cep, logradouro, numero, bairro, cidade, uf').in('id', clientIds),
         supabase.from('proposal_portal_items').select('portal_id, saved_pdf_id, position, condition_original_value, condition_final_value, condition_discount_amount, condition_discount_percent, condition_expires_at, saved_pdfs(proposal_option_name, nome_arquivo, total_preco, follow_up_base_value, follow_up_discount_percent, follow_up_discount_amount, follow_up_revision)').in('portal_id', portalIds).order('position'),
         supabase.from('proposal_portal_messages').select('id, portal_id, saved_pdf_id, sender_type, kind, body, offer_type, offer_value, condition_value, payment_selection, created_at').in('portal_id', portalIds).order('created_at'),
         supabase.from('proposal_portal_follow_ups').select('id, portal_id, kind, step, channel, reason, note, remind_at, created_at').in('portal_id', portalIds).order('created_at'),
@@ -647,6 +649,14 @@ export const loadCompanyProposalPortals = async (options: { clientId?: number } 
 
     const clientNames = new Map((clients || []).map(client => [Number(client.id), client.nome]));
     const clientPhones = new Map((clients || []).map((client: any) => [Number(client.id), client.telefone as string | null]));
+    const clientAddresses = new Map((clients || []).map((client: any) => [Number(client.id), {
+        cep: client.cep ?? undefined,
+        logradouro: client.logradouro ?? undefined,
+        numero: client.numero ?? undefined,
+        bairro: client.bairro ?? undefined,
+        cidade: client.cidade ?? undefined,
+        uf: client.uf ?? undefined,
+    }]));
     return portals.map(portal => {
         const portalMessages = (messages || []).filter(message => message.portal_id === portal.id) as Array<ProposalPortalMessage & { portal_id: string }>;
         const readAt = portal.last_read_by_company_at ? new Date(portal.last_read_by_company_at).getTime() : 0;
@@ -673,6 +683,7 @@ export const loadCompanyProposalPortals = async (options: { clientId?: number } 
             firstViewedAt: portal.first_viewed_at,
             lastViewedAt: portal.last_viewed_at,
             clientPhone: clientPhones.get(Number(portal.client_id)) ?? null,
+            clientAddress: clientAddresses.get(Number(portal.client_id)),
             lostAt: portal.lost_at,
             lostReason: portal.lost_reason,
             followUps: (followUps as Array<ProposalFollowUpEvent & { portal_id: string }>).filter(event => event.portal_id === portal.id),

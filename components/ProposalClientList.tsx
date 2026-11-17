@@ -24,6 +24,7 @@ import {
 } from '../src/lib/proposalFollowUpQueue';
 import { buildProposalWhatsAppUrl } from '../src/lib/proposalMessages';
 import { OpenedNowBadge } from './ProposalDetailPanel';
+import { matchesClientSearch } from '../src/lib/clientSearch';
 
 export type ProposalListTab = 'today' | 'waiting' | 'closed';
 
@@ -124,7 +125,7 @@ const ProposalClientList: React.FC<ProposalClientListProps> = ({ groups, templat
 
     const searched = useMemo(() => {
         const term = normalizeSearch(query);
-        return term ? groups.filter(group => normalizeSearch(group.primary.clientName).includes(term)) : groups;
+        return term ? groups.filter(group => matchesClientSearch({ nome: group.primary.clientName, telefone: group.primary.clientPhone, ...group.primary.clientAddress }, query)) : groups;
     }, [groups, query]);
     const groupByPortal = useMemo(() => new Map(searched.map(group => [group.primary.id, group])), [searched]);
     const { due, waiting, stale } = useMemo(() => buildFollowUpQueue(searched.map(group => group.primary), now, templates), [searched, now, templates]);
@@ -240,7 +241,7 @@ const ProposalClientList: React.FC<ProposalClientListProps> = ({ groups, templat
                         type="search"
                         value={query}
                         onChange={event => onViewChange({ query: event.target.value, filter: 'all' })}
-                        placeholder="Buscar cliente"
+                        placeholder="Buscar cliente, bairro ou CEP"
                         aria-label="Buscar cliente"
                         style={{ fontSize: 16 }}
                         className="h-10 w-full scroll-mt-28 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] pl-9 pr-3 text-[var(--text-body)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-blue-500/30"
