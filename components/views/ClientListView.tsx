@@ -206,7 +206,6 @@ const ClientListView: React.FC<ClientListViewProps> = ({
                             onChange={event => setSearchTerm(event.target.value)}
                             placeholder="Buscar por nome, telefone, bairro ou CEP"
                             aria-label="Buscar cliente"
-                            disabled={isLoading}
                             style={{ fontSize: 16 }}
                             className="h-11 w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] pl-10 pr-10 text-[var(--text-strong)] outline-none transition-colors placeholder:text-[var(--text-soft)] focus:border-[var(--brand-primary)] sm:h-10 sm:rounded-[var(--radius-control)]"
                         />

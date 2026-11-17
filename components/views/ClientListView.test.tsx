@@ -47,6 +47,17 @@ describe('ClientListView', () => {
         expect(props.onOpenClient).toHaveBeenCalledWith(1);
     });
 
+    it('deixa continuar digitando enquanto a busca consulta o servidor', () => {
+        const { rerender } = render(<ClientListView {...baseProps()} />);
+        const search = screen.getByLabelText('Buscar cliente');
+        search.focus();
+        fireEvent.change(search, { target: { value: '5' } });
+
+        rerender(<ClientListView {...baseProps()} isLoading />);
+        expect(screen.getByLabelText('Buscar cliente')).not.toBeDisabled();
+        expect(screen.getByLabelText('Buscar cliente')).toHaveFocus();
+    });
+
     it('busca por nome (sem acento) ou por telefone', () => {
         render(<ClientListView {...baseProps()} />);
         const search = screen.getByLabelText('Buscar cliente');
