@@ -4,7 +4,7 @@ import { Agendamento, Client, SavedPDF } from '../../types';
 import ActionButton from '../ui/ActionButton';
 import ContentState from '../ui/ContentState';
 import { ListSkeleton } from '../ui/Skeleton';
-import { matchesSearch } from '../../src/lib/textSearch';
+import { clientPlaceLabel, matchedOnlyByAddress, matchesClientSearch } from '../../src/lib/clientSearch';
 import {
     buildClientWhatsAppUrl,
     formatMoneyShort,
@@ -38,7 +38,6 @@ const PAGE_SIZE = 20;
 // Celular: avatar | nome ... quando / situação + valor. Computador: uma coluna para cada coisa.
 const ROW_GRID = "grid items-center gap-x-3 gap-y-1 grid-cols-[auto_auto_minmax(0,1fr)_auto] [grid-template-areas:'avatar_name_name_when'_'avatar_stage_value_value'] sm:gap-y-0.5 sm:grid-cols-[44px_minmax(0,2.2fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)] sm:[grid-template-areas:'avatar_name_stage_value_when'_'avatar_phone_stage_value_when']";
 const HEADER_GRID = 'grid items-center gap-x-3 grid-cols-[44px_minmax(0,2.2fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)]';
-const digitsOf = (value?: string) => (value || '').replace(/\D/g, '');
 
 const SORT_LABELS: Record<Sort, string> = {
     activity: 'Atividade recente',
@@ -123,8 +122,7 @@ const ClientListView: React.FC<ClientListViewProps> = ({
     const searched = useMemo(() => {
         const term = searchTerm.trim();
         if (!term) return rows;
-        const termDigits = digitsOf(term);
-        return rows.filter(({ client }) => matchesSearch(client.nome, term) || (termDigits.length >= 3 && digitsOf(client.telefone).includes(termDigits)));
+        return rows.filter(({ client }) => matchesClientSearch(client, term));
     }, [rows, searchTerm]);
 
     const counts = useMemo(() => {
@@ -206,9 +204,8 @@ const ClientListView: React.FC<ClientListViewProps> = ({
                             type="text"
                             value={searchTerm}
                             onChange={event => setSearchTerm(event.target.value)}
-                            placeholder="Buscar por nome ou telefone"
+                            placeholder="Buscar por nome, telefone, bairro ou CEP"
                             aria-label="Buscar cliente"
-                            disabled={isLoading}
                             style={{ fontSize: 16 }}
                             className="h-11 w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] pl-10 pr-10 text-[var(--text-strong)] outline-none transition-colors placeholder:text-[var(--text-soft)] focus:border-[var(--brand-primary)] sm:h-10 sm:rounded-[var(--radius-control)]"
                         />
@@ -287,12 +284,13 @@ const ClientListView: React.FC<ClientListViewProps> = ({
                                 const { client, summary } = row;
                                 const whatsappUrl = buildClientWhatsAppUrl(client);
                                 const value = valueFor(summary);
+                                const placeLabel = searchTerm.trim() && matchedOnlyByAddress(client, searchTerm) ? clientPlaceLabel(client) : '';
                                 return (
                                     <li key={client.id} className={`group/row flex items-center gap-1 rounded-2xl border bg-[var(--surface-raised)] pr-1.5 shadow-[var(--shadow-hairline)] transition-colors sm:rounded-none sm:border-0 sm:bg-transparent sm:shadow-none sm:hover:bg-[var(--surface-muted)] ${client.pinned ? 'border-blue-200 dark:border-blue-900/60' : 'border-[var(--border-subtle)]'}`}>
                                         <button type="button" onClick={() => client.id != null && onOpenClient(client.id)}
                                             className={`${ROW_GRID} min-w-0 flex-1 py-3 pl-3 text-left sm:pl-4`}>
                                             <span className="[grid-area:avatar]"><ClientAvatar client={client} /></span>
-                                            <span className="min-w-0 truncate text-[15px] font-semibold text-[var(--text-strong)] [grid-area:name] sm:text-sm sm:font-medium">{client.nome}</span>
+                                            <span className="min-w-0 truncate text-[15px] font-semibold text-[var(--text-strong)] [grid-area:name] sm:text-sm sm:font-medium">{client.nome}{placeLabel ? <span className="ml-1.5 text-xs font-normal text-[var(--text-muted)]">· {placeLabel}</span> : null}</span>
                                             <span className="hidden min-w-0 truncate text-xs tabular-nums text-[var(--text-muted)] [grid-area:phone] sm:block">{client.telefone || 'Sem telefone'}</span>
                                             <span className="flex [grid-area:stage]"><ClientStageBadge stage={summary.stage} /></span>
                                             {value ? (

@@ -3,7 +3,7 @@ import { Client, SavedPDF } from '../../types';
 import ActionButton from '../ui/ActionButton';
 import ContentState from '../ui/ContentState';
 import { ListSkeleton } from '../ui/Skeleton';
-import { matchesSearch } from '../../src/lib/textSearch';
+import { matchesClientSearch } from '../../src/lib/clientSearch';
 
 const useDebounce = (value: string, delay: number) => {
     const [debouncedValue, setDebouncedValue] = useState(value);
@@ -206,9 +206,7 @@ const ClientSelectionModal: React.FC<ClientSelectionModalProps> = ({
         if (isLoading) return [];
         let result = clients;
         if (debouncedSearchTerm) {
-            result = clients.filter(client =>
-                matchesSearch(client.nome, debouncedSearchTerm)
-            );
+            result = clients.filter(client => matchesClientSearch(client, debouncedSearchTerm));
         }
         // Ordenar: fixados primeiro (pelo mais recente), depois por ID decrescente (mais recentes criados)
         // Importante: criar uma cópia do array para não mutar a prop original
@@ -330,7 +328,7 @@ const ClientSelectionModal: React.FC<ClientSelectionModalProps> = ({
                             type="text"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            placeholder="Buscar pelo nome do cliente..."
+                            placeholder="Buscar por nome, bairro ou CEP..."
                             className="h-11 w-full rounded-[16px] border border-slate-200 bg-slate-50/90 pl-10 pr-10 text-[14px] text-slate-800 shadow-sm outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:focus:bg-slate-800"
                             disabled={isLoading}
                         />

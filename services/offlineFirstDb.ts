@@ -14,6 +14,7 @@ import { normalizeFilmForPersistence } from '../src/lib/filmPersistence';
 import { isOnlineNow, refreshSyncStatus, syncAllPending } from './syncService';
 import { ProposalOptionsHistoryEntry } from './proposalSync';
 import { withRemoteDeadline } from '../src/lib/remoteReadDeadline';
+import { matchesClientSearch } from '../src/lib/clientSearch';
 
 const POSTGRES_INTEGER_MAX = 2147483647;
 
@@ -683,11 +684,9 @@ export async function getClientPage(
     }
 
     const localClients = await getLocalClients();
-    const normalizedSearch = query.search?.trim().toLocaleLowerCase('pt-BR') || '';
-    const filtered = sortClientsForPage(localClients.map(stripClientSyncMetadata)).filter(client => {
-        if (!normalizedSearch) return true;
-        return `${client.nome} ${client.telefone} ${client.email}`.toLocaleLowerCase('pt-BR').includes(normalizedSearch);
-    });
+    const search = query.search?.trim() || '';
+    const filtered = sortClientsForPage(localClients.map(stripClientSyncMetadata))
+        .filter(client => !search || matchesClientSearch(client, search));
     const clients = filtered.slice(offset, offset + limit);
     return {
         clients,
