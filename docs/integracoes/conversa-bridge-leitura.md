@@ -9,13 +9,18 @@ pode consultar:
 Nesta etapa a integração **não** cria agendamento, **não** altera proposta, **não** envia
 mensagem e **não** conta visualização da proposta.
 
+Com uma permissão à parte (`clients:create`), o atendimento também pode **salvar o
+cliente** que a IA terminou de qualificar (seção 4b). Ele só cria um cadastro novo:
+nunca altera nem apaga cliente existente.
+
 Arquivos:
 
 | O quê | Onde |
 |---|---|
 | Tabela da chave e consultas no banco | `supabase/migrations/20261120120000_crm_leitura_atendimento.sql` |
 | Função publicada | `supabase/functions/crm-read/` (`index.ts`, `crmReadHandler.ts`, `crmReadLogic.ts`) |
-| Testes | `src/lib/crmReadLogic.test.ts`, `src/lib/crmReadHandler.test.ts` |
+| Salvar cliente (permissão, registro e limite) | `supabase/migrations/20261121090000_crm_salvar_cliente.sql` |
+| Testes | `src/lib/crmReadLogic.test.ts`, `src/lib/crmReadHandler.test.ts`, `src/lib/crmSaveClient.test.ts` |
 | Criar, listar e revogar chave | `scripts/crm-read-key.mjs` |
 | Conferência depois de publicar | `scripts/crm-read-smoke.mjs` |
 
@@ -234,6 +239,63 @@ recentes, mais os orçamentos que estão nesses links. Links revogados não apar
 
 ---
 
+## 4b. Salvar o cliente qualificado (permissão `clients:create`)
+
+Para quando a IA termina a qualificação e passa para a equipe montar o orçamento. Só
+funciona com uma chave que tenha a permissão `clients:create` (seção 6).
+
+### Pedido
+
+```json
+{
+  "action": "cliente_salvar",
+  "telefone": "558398141069",
+  "nome": "Roseanny Nascimento✨🌸",
+  "bairro": "Bessa",
+  "resumo": "2 janelas, 1,73 × 1,25, quer claridade, enviou foto. Anúncio: Conforto sem perder a luz."
+}
+```
+
+- `telefone` (obrigatório): **o número de quem mandou a mensagem**, nunca um número escrito na
+  conversa.
+- `nome` (opcional): o nome do WhatsApp ou o que o cliente disse. O CRM tira emojis,
+  símbolos e letras "decoradas". Se sobrar pouco (ex.: "♠❤♣♦", "s.a"), o cliente é salvo como
+  **"Cliente WhatsApp final 1069"** e a resposta avisa com `nome_provisorio: true`. O
+  atendimento deve perguntar o nome **antes** de passar para a equipe.
+- `bairro` e `cidade` (opcionais): até 80 caracteres.
+- `resumo` (opcional): até 800 caracteres. Vira a observação do cadastro, como
+  "Veio do WhatsApp (IA) em 20/11/2026: ...". Não mande fotos, links nem dados de terceiros.
+
+### O que o CRM faz
+
+- **Telefone novo na empresa:** cria o cliente com nome, telefone, bairro, cidade e
+  observação. O cadastro fica na empresa da chave.
+- **Telefone que já existe** (com ou sem o nono dígito): **não cria e não altera nada**.
+  Só devolve a referência.
+- **Nos dois casos**, manda um aviso para os celulares da empresa que recebem avisos do app:
+  - cliente novo: "Novo cliente pronto para orçamento: Roseanny (Bessa), pelo WhatsApp.";
+  - cliente que já existia: "Cliente pediu orçamento de novo".
+
+  Tocar no aviso abre a lista de clientes. Se o aviso falhar, o cadastro vale do mesmo jeito.
+- **Limite:** no máximo 30 pedidos por hora por chave (erro 429 depois disso). Cada pedido
+  fica registrado em `crm_client_saves`.
+
+### Resposta
+
+```json
+{ "cliente_ref": 1234, "criado": true, "nome_salvo": "Roseanny Nascimento", "nome_provisorio": false }
+```
+
+Cliente que já existia:
+
+```json
+{ "cliente_ref": 1234, "criado": false, "nome_salvo": null, "nome_provisorio": false }
+```
+
+O nome do cadastro antigo não é devolvido.
+
+---
+
 ## 5. Erros
 
 | HTTP | Quando | Corpo |
@@ -243,6 +305,7 @@ recentes, mais os orçamentos que estão nesses links. Links revogados não apar
 | 403 | A chave não tem permissão para essa consulta (ex.: chave só de agenda) | `{ "error": "Esta chave não pode fazer esta consulta." }` |
 | 405 | Método diferente de POST | |
 | 413 | Corpo maior que 4 KB | |
+| 429 | Salvar cliente: limite de 30 por hora atingido | `{ "error": "Limite de cadastros por hora atingido. Tente mais tarde." }` |
 | 503 | Banco indisponível | Mensagem genérica, sem detalhes internos |
 
 ---
@@ -328,6 +391,28 @@ Juntar este PR no `main` não muda nada que os usuários do app veem: não há t
 5. **Criar a chave** (seção 6) e colocá-la no atendimento.
 6. **Rodar a conferência** (seção 9).
 
+### Salvar cliente (migração `20261121090000_crm_salvar_cliente.sql`)
+
+1. Conferir o nome da regra de permissões da tabela de chaves (somente leitura). Deve existir
+   `crm_read_keys_scopes_check`:
+
+   ```sql
+   SELECT conname FROM pg_constraint WHERE conrelid = 'public.crm_read_keys'::regclass AND contype = 'c';
+   ```
+
+2. Aplicar a migração à mão e conferir as permissões, com o SQL que está no fim dela.
+3. Publicar a função `crm-read` de novo (mesmo comando acima).
+4. Dar a permissão à chave do atendimento, **só com autorização do dono**:
+
+   ```sql
+   UPDATE public.crm_read_keys SET scopes = array_append(scopes, 'clients:create')
+    WHERE id = '<id da chave>' AND NOT ('clients:create' = ANY (scopes))
+   RETURNING id, scopes;
+   ```
+
+   Para tirar a permissão sem desligar a leitura:
+   `UPDATE public.crm_read_keys SET scopes = array_remove(scopes, 'clients:create') WHERE id = '<id da chave>';`
+
 ---
 
 ## 8. O que configurar no projeto Lovable (Conversa Bridge Ai)
@@ -359,6 +444,14 @@ Nada disto foi feito ainda. Fica para a próxima etapa, com autorização do don
 7. **Uso econômico.** Consultar propostas quando a conversa for sobre orçamento (ex.: no
    início da conversa ou quando o cliente citar a proposta), não a cada mensagem. A agenda
    só quando o assunto for marcar horário.
+8. **Salvar cliente (seção 4b):**
+   - chamar `cliente_salvar` **uma vez por conversa**, no momento em que a IA termina a
+     qualificação e passa para a equipe montar o orçamento. Não salvar quando ela passa para
+     a equipe por outro motivo ("quero falar com alguém", CRM fora do ar);
+   - se o nome do WhatsApp não servir, a IA pergunta o nome **antes** da mensagem final
+     ("Para o especialista já te chamar pelo nome, com quem eu falo?");
+   - o resumo leva o que a IA levantou: quantidade, medidas, o que incomoda, se mandou foto,
+     o anúncio de origem e a película sugerida. Nada de dados de outras pessoas.
 
 ---
 
@@ -367,7 +460,7 @@ Nada disto foi feito ainda. Fica para a próxima etapa, com autorização do don
 ### Automáticos (sem rede e sem banco)
 
 ```powershell
-npx vitest run src/lib/crmReadLogic.test.ts src/lib/crmReadHandler.test.ts
+npx vitest run src/lib/crmReadLogic.test.ts src/lib/crmReadHandler.test.ts src/lib/crmSaveClient.test.ts
 ```
 
 Cobrem:
@@ -387,6 +480,14 @@ Cobrem:
   sem fim e falta de horário de trabalho configurado.
 - **Pedidos estranhos:** ação de escrita, JSON quebrado, pedido grande demais; o registro de
   erro não leva chave nem telefone.
+- **Salvar cliente:**
+  - a chave sem `clients:create` dá 403;
+  - o nome sai limpo (emojis, letras decoradas), e só com emoji ou iniciais vira o nome
+    provisório;
+  - telefone que já existe não cria e não devolve o nome antigo;
+  - o limite por hora dá 429;
+  - aviso no celular que falhou não desfaz o cadastro;
+  - `company_id` é recusado antes de salvar.
 
 ### Depois de publicar (com a chave de verdade)
 
@@ -409,6 +510,6 @@ O script mostra só "passou/falhou" e códigos HTTP. Para testar a revogação, 
 
 - Tela em Configurações para criar e revogar a chave, sem SQL.
 - Limite de consultas por minuto por chave.
-- Ações com escrita (pré-agendamento, registrar retorno combinado), cada uma com autorização
-  própria.
+- Outras ações com escrita (pré-agendamento, registrar retorno combinado, transformar as
+  medidas do resumo em medidas do orçamento), cada uma com autorização própria.
 - Vários números ou empresas no atendimento.

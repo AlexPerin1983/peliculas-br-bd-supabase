@@ -18,11 +18,21 @@ export const MAX_AGENDA_DAYS = 31;
 const MIN_FREE_MINUTES = 30;
 const DEFAULT_EVENT_MINUTES = 60;
 
-export type CrmScope = 'proposals:read' | 'agenda:read';
+export type CrmScope = 'proposals:read' | 'agenda:read' | 'clients:create';
+
+export interface SaveClientInput {
+    phone: string;
+    // Nome limpo, ou null quando o que veio não serve (só emojis, iniciais...).
+    name: string | null;
+    bairro: string | null;
+    cidade: string | null;
+    summary: string | null;
+}
 
 export type CrmCommand =
     | { action: 'propostas'; phone: string }
-    | { action: 'agenda'; from: string; to: string };
+    | { action: 'agenda'; from: string; to: string }
+    | ({ action: 'cliente_salvar' } & SaveClientInput);
 
 export const isPlausibleCrmKey = (key: unknown): key is string =>
     typeof key === 'string' && CRM_KEY_PATTERN.test(key);
@@ -43,6 +53,38 @@ export const phoneDigits = (phone: unknown): string | null => {
 const ALLOWED_FIELDS: Record<CrmCommand['action'], string[]> = {
     propostas: ['action', 'telefone'],
     agenda: ['action', 'de', 'ate'],
+    cliente_salvar: ['action', 'telefone', 'nome', 'bairro', 'cidade', 'resumo'],
+};
+
+// Nome do WhatsApp ou o que o cliente disse: tira emojis, símbolos e letras
+// "decoradas" (𝓡𝓸𝓼𝓮 vira Rose). Devolve null quando sobra pouco para ser um nome
+// (ex.: "♠❤♣♦", "s.a"): aí o atendimento pergunta o nome ou fica o provisório.
+export const cleanClientName = (value: unknown): string | null => {
+    if (typeof value !== 'string') return null;
+    const cleaned = value
+        .normalize('NFKC')
+        .replace(/[^\p{L}\p{M}\s'-]/gu, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 120)
+        .trim();
+    const letters = cleaned.replace(/[^\p{L}]/gu, '');
+    const hasRealWord = cleaned.split(' ').some(word => word.replace(/[^\p{L}]/gu, '').length >= 3);
+    return letters.length >= 3 && hasRealWord ? cleaned : null;
+};
+
+export const provisionalClientName = (phone: string) => `Cliente WhatsApp final ${phone.slice(-4)}`;
+
+const cleanLine = (value: unknown, max: number): string | null => {
+    if (typeof value !== 'string') return null;
+    const text = value.replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max).trim();
+    return text || null;
+};
+
+// Observação gravada no cadastro, com a data de Brasília.
+export const clientNotes = (summary: string | null, now: number) => {
+    const day = new Date(now - OFFSET_MS).toISOString().slice(0, 10).split('-').reverse().join('/');
+    return `Veio do WhatsApp (IA) em ${day}${summary ? `: ${summary}` : '.'}`.slice(0, 1000);
 };
 // Campos que pareceriam escolher a empresa: recusados com uma mensagem clara.
 const COMPANY_FIELDS = /^(company|organization|organisation|empresa|org|tenant)(_?id)?$/i;
@@ -64,13 +106,32 @@ export const parseCrmCommand = (payload: unknown): CrmCommand | { invalid: strin
     if (companyField) return { invalid: `A empresa vem da chave de acesso; não envie "${companyField}".` };
 
     const action = body.action;
-    if (action !== 'propostas' && action !== 'agenda') return { invalid: 'Ação desconhecida. Use "propostas" ou "agenda".' };
+    if (action !== 'propostas' && action !== 'agenda' && action !== 'cliente_salvar') {
+        return { invalid: 'Ação desconhecida. Use "propostas", "agenda" ou "cliente_salvar".' };
+    }
     const extra = keys.find(key => !ALLOWED_FIELDS[action].includes(key));
     if (extra) return { invalid: `Campo não aceito: "${extra.slice(0, 40)}".` };
 
     if (action === 'propostas') {
         const phone = phoneDigits(body.telefone);
         return phone ? { action, phone } : { invalid: 'Telefone inválido. Envie só os dígitos, com DDD.' };
+    }
+
+    if (action === 'cliente_salvar') {
+        const phone = phoneDigits(body.telefone);
+        if (!phone) return { invalid: 'Telefone inválido. Envie só os dígitos, com DDD.' };
+        for (const field of ['nome', 'bairro', 'cidade', 'resumo']) {
+            if (body[field] != null && typeof body[field] !== 'string') return { invalid: `O campo "${field}" precisa ser texto.` };
+        }
+        if (typeof body.resumo === 'string' && body.resumo.length > 800) return { invalid: 'Resumo grande demais (máximo 800 caracteres).' };
+        return {
+            action,
+            phone,
+            name: cleanClientName(body.nome),
+            bairro: cleanLine(body.bairro, 80),
+            cidade: cleanLine(body.cidade, 80),
+            summary: cleanLine(body.resumo, 800),
+        };
     }
 
     const from = typeof body.de === 'string' ? body.de : '';
@@ -84,7 +145,17 @@ export const parseCrmCommand = (payload: unknown): CrmCommand | { invalid: strin
 };
 
 export const requiredScope = (command: CrmCommand): CrmScope =>
-    command.action === 'propostas' ? 'proposals:read' : 'agenda:read';
+    command.action === 'propostas' ? 'proposals:read'
+        : command.action === 'agenda' ? 'agenda:read'
+            : 'clients:create';
+
+// Aviso no celular da empresa quando o atendimento salva um cliente.
+export const saveClientPush = (result: { clientId: number; name: string; created: boolean }, bairro: string | null) => ({
+    title: result.created ? 'Novo cliente pronto para orçamento' : 'Cliente pediu orçamento de novo',
+    body: `${result.name.slice(0, 80)}${bairro ? ` (${bairro})` : ''}, pelo WhatsApp.`,
+    tag: `crm-client-${result.clientId}`,
+    url: '/?tab=client',
+});
 
 // Início do primeiro dia e início do dia seguinte ao último, no horário de Brasília.
 export const agendaRange = (from: string, to: string) => ({
