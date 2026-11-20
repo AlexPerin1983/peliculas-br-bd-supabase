@@ -4,10 +4,12 @@
 // Regras de segurança:
 // - sem chave válida, nada é lido (401, sempre a mesma mensagem);
 // - a empresa vem SÓ da chave; campos como company_id no pedido são recusados;
-// - nada de chave, telefone ou resposta nos registros (console).
+// - nada de chave, telefone ou resposta nos registros (console);
+// - salvar cliente: só com a permissão clients:create; nunca altera cliente existente.
 import {
     type AgendaRows, type CrmScope, type ProposalRows,
-    CRM_KEY_HEADER, agendaRange, isPlausibleCrmKey, parseCrmCommand, requiredScope, sha256Hex, shapeAgenda, shapeProposals,
+    CRM_KEY_HEADER, agendaRange, clientNotes, isPlausibleCrmKey, parseCrmCommand, provisionalClientName, requiredScope,
+    saveClientPush, sha256Hex, shapeAgenda, shapeProposals,
 } from './crmReadLogic.ts';
 
 export interface CrmKeyRecord {
@@ -21,10 +23,20 @@ export interface CrmReadDeps {
     findKey: (tokenHash: string) => Promise<CrmKeyRecord | null>;
     loadProposals: (organizationId: string, phone: string) => Promise<ProposalRows>;
     loadAgenda: (organizationId: string, fromIso: string, toIso: string) => Promise<AgendaRows>;
+    // Cria o cliente se o telefone ainda não existir na empresa (nunca altera o existente).
+    saveClient?: (keyId: string, organizationId: string, input: {
+        phone: string; name: string; bairro: string | null; cidade: string | null; notes: string;
+    }) => Promise<SaveClientOutcome>;
+    // Aviso no celular da empresa. Falhar aqui não desfaz o cadastro.
+    notifyCompany?: (organizationId: string, push: ReturnType<typeof saveClientPush>) => Promise<void>;
     now?: () => number;
     // Só o código do erro, para diagnóstico (nunca dados do pedido).
     logError?: (code: string) => void;
 }
+
+export type SaveClientOutcome =
+    | { ok: true; clientId: number; name: string; created: boolean }
+    | { ok: false; reason: 'limit' | 'forbidden' };
 
 const MAX_BODY_BYTES = 4_096;
 
@@ -75,6 +87,35 @@ export const handleCrmRead = async (request: Request, deps: CrmReadDeps): Promis
     try {
         if (command.action === 'propostas') {
             return json(shapeProposals(await deps.loadProposals(org, command.phone), now));
+        }
+        if (command.action === 'cliente_salvar') {
+            if (!deps.saveClient) return json({ error: 'Esta chave não pode fazer esta consulta.' }, 403);
+            const outcome = await deps.saveClient(record.keyId, org, {
+                phone: command.phone,
+                name: command.name ?? provisionalClientName(command.phone),
+                bairro: command.bairro,
+                cidade: command.cidade,
+                notes: clientNotes(command.summary, now),
+            });
+            if (outcome.ok === false) {
+                return outcome.reason === 'limit'
+                    ? json({ error: 'Limite de cadastros por hora atingido. Tente mais tarde.' }, 429)
+                    : json({ error: 'Esta chave não pode fazer esta consulta.' }, 403);
+            }
+            if (deps.notifyCompany) {
+                try {
+                    await deps.notifyCompany(org, saveClientPush(outcome, command.bairro));
+                } catch {
+                    logError('notify_failed');
+                }
+            }
+            return json({
+                cliente_ref: outcome.clientId,
+                criado: outcome.created,
+                // Só quando foi criado agora: o nome de um cliente que já existia não volta.
+                nome_salvo: outcome.created ? outcome.name : null,
+                nome_provisorio: outcome.created && command.name == null,
+            });
         }
         const { fromIso, toIso } = agendaRange(command.from, command.to);
         return json(shapeAgenda(await deps.loadAgenda(org, fromIso, toIso), command.from, command.to, now));
