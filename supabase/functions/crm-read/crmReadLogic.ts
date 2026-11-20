@@ -116,7 +116,7 @@ const firstName = (name: unknown) => String(name ?? '').trim().split(/\s+/)[0]?.
 // ---------------------------------------------------------------- propostas
 
 export interface ProposalRows {
-    clients: Array<{ id: number; nome: string | null }>;
+    clients: Array<{ id: number; nome: string | null; bairro?: string | null; cidade?: string | null }>;
     portals: any[];
     items: any[];
     pdfs: any[];
@@ -175,7 +175,8 @@ export interface ProposalOut {
 
 export interface ProposalsResponse {
     encontrado: boolean;
-    clientes: Array<{ ref: number; primeiro_nome: string | null }>;
+    // Bairro e cidade do próprio cliente (do cadastro), nunca rua, número ou CEP.
+    clientes: Array<{ ref: number; primeiro_nome: string | null; bairro: string | null; cidade: string | null }>;
     propostas: ProposalOut[];
     avisos: string[];
 }
@@ -315,7 +316,12 @@ export const shapeProposals = (rows: ProposalRows, now: number): ProposalsRespon
 
     return {
         encontrado: clients.length > 0,
-        clientes: clients.map(client => ({ ref: Number(client.id), primeiro_nome: firstName(client.nome) })),
+        clientes: clients.map(client => ({
+            ref: Number(client.id),
+            primeiro_nome: firstName(client.nome),
+            bairro: client.bairro ? String(client.bairro).trim().slice(0, 80) || null : null,
+            cidade: client.cidade ? String(client.cidade).trim().slice(0, 80) || null : null,
+        })),
         propostas,
         avisos,
     };
