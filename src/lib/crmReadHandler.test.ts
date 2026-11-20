@@ -69,7 +69,7 @@ describe('leitura do CRM: acesso autorizado', () => {
         expect(response.headers.get('Cache-Control')).toBe('no-store');
         const body = await response.json();
         expect(body.encontrado).toBe(true);
-        expect(body.clientes).toEqual([{ ref: 1, primeiro_nome: 'Ana' }]);
+        expect(body.clientes).toEqual([{ ref: 1, primeiro_nome: 'Ana', bairro: null, cidade: null }]);
         expect(body.propostas[0].opcoes[0].nome).toBe('Opção da empresa A');
         expect(deps.loadProposals).toHaveBeenCalledWith(ORG_A, PHONE_A);
     });
@@ -145,7 +145,7 @@ describe('leitura do CRM: tentativa de consultar outra empresa', () => {
     it('a empresa B continua vendo só os próprios dados com a própria chave', async () => {
         const deps = await buildDeps();
         const own = await (await call(deps, { action: 'propostas', telefone: PHONE_B }, KEY_B)).json();
-        expect(own.clientes).toEqual([{ ref: 2, primeiro_nome: 'Bruno' }]);
+        expect(own.clientes).toEqual([{ ref: 2, primeiro_nome: 'Bruno', bairro: null, cidade: null }]);
         const other = await (await call(deps, { action: 'propostas', telefone: PHONE_A }, KEY_B)).json();
         expect(other.encontrado).toBe(false);
         expect(deps.loadProposals).toHaveBeenNthCalledWith(1, ORG_B, PHONE_B);

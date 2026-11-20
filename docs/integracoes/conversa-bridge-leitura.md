@@ -41,7 +41,7 @@ Arquivos:
   atendimento. A função não registra chave, telefone nem resposta; em erro, registra só um
   código (`propostas_failed`, `key_lookup_failed`...).
 - **Dados mínimos.** Fica de fora: nome completo (vai só o primeiro nome), telefone,
-  endereço (vai só bairro e cidade, na agenda), CPF/CNPJ, e-mail, observações, custos,
+  endereço (vai só bairro e cidade: do próprio cliente e dos compromissos da agenda), CPF/CNPJ, e-mail, observações, custos,
   arquivo do PDF, link da proposta e mensagens trocadas.
 - **Funções só do servidor.** As funções SQL são `SECURITY DEFINER`, com EXECUTE revogado de
   `PUBLIC, anon, authenticated` e liberado só para `service_role`. O app não vê a tabela de
@@ -85,7 +85,7 @@ x-crm-key: <chave de leitura>
 ```json
 {
   "encontrado": true,
-  "clientes": [{ "ref": 101, "primeiro_nome": "Maria" }],
+  "clientes": [{ "ref": 101, "primeiro_nome": "Maria", "bairro": "Bessa", "cidade": "João Pessoa" }],
   "propostas": [
     {
       "id": "link:3f6c0d8e-0000-4000-8000-000000000001",
@@ -171,6 +171,7 @@ Telefone sem cadastro na empresa:
 | Campo | Significado |
 |---|---|
 | `clientes[].ref` | Número interno do cadastro (não é dado pessoal). Se vier mais de um, há cadastros repetidos com o mesmo telefone (vem um aviso). |
+| `clientes[].bairro` / `cidade` | Bairro e cidade do cadastro do próprio cliente (para saber se a equipe estará perto). Vazio quando o cadastro não tem. Nunca rua, número ou CEP. |
 | `propostas[].id` | `link:<id>` para proposta enviada por link; `orcamentos:<ref>` para orçamentos que nunca foram enviados por link. |
 | `situacao` | `aguardando_resposta`, `em_negociacao` (cliente pediu outro valor), `aprovada`, `recusada`, `vencida`, `perdida` (marcada como perdida pela equipe) ou `sem_link`. |
 | `visualizacoes` / `ultima_visualizacao_em` | Quantas vezes o cliente abriu o link e quando foi a última. |

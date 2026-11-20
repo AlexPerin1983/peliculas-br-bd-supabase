@@ -68,7 +68,7 @@ describe('leitura do CRM: pedido', () => {
 });
 
 const proposalRows = (): ProposalRows => ({
-    clients: [{ id: 101, nome: 'Maria Aparecida da Silva', telefone: '21998765432', cpf: '123.456.789-00', logradouro: 'Rua Secreta, 45' } as any],
+    clients: [{ id: 101, nome: 'Maria Aparecida da Silva', bairro: ' Bessa ', cidade: 'João Pessoa', telefone: '21998765432', cpf: '123.456.789-00', logradouro: 'Rua Secreta, 45', cep: '58035-000' } as any],
     portals: [{
         id: 'portal-1', client_id: 101, status: 'active', created_at: '2026-11-18T13:00:00Z',
         expires_at: '2026-11-25T13:00:00Z', view_count: 3, last_viewed_at: '2026-11-19T22:10:00Z',
@@ -108,7 +108,7 @@ describe('leitura do CRM: propostas', () => {
     it('monta a proposta do link com opções, recomendada, condição e pagamento', () => {
         const result = shapeProposals(proposalRows(), NOW);
         expect(result.encontrado).toBe(true);
-        expect(result.clientes).toEqual([{ ref: 101, primeiro_nome: 'Maria' }]);
+        expect(result.clientes).toEqual([{ ref: 101, primeiro_nome: 'Maria', bairro: 'Bessa', cidade: 'João Pessoa' }]);
 
         const link = result.propostas.find(item => item.tipo === 'link')!;
         expect(link).toMatchObject({
@@ -146,7 +146,7 @@ describe('leitura do CRM: propostas', () => {
 
     it('não devolve dados pessoais, link, arquivo nem orçamento de outro cliente', () => {
         const text = JSON.stringify(shapeProposals(proposalRows(), NOW));
-        for (const secret of ['Aparecida', 'Silva', '99876', '123.456.789', 'Rua Secreta', 'segredo-do-link', 'privado/arquivo.pdf', 'cliente chato', 'Outro cliente', '999']) {
+        for (const secret of ['Aparecida', 'Silva', '99876', '123.456.789', 'Rua Secreta', '58035', 'segredo-do-link', 'privado/arquivo.pdf', 'cliente chato', 'Outro cliente', '999']) {
             expect(text).not.toContain(secret);
         }
     });
