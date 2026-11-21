@@ -67,6 +67,11 @@ Deno.serve(async (request) => {
                 draft: data.draft === 'criado' || data.draft === 'ja_existia' ? data.draft : 'sem_medidas',
             };
         },
+        runTeamRpc: async (name, args) => {
+            const { data, error } = await admin.rpc(name, args);
+            if (error) throw new Error(error.message ?? 'rpc');
+            return data;
+        },
         notifyCompany: async (organizationId, push) => {
             const publicKey = Deno.env.get('VAPID_PUBLIC_KEY') ?? '';
             const privateKey = Deno.env.get('VAPID_PRIVATE_KEY') ?? '';
