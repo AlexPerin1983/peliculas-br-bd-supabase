@@ -15,6 +15,16 @@ vi.mock('../../src/lib/proposalPortal', () => ({
     buildProposalPricesBlock: (pdfs: SavedPDF[]) => pdfs.map(pdf => `${pdf.proposalOptionName}: ${pdf.totalPreco}`).join('\n'),
 }));
 
+vi.mock('../../src/lib/aiProposalSend', async () => {
+    const actual = await vi.importActual<typeof import('../../src/lib/aiProposalSend')>('../../src/lib/aiProposalSend');
+    return {
+        describeAiProposalSend: actual.describeAiProposalSend,
+        isAiProposalSendAvailable: vi.fn(async () => false),
+        requestAiProposalSend: vi.fn(async () => undefined),
+        getAiProposalSendStatus: vi.fn(async () => null),
+    };
+});
+
 const client: Client = {
     id: 1,
     nome: 'Camila Soares',
@@ -58,6 +68,28 @@ describe('ProposalShareModal', () => {
         await screen.findByText('Link criado com sucesso');
         expect(screen.queryByRole('button', { name: /Recomendar/ })).not.toBeInTheDocument();
         expect(setProposalPortalHighlight).not.toHaveBeenCalled();
+    });
+
+    it('sem o atendimento ligado, não mostra "Enviar pela IA"', async () => {
+        render(<ProposalShareModal isOpen client={client} pdfs={[pdf]} onClose={vi.fn()} />);
+        fireEvent.click(await screen.findByRole('button', { name: /Criar link da proposta/i }));
+        await screen.findByText('Link criado com sucesso');
+        expect(screen.queryByRole('button', { name: /Enviar pela IA/ })).not.toBeInTheDocument();
+    });
+
+    it('com o atendimento ligado, "Enviar pela IA" manda a mensagem com o link para a fila', async () => {
+        const ai = await import('../../src/lib/aiProposalSend');
+        vi.mocked(ai.isAiProposalSendAvailable).mockResolvedValueOnce(true);
+        vi.mocked(ai.getAiProposalSendStatus).mockResolvedValue(null);
+        render(<ProposalShareModal isOpen client={client} pdfs={[pdf]} onClose={vi.fn()} />);
+        fireEvent.click(await screen.findByRole('button', { name: /Criar link da proposta/i }));
+        await screen.findByText('Link criado com sucesso');
+
+        vi.mocked(ai.getAiProposalSendStatus).mockResolvedValue({ status: 'pendente', detail: null, createdAt: '2026-11-21T15:00:00Z' });
+        fireEvent.click(await screen.findByRole('button', { name: 'Enviar pela IA' }));
+        await waitFor(() => expect(ai.requestAiProposalSend).toHaveBeenCalledWith('portal-1', expect.stringContaining(portalUrl)));
+        expect(await screen.findByText('Aguardando o atendimento enviar ao cliente…')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Enviar pela IA' })).toBeDisabled();
     });
 
     it('oferece WhatsApp comum e Business com o mesmo link criado', async () => {

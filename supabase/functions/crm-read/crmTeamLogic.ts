@@ -10,8 +10,11 @@ const OFFSET = '-03:00';
 const OFFSET_MS = 3 * 3_600_000;
 const WEEKDAYS = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
 
-export type TeamAction = 'agenda_criar' | 'proposta_gerar' | 'proposta_atualizar' | 'proposta_consultar' | 'proposta_enviar';
-export const TEAM_ACTIONS: TeamAction[] = ['agenda_criar', 'proposta_gerar', 'proposta_atualizar', 'proposta_consultar', 'proposta_enviar'];
+export type TeamAction = 'agenda_criar' | 'proposta_gerar' | 'proposta_atualizar' | 'proposta_consultar'
+    | 'envios_pendentes' | 'envio_confirmar';
+export const TEAM_ACTIONS: TeamAction[] = [
+    'agenda_criar', 'proposta_gerar', 'proposta_atualizar', 'proposta_consultar', 'envios_pendentes', 'envio_confirmar',
+];
 
 export interface ClientTarget {
     phone: string | null;
@@ -22,20 +25,23 @@ export type TeamCommand =
     | ({ action: 'agenda_criar'; operator: string; start: number; end: number; type: 'consulta' | 'instalacao'; notes: string | null } & ClientTarget)
     | ({ action: 'proposta_gerar' | 'proposta_atualizar'; operator: string; films: string[]; discountPercent: number } & ClientTarget)
     | ({ action: 'proposta_consultar' } & ClientTarget)
-    | ({ action: 'proposta_enviar'; operator: string; optionNames: string[]; validDays: number } & ClientTarget);
+    // A fila de envio é preenchida só pelo app ("Enviar pela IA"); o atendimento só lê e confirma.
+    | { action: 'envios_pendentes' }
+    | { action: 'envio_confirmar'; sendId: number; sent: boolean; detail: string | null };
 
 export const TEAM_FIELDS: Record<TeamAction, string[]> = {
     agenda_criar: ['action', 'operador_telefone', 'cliente_telefone', 'cliente_ref', 'inicio', 'fim', 'duracao_minutos', 'tipo', 'observacoes'],
     proposta_gerar: ['action', 'operador_telefone', 'cliente_telefone', 'cliente_ref', 'peliculas', 'desconto_percentual'],
     proposta_atualizar: ['action', 'operador_telefone', 'cliente_telefone', 'cliente_ref', 'peliculas', 'desconto_percentual'],
     proposta_consultar: ['action', 'cliente_telefone', 'cliente_ref'],
-    proposta_enviar: ['action', 'operador_telefone', 'cliente_telefone', 'cliente_ref', 'opcoes', 'validade_dias'],
+    envios_pendentes: ['action'],
+    envio_confirmar: ['action', 'envio_id', 'enviado', 'detalhe'],
 };
 
 export const teamScope = (action: TeamAction): CrmScope =>
     action === 'agenda_criar' ? 'agenda:create'
         : action === 'proposta_consultar' ? 'proposals:read'
-            : action === 'proposta_enviar' ? 'proposals:send'
+            : action === 'envios_pendentes' || action === 'envio_confirmar' ? 'proposals:send'
                 : 'proposals:write';
 
 // "2026-11-24 14:00", "2026-11-24T14:00" (hora de Brasília) ou ISO com fuso.
@@ -76,6 +82,17 @@ const textList = (value: unknown, field: string, max: number): string[] | { inva
 };
 
 export const parseTeamCommand = (action: TeamAction, body: Record<string, unknown>): TeamCommand | { invalid: string } => {
+    if (action === 'envios_pendentes') return { action };
+    if (action === 'envio_confirmar') {
+        const id = Number(body.envio_id);
+        if (!Number.isInteger(id) || id <= 0) return { invalid: 'envio_id inválido.' };
+        if (typeof body.enviado !== 'boolean') return { invalid: 'enviado precisa ser true ou false.' };
+        if (body.detalhe != null && (typeof body.detalhe !== 'string' || body.detalhe.length > 300)) {
+            return { invalid: 'detalhe precisa ser texto de até 300 caracteres.' };
+        }
+        return { action, sendId: id, sent: body.enviado, detail: typeof body.detalhe === 'string' ? body.detalhe.trim() || null : null };
+    }
+
     const target = clientTarget(body);
     if ('invalid' in target) return target;
     if (action === 'proposta_consultar') return { action, ...target };
@@ -104,14 +121,6 @@ export const parseTeamCommand = (action: TeamAction, body: Record<string, unknow
         }
         const notes = typeof body.observacoes === 'string' ? body.observacoes.replace(/\s+/g, ' ').trim() || null : null;
         return { action, ...target, operator, start, end, type: body.tipo === 'instalacao' ? 'instalacao' : 'consulta', notes };
-    }
-
-    if (action === 'proposta_enviar') {
-        const optionNames = textList(body.opcoes, 'opcoes', 6);
-        if (!Array.isArray(optionNames)) return optionNames;
-        const days = body.validade_dias == null ? 7 : Number(body.validade_dias);
-        if (!Number.isInteger(days) || days < 1 || days > 30) return { invalid: 'validade_dias precisa ser de 1 a 30.' };
-        return { action, ...target, operator, optionNames, validDays: days };
     }
 
     const films = textList(body.peliculas, 'peliculas', 4);
@@ -145,6 +154,22 @@ export const proposalClientSlug = (clientName: string | null | undefined) => {
 export const proposalPortalUrl = (token: string, clientName: string | null | undefined) =>
     `${APP_ORIGIN}/p/${proposalClientSlug(clientName)}/${encodeURIComponent(token)}`;
 
+const brl = (value: number) => `R$ ${value.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`;
+
+// Aviso no celular quando a IA calcula: tocar abre o orçamento do cliente no app.
+export const proposalReadyPush = (clientId: number, clientName: unknown, options: Array<{ total?: unknown }>) => {
+    const totals = options.map(option => Number(option.total)).filter(Number.isFinite).sort((a, b) => a - b);
+    const range = totals.length === 0 ? ''
+        : totals.length === 1 ? `: ${brl(totals[0])}`
+            : `: ${totals.length} opções, de ${brl(totals[0])} a ${brl(totals[totals.length - 1])}`;
+    return {
+        title: 'Orçamento calculado pelo WhatsApp',
+        body: `${String(clientName ?? 'Cliente').slice(0, 60)}${range}. Toque para conferir o PDF e enviar.`,
+        tag: `crm-proposta-${clientId}`,
+        url: `/?tab=client&cliente=${clientId}`,
+    };
+};
+
 // Mensagens para a IA repassar à equipe quando o CRM recusa.
 export const TEAM_REASONS: Record<string, string> = {
     cliente_nao_encontrado: 'Não achei esse cliente no CRM. Salve o cliente primeiro.',
@@ -156,6 +181,5 @@ export const TEAM_REASONS: Record<string, string> = {
     no_maximo_4_peliculas: 'No máximo 4 películas por vez.',
     pelicula_desconhecida: 'Película não encontrada no catálogo da empresa.',
     desconto_acima_do_limite: 'Desconto acima do limite permitido.',
-    opcao_sem_preco: 'Uma das opções está sem preço no catálogo. Confira a película no app.',
-    nenhuma_opcao_para_enviar: 'Não há opção calculada para enviar. Use proposta_gerar primeiro.',
+    envio_nao_encontrado: 'Esse envio não está mais pendente.',
 };

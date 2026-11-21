@@ -53,7 +53,8 @@ describe('leitura dos comandos da equipe', () => {
     it('exige o telefone de quem deu o comando nas escritas', () => {
         expect(parseTeamCommand('agenda_criar', { cliente_telefone: CLIENT, inicio: '2026-11-24 14:00' }))
             .toEqual({ invalid: expect.stringContaining('operador_telefone') });
-        expect(parseTeamCommand('proposta_enviar', { cliente_telefone: CLIENT })).toHaveProperty('invalid');
+        expect(parseTeamCommand('proposta_gerar', { cliente_telefone: CLIENT })).toHaveProperty('invalid');
+        expect(parseTeamCommand('envio_confirmar', { envio_id: 3 })).toHaveProperty('invalid');
         expect(parseTeamCommand('proposta_consultar', { cliente_telefone: CLIENT })).toMatchObject({ phone: CLIENT });
     });
 
@@ -87,7 +88,7 @@ describe('ações da equipe no CRM', () => {
 
     it('número fora da equipe é recusado (o banco decide)', async () => {
         const deps = await buildDeps(() => { throw new Error('CRM:operador'); });
-        const response = await call(deps, { action: 'proposta_enviar', operador_telefone: CLIENT, cliente_telefone: CLIENT });
+        const response = await call(deps, { action: 'proposta_gerar', operador_telefone: CLIENT, cliente_telefone: CLIENT });
         expect(response.status).toBe(403);
         expect(await response.json()).toMatchObject({ sucesso: false, motivo: 'operador_nao_autorizado' });
     });
@@ -112,13 +113,27 @@ describe('ações da equipe no CRM', () => {
         expect(deps.notifyCompany).not.toHaveBeenCalled();
     });
 
-    it('proposta_gerar calcula sem enviar ao cliente', async () => {
-        const opcoes = [{ nome: 'G5 (WhatsApp)', pelicula: 'G5', m2: 2.4, subtotal: 480, desconto: 48, total: 432, sem_preco: false }];
+    it('proposta_gerar calcula sem enviar ao cliente e avisa a equipe no celular', async () => {
+        const opcoes = [
+            { nome: 'G5 (WhatsApp)', pelicula: 'G5', m2: 2.4, subtotal: 480, desconto: 48, total: 432, sem_preco: false },
+            { nome: 'Nano (WhatsApp)', pelicula: 'Nano', m2: 2.4, subtotal: 1440, desconto: 144, total: 1296, sem_preco: false },
+        ];
         const deps = await buildDeps(() => ({ ok: true, client_id: 5, client_name: 'Marília', opcoes }));
-        const body = await (await call(deps, { action: 'proposta_gerar', operador_telefone: TEAM, cliente_telefone: CLIENT, peliculas: ['G5'], desconto_percentual: 10 })).json();
+        const body = await (await call(deps, { action: 'proposta_gerar', operador_telefone: TEAM, cliente_telefone: CLIENT, peliculas: ['G5', 'Nano'], desconto_percentual: 10 })).json();
         expect(body).toMatchObject({ sucesso: true, enviado_ao_cliente: false, opcoes });
         expect(body).not.toHaveProperty('link_proposta');
-        expect(deps.runTeamRpc).toHaveBeenCalledWith('crm_proposal_generate', expect.objectContaining({ p_films: ['G5'], p_discount_percent: 10 }));
+        expect(deps.runTeamRpc).toHaveBeenCalledWith('crm_proposal_generate', expect.objectContaining({ p_films: ['G5', 'Nano'], p_discount_percent: 10 }));
+        expect(deps.notifyCompany).toHaveBeenCalledWith(ORG, expect.objectContaining({
+            body: 'Marília: 2 opções, de R$ 432,00 a R$ 1.296,00. Toque para conferir o PDF e enviar.',
+            url: '/?tab=client&cliente=5',
+        }));
+    });
+
+    it('não existe ação que mande o link ao cliente pelo WhatsApp', async () => {
+        const deps = await buildDeps(() => ({ ok: true }));
+        const response = await call(deps, { action: 'proposta_enviar', operador_telefone: TEAM, cliente_ref: 5 });
+        expect(response.status).toBe(400);
+        expect(deps.runTeamRpc).not.toHaveBeenCalled();
     });
 
     it('proposta_gerar repassa película desconhecida com a lista do catálogo', async () => {
@@ -127,11 +142,23 @@ describe('ações da equipe no CRM', () => {
         expect(body).toMatchObject({ sucesso: false, motivo: 'pelicula_desconhecida', peliculas_desconhecidas: ['X9'], peliculas_disponiveis: ['G5', 'Nano'] });
     });
 
-    it('proposta_enviar devolve o link público', async () => {
-        const deps = await buildDeps(() => ({ ok: true, client_id: 5, client_name: 'Marília Souza', token: 'tok', expira_em: '2026-11-28T23:59:59-03:00', opcoes: [] }));
-        const body = await (await call(deps, { action: 'proposta_enviar', operador_telefone: TEAM, cliente_ref: 5 })).json();
-        expect(body).toMatchObject({ sucesso: true, link_proposta: 'https://app.filmstec.shop/p/marilia/tok' });
-        expect(deps.runTeamRpc).toHaveBeenCalledWith('crm_proposal_send', expect.objectContaining({ p_option_names: null, p_valid_days: 7 }));
+    it('envios_pendentes entrega o que a equipe liberou no app', async () => {
+        const deps = await buildDeps(() => [{ envio_id: 9, cliente_ref: 5, cliente_telefone: CLIENT, cliente_nome: 'Marília Souza', mensagem: 'Segue o orçamento: https://app.filmstec.shop/p/marilia/tok', token: 'tok', pedido_em: '2026-11-21T15:00:00Z' }]);
+        const body = await (await call(deps, { action: 'envios_pendentes' })).json();
+        expect(body).toEqual({ sucesso: true, envios: [expect.objectContaining({ envio_id: 9, cliente_telefone: CLIENT, link_proposta: 'https://app.filmstec.shop/p/marilia/tok' })] });
+        expect(deps.runTeamRpc).toHaveBeenCalledWith('crm_ai_send_pending', { p_key_id: 'k1', p_organization_id: ORG });
+    });
+
+    it('envio_confirmar marca enviado ou falhou', async () => {
+        const deps = await buildDeps(() => ({ ok: true, status: 'falhou' }));
+        const body = await (await call(deps, { action: 'envio_confirmar', envio_id: 9, enviado: false, detalhe: 'Fora da janela de 24h' })).json();
+        expect(body).toEqual({ sucesso: true, status: 'falhou' });
+        expect(deps.runTeamRpc).toHaveBeenCalledWith('crm_ai_send_confirm', expect.objectContaining({ p_id: 9, p_sent: false, p_detail: 'Fora da janela de 24h' }));
+    });
+
+    it('chave sem proposals:send não lê a fila', async () => {
+        const deps = await buildDeps(() => []);
+        expect((await call(deps, { action: 'envios_pendentes' }, KEY_READ)).status).toBe(403);
     });
 
     it('erro inesperado do banco não vaza detalhes', async () => {

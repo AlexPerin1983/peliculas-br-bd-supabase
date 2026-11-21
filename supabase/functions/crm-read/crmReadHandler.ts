@@ -13,7 +13,7 @@ import {
 } from './crmReadLogic.ts';
 import {
     type TeamAction, type TeamCommand, TEAM_ACTIONS, TEAM_FIELDS, TEAM_REASONS,
-    addDays, describeWhen, localDay, localIso, parseTeamCommand, proposalPortalUrl, teamScope,
+    addDays, describeWhen, localDay, localIso, parseTeamCommand, proposalPortalUrl, proposalReadyPush, teamScope,
 } from './crmTeamLogic.ts';
 
 // Chama uma função do banco (RPC) com os argumentos dados. Erros do banco chegam
@@ -147,7 +147,7 @@ export const handleCrmRead = async (request: Request, deps: CrmReadDeps): Promis
 
 const COMPANY_FIELD = /^(company|organization|organisation|empresa|org|tenant)(_?id)?$/i;
 
-const target = (command: TeamCommand) => ({ p_phone: command.phone, p_client_id: command.clientId });
+const target = (command: Extract<TeamCommand, { phone: string | null }>) => ({ p_phone: command.phone, p_client_id: command.clientId });
 
 const refused = (motivo: string, extra: Record<string, unknown> = {}) =>
     json({ sucesso: false, motivo, mensagem: TEAM_REASONS[motivo] ?? 'Não foi possível concluir.', ...extra });
@@ -237,19 +237,28 @@ const handleTeamAction = async (
             });
         }
 
-        if (command.action === 'proposta_enviar') {
-            const data = await rpc('crm_proposal_send', {
-                p_key_id: record.keyId, p_organization_id: org, p_operator: command.operator, ...target(command),
-                p_option_names: command.optionNames.length ? command.optionNames : null, p_valid_days: command.validDays,
-            });
-            if (!data?.ok) return refused(String(data?.motivo ?? 'nenhuma_opcao_para_enviar'), data?.opcao ? { opcao: data.opcao } : {});
+        if (command.action === 'envios_pendentes') {
+            const rows = await rpc('crm_ai_send_pending', { p_key_id: record.keyId, p_organization_id: org });
             return json({
                 sucesso: true,
-                cliente_ref: data.client_id,
-                link_proposta: proposalPortalUrl(String(data.token), data.client_name),
-                expira_em: data.expira_em,
-                opcoes: data.opcoes ?? [],
+                envios: (Array.isArray(rows) ? rows : []).map((row: any) => ({
+                    envio_id: Number(row.envio_id),
+                    cliente_ref: Number(row.cliente_ref),
+                    cliente_telefone: String(row.cliente_telefone ?? ''),
+                    // Texto que a equipe aprovou no app, já com o link dentro: enviar como está.
+                    mensagem: String(row.mensagem ?? ''),
+                    link_proposta: proposalPortalUrl(String(row.token), row.cliente_nome),
+                    pedido_em: row.pedido_em,
+                })),
             });
+        }
+
+        if (command.action === 'envio_confirmar') {
+            const data = await rpc('crm_ai_send_confirm', {
+                p_key_id: record.keyId, p_organization_id: org, p_id: command.sendId, p_sent: command.sent, p_detail: command.detail,
+            });
+            if (!data?.ok) return refused(String(data?.motivo ?? 'envio_nao_encontrado'));
+            return json({ sucesso: true, status: data.status });
         }
 
         const data = await rpc('crm_proposal_generate', {
@@ -264,12 +273,13 @@ const handleTeamAction = async (
             if (data?.limite != null) details.desconto_maximo = Number(data.limite);
             return refused(motivo, details);
         }
+        await notify(proposalReadyPush(data.client_id, data.client_name, data.opcoes ?? []));
         return json({
             sucesso: true,
             cliente_ref: data.client_id,
             opcoes: data.opcoes ?? [],
             enviado_ao_cliente: false,
-            mensagem: 'Calculado e salvo no CRM. Nada foi enviado ao cliente: mande o resumo para a equipe aprovar.',
+            mensagem: 'Calculado e salvo no CRM. Nada foi enviado ao cliente: mande o resumo para a equipe. Para enviar, a equipe confere o PDF no app e toca em "Enviar pela IA".',
         });
     } catch (error) {
         const message = error instanceof Error ? error.message : String((error as { message?: string })?.message ?? '');

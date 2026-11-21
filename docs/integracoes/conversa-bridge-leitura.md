@@ -542,7 +542,7 @@ Decisão do dono (21/11/2026): a IA pode marcar agenda, calcular e recalcular pr
 desconto, mas **nada vai ao cliente sem a equipe aprovar**. Por isso:
 
 - `proposta_gerar` / `proposta_atualizar` só calculam e salvam no CRM (`enviado_ao_cliente: false`);
-- só `proposta_enviar` cria o link público, e só com o comando de um número da equipe;
+- o link (com o PDF gerado pelo app) só vai ao cliente quando a equipe toca em "Enviar pela IA" no app;
 - toda escrita leva `operador_telefone` (o WhatsApp de quem deu o comando). O **banco** confere
   esse número contra `crm_read_keys.operator_phones` (com e sem o nono dígito). Número de cliente
   recebe 403 `operador_nao_autorizado`. Nunca preencha `operador_telefone` com o número do cliente
@@ -550,8 +550,9 @@ desconto, mas **nada vai ao cliente sem a equipe aprovar**. Por isso:
 - limite de 60 escritas por hora por chave; desconto até `max_discount_percent` da chave (padrão 20%);
 - tudo fica registrado em `crm_team_actions`.
 
-Permissões novas da chave: `agenda:create`, `proposals:write`, `proposals:send`
-(`proposta_consultar` usa a `proposals:read` que já existe).
+Permissões novas da chave: `agenda:create`, `proposals:write`, `proposals:send` (ler e
+confirmar a fila de envio; também faz o botão aparecer no app). `proposta_consultar` usa a
+`proposals:read` que já existe.
 
 Mesmo endereço e cabeçalho (`POST .../functions/v1/crm-read`, `x-crm-key`). O cliente vai por
 `cliente_telefone` (só dígitos, com DDD) **ou** `cliente_ref` (o `cliente_ref` devolvido por
@@ -601,19 +602,32 @@ Mesmo endereço e cabeçalho (`POST .../functions/v1/crm-read`, `x-crm-key`). O 
 Devolve `opcoes` (com totais, `da_ia`, `rascunho`) e `links` (os 5 últimos: `link_proposta`,
 `status`, `visualizacoes`, `ultima_visualizacao`, `expira_em`). Não precisa de `operador_telefone`.
 
-### proposta_enviar (só depois do "Aprovado, envia" da equipe)
+### Envio ao cliente: só pelo botão "Enviar pela IA" no app
+
+Não existe ação para a IA mandar o orçamento por conta própria (`proposta_enviar` é recusada com 400).
+O caminho é:
+
+1. `proposta_gerar` avisa no celular da equipe ("Orçamento calculado pelo WhatsApp…"). Tocando,
+   o app abre no orçamento do cliente; a equipe confere, gera o PDF e cria o link como sempre.
+2. Na tela do link, o botão **"Enviar pela IA"** põe a mensagem (já com o link) na fila.
+3. O atendimento consulta a fila, manda a mensagem ao cliente **exatamente como veio** e confirma.
 
 ```json
-{ "action": "proposta_enviar", "operador_telefone": "5583999990000", "cliente_telefone": "5583988887777",
-  "opcoes": ["X (WhatsApp)"], "validade_dias": 7 }
+{ "action": "envios_pendentes" }
 ```
 
-- Sem `opcoes`, envia todas as opções `(WhatsApp)`. `validade_dias`: 1 a 30 (padrão 7).
-- Cria as propostas salvas (sem arquivo PDF: no link o cliente vê valores e aprova; o botão de
-  baixar PDF avisa que não há arquivo) e o link.
-- Sucesso: `{ "sucesso": true, "cliente_ref": 5, "link_proposta": "https://app.filmstec.shop/p/marilia/<código>",
-  "expira_em": "...", "opcoes": [ { "nome": "...", "proposta_id": 456, "total": 864, ... } ] }`.
-- Recusas: `nenhuma_opcao_para_enviar`, `opcao_sem_preco`, `cliente_nao_encontrado`.
+Resposta: `{ "sucesso": true, "envios": [ { "envio_id": 9, "cliente_ref": 5, "cliente_telefone": "5583988887777",
+"mensagem": "Oi, Marília! ... https://app.filmstec.shop/p/marilia/<código>", "link_proposta": "https://...", "pedido_em": "..." } ] }`.
+Consultar a cada 1 minuto basta. Pedidos com mais de 24 h sem envio são cancelados (o app avisa a equipe).
+
+```json
+{ "action": "envio_confirmar", "envio_id": 9, "enviado": true }
+{ "action": "envio_confirmar", "envio_id": 9, "enviado": false, "detalhe": "Fora da janela de 24 h do WhatsApp" }
+```
+
+O app mostra para a equipe "Enviado ao cliente pelo atendimento" ou o motivo da falha. Se a
+conversa do cliente estiver fora da janela de 24 h da Meta, confirme com `enviado: false` e o
+motivo; a equipe envia pelo WhatsApp dela.
 
 ### Liberar (com autorização do dono)
 
