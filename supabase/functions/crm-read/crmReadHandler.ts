@@ -7,7 +7,7 @@
 // - nada de chave, telefone ou resposta nos registros (console);
 // - salvar cliente: só com a permissão clients:create; nunca altera cliente existente.
 import {
-    type AgendaRows, type CrmScope, type ProposalRows,
+    type AgendaRows, type CrmScope, type DraftMeasurement, type ProposalRows,
     CRM_KEY_HEADER, agendaRange, clientNotes, isPlausibleCrmKey, parseCrmCommand, provisionalClientName, requiredScope,
     saveClientPush, sha256Hex, shapeAgenda, shapeProposals,
 } from './crmReadLogic.ts';
@@ -26,6 +26,7 @@ export interface CrmReadDeps {
     // Cria o cliente se o telefone ainda não existir na empresa (nunca altera o existente).
     saveClient?: (keyId: string, organizationId: string, input: {
         phone: string; name: string; bairro: string | null; cidade: string | null; notes: string;
+        measurements: DraftMeasurement[]; film: string | null;
     }) => Promise<SaveClientOutcome>;
     // Aviso no celular da empresa. Falhar aqui não desfaz o cadastro.
     notifyCompany?: (organizationId: string, push: ReturnType<typeof saveClientPush>) => Promise<void>;
@@ -35,7 +36,7 @@ export interface CrmReadDeps {
 }
 
 export type SaveClientOutcome =
-    | { ok: true; clientId: number; name: string; created: boolean }
+    | { ok: true; clientId: number; name: string; created: boolean; draft?: 'criado' | 'ja_existia' | 'sem_medidas' }
     | { ok: false; reason: 'limit' | 'forbidden' };
 
 const MAX_BODY_BYTES = 4_096;
@@ -96,6 +97,8 @@ export const handleCrmRead = async (request: Request, deps: CrmReadDeps): Promis
                 bairro: command.bairro,
                 cidade: command.cidade,
                 notes: clientNotes(command.summary, now),
+                measurements: command.measurements,
+                film: command.film,
             });
             if (outcome.ok === false) {
                 return outcome.reason === 'limit'
@@ -115,6 +118,7 @@ export const handleCrmRead = async (request: Request, deps: CrmReadDeps): Promis
                 // Só quando foi criado agora: o nome de um cliente que já existia não volta.
                 nome_salvo: outcome.created ? outcome.name : null,
                 nome_provisorio: outcome.created && command.name == null,
+                rascunho_medidas: outcome.draft ?? 'sem_medidas',
             });
         }
         const { fromIso, toIso } = agendaRange(command.from, command.to);

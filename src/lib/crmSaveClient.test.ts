@@ -49,9 +49,9 @@ describe('pedido de salvar cliente', () => {
         expect(parseCrmCommand({
             action: 'cliente_salvar', telefone: '+55 (83) 9814-1069', nome: 'Roseanny ✨', bairro: ' Bessa ', resumo: '2 janelas',
         })).toEqual({
-            action: 'cliente_salvar', phone: '558398141069', name: 'Roseanny', bairro: 'Bessa', cidade: null, summary: '2 janelas',
+            action: 'cliente_salvar', phone: '558398141069', name: 'Roseanny', bairro: 'Bessa', cidade: null, summary: '2 janelas', measurements: [], film: null,
         });
-        expect(requiredScope({ action: 'cliente_salvar', phone: '558398141069', name: null, bairro: null, cidade: null, summary: null }))
+        expect(requiredScope({ action: 'cliente_salvar', phone: '558398141069', name: null, bairro: null, cidade: null, summary: null, measurements: [], film: null }))
             .toBe('clients:create');
     });
 
@@ -116,12 +116,12 @@ describe('salvar cliente: acesso', () => {
             resumo: '2 janelas, 1,73 × 1,25, quer claridade. Anúncio: Conforto sem perder a luz.',
         });
         expect(response.status).toBe(200);
-        expect(await response.json()).toEqual({ cliente_ref: 99, criado: true, nome_salvo: 'Roseanny Nascimento', nome_provisorio: false });
+        expect(await response.json()).toEqual({ cliente_ref: 99, criado: true, nome_salvo: 'Roseanny Nascimento', nome_provisorio: false, rascunho_medidas: 'sem_medidas' });
         expect(saved).toEqual([{
             keyId: 'k-save',
             org: ORG_A,
             input: {
-                phone: '5583981411069', name: 'Roseanny Nascimento', bairro: 'Bessa', cidade: null,
+                phone: '5583981411069', name: 'Roseanny Nascimento', bairro: 'Bessa', cidade: null, measurements: [], film: null,
                 notes: 'Veio do WhatsApp (IA) em 20/11/2026: 2 janelas, 1,73 × 1,25, quer claridade. Anúncio: Conforto sem perder a luz.',
             },
         }]);
@@ -140,7 +140,7 @@ describe('salvar cliente: acesso', () => {
     it('telefone que já é cliente: não cria e não devolve o nome do cadastro', async () => {
         const { deps } = await buildDeps(['5583981411069']);
         const body = await (await call(deps, { action: 'cliente_salvar', telefone: '83981411069', nome: 'Outro Nome' })).json();
-        expect(body).toEqual({ cliente_ref: 50, criado: false, nome_salvo: null, nome_provisorio: false });
+        expect(body).toEqual({ cliente_ref: 50, criado: false, nome_salvo: null, nome_provisorio: false, rascunho_medidas: 'sem_medidas' });
         expect(deps.notifyCompany).toHaveBeenCalledWith(ORG_A, expect.objectContaining({ title: 'Cliente pediu orçamento de novo' }));
     });
 
@@ -175,5 +175,50 @@ describe('salvar cliente: acesso', () => {
         expect(response.status).toBe(503);
         expect(JSON.stringify(await response.json())).not.toContain('db.interno');
         expect(deps.logError).toHaveBeenCalledWith('cliente_salvar_failed');
+    });
+});
+
+describe('rascunho de medidas', () => {
+    it('lê medidas em metros ou centímetros no formato do app', async () => {
+        const { draftDimension } = await import('../../supabase/functions/crm-read/crmReadLogic');
+        expect(draftDimension('5')).toBe('5,00');
+        expect(draftDimension('1,2')).toBe('1,20');
+        expect(draftDimension(1.735)).toBe('1,74');
+        expect(draftDimension('120')).toBe('1,20');
+        expect(draftDimension('0,01')).toBeNull();
+        expect(draftDimension('25 metros')).toBeNull();
+        expect(draftDimension('3000')).toBeNull();
+    });
+
+    it('aceita a lista de medidas da conversa e recusa lixo', () => {
+        expect(parseCrmCommand({
+            action: 'cliente_salvar', telefone: '61981195695', nome: 'Marilia', bairro: 'Cabo Branco',
+            medidas: [{ largura: '5', altura: '2', local: 'Cortina de vidro' }, { largura: 3, altura: 2 }], pelicula: 'Nano Cerâmica',
+        })).toMatchObject({
+            measurements: [
+                { largura: '5,00', altura: '2,00', quantidade: 1, ambiente: 'Cortina de vidro' },
+                { largura: '3,00', altura: '2,00', quantidade: 1, ambiente: null },
+            ],
+            film: 'Nano Cerâmica',
+        });
+        expect(parseCrmCommand({ action: 'cliente_salvar', telefone: '61981195695', medidas: 'grande' })).toHaveProperty('invalid');
+        expect(parseCrmCommand({ action: 'cliente_salvar', telefone: '61981195695', medidas: [{ largura: 'x', altura: 2 }] })).toHaveProperty('invalid');
+        expect(parseCrmCommand({ action: 'cliente_salvar', telefone: '61981195695', medidas: [{ largura: 1, altura: 1, quantidade: 0 }] })).toHaveProperty('invalid');
+        expect(parseCrmCommand({ action: 'cliente_salvar', telefone: '61981195695', medidas: Array(31).fill({ largura: 1, altura: 1 }) })).toHaveProperty('invalid');
+    });
+
+    it('manda as medidas para o banco e devolve se o rascunho foi criado', async () => {
+        const { deps, saved } = await buildDeps();
+        deps.saveClient.mockImplementationOnce(async (_k: string, _o: string, input: any) => {
+            saved.push({ keyId: _k, org: _o, input });
+            return { ok: true, clientId: 99, name: input.name, created: true, draft: 'criado' };
+        });
+        const body = await (await call(deps, {
+            action: 'cliente_salvar', telefone: '61981195695', nome: 'Marilia',
+            medidas: [{ largura: 5, altura: 2 }], pelicula: 'Nano Cerâmica',
+        })).json();
+        expect(saved[0].input.measurements).toEqual([{ largura: '5,00', altura: '2,00', quantidade: 1, ambiente: null }]);
+        expect(saved[0].input.film).toBe('Nano Cerâmica');
+        expect(body.rascunho_medidas).toBe('criado');
     });
 });

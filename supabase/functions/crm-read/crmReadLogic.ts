@@ -27,7 +27,48 @@ export interface SaveClientInput {
     bairro: string | null;
     cidade: string | null;
     summary: string | null;
+    // Medidas no formato do app ("1,20"), para o rascunho do orçamento. Vazio = sem rascunho.
+    measurements: DraftMeasurement[];
+    film: string | null;
 }
+
+export interface DraftMeasurement {
+    largura: string;
+    altura: string;
+    quantidade: number;
+    ambiente: string | null;
+}
+
+// Medida em metros (aceita "1,20", "1.2", 1.2) ou em centímetros quando passa de 20 ("120").
+// Fora de 5 cm a 20 m: não serve. Devolve no formato do app: "1,20".
+export const draftDimension = (value: unknown): string | null => {
+    if (typeof value !== 'string' && typeof value !== 'number') return null;
+    const match = String(value).trim().replace(/\s+/g, '').replace(',', '.').match(/^\d+(?:\.\d+)?$/);
+    if (!match) return null;
+    let meters = Number(match[0]);
+    if (meters > 20 && meters <= 2000) meters /= 100;
+    if (!Number.isFinite(meters) || meters < 0.05 || meters > 20) return null;
+    return meters.toFixed(2).replace('.', ',');
+};
+
+export const parseDraftMeasurements = (value: unknown): DraftMeasurement[] | { invalid: string } => {
+    if (value == null) return [];
+    if (!Array.isArray(value)) return { invalid: 'O campo "medidas" precisa ser uma lista.' };
+    if (value.length > 30) return { invalid: 'No máximo 30 medidas por cliente.' };
+    const out: DraftMeasurement[] = [];
+    for (const item of value) {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) return { invalid: 'Medida inválida.' };
+        const row = item as Record<string, unknown>;
+        const largura = draftDimension(row.largura);
+        const altura = draftDimension(row.altura);
+        if (!largura || !altura) return { invalid: 'Medida inválida: envie largura e altura em metros (ex.: 1,20).' };
+        const quantity = row.quantidade == null ? 1 : Number(row.quantidade);
+        if (!Number.isInteger(quantity) || quantity < 1 || quantity > 50) return { invalid: 'Quantidade inválida (de 1 a 50).' };
+        const local = typeof row.local === 'string' ? row.local.replace(/\s+/g, ' ').trim().slice(0, 40) : '';
+        out.push({ largura, altura, quantidade: quantity, ambiente: local || null });
+    }
+    return out;
+};
 
 export type CrmCommand =
     | { action: 'propostas'; phone: string }
@@ -53,7 +94,7 @@ export const phoneDigits = (phone: unknown): string | null => {
 const ALLOWED_FIELDS: Record<CrmCommand['action'], string[]> = {
     propostas: ['action', 'telefone'],
     agenda: ['action', 'de', 'ate'],
-    cliente_salvar: ['action', 'telefone', 'nome', 'bairro', 'cidade', 'resumo'],
+    cliente_salvar: ['action', 'telefone', 'nome', 'bairro', 'cidade', 'resumo', 'medidas', 'pelicula'],
 };
 
 // Nome do WhatsApp ou o que o cliente disse: tira emojis, símbolos e letras
@@ -120,16 +161,20 @@ export const parseCrmCommand = (payload: unknown): CrmCommand | { invalid: strin
     if (action === 'cliente_salvar') {
         const phone = phoneDigits(body.telefone);
         if (!phone) return { invalid: 'Telefone inválido. Envie só os dígitos, com DDD.' };
-        for (const field of ['nome', 'bairro', 'cidade', 'resumo']) {
+        for (const field of ['nome', 'bairro', 'cidade', 'resumo', 'pelicula']) {
             if (body[field] != null && typeof body[field] !== 'string') return { invalid: `O campo "${field}" precisa ser texto.` };
         }
         if (typeof body.resumo === 'string' && body.resumo.length > 800) return { invalid: 'Resumo grande demais (máximo 800 caracteres).' };
+        const measurements = parseDraftMeasurements(body.medidas);
+        if (!Array.isArray(measurements)) return measurements;
         return {
             action,
             phone,
             name: cleanClientName(body.nome),
             bairro: cleanLine(body.bairro, 80),
             cidade: cleanLine(body.cidade, 80),
+            measurements,
+            film: cleanLine(body.pelicula, 80),
             summary: cleanLine(body.resumo, 800),
         };
     }
