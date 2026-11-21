@@ -45,7 +45,7 @@ Deno.serve(async (request) => {
             return data ?? { events: [], working_hours: null };
         },
         saveClient: async (keyId, organizationId, input) => {
-            const { data, error } = await admin.rpc('crm_save_client', {
+            const { data, error } = await admin.rpc('crm_save_client_with_draft', {
                 p_key_id: keyId,
                 p_organization_id: organizationId,
                 p_phone: input.phone,
@@ -53,6 +53,8 @@ Deno.serve(async (request) => {
                 p_bairro: input.bairro,
                 p_cidade: input.cidade,
                 p_notes: input.notes,
+                p_measurements: input.measurements.length ? input.measurements : null,
+                p_film: input.film,
             });
             if (error) {
                 const message = error.message ?? '';
@@ -60,7 +62,10 @@ Deno.serve(async (request) => {
                 if (message.includes('sem permissão')) return { ok: false, reason: 'forbidden' };
                 throw error;
             }
-            return { ok: true, clientId: Number(data.client_id), name: String(data.name ?? ''), created: data.created === true };
+            return {
+                ok: true, clientId: Number(data.client_id), name: String(data.name ?? ''), created: data.created === true,
+                draft: data.draft === 'criado' || data.draft === 'ja_existia' ? data.draft : 'sem_medidas',
+            };
         },
         notifyCompany: async (organizationId, push) => {
             const publicKey = Deno.env.get('VAPID_PUBLIC_KEY') ?? '';

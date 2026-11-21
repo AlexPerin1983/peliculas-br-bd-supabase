@@ -266,6 +266,28 @@ funciona com uma chave que tenha a permissão `clients:create` (seção 6).
 - `resumo` (opcional): até 800 caracteres. Vira a observação do cadastro, como
   "Veio do WhatsApp (IA) em 20/11/2026: ...". Não mande fotos, links nem dados de terceiros.
 
+### Rascunho de medidas (opcional)
+
+O pedido pode levar as medidas e a película que a IA levantou:
+
+```json
+"medidas": [{ "largura": 5, "altura": 2, "quantidade": 1, "local": "Cortina de vidro" }, { "largura": "3", "altura": "2" }],
+"pelicula": "Nano Cerâmica"
+```
+
+- As medidas vão em metros ("1,20", 1.2) ou em centímetros (acima de 20 conta como cm: "120" = 1,20 m).
+- Cada medida precisa ficar entre 5 cm e 20 m, com no máximo 30 medidas e quantidade de 1 a 50.
+- Medida que não se encaixa recusa o pedido inteiro (400).
+- O CRM cria uma opção **"WhatsApp (rascunho)"** na tela de orçamento do cliente, com essas medidas
+  e a observação *"Medida aproximada informada pelo cliente no WhatsApp. Conferir antes de
+  enviar."*.
+- Isso só acontece **se o cliente ainda não tem nenhuma opção de proposta**. O que a equipe já
+  montou nunca é alterado.
+- **Película:** usa o nome enviado só se ele existir no catálogo da empresa. Senão, usa a película
+  fixada no topo do catálogo e, se não houver, "Nenhuma".
+- A resposta ganha `"rascunho_medidas"`: `"criado"`, `"ja_existia"` ou `"sem_medidas"`.
+- Nada é enviado ao cliente: o rascunho é só para a equipe conferir e gerar o orçamento.
+
 ### O que o CRM faz
 
 - **Telefone novo na empresa:** cria o cliente com nome, telefone, bairro, cidade e
