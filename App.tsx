@@ -287,6 +287,9 @@ const App: React.FC = () => {
     const [selectedClientId, setSelectedClientId] = useState<number | null>(() => {
         // Restauracao instantanea do cliente selecionado (espelho local do valor
         // que tambem fica salvo no Supabase em UserInfo.lastSelectedClientId).
+        // A notificacao do atendimento de WhatsApp abre direto um cliente: ?cliente=123.
+        const fromLink = Number(new URLSearchParams(window.location.search).get('cliente'));
+        if (Number.isInteger(fromLink) && fromLink > 0) return fromLink;
         const saved = localStorage.getItem('peliculas-br-selected-client-id');
         const parsed = saved ? Number(saved) : NaN;
         return Number.isFinite(parsed) ? parsed : null;
@@ -707,7 +710,7 @@ const App: React.FC = () => {
             }
         }
 
-        const consumedParams = ['tab', 'action', 'title', 'text', 'url', 'markAgendamento', 'serviceStatus'];
+        const consumedParams = ['tab', 'action', 'title', 'text', 'url', 'markAgendamento', 'serviceStatus', 'cliente'];
         if (consumedParams.some((key) => urlParams.has(key))) {
             const nextUrl = new URL(window.location.href);
             consumedParams.forEach((key) => nextUrl.searchParams.delete(key));

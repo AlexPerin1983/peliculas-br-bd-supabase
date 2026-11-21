@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Ban, CalendarClock, Check, Copy, ExternalLink, Link2, LoaderCircle, MessageCircle, RefreshCw, ShieldCheck, Star } from 'lucide-react';
+import { Ban, Bot, CalendarClock, Check, Copy, ExternalLink, Link2, LoaderCircle, MessageCircle, RefreshCw, ShieldCheck, Star } from 'lucide-react';
 import type { Client, SavedPDF } from '../../types';
 import {
     buildProposalPricesBlock,
@@ -27,6 +27,13 @@ import {
 import Modal from '../ui/Modal';
 import ProposalWhatsAppChooser from './ProposalWhatsAppChooser';
 import { formatOptionName } from '../../src/lib/optionName';
+import {
+    describeAiProposalSend,
+    getAiProposalSendStatus,
+    isAiProposalSendAvailable,
+    requestAiProposalSend,
+    type AiProposalSendStatus,
+} from '../../src/lib/aiProposalSend';
 
 interface ProposalShareModalProps {
     isOpen: boolean;
@@ -122,6 +129,50 @@ const ProposalShareModal: React.FC<ProposalShareModalProps> = ({ isOpen, client,
     const [highlightId, setHighlightId] = useState<number | null>(null);
     const pdfKey = pdfs.map(pdf => pdf.id).join(',');
     const [saveProgress, setSaveProgress] = useState<ProposalSaveProgress | null>(null);
+    // "Enviar pela IA" (atendimento de WhatsApp): só para empresas com ele ligado.
+    const [aiAvailable, setAiAvailable] = useState(false);
+    const [aiStatus, setAiStatus] = useState<AiProposalSendStatus | null>(null);
+    const [aiBusy, setAiBusy] = useState(false);
+    const createdPortalId = created?.portalId ?? null;
+
+    useEffect(() => {
+        if (!isOpen) return;
+        let cancelled = false;
+        void isAiProposalSendAvailable().then(ok => { if (!cancelled) setAiAvailable(ok); });
+        return () => { cancelled = true; };
+    }, [isOpen]);
+
+    // Mostra a situação do último pedido deste link; enquanto pendente, confere de 10 em 10 s.
+    useEffect(() => {
+        setAiStatus(null);
+        if (!isOpen || !aiAvailable || !createdPortalId) return;
+        let cancelled = false;
+        let timer: number | undefined;
+        const load = async () => {
+            const next = await getAiProposalSendStatus(createdPortalId).catch(() => null);
+            if (cancelled) return;
+            setAiStatus(next);
+            if (next?.status === 'pendente') timer = window.setTimeout(load, 10_000);
+        };
+        void load();
+        return () => { cancelled = true; if (timer) window.clearTimeout(timer); };
+    }, [isOpen, aiAvailable, createdPortalId]);
+
+    const sendByAi = async () => {
+        if (!created) return;
+        setAiBusy(true);
+        setError('');
+        try {
+            await requestAiProposalSend(created.portalId, message);
+            setAiStatus({ status: 'pendente', detail: null, createdAt: new Date().toISOString() });
+            const next = await getAiProposalSendStatus(created.portalId).catch(() => null);
+            if (next) setAiStatus(next);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Não foi possível pedir o envio.');
+        } finally {
+            setAiBusy(false);
+        }
+    };
 
     const readyMessages = useMemo(() => messageOptions.map(option => option.trim()).filter(Boolean), [messageOptions]);
     const [choice, setChoice] = useState(readMessageStyle);
@@ -494,6 +545,18 @@ const ProposalShareModal: React.FC<ProposalShareModalProps> = ({ isOpen, client,
                         {whatsappAppUrl && whatsappBusinessUrl
                             ? <button type="button" onClick={() => setIsWhatsAppChooserOpen(true)} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 text-sm font-bold text-white shadow-sm hover:bg-emerald-700"><MessageCircle className="h-4 w-4" aria-hidden="true" /> Enviar no WhatsApp</button>
                             : <button disabled className="h-12 w-full rounded-xl bg-slate-200 text-sm font-bold text-slate-500 dark:bg-slate-800">Sem telefone</button>}
+                        {aiAvailable && whatsappAppUrl ? (
+                            <div className="space-y-1.5">
+                                <button type="button" disabled={aiBusy || linkMissing || aiStatus?.status === 'pendente'} onClick={() => void sendByAi()}
+                                    className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-emerald-600 bg-[var(--surface)] text-emerald-700 disabled:opacity-60 dark:text-emerald-300">
+                                    {aiBusy ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Bot className="h-4 w-4" aria-hidden="true" />}
+                                    <span className="text-sm font-bold">{aiStatus?.status === 'enviado' ? 'Enviar de novo pela IA' : 'Enviar pela IA'}</span>
+                                </button>
+                                <p role="status" className="text-center text-[11px] leading-4 text-[var(--text-muted)]">
+                                    {describeAiProposalSend(aiStatus) || 'O atendimento manda esta mensagem ao cliente na conversa do WhatsApp da empresa.'}
+                                </p>
+                            </div>
+                        ) : null}
                         <button type="button" onClick={() => void copy('message', message)} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] text-sm font-semibold text-[var(--text-strong)]">
                             {copied === 'message' ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />} {copied === 'message' ? 'Mensagem copiada' : 'Copiar mensagem'}
                         </button>

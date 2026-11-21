@@ -11,6 +11,14 @@ import {
     CRM_KEY_HEADER, agendaRange, clientNotes, isPlausibleCrmKey, parseCrmCommand, provisionalClientName, requiredScope,
     saveClientPush, sha256Hex, shapeAgenda, shapeProposals,
 } from './crmReadLogic.ts';
+import {
+    type TeamAction, type TeamCommand, TEAM_ACTIONS, TEAM_FIELDS, TEAM_REASONS,
+    addDays, describeWhen, localDay, localIso, parseTeamCommand, proposalPortalUrl, proposalReadyPush, teamScope,
+} from './crmTeamLogic.ts';
+
+// Chama uma função do banco (RPC) com os argumentos dados. Erros do banco chegam
+// como Error com a mensagem original (ex.: "CRM:operador").
+export type RunTeamRpc = (name: string, args: Record<string, unknown>) => Promise<any>;
 
 export interface CrmKeyRecord {
     keyId: string;
@@ -29,7 +37,9 @@ export interface CrmReadDeps {
         measurements: DraftMeasurement[]; film: string | null;
     }) => Promise<SaveClientOutcome>;
     // Aviso no celular da empresa. Falhar aqui não desfaz o cadastro.
-    notifyCompany?: (organizationId: string, push: ReturnType<typeof saveClientPush>) => Promise<void>;
+    notifyCompany?: (organizationId: string, push: { title: string; body: string; tag?: string; url?: string }) => Promise<void>;
+    // Ações da equipe (agenda_criar, proposta_*). Sem isto, respondem 403.
+    runTeamRpc?: RunTeamRpc;
     now?: () => number;
     // Só o código do erro, para diagnóstico (nunca dados do pedido).
     logError?: (code: string) => void;
@@ -76,6 +86,12 @@ export const handleCrmRead = async (request: Request, deps: CrmReadDeps): Promis
     } catch {
         return json({ error: 'Pedido inválido.' }, 400);
     }
+
+    const teamAction = payload && typeof payload === 'object' && !Array.isArray(payload)
+        && TEAM_ACTIONS.includes((payload as Record<string, unknown>).action as TeamAction)
+        ? (payload as Record<string, unknown>).action as TeamAction
+        : null;
+    if (teamAction) return handleTeamAction(teamAction, payload as Record<string, unknown>, record, deps);
 
     const command = parseCrmCommand(payload);
     if ('invalid' in command) return json({ error: command.invalid }, 400);
@@ -126,5 +142,153 @@ export const handleCrmRead = async (request: Request, deps: CrmReadDeps): Promis
     } catch {
         logError(`${command.action}_failed`);
         return json({ error: 'Não foi possível consultar o CRM agora.' }, 503);
+    }
+};
+
+const COMPANY_FIELD = /^(company|organization|organisation|empresa|org|tenant)(_?id)?$/i;
+
+const target = (command: Extract<TeamCommand, { phone: string | null }>) => ({ p_phone: command.phone, p_client_id: command.clientId });
+
+const refused = (motivo: string, extra: Record<string, unknown> = {}) =>
+    json({ sucesso: false, motivo, mensagem: TEAM_REASONS[motivo] ?? 'Não foi possível concluir.', ...extra });
+
+// Ações da equipe. Recusas de regra (horário ocupado, película errada...) voltam
+// com 200 e sucesso=false, para a IA explicar; falta de permissão volta 403.
+const handleTeamAction = async (
+    action: TeamAction, body: Record<string, unknown>, record: CrmKeyRecord, deps: CrmReadDeps,
+): Promise<Response> => {
+    const logError = deps.logError ?? (() => {});
+    const keys = Object.keys(body);
+    const companyField = keys.find(key => COMPANY_FIELD.test(key));
+    if (companyField) return json({ error: `A empresa vem da chave de acesso; não envie "${companyField}".` }, 400);
+    const extra = keys.find(key => !TEAM_FIELDS[action].includes(key));
+    if (extra) return json({ error: `Campo não aceito: "${extra.slice(0, 40)}".` }, 400);
+
+    const command = parseTeamCommand(action, body);
+    if ('invalid' in command) return json({ error: command.invalid }, 400);
+    if (!record.scopes.includes(teamScope(action)) || !deps.runTeamRpc) {
+        return json({ error: 'Esta chave não pode fazer esta ação.' }, 403);
+    }
+
+    const org = record.organizationId;
+    const rpc = deps.runTeamRpc;
+    const now = (deps.now ?? Date.now)();
+    const notify = async (push: { title: string; body: string; tag?: string; url?: string }) => {
+        if (!deps.notifyCompany) return;
+        try { await deps.notifyCompany(org, push); } catch { logError('notify_failed'); }
+    };
+
+    try {
+        if (command.action === 'proposta_consultar') {
+            const data = await rpc('crm_proposal_status', { p_organization_id: org, ...target(command) });
+            if (!data?.ok) return refused(String(data?.motivo ?? 'cliente_nao_encontrado'));
+            return json({
+                sucesso: true,
+                cliente_ref: data.client_id,
+                opcoes: data.opcoes ?? [],
+                links: (data.links ?? []).map((link: any) => ({
+                    link_proposta: proposalPortalUrl(String(link.token), data.client_name),
+                    status: link.status,
+                    expira_em: link.expira_em,
+                    criado_em: link.criado_em,
+                    visualizacoes: Number(link.visualizacoes ?? 0),
+                    ultima_visualizacao: link.ultima_visualizacao ?? null,
+                })),
+            });
+        }
+
+        if (command.action === 'agenda_criar') {
+            const data = await rpc('crm_agenda_create', {
+                p_key_id: record.keyId, p_organization_id: org, p_operator: command.operator, ...target(command),
+                p_start: new Date(command.start).toISOString(), p_end: new Date(command.end).toISOString(),
+                p_type: command.type, p_notes: command.notes,
+            });
+            if (!data?.ok) {
+                const motivo = String(data?.motivo ?? 'horario_invalido');
+                if (motivo !== 'conflito') return refused(motivo);
+                // Horários livres de 30 min ou mais, do dia pedido até 3 dias depois.
+                const from = localDay(command.start);
+                const to = addDays(from, 3);
+                const { fromIso, toIso } = agendaRange(from, to);
+                let livres: unknown = null;
+                try {
+                    livres = shapeAgenda(await deps.loadAgenda(org, fromIso, toIso), from, to, now).livres;
+                } catch {
+                    logError('agenda_free_failed');
+                }
+                return refused('conflito', { livres });
+            }
+            const when = describeWhen(command.start);
+            const kind = data.tipo === 'instalacao' ? 'Instalação' : 'Visita de medição';
+            await notify({
+                title: `${kind} marcada pelo WhatsApp`,
+                body: `${String(data.client_name ?? 'Cliente').slice(0, 80)}: ${when}.`,
+                tag: `crm-agenda-${data.agenda_id}`,
+                url: '/?tab=agenda',
+            });
+            return json({
+                sucesso: true,
+                agenda_id: data.agenda_id,
+                cliente_ref: data.client_id,
+                tipo: data.tipo === 'instalacao' ? 'instalacao' : 'visita_medicao',
+                inicio: localIso(command.start),
+                fim: localIso(command.end),
+                mensagem: `Agendado para ${when}.`,
+            });
+        }
+
+        if (command.action === 'envios_pendentes') {
+            const rows = await rpc('crm_ai_send_pending', { p_key_id: record.keyId, p_organization_id: org });
+            return json({
+                sucesso: true,
+                envios: (Array.isArray(rows) ? rows : []).map((row: any) => ({
+                    envio_id: Number(row.envio_id),
+                    cliente_ref: Number(row.cliente_ref),
+                    cliente_telefone: String(row.cliente_telefone ?? ''),
+                    // Texto que a equipe aprovou no app, já com o link dentro: enviar como está.
+                    mensagem: String(row.mensagem ?? ''),
+                    link_proposta: proposalPortalUrl(String(row.token), row.cliente_nome),
+                    pedido_em: row.pedido_em,
+                })),
+            });
+        }
+
+        if (command.action === 'envio_confirmar') {
+            const data = await rpc('crm_ai_send_confirm', {
+                p_key_id: record.keyId, p_organization_id: org, p_id: command.sendId, p_sent: command.sent, p_detail: command.detail,
+            });
+            if (!data?.ok) return refused(String(data?.motivo ?? 'envio_nao_encontrado'));
+            return json({ sucesso: true, status: data.status });
+        }
+
+        const data = await rpc('crm_proposal_generate', {
+            p_key_id: record.keyId, p_organization_id: org, p_operator: command.operator, ...target(command),
+            p_films: command.films.length ? command.films : null, p_discount_percent: command.discountPercent,
+        });
+        if (!data?.ok) {
+            const motivo = String(data?.motivo ?? 'sem_medidas');
+            const details: Record<string, unknown> = {};
+            if (data?.disponiveis) details.peliculas_disponiveis = data.disponiveis;
+            if (data?.desconhecidas) details.peliculas_desconhecidas = data.desconhecidas;
+            if (data?.limite != null) details.desconto_maximo = Number(data.limite);
+            return refused(motivo, details);
+        }
+        await notify(proposalReadyPush(data.client_id, data.client_name, data.opcoes ?? []));
+        return json({
+            sucesso: true,
+            cliente_ref: data.client_id,
+            opcoes: data.opcoes ?? [],
+            enviado_ao_cliente: false,
+            mensagem: 'Calculado e salvo no CRM. Nada foi enviado ao cliente: mande o resumo para a equipe. Para enviar, a equipe confere o PDF no app e toca em "Enviar pela IA".',
+        });
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String((error as { message?: string })?.message ?? '');
+        if (message.includes('CRM:operador')) {
+            return json({ sucesso: false, motivo: 'operador_nao_autorizado', mensagem: 'Este número não é da equipe. Ação recusada.' }, 403);
+        }
+        if (message.includes('CRM:permissao')) return json({ error: 'Esta chave não pode fazer esta ação.' }, 403);
+        if (message.includes('CRM:limite')) return json({ error: 'Limite de ações por hora atingido. Tente mais tarde.' }, 429);
+        logError(`${action}_failed`);
+        return json({ error: 'Não foi possível concluir no CRM agora.' }, 503);
     }
 };

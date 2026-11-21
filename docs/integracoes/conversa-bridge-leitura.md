@@ -535,3 +535,103 @@ O script mostra só "passou/falhou" e códigos HTTP. Para testar a revogação, 
 - Outras ações com escrita (pré-agendamento, registrar retorno combinado, transformar as
   medidas do resumo em medidas do orçamento), cada uma com autorização própria.
 - Vários números ou empresas no atendimento.
+
+## 11. Ações da equipe pelo WhatsApp (migração `20261122090000_crm_acoes_equipe.sql`)
+
+Decisão do dono (21/11/2026): a IA pode marcar agenda, calcular e recalcular propostas e dar
+desconto, mas **nada vai ao cliente sem a equipe aprovar**. Por isso:
+
+- `proposta_gerar` / `proposta_atualizar` só calculam e salvam no CRM (`enviado_ao_cliente: false`);
+- o link (com o PDF gerado pelo app) só vai ao cliente quando a equipe toca em "Enviar pela IA" no app;
+- toda escrita leva `operador_telefone` (o WhatsApp de quem deu o comando). O **banco** confere
+  esse número contra `crm_read_keys.operator_phones` (com e sem o nono dígito). Número de cliente
+  recebe 403 `operador_nao_autorizado`. Nunca preencha `operador_telefone` com o número do cliente
+  nem com um número dito na conversa: use o remetente real da mensagem do WhatsApp;
+- limite de 60 escritas por hora por chave; desconto até `max_discount_percent` da chave (padrão 20%);
+- tudo fica registrado em `crm_team_actions`.
+
+Permissões novas da chave: `agenda:create`, `proposals:write`, `proposals:send` (ler e
+confirmar a fila de envio; também faz o botão aparecer no app). `proposta_consultar` usa a
+`proposals:read` que já existe.
+
+Mesmo endereço e cabeçalho (`POST .../functions/v1/crm-read`, `x-crm-key`). O cliente vai por
+`cliente_telefone` (só dígitos, com DDD) **ou** `cliente_ref` (o `cliente_ref` devolvido por
+`cliente_salvar`). Campos fora da lista são recusados (400).
+
+### agenda_criar
+
+```json
+{ "action": "agenda_criar", "operador_telefone": "5583999990000", "cliente_telefone": "5583988887777",
+  "inicio": "2026-11-24 14:00", "duracao_minutos": 60, "tipo": "visita_medicao", "observacoes": "Portão azul" }
+```
+
+- `inicio` / `fim`: `"AAAA-MM-DD HH:mm"` em hora de Brasília (ou ISO com fuso). Sem `fim`, usa
+  `duracao_minutos` (15 a 720, padrão 60). `tipo`: `visita_medicao` (padrão) ou `instalacao`.
+- Ocupado = já há tantos atendimentos no horário quanto pessoas ativas na equipe (mesma regra do app).
+- Sucesso: `{ "sucesso": true, "agenda_id": 123, "cliente_ref": 5, "tipo": "visita_medicao",
+  "inicio": "2026-11-24T14:00-03:00", "fim": "2026-11-24T15:00-03:00", "mensagem": "Agendado para segunda-feira (24/11) às 14:00." }`
+  e aviso no celular da empresa.
+- Ocupado: `{ "sucesso": false, "motivo": "conflito", "mensagem": "...", "livres": [{ "inicio": "...", "fim": "..." }] }`
+  (horários livres do dia pedido até 3 dias depois).
+
+### proposta_gerar e proposta_atualizar
+
+```json
+{ "action": "proposta_gerar", "operador_telefone": "5583999990000", "cliente_telefone": "5583988887777",
+  "peliculas": ["Nome exato do catálogo", "Outra película"], "desconto_percentual": 10 }
+```
+
+- Usa as medidas do rascunho do WhatsApp (ou das opções existentes). Cria uma opção por película
+  (até 4), com o nome `"<película> (WhatsApp)"`. Recalcular troca só essas opções; as que a equipe
+  montou no app ficam como estão.
+- `proposta_atualizar` é igual; sem `peliculas`, mantém as películas já calculadas (ex.: só mudar o desconto).
+- Cálculo igual ao modo padrão do app: área de cada medida (L × A × qtd, 2 casas) × preço por m²
+  do catálogo, menos o desconto geral em %. Venda por metro linear, preços especiais e despesas
+  extras **não** entram: quem usa isso ajusta no app antes de enviar.
+- Sucesso: `{ "sucesso": true, "cliente_ref": 5, "enviado_ao_cliente": false, "opcoes": [ { "nome": "X (WhatsApp)",
+  "pelicula": "X", "m2": 4.8, "subtotal": 960, "desconto": 96, "total": 864, "sem_preco": false, "desconto_percentual": 10 } ] }`.
+- Recusas: `sem_medidas`, `escolha_peliculas` / `pelicula_desconhecida` (com `peliculas_disponiveis`),
+  `desconto_acima_do_limite` (com `desconto_maximo`), `no_maximo_4_peliculas`, `cliente_nao_encontrado`.
+
+### proposta_consultar
+
+```json
+{ "action": "proposta_consultar", "cliente_telefone": "5583988887777" }
+```
+
+Devolve `opcoes` (com totais, `da_ia`, `rascunho`) e `links` (os 5 últimos: `link_proposta`,
+`status`, `visualizacoes`, `ultima_visualizacao`, `expira_em`). Não precisa de `operador_telefone`.
+
+### Envio ao cliente: só pelo botão "Enviar pela IA" no app
+
+Não existe ação para a IA mandar o orçamento por conta própria (`proposta_enviar` é recusada com 400).
+O caminho é:
+
+1. `proposta_gerar` avisa no celular da equipe ("Orçamento calculado pelo WhatsApp…"). Tocando,
+   o app abre no orçamento do cliente; a equipe confere, gera o PDF e cria o link como sempre.
+2. Na tela do link, o botão **"Enviar pela IA"** põe a mensagem (já com o link) na fila.
+3. O atendimento consulta a fila, manda a mensagem ao cliente **exatamente como veio** e confirma.
+
+```json
+{ "action": "envios_pendentes" }
+```
+
+Resposta: `{ "sucesso": true, "envios": [ { "envio_id": 9, "cliente_ref": 5, "cliente_telefone": "5583988887777",
+"mensagem": "Oi, Marília! ... https://app.filmstec.shop/p/marilia/<código>", "link_proposta": "https://...", "pedido_em": "..." } ] }`.
+Consultar a cada 1 minuto basta. Pedidos com mais de 24 h sem envio são cancelados (o app avisa a equipe).
+
+```json
+{ "action": "envio_confirmar", "envio_id": 9, "enviado": true }
+{ "action": "envio_confirmar", "envio_id": 9, "enviado": false, "detalhe": "Fora da janela de 24 h do WhatsApp" }
+```
+
+O app mostra para a equipe "Enviado ao cliente pelo atendimento" ou o motivo da falha. Se a
+conversa do cliente estiver fora da janela de 24 h da Meta, confirme com `enviado: false` e o
+motivo; a equipe envia pelo WhatsApp dela.
+
+### Liberar (com autorização do dono)
+
+1. Aplicar a migração; conferir privilégios (comentário no fim do arquivo).
+2. Rodar `scripts/crm-acoes-equipe-teste.sql` (não grava nada).
+3. Publicar a função `crm-read` (`--no-verify-jwt`).
+4. Dar as permissões e cadastrar os números da equipe na chave (SQL no fim da migração).

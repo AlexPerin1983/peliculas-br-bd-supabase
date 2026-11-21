@@ -18,7 +18,8 @@ export const MAX_AGENDA_DAYS = 31;
 const MIN_FREE_MINUTES = 30;
 const DEFAULT_EVENT_MINUTES = 60;
 
-export type CrmScope = 'proposals:read' | 'agenda:read' | 'clients:create';
+export type CrmScope = 'proposals:read' | 'agenda:read' | 'clients:create'
+    | 'agenda:create' | 'proposals:write' | 'proposals:send';
 
 export interface SaveClientInput {
     phone: string;
@@ -148,7 +149,7 @@ export const parseCrmCommand = (payload: unknown): CrmCommand | { invalid: strin
 
     const action = body.action;
     if (action !== 'propostas' && action !== 'agenda' && action !== 'cliente_salvar') {
-        return { invalid: 'Ação desconhecida. Use "propostas", "agenda" ou "cliente_salvar".' };
+        return { invalid: 'Ação desconhecida. Use "propostas", "agenda", "cliente_salvar", "agenda_criar", "proposta_gerar", "proposta_atualizar", "proposta_consultar" ou "proposta_enviar".' };
     }
     const extra = keys.find(key => !ALLOWED_FIELDS[action].includes(key));
     if (extra) return { invalid: `Campo não aceito: "${extra.slice(0, 40)}".` };
