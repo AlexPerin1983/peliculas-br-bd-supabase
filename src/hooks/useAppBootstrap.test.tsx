@@ -87,7 +87,7 @@ describe('useAppBootstrap', () => {
       { id: 3, nome: 'Meu cliente', lastUpdated: '2026-10-30T12:00:00Z' }
     ];
 
-    const abrirApp = async () => {
+    const abrirApp = async (link?: { id: number; aviso: () => void }) => {
       dbMocks.getUserInfo.mockResolvedValue({ id: 'info', nome: 'Empresa' });
       dbMocks.getAllClients.mockResolvedValue(clientesDaConta);
       dbMocks.getAllCustomFilms.mockResolvedValue([]);
@@ -98,6 +98,8 @@ describe('useAppBootstrap', () => {
         authUserId: 'user-1',
         initialClientLoad: 'all',
         initialPdfLoad: 'deferred',
+        requestedClientId: link?.id,
+        onRequestedClientMissing: link?.aviso,
         setIsLoading: vi.fn(),
         setClients: vi.fn(),
         setClientListClients: vi.fn(),
@@ -128,6 +130,51 @@ describe('useAppBootstrap', () => {
 
     it('abre o mais recente quando o aparelho nao tem cliente guardado', async () => {
       expect(await abrirApp()).toHaveBeenLastCalledWith(7);
+    });
+
+    it('link abre o cliente pedido, e nao o ultimo deste aparelho', async () => {
+      const aviso = vi.fn();
+      // O app grava o cliente do link neste aparelho antes de carregar a lista.
+      window.localStorage.setItem('peliculas-br-selected-client-id', '3');
+      expect(await abrirApp({ id: 3, aviso })).toHaveBeenLastCalledWith(3);
+      expect(aviso).not.toHaveBeenCalled();
+    });
+
+    it('link de cliente que nao esta na lista nao abre outro cliente e avisa uma vez', async () => {
+      const aviso = vi.fn();
+      window.localStorage.setItem('peliculas-br-selected-client-id', '2059');
+      expect(await abrirApp({ id: 2059, aviso })).toHaveBeenLastCalledWith(null);
+      expect(aviso).toHaveBeenCalledTimes(1);
+    });
+
+    it('cliente do link que chega depois e aberto na atualizacao seguinte', async () => {
+      const aviso = vi.fn();
+      const setSelectedClientId = vi.fn();
+      dbMocks.getUserInfo.mockResolvedValue({ id: 'info', nome: 'Empresa' });
+      dbMocks.getAllClients.mockResolvedValue(clientesDaConta);
+      dbMocks.getAllCustomFilms.mockResolvedValue([]);
+      dbMocks.getAllAgendamentos.mockResolvedValue([]);
+      const nada = () => undefined;
+      const { result } = renderHook(() => useAppBootstrap({
+        authUserId: 'user-1', initialClientLoad: 'all', initialPdfLoad: 'deferred', requestedClientId: 2059, onRequestedClientMissing: aviso,
+        setIsLoading: nada, setClients: nada, setClientListClients: nada, setClientListHasMore: nada, setClientListNextOffset: nada,
+        setHasLoadedAllClients: nada, setSelectedClientId, setUserInfo: nada, setFilms: nada, setAllSavedPdfs: nada, setHistoryPdfs: nada,
+        setHistoryHasMore: nada, setHistoryNextOffset: nada, setHasLoadedAllPdfs: nada, setAgendamentos: nada, setHasLoadedHistory: nada, setHasLoadedAgendamentos: nada
+      }));
+      await waitFor(() => expect(setSelectedClientId).toHaveBeenLastCalledWith(null));
+      await result.current.loadClients(undefined, false);
+      expect(setSelectedClientId).toHaveBeenLastCalledWith(null);
+      dbMocks.getAllClients.mockResolvedValue([...clientesDaConta, { id: 2059, nome: 'Cristian' }]);
+      await result.current.loadClients(undefined, false);
+      expect(setSelectedClientId).toHaveBeenLastCalledWith(2059);
+      expect(aviso).toHaveBeenCalledTimes(1);
+    });
+
+    it('quem escolhe outro cliente depois do link fica nele', async () => {
+      const aviso = vi.fn();
+      window.localStorage.setItem('peliculas-br-selected-client-id', '7');
+      expect(await abrirApp({ id: 2059, aviso })).toHaveBeenLastCalledWith(7);
+      expect(aviso).not.toHaveBeenCalled();
     });
 
     it('ignora cliente guardado que nao existe nesta conta', async () => {

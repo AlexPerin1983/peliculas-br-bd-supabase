@@ -200,7 +200,7 @@ export const saveClientPush = (result: { clientId: number; name: string; created
     title: result.created ? 'Novo cliente pronto para orçamento' : 'Cliente pediu orçamento de novo',
     body: `${result.name.slice(0, 80)}${bairro ? ` (${bairro})` : ''}, pelo WhatsApp.`,
     tag: `crm-client-${result.clientId}`,
-    url: '/?tab=client',
+    url: `/?tab=client&cliente=${result.clientId}`,
 });
 
 // Início do primeiro dia e início do dia seguinte ao último, no horário de Brasília.
