@@ -7,6 +7,9 @@ import { redirectToCanonicalHostIfNeeded } from '../lib/canonicalHost';
 interface UseAppBootstrapParams {
     authUserId?: string;
     lastSelectedClientId?: number | null;
+    /** Cliente pedido por um link (?cliente=123): nunca é trocado por outro em silêncio. */
+    requestedClientId?: number | null;
+    onRequestedClientMissing?: () => void;
     setIsLoading: Dispatch<SetStateAction<boolean>>;
     setClients: Dispatch<SetStateAction<Client[]>>;
     setClientListClients: Dispatch<SetStateAction<Client[]>>;
@@ -31,6 +34,8 @@ interface UseAppBootstrapParams {
 export function useAppBootstrap({
     authUserId,
     lastSelectedClientId,
+    requestedClientId = null,
+    onRequestedClientMissing,
     setIsLoading,
     setClients,
     setClientListClients,
@@ -52,6 +57,9 @@ export function useAppBootstrap({
     setHasLoadedAgendamentos
 }: UseAppBootstrapParams) {
     const lastSelectedClientIdRef = useRef<number | null | undefined>(lastSelectedClientId);
+    const requestedClientIdRef = useRef<number | null>(requestedClientId);
+    const requestedMissingNotifiedRef = useRef(false);
+    const onRequestedClientMissingRef = useRef(onRequestedClientMissing);
     const historyNextOffsetRef = useRef(0);
     const hasLoadedAllPdfsRef = useRef(false);
     const clientListNextOffsetRef = useRef(0);
@@ -62,6 +70,10 @@ export function useAppBootstrap({
     useEffect(() => {
         lastSelectedClientIdRef.current = lastSelectedClientId;
     }, [lastSelectedClientId]);
+
+    useEffect(() => {
+        onRequestedClientMissingRef.current = onRequestedClientMissing;
+    }, [onRequestedClientMissing]);
 
     const loadClients = useCallback(async (clientIdToSelect?: number, shouldReorder = true) => {
         const storedClients = await db.getAllClients();
@@ -80,6 +92,31 @@ export function useAppBootstrap({
         setHasLoadedAllClients(true);
 
         let idToSelect = clientIdToSelect;
+
+        // Aberto por um link: ou é o cliente pedido, ou nenhum (com aviso). Cair em
+        // outro cliente faria a pessoa montar o orçamento errado sem perceber.
+        const requestedId = requestedClientIdRef.current;
+        if (idToSelect) {
+            requestedClientIdRef.current = null;
+        } else if (requestedId) {
+            const deviceClientId = Number(localStorage.getItem('peliculas-br-selected-client-id'));
+            const pickedAnother = deviceClientId !== requestedId
+                && finalClients.some(client => client.id === deviceClientId);
+            if (pickedAnother) {
+                requestedClientIdRef.current = null;
+            } else if (finalClients.some(client => client.id === requestedId)) {
+                requestedClientIdRef.current = null;
+                idToSelect = requestedId;
+            } else {
+                // Continua procurando nas próximas atualizações, sem repetir o aviso.
+                setSelectedClientId(null);
+                if (!requestedMissingNotifiedRef.current) {
+                    requestedMissingNotifiedRef.current = true;
+                    onRequestedClientMissingRef.current?.();
+                }
+                return;
+            }
+        }
 
         if (!idToSelect) {
             // Cada aparelho volta ao cliente em que estava. O último cliente da

@@ -126,6 +126,13 @@ const MeasurementHistoryModal = lazy(() => import('./components/modals/Measureme
 
 type ActiveTab = PersistedAppTab;
 
+// Cliente pedido por um link (?cliente=123), como o do aviso do WhatsApp.
+const getLinkedClientId = (): number | null => {
+    if (typeof window === 'undefined') return null;
+    const id = Number(new URLSearchParams(window.location.search).get('cliente'));
+    return Number.isInteger(id) && id > 0 ? id : null;
+};
+
 const getExplicitStartupTab = (): ActiveTab | null => {
     if (typeof window === 'undefined') return null;
 
@@ -288,12 +295,13 @@ const App: React.FC = () => {
         // Restauracao instantanea do cliente selecionado (espelho local do valor
         // que tambem fica salvo no Supabase em UserInfo.lastSelectedClientId).
         // A notificacao do atendimento de WhatsApp abre direto um cliente: ?cliente=123.
-        const fromLink = Number(new URLSearchParams(window.location.search).get('cliente'));
-        if (Number.isInteger(fromLink) && fromLink > 0) return fromLink;
+        const fromLink = getLinkedClientId();
+        if (fromLink) return fromLink;
         const saved = localStorage.getItem('peliculas-br-selected-client-id');
         const parsed = saved ? Number(saved) : NaN;
         return Number.isFinite(parsed) ? parsed : null;
     });
+    const [linkedClientId] = useState<number | null>(getLinkedClientId);
     const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
     const [films, setFilms] = useState<Film[]>([]);
     const [allSavedPdfs, setAllSavedPdfs] = useState<SavedPDF[]>([]);
@@ -858,6 +866,14 @@ const App: React.FC = () => {
         return matchedModule?.name || formatModuleIdLabel(billingReturnState.moduleId);
     }, [billingReturnState?.moduleId, subscriptionModules]);
 
+    const handleLinkedClientMissing = useCallback(() => {
+        showAlert({
+            title: 'Cliente não encontrado',
+            message: 'O cliente deste link não apareceu aqui. Confira a internet e se você entrou com a conta da empresa, e abra o link de novo.',
+            tone: 'info'
+        });
+    }, [showAlert]);
+
     const {
         loadClients,
         loadClientListPage,
@@ -868,6 +884,8 @@ const App: React.FC = () => {
     } = useAppBootstrap({
         authUserId: needsOrganizationSetup ? undefined : authUser?.id,
         lastSelectedClientId: userInfo?.lastSelectedClientId,
+        requestedClientId: linkedClientId,
+        onRequestedClientMissing: handleLinkedClientMissing,
         setIsLoading,
         setClients,
         setClientListClients,

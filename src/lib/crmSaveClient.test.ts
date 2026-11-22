@@ -65,7 +65,7 @@ describe('pedido de salvar cliente', () => {
 
     it('aviso no celular: novo cliente ou pedido de novo', () => {
         expect(saveClientPush({ clientId: 7, name: 'Roseanny', created: true }, 'Bessa')).toEqual({
-            title: 'Novo cliente pronto para orçamento', body: 'Roseanny (Bessa), pelo WhatsApp.', tag: 'crm-client-7', url: '/?tab=client',
+            title: 'Novo cliente pronto para orçamento', body: 'Roseanny (Bessa), pelo WhatsApp.', tag: 'crm-client-7', url: '/?tab=client&cliente=7',
         });
         expect(saveClientPush({ clientId: 7, name: 'Roseanny Souza', created: false }, null).title).toBe('Cliente pediu orçamento de novo');
     });
