@@ -182,3 +182,43 @@ describe('leitura do CRM: pedidos estranhos e registros', () => {
         expect(logged).not.toContain(KEY_A);
     });
 });
+
+describe('leitura do CRM: catálogo de películas', () => {
+    const films: Record<string, Array<{ nome: string; preco: number | null; mao_de_obra: number | null; pinned: boolean | null }>> = {
+        [ORG_A]: [
+            { nome: 'Window Premium', preco: 230, mao_de_obra: 40, pinned: true },
+            { nome: 'Carbon X7', preco: 0, mao_de_obra: 180, pinned: false },
+            { nome: 'Sem preço', preco: 0, mao_de_obra: 0, pinned: false },
+        ],
+        [ORG_B]: [{ nome: 'Película da empresa B', preco: 999, mao_de_obra: 0, pinned: false }],
+    };
+    const withFilms = async () => {
+        const deps = await buildDeps();
+        return { ...deps, loadFilms: vi.fn(async (org: string) => films[org] ?? []) };
+    };
+
+    it('devolve só nome, preço por m² e destaque das películas da empresa da chave', async () => {
+        const deps = await withFilms();
+        const res = await call(deps, { action: 'peliculas' });
+        expect(res.status).toBe(200);
+        expect(await res.json()).toEqual({ peliculas: [
+            { nome: 'Window Premium', preco_m2: 230, destaque: true },
+            { nome: 'Carbon X7', preco_m2: 180, destaque: false },
+        ] });
+        expect(deps.loadFilms).toHaveBeenCalledWith(ORG_A);
+    });
+    it('não aceita escolher a empresa nem campos extras', async () => {
+        const deps = await withFilms();
+        expect((await call(deps, { action: 'peliculas', organization_id: ORG_B })).status).toBe(400);
+        expect((await call(deps, { action: 'peliculas', telefone: PHONE_B })).status).toBe(400);
+        expect(deps.loadFilms).not.toHaveBeenCalled();
+    });
+    it('chave só de agenda não lê o catálogo', async () => {
+        const deps = await withFilms();
+        expect((await call(deps, { action: 'peliculas' }, KEY_AGENDA_ONLY)).status).toBe(403);
+    });
+    it('sem a leitura de películas configurada: 403', async () => {
+        const deps = await buildDeps();
+        expect((await call(deps, { action: 'peliculas' })).status).toBe(403);
+    });
+});

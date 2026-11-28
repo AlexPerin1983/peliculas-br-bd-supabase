@@ -9,7 +9,7 @@
 import {
     type AgendaRows, type CrmScope, type DraftMeasurement, type ProposalRows,
     CRM_KEY_HEADER, agendaRange, clientNotes, isPlausibleCrmKey, parseCrmCommand, provisionalClientName, requiredScope,
-    saveClientPush, sha256Hex, shapeAgenda, shapeProposals,
+    saveClientPush, sha256Hex, shapeAgenda, shapeFilms, shapeProposals, type FilmRow,
 } from './crmReadLogic.ts';
 import {
     type TeamAction, type TeamCommand, TEAM_ACTIONS, TEAM_FIELDS, TEAM_REASONS,
@@ -31,6 +31,8 @@ export interface CrmReadDeps {
     findKey: (tokenHash: string) => Promise<CrmKeyRecord | null>;
     loadProposals: (organizationId: string, phone: string) => Promise<ProposalRows>;
     loadAgenda: (organizationId: string, fromIso: string, toIso: string) => Promise<AgendaRows>;
+    // Catálogo de películas da empresa (nome, preço por m², fixada). Sem isto, "peliculas" responde 403.
+    loadFilms?: (organizationId: string) => Promise<FilmRow[]>;
     // Cria o cliente se o telefone ainda não existir na empresa (nunca altera o existente).
     saveClient?: (keyId: string, organizationId: string, input: {
         phone: string; name: string; bairro: string | null; cidade: string | null; notes: string;
@@ -102,6 +104,10 @@ export const handleCrmRead = async (request: Request, deps: CrmReadDeps): Promis
     const now = (deps.now ?? Date.now)();
     const org = record.organizationId;
     try {
+        if (command.action === 'peliculas') {
+            if (!deps.loadFilms) return json({ error: 'Esta chave não pode fazer esta consulta.' }, 403);
+            return json(shapeFilms(await deps.loadFilms(org)));
+        }
         if (command.action === 'propostas') {
             return json(shapeProposals(await deps.loadProposals(org, command.phone), now));
         }
