@@ -239,6 +239,20 @@ recentes, mais os orçamentos que estão nesses links. Links revogados não apar
 
 ---
 
+## 4a. Catálogo de películas (permissão `proposals:read`)
+
+Para o atendimento dar a faixa "a partir de" com os preços do app. Devolve só o nome, o preço por m² (o mesmo que a proposta usa: o preço da película, ou a mão de obra quando o preço é zero) e se a película está fixada no topo. Nada de custo, fornecedor ou estoque.
+
+```json
+{ "action": "peliculas" }
+```
+
+```json
+{ "peliculas": [ { "nome": "Window Premium", "preco_m2": 230, "destaque": true } ] }
+```
+
+Até 60 películas, fixadas primeiro. A empresa vem só da chave.
+
 ## 4b. Salvar o cliente qualificado (permissão `clients:create`)
 
 Para quando a IA termina a qualificação e passa para a equipe montar o orçamento. Só

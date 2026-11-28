@@ -74,6 +74,7 @@ export const parseDraftMeasurements = (value: unknown): DraftMeasurement[] | { i
 export type CrmCommand =
     | { action: 'propostas'; phone: string }
     | { action: 'agenda'; from: string; to: string }
+    | { action: 'peliculas' }
     | ({ action: 'cliente_salvar' } & SaveClientInput);
 
 export const isPlausibleCrmKey = (key: unknown): key is string =>
@@ -95,6 +96,7 @@ export const phoneDigits = (phone: unknown): string | null => {
 const ALLOWED_FIELDS: Record<CrmCommand['action'], string[]> = {
     propostas: ['action', 'telefone'],
     agenda: ['action', 'de', 'ate'],
+    peliculas: ['action'],
     cliente_salvar: ['action', 'telefone', 'nome', 'bairro', 'cidade', 'resumo', 'medidas', 'pelicula'],
 };
 
@@ -148,11 +150,13 @@ export const parseCrmCommand = (payload: unknown): CrmCommand | { invalid: strin
     if (companyField) return { invalid: `A empresa vem da chave de acesso; não envie "${companyField}".` };
 
     const action = body.action;
-    if (action !== 'propostas' && action !== 'agenda' && action !== 'cliente_salvar') {
-        return { invalid: 'Ação desconhecida. Use "propostas", "agenda", "cliente_salvar", "agenda_criar", "proposta_gerar", "proposta_atualizar", "proposta_consultar" ou "proposta_enviar".' };
+    if (action !== 'propostas' && action !== 'agenda' && action !== 'cliente_salvar' && action !== 'peliculas') {
+        return { invalid: 'Ação desconhecida. Use "propostas", "agenda", "peliculas", "cliente_salvar", "agenda_criar", "proposta_gerar", "proposta_atualizar", "proposta_consultar" ou "proposta_enviar".' };
     }
     const extra = keys.find(key => !ALLOWED_FIELDS[action].includes(key));
     if (extra) return { invalid: `Campo não aceito: "${extra.slice(0, 40)}".` };
+
+    if (action === 'peliculas') return { action };
 
     if (action === 'propostas') {
         const phone = phoneDigits(body.telefone);
@@ -191,7 +195,7 @@ export const parseCrmCommand = (payload: unknown): CrmCommand | { invalid: strin
 };
 
 export const requiredScope = (command: CrmCommand): CrmScope =>
-    command.action === 'propostas' ? 'proposals:read'
+    command.action === 'propostas' || command.action === 'peliculas' ? 'proposals:read'
         : command.action === 'agenda' ? 'agenda:read'
             : 'clients:create';
 
@@ -547,3 +551,18 @@ export const shapeAgenda = (rows: AgendaRows, from: string, to: string, now: num
         avisos,
     };
 };
+
+// Catálogo de películas da empresa para o atendimento dar a faixa de preço: só nome,
+// preço por m² (o mesmo que a proposta usa: preço, ou a mão de obra quando o preço é zero)
+// e se está fixada no topo. Nada de custo, fornecedor ou estoque.
+export interface FilmRow { nome: string | null; preco: number | string | null; mao_de_obra: number | string | null; pinned: boolean | null }
+export const shapeFilms = (rows: FilmRow[] | null | undefined) => ({
+    peliculas: (rows ?? [])
+        .map(row => {
+            const price = Number(row.preco) > 0 ? Number(row.preco) : Number(row.mao_de_obra) || 0;
+            return { nome: String(row.nome ?? '').trim().slice(0, 80), preco_m2: Math.round(price * 100) / 100, destaque: row.pinned === true };
+        })
+        .filter(film => film.nome && film.preco_m2 > 0)
+        .sort((a, b) => Number(b.destaque) - Number(a.destaque) || a.nome.localeCompare(b.nome, 'pt-BR'))
+        .slice(0, 60),
+});

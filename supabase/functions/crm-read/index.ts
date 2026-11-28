@@ -39,6 +39,11 @@ Deno.serve(async (request) => {
             if (error) throw error;
             return data ?? { clients: [], portals: [], items: [], pdfs: [] };
         },
+        loadFilms: async (organizationId) => {
+            const { data, error } = await admin.rpc('crm_company_films', { p_organization_id: organizationId });
+            if (error) throw error;
+            return Array.isArray(data) ? data : [];
+        },
         loadAgenda: async (organizationId, fromIso, toIso) => {
             const { data, error } = await admin.rpc('crm_read_agenda', { p_organization_id: organizationId, p_from: fromIso, p_to: toIso });
             if (error) throw error;
