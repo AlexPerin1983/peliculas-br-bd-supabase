@@ -7,7 +7,7 @@
 // Requer: SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY (já presentes nas funções).
 import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { BRIDGE_KEY_HEADER, isPlausibleBridgeKey, normalizeBridgeSettings, parseBridgeCommand, sha256Hex } from './bridgeLogic.ts';
-import { getFollowUpItem } from './followUpCore.ts';
+import { buildPortalUrl, getFollowUpItem } from './followUpCore.ts';
 import {
     PIPELINE_AGENDA_COLUMNS, PIPELINE_FOLLOW_UP_COLUMNS, PIPELINE_ITEM_COLUMNS, PIPELINE_LOOKBACK_DAYS, PIPELINE_MESSAGE_COLUMNS, PIPELINE_PORTAL_COLUMNS,
     type PipelineRows, buildPipeline, templatesByStep, toCorePortal,
@@ -231,6 +231,47 @@ Deno.serve(async (request) => {
                 .eq('version', command.version).eq('active', true).maybeSingle();
             if (error) return json({ error: 'Serviço indisponível.' }, 500);
             return data ? json(data) : json({ error: 'Esta versão não está mais disponível. Procure a atualização de novo.' }, 404);
+        }
+        // ---- Estagiária IA: cliente, proposta, PDF e link. O banco só deixa mexer nas
+        // propostas que ela mesma criou; enviar ao cliente continua sendo decisão da equipe.
+        case 'intern_context': {
+            const { data, error } = await admin.rpc('whatsapp_bridge_intern_context', { p_organization_id: org, p_phone: command.phone });
+            return error ? rpcError(error) : json({ context: data });
+        }
+        case 'intern_client_save': {
+            const { data, error } = await admin.rpc('whatsapp_bridge_intern_client_save', {
+                p_organization_id: org, p_phone: command.phone, p_name: command.name, p_fields: command.fields,
+            });
+            return error ? rpcError(error) : json(data);
+        }
+        case 'intern_proposal_save': {
+            const { data, error } = await admin.rpc('whatsapp_bridge_intern_proposal_save', {
+                p_organization_id: org, p_created_by: connector.created_by, p_client_id: command.clientId,
+                p_saved_pdf_id: command.savedPdfId, p_data: command.proposal,
+            });
+            if (error) return rpcError(error);
+            const result = data as { share_code?: string; client_name?: string };
+            return json({ ...data, link: result.share_code ? buildPortalUrl(APP_ORIGIN, result.share_code, result.client_name || undefined) : null });
+        }
+        case 'intern_proposal_pdf': {
+            // Mesma pasta que o app usa: a do dono da empresa.
+            const { data: organization } = await admin.from('organizations').select('owner_id').eq('id', org).maybeSingle();
+            if (!organization?.owner_id) return json({ error: 'Empresa não encontrada.' }, 404);
+            const path = `${organization.owner_id}/${crypto.randomUUID()}.pdf`;
+            const upload = await admin.storage.from('pdfs').upload(path, command.pdf, { contentType: 'application/pdf', upsert: false });
+            if (upload.error) return json({ error: 'Não foi possível guardar o PDF.' }, 500);
+            const { data, error } = await admin.rpc('whatsapp_bridge_intern_proposal_pdf', { p_organization_id: org, p_saved_pdf_id: command.savedPdfId, p_pdf_path: path });
+            if (error) { await admin.storage.from('pdfs').remove([path]); return rpcError(error); }
+            const oldPath = (data as { old_path?: string | null })?.old_path;
+            if (oldPath && oldPath !== path) await admin.storage.from('pdfs').remove([oldPath]);
+            return json({ pdf_path: path });
+        }
+        case 'intern_proposal_delete': {
+            const { data, error } = await admin.rpc('whatsapp_bridge_intern_proposal_delete', { p_organization_id: org, p_saved_pdf_id: command.savedPdfId });
+            if (error) return rpcError(error);
+            const pdfPath = (data as { pdf_path?: string | null })?.pdf_path;
+            if (pdfPath) await admin.storage.from('pdfs').remove([pdfPath]);
+            return json({ deleted: true });
         }
     }
 });
